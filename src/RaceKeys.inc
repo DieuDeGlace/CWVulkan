@@ -1,0 +1,45 @@
+// Race number -> the key of the race's <name id="..."> entry in the game's dictionary
+// (dict_en.xml), e.g. race 0 -> "ElfMale". Facts from docs/specs/race-keys.md: the game
+// builds this map in code at 0x1401510f0 (195 insertions, 193 distinct race numbers).
+// Race numbers missing here have no entry in the game's table. 260/261 repeat the Orc keys
+// of 11/12 and 304/305 both name the Gnome; spellings (Makake, Spectrino) are the game's.
+// Included inside a namespace or function: one plain array, no includes of its own.
+static const std::pair<int, const char *> RACE_KEYS[] = {
+    {0, "ElfMale"}, {1, "ElfFemale"}, {2, "HumanMale"}, {3, "HumanFemale"}, {4, "GoblinMale"},
+    {5, "GoblinFemale"}, {6, "Bullterrier"}, {7, "LizardmanMale"}, {8, "LizardmanFemale"}, {9, "DwarfMale"},
+    {10, "DwarfFemale"}, {11, "OrcMale"}, {12, "OrcFemale"}, {13, "FrogmanMale"}, {14, "FrogmanFemale"},
+    {15, "UndeadMale"}, {16, "UndeadFemale"}, {17, "Skeleton"}, {18, "OldMan"}, {19, "Collie"},
+    {20, "ShepherdDog"}, {21, "SkullBull"}, {22, "Alpaca"}, {23, "BrownAlpaca"}, {24, "Egg"}, {25, "Turtle"},
+    {26, "Terrier"}, {27, "ScottishTerrier"}, {28, "Wolf"}, {29, "Panther"}, {30, "Cat"}, {31, "BrownCat"},
+    {32, "WhiteCat"}, {33, "Pig"}, {34, "Sheep"}, {35, "Bunny"}, {36, "Porcupine"}, {37, "GreenSlime"},
+    {38, "PinkSlime"}, {39, "YellowSlime"}, {40, "BlueSlime"}, {41, "Frightener"}, {42, "SandHorror"},
+    {43, "Wizard"}, {44, "Bandit"}, {45, "Witch"}, {46, "Ogre"}, {47, "Rockling"}, {48, "Gnoll"},
+    {49, "PolarGnoll"}, {50, "Monkey"}, {51, "Gnobold"}, {52, "Insectoid"}, {53, "Hornet"},
+    {54, "InsectGuard"}, {55, "Crow"}, {56, "Chicken"}, {57, "Seagull"}, {58, "Parrot"}, {59, "Bat"},
+    {60, "Fly"}, {61, "Midge"}, {62, "Mosquito"}, {63, "PlainRunner"}, {64, "LeafRunner"}, {65, "SnowRunner"},
+    {66, "DesertRunner"}, {67, "Peacock"}, {68, "Frog"}, {69, "PlantCreature"}, {70, "RadishCreature"},
+    {71, "Onionling"}, {72, "DesertOnionling"}, {73, "Devourer"}, {74, "Duckbill"}, {75, "Crocodile"},
+    {76, "SpikeCreature"}, {77, "Anubis"}, {78, "Horus"}, {79, "Jester"}, {80, "Spectrino"}, {81, "Djinn"},
+    {82, "Minotaur"}, {83, "NomadMale"}, {85, "Imp"}, {86, "Spitter"}, {87, "Mole"}, {88, "Biter"},
+    {90, "Squirrel"}, {91, "Raccoon"}, {92, "Owl"}, {93, "Penguin"}, {94, "Werewolf"}, {96, "Zombie"},
+    {97, "Vampire"}, {98, "Horse"}, {99, "Camel"}, {100, "Cow"}, {101, "Dragon"}, {102, "BarkBeetle"},
+    {103, "FireBeetle"}, {104, "SnoutBeetle"}, {105, "LemonBeetle"}, {106, "Crab"}, {107, "SeaCrab"},
+    {108, "Troll"}, {109, "DarkTroll"}, {110, "HellDemon"}, {111, "Golem"}, {112, "EmberGolem"},
+    {113, "SnowGolem"}, {114, "Yeti"}, {115, "Cyclops"}, {116, "Mammoth"}, {117, "Lich"}, {118, "RuneGiant"},
+    {119, "Saurian"}, {120, "Bush"}, {121, "SnowBush"}, {122, "SnowBerryBush"}, {123, "CottonPlant"},
+    {124, "Scrub"}, {125, "CobwebScrub"}, {126, "FireScrub"}, {127, "Ginseng"}, {128, "Cactus"},
+    {130, "ThornTree"}, {131, "GoldDeposit"}, {132, "IronDeposit"}, {133, "SilverDeposit"},
+    {134, "SandstoneDeposit"}, {135, "EmeraldDeposit"}, {136, "SapphireDeposit"}, {137, "RubyDeposit"},
+    {138, "DiamondDeposit"}, {139, "IceCrystalDeposit"}, {140, "Scarecrow"}, {141, "Aim"}, {142, "Dummy"},
+    {143, "Vase"}, {144, "Bomb"}, {145, "SapphireFish"}, {146, "LemonFish"}, {147, "Seahorse"},
+    {148, "Mermaid"}, {149, "Merman"}, {150, "Shark"}, {152, "LanternFish"}, {153, "MawFish"},
+    {154, "Piranha"}, {155, "Blowfish"}, {165, "SkeletonKnight"}, {166, "SkeletonHorse"}, {167, "Sorcerer"},
+    {168, "Hyena"}, {169, "Giraffe"}, {170, "Warthog"}, {171, "Antelope"}, {172, "Makake"},
+    {173, "SkeletonDog"}, {174, "LavaTurtle"}, {175, "DemonPortal"}, {176, "SlimeWell"}, {177, "HornetsNest"},
+    {178, "UnholyTomb"}, {179, "BonePile"}, {180, "Molehill"}, {191, "Mantis"}, {192, "RadishCreatureSprout"},
+    {193, "PlantCreatureSprout"}, {200, "BabyElephant"}, {201, "BabyMammoth"}, {209, "GoldKnightHorse"},
+    {210, "Flamingo"}, {211, "Toucan"}, {215, "BlueTurtle"}, {216, "SnowGnobold"}, {217, "SavageDog"},
+    {220, "SnowLeopard"}, {224, "AlphaDog"}, {225, "FlyingEye"}, {226, "DemonMarauder"}, {229, "Crawler"},
+    {230, "Necromancer"}, {260, "OrcMale"}, {261, "OrcFemale"}, {292, "EarthPile"}, {293, "Caterpillar"},
+    {294, "EarthCaterpillar"}, {295, "Snail"}, {296, "DarkJester"}, {304, "Gnome"}, {305, "Gnome"},
+};

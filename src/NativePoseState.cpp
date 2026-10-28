@@ -1,0 +1,128 @@
+// The pose state and its clock (docs/specs/creature-pose.md §12): what the world's creature
+// draw (0xd3170) writes into a creature's animation state right before posing it. The state is
+// not a lasting animation state of its own: every drawn frame it is worked out again from the
+// creature's current ability, and the clock is the ability clock at that moment.
+#include "NativePose.h"
+
+#include <array>
+#include <cstring>
+
+namespace nativepose {
+namespace {
+
+// Creature record fields read here (creature-pose.md §1.4).
+constexpr size_t ABILITY = 0x68;       // u8: the current ability
+constexpr size_t ABILITY_CLOCK = 0x6c; // f32: ms into it
+constexpr size_t LOCK_TIMER = 0x134;   // f32: while it is not 0 the creature shows the lock pose
+constexpr size_t ITEM_IN_USE = 0x1d8, LEFT_ITEM = 0x638, RIGHT_ITEM = 0x6d8;
+
+// An item's category (+0x00, a byte) and kind (its subtype, +0x04).
+constexpr size_t ITEM_CATEGORY = 0x00, ITEM_KIND = 0x04;
+
+// The animation state fields set here (A, at the creature's +0xc38).
+constexpr size_t STATE_CLOCK = ANIM + 0x08; // f32
+constexpr size_t STATE = ANIM + 0x0c;       // i32
+
+// The pose state of a locked creature (lock timer running), whatever its ability.
+constexpr int LOCKED_STATE = 0x3d;
+
+// Abilities whose state depends on what the creature holds (§12.2).
+constexpr int ABILITY_BY_HELD_WEAPON = 0x32, ABILITY_BY_LEFT_ITEM = 0x67, ABILITY_BY_ITEM_IN_USE = 0x89;
+constexpr int WEAPON_CATEGORY = 3, VEHICLE_CATEGORY = 0x18;
+
+// The fixed part of the choice (§12.2): ability -> pose state. Abilities not listed give 0.
+struct AbilityState {
+    uint8_t ability, state;
+};
+constexpr AbilityState FIXED_STATES[] = {
+    {0x02, 0x10}, {0x03, 0x0f}, {0x04, 0x12}, {0x05, 0x11}, {0x06, 0x22}, {0x07, 0x14}, {0x08, 0x13}, {0x09, 0x09},
+    {0x0a, 0x12}, {0x0b, 0x0a}, {0x0c, 0x1d}, {0x0d, 0x1e}, {0x0e, 0x1f}, {0x0f, 0x20}, {0x10, 0x21}, {0x11, 0x24},
+    {0x12, 0x24}, {0x13, 0x11}, {0x14, 0x12}, {0x15, 0x33}, {0x16, 0x33}, {0x17, 0x15}, {0x18, 0x15}, {0x19, 0x16},
+    {0x1a, 0x16}, {0x1b, 0x48}, {0x1c, 0x49}, {0x1d, 0x0b}, {0x1f, 0x42}, {0x20, 0x42}, {0x21, 0x42}, {0x22, 0x42},
+    {0x23, 0x42}, {0x24, 0x44}, {0x25, 0x1c}, {0x26, 0x17}, {0x27, 0x1a}, {0x28, 0x18}, {0x29, 0x19}, {0x2a, 0x18},
+    {0x2b, 0x19}, {0x2c, 0x17}, {0x2d, 0x1a}, {0x2e, 0x1a}, {0x2f, 0x17}, {0x30, 0x1a}, {0x31, 0x01}, {0x33, 0x42},
+    {0x35, 0x4c}, {0x37, 0x01}, {0x38, 0x16}, {0x3a, 0x02}, {0x3b, 0x03}, {0x3c, 0x04}, {0x3d, 0x02}, {0x3e, 0x32},
+    {0x3f, 0x12}, {0x40, 0x06}, {0x41, 0x05}, {0x42, 0x31}, {0x43, 0x32}, {0x44, 0x26}, {0x45, 0x27}, {0x46, 0x28},
+    {0x47, 0x29}, {0x48, 0x2a}, {0x49, 0x2a}, {0x4a, 0x2b}, {0x4b, 0x2c}, {0x4c, 0x2d}, {0x4d, 0x2e}, {0x4e, 0x2f},
+    {0x4f, 0x30}, {0x50, 0x37}, {0x53, 0x1b}, {0x54, 0x34}, {0x55, 0x35}, {0x56, 0x36}, {0x57, 0x3e}, {0x58, 0x38},
+    {0x59, 0x39}, {0x5a, 0x38}, {0x5b, 0x3a}, {0x5c, 0x3b}, {0x5d, 0x3c}, {0x5f, 0x41}, {0x60, 0x42}, {0x61, 0x42},
+    {0x62, 0x42}, {0x63, 0x42}, {0x64, 0x45}, {0x65, 0x42}, {0x68, 0x1a}, {0x69, 0x1a}, {0x6a, 0x1a}, {0x6b, 0x1a},
+    {0x6c, 0x47}, {0x6e, 0x08}, {0x71, 0x4a}, {0x73, 0x4a}, {0x74, 0x4b}, {0x75, 0x42}, {0x76, 0x3f}, {0x77, 0x3f},
+    {0x79, 0x40}, {0x7b, 0x4d}, {0x7c, 0x4e}, {0x7d, 0x4f}, {0x7e, 0x50}, {0x80, 0x51}, {0x81, 0x52}, {0x82, 0x54},
+    {0x84, 0x42}, {0x85, 0x42}, {0x86, 0x43}, {0x87, 0x43}, {0x88, 0x55}, {0x8c, 0x56}, {0x90, 0x43}, {0x93, 0x58},
+    {0x94, 0x57}, {0x95, 0x59}, {0x96, 0x42}, {0x97, 0x42}, {0x98, 0x61}, {0x9a, 0x63}, {0x9b, 0x62}, {0x9e, 0x1d},
+    {0x9f, 0x41}, {0xa0, 0x47}, {0xa1, 0x64}, {0xa2, 0x65}, {0xa3, 0x66},
+};
+
+// The table above by ability (0 for the rest).
+const std::array<uint8_t, 256> &fixedStates() {
+    static const std::array<uint8_t, 256> table = [] {
+        std::array<uint8_t, 256> t{};
+        for (const AbilityState &e : FIXED_STATES)
+            t[e.ability] = e.state;
+        return t;
+    }();
+    return table;
+}
+
+uint8_t category(const uint8_t *item) { return item[ITEM_CATEGORY]; }
+uint32_t kind(const uint8_t *item) {
+    uint32_t k;
+    std::memcpy(&k, item + ITEM_KIND, sizeof k);
+    return k;
+}
+
+// Ability 0x32: a right-hand weapon of kind 6 or 7, else a left-hand weapon (kind 0xd or
+// another), else neither.
+int heldWeaponState(const uint8_t *creature) {
+    const uint8_t *right = creature + RIGHT_ITEM, *left = creature + LEFT_ITEM;
+    if (category(right) == WEAPON_CATEGORY && (kind(right) == 6 || kind(right) == 7))
+        return 0x16;
+    if (category(left) == WEAPON_CATEGORY)
+        return kind(left) == 0xd ? 0x09 : 0x24;
+    return 0x23;
+}
+
+// Ability 0x67: whether there is anything in the left hand.
+int leftItemState(const uint8_t *creature) { return category(creature + LEFT_ITEM) == 0 ? 0x32 : 0x24; }
+
+// Ability 0x89: the item in use, when it is one of the listed vehicle kinds.
+int itemInUseState(const uint8_t *creature) {
+    const uint8_t *item = creature + ITEM_IN_USE;
+    if (category(item) == VEHICLE_CATEGORY)
+        switch (kind(item)) {
+        case 4: return 0x5a;
+        case 5: return 0x5b;
+        case 6: return 0x5c;
+        case 7: return 0x5d;
+        case 8: return 0x5e;
+        case 0xa: return 0x5f;
+        case 0xb: return 0x60;
+        default: break;
+        }
+    return 0x4e;
+}
+
+} // namespace
+
+int poseStateFor(const uint8_t *creature) {
+    float lock;
+    std::memcpy(&lock, creature + LOCK_TIMER, sizeof lock);
+    if (lock != 0.0f) // (a NaN counts as running)
+        return LOCKED_STATE;
+    const int ability = creature[ABILITY];
+    switch (ability) {
+    case ABILITY_BY_HELD_WEAPON: return heldWeaponState(creature);
+    case ABILITY_BY_LEFT_ITEM: return leftItemState(creature);
+    case ABILITY_BY_ITEM_IN_USE: return itemInUseState(creature);
+    default: return fixedStates()[ability];
+    }
+}
+
+void setPoseState(uint8_t *creature) {
+    std::memcpy(creature + STATE_CLOCK, creature + ABILITY_CLOCK, sizeof(float)); // bit for bit
+    const int32_t state = poseStateFor(creature);
+    std::memcpy(creature + STATE, &state, sizeof state);
+}
+
+} // namespace nativepose

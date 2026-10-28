@@ -1,0 +1,2 @@
+# Preserve exact file bytes so SOURCE-MANIFEST.sha256 survives Git checkouts.
+* -text

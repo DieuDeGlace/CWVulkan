@@ -1,0 +1,111 @@
+# Clean-room process
+
+CubeVulkan is to Cube World what OpenMW is to Morrowind: its own engine, written from a
+description of how the game behaves, that reads the content of the owner's own copy. To keep
+source provenance separate it follows a clean-room process: the people (or agents) who read the game's code don't write
+CubeVulkan's code, and those who write the code don't read the game's code.
+
+## How a feature is ported
+
+1. **Specification.** One agent reads the decompiled game (`decompiled cube world steam`, by
+   RVA) and the binary for its constants. It writes a plain-language behavioural spec in
+   `docs/specs/`: inputs, outputs, the order of decisions and random draws, and constants, ids
+   and record offsets (facts). It contains no code, no transcribed pseudocode, no decompiler
+   variable names, and nothing from third-party reconstructions (Infinite-Cubes, its Steam
+   `release` and its Alpha `alpha` folders alike). Alpha specs come from the Alpha decompile
+   (`disassembled alpha cube world`). Routines are cited by RVA.
+
+   The spec writer may look at the reconstructions to cross-check a reading: a misread
+   offset, a stuck routine, or a guess about what something is for. It takes nothing from
+   them. Whatever the cross-check suggests is confirmed in the decompile and written in the
+   spec's own words, citing the decompile, with none of the reconstruction's names, comments
+   or structure. They have no license, so all rights stay with their authors.
+2. **Implementation.** A second agent reads only the spec and CubeVulkan's own sources. It
+   never opens the decompile, the binary's code or Infinite-Cubes. It writes the code with
+   CubeVulkan's structure and names, readable on its own, commented in plain words.
+3. **Verification.** The result is checked against the game's own behaviour: its exported
+   data (`Extract/`), recordings and captures. It is never checked by comparing against code.
+
+Similarities with the game are expected where behaviour must match (constants, the order of
+random draws, data layouts). What must not happen is lifting code or its expression.
+
+## Audit, 2026-10-27
+
+- Comments and docs no longer use names that a third-party reconstruction invented for the
+  game's methods, members and constants (about 300 lines). They now describe the behaviour in
+  plain words, citing RVAs where known.
+- Class names that the game's own binary carries (its RTTI: `Game`, `World`, `Creature`,
+  `Zone`, `MapOverlayWidget`, `InventoryWidget`, `ScalableFont`, ...) and outside APIs remain.
+- Code identifiers borrowed from the reconstruction were renamed (`mapLabelScale`,
+  `mapViewCentre`, `boughtFlights`, `boughtFromVendor`, `nameHash`, `plx::keyOf`,
+  `setTextColour`). The game's own item keys (`WaterFlask`, ...) are its data and stay.
+
+### To redo clean-room
+
+These were written while reading the Infinite-Cubes reconstruction. They are to be specified
+from the decompile and reimplemented from the spec, then their notes here removed:
+
+(None left: the last, `src/RaceKeys.inc`, is under "Done so far" below.)
+
+Everything ported from here on follows the process above.
+
+### Also to redo: modules transcribed straight from the decompile
+
+These were written by one hand while reading the decompile, often close to its shape (raw
+float bit patterns, offset-named helpers). They don't use the third-party reconstruction, but
+they aren't clean-room either, and many aren't readable the way the project wants. Each gets
+a spec from the decompile and a fresh implementation from that spec, verified against the
+same oracles that check them today:
+- the recorded creature updates, AI ticks, hits, ability calls and effect steps;
+- the oracle zones extracted from the game.
+
+(None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
+
+Done so far with the full process:
+- the special skill and interaction kinds 1/11/12/13;
+- the conversation builder (`src/TalkGen.*`);
+- map markers, lore and artifacts (`src/MapMarks.*`, `src/Lore.*`);
+- the .plx reader and the Plasma scene, shapes and text (`src/Plx.*`, `src/Plasma*`), with
+  FreeType for glyphs.
+- the use key: targets, prompts and actions (`src/UsePrompt.*`).
+- the creature upkeep (`src/NativeUpkeep.cpp`), all 10,800 recorded calls matching.
+- the hit routine (`src/NativeHit.cpp`), all 600 recorded hits matching.
+- drops, rewards and item generation (`src/NativeDrop.*`), the drop, item and gear oracles matching.
+- the effect objects (`src/NativeEffects.cpp`), 697/700 steps as before; the 3 failures are a recorder gap.
+- the stat rules (`src/NativeRules.cpp`), playerstats and rulesoracle matching.
+- the creature physics (`src/NativeUpdate.cpp`), all 8822 recorded updates matching.
+- the creature AI (`src/NativeAI.cpp`), 1776/1800 recorded ticks; the rest are recording artefacts.
+- the creature abilities (`src/NativeAbility.cpp`), the ability oracle as before. (Slip on record: the implementer saw the old file's first ~30 lines, includes and a byte accessor, plus one asinf line, before deleting it; the new code was written from the specs.)
+- the creature pose (`src/NativePose.cpp`, `NativePoseTables.inc`), every recorded pose bit for bit.
+- the player control (`src/NativeControl.cpp`), the control and attack oracles matching.
+- the zone-object interactions, kinds 2, 3, 5, 7, 8 and 10, and the open/shut routine (`src/NativeInteract.cpp`), from unit tests (no recording exists).
+- the item models (`src/NativeItems.cpp`), all 117,000 recorded model slots matching.
+- the world generator (`src/worldgen/`, replacing `GameGen.cpp`, `GameGenMap.inc` and
+  `GameCreatures.cpp`, deleted unread): terrain, structures, creatures, region roles, looks and
+  gear, every caller moved to it. The oracle zones match draw for draw (gen_seed_123, gen2, genb:
+  every .rtrace whole), with every spawn point but those whose race comes from the three picker
+  lists not yet extracted, and genr's shopper that reads past the game's list.
+- shops, identifying and crafting (`src/GameShop.*`, `src/GameCraft.*`, deleted unread) and ground items and
+  pick-up (`src/GroundItems.*`, replacing CubeVulkan's invented coin flight), from `loot-shops.md`,
+  `loot-crafting.md` and `loot-pickup.md`; checked by unit tests of the seeds, prices, the craft timing,
+  the hop and pick-up timing (no shop, crafting or pick-up recording exists yet).
+- the world map's region model and its markers (`src/worldgen/MapModel.*`, 0x2eb7b0), written
+  fresh from `worldmap-model.md` in place of CubeVulkan's own stand-in; checked by unit tests of
+  what the spec states (sizes, units, marker lists and their order around a town), since no
+  recording of the game's map exists yet (`EngineTests mapdump` prints what one would be
+  compared with).
+- the creature looks (`NativeLooks.cpp`, now `worldgen/Looks.*`) and the creature record, residents
+  and pets (`NativeCreature.cpp`, now `worldgen/Residents.*`), deleted unread; looks.bin 7704/7704.
+- the class-adapted treasure item, `transformed()` in `src/NativePlayer.cpp` (0x10a720), its old body deleted
+  unread and written from `player-item-adaptation.md`; checked by unit tests of every rule over 3000 modifiers
+  and each class (no recording of the routine exists yet).
+- the race-number-to-dictionary-key table (`src/RaceKeys.inc`), deleted and written again from
+  `race-keys.md`, whose facts come from the game's own table (0x1401510f0); checked by unit tests of the
+  table and that every key names an entry of the install's `dict_en.xml` (all but Bullterrier and Vase,
+  which the game's dictionary lacks). (Slip on record: the implementer saw the old file's first five
+  lines, its two-line header and three lines of entries, before deleting it.)
+- the game's save files (`src/NativeSaves.*`, from `native-saves.md`) and the front screens (`src/Frontend*.cpp`,
+  `src/HudFrontend.cpp`, from `frontend-title.md`, `frontend-characters.md`, `frontend-options.md`).
+  `src/NativeMenu.*` (the CWM1 replay and its third-party `shade()`) is retired with `tools/MenuProbe.cpp`,
+  `tools/MenuCapture.cpp` and `tools/ConvertMenuCapture.py`: the title is now the ordinary world. Nothing of
+  `shade()` was kept; the logo's overlay lighting is a stand-in until a spec covers it (`docs/menu.md`).
