@@ -235,7 +235,8 @@ add_library(engine STATIC
 add_dependencies(engine shaders)
 target_include_directories(engine PUBLIC src include ${SHADER_OUT})
 # glu32: Windows' GLU, whose polygon tessellator fills the interface's outline shapes as Plasma's does.
-target_link_libraries(engine PUBLIC deps glfw ws2_32 glu32 freetype)
+target_link_libraries(engine PUBLIC deps glfw ws2_32 glu32 freetype winmm)
+target_sources(engine PRIVATE src/GamepadUi.cpp)
 if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
@@ -258,6 +259,8 @@ add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp test
 target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)
+target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp)
+target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
 
 # CubeVulkan's own art (assets/: the OverworldEvents quest sprites, MIT) next to the executable.

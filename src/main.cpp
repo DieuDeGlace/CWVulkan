@@ -1307,6 +1307,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // Inventory screen (B, as the game): the game's art, item icons drawn from the
     // items' own sprites, names from the game's dictionary, the game's class rules.
     bool inventoryOpen = openInventory;
+    bool inventoryRegionActive = false;
     // The crafting widget (C, the game's the crafting button) beside the bag, or alone, and the
     // bag itself (B): the screen is open while either is.
     bool craftingOpen = false, bagShown = true;
@@ -2865,6 +2866,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     double lastX = 0, lastY = 0;
     const bool mouseLook = capture.empty() && config.number("Input", "MouseLook", 1, 0, 1) != 0;
     glfwGetCursorPos(window, &lastX, &lastY);
+    auto pointerPosition = [&](double *x, double *y) {
+        if (input.pointerSampled)
+            *x = input.pointerX, *y = input.pointerY;
+        else
+            glfwGetCursorPos(window, x, y);
+    };
     auto start = std::chrono::steady_clock::now(), previous = start, titleTime = start;
     // Sounds (sound.md): the world clock the ambient emitters tick by (world +0x440, ms) and
     // each zone's emitters, read once.
@@ -2925,9 +2932,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
     float viewYaw = player.yaw, viewPitch = player.pitch, viewZoom = player.zoom;
-    glm::vec2 mapPadAngles{0}; // The map's controller angles are separate from the camera's.
 
     while (!glfwWindowShouldClose(window)) {
+        input.gamepadSampled = false;
+        input.pointerSampled = false;
         glfwPollEvents();
         if (std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
             saveProgress();
@@ -2952,6 +2960,22 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // everything while one is open). Start Menu and Exit Game end the session.
         const bool panelsBeforeInput = inventoryOpen || mapOpen || (menusReady && menus.open());
         const bool capturingBeforeInput = menusReady && menus.capturingControl();
+        input.gamepadModal = panelsBeforeInput || chat.typing();
+        input.gamepadMapMode = mapOpen;
+        input.gamepadPanels = {};
+        if (inventoryOpen && hud.hasPanels()) {
+            double x, y;
+            glfwGetCursorPos(window, &x, &y);
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            const auto size = renderer.screenSize();
+            const glm::vec2 point((float)(x * size.width / std::max(width, 1)),
+                                  (float)(y * size.height / std::max(height, 1)));
+            input.gamepadPanels = {hud.inventoryPanelEligible(point, inventoryView, 0),
+                                   hud.inventoryPanelEligible(point, inventoryView, 2),
+                                   hud.inventoryPanelEligible(point, inventoryView, 1)};
+        }
+        input.sampleGamepad(window, capturingBeforeInput, &gameControls);
         if (menusReady)
             switch (menus.frame(dt * 1000.0)) {
             case frontend::Result::Title:
@@ -2985,12 +3009,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         input.typed.clear();
         gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing(),
-                         panelsBeforeInput || menusOpen || chat.typing() || talk.has_value(), talk.has_value(),
-                         capturingBeforeInput || (menusReady && menus.capturingControl()));
+                         panelsBeforeInput || menusOpen || chat.typing(), mapOpen,
+                         capturingBeforeInput || (menusReady && menus.capturingControl()),
+                         input.gamepadPanels.any(), &input.gamepad);
         if (gameInput.gamepad().dismiss) {
             inventoryOpen = craftingOpen = mapOpen = false;
             bagShown = true;
-            talk.reset();
             if (menusReady)
                 menus.dismiss();
             menusOpen = false;
@@ -3081,10 +3105,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                                                           : GLFW_CURSOR_NORMAL;
         if (glfwGetInputMode(window, GLFW_CURSOR) != cursorMode) {
             glfwSetInputMode(window, GLFW_CURSOR, cursorMode);
-            glfwGetCursorPos(window, &lastX, &lastY);
+            pointerPosition(&lastX, &lastY);
         }
         double mx, my;
-        glfwGetCursorPos(window, &mx, &my);
+        pointerPosition(&mx, &my);
         if (mapOpen && !inventoryOpen && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             // the pointer movement: dragging with the right button moves the map, 2^zoom blocks a
             // pixel, along the camera's turn.
@@ -3107,9 +3131,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         lastY = my;
         const GamepadCamera padTurn = gamepadCamera(gameInput.gamepad().look, frameMs);
         constexpr double PAD_RADIANS = 0.017453292519943295;
-        if (mapOpen) {
-            mapPadAngles.x = (float)((double)mapPadAngles.x + padTurn.yaw * PAD_RADIANS);
-            mapPadAngles.y = (float)((double)mapPadAngles.y + padTurn.pitch * PAD_RADIANS);
+        if (upgrade.open) {
+            upgradeView.yawDegrees = (float)((double)upgradeView.yawDegrees + padTurn.yaw);
+            upgradeView.pitchDegrees = (float)((double)upgradeView.pitchDegrees + padTurn.pitch);
         } else {
             player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
             player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
@@ -3484,7 +3508,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             closeInventoryAt = -1;
         }
         if (!inventoryOpen) // (the shop, the identify window and the upgrade widget close with the inventory)
-            vendorTrade.open = upgrade.open = false, identify.close();
+            vendorTrade.open = upgrade.open = false, inventoryRegionActive = false, identify.close();
         lootWindowItems.clear();
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
@@ -3508,7 +3532,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             };
             listed.clear();
             inventoryView.items.clear();
-            inventoryView.regionName = landName;
+            const worldgen::Int2 here = regionHere();
+            if (!inventoryRegionActive) {
+                inventoryView.activeRegion = {here.x, here.y};
+                inventoryRegionActive = true;
+            }
             for (size_t i = 0; i < gear.itemCount(); i++)
                 if (!gear.isWorn(i)) {
                     const Gear::Item &it = gear.item(i);
@@ -3516,65 +3544,81 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     inventoryView.items.push_back({itemName(it), it.sprite, 1,
                                                    (catalog.mayUse(it.category, it.id, it.material, gear.playerClass()) && levelAllows(it)),
                                                    tabOf(it.category), stacks(it.category), rarityColour(it.rarity)});
+                    inventoryView.items.back().region = {it.region[0], it.region[1]};
                 }
             const size_t gearRows = listed.size();
-            for (const Carried &c : bag) // then what the bag holds (not usable yet)
+            for (const Carried &c : bag) { // then what the bag holds (not usable yet)
                 inventoryView.items.push_back({bagName(c.item, itemName(c.item)), c.item.sprite, c.count, true, tabOf(c.item.category),
                                                stacks(c.item.category), rarityColour(c.item.rarity)});
+                inventoryView.items.back().region = {c.item.region[0], c.item.region[1]};
+            }
+            auto refreshRegions = [&] {
+                std::vector<inventoryui::Region> regions;
+                for (const auto &entry : inventoryView.items)
+                    if (entry.tab == inventoryView.tab && entry.count != 0)
+                        regions.push_back(entry.region);
+                inventoryView.regionChoices = inventoryui::regionChoices(std::move(regions), {here.x, here.y});
+                inventoryView.regionName = landNameOf({inventoryView.activeRegion[0], inventoryView.activeRegion[1]});
+            };
+            refreshRegions();
             // The vendor (the vendor update): its offers, or what was sold to it, newest first.
             std::vector<gameshop::Item> vendorRaws;
             inventoryView.vendor.open = vendorTrade.open;
-            inventoryView.vendor.items.clear();
-            if (vendorTrade.open) {
-                std::vector<gameshop::Offer> offers;
-                if (inventoryView.vendor.tab == 1)
-                    for (auto it = soldItems.rbegin(); it != soldItems.rend(); ++it)
-                        offers.push_back({it->first, it->second});
-                else {
-                    const worldgen::Int2 region = regionHere();
-                    const int tier = gameshop::shopTier(region.x, region.y, saveGame.solvedMissions);
-                    const std::vector<gameshop::Item> &bought = boughtFromVendor[vendorTrade.shop.id];
-                    offers = gameshop::stock(vendorTrade.shop, day, gear.playerClass(), tier,
-                                             [&](const gameshop::Item &item) { return gameshop::boughtCount(bought, item); });
-                }
-                static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
-                for (const gameshop::Offer &o : offers) {
-                    const uint8_t *n = o.item.data();
-                    int32_t id;
-                    std::memcpy(&id, n + 4, 4);
-                    Gear::Item shown;
-                    shown.category = n[0], shown.id = id, shown.material = n[0x1c], shown.rarity = (int8_t)n[0x14];
-                    std::memcpy(&shown.modifier, n + 8, 4);
-                    std::string sprite = spawnedReady ? spawned.itemSprite(n) : std::string();
-                    static std::set<std::string> tried;
-                    if (!sprite.empty() && tried.insert(sprite).second)
-                        if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
-                            CubModel cub;
-                            if (cub.load(*path)) {
-                                hud.addIcon(sprite, renderItemIcon(cub, 64), 64);
-                                hud.layout(renderer, renderer.screenSize());
+            auto refreshVendor = [&] {
+                vendorRaws.clear();
+                inventoryView.vendor.items.clear();
+                if (vendorTrade.open) {
+                    std::vector<gameshop::Offer> offers;
+                    if (inventoryView.vendor.tab == 1)
+                        for (auto it = soldItems.rbegin(); it != soldItems.rend(); ++it)
+                            offers.push_back({it->first, it->second});
+                    else {
+                        const worldgen::Int2 region = regionHere();
+                        const int tier = gameshop::shopTier(region.x, region.y, saveGame.solvedMissions);
+                        const std::vector<gameshop::Item> &bought = boughtFromVendor[vendorTrade.shop.id];
+                        offers = gameshop::stock(vendorTrade.shop, day, gear.playerClass(), tier,
+                                                 [&](const gameshop::Item &item) { return gameshop::boughtCount(bought, item); });
+                    }
+                    static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
+                    for (const gameshop::Offer &o : offers) {
+                        const uint8_t *n = o.item.data();
+                        int32_t id;
+                        std::memcpy(&id, n + 4, 4);
+                        Gear::Item shown;
+                        shown.category = n[0], shown.id = id, shown.material = n[0x1c], shown.rarity = (int8_t)n[0x14];
+                        std::memcpy(&shown.modifier, n + 8, 4);
+                        std::string sprite = spawnedReady ? spawned.itemSprite(n) : std::string();
+                        static std::set<std::string> tried;
+                        if (!sprite.empty() && tried.insert(sprite).second)
+                            if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
+                                CubModel cub;
+                                if (cub.load(*path)) {
+                                    hud.addIcon(sprite, renderItemIcon(cub, 64), 64);
+                                    hud.layout(renderer, renderer.screenSize());
+                                }
                             }
-                        }
-                    Hud::Inventory::Entry e;
-                    e.name = bagName(shown, itemName(shown)) + (gameshop::renowned(o.item) ? "+" : "");
-                    e.icon = sprite;
-                    e.count = o.count;
-                    e.allowed = !(shown.category >= 3 && shown.category <= 9) || catalog.mayUse(shown.category, shown.id, shown.material, gear.playerClass());
-                    e.tab = inventoryView.vendor.tab;
-                    e.color = rarities[std::clamp((int)shown.rarity, -1, 4) + 1];
-                    e.price = inventoryView.vendor.tab == 1 ? gameshop::sellPrice(o.item) : gameshop::price(o.item);
-                    inventoryView.vendor.items.push_back(e);
-                    vendorRaws.push_back(o.item);
+                        Hud::Inventory::Entry e;
+                        e.name = bagName(shown, itemName(shown)) + (gameshop::renowned(o.item) ? "+" : "");
+                        e.icon = sprite;
+                        e.count = o.count;
+                        e.allowed = !(shown.category >= 3 && shown.category <= 9) || catalog.mayUse(shown.category, shown.id, shown.material, gear.playerClass());
+                        e.tab = inventoryView.vendor.tab;
+                        e.color = rarities[std::clamp((int)shown.rarity, -1, 4) + 1];
+                        e.price = inventoryView.vendor.tab == 1 ? gameshop::sellPrice(o.item) : gameshop::price(o.item);
+                        inventoryView.vendor.items.push_back(e);
+                        vendorRaws.push_back(o.item);
+                    }
+                    // What the bag's items sell for (the inventory panel's drawing, with the vendor open).
+                    for (size_t k = 0; k < inventoryView.items.size(); k++) {
+                        const Gear::Item &it = k < listed.size() ? gear.item(listed[k]) : bag[k - listed.size()].item;
+                        inventoryView.items[k].price = gameshop::sellPrice(rawOf(it));
+                    }
                 }
-                // What the bag's items sell for (the inventory panel's drawing, with the vendor open).
-                for (size_t k = 0; k < inventoryView.items.size(); k++) {
-                    const Gear::Item &it = k < listed.size() ? gear.item(listed[k]) : bag[k - listed.size()].item;
-                    inventoryView.items[k].price = gameshop::sellPrice(rawOf(it));
-                }
-            }
+            };
+            refreshVendor();
             // Mouse in framebuffer pixels (the window may be scaled).
             double cx, cy;
-            glfwGetCursorPos(window, &cx, &cy);
+            pointerPosition(&cx, &cy);
             int ww, wh, fw, fh;
             glfwGetWindowSize(window, &ww, &wh);
             glfwGetFramebufferSize(window, &fw, &fh);
@@ -3713,7 +3757,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 // The craft button (loot-crafting.md §3.1): held, it makes the selected recipe in
                 // 1000 ms, each further one 1.2 times faster down to 200 ms.
-                const bool held0 = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+                const bool held0 = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS || input.gamepadPointer.held[0];
                 bool started = false;
                 const bool made = craftButton.update((float)(dt * 1000.0), true, cv.details.buttonOver && held0, &started);
                 if (started) {
@@ -4013,7 +4057,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     uint64_t cubesSeen = 1469598103934665603ull; // (FNV-1a over the cube bytes)
                     for (size_t k = Gear::CUBES_AT; k <= Gear::CUBE_COUNT_AT; k++)
                         cubesSeen = (cubesSeen ^ record[k]) * 1099511628211ull;
-                    const std::string key = upgradeModelSprite + "|" + std::to_string(upgradeView.yawDegrees) + "|" + std::to_string(cubesSeen);
+                    const std::string key = upgradeModelSprite + "|" + std::to_string(upgradeView.yawDegrees) + "|" +
+                                            std::to_string(upgradeView.pitchDegrees) + "|" + std::to_string(cubesSeen);
                     if (key != upgradePictureKey && upgradeModel.sx) {
                         hud.addIcon("upgrade-weapon", upgradewidget::render(upgradeModel, record.data(), upgradeView), upgradeView.pixels);
                         hud.layout(renderer, renderer.screenSize());
@@ -4049,19 +4094,52 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     lootWindowItems.insert(lootWindowItems.end(), items.begin(), items.end());
                 }
             }
-            { // the inventory scrolling / scrolling down, by the buttons and the wheel
-                const int rows = hud.inventoryRowCount(inventoryView);
+            auto changePanelTab = [&](int which, int next) {
+                auto change = [&](auto &panel) {
+                    if (panel.tab == next)
+                        return;
+                    panel.selectTab(next);
+                    if (which == 0)
+                        refreshRegions();
+                    else if (which == 1)
+                        refreshVendor();
+                    panel.scroll = std::clamp(panel.scroll, 0, std::max(0, hud.inventoryRowCount(inventoryView, which) - 1));
+                    panel.selected = hud.inventoryFirstItem(inventoryView, which);
+                    audio.playInterface(soundrules::soundid::MENU_TAB);
+                };
+                if (which == 0)
+                    change(inventoryView);
+                else if (which == 1)
+                    change(inventoryView.vendor);
+                else
+                    change(inventoryView.crafting);
+            };
+            auto changeRegion = [&](int direction) {
+                inventoryui::changeRegion(inventoryView.activeRegion, inventoryView.regionChoices, direction);
+                refreshRegions();
+                inventoryView.scroll = std::clamp(inventoryView.scroll, 0, std::max(0, hud.inventoryRowCount(inventoryView) - 1));
+                audio.playInterface(soundrules::soundid::MENU_TAB);
+            };
+            auto scrollPanel = [&](int which, int &offset, int step) {
+                const int last = std::max(0, hud.inventoryRowCount(inventoryView, which) - 1);
+                const int before = std::clamp(offset, 0, last);
+                offset = std::clamp(before + step, 0, last);
+                if (offset != before)
+                    audio.playInterface(soundrules::soundid::MENU_TAB);
+            };
+            if (bagShown) { // the inventory scrolling / scrolling down, by the buttons and the wheel
                 int step = 0;
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverButton)
                         step += inventoryView.hoverButton == 1 ? -1 : 1;
                 step -= (int)inventoryWheel;
                 inventoryWheel -= (int)inventoryWheel;
-                inventoryView.scroll = std::clamp(inventoryView.scroll + step, 0, std::max(0, rows - 1));
+                if (input.gamepadPointer.scrollPanel == 0)
+                    step += input.gamepadPointer.scrollRows;
+                scrollPanel(0, inventoryView.scroll, step);
             }
             if (craftingOpen) { // the crafting widget's scroll buttons (and the wheel, without the bag)
                 Hud::Inventory::Crafting &cv = inventoryView.crafting;
-                const int rows = hud.inventoryRowCount(inventoryView, 2);
                 int step = 0;
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && cv.hoverButton)
@@ -4070,17 +4148,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     step -= (int)inventoryWheel;
                     inventoryWheel -= (int)inventoryWheel;
                 }
-                cv.scroll = std::clamp(cv.scroll + step, 0, std::max(0, rows - 1));
+                if (input.gamepadPointer.scrollPanel == 1)
+                    step += input.gamepadPointer.scrollRows;
+                scrollPanel(2, cv.scroll, step);
+            }
+            if (vendorTrade.open) {
+                int step = input.gamepadPointer.scrollPanel == 2 ? input.gamepadPointer.scrollRows : 0;
+                for (int button : input.buttons)
+                    if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.vendor.hoverButton)
+                        step += inventoryView.vendor.hoverButton == 1 ? -1 : 1;
+                scrollPanel(1, inventoryView.vendor.scroll, step);
             }
             for (int button : input.buttons) {
                 if (button != GLFW_MOUSE_BUTTON_LEFT || inventoryView.hoverButton)
                     continue;
+                if (const int region = hud.inventoryRegionButtonAt(mouse, inventoryView)) {
+                    changeRegion(region);
+                    continue;
+                }
                 if (craftingOpen && inventoryView.crafting.hoverTab >= 0) { // the crafting tabs
-                    Hud::Inventory::Crafting &cv = inventoryView.crafting;
-                    if (cv.tab != cv.hoverTab) {
-                        cv.tab = cv.hoverTab, cv.scroll = 0, cv.selected = -1;
-                        audio.playInterface(soundrules::soundid::MENU_TAB);
-                    }
+                    changePanelTab(2, inventoryView.crafting.hoverTab);
                     continue;
                 }
                 if (craftingOpen && inventoryView.crafting.hoverItem >= 0) { // the inventory selection frame(true)
@@ -4091,8 +4178,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (craftingOpen && inventoryView.crafting.hoverButton)
                     continue;
                 if (vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
-                    inventoryView.vendor.tab = inventoryView.vendor.hoverTab;
-                    inventoryView.vendor.scroll = 0;
+                    changePanelTab(1, inventoryView.vendor.hoverTab);
                     continue;
                 }
                 if (vendorTrade.open && inventoryView.vendor.hoverItem >= 0 &&
@@ -4150,8 +4236,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     continue;
                 }
                 if (inventoryView.hoverTab >= 0) { // the inventory tab selection
-                    inventoryView.tab = inventoryView.hoverTab;
-                    inventoryView.scroll = 0;
+                    changePanelTab(0, inventoryView.hoverTab);
                     continue;
                 }
                 if (inventoryView.hoverItem >= (int)gearRows) {
@@ -4197,6 +4282,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         applyGear();
                     }
                 }
+            }
+            if (input.gamepadPointer.regionDirection)
+                changeRegion(input.gamepadPointer.regionDirection);
+            for (const auto &tab : input.gamepadPointer.tabs) {
+                const int which = tab.panel == 1 ? 2 : tab.panel == 2 ? 1 : 0;
+                const int current = which == 0 ? inventoryView.tab : which == 1 ? inventoryView.vendor.tab : inventoryView.crafting.tab;
+                changePanelTab(which, (current + tab.direction + (which == 1 ? 2 : 6)) % (which == 1 ? 2 : 6));
             }
             input.buttons.clear(); // No attacks while the inventory is open.
             // Slot icons: what is equipped (measured items, or the recorded sprite of
@@ -4273,7 +4365,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (mouseLook) startMove(moves.special);
             else {
                 rightDownAt = time;
-                glfwGetCursorPos(window, &rightDownX, &rightDownY);
+                pointerPosition(&rightDownX, &rightDownY);
             }
         }
         for (int button : input.released) {
@@ -4283,7 +4375,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 startMove(moves.releaseSpecial);
             } else if (special && rightDownAt >= 0) {
                 double rx, ry;
-                glfwGetCursorPos(window, &rx, &ry);
+                pointerPosition(&rx, &ry);
                 if (time - rightDownAt < .3 && std::abs(rx - rightDownX) + std::abs(ry - rightDownY) < 8)
                     startMove(moves.special);
                 rightDownAt = -1;
@@ -4603,7 +4695,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             sinceAttack = 0;
             attackQueued = false;
         }
-        input.buttons.clear();
+            input.finishPointerCallbacks();
+            input.buttons.clear();
         input.released.clear();
         if (poseAbility > 0) {
             ability = (int)poseAbility;
@@ -6085,7 +6178,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             if (hs.pointer) {
                 double px, py;
-                glfwGetCursorPos(window, &px, &py);
+                pointerPosition(&px, &py);
                 if (pointerTestX >= 0)
                     px = pointerTestX, py = pointerTestY;
                 hs.pointerAt = glm::vec2((float)px, (float)py);
@@ -6097,6 +6190,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
             hud.draw(hs, hudVertices);
+            input.gamepadNavigationPoints.clear();
+            if (hs.inventory && (menusReady ? menus.interfaceShown() : true)) {
+                int width, height;
+                glfwGetWindowSize(window, &width, &height);
+                const auto size = renderer.screenSize();
+                for (glm::vec2 point : hud.inventoryNavigationPoints(*hs.inventory))
+                    input.gamepadNavigationPoints.push_back({(int32_t)(point.x * width / std::max(1u, size.width)),
+                                                            (int32_t)(point.y * height / std::max(1u, size.height))});
+            }
             if (menusReady && !menus.interfaceShown()) // F4: the whole interface hidden
                 hudVertices.clear();
             else if (hs.gold >= 0 && hud.hasInterface()) { // the money's turning coin (hud-money.md §2)
@@ -6148,7 +6250,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             view.center = mapPosition;
             view.level = mapZoom;
             view.radius = radius;
-            view.pitch = viewPitch + mapPadAngles.y, view.yaw = viewYaw + mapPadAngles.x;
+            view.pitch = viewPitch, view.yaw = viewYaw;
             view.cursor = mapViewCentre;
             view.viewScale = minimapScale * mapLabelScale; // options mapScale x the eased scale (§4.1)
             view.screen = glm::vec2(w, h);
@@ -6249,7 +6351,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             mapCursorKnown = false;
             if (mapOpen && !halfRadius) { // (no cursor on the minimap, nor at half radius: §4.6)
                 double px, py;
-                glfwGetCursorPos(window, &px, &py);
+                pointerPosition(&px, &py);
                 if (pointerTestX >= 0)
                     px = pointerTestX, py = pointerTestY;
                 mapCursorKnown = worldMap.pick(view, glm::vec2((float)px, (float)py), mapCursor);
@@ -6384,7 +6486,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 // and a revealed artifact's place shows its artifact.
                 if (mapOpen && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS) {
                     double px, py;
-                    glfwGetCursorPos(window, &px, &py);
+                    pointerPosition(&px, &py);
                     if (pointerTestX >= 0)
                         px = pointerTestX, py = pointerTestY;
                     const mapmarks::Hover hovered = mapmarks::hover(mapMarkerViews, glm::vec2((float)px, (float)py), hud.interfaceScale(),

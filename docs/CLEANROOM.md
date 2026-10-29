@@ -62,6 +62,10 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- controller GUI events, ranking and repeat timing, inventory region/tab state,
+  navigation registration, shape picking and transformed bounds, from the independent
+  `remaining-runtime-gaps.md` sections 4.1–4.17. Implementations and synthetic checks
+  use only that specification and the engine's sources; owner assets remain external.
 - the special skill and interaction kinds 1/11/12/13;
 - the conversation builder (`src/TalkGen.*`);
 - map markers, lore and artifacts (`src/MapMarks.*`, `src/Lore.*`);

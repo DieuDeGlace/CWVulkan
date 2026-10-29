@@ -125,6 +125,8 @@ int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
+int gamepadUiTests();      // tests/GamepadUiTests.cpp
+int plasmaHitTests();      // tests/PlasmaHitTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -8853,6 +8855,10 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "hitui")
+        return plasmaHitTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "padui")
+        return gamepadUiTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "pets")
         return petTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "dialogue")
@@ -10107,6 +10113,8 @@ int main(int argc, char **argv) {
     failures += playerHitTests();      // tests/PlayerHitTests.cpp
     failures += dialoguePageTests();   // tests/DialoguePageTests.cpp
     failures += petTests();            // tests/PetTests.cpp
+    failures += gamepadUiTests();      // tests/GamepadUiTests.cpp
+    failures += plasmaHitTests();     // tests/PlasmaHitTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

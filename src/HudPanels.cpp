@@ -218,7 +218,8 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
 static std::vector<int> shownOf(const Hud::InvList &list) {
     std::vector<int> shown;
     for (size_t i = 0; i < list.items->size(); i++)
-        if ((*list.items)[i].tab == list.tab && (list.all || (*list.items)[i].count != 0))
+        if ((*list.items)[i].tab == list.tab && (list.all || (*list.items)[i].count != 0) &&
+            (!list.region || (*list.items)[i].region == *list.region))
             shown.push_back((int)i);
     return shown;
 }
@@ -260,11 +261,9 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
     for (auto [name, value] : {std::pair{"upbutton", 1}, std::pair{"downbutton", 2}})
         if (auto it = p.buttons.find(name); it != p.buttons.end() && it->second)
             it->second->fill = list.hoverButton == value ? glm::vec4(0, 1, 1, 1) : glm::vec4(1);
-    // The region buttons show for the bag's first two tabs with other regions (none yet:
-    // CubeVulkan's items do not keep their region apart).
     for (const char *b : {"leftbutton", "rightbutton"})
         if (auto it = p.buttons.find(b); it != p.buttons.end() && it->second)
-            it->second->visible = false;
+            it->second->visible = list.regionArrows;
 }
 
 // Places the panels for this frame (the interface's layout for the window size).
@@ -613,7 +612,8 @@ void Hud::drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) c
 // --- What the pointer is on --------------------------------------------------------------
 
 Hud::InvList Hud::bagList(const Inventory &inv) const {
-    return {&inv.items, inv.tab, inv.scroll, inv.hoverItem, inv.hoverTab, inv.hoverButton};
+    return {&inv.items, inv.tab, inv.scroll, inv.hoverItem, inv.hoverTab, inv.hoverButton, false, inv.selected,
+            inv.tab < 2 ? &inv.activeRegion : nullptr, inv.tab < 2 && inv.regionChoices.size() > 1};
 }
 Hud::InvList Hud::vendorList(const Inventory &inv) const {
     return {&inv.vendor.items, inv.vendor.tab, inv.vendor.scroll, inv.vendor.hoverItem, inv.vendor.hoverTab, inv.vendor.hoverButton};
@@ -629,8 +629,74 @@ const Hud::InvPanel &Hud::invPanel(int which) const { return which == 1 ? panels
 
 static bool inside(glm::vec2 m, glm::vec2 at, glm::vec2 size) { return m.x >= at.x && m.x < at.x + size.x && m.y >= at.y && m.y < at.y + size.y; }
 
+int Hud::inventoryFirstItem(const Inventory &inv, int which) const {
+    if (!hasPanels())
+        return -1;
+    const InvList list = listOf(inv, which);
+    const auto shown = shownOf(list);
+    const int first = list.scroll * invPanel(which).columns;
+    return first >= 0 && first < (int)shown.size() ? shown[(size_t)first] : -1;
+}
+
+int Hud::inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const {
+    if (!hasPanels() || !inv.bagShown || inv.tab >= 2 || inv.regionChoices.size() < 2)
+        return 0;
+    placePanels(inv);
+    for (auto [name, direction] : {std::pair{"leftbutton", -1}, std::pair{"rightbutton", 1}})
+        if (const auto found = panels.bag.buttons.find(name); found != panels.bag.buttons.end() && found->second &&
+            inside(mouse, scene->contentPosition(*found->second), scene->screenSize(*found->second)))
+            return direction;
+    return 0;
+}
+
 int Hud::inventoryRowCount(const Inventory &inv, int which) const {
     return hasPanels() ? invRowCount(invPanel(which), listOf(inv, which)) : 1;
+}
+
+std::vector<glm::vec2> Hud::inventoryNavigationPoints(const Inventory &inv) const {
+    std::vector<glm::vec2> points;
+    if (!hasPanels())
+        return points;
+    placePanels(inv);
+    const plasma::Scene &s = *scene;
+    auto frameCentre = [&](const plasma::SceneNode &node) {
+        points.push_back(glm::vec2(glm::ivec2(s.contentPosition(node) + s.screenSize(node) * 0.5f)));
+    };
+    if (inv.bagShown)
+        for (const auto *slot : panels.slots)
+            frameCentre(*slot);
+    auto grid = [&](int which, bool visible) {
+        const InvPanel &panel = invPanel(which);
+        const InvList list = listOf(inv, which);
+        if (!visible || !panel.node || !list.items || list.tab < 0 || list.tab >= (int)panel.tabs.size())
+            return;
+        const glm::vec2 origin = s.contentPosition(*panel.node);
+        const float scale = s.matrix(*panel.node)[0][0], halfIcon = (float)(panels.cellHeight / 2) * scale;
+        for (int row = 0; row < panel.rows; ++row)
+            for (int column = 0; column < panel.columns; ++column) {
+                const glm::vec2 corner = glm::vec2(glm::ivec2(origin + scale * glm::vec2(10 + column * (panels.cellWidth + 5),
+                                                                                     40 + row * (panels.cellHeight + 5))));
+                points.push_back(glm::vec2(glm::ivec2(corner + halfIcon)));
+            }
+    };
+    grid(2, inv.crafting.open);
+    if (inv.crafting.open && inv.crafting.details.valid && panels.details) {
+        const auto &node = *panels.details;
+        const glm::vec2 origin = s.contentPosition(node);
+        const float scale = s.matrix(node)[0][0], height = s.contentSize(node).y;
+        const int columns = (int)((s.viewSize(node).x - 10) / 45);
+        if (columns > 0)
+            for (size_t i = 0; i < inv.crafting.details.ingredients.size(); ++i) {
+                const glm::vec2 corner = glm::vec2(glm::ivec2(origin + scale * glm::vec2(20 + 70 * ((int)i % columns),
+                                                                                     height - 120 + 45 * ((int)i / columns))));
+                points.push_back(glm::vec2(glm::ivec2(corner + 20 * scale)));
+            }
+        if (panels.craftButton)
+            frameCentre(*panels.craftButton);
+    }
+    grid(1, inv.vendor.open);
+    grid(0, inv.bagShown);
+    return points;
 }
 
 int Hud::inventoryButtonAt(glm::vec2 m, const Inventory &inv, int which) const {
@@ -644,6 +710,29 @@ int Hud::inventoryButtonAt(glm::vec2 m, const Inventory &inv, int which) const {
                                             inside(m, scene->contentPosition(*it->second), scene->screenSize(*it->second)))
             found = value;
     return found;
+}
+
+bool Hud::inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int which) const {
+    const bool shown = which == 0 ? inv.bagShown : which == 1 ? inv.vendor.open : inv.crafting.open;
+    const InvPanel &panel = invPanel(which);
+    if (!shown || !hasPanels() || !panel.node)
+        return false;
+    placePanels(inv);
+    if (!panel.node->visible)
+        return false;
+    auto textHit = [&](const plasma::SceneNode &node, glm::vec2 point) {
+        plasma::TextStyle style;
+        if (!node.doc || !plasma::textStyle(node.doc->shapes[(size_t)node.shape], node.doc->loaderFlags, style))
+            return false;
+        if (node.text)
+            style.string = *node.text;
+        const auto &font = plasmaFonts[fontIndex(style.font)];
+        plasma::TextBox bounds;
+        return font.loaded() && plasma::textBounds(font, style, scene->matrix(node), bounds) &&
+               point.x >= bounds.minimum.x && point.y >= bounds.minimum.y &&
+               point.x <= bounds.maximum.x && point.y <= bounds.maximum.y;
+    };
+    return scene->hitTest(*panel.node, mouse, textHit) != nullptr;
 }
 
 int Hud::panelItemAt(glm::vec2 m, const Inventory &inv, int which) const {

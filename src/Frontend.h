@@ -9,6 +9,7 @@
 // tests check them); the second half runs them with the world, the renderer and the interface.
 #include "DayNight.h"
 #include "GameOptions.h"
+#include "GamepadUi.h"
 #include "Hud.h"
 #include "NativeProgress.h"
 #include "NativeSaves.h"
@@ -36,7 +37,33 @@ struct MenuInput {
     double scroll = 0;
     std::vector<int> pressed, buttons, released;
     std::string typed; // text typed this frame (character creation's name)
-    void clear() { scroll = 0; pressed.clear(); buttons.clear(); released.clear(); typed.clear(); }
+    // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
+    GamepadButtons gamepad;
+    gamepadui::Input gamepadInput;
+    gamepadui::Frame gamepadPointer;
+    gamepadui::Eligible gamepadPanels;
+    std::vector<gamepadui::Point> gamepadNavigationPoints; // Registered by the preceding gameplay draw.
+    bool gamepadSampled = false, gamepadModal = false, gamepadMapMode = false;
+    bool pointerSampled = false;
+    bool lastUsedPad = false;
+    double pointerX = 0, pointerY = 0; // GUI hit tests retain the pre-navigation cursor this frame.
+    void sampleGamepad(GLFWwindow *window, bool capturing, const gameoptions::Controls *controls = nullptr) {
+        if (!gamepadSampled) {
+            if (!capturing && controls && GameInput::physicalBindingDown(window, *controls))
+                lastUsedPad = false;
+            gamepad = GameInput::pollGamepad(window, capturing);
+            gamepadSampled = true;
+        }
+    }
+    void finishPointerCallbacks() {
+        if (gamepadPointer.padAfterCallbacks)
+            lastUsedPad = true;
+    }
+    void clear() {
+        scroll = 0; pressed.clear(); buttons.clear(); released.clear(); typed.clear();
+        gamepadSampled = false;
+        pointerSampled = false;
+    }
 };
 
 namespace frontend {
@@ -215,6 +242,14 @@ struct OptionsScreen {
 struct ControlsScreen {
     gameoptions::Controls values = gameoptions::defaultControls();
     int waiting = -1, first = 0;
+    void bind(gameoptions::Binding binding) {
+        if (waiting < 0 || waiting >= (int)values.size())
+            return;
+        for (auto &old : values)
+            if (old == binding)
+                old = {0, 0};
+        values[(size_t)waiting] = binding;
+    }
     static float rowY(int visibleRow) { return 27.0f + 30.0f * (float)visibleRow; }
     static int visibleRows() { return (int)((CONTROLS_SIZE.y - 120.0f) / 30.0f); }
 };

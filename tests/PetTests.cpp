@@ -149,6 +149,12 @@ int petTests() {
         check(equippedPet->record[0x64c] == 0 && get<int32_t>(equippedPet->record, 0x644) == -2,
               "empty owner weapon clears rarity without replacing region");
         check(equippedPet->buffs.size() == 1 && equipment.world.buffNotes.size() == 1, "owner buff copied with a notice");
+        if (!equipment.world.buffNotes.empty()) {
+            const auto &notice = equipment.world.buffNotes.back();
+            const int64_t recipient = get<int64_t>(equippedPet->record, 8);
+            check(get<int64_t>(notice.data(), 0) == recipient && get<int64_t>(notice.data(), 8) == recipient &&
+                  get<int64_t>(notice.data(), 0x20) == 99, "copied buff notice is pet-to-pet, retaining its original buff source");
+        }
         nativepet::step(equipment.world);
         check(equipment.world.buffNotes.size() == 1, "existing copied buff does not emit another notice");
     }

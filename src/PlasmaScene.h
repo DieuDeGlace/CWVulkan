@@ -135,6 +135,7 @@ struct SceneNode {
     bool visible = true, clips = false; // the display's values
     glm::vec4 fill{1};
     int displayFlags = 0;
+    float blurRadius = 0;
     std::optional<Widget> widget;
     // A text shape's live string and colour when the interface set them (setText, setTextColour).
     std::optional<std::wstring> text;
@@ -184,6 +185,9 @@ class Scene {
     void setIcon(SceneNode &node, const std::string &targetName, const plx::Document &icons, const std::string &iconName);
     // The bounds of a node's shape (with its children's, `deep`) in the node's own space.
     bool shapeBounds(const SceneNode &n, glm::vec2 &minimum, glm::vec2 &maximum, bool deep) const;
+    using LocalBounds = std::function<bool(const SceneNode &, glm::vec2 &, glm::vec2 &)>;
+    bool screenBounds(const SceneNode &node, glm::vec2 &minimum, glm::vec2 &maximum,
+                      const LocalBounds &localBounds = {}) const;
 
     // A node's local matrix, and its world matrix (through its parents and the root).
     glm::mat4 transformation(const SceneNode &n) const;
@@ -215,6 +219,11 @@ class Scene {
     void drawShape(const SceneNode &n, glm::vec4 tint, Drawn &out) const;
     // A point of a node's space in window pixels, stretched by its owner widget (spec 2.7.4).
     glm::vec2 deform(const SceneNode &n, glm::vec2 local) const;
+    // Independent subtree picking, with native flags, clipping and inverse widget stretch.
+    // Text containment uses the caller's font-backed cached bounds; ordinary widget callbacks are false.
+    using TextHit = std::function<bool(const SceneNode &, glm::vec2 local)>;
+    const SceneNode *hitTest(const SceneNode &node, glm::vec2 point, const TextHit &textHit = {},
+                             uint32_t options = 0, bool clipWidgets = true) const;
 
   private:
     const plx::Document &doc;

@@ -25,7 +25,10 @@ struct Vertex {
 struct Triangles {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices; // a triangle list
+    std::vector<std::vector<int>> outlines; // Final drawing boundaries, cached after building.
 };
+// Native drawing containment: inclusive bounds, then even/odd crossings of its index outlines.
+bool contains(const Triangles &drawing, glm::vec2 point);
 
 // SmoothMeshShape.flags (spec 1.2).
 enum : int { MESH_OUTLINE = 0x1, MESH_STROKE = 0x2, MESH_NO_FILL = 0x4, MESH_OPEN = 0x8, MESH_EXTRUDED = 0x10 };

@@ -40,16 +40,20 @@ glm::vec2 Hud::templateSize(const std::string &name) {
         frontScene = std::make_unique<plasma::Scene>(gui);
         frontScene->setScale(1.0f);
     }
+    frontScene->setScale(1.0f);
     plasma::SceneNode *probe = frontScene->instance(name, &frontScene->root());
-    if (!probe)
+    if (!probe) {
+        frontScene->setScale(guiScale);
         return glm::vec2(0);
+    }
     const glm::vec2 size = probe->widget ? frontScene->viewSize(*probe) : glm::vec2(0);
     auto &children = frontScene->root().children;
     children.erase(std::remove_if(children.begin(), children.end(), [&](const auto &c) { return c.get() == probe; }), children.end());
+    frontScene->setScale(guiScale);
     return size;
 }
 
-void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out) const {
+void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation) const {
     std::map<std::string, size_t> used; // instances of each template taken this frame
     for (const ScreenItem &item : screen) {
         switch (item.kind) {
@@ -75,8 +79,8 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out) cons
                 break;
             if (!frontScene) {
                 frontScene = std::make_unique<plasma::Scene>(gui);
-                frontScene->setScale(1.0f);
             }
+            frontScene->setScale(guiScale);
             auto &list = frontNodes[item.name];
             size_t &k = used[item.name];
             if (k >= list.size()) {
@@ -108,6 +112,32 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out) cons
             if (!item.text.empty())
                 node.setAllText(item.text);
             sceneNode(out, node, item.color, frontScene.get());
+            if (navigation && item.navigation != ScreenItem::NoPoint) {
+                auto localBounds = [&](const plasma::SceneNode &n, glm::vec2 &lo, glm::vec2 &hi) {
+                    plasma::TextStyle style;
+                    if (!n.doc || n.shape < 0 || n.shape >= (int)n.doc->shapes.size() ||
+                        !plasma::textStyle(n.doc->shapes[(size_t)n.shape], n.doc->loaderFlags, style))
+                        return false;
+                    if (n.text)
+                        style.string = *n.text;
+                    plasma::TextBox box;
+                    const auto &font = plasmaFonts[fontIndex(style.font)];
+                    if (!plasma::textBounds(font, style, frontScene->matrix(n), box))
+                        return false;
+                    lo = box.minimum, hi = box.maximum;
+                    return true;
+                };
+                auto centre = [&](const plasma::SceneNode &n) {
+                    glm::vec2 lo, hi;
+                    if (frontScene->screenBounds(n, lo, hi, localBounds))
+                        navigation->push_back(glm::vec2(glm::ivec2((lo + hi) * 0.5f)));
+                };
+                if (item.navigation == ScreenItem::ShapeCentre)
+                    centre(node);
+                else
+                    for (const auto &child : node.children)
+                        centre(*child);
+            }
             break;
         }
         }

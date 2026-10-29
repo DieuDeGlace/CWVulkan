@@ -10,6 +10,7 @@
 #endif
 #include <Windows.h>
 #include <Xinput.h>
+#include <mmsystem.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -62,6 +63,10 @@ GamepadButtons readGamepad() {
     XINPUT_STATE state{};
     if (!getState || getState(0, &state) != ERROR_SUCCESS)
         return pad;
+    static DWORD previousPoll = timeGetTime();
+    const DWORD now = timeGetTime();
+    pad.elapsedMs = (int32_t)(now - previousPoll);
+    previousPoll = now;
     pad.connected = true;
     const auto &p = state.Gamepad;
     auto has = [&](WORD mask) { return (p.wButtons & mask) != 0; };
@@ -102,11 +107,21 @@ bool GameInput::keyIsBound(const gameoptions::Controls &controls, int glfwKey) {
     return std::any_of(controls.begin(), controls.end(), [&](const gameoptions::Binding &b) { return keyMatches(b, glfwKey); });
 }
 
+GamepadButtons GameInput::pollGamepad(GLFWwindow *window, bool capturingBinding) {
+    return !capturingBinding && glfwGetWindowAttrib(window, GLFW_FOCUSED) ? readGamepad() : GamepadButtons{};
+}
+
+bool GameInput::physicalBindingDown(GLFWwindow *window, const gameoptions::Controls &controls) {
+    return glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
+           std::any_of(controls.begin(), controls.end(), [&](const auto &binding) { return bindingDown(window, binding); });
+}
+
 void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
-                       const std::vector<int> &pressedButtons, bool enabled, bool ui, bool conversation, bool capturingBinding) {
+                       const std::vector<int> &pressedButtons, bool enabled, bool ui, bool mapMode, bool capturingBinding,
+                       bool panelEligible, const GamepadButtons *sample) {
     const bool focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
     if (focused && !capturingBinding)
-        padFrame.update(readGamepad(), ui, conversation);
+        padFrame.update(sample ? *sample : pollGamepad(window, false), ui, mapMode, panelEligible);
     else
         padFrame.clear();
     for (int i = 0; i < gameoptions::BINDINGS; i++) {
@@ -125,7 +140,7 @@ void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls
     }
 }
 
-std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad, bool ui, bool conversation, bool suppressJump) {
+std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad, bool ui, bool mapMode, bool suppressJump) {
     std::array<bool, gameoptions::BINDINGS> held{};
     held[gameoptions::ZOOM_IN] = pad.dpadUp;
     held[gameoptions::ZOOM_OUT] = pad.dpadDown;
@@ -134,13 +149,13 @@ std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pa
     held[gameoptions::SYSTEM_MENU] = pad.start;
     held[gameoptions::ATTACK] = pad.rightShoulder;
     held[gameoptions::SPECIAL_ATTACK] = pad.rightTrigger > 128;
-    if (!ui || conversation) {
+    if (!ui || mapMode) {
         held[gameoptions::LAMP] = pad.dpadRight;
         held[gameoptions::CALL_PET] = pad.leftThumb;
         held[gameoptions::RING_MENU] = pad.rightThumb;
         held[gameoptions::WORLD_MAP] = pad.dpadLeft;
     }
-    if (!ui && !conversation) {
+    if (!ui && !mapMode) {
         held[gameoptions::ULTIMATE_SKILL] = pad.y;
         held[gameoptions::JUMP] = pad.b && !suppressJump;
         held[gameoptions::DODGE] = pad.leftShoulder;
@@ -173,7 +188,7 @@ void GamepadFrame::clear() {
     dismiss = false;
 }
 
-void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool conversation) {
+void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool mapMode, bool panelEligible) {
     const GamepadStick previousLook = look;
     clear();
     if (!pad.connected)
@@ -182,10 +197,12 @@ void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool conversation)
         suppressJump = false;
     else if (ui)
         suppressJump = dismiss = true;
-    held = gamepadControls(pad, ui, conversation, suppressJump);
-    if (!ui || conversation) {
+    held = gamepadControls(pad, ui, mapMode, suppressJump);
+    if (!ui || mapMode) {
         movement = gamepadStick(pad.leftX, pad.leftY);
         look = gamepadStick(pad.rightX, pad.rightY);
-    } else
+    } else if (panelEligible)
         look = previousLook; // The ordinary UI branch does not write a fresh right pair.
+    else
+        look = gamepadStick(pad.rightX, pad.rightY);
 }

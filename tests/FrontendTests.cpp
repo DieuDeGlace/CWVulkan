@@ -401,14 +401,21 @@ void optionsApplied() {
     FRONT_CHECK(!gameplay[gameoptions::CLASS_SKILL] && !gameplay[gameoptions::SPECIAL_ATTACK]);
     pad.leftTrigger = pad.rightTrigger = 129;
     FRONT_CHECK(gamepadControls(pad)[gameoptions::CLASS_SKILL] && gamepadControls(pad)[gameoptions::SPECIAL_ATTACK]);
-    const auto ui = gamepadControls(pad, true), conversation = gamepadControls(pad, true, true);
+    const auto ui = gamepadControls(pad, true), fullMap = gamepadControls(pad, true, true);
     FRONT_CHECK(ui[gameoptions::ATTACK] && ui[gameoptions::SPECIAL_ATTACK] && !ui[gameoptions::USE] && !ui[gameoptions::LAMP]);
-    FRONT_CHECK(conversation[gameoptions::LAMP] && !conversation[gameoptions::JUMP] && !conversation[gameoptions::DODGE]);
+    FRONT_CHECK(fullMap[gameoptions::LAMP] && !fullMap[gameoptions::JUMP] && !fullMap[gameoptions::DODGE]);
     FRONT_CHECK(gamepadStick(6553, 0).x == 0 && gamepadStick(6554, 0).x == 6554.0f / 32768.0f);
     FRONT_CHECK(gamepadStick(5000, 5000).x != 0);
     const auto diagonal = gamepadStick(-32768, 32767);
     FRONT_CHECK(diagonal.x == -1 && diagonal.y == 32767.0f / 32768.0f);
     const auto turn = gamepadCamera({0.5f, -0.5f}, 16);
+    frontend::ControlsScreen capture;
+    const auto previouslyBound = capture.values[gameoptions::UP];
+    capture.waiting = gameoptions::USE;
+    capture.bind(previouslyBound);
+    FRONT_CHECK(capture.values[gameoptions::USE] == previouslyBound && capture.values[gameoptions::UP] == (gameoptions::Binding{0, 0}));
+    capture.bind({0, 1}); // Left mouse is valid after selecting a capture row on release.
+    FRONT_CHECK(capture.values[gameoptions::USE] == (gameoptions::Binding{0, 1}) && capture.waiting == gameoptions::USE);
     FRONT_CHECK(std::abs(turn.yaw - 0.8) < 1e-6 && std::abs(turn.pitch + 0.8) < 1e-6);
     FRONT_CHECK(gamepadCamera({1, 1}, 1001).yaw == gamepadCamera({1, 1}, 1000).yaw);
     FRONT_CHECK(gamepadCamera({1, 0}, 16, 100).yaw < gamepadCamera({1, 0}, 16, 25).yaw);

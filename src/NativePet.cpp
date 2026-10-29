@@ -95,7 +95,7 @@ void reconcile(World &world, Creature &owner) {
         }
         if (const auto *buff = nativebuffs::find(owner, 0x13); buff && !nativebuffs::find(*pet, 0x13)) {
             nativebuffs::give(*pet, *buff, true);
-            world.buffNotes.push_back(nativebuffs::notice(id(owner), id(*pet), *buff, 1));
+            world.buffNotes.push_back(nativebuffs::notice(id(*pet), id(*pet), *buff, 1));
         }
         const float oldMaximum = maximum(world, *pet);
         put(pet->record, LEVEL, get<int32_t>(c, LEVEL));

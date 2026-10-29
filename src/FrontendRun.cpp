@@ -204,6 +204,15 @@ class Session {
     float guiScale = 1;
     glm::vec2 window{0}, mouse{0}; // GUI units
     bool clicked = false;
+    bool pointerDown = false, pointerUp = false;
+    bool capturingAtPoll = false;
+    std::vector<gamepadui::Point> navigationPoints;
+    void navigationPoint(glm::vec2 at) {
+        int width, height;
+        glfwGetWindowSize(s.window, &width, &height);
+        navigationPoints.push_back({(int32_t)(at.x * guiScale * (float)width / (float)std::max(1u, size.width)),
+                                    (int32_t)(at.y * guiScale * (float)height / (float)std::max(1u, size.height))});
+    }
     double dtMs = 0;
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
     double seconds = 0, nextSteamCheck = 0;
@@ -731,14 +740,38 @@ void Session::readInput(bool poll, double frameMs) {
     double mx, my;
     int ww, wh;
     glfwGetCursorPos(s.window, &mx, &my);
+    s.input->pointerX = mx, s.input->pointerY = my;
+    s.input->pointerSampled = true;
+    capturingAtPoll = capturingControl();
+    s.input->sampleGamepad(s.window, capturingAtPoll, s.controls);
+    const bool ui = front() || anyOpen() || s.input->gamepadModal;
+    std::vector<gamepadui::Point> points;
+    if (!front())
+        points = s.input->gamepadNavigationPoints;
+    points.insert(points.end(), navigationPoints.begin(), navigationPoints.end());
+    s.input->gamepadPointer = s.input->gamepadInput.update(s.input->gamepad, ui, s.input->gamepadMapMode,
+                                                        {(float)mx, (float)my}, points, s.input->gamepadPanels);
+    const auto &pad = s.input->gamepadPointer;
+    if (pad.padBeforeCallbacks)
+        s.input->lastUsedPad = true;
+    for (int button = 0; button < 3; ++button) {
+        if (pad.pressed[(size_t)button])
+            s.input->buttons.push_back(button);
+        if (pad.released[(size_t)button])
+            s.input->released.push_back(button);
+    }
+    if (pad.moveCursor) {
+        glfwSetCursorPos(s.window, pad.cursor.x, pad.cursor.y);
+    }
+    if (pad.navigationSound)
+        playSound(SOUND_MENU_SELECT);
     if (req.pointer.x >= 0)
         mx = req.pointer.x, my = req.pointer.y;
     glfwGetWindowSize(s.window, &ww, &wh);
     mouse = glm::vec2((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh))) / guiScale;
-    // The title root dispatches from mouse-up (0x965e0); it is not a held button.
-    const bool rootMenu = titleShown && !optionsOpen && !controlsOpen && !helpOpen && !friendsOpen;
-    const auto &clicks = rootMenu ? s.input->released : s.input->buttons;
-    clicked = std::find(clicks.begin(), clicks.end(), GLFW_MOUSE_BUTTON_LEFT) != clicks.end();
+    pointerDown = std::find(s.input->buttons.begin(), s.input->buttons.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->buttons.end();
+    pointerUp = std::find(s.input->released.begin(), s.input->released.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->released.end();
+    clicked = pointerDown || pointerUp;
 }
 
 // --- Keys --------------------------------------------------------------------------------------
@@ -791,18 +824,27 @@ void Session::handleKeys(bool inGame) {
     MenuInput &in = *s.input;
     // A controls row waiting for a key takes the next key or mouse button (open question 6).
     if (controlsOpen && controls.waiting >= 0) {
+        gameoptions::Binding first{0, 0};
         for (int key : in.pressed) {
-            controls.values[(size_t)controls.waiting] = keyBinding(key);
+            if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+                controls.waiting = -1;
+                in.pressed.clear();
+                return;
+            }
+            const auto binding = keyBinding(key);
+            if (binding.code && (!first.code || binding.code < first.code))
+                first = binding;
+        }
+        if (first.code) {
+            controls.bind(first);
             controls.waiting = -1;
             in.pressed.clear();
             return;
         }
-        for (int button : in.buttons)
-            if (button != GLFW_MOUSE_BUTTON_LEFT || !clicked) {
-                controls.values[(size_t)controls.waiting] = {button, 1};
-                controls.waiting = -1;
-                return;
-            }
+        for (int button = 0; button < 4; ++button)
+            if (std::find(in.buttons.begin(), in.buttons.end(), button) != in.buttons.end())
+                controls.bind({button, 1});
+        return; // Mouse capture finishes on release; XInput is not sampled while waiting.
     }
     handleInterfaceKeys(in.pressed);
     for (int key : in.pressed) {
@@ -841,10 +883,14 @@ void Session::handleKeys(bool inGame) {
 // --- Clicks ------------------------------------------------------------------------------------
 
 void Session::handleClick(bool inGame) {
+    const bool finishingCapture = controlsOpen && capturingAtPoll && !s.input->released.empty();
+    if (finishingCapture)
+        controls.waiting = -1;
     if (!clicked)
         return;
     if (helpOpen) {
-        closeHelp();
+        if (pointerDown)
+            closeHelp();
         return;
     }
     if (controlsOpen) {
@@ -852,20 +898,20 @@ void Session::handleClick(bool inGame) {
         const int rows = ControlsScreen::visibleRows();
         for (int v = 0; v < rows && controls.first + v < gameoptions::BINDINGS; v++) {
             const float y = ControlsScreen::rowY(v);
-            if (m.y >= y - 20 && m.y < y + 10 && m.x >= 0 && m.x < CONTROLS_SIZE.x - 40) {
+            if (pointerUp && !finishingCapture && m.y >= y - 20 && m.y < y + 10 && m.x >= 0 && m.x < CONTROLS_SIZE.x - 40) {
                 controls.waiting = controls.first + v;
                 return;
             }
         }
         const glm::vec2 up = at + glm::vec2(CONTROLS_SIZE.x - 35, 10), down = at + glm::vec2(CONTROLS_SIZE.x - 35, CONTROLS_SIZE.y - 105);
-        if (inside(mouse, up, {25, 25}))
+        if (pointerDown && inside(mouse, up, {25, 25}))
             controls.first = std::max(0, controls.first - 1);
-        if (inside(mouse, down, {25, 25}))
+        if (pointerDown && inside(mouse, down, {25, 25}))
             controls.first = std::min(gameoptions::BINDINGS - rows, controls.first + 1);
         const float by = CONTROLS_SIZE.y - 35;
         const char *const labels[3] = {"Defaults", "OK", "Cancel"};
         for (int b = 0; b < 3; b++)
-            if (inside(m, {20.0f + 160.0f * (float)b, by}, CONTROLS_BUTTON_SIZE)) {
+            if (pointerUp && inside(m, {20.0f + 160.0f * (float)b, by}, CONTROLS_BUTTON_SIZE)) {
                 if (b == 0)
                     controls.values = gameoptions::defaultControls();
                 if (b == 1) {
@@ -886,14 +932,14 @@ void Session::handleClick(bool inGame) {
         const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
         for (int row = 0; row < OPTION_ROWS; row++) {
             const float y = OptionsScreen::rowY(row);
-            if (inside(m, {valueX - 100, y - arrow.y * 0.5f - 5}, arrow))
+            if (pointerDown && inside(m, {valueX - 100, y - arrow.y * 0.5f - 5}, arrow))
                 options.arrow(row, -1);
-            if (inside(m, {valueX + 100 - arrow.x, y - arrow.y * 0.5f - 5}, arrow))
+            if (pointerDown && inside(m, {valueX + 100 - arrow.x, y - arrow.y * 0.5f - 5}, arrow))
                 options.arrow(row, +1);
         }
         const float by = OPTIONS_SIZE.y - 40;
         for (int b = 0; b < 3; b++)
-            if (inside(m, {40.0f + 130.0f * (float)b, by}, OPTIONS_BUTTON_SIZE)) {
+            if (pointerUp && inside(m, {40.0f + 130.0f * (float)b, by}, OPTIONS_BUTTON_SIZE)) {
                 if (b < 2)
                     applyOptions();
                 if (b > 0)
@@ -901,9 +947,11 @@ void Session::handleClick(bool inGame) {
             }
         return;
     }
-    if (inGame && friendsOpen && friendsClick())
+    if (inGame && friendsOpen && pointerDown && friendsClick())
         return;
     if (inGame && systemShown) { // the system menu (frontend-options.md §5)
+        if (!pointerUp)
+            return;
         const glm::vec2 m = mouse - centred(SYSTEM_MENU_SIZE);
         const int hovered = hoveredLine(systemLines(), m, SYSTEM_MENU_SIZE.x);
         if (hovered < 0)
@@ -922,11 +970,13 @@ void Session::handleClick(bool inGame) {
     }
     if (inGame)
         return;
-    if ((charactersShown || creationShown) && inside(mouse, BACK_AT, BACK_SIZE)) {
+    if (pointerDown && (charactersShown || creationShown) && inside(mouse, BACK_AT, BACK_SIZE)) {
         back(false);
         return;
     }
     if (titleShown) {
+        if (!pointerUp)
+            return;
         const glm::vec2 m = mouse - rootMenuPosition(window);
         const bool continueShown = selectedSlot >= 0 && selectedSlot < (int)listed.size();
         switch (hoveredLine(rootLines(continueShown), m, ROOT_MENU_SIZE.x)) {
@@ -942,6 +992,8 @@ void Session::handleClick(bool inGame) {
         return;
     }
     if (charactersShown) {
+        if (!pointerUp)
+            return;
         if (cursor < 0 || cursor > (int)listed.size())
             return;
         const glm::vec2 at = entryAt(cursor);
@@ -980,7 +1032,7 @@ void Session::handleClick(bool inGame) {
             const float y = LOOK_ROW_Y[row];
             const int direction = inside(m, {LOOK_LEFT_ARROW_X, y - arrow.y * 0.5f - 5}, arrow) ? -1
                                   : inside(m, {LOOK_RIGHT_ARROW_X, y - arrow.y * 0.5f - 5}, arrow) ? 1 : 0;
-            if (direction) {
+            if (pointerDown && direction) {
                 playSound(SOUND_MENU_SELECT);
                 look.arrow(row, direction);
                 applyLook(false);
@@ -988,13 +1040,13 @@ void Session::handleClick(bool inGame) {
             }
         }
         int column, gridRow;
-        if (hairCellAt(m, column, gridRow)) { // committing the colour (0x272470)
+        if (pointerDown && hairCellAt(m, column, gridRow)) { // committing the colour (0x272470)
             look.committed = look.preview;
             applyLook(false);
             return;
         }
         const glm::vec2 createAt{window.x - CREATE_SIZE.x, window.y - CREATE_FROM_BOTTOM - CREATE_SIZE.y};
-        if (nameAccepted(name) && inside(mouse, createAt, CREATE_SIZE)) {
+        if (pointerUp && nameAccepted(name) && inside(mouse, createAt, CREATE_SIZE)) {
             // Create Character (frontend-characters.md §5.8).
             creationShown = false;
             stage.name = name;
@@ -1102,9 +1154,11 @@ void Session::titleItems(Hud::Screen &out) {
     const auto lines = rootLines(continueShown);
     const int hovered = optionsOpen ? -1 : hoveredLine(lines, mouse - at, ROOT_MENU_SIZE.x);
     static const char *const WORDS[4] = {"Start Game", "Options", "Exit", "Continue"};
-    for (const MenuLine &l : lines)
+    for (const MenuLine &l : lines) {
+        navigationPoint(at + glm::vec2((float)(int)(ROOT_MENU_SIZE.x * 0.5f), l.navigationY));
         out.push_back(text(WORDS[l.index], at + glm::vec2(ROOT_MENU_SIZE.x * 0.5f, l.textY), 18, 4,
                            l.index == hovered ? HOVERED : WHITE, ALIGN_CENTRE));
+    }
     const glm::vec2 px((float)size.width, (float)size.height);
     out.push_back(text("Copyright (c) 2019 Picroma e.K.", glm::vec2(10, px.y - 15) / guiScale, 12, 3, WHITE, ALIGN_LEFT));
     out.push_back(text("1.0.0-1", glm::vec2(px.x - 10, px.y - 15) / guiScale, 12, 3, WHITE, ALIGN_RIGHT));
@@ -1202,6 +1256,7 @@ void Session::creationItems(Hud::Screen &out) {
 void Session::optionsItems(Hud::Screen &out) {
     const glm::vec2 at = centred(OPTIONS_SIZE), m = mouse - at;
     out.push_back(widget("blackwidget", at, OPTIONS_SIZE));
+    out.back().navigation = Hud::ScreenItem::ChildCentres;
     const float valueX = (OPTIONS_SIZE.x - 250) * 0.5f + 240;
     const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
     for (int row = 0; row < OPTION_ROWS; row++) {
@@ -1210,14 +1265,20 @@ void Session::optionsItems(Hud::Screen &out) {
         out.push_back(text(options.value(row), at + glm::vec2(valueX, y), 12, 3, WHITE, ALIGN_CENTRE));
         const glm::vec2 left{valueX - 100, y - arrow.y * 0.5f - 5}, right{valueX + 100 - arrow.x, y - arrow.y * 0.5f - 5};
         out.push_back(widget("leftbutton", at + left, glm::vec2(0), "", inside(m, left, arrow) ? ARROW_HOVERED : WHITE));
+        out.back().navigation = Hud::ScreenItem::ShapeCentre;
         out.push_back(widget("rightbutton", at + right, glm::vec2(0), "", inside(m, right, arrow) ? ARROW_HOVERED : WHITE));
+        out.back().navigation = Hud::ScreenItem::ShapeCentre;
     }
     const char *const labels[3] = {"Apply", "OK", "Cancel"};
-    for (int b = 0; b < 3; b++)
+    for (int b = 0; b < 3; b++) {
         out.push_back(widget("button", at + glm::vec2(40.0f + 130.0f * (float)b, OPTIONS_SIZE.y - 40), OPTIONS_BUTTON_SIZE, labels[b]));
+        out.back().navigation = Hud::ScreenItem::ShapeCentre;
+    }
 }
 
 void Session::controlsItems(Hud::Screen &out) {
+    if (s.input->lastUsedPad)
+        controls.waiting = -1;
     const glm::vec2 at = centred(CONTROLS_SIZE), m = mouse - at;
     out.push_back(widget("blackwidget", at, CONTROLS_SIZE));
     const float valueX = (CONTROLS_SIZE.x - 250) * 0.5f + 240;
@@ -1240,8 +1301,10 @@ void Session::controlsItems(Hud::Screen &out) {
     out.push_back(widget("upbutton", at + glm::vec2(CONTROLS_SIZE.x - 35, 10), glm::vec2(0)));
     out.push_back(widget("downbutton", at + glm::vec2(CONTROLS_SIZE.x - 35, CONTROLS_SIZE.y - 105), glm::vec2(0)));
     const char *const labels[3] = {"Defaults", "OK", "Cancel"};
-    for (int b = 0; b < 3; b++)
+    for (int b = 0; b < 3; b++) {
         out.push_back(widget("button", at + glm::vec2(20.0f + 160.0f * (float)b, CONTROLS_SIZE.y - 35), CONTROLS_BUTTON_SIZE, labels[b]));
+        out.back().navigation = Hud::ScreenItem::ShapeCentre;
+    }
 }
 
 // The help sheet (the HelpWidget listing the controls). Its layout is not specified; the
@@ -1263,9 +1326,11 @@ void Session::systemItems(Hud::Screen &out) {
     const glm::vec2 at = centred(SYSTEM_MENU_SIZE);
     const int hovered = hoveredLine(systemLines(), mouse - at, SYSTEM_MENU_SIZE.x);
     static const char *const WORDS[4] = {"Options", "Controls", "Start Menu", "Exit Game"};
-    for (const MenuLine &l : systemLines())
+    for (const MenuLine &l : systemLines()) {
+        navigationPoint(at + glm::vec2((float)(int)(SYSTEM_MENU_SIZE.x * 0.5f), l.navigationY));
         out.push_back(text(WORDS[l.index], at + glm::vec2(SYSTEM_MENU_SIZE.x * 0.5f, l.textY), 13, 3,
                            l.index == hovered ? HOVERED : WHITE, ALIGN_CENTRE));
+    }
 }
 
 // --- The multiplayer menu (netcode-transport.md §3) ---------------------------------------------
@@ -1358,6 +1423,7 @@ bool Session::friendsClick() {
 
 Hud::Screen Session::buildScreen(bool inGame) {
     Hud::Screen out;
+    navigationPoints.clear();
     if (!interfaceShown)
         return out;
     if (inGame) {
@@ -1395,10 +1461,11 @@ bool Session::frame() {
     }
     handleKeys(false);
     if (req.clickAfter >= 0 && !testClicked && seconds >= req.clickAfter && s.world->pendingCount() == 0) {
-        clicked = true; // (testing: the click a capture of Continue or Select needs)
+        clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;
     }
     handleClick(false);
+    s.input->finishPointerCallbacks();
     s.input->clear();
     if (done)
         return false;
@@ -1418,7 +1485,10 @@ bool Session::frame() {
         previewItems(opaque);
     }
     std::vector<OverlayVertex> overlay;
-    hud.drawScreen(screen, overlay);
+    std::vector<glm::vec2> templatePoints;
+    hud.drawScreen(screen, overlay, &templatePoints);
+    for (const auto point : templatePoints)
+        navigationPoint(point / guiScale);
     s.renderer->overlay(std::move(overlay));
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
     if (s.audio) {
@@ -1500,6 +1570,7 @@ Result::Action Session::gameFrame(double frameMs) {
     }
     handleKeys(true);
     handleClick(true);
+    s.input->finishPointerCallbacks();
     s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear(), s.input->typed.clear();
     s.input->scroll = 0;
     if (!anyOpen())
@@ -1512,8 +1583,14 @@ Result::Action Session::gameFrame(double frameMs) {
 }
 
 void Session::gameDraw(std::vector<OverlayVertex> &out) {
-    if (anyOpen())
-        hud.drawScreen(buildScreen(true), out);
+    if (anyOpen()) {
+        std::vector<glm::vec2> templatePoints;
+        hud.drawScreen(buildScreen(true), out, &templatePoints);
+        for (const auto point : templatePoints)
+            navigationPoint(point / guiScale);
+    }
+    else
+        navigationPoints.clear();
 }
 
 Result run(Services &s, const Request &request) {

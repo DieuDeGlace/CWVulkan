@@ -358,6 +358,7 @@ SceneNode *Scene::instance(const plx::Document &from, int index, SceneNode *pare
     if (const plx::Object *d = objectAt(from.displays, source.display)) {
         const Display display = displayOf(*d);
         n->visible = display.visible, n->clips = display.clips, n->fill = display.fill, n->displayFlags = display.flags;
+        n->blurRadius = display.blurRadius;
     }
     if (const plx::Object *w = objectAt(from.widgets, source.widget))
         n->widget = widgetOf(*w);
@@ -382,6 +383,7 @@ SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
     n->transform = from.transform;
     n->local = from.local;
     n->visible = from.visible, n->clips = from.clips, n->fill = from.fill, n->displayFlags = from.displayFlags;
+    n->blurRadius = from.blurRadius;
     n->widget = from.widget;
     n->text = from.text, n->textColor = from.textColor;
     n->onDraw = from.onDraw;
@@ -421,6 +423,46 @@ const ShapeDrawing *Scene::drawing(const SceneNode &n) const {
         it = drawings.emplace(key, std::move(d)).first;
     }
     return &it->second;
+}
+
+bool Scene::screenBounds(const SceneNode &node, glm::vec2 &minimum, glm::vec2 &maximum, const LocalBounds &localBounds) const {
+    bool any = false;
+    auto extend = [&](glm::vec2 lo, glm::vec2 hi) {
+        minimum = any ? glm::min(minimum, lo) : lo;
+        maximum = any ? glm::max(maximum, hi) : hi;
+        any = true;
+    };
+    const glm::mat4 world = matrix(node);
+    if (const auto *shape = drawing(node)) {
+        auto vertices = [&](const Triangles &triangles) {
+            for (const auto &vertex : triangles.vertices) {
+                const glm::vec2 point = apply(world, vertex.position);
+                extend(point, point);
+            }
+        };
+        if (shape->filled)
+            vertices(shape->fill);
+        if (shape->stroked)
+            vertices(shape->stroke);
+    } else if (localBounds) {
+        glm::vec2 lo, hi;
+        if (localBounds(node, lo, hi))
+            for (const auto corner : {lo, hi, glm::vec2(lo.x, hi.y), glm::vec2(hi.x, lo.y)}) {
+                const glm::vec2 point = apply(world, corner);
+                extend(point, point);
+            }
+    }
+    if (!node.clips)
+        for (const auto &child : node.children) {
+            glm::vec2 lo, hi;
+            if (child->visible && !disabled(*child) && screenBounds(*child, lo, hi, localBounds))
+                extend(lo, hi);
+        }
+    if (any && (node.displayFlags & 1) && node.blurRadius > 0) {
+        const float blur = (glm::length(glm::vec2(world[0])) + glm::length(glm::vec2(world[1]))) * 0.5f * node.blurRadius;
+        minimum -= blur, maximum += blur;
+    }
+    return any;
 }
 
 bool Scene::shapeBounds(const SceneNode &n, glm::vec2 &minimum, glm::vec2 &maximum, bool deep) const {
@@ -612,6 +654,22 @@ struct Deformer {
         q += innerPosition - innerBindPos + t * (innerSize - innerBindSize);
         return apply(fromWidget, q);
     }
+    glm::vec2 inverse(glm::vec2 point) const {
+        if (!active)
+            return apply(glm::inverse(world), point);
+        glm::vec2 q = apply(glm::inverse(fromWidget), point);
+        glm::vec2 t;
+        for (int axis = 0; axis < 2; ++axis) {
+            if (q[axis] < innerPosition[axis])
+                t[axis] = 0;
+            else if (q[axis] >= innerPosition[axis] + innerSize[axis])
+                t[axis] = 1;
+            else
+                t[axis] = (q[axis] - innerPosition[axis]) / innerSize[axis];
+        }
+        q += innerBindPos - innerPosition + t * (innerBindSize - innerSize);
+        return apply(glm::inverse(toWidget), q);
+    }
 };
 
 // A node's stretch: by its owner widget (its own widget, or the nearest above it).
@@ -636,6 +694,33 @@ Deformer deformerOf(const Scene &scene, const SceneNode &n) {
 } // namespace
 
 glm::vec2 Scene::deform(const SceneNode &n, glm::vec2 local) const { return deformerOf(*this, n)(local); }
+
+const SceneNode *Scene::hitTest(const SceneNode &node, glm::vec2 point, const TextHit &textHit,
+                                uint32_t options, bool clipWidgets) const {
+    if (!node.visible || (node.flags & (plx::NODE_DISABLED | plx::NODE_NO_PICK)))
+        return nullptr;
+    const bool wholeHit = node.widget && (node.widget->flags & WIDGET_WHOLE_HIT);
+    if (clipWidgets && !wholeHit && node.widget && (node.widget->flags & WIDGET_OWN_SURFACE)) {
+        const glm::vec2 origin = contentPosition(node), size = screenSize(node);
+        if (point.x < origin.x || point.y < origin.y || point.x > origin.x + size.x || point.y > origin.y + size.y)
+            return nullptr;
+    }
+    bool hit = wholeHit;
+    if (const ShapeDrawing *shape = drawing(node)) {
+        const glm::vec2 local = deformerOf(*this, node).inverse(point);
+        hit = hit || (shape->filled && contains(shape->fill, local)) || (shape->stroked && contains(shape->stroke, local));
+    } else if (textHit && node.doc && node.shape >= 0 && node.shape < (int)node.doc->shapes.size() &&
+               node.doc->shapes[(size_t)node.shape].kind == "TextShape")
+        hit = hit || textHit(node, apply(glm::inverse(matrix(node)), point));
+    if (!node.clips || hit)
+        for (auto child = node.children.rbegin(); child != node.children.rend(); ++child)
+            if (const SceneNode *found = hitTest(**child, point, textHit, options, clipWidgets))
+                return found;
+    const bool filtered = ((node.flags & plx::NODE_PASSIVE) && !(options & 2)) ||
+                          ((node.flags & plx::NODE_NO_PICK_1) && (options & 1)) ||
+                          ((node.flags & plx::NODE_LOADED) && (options & 4));
+    return hit && !filtered ? &node : nullptr;
+}
 
 void Scene::drawShape(const SceneNode &n, glm::vec4 tint, Drawn &out) const {
     const ShapeDrawing *d = drawing(n);

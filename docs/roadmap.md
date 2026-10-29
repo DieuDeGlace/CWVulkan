@@ -67,11 +67,16 @@ individual feature documents.
 
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
   currently supplied, including integrated pet combat and appearance comparisons.
-- [ ] Controller GUI navigation/click synthesis, tab/category switching, title-menu
-  routing and aim-tracking integration. Exact navigation-point ranking is unresolved.
+- [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
+  repeats, click phases, root/system/Options/Controls points, inventory grids,
+  equipment and recipe points, panel scrolling, tab rows and region filters are
+  implemented from the independent spec. Identification/answer points, interactive-map
+  shoulder routing and hardware comparisons remain. Region-distance ties beyond
+  32 choices still need an exact specification.
 - [ ] Interactive conversation choices, emote rendering, numeric-script item actions
-  and complete recipe sources. String scripts do not have give/take tokens; the
-  independent runtime-gap spec describes a separate numeric format.
+  and complete recipe sources. String scripts do not have give/take tokens;
+  only numeric item-receipt feedback has a verified producer so far. Answer actions
+  and speech/emote timing are now specified independently, pending implementation.
 - [ ] Network feat production/payload meaning. Its display consumer is traced;
   generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.

@@ -6,6 +6,7 @@
 // dict_en.xml. Everything is laid out as the game lays it out at 1920x1080 and
 // scaled with the window height.
 #include "MapMarks.h"
+#include "InventoryUi.h"
 #include "Renderer.h"
 #include "Plx.h"
 #include "PlasmaShape.h"
@@ -38,7 +39,7 @@ class Hud {
         bool taken = false; // damage the player took (the game's red style)
     };
     // The inventory screen (B), laid out as the game's.
-    struct Inventory {
+    struct Inventory : inventoryui::Tabs<6> {
         struct Entry {
             std::string name, icon; // icon: key given to addIcon ("" = none)
             int count = 1;
@@ -48,23 +49,23 @@ class Hud {
             bool stack = false;  // its count is shown (the stackable categories)
             glm::vec4 color{1};  // its rarity's colour (the rarity colour)
             int price = 0;       // what it costs (a vendor's) or sells for (the bag's, with a vendor open)
+            inventoryui::Region region{};
         };
         // The vendor beside the bag (InventoryWidget type 3): its offers on tab 0, what the
         // player sold to it on tab 1 (buy back).
-        struct Vendor {
+        struct Vendor : inventoryui::Tabs<2> {
             bool open = false;
             std::vector<Entry> items;
-            int tab = 0, scroll = 0, hoverItem = -1, hoverTab = -1, hoverButton = 0;
+            int hoverItem = -1, hoverTab = -1, hoverButton = 0;
         } vendor;
         // The crafting widget (InventoryWidget type 2, left of the bag: the formulas by tab,
         // `count` how many times each can be made) and the formula's details under it
         // (FormulaDetailsWidget).
-        struct Crafting {
+        struct Crafting : inventoryui::Tabs<6> {
             bool open = false;
             int classType = 0; // its first two tabs' icons are the class's
             std::vector<Entry> items;
-            int tab = 0, scroll = 0, hoverItem = -1, hoverTab = -1, hoverButton = 0;
-            int selected = -1; // the item the selection frame is on (its index in `items`)
+            int hoverItem = -1, hoverTab = -1, hoverButton = 0;
             struct Ingredient {
                 std::string icon;
                 int have = 0, need = 0;
@@ -82,7 +83,9 @@ class Hud {
             } details;
         } crafting;
         bool bagShown = true; // the bag, its slots and the character (B); crafting alone hides them
-        int tab = 0, hoverTab = -1, scroll = 0; // the tab shown, the one under the pointer, its first row
+        int hoverTab = -1;
+        inventoryui::Region activeRegion{};
+        std::vector<inventoryui::Region> regionChoices;
         int hoverButton = 0;                    // the scroll button under the pointer (1 up, 2 down)
         // The hovered item's details (the item details text), shown in the preview widget: each line
         // its text, size and stroke, colour, the advance after it (from its end when `fromEnd`),
@@ -214,6 +217,11 @@ class Hud {
     // button under the mouse (1 up, 2 down, 0 none).
     int inventoryRowCount(const Inventory &inv, int which = 0) const;
     int inventoryButtonAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
+    // Tests this panel's own node tree, independent of overlapping panels (native 0x333e70).
+    bool inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
+    std::vector<glm::vec2> inventoryNavigationPoints(const Inventory &inv) const;
+    int inventoryFirstItem(const Inventory &inv, int which = 0) const;
+    int inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const;
     bool hasPanels() const { return scene && panels.bag.node; }
     bool hasPointer() const { return cursorNode != nullptr; } // (cursor.plx was read)
     // The interface's scale (guiScale), and how wide a map marker's label is in pixels: at the
@@ -233,6 +241,8 @@ class Hud {
         int tab = 0, scroll = 0, hoverItem = -1, hoverTab = -1, hoverButton = 0;
         bool all = false; // every item shows, however many (the crafting widget's formulas)
         int selected = -1;
+        const inventoryui::Region *region = nullptr;
+        bool regionArrows = false;
     };
 
     // Loads the extracted HUD art, fonts and names. False (with a reason) if the
@@ -316,9 +326,10 @@ class Hud {
         glm::vec4 color{1}, outlineColor{0, 0, 0, 1}; // a template's tint is `color`
         int align = 0;            // 0 left, 1 centred, 2 right, 5 centred both ways
         std::string name;         // the template, or the icon's key
+        enum Navigation { NoPoint, ShapeCentre, ChildCentres } navigation = NoPoint;
     };
     using Screen = std::vector<ScreenItem>;
-    void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out) const;
+    void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation = nullptr) const;
     // A gui.plx template's size (its frame, interface units); zero when there is none.
     glm::vec2 templateSize(const std::string &name);
     bool hasInterface() const { return guiLoaded; }

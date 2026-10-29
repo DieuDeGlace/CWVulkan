@@ -859,7 +859,42 @@ ShapeDrawing build(const SmoothMesh &source) {
             for (const CurvePoint &p : c.points)
                 extent.push_back(p.v.position);
     boundsOf(extent, d);
+    for (Triangles *drawing : {&d.fill, &d.stroke}) {
+        std::vector<std::vector<int>> faces;
+        for (size_t i = 0; i + 2 < drawing->indices.size(); i += 3)
+            faces.push_back({(int)drawing->indices[i], (int)drawing->indices[i + 1], (int)drawing->indices[i + 2]});
+        drawing->outlines = outlineLoops(faces);
+    }
     return d;
+}
+
+bool contains(const Triangles &drawing, glm::vec2 point) {
+    if (drawing.vertices.empty())
+        return false;
+    glm::vec2 minimum = drawing.vertices[0].position, maximum = minimum;
+    for (const auto &vertex : drawing.vertices)
+        minimum = glm::min(minimum, vertex.position), maximum = glm::max(maximum, vertex.position);
+    if (point.x < minimum.x || point.y < minimum.y || point.x > maximum.x || point.y > maximum.y)
+        return false;
+    bool inside = false;
+    for (const auto &loop : drawing.outlines) {
+        if (loop.empty())
+            continue;
+        for (size_t i = 0; i < loop.size(); ++i) {
+            const int first = loop[i], second = loop[(i + 1) % loop.size()];
+            if (first < 0 || second < 0 || first >= (int)drawing.vertices.size() || second >= (int)drawing.vertices.size())
+                return false;
+            glm::vec2 a = drawing.vertices[(size_t)first].position, b = drawing.vertices[(size_t)second].position;
+            if (a.y > b.y)
+                std::swap(a, b);
+            if (a.y < point.y && point.y <= b.y) {
+                const float x = a.x + (point.y - a.y) * (b.x - a.x) / (b.y - a.y);
+                if (x < point.x)
+                    inside = !inside;
+            }
+        }
+    }
+    return inside;
 }
 
 bool buildSmoothMesh(const plx::Object &shape, ShapeDrawing &out) {

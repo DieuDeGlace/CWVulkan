@@ -23,17 +23,18 @@ struct GamepadButtons {
     uint8_t leftTrigger = 0, rightTrigger = 0;
     int16_t leftX = 0, leftY = 0, rightX = 0, rightY = 0;
     bool connected = false;
+    int32_t elapsedMs = 0; // Signed timeGetTime difference between successful polls.
 };
 struct GamepadStick { float x = 0, y = 0; };
 GamepadStick gamepadStick(int16_t x, int16_t y);
 std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad, bool ui = false,
-                                                     bool conversation = false, bool suppressJump = false);
+                                                     bool mapMode = false, bool suppressJump = false);
 struct GamepadCamera { double yaw = 0, pitch = 0; }; // degrees to subtract
 GamepadCamera gamepadCamera(GamepadStick stick, double elapsedMs, float trackingDistance = -1);
 
 class GamepadFrame {
   public:
-    void update(const GamepadButtons &pad, bool ui, bool conversation);
+    void update(const GamepadButtons &pad, bool ui, bool mapMode, bool panelEligible = false);
     void clear(); // Lost foreground/capture: release inputs without clearing the B latch.
     std::array<bool, gameoptions::BINDINGS> held{};
     GamepadStick movement{}, look{};
@@ -49,7 +50,10 @@ class GameInput {
     // `enabled` gates keyboard/mouse bindings; fixed pad mappings follow their UI rules.
     void update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
                 const std::vector<int> &pressedButtons, bool enabled, bool ui = false,
-                bool conversation = false, bool capturingBinding = false);
+                bool mapMode = false, bool capturingBinding = false, bool panelEligible = false,
+                const GamepadButtons *sample = nullptr);
+    static GamepadButtons pollGamepad(GLFWwindow *window, bool capturingBinding);
+    static bool physicalBindingDown(GLFWwindow *window, const gameoptions::Controls &controls);
     const GamepadFrame &gamepad() const { return padFrame; }
     // Whether the control is down now, and whether it went down this frame.
     bool held(int action) const { return action >= 0 && action < gameoptions::BINDINGS && down[(size_t)action]; }
