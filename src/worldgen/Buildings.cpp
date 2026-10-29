@@ -774,6 +774,7 @@ void BuildingBuilder::outdoorSpot(int d, float along, float modelAlong, int turn
     }
     Model mo;
     mo.type = 0x36 + zone.draw() % 3;
+    mo.r = mo.g = mo.b = 1.0f;
     const int64_t across = edge + out * dotsOf(0.5f);
     const int64_t a = mid + dotsOf(modelAlong);
     mo.x = xWall ? across : a, mo.y = xWall ? a : across;
@@ -789,11 +790,8 @@ int BuildingBuilder::doorObjectType() const {
     if (roof == 5) {
         type = 8;
         if (!(random(cellKey(c1.x, c1.y) + 0x10581) & 1)) {
-            // A signed division by a magic multiply, as the game computes it (open question 9).
-            const int32_t h = (int32_t)hash(cellKey(c1.x, c1.y) + 0x29fa4);
-            int32_t q = (int32_t)(((int64_t)h * (int64_t)(int32_t)0x9e5706b3u) >> 32) >> 13;
-            q += (int32_t)((uint32_t)q >> 31);
-            if ((q & 3) != 0 && !zone.planner.items.empty())
+            // The verified reciprocal quotient has the same low two bits as R.
+            if ((cellRandom(c1, 0x29fa4) & 3) != 0 && !zone.planner.items.empty())
                 type = zone.planner.items[(size_t)((uint32_t)cellRandom(c1, 0x89d85) % (uint32_t)zone.planner.items.size())];
         }
     } else if (roof == 4) {

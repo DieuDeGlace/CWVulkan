@@ -76,6 +76,7 @@ public:
             return;
         const Mason::World w = c.world(0, py, z);
         Model mo;
+        mo.r = mo.g = mo.b = 1.0f, mo.flags = 2;
         mo.x = dotsOf(w.x) + 32768, mo.y = dotsOf(w.y) + 32768, mo.z = dotsOf(w.z) + 655;
         float k = 1.0f, s = 1.0f;
         switch (kind) {
@@ -86,6 +87,8 @@ public:
         case 4: mo.type = 0x3f, k = 0.0625f, s = 1.5f; break;
         default: mo.type = 0x44 + zone.draw() % 4, k = 1.0f, s = zone.fraction(0.1f) + 0.1f; break;
         }
+        if (kind == 1)
+            mo.r = 0.6f, mo.g = 0.5f, mo.b = 0.2f, mo.flags = 1;
         mo.yaw = (float)(c.facing(0) * 90);
         const float tt = s - 1.0f;
         mo.x += trunc64(tt * (float)c.matrix()[4] * 0.5f * 65536.0f);
@@ -237,6 +240,7 @@ public:
             return;
         const Mason::World w = m.world(x, y, t);
         Model mo;
+        mo.r = mo.g = mo.b = 1.0f, mo.flags = 2;
         mo.x = dotsOf(w.x) + 32768, mo.y = dotsOf(w.y) + 32768, mo.z = dotsOf(w.z) + 655;
         mo.yaw = (float)(zone.draw() % 4 * 90);
         if (kind == 0) {
@@ -245,6 +249,7 @@ public:
             mo.type = 0x48, mo.size = s;
         } else {
             mo.type = 0x49, mo.z -= 0x40000, mo.size = 0.15f;
+            mo.r = 0.55f, mo.g = 0.5f, mo.b = 0.4f, mo.flags = 1;
         }
         zone.models.push_back(mo);
     }
@@ -294,6 +299,7 @@ public:
         chain.x = dotsOf(w.x) + 32112, chain.y = dotsOf(w.y) + 32112, chain.z = dotsOf(w.z) - 67502;
         chain.size = (float)(w.z - z0 - 1);
         chain.yaw = 0.7f;
+        chain.r = chain.g = chain.b = 1.0f, chain.flags = 2;
         zone.models.push_back(chain);
     }
 

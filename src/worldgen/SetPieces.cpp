@@ -334,6 +334,7 @@ void cropField(ZoneBuild &zone, BuildingRules &rules, int32_t cx, int32_t cy, in
                     mo.x = dotsOf(X) + 32768, mo.y = dotsOf(Y) + 32768, mo.z = dotsOf(h);
                     mo.yaw = (float)zone.draw() * 360.0f / 32767.0f;
                     mo.size = 0.07f;
+                    mo.r = mo.g = mo.b = 1.0f, mo.flags = 2;
                     zone.models.push_back(mo);
                 }
             }
@@ -386,6 +387,8 @@ void cropField(ZoneBuild &zone, BuildingRules &rules, int32_t cx, int32_t cy, in
                 mo.x = px, mo.y = py, mo.z = pz;
                 mo.yaw = turned ? (float)zone.draw() * 360.0f / 32767.0f : 0.0f;
                 mo.size = scale;
+                mo.r = mo.g = mo.b = 1.0f;
+                mo.flags = crop == 0x26 || crop == 0x22 || crop == 0x2a || crop == 0x2b ? 4 : 0;
                 zone.models.push_back(mo);
             }
         }

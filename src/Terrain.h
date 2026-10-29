@@ -1,4 +1,5 @@
 #pragma once
+#include "ObjectVisual.h"
 // Procedural terrain built around the ten region types Steam Cube World's own
 // biome function reports (see reference/README.md), with colours measured from
 // vanilla reference shots (Palette.h). Relief uses TerrainVariance's rules, or
@@ -97,7 +98,7 @@ struct ColumnInfo {
 struct Scenery {
     std::string model; // Sprite name without extension.
     float x, y, z, yaw, scale;
-    uint8_t flags;
+    uint8_t flags = 0;
     bool estimatedScale = false; // extracted object lacks a native size measurement
     // A zone model's record flags (+0x38; vegetationwind::modelflag: 1 shines, 4 sways) and its
     // 1-based place in the zone's model list, which phases its sway (vegetation-wind.md §3, §4).
@@ -106,6 +107,7 @@ struct Scenery {
     // The Alpha look: the light where it stands (0..1, alpha-rendering.md 9.2), worked out with
     // the zone; below 0 when not known.
     float light = -1;
+    objectvisual::State object; // type<0 for ordinary zone models.
 };
 
 struct ZoneData {

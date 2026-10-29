@@ -12,6 +12,7 @@
 #include "Assets.h"
 #include "Extracted.h"
 #include "worldgen/CellObjects.h"
+#include "worldgen/BuildingBuilder.h"
 #include "worldgen/Structures.h"
 #include "worldgen/WorldValues.h"
 #include "worldgen/ZoneCreatures.h"
@@ -758,8 +759,40 @@ fs::path generatedZonesDir(const fs::path &game) {
 } // namespace
 
 // The fast subset in the default test run.
+void plannerDoorChecks() {
+    const wg::WorldValues world = wg::worldValues(123);
+    wg::CellObjects cells(world);
+    wg::BuildingRules rules(cells);
+    wg::ZoneTerrain terrain;
+    wg::ZoneBuild zone(terrain, world, cells, false);
+    wg::BuildingBuilder building(zone, rules, 0, 0, 0, 0, 1, {});
+    building.roof = 5;
+    zone.planner.items = {16};
+    zone.place.cell = {0, 0};
+    WS_CHECK(building.doorObjectType() == 16);
+    zone.place.cell = {1, 0};
+    WS_CHECK(building.doorObjectType() == 8); // Native selector low two bits are zero.
+    zone.place.cell = {-1, 0};
+    WS_CHECK(building.doorObjectType() == 8); // Native roof-five predicate is false.
+    zone.place.cell = {157894, 0};
+    zone.planner.items = {100, 101, 102, 103, 104};
+    WS_CHECK(building.doorObjectType() == 103); // R=-3 indexes as uint32, not positive signed modulo.
+    zone.planner.items = {16};
+    zone.place.cell = {0, 0};
+    building.t = 76;
+    WS_CHECK(building.doorObjectType() == 16);
+    zone.place.cell = {-1, 0};
+    WS_CHECK(building.doorObjectType() == -1);
+    building.t = 100;
+    WS_CHECK(building.doorObjectType() == 16); // Cell type100 overrides the parity test.
+    zone.planner.items.clear();
+    building.t = 1;
+    WS_CHECK(building.doorObjectType() == 8);
+}
+
 int worldgenStructureTests() {
     failures = 0;
+    plannerDoorChecks();
     const fs::path game = gameDir();
     if (game.empty())
         return 0;
@@ -771,6 +804,7 @@ int worldgenStructureTests() {
 // `EngineTests wgstructures [zones]`.
 int worldgenStructureCommand(int maxZones) {
     failures = 0;
+    plannerDoorChecks();
     const fs::path game = gameDir();
     if (game.empty())
         return std::printf("no game folder\n"), 1;

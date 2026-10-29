@@ -127,6 +127,7 @@ int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
 int gamepadUiTests();      // tests/GamepadUiTests.cpp
 int plasmaHitTests();      // tests/PlasmaHitTests.cpp
+int objectVisualTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -371,12 +372,15 @@ static void extractedPlacements() {
     // Exercise the real file reader, including negative world coordinates.
     auto root = fs::temp_directory_path() /
                 ("CubeVulkan-placement-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    auto seed = root / "seed_123";
+    const auto extract = root / "Extract";
+    auto seed = extract / "seed_123";
     CHECK(fs::create_directory(root));
+    CHECK(fs::create_directory(extract));
     CHECK(fs::create_directory(seed));
     { std::ofstream(seed / "manifest.txt") << "seed=123\nhomeX=-65\nhomeY=-1\nhomeZ=7\n"; }
     writeZoneFixture(seed / "z_-2_-1.cwz", -2, -1);
-    { std::ofstream(root / "sprite-groups.txt") << "# building-part sprites\n3 sprites/other.cub\n0 sprites/window.cub\n"; }
+    { std::ofstream(extract / "sprite-groups.txt") << "# environment sprites\n0 sprites/flower.cub\n"
+                                                   "# building-part sprites\n3 sprites/other.cub\n0 sprites/window.cub\n"; }
     auto records = seed / "z_-2_-1.rec";
     auto writeRecords = [&](uint32_t stride, uint32_t count, const std::vector<uint8_t> &payload) {
         std::ofstream out(records, std::ios::binary | std::ios::trunc);
@@ -411,16 +415,68 @@ static void extractedPlacements() {
         CHECK(std::abs(props[i].yaw - i * 1.5707963f) < 1e-5f);
         CHECK(props[i].estimatedScale);
     }
-    { std::ofstream(root / "sprite-scales.txt") << "11\tsprites/window.cub\t0.125\t12\n"; }
+    { std::ofstream(extract / "sprite-scales.txt") << "11\tsprites/window.cub\t0.125\t12\n"; }
     CHECK(ex.open(seed, error));
     props = ex.props(0, 0);
     CHECK(props.size() == 4 && !props[0].estimatedScale && props[0].scale == .125f);
-    CHECK(fs::remove(root / "sprite-scales.txt"));
+    CHECK(fs::remove(extract / "sprite-scales.txt"));
     CHECK(ex.open(seed, error));
     CHECK(ex.props(0, 0)[0].estimatedScale); // no stale scale after re-opening
-    payload[0x20] = 4; // Invalid actual rotation, unlike padding.
+    for (uint8_t turn : {4, 48, 191, 255}) {
+        payload[0x20] = turn; // Steam's renderer accepts every unsigned rotation byte.
+        writeRecords(0xe0, 4, payload);
+        const auto rotated = ex.props(0, 0);
+        CHECK(rotated.size() == 4);
+        CHECK(std::abs(rotated[0].yaw - turn * 1.5707963f) < 1e-5f);
+        CHECK(rotated[0].x == props[0].x && rotated[0].y == props[0].y && rotated[0].z == props[0].z);
+    }
+    CHECK(fs::create_directory(root / "sprites"));
+    {
+        std::ofstream model(root / "sprites" / "window.cub", std::ios::binary);
+        const int32_t dimensions[] = {7, 14, 7}; // X is the normalization denominator, even when Y is wider.
+        model.write((const char *)dimensions, sizeof dimensions);
+        std::ofstream(extract / "sprite-scales.txt") << "11\tsprites/window.cub\t0.125\t12\n";
+    }
+    const float objectScale = 1.5f;
+    memcpy(payload.data() + 0x24, &objectScale, sizeof objectScale);
     writeRecords(0xe0, 4, payload);
-    CHECK(ex.props(0, 0).size() == 3);
+    CHECK(ex.open(seed, error));
+    const auto normalized = ex.props(0, 0);
+    CHECK(normalized.size() == 4 && !normalized[0].estimatedScale);
+    CHECK(std::abs(normalized[0].scale - 3.0f / 7) < 1e-6f);
+    CHECK(normalized[0].object.scale == objectScale && normalized[0].object.turn == 255);
+    const float largeScale = 12;
+    memcpy(payload.data() + 0x24, &largeScale, sizeof largeScale);
+    writeRecords(0xe0, 4, payload);
+    const auto largeObject = ex.props(0, 0);
+    CHECK(largeObject.size() == 4 && std::abs(largeObject[0].scale - 24.0f / 7) < 1e-6f);
+    {
+        std::ofstream out(records, std::ios::binary | std::ios::app);
+        auto append = [&](uint32_t offset, uint32_t stride, const std::vector<uint8_t> &record) {
+            const uint32_t header[] = {offset, stride, 1};
+            out.write((const char *)header, sizeof header);
+            out.write((const char *)record.data(), record.size());
+        };
+        std::vector<uint8_t> model(0x40), item(0xe0);
+        const int64_t position[] = {-65LL * 65536, -65536, 8LL * 65536};
+        memcpy(model.data() + 8, position, sizeof position);
+        const float size = 2.5f, yaw = 45;
+        const int32_t flags = 4;
+        memcpy(model.data() + 0x20, &size, sizeof size);
+        memcpy(model.data() + 0x24, &yaw, sizeof yaw);
+        memcpy(model.data() + 0x38, &flags, sizeof flags);
+        append(0x18, 0x40, model);
+        append(0x90, 0x40, model); // Derived light list must not duplicate the model as a building part.
+        append(0xa8, 0x40, model); // Nor should ambient emitter records draw a voxel model.
+        item[0] = 3; // A real item category, distinct from building-part type3.
+        memcpy(item.data() + 0xa0, position, sizeof position);
+        append(0x30, 0xe0, item);
+        append(0x48, 0xe0, item);
+    }
+    const auto sceneProps = ex.props(0, 0);
+    CHECK(sceneProps.size() == 5);
+    CHECK(sceneProps.back().model == "flower" && sceneProps.back().scale == 2.5f);
+    CHECK(sceneProps.back().modelFlags == 4 && sceneProps.back().listPosition == 1);
     writeRecords(0xe0, 5, payload); // Truncated payload.
     CHECK(ex.props(0, 0).empty());
     writeRecords(0, UINT32_MAX, {});
@@ -430,8 +486,12 @@ static void extractedPlacements() {
     fs::remove(records);
     fs::remove(seed / "manifest.txt");
     fs::remove(seed / "z_-2_-1.cwz");
-    fs::remove(root / "sprite-groups.txt");
+    fs::remove(extract / "sprite-groups.txt");
+    fs::remove(extract / "sprite-scales.txt");
+    fs::remove(root / "sprites" / "window.cub");
+    fs::remove(root / "sprites");
     fs::remove(seed);
+    fs::remove(extract);
     fs::remove(root);
 }
 
@@ -10115,6 +10175,7 @@ int main(int argc, char **argv) {
     failures += petTests();            // tests/PetTests.cpp
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp
     failures += plasmaHitTests();     // tests/PlasmaHitTests.cpp
+    failures += objectVisualTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

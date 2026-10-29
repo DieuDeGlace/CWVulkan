@@ -62,6 +62,9 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- static-object visual sizing, captured door/window transforms and crop/furnishing
+  model metadata, from `worldgen-parity-gaps.md`. Owner voxel dimensions are read
+  from local model headers; no replacement assets or reference source code are included.
 - controller GUI events, ranking and repeat timing, inventory region/tab state,
   navigation registration, shape picking and transformed bounds, from the independent
   `remaining-runtime-gaps.md` sections 4.1–4.17. Implementations and synthetic checks

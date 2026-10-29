@@ -158,7 +158,10 @@ class ExtractedWorld {
     // (Extract/sprite-scales.txt). Building parts are sized per type in code.
     std::map<std::string, float> measuredScale;
     mutable std::map<std::string, float> estimatedScale; // guarded by cacheMutex
+    std::filesystem::path spriteFolder;
+    mutable std::map<std::string, int> voxelWidths; // owner model headers, guarded by cacheMutex
     float partScale(const std::string &name) const;
+    std::pair<float, bool> objectScale(int type, const std::string &name, float scale) const;
     // Reads the sprite tables (sprite-groups.txt, sprite-scales.txt) in `dir`.
     void loadSpriteTables(const std::filesystem::path &dir);
     std::set<Key> zones; // Absolute zone coordinates present on disk.

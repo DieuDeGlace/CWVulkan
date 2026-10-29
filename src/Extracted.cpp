@@ -63,6 +63,7 @@ void ExtractedWorld::openGenerated(int homeX, int homeY, const fs::path &spriteD
         cache.clear();
         absent.clear();
         estimatedScale.clear();
+        voxelWidths.clear();
     }
     folder.clear();
     if (!spriteDir.empty())
@@ -78,6 +79,7 @@ void ExtractedWorld::openGenerated(int homeX, int homeY, const fs::path &spriteD
 
 // Sprite tables written by the extractor next to the seed folders.
 void ExtractedWorld::loadSpriteTables(const fs::path &dir) {
+    spriteFolder = dir.parent_path() / "sprites";
     std::string line;
     std::ifstream groups(dir / "sprite-groups.txt");
     std::vector<std::string> *table = nullptr;
@@ -152,6 +154,7 @@ bool ExtractedWorld::open(const fs::path &dir, std::string &error) {
         cache.clear();
         absent.clear();
         estimatedScale.clear();
+        voxelWidths.clear();
     }
     folder = dir;
     std::error_code ec;
@@ -556,6 +559,28 @@ float ExtractedWorld::partScale(const std::string &name) const {
     return scale;
 }
 
+std::pair<float, bool> ExtractedWorld::objectScale(int type, const std::string &name, float scale) const {
+    int width = 0;
+    {
+        std::lock_guard lock(cacheMutex);
+        auto found = voxelWidths.find(name);
+        if (found == voxelWidths.end()) {
+            int32_t dimensions[3]{};
+            std::ifstream model(spriteFolder / (name + ".cub"), std::ios::binary);
+            if (model.read((char *)dimensions, sizeof dimensions) &&
+                dimensions[0] > 0 && dimensions[1] > 0 && dimensions[2] > 0)
+                width = dimensions[0];
+            voxelWidths[name] = width;
+        } else
+            width = found->second;
+    }
+    if (width > 0)
+        return {objectvisual::voxelScale(type, scale, width), false};
+    // A missing owner model cannot render. Retain the legacy metadata fallback
+    // for incomplete exports, with its existing provenance warning.
+    return {scale * partScale(name), measuredScale.count(name) == 0};
+}
+
 std::vector<Scenery> ExtractedWorld::props(int zx, int zy) {
     int64_t ax = (int64_t)zx + originX, ay = (int64_t)zy + originY;
     if (ax < INT32_MIN || ax > INT32_MAX || ay < INT32_MIN || ay > INT32_MAX) return {};
@@ -574,7 +599,7 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
         int listPosition = 0; // (vegetation-wind.md §4.3: every record counts, from 1)
         for (const worldgen::Model &m : zone->things->models) {
             listPosition++;
-            if (m.type < 0 || m.type >= (int)environment.size() || environment[m.type].empty() || !(m.size > 0 && m.size < 2) ||
+            if (m.type < 0 || m.type >= (int)environment.size() || environment[m.type].empty() || !(m.size > 0) || !std::isfinite(m.size) ||
                 !std::isfinite(m.yaw))
                 continue;
             const std::string &name = environment[m.type];
@@ -583,11 +608,13 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
             out.push_back({name, p.x, p.y, p.z, glm::radians(m.yaw), m.size, 0, false, m.flags, listPosition});
         }
         for (const worldgen::ZoneObject &o : zone->objects) {
-            if (o.type < 0 || o.type >= (int)buildingParts.size() || buildingParts[o.type].empty() || o.turn > 3 || !(o.scale > 0 && o.scale < 8))
+            if (o.type < 0 || o.type >= (int)buildingParts.size() || buildingParts[o.type].empty() || !(o.scale > 0) || !std::isfinite(o.scale))
                 continue;
             const glm::vec3 p = local(o.x, o.y, o.z);
-            out.push_back({buildingParts[o.type], p.x, p.y, p.z, o.turn * 1.5707963f, o.scale * partScale(buildingParts[o.type]), 0,
-                           measuredScale.count(buildingParts[o.type]) == 0});
+            const auto [scale, estimated] = objectScale(o.type, buildingParts[o.type], o.scale);
+            Scenery placed{buildingParts[o.type], p.x, p.y, p.z, o.turn * 1.5707963f, scale, 0, estimated};
+            placed.object = {o.type, o.turn, (uint8_t)o.active, o.scale, o.swing};
+            out.push_back(std::move(placed));
         }
         return out;
     }
@@ -615,8 +642,10 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
         if (!stride || count > (data.size() - at) / stride)
             break;
         // Unknown record layouts cannot be decoded using these field offsets.
-        bool spriteLayout = stride == 0x40 && (offset == 0x18 || offset == 0x90);
-        bool objectLayout = stride == 0xe0 && (offset == 0x30 || offset == 0x48 || offset == 0x60);
+        // Only the live model/object lists are scenery. Ground items, generation
+        // backups, and derived light/emitter lists have separate consumers.
+        bool spriteLayout = stride == 0x40 && offset == worldgen::zonelist::MODELS;
+        bool objectLayout = stride == 0xe0 && offset == worldgen::zonelist::OBJECTS;
         if (!spriteLayout && !objectLayout) {
             at += (size_t)stride * count;
             continue;
@@ -626,31 +655,14 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
             int32_t id;
             memcpy(&id, r, 4);
             float x, y, z;
-            // Records at 0x30/0x48 (statues, stone gates) keep their position at +0xa0.
-            bool spawnLayout = stride == 0xe0 && (offset == 0x30 || offset == 0x48);
-            if (!local(r + (spawnLayout ? 0xa0 : 8), x, y, z))
+            if (!local(r + 8, x, y, z))
                 continue;
-            if (spawnLayout) {
-                if (offset == 0x30 && id >= 0 && id < (int)buildingParts.size() && !buildingParts[id].empty())
-                    out.push_back({buildingParts[id], x, y, z, 0, partScale(buildingParts[id]), 0,
-                                   measuredScale.count(buildingParts[id]) == 0}); // 0x48 repeats 0x30.
-                continue;
-            }
-            if (stride == 0x40 && offset == 0x90) {
-                // Second sprite array: building parts (chest lids) in the sprite layout.
-                float scale, degrees;
-                memcpy(&scale, r + 32, 4);
-                memcpy(&degrees, r + 36, 4);
-                if (id >= 0 && id < (int)buildingParts.size() && !buildingParts[id].empty() && scale > 0 && scale < 2 && std::isfinite(degrees))
-                    out.push_back({buildingParts[id], x, y, z, glm::radians(degrees), scale, 0});
-                continue;
-            }
             if (stride == 0x40) {
                 // Sprite record: environment type, position, blocks per voxel, yaw in degrees.
                 float scale, degrees;
                 memcpy(&scale, r + 32, 4);
                 memcpy(&degrees, r + 36, 4);
-                if (id < 0 || id >= (int)environment.size() || environment[id].empty() || !(scale > 0 && scale < 2) || !std::isfinite(degrees))
+                if (id < 0 || id >= (int)environment.size() || environment[id].empty() || !(scale > 0) || !std::isfinite(scale) || !std::isfinite(degrees))
                     continue;
                 // The record's flags (+0x38) say whether it sways or shines; its place in the
                 // zone's model list (+0x18) phases the sway (vegetation-wind.md §3.1, §4.3).
@@ -667,11 +679,17 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
                 uint8_t turns = r[0x20];
                 float scale;
                 memcpy(&scale, r + 0x24, 4);
-                if (id < 0 || id >= (int)buildingParts.size() || buildingParts[id].empty() || turns > 3 ||
-                    !(scale > 0 && scale < 8))
+                // Native drawing consumes the full byte, including captured uninitialized lamp turns.
+                // It neither rejects values above three nor masks them to two bits.
+                if (id < 0 || id >= (int)buildingParts.size() || buildingParts[id].empty() ||
+                    !(scale > 0) || !std::isfinite(scale))
                     continue;
-                out.push_back({buildingParts[id], x, y, z, turns * 1.5707963f, scale * partScale(buildingParts[id]), 0,
-                               measuredScale.count(buildingParts[id]) == 0});
+                const auto [voxelScale, estimated] = objectScale(id, buildingParts[id], scale);
+                Scenery placed{buildingParts[id], x, y, z, turns * 1.5707963f, voxelScale, 0, estimated};
+                float elapsed;
+                memcpy(&elapsed, r + 0x2c, sizeof elapsed);
+                placed.object = {id, turns, r[0x28], scale, elapsed};
+                out.push_back(std::move(placed));
             }
         }
         at += (size_t)stride * count;

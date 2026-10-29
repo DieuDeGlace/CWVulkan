@@ -72,8 +72,14 @@ individual feature documents.
   across four overlapping seed-123 sets; it still finds object-record differences.
   `WC_STRICT_RECORDS=1 EngineTests wgcreatures 10000` now fails on object keys,
   model counts/positions or item keys/angles that differ, and on absent zone fixtures.
-  Model size/yaw coverage and undefined-but-consumed native fields need separate
-  verification; this command alone does not certify complete transform parity.
+  Defined model fields and list order now match all 50,116 records in those snapshots:
+  type, position, size/angle, tint and flags. Only independently verified unused,
+  unwritten marker-size fields are excluded and reported separately. The loader now
+  draws only live model/object lists, retains full captured turn bytes, and derives
+  object scale from type extents and owner voxel dimensions. Captured door/window
+  pivots and sliding extents have corner regressions. Live animation synchronization,
+  model0x59 rendering, model+0x28 lighting, undefined consumed lamp turns and broader
+  dungeon/theme block oracles still prevent a complete parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
   currently supplied, including integrated pet combat and appearance comparisons.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor

@@ -324,6 +324,40 @@ uint32_t bitsOf(float f) {
     std::memcpy(&u, &f, 4);
     return u;
 }
+// Only producer-specific unused size slots identified by the independent audit
+// are excluded. Initialized yaw, tint, flags and record order remain checked.
+bool unspecifiedMarkerSize(const wg::Model &model) {
+    return (model.type >= 0x4d && model.type <= 0x50) || (model.type == 0x4c && model.size == 0);
+}
+bool sameModelFields(const wg::Model &game, const wg::Model &mine) {
+    return game.type == mine.type && game.x == mine.x && game.y == mine.y && game.z == mine.z &&
+           (unspecifiedMarkerSize(mine) || bitsOf(game.size) == bitsOf(mine.size)) &&
+           bitsOf(game.yaw) == bitsOf(mine.yaw) && bitsOf(game.r) == bitsOf(mine.r) &&
+           bitsOf(game.g) == bitsOf(mine.g) && bitsOf(game.b) == bitsOf(mine.b) && game.flags == mine.flags;
+}
+void modelRecordChecks() {
+    wg::Model game, mine;
+    game.type = mine.type = 0x4d;
+    game.size = 123;
+    WC_CHECK(sameModelFields(game, mine)); // Unwritten leaf-marker size has no stock consumer.
+    game.yaw = 90;
+    WC_CHECK(!sameModelFields(game, mine)); // Its initialized yaw must not be masked.
+    game.yaw = 0;
+    game.type = mine.type = 3;
+    WC_CHECK(!sameModelFields(game, mine)); // Drawable size is meaningful.
+    game = mine;
+    game.flags = 4;
+    WC_CHECK(!sameModelFields(game, mine));
+    game = mine;
+    game.type = mine.type = 0x59;
+    game.yaw = 360;
+    WC_CHECK(!sameModelFields(game, mine)); // This slot is beam width, not a periodic angle.
+    game = mine;
+    game.type = mine.type = 0x4c;
+    mine.size = 0.1f;
+    WC_CHECK(!sameModelFields(game, mine)); // A prior plant's initialized size must be retained.
+}
+
 template <class K> int matched(std::multiset<K> game, const std::multiset<K> &mine) {
     int n = 0;
     for (const K &k : mine) {
@@ -339,6 +373,7 @@ struct Totals {
     long long draws = 0, drawsSame = 0;
     int objectsGame = 0, objectsMine = 0, objectsSame = 0;
     int modelsGame = 0, modelsMine = 0, modelsSame = 0;
+    int modelsInOrder = 0, unspecifiedSizes = 0, rawSizeDifferences = 0;
     int itemsGame = 0, itemsMine = 0, itemsSame = 0, itemsAngle = 0;
     int pointsGame = 0, pointsMine = 0, pointsPlaced = 0, pointsSame = 0, idsSame = 0;
     int pointsExcused = 0; // pairs left out as the documented exception below
@@ -389,6 +424,7 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
     const std::vector<uint8_t> rec = readFile(p.replace_extension(".rec"));
     std::multiset<ObjectKey> go, mo;
     std::multiset<std::tuple<int, int64_t, int64_t, int64_t>> gm, mm;
+    std::vector<wg::Model> modelRecords;
     std::multiset<std::tuple<int, int, int64_t, int64_t, int64_t>> gi, mi;
     std::multiset<std::tuple<int, int, int64_t, int64_t, int64_t, uint32_t>> gia, mia;
     for (size_t at = 4; rec.size() >= 4 && at + 12 <= rec.size();) {
@@ -401,8 +437,16 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
             if (offset == wg::zonelist::OBJECTS)
                 go.insert({field<int32_t>(r, 0), field<int64_t>(r, 8), field<int64_t>(r, 0x10), field<int64_t>(r, 0x18), r[0x20],
                            bitsOf(field<float>(r, 0x24))});
-            else if (offset == wg::zonelist::MODELS)
+            else if (offset == wg::zonelist::MODELS) {
                 gm.insert({field<int32_t>(r, 0), field<int64_t>(r, 8), field<int64_t>(r, 0x10), field<int64_t>(r, 0x18)});
+                wg::Model model;
+                model.type = field<int32_t>(r, 0);
+                model.x = field<int64_t>(r, 8), model.y = field<int64_t>(r, 0x10), model.z = field<int64_t>(r, 0x18);
+                model.size = field<float>(r, 0x20), model.yaw = field<float>(r, 0x24);
+                model.r = field<float>(r, 0x2c), model.g = field<float>(r, 0x30), model.b = field<float>(r, 0x34);
+                model.flags = field<int32_t>(r, 0x38);
+                modelRecords.push_back(model);
+            }
             else if (offset == wg::zonelist::ITEMS) {
                 gi.insert({r[0], field<int32_t>(r, 4), field<int64_t>(r, 0xa0), field<int64_t>(r, 0xa8), field<int64_t>(r, 0xb0)});
                 gia.insert({r[0], field<int32_t>(r, 4), field<int64_t>(r, 0xa0), field<int64_t>(r, 0xa8), field<int64_t>(r, 0xb0),
@@ -421,6 +465,33 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
     }
     t.objectsGame += (int)go.size(), t.objectsMine += (int)mo.size(), t.objectsSame += matched(go, mo);
     t.modelsGame += (int)gm.size(), t.modelsMine += (int)mm.size(), t.modelsSame += matched(gm, mm);
+    for (size_t i = 0; i < std::min(modelRecords.size(), z.models.size()); ++i) {
+        const auto &game = modelRecords[i], &mine = z.models[i];
+        t.unspecifiedSizes += unspecifiedMarkerSize(mine);
+        t.rawSizeDifferences += bitsOf(game.size) != bitsOf(mine.size);
+        if (sameModelFields(game, mine))
+            ++t.modelsInOrder;
+        else {
+            const std::string prefix = "model type " + std::to_string(mine.type) + " ";
+            if (game.type != mine.type) ++t.wrongFields["model type/order"];
+            if (game.x != mine.x || game.y != mine.y || game.z != mine.z) ++t.wrongFields[prefix + "position/order"];
+            if (!unspecifiedMarkerSize(mine) && bitsOf(game.size) != bitsOf(mine.size)) ++t.wrongFields[prefix + "size"];
+            if (bitsOf(game.yaw) != bitsOf(mine.yaw)) ++t.wrongFields[prefix + "yaw/width"];
+            if (bitsOf(game.r) != bitsOf(mine.r) || bitsOf(game.g) != bitsOf(mine.g) || bitsOf(game.b) != bitsOf(mine.b))
+                ++t.wrongFields[prefix + "tint"];
+            if (game.flags != mine.flags) ++t.wrongFields[prefix + "flags"];
+            if (verbose && std::getenv("WC_MODEL_RECORDS")) {
+                char detail[640];
+                std::snprintf(detail, sizeof detail,
+                              "zone %d %d model %zu types %d/%d position %lld,%lld,%lld / %lld,%lld,%lld "
+                              "size %.9g/%.9g yaw %.9g/%.9g tint %.9g,%.9g,%.9g / %.9g,%.9g,%.9g flags %x/%x",
+                              zx, zy, i, game.type, mine.type, (long long)game.x, (long long)game.y, (long long)game.z,
+                              (long long)mine.x, (long long)mine.y, (long long)mine.z, game.size, mine.size, game.yaw, mine.yaw,
+                              game.r, game.g, game.b, mine.r, mine.g, mine.b, game.flags, mine.flags);
+                t.notes.push_back(detail);
+            }
+        }
+    }
     t.itemsGame += (int)gi.size(), t.itemsMine += (int)mi.size(), t.itemsSame += matched(gi, mi), t.itemsAngle += matched(gia, mia);
     if (verbose && std::getenv("WC_RECORDS")) {
         for (const ObjectKey &k : go)
@@ -578,6 +649,8 @@ Totals zonesOracle(const fs::path &dir, const wg::CreatureTables &tables, int ma
                 t.objectsGame, t.objectsMine, t.objectsSame, t.modelsGame, t.modelsSame, t.itemsGame, t.itemsMine, t.itemsSame, t.itemsAngle);
     std::printf("  spawn points game %d, new %d, paired %d, every field the same %d, same id %d, excused %d\n", t.pointsGame, t.pointsMine,
                 t.pointsPlaced, t.pointsSame, t.idsSame, t.pointsExcused);
+    std::printf("  model fields/order %d of %d; unspecified marker sizes %d, raw size differences %d\n",
+                t.modelsInOrder, t.modelsGame, t.unspecifiedSizes, t.rawSizeDifferences);
     if (verbose) {
         for (auto &[f, n] : t.wrongFields)
             std::printf("  wrong %s: %d\n", f.c_str(), n);
@@ -679,6 +752,7 @@ void petChecks(const wg::CreatureTables &tables) {
 // The fast subset in the default test run.
 int worldgenCreatureTests() {
     failures = 0;
+    modelRecordChecks();
     residentChecks();
     const fs::path game = gameDir();
     if (game.empty())
@@ -694,12 +768,14 @@ int worldgenCreatureTests() {
     const Totals t = zonesOracle(extractDir(game) / "gen_seed_123", tables, 6, false, -1);
     WC_CHECK(t.wholeTraces == t.traces);
     WC_CHECK(t.pointsSame == t.pointsGame && t.pointsMine == t.pointsGame);
+    WC_CHECK(t.modelsInOrder == t.modelsGame && t.modelsMine == t.modelsGame);
     return failures;
 }
 
 // `EngineTests wgcreatures [zones]`.
 int worldgenCreatureCommand(int maxZones) {
     failures = 0;
+    modelRecordChecks();
     residentChecks();
     const fs::path game = gameDir();
     if (game.empty())
@@ -722,6 +798,7 @@ int worldgenCreatureCommand(int maxZones) {
             d >> day;
         const Totals t = zonesOracle(extractDir(game) / set, tables, maxZones, true, refreshed ? day : -1);
         checkedZones += t.zones;
+        WC_CHECK(t.modelsInOrder == t.modelsGame && t.modelsMine == t.modelsGame);
         if (strictRecords && t.zones) {
             WC_CHECK(t.objectsSame == t.objectsGame && t.objectsMine == t.objectsGame);
             WC_CHECK(t.modelsSame == t.modelsGame && t.modelsMine == t.modelsGame);

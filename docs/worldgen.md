@@ -9,6 +9,20 @@ CubeVulkan reimplements Cube World's world generator, so the whole world exists 
 
 ## Status
 
+**2026-10-29 placement audit:** the loader now keeps live model/object lists
+separate from ground-item, backup and derived-light lists. Object sizes use the
+type extents and owner's voxel-X dimension; captured full-byte rotations,
+door hinges and gate/window slide extents are retained. Crop and furnishing
+tint/flag corrections preserve random-draw order. All 50,116 initialized model
+records in 789 overlapping seed-123 snapshots now match in list order, including
+size/angle, tint and flags. The full engine test suite passes; a deep read of
+31,151 exported zones finds no invalid terrain records, but still reports a
+missing owner `stone-stool` model. These are bounded checks: the historical
+coverage table below is not proof of all seeds, cultures or dungeons. Live
+object animation synchronization, light-beam rendering, model lighting and the
+consumed undefined lamp-turn bytes remain open in the
+[parity audit](specs/worldgen-parity-gaps.md) and [roadmap](roadmap.md).
+
 The generator is now `src/worldgen/` (namespace `worldgen`), rebuilt clean-room from
 `docs/specs/worldgen-*.md` (see `docs/CLEANROOM.md`); the engine uses it through
 `worldgen/Generator.h`, and CubeVulkan's own options are in `worldgen/Options.h`. The routine

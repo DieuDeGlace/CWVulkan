@@ -454,6 +454,8 @@ void World::update(glm::vec3 focus) {
             Instance i{m, {s.x, s.y, s.z}, s.yaw, s.scale, (uint32_t)(s.flags & ~SWAY), true};
             z.scenery.push_back(instanceDraw(i));
             DrawItem &d = z.scenery.back();
+            if (s.object.type >= 0)
+                d.model = objectvisual::matrix(s.object, i.position, models[m].size);
             d.kind = DrawKind::Scenery;
             d.standingLight = s.light;
             using namespace vegetationwind::modelflag;
