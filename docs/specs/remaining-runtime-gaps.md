@@ -319,7 +319,7 @@ right-stick right turns yaw toward decreasing angles, and stick up lowers pitch 
 up in the game's pitch convention). The subsequent camera smoothing is the existing
 rule in `frontend-title.md` §3.3.
 
-If aim tracking G+0x1e88 is active and its target G+0x1e58 resolves to a living creature,
+If the per-frame creature-box overlap byte G+0x1e88 is set and target G+0x1e58 resolves to a living creature,
 let d be the Euclidean distance in blocks from camera eye G+0x1dc0 to the target's
 drawn position +0xb10. Convert each fixed-position difference to float, multiply by
 1/65536, and take the square root of the sum of squares (0x6d6b0 / 0x9baf0).
@@ -945,7 +945,7 @@ displayed **region name** (0x1081b0), obtain that region's generated block posit
 (0x2b9210), set the map's target centre (0xa3390), and raise zoom to at least 4. These
 are map-region navigation operations. They are not dialogue-page or conversation-
 choice navigation. `native-saves.md` field 28 describes this serialized region list;
-its broader gameplay provenance remains separate from the verified map use.
+its gameplay provenance and exact traversal are now specified in §4.18.
 
 **What makes 0x1014f0 true:** it explicitly includes this full-map byte, so an
 ordinary open map is a UI-input state even without flight/shrine selection. It does
@@ -1118,6 +1118,165 @@ With effective panel width W and height H, their widget-local integer coordinate
 are **(truncate(W/3), truncate(H−20))**, then
 **(truncate(2W/3), truncate(H−20))**. They correspond to **Identify**, then **Goodbye!**,
 and pass through 0xf97e0's placement transform.
+
+### 4.18 Interactive-map shoulders navigate the player's region history
+
+Sources: **0x1355a0**, **0x101860 / 0x101790**, **0x103200 / 0x1081b0**,
+**0x2da6c0 / 0x2d0610**, **0x2b9210**, and **0xa3390**.
+The list is the local player's character-data **+0x118** linked list, count at
+**+0x120**, serialized as field **28** in `native-saves.md`. Entries are signed
+**i32 region x/y pairs**, not creature ids, dialogue pages, shrine locations or
+flight destinations. Native list nodes have next/previous links at **+0 / +8** and
+the coordinate pair at **+0x10 / +0x14**. The UI's current node is interface
+**+0x5c8 = G+0x6e0**.
+
+**History producer:** 0x2da6c0 updates the local player's current generated region
+at creature **+0x150 / +0x154**, then maintains this list unless ability is **0x9c
+or 0x9d**. If the first history entry already matches that region, leave the list
+alone. Otherwise remove an older matching entry if present and insert the current
+region at the **front** through 0x2d0610. Thus this is a unique region history in
+**most recently occupied first** order; revisiting a region moves it to the front.
+The initial empty list acquires the current region through this same pass. This
+pass performs no fixed-length history trimming.
+
+When the full-map region-label panel transitions from hidden to shown in
+0x103200, select the list's **first node** and refresh its label/arrows. Closing and
+reopening the map therefore restarts the history selection at the first entry.
+This initialization does not itself invoke the shoulder recentering action.
+
+During each successful XInput poll in interactive map mode **G+0x668 nonzero**:
+
+* **Left shoulder 0x0100 down edge → 0x101860:** advance to the current node's **next**
+  entry if that next entry is not the list sentinel. This goes toward older history.
+* **Right shoulder 0x0200 down edge → 0x101790:** move to the **previous** entry unless
+  the current node is already the list's first entry. This goes toward newer history.
+
+There is **no wrap and no held repeat**. Both edge tests run in the above order,
+so simultaneous fresh shoulders can advance and then move back. Even at a boundary,
+the invoked handler refreshes the label/arrows, recenters on the still-selected
+region and enforces minimum zoom; it does not return simply because no index changed.
+The callback does not require the corresponding on-screen arrow to be visible.
+
+The left/right previous-edge bytes are **0x551cdd / 0x551cde**, initially zero.
+Each is updated from the current button only in this interactive-map branch, even
+when its handler could not move. They remain unchanged during ordinary gameplay,
+ordinary UI, failed polls and Controls capture. A shoulder already held when
+entering the map therefore triggers if its saved map bit was zero; closing/reopening
+does not reset that saved bit. Each invoked edge marks the last device as pad.
+Right shoulder also keeps its independent held Normal-Attack mapping from §4.1.
+
+After either handler's possible node change, 0x1081b0 updates the generated region
+name, shows the forward/left arrow only when a next entry exists, and shows the
+backward/right arrow only when the selection is not the first entry. This uses
+the region-name dictionary generator rather than a saved display string.
+0x2b9210 then obtains that region's deterministic generated **block coordinate**.
+With region pair (x,y), its x coordinate is **8192x + 1024 + (hx modulo 6144)** and y
+coordinate **8192y + 1024 + (hy modulo 6144)**, where hx/hy use the existing region
+hash with salts **0xe29e / 0x70532** respectively. Use the native region-position
+generator from `worldgen-terrain.md` §2.1; this is not a bounding-box midpoint.
+
+0xa3390 stores the map target centre at **G+0x1e08 / +0x1e10 / +0x1e18**: x/y are
+those block coordinates converted to fixed position by multiplying by **65536**;
+z is terrain height from **0x35ea0(x,y,0)** times 65536, truncated to i64. It sets
+the manual-map-centre byte **G+0x1e38 = 1**. The handler then raises zoom
+**G+0x1e04 to at least 4**, preserving a larger zoom. It does not immediately
+overwrite the drawn centre at +0x1e20: the normal map centre smoothing follows.
+It neither starts travel nor changes flight/shrine mode. The handlers have no
+explicit empty-history guard; the normal history-producing pass supplies a valid
+first entry. No meaningful destination is established for an artificially empty
+history containing only a sentinel.
+
+### 4.19 Gameplay aim state, movement assist, and manual look slowdown
+
+Sources: **0xa5a50**, **0x8ae50**, **0x17840**, and **0xadcd0**. This connects
+`use-prompt.md` §2, `player-control.md` §4.6, and the manual right-stick arithmetic
+in §4.3. These are **two separate camera effects** with different guards and
+positions in the frame, rather than a persistent lock-on mode.
+
+The frame clears targeted creature **G+0x1e58 = 0** and the byte
+**G+0x1e88 = 0** before its target-selection work. The latter means **some eligible
+creature's projected box spans the crosshair**, not that the player enabled aim
+tracking or that line of sight passed. It is set during the creature-box test
+**before** line of sight. A blocked creature can therefore set this byte without
+becoming a target. The candidate list, eligibility filters, projected-corner test,
+line-of-sight limit and perpendicular-distance ranking are those in
+`use-prompt.md` §2.1–§2.2. Equal ranking distances retain the earlier selected
+candidate because replacement uses a strict comparison. This state is rebuilt,
+not retained until another attack or another stick press.
+
+**Movement yaw assist occurs inside 0x8ae50**, after its creature candidate pass
+and attack/skill handling, but **before** its static-object and ground-item scans
+and nearby-target fallbacks. Its conditions are exactly:
+
+* The current creature target id +0x1e58 is nonzero and resolves to a creature
+  whose health +0x180 is **strictly positive**.
+* The **filtered LEFT-stick movement pair** at **G+0x1d6c / +0x1d70** has squared
+  length **strictly greater than float 0.10000000149011612**.
+
+This block does not test the right stick, the last-used-device indicator, a held
+attack/aim button, or +0x1e88. It adds no further enemy/faction test or separate
+UI/map-mode test; normal target eligibility and whether 0x8ae50 is called still
+apply. A later object/item target taking priority does not undo this earlier
+frame's yaw assist.
+
+Use the target's **drawn position +0xb10** and the aiming ray's origin
+**G+0x1dd8 / +0x1de0 / +0x1de8**, not the camera eye, for the direction vector D.
+Convert fixed-position differences to blocks, then add **target size-z +0x8c ×
+0.45** to its vertical component. Add target velocity **+0x34 / +0x38 / +0x3c**
+times a lead time in seconds. That lead time is the block distance from the
+player's physical position **+0x10** to the target's drawn position divided by
+**150**, when the existing ranged predicate **0x5eca0** is true, or **500** otherwise.
+This is the same predicate and lead arithmetic already detailed by
+`player-control.md` §4.6; it is not the equipped weapon's individual projectile speed.
+
+Let F be the existing camera forward vector **G+0x1ec4 / +0x1ec8 / +0x1ecc**.
+Normalize the horizontal parts of F and D when both are nonzero. The desired yaw
+is the **current displayed camera yaw G+0x1d90**, plus
+**asin(Fx×Dy − Fy×Dx) × 180/π**. The corresponding pitch toward D is computed
+natively but **does not update the pitch target**.
+
+When full F and D are nonzero, normalize them and let m be the length of their
+cross product. The blend amount is
+**(1 − exp(−r×dt)) × exp(−20×m)**, with dt in **milliseconds**, and r equal to
+float **0.014999999664723873** when player float **+0x12c is zero**, or float
+**0.029999999329447746** otherwise. Apply **0x17840** to the old yaw target
+**G+0x1da8 narrowed to float**, desired yaw, and that blend amount. Widen its float
+result to double and store it back to +0x1da8. Do not directly set the current
+yaw or rotate the aiming ray/cast again in this block.
+
+For precise implementation of 0x17840, its angle arguments are degrees. Form each
+angle's single-precision sine/cosine after conversion to radians. When the
+double-precision dot product of those unit direction pairs is at least
+**−0.8999999761581421**, the returned angle is old angle plus the blend amount
+times **asin(clamp(sin(new−old), −1, 1)) × 180/π**, with native float result
+rounding. Below that dot threshold, return the new angle directly. In particular,
+this helper is not an unrestricted linear blend of angle numbers or an atan2
+shortest-angle replacement. The current desired yaw is based on +0x1d90, while
+the old argument to this blend is the separate target +0x1da8.
+
+**Manual look slowdown occurs later in 0xa5a50**, after the whole input/target
+routine. It uses the then-current +0x1e58 and requires **+0x1e88 nonzero** plus a
+resolved living target. Its distance starts at the **camera eye G+0x1dc0**, not
+the ray origin or the player. Multiply the normal cubic right-stick rate by
+**max(1 − distance/50, float 0.3)**, as specified in §4.3. It does not independently
+require movement, so it can slow manual looking while the player stands still.
+Conversely, movement yaw assist can run without applying this slowdown if its
+different guards do not hold at this later stage.
+
+The intervening object/item targeting and nearby fallback rules can clear or
+replace the creature target without clearing the geometric +0x1e88 byte. Also,
+when general DialogWidget **G+0x418** is visible, the frame replaces +0x1e58 with
+that widget's speaker id **+0x210** before the slowdown test; it does not replace
++0x1e88 at that point. The later rate therefore uses the **final current target**,
+not a separately saved early creature-assist target.
+
+Frame order is: clear target state; creature targeting and movement yaw assist;
+object/item targeting and nearby fallbacks; visible general-dialogue speaker
+override; cubic manual right-stick yaw/pitch adjustment; ordinary camera smoothing
+**0xadcd0**, which updates displayed angles and camera matrices from their targets.
+The input/assist elapsed milliseconds are the frame's double elapsed value capped
+above at **1000 ms**, not the UI's successful-poll timer. Neither effect originates
+a network request or directly changes a projectile/attack target.
 
 ## 5. Verified: dialogue page grouping and placement of page effects
 

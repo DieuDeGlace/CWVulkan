@@ -338,7 +338,7 @@ struct Totals {
     int zones = 0, traces = 0, wholeTraces = 0;
     long long draws = 0, drawsSame = 0;
     int objectsGame = 0, objectsMine = 0, objectsSame = 0;
-    int modelsGame = 0, modelsSame = 0;
+    int modelsGame = 0, modelsMine = 0, modelsSame = 0;
     int itemsGame = 0, itemsMine = 0, itemsSame = 0, itemsAngle = 0;
     int pointsGame = 0, pointsMine = 0, pointsPlaced = 0, pointsSame = 0, idsSame = 0;
     int pointsExcused = 0; // pairs left out as the documented exception below
@@ -420,7 +420,7 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
         mia.insert({i.item.category, i.item.id, i.x, i.y, i.z, bitsOf(i.angle)});
     }
     t.objectsGame += (int)go.size(), t.objectsMine += (int)mo.size(), t.objectsSame += matched(go, mo);
-    t.modelsGame += (int)gm.size(), t.modelsSame += matched(gm, mm);
+    t.modelsGame += (int)gm.size(), t.modelsMine += (int)mm.size(), t.modelsSame += matched(gm, mm);
     t.itemsGame += (int)gi.size(), t.itemsMine += (int)mi.size(), t.itemsSame += matched(gi, mi), t.itemsAngle += matched(gia, mia);
     if (verbose && std::getenv("WC_RECORDS")) {
         for (const ObjectKey &k : go)
@@ -713,19 +713,28 @@ int worldgenCreatureCommand(int maxZones) {
     petChecks(tables);
     pickersOracle(oracle, tables);
     regionsOracle(oracle / "regions.txt", true);
-    Totals all;
+    const bool strictRecords = std::getenv("WC_STRICT_RECORDS") != nullptr;
+    int checkedZones = 0;
     for (const char *set : {"gen_seed_123", "gen2_seed_123", "genb_seed_123", "genr_seed_123"}) {
         const bool refreshed = std::string(set) == "genr_seed_123";
         int day = 0;
         if (std::ifstream d(extractDir(game) / set / "day.txt"); d)
             d >> day;
         const Totals t = zonesOracle(extractDir(game) / set, tables, maxZones, true, refreshed ? day : -1);
+        checkedZones += t.zones;
+        if (strictRecords && t.zones) {
+            WC_CHECK(t.objectsSame == t.objectsGame && t.objectsMine == t.objectsGame);
+            WC_CHECK(t.modelsSame == t.modelsGame && t.modelsMine == t.modelsGame);
+            WC_CHECK(t.itemsSame == t.itemsGame && t.itemsMine == t.itemsGame && t.itemsAngle == t.itemsGame);
+        }
         if (std::string(set) == "gen_seed_123") {
             WC_CHECK(t.wholeTraces == t.traces);
             WC_CHECK(t.itemsSame == t.itemsGame && t.itemsMine == t.itemsGame);
         }
         WC_CHECK(t.pointsSame + t.pointsExcused == t.pointsGame && t.pointsMine == t.pointsGame);
     }
-    std::printf(failures ? "%d failure(s)\n" : "wgcreatures: all passed\n", failures);
+    if (strictRecords)
+        WC_CHECK(checkedZones > 0); // A strict owner-fixture audit must not succeed by skipping everything.
+    std::printf(failures ? "%d failure(s)\n" : "wgcreatures: checked assertions passed\n", failures);
     return failures ? 1 : 0;
 }

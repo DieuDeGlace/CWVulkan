@@ -65,6 +65,15 @@ individual feature documents.
 
 ## Genuine implementation gaps
 
+- [ ] Strict Steam world/dungeon parity is a release requirement: region/theme
+  generation, dungeon/building layouts and object placement/transforms must match
+  the owner's reference inputs. Implemented generation is not a certification of
+  every region or seed. The expanded 2026-10-29 audit covers 789 zone snapshots
+  across four overlapping seed-123 sets; it still finds object-record differences.
+  `WC_STRICT_RECORDS=1 EngineTests wgcreatures 10000` now fails on object keys,
+  model counts/positions or item keys/angles that differ, and on absent zone fixtures.
+  Model size/yaw coverage and undefined-but-consumed native fields need separate
+  verification; this command alone does not certify complete transform parity.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
   currently supplied, including integrated pet combat and appearance comparisons.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
