@@ -186,26 +186,27 @@ void Audio::startSuccess() { s->successMs = SUCCESS_MS; }
 bool Audio::successRunning() const { return s->successMs > 0; }
 const std::string &Audio::currentTrack() const { return s->music.current; }
 
-void Audio::updateMusic(const MusicPlace &place, float dtMs) {
-    s->successMs = std::max(0.0f, s->successMs - dtMs);
-    s->duckMs = std::max(0.0f, s->duckMs - dtMs);
+void Audio::updateMusic(const MusicPlace &place, double dtMs) {
+    dtMs = std::min(dtMs, 1000.0);
+    s->successMs = (float)std::max(0.0, (double)s->successMs - dtMs);
+    s->duckMs = (float)std::max(0.0, (double)s->duckMs - dtMs);
     MusicPlace here = place;
     here.success = s->successMs > 0;
     musicStep(dtMs, chooseTrack(here, s->music.current));
 }
 
-void Audio::menuMusic(float dtMs) {
+void Audio::menuMusic(double dtMs) {
     MusicPlace menu;
     menu.menu = true;
     musicStep(dtMs, chooseTrack(menu, s->music.current));
 }
 
-void Audio::musicStep(float dtMs, const Track &wanted) {
+void Audio::musicStep(double dtMs, const Track &wanted) {
     const bool playing = s->trackOpen && ma_sound_is_playing(&s->track);
     const std::string before = s->music.current;
     MusicOptions options;
     options.volume = s->musicOption, options.loop = s->musicLoop;
-    stepMusic(s->music, wanted, playing, dtMs, options, s->successMs > 0, s->duckMs);
+    stepMusic(s->music, wanted, playing, std::min(dtMs, 1000.0), options, s->successMs > 0, s->duckMs);
     if (s->log && s->music.current != before)
         s->log("Music: " + s->music.current);
     feedMusic();

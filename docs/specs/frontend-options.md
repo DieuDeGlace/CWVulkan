@@ -1,5 +1,9 @@
 # Frontend: options, controls, interface keys and the pause (system) menu
 
+Follow-up evidence: `remaining-runtime-gaps.md` §4 supplies the XInput mappings,
+stick filters, camera arithmetic and UI event edges left open here. Exact GUI
+navigation-point ranking remains unresolved in that independent trace.
+
 Behavioural specification of Steam Cube World's settings and its in-game system menu, written
 from the decompiled executable and the binary's constants (routines by RVA, image base
 0x140000000). Conventions, GUI units and the text helper are those of `frontend-title.md` §0.

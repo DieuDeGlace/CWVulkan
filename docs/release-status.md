@@ -15,6 +15,9 @@ checkpoint describe the intended setup and remaining limits.
   and the other roadmap gaps remain open. The subsequent equipped-pet update pass
   also builds and passes the full suite, with focused creation, naming, health,
   inheritance, authority, travel and detachment regressions.
+- Follow-up timing: music receives double-precision elapsed frame time through the
+  audio API with the native 1000-ms cap. The title root activates on mouse release,
+  correcting the older spec's description of the 0x965e0 input callback.
 - Enemy lifecycle: configurable Timed/Instance/Permanent modes. Timed defaults to
   300 seconds; Instance resets on spawn-zone unload for all players. Temporary
   deaths do not enter permanent saves, and mirrors handle repeated deaths.

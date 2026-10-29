@@ -1,5 +1,9 @@
 # Netcode, part 4: CubeVulkan's protocol, interoperating, and open questions
 
+Follow-up evidence: `remaining-runtime-gaps.md` §§1–3 supplies incoming local-player
+hit rules, the feat display consumer and client-local guest dialogue effects.
+Feat production and payload meaning remain unresolved; do not invent an award packet.
+
 This part compares Steam Cube World's multiplayer (`netcode-transport.md`, `netcode-roles.md`,
 `netcode-packets.md`) with CubeVulkan's current protocol (`docs/multiplayer.md`, `src/Net.h`),
 says what each of two goals would take, and lists what is still unknown with an oracle for each.

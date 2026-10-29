@@ -1,5 +1,9 @@
 # Sound and music
 
+Follow-up evidence: `remaining-runtime-gaps.md` §8 resolves the music-fade
+coefficients (old question 3) and sound-queue lifetime. Use that independently
+authored clarification together with this specification.
+
 Behavioural specification of Steam Cube World's sound system: the sound list, how a sound is
 placed and mixed, the music choice and its fades, the ambient sounds of the world, and which
 events play which sound. Written from the decompiled executable (RVAs, image base 0x140000000),

@@ -735,7 +735,10 @@ void Session::readInput(bool poll, double frameMs) {
         mx = req.pointer.x, my = req.pointer.y;
     glfwGetWindowSize(s.window, &ww, &wh);
     mouse = glm::vec2((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh))) / guiScale;
-    clicked = std::find(s.input->buttons.begin(), s.input->buttons.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->buttons.end();
+    // The title root dispatches from mouse-up (0x965e0); it is not a held button.
+    const bool rootMenu = titleShown && !optionsOpen && !controlsOpen && !helpOpen && !friendsOpen;
+    const auto &clicks = rootMenu ? s.input->released : s.input->buttons;
+    clicked = std::find(clicks.begin(), clicks.end(), GLFW_MOUSE_BUTTON_LEFT) != clicks.end();
 }
 
 // --- Keys --------------------------------------------------------------------------------------
@@ -1419,7 +1422,7 @@ bool Session::frame() {
     s.renderer->overlay(std::move(overlay));
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
     if (s.audio) {
-        s.audio->menuMusic((float)dtMs);
+        s.audio->menuMusic(dtMs);
         s.audio->update();
     }
     if (!req.capture.empty() && req.clickAfter < 0) {

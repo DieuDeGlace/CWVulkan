@@ -6426,7 +6426,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         auto column = columnAt(player.position.x, player.position.y);
         {
-            const float frameMs = (float)(dt * 1000.0);
+            const float ambientFrameMs = (float)(dt * 1000.0);
             int64_t here[3];
             playerUnits(here);
             const int32_t bx = worldgen::floorDots(here[0]), by = worldgen::floorDots(here[1]), bz = worldgen::floorDots(here[2]);
@@ -6440,7 +6440,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             constexpr int SPIRIT_WORLD_BUFF = 0x13;
             place.spiritWorld = spawned.playerRecord() && spawned.playerBuff(SPIRIT_WORLD_BUFF, strength, left);
             place.boss = spawnedReady && spawned.bossAfterPlayer();
-            audio.updateMusic(place, frameMs);
+            audio.updateMusic(place, std::min(frameMs, 1000.0));
 
             // The ambient sounds (§4): the emitters of the 3 x 3 zones around the player, or
             // around where it flies to (ability 0x9c, +0x1b0).
@@ -6449,7 +6449,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (const uint8_t *me = spawned.playerRecord(); me && spawned.playerAbility(flightMs) == 0x9c)
                 std::memcpy(centre, me + worldgen::creature::HOME_PLACE, sizeof centre);
             soundrules::AmbientFrame frame;
-            frame.clockMs = worldClockMs, frame.dtMs = frameMs, frame.timeOfDayMs = hour * 3600000.0f;
+            frame.clockMs = worldClockMs, frame.dtMs = ambientFrameMs, frame.timeOfDayMs = hour * 3600000.0f;
             constexpr int ZONE_SHIFT = 6; // zones of 64 blocks
             const int32_t zx = worldgen::floorDiv(centre[0], ZONE_SHIFT), zy = worldgen::floorDiv(centre[1], ZONE_SHIFT);
             for (int32_t ax = zx - 1; ax <= zx + 1; ax++)

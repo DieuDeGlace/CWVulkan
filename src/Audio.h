@@ -58,9 +58,9 @@ class Audio {
     bool successRunning() const;
     // The game update's music step (§3.3, §3.4, §3.5) for the place the player is in: counts
     // the duck and success timers down, chooses the track and moves the music on.
-    void updateMusic(const soundrules::MusicPlace &place, float dtMs);
+    void updateMusic(const soundrules::MusicPlace &place, double dtMs);
     // The same while a menu screen shows outside the game: the title theme.
-    void menuMusic(float dtMs);
+    void menuMusic(double dtMs);
     // The track now chosen (for the log).
     const std::string &currentTrack() const;
 
@@ -71,6 +71,6 @@ class Audio {
     struct State;
     std::unique_ptr<State> s;
     void playSound(int number, float volume, float pitch); // the output's play (§1.3)
-    void musicStep(float dtMs, const soundrules::Track &wanted);
+    void musicStep(double dtMs, const soundrules::Track &wanted);
     void feedMusic(); // the music thread's step (§3.2)
 };

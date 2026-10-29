@@ -246,7 +246,11 @@ Then, in font size 12, outline 3, white:
   (window pixels converted into the widget's frame);
 * the version "1.0.0-1" right-aligned at the window point (W − 10, H − 15).
 
-### 4.2 Clicking (0x965e0, a press of mouse button 0)
+### 4.2 Clicking (0x965e0, release of mouse button 0)
+
+The independently verified input trace in `remaining-runtime-gaps.md` §4.4
+identifies 0x94900 as mouse-down and 0x965e0 as mouse-up. This corrects the older
+"press" description here; root-menu activation runs on release.
 
 Only while the title layer and the root-menu node are both shown, and only for the hovered
 entry:
