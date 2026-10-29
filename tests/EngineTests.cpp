@@ -124,6 +124,7 @@ int windContinueTests();   // tests/WindContinueTests.cpp
 int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
+int petTests();            // tests/PetTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -8852,6 +8853,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "pets")
+        return petTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "dialogue")
         return dialoguePageTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "playerhit")
@@ -10103,6 +10106,7 @@ int main(int argc, char **argv) {
     failures += enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
     failures += playerHitTests();      // tests/PlayerHitTests.cpp
     failures += dialoguePageTests();   // tests/DialoguePageTests.cpp
+    failures += petTests();            // tests/PetTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

@@ -59,11 +59,14 @@ individual feature documents.
   reset. Ground/block lists remain loaded; elapsed respawn timers survive resets.
   Synthetic and generated-world tests cover the clock boundary and timer behavior;
   shopper/static-object comparisons still need broader owner recordings.
+- [x] Equipped-pet reconciliation, creation, race/name changes, health fractions,
+  owner equipment/buff inheritance and detach rules in `NativePet`. PetTests cover
+  dead-link repair, mirror authority, travel gates and the 3000-ms glide boundary.
 
 ## Genuine implementation gaps
 
-- [ ] Remaining ability/AI cases and the native player's pet update pass. Broader
-  recordings are needed beyond the samples currently supplied.
+- [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
+  currently supplied, including integrated pet combat and appearance comparisons.
 - [ ] Controller GUI navigation/click synthesis, tab/category switching, title-menu
   routing and aim-tracking integration. Exact navigation-point ranking is unresolved.
 - [ ] Interactive conversation choices, emote rendering, numeric-script item actions

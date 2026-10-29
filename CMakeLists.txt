@@ -177,6 +177,7 @@ add_library(engine STATIC
     src/NativeAbility.cpp
     src/NativeHit.cpp
     src/NativePlayerHit.cpp
+    src/NativePet.cpp
     src/NativeEffects.cpp
     src/NativeDrop.cpp
     src/NativeInteract.cpp
@@ -256,6 +257,7 @@ enable_testing()
 add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/WindContinueTests.cpp tests/EnemyRespawnTests.cpp tests/PlayerHitTests.cpp)
 target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
+target_sources(EngineTests PRIVATE tests/PetTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
 
 # CubeVulkan's own art (assets/: the OverworldEvents quest sprites, MIT) next to the executable.

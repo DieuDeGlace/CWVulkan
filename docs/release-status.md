@@ -11,8 +11,10 @@ checkpoint describe the intended setup and remaining limits.
   gameplay XInput mapping/sticks/camera, page-scoped dialogue marks and daily world/
   character reset behavior now follow the independent runtime-gap specification.
   The complete EngineTests run passed, including the new focused regressions and
-  owner-data comparisons. GUI controller navigation, dialogue answer activation,
-  pet updates and the other roadmap gaps remain open.
+  owner-data comparisons. GUI controller navigation, dialogue answer activation
+  and the other roadmap gaps remain open. The subsequent equipped-pet update pass
+  also builds and passes the full suite, with focused creation, naming, health,
+  inheritance, authority, travel and detachment regressions.
 - Enemy lifecycle: configurable Timed/Instance/Permanent modes. Timed defaults to
   300 seconds; Instance resets on spawn-zone unload for all players. Temporary
   deaths do not enter permanent saves, and mirrors handle repeated deaths.
@@ -58,7 +60,8 @@ checkpoint. Captures are private and excluded from the source archive.
   and wider waterfall, underwater, wet-ground, dusk/night and material comparisons.
 - Frontend: exact panel opacity and logo shading require further independent evidence.
 - Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
-  pets, controller GUI/aim tracking, conversation choices/emotes/numeric item actions,
+  integrated pet combat/appearance comparisons, controller GUI/aim tracking,
+  conversation choices/emotes/numeric item actions,
   and network feat production. See the [audited roadmap](roadmap.md). Recorded
   comparisons do not prove complete gameplay parity.
 - Human/system checks: two Steam accounts and an original-game peer, a real first-run

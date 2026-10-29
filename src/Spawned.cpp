@@ -8,6 +8,7 @@
 #include "GroundItems.h"
 #include "NativePlayer.h"
 #include "NativePlayerHit.h"
+#include "NativePet.h"
 #include "World.h"
 #include "GameMath.h"
 #include "NativeBuffs.h"
@@ -1112,7 +1113,20 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
         made.particles.clear(), made.numbers.clear(), made.buffNotes.clear();
         keepSounds(made.sounds);
     };
+    nativepet::World pets;
+    pets.client = client;
+    pets.local = hasPlayer ? &player.side : nullptr;
+    pets.construct = iw.construct;
+    pets.added = [&](nativeai::Creature *made) {
+        iw.creatures.push_back(made);
+        iw.added(made);
+    };
+    pets.setup = a.adopt;
     auto step = [&](float dt) {
+        pets.creatures = sides;
+        nativepet::step(pets);
+        worldEvents.buffs.insert(worldEvents.buffs.end(), pets.buffNotes.begin(), pets.buffNotes.end());
+        pets.buffNotes.clear();
         for (size_t i = 0; i < w.creatures.size(); i++) {
             uint8_t *c = w.creatures[i];
             float health;
