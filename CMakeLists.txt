@@ -116,6 +116,7 @@ add_library(engine STATIC
     src/Character.cpp
     src/Creatures.cpp
     src/Actors.cpp
+    src/EnemyRespawn.cpp
     src/Hud.cpp
     src/Frontend.cpp
     src/FrontendRun.cpp
@@ -175,6 +176,7 @@ add_library(engine STATIC
     src/NativeUpkeep.cpp
     src/NativeAbility.cpp
     src/NativeHit.cpp
+    src/NativePlayerHit.cpp
     src/NativeEffects.cpp
     src/NativeDrop.cpp
     src/NativeInteract.cpp
@@ -251,8 +253,9 @@ target_include_directories(HelloMod PRIVATE include)
 set_target_properties(HelloMod PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples)
 
 enable_testing()
-add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/WindContinueTests.cpp)
+add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/WindContinueTests.cpp tests/EnemyRespawnTests.cpp tests/PlayerHitTests.cpp)
 target_link_libraries(EngineTests PRIVATE engine)
+target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
 
 # CubeVulkan's own art (assets/: the OverworldEvents quest sprites, MIT) next to the executable.

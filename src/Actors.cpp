@@ -211,7 +211,15 @@ void Actors::update(double dt, const std::vector<glm::vec3> &players, const Floo
     }
     for (auto &a : actors) {
         if (a.dead) {
-            a.deathTime += dt; // The game never brings a dead creature back (docs/creatures.md).
+            a.deathTime += dt;
+            const bool timer = respawnSettings.mode == enemyrespawn::Mode::Timed && a.deathTime >= respawnSettings.seconds;
+            const bool unloaded = respawnSettings.mode == enemyrespawn::Mode::Instance &&
+                std::none_of(players.begin(), players.end(), [&](glm::vec3 p) {
+                    return std::abs(std::floor(p.x / 64) - std::floor(a.home.x / 64)) <= 5 &&
+                           std::abs(std::floor(p.y / 64) - std::floor(a.home.y / 64)) <= 5;
+                });
+            if (!a.netDriven && (timer || unloaded))
+                revive(a);
             continue;
         }
         a.sinceHurt += dt;
@@ -384,6 +392,19 @@ std::string Actors::summary() const {
     }
     return s + "); " + std::to_string(walkers) + " have a recorded walk, " + std::to_string(attackers) +
            " a recorded attack or action";
+}
+
+void Actors::revive(Actor &a) {
+    a.position = a.target = a.home;
+    a.dead = false;
+    a.hp = a.maxHp;
+    a.deathTime = a.cooldown = a.animTime = a.walked = 0;
+    a.sinceHurt = a.sinceHit = a.sinceStun = 99;
+    a.stunned = 0;
+    a.combo = 0;
+    a.effects = {};
+    a.returning = false;
+    enter(a, State::Idle, 1);
 }
 
 bool Actors::hurt(size_t i, float amount) {

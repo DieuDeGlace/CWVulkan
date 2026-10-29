@@ -7,6 +7,7 @@
 #include "NativeInteract.h"
 #include "GroundItems.h"
 #include "NativePlayer.h"
+#include "NativePlayerHit.h"
 #include "World.h"
 #include "GameMath.h"
 #include "NativeBuffs.h"
@@ -89,6 +90,38 @@ bool SpawnedCreatures::init(const std::filesystem::path &extractDir, std::string
     return !sprites.empty();
 }
 
+void SpawnedCreatures::setEnemyRespawn(enemyrespawn::Settings settings) {
+    respawnSettings = settings;
+    enemyDeaths = enemyrespawn::Deaths(settings);
+}
+
+void SpawnedCreatures::advanceRespawns(double elapsedMs) {
+    if (!client)
+        releaseDeaths(enemyDeaths.advance(elapsedMs / 1000.0));
+}
+
+std::set<int64_t> SpawnedCreatures::persistentDeadSet() const {
+    std::set<int64_t> saved;
+    for (int64_t id : worldDead)
+        if (!enemyDeaths.contains(id))
+            saved.insert(id);
+    return saved;
+}
+
+void SpawnedCreatures::releaseDeaths(const std::vector<int64_t> &ids) {
+    for (int64_t id : ids) {
+        remove(id);
+        made.erase(id);
+        worldDead.erase(id);
+        dead.erase(id);
+        seenAlive.erase(id);
+        toBurst.erase(id);
+        lastAbility.erase(id);
+        trips.erase(id);
+        // A resident is rebuilt from its original spawn point on the next update.
+    }
+}
+
 void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     if (!worldgen::creatureTablesLoaded())
         return;
@@ -124,12 +157,16 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     // A zone that leaves memory has its state recorded (0x2d3e20) and its lists let go.
     for (const nativesaves::Cell &zone : zoneStates.zonesInMemory())
         if (!near(zone[0], zone[1], NEAR_ZONES + 1)) {
+            releaseDeaths(enemyDeaths.unload({zone[0], zone[1]}));
             zoneStates.unload(zone, deadTrackedIn({zone[0], zone[1]}));
             stateNeeded.erase({zone[0], zone[1]});
             unloadedZones.push_back({zone[0], zone[1]});
         }
     for (auto it = zones.begin(); it != zones.end();)
         if (it->first != NETWORK_ZONE && !near(it->first.first, it->first.second, NEAR_ZONES + 1)) {
+            releaseDeaths(enemyDeaths.unload(it->first));
+            for (const Creature &cr : it->second)
+                made.erase(get<int64_t>(cr.record, worldgen::creature::ID));
             if (const auto residents = zoneResidents.find(it->first); residents != zoneResidents.end())
                 for (const auto &[id, sp] : residents->second->spawns.points) // (a zone let go takes its creatures)
                     made.erase(id);
@@ -157,12 +194,46 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
                     continue;
                 zones[{zx, zy}];
                 const std::shared_ptr<const worldgen::ZoneContents> zone = zoneResidents[{zx, zy}] = worldgen::zone(zx, zy);
+                // Old saves have no respawn timestamps. In a respawning world, an enemy
+                // killed before this instance starts is available again when its zone loads.
+                if (respawnSettings.mode != enemyrespawn::Mode::Permanent)
+                    for (const auto &[id, point] : zone->spawns.points)
+                        if (enemyrespawn::isEnemy(point.hostility) && !enemyDeaths.contains(id) && !protectedDead.count(id))
+                            worldDead.erase(id);
                 zoneRand.emplace(std::make_pair(zx, zy), std::mt19937((uint32_t)(zx * 73856093) ^ (uint32_t)(zy * 19349663)));
                 zoneTracked[{zx, zy}] = zone->spawns.tracked;
                 if (!zone->spawns.mission.empty())
                     zoneMissions[{zx, zy}] = zone->spawns.mission;
                 fresh.push_back({zx, zy});
             }
+    // A visited zone refreshes its daily spawn points and base objects before its
+    // residents are scanned. Refreshing alone does not remove live shoppers.
+    // See remaining-runtime-gaps.md §6; a midnight reset is a separate operation.
+    for (auto &[key, zone] : zoneResidents)
+        if (near(key.first, key.second, NEAR_ZONES) && zone->spawns.day != dayCount) {
+            auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
+            worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
+            zone = refreshed;
+            for (const auto &[id, point] : refreshed->spawns.points)
+                if (enemyDeaths.contains(id) && !enemyrespawn::isEnemy(point.hostility)) {
+                    // Daily points can reuse an id for a friendly resident.
+                    enemyDeaths.forget(id);
+                    worldDead.erase(id);
+                }
+            if (auto *lists = zoneStates.find({key.first, key.second})) {
+                std::vector<nativesaves::Record> objects;
+                for (const auto &source : refreshed->objects) {
+                    worldgen::ZoneObject object;
+                    static_cast<worldgen::StaticObject &>(object) = source;
+                    objects.push_back(zonestates::staticObjectRecord(object));
+                }
+                if (objects != lists->staticObjects) {
+                    lists->staticObjects = std::move(objects);
+                    zoneStates.objectsChanged({key.first, key.second});
+                    objectsChanged.insert(key);
+                }
+            }
+        }
     // the world's resident update (0x2e17d0): the residents not in the world yet, not dead for good,
     // within 256 blocks of a player, whose conditions are met, are made.
     // The regions where a player lifted the demon portals' promotion (+0x128 bit 0x800).
@@ -708,6 +779,9 @@ std::vector<SpawnedCreatures::Death> SpawnedCreatures::takeDeaths(const Extracte
                 continue;
             dead.insert(id);
             worldDead.insert(id); // (the world's: its zone does not make it again)
+            if (!client && enemyrespawn::isEnemy(cr.record[worldgen::creature::HOSTILITY]))
+                if (const auto source = zoneResidents.find(zone); source != zoneResidents.end() && source->second->spawns.points.count(id))
+                    enemyDeaths.killed(id, zone);
             toBurst.insert(id);
             out.push_back({id, get<int64_t>(cr.record, 0x9e0),
                            ew.toLocal(reinterpret_cast<const int64_t *>(&cr.record[worldgen::creature::POSITION])),
@@ -994,6 +1068,8 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     // its spawn point is not made again and prerequisites count it), and the id map moves it
     // to its new id. It keeps its place in the creature lists.
     a.markDead = [&](int64_t id) {
+        protectedDead.insert(id);
+        enemyDeaths.forget(id);
         if (worldDead.insert(id).second)
             markedDead.push_back(id);
     };
@@ -1416,6 +1492,9 @@ const std::vector<nativeai::Object> *SpawnedCreatures::zoneObjects(int zx, int z
 
 void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool serverMode) {
     storedZones = world;
+    if (world && respawnSettings.mode != enemyrespawn::Mode::Permanent)
+        for (auto &[zone, state] : world->zones)
+            state.deadTracked = 0; // temporary deaths from an earlier instance have ended
     zoneStates = zonestates::ZoneStates(world, serverMode, [&ew](nativesaves::Cell zone, const std::vector<nativesaves::BlockChange> &changes) {
         ew.setBlockChanges(zone[0], zone[1], changes);
     });
@@ -1919,6 +1998,17 @@ void SpawnedCreatures::receivedUpdate(int64_t id, bool fresh) {
     if (!cr)
         return;
     worldgen::CreatureRecord &r = cr->record;
+    if (get<float>(r, worldgen::creature::HEALTH) > 0 && (dead.count(id) || worldDead.count(id))) {
+        // The host has brought this id back. Its next death must produce effects and
+        // kill credit again, and it must not ease from its old corpse's position.
+        fresh = true;
+        dead.erase(id);
+        worldDead.erase(id);
+        toBurst.erase(id);
+        seenAlive.insert(id);
+        cr->side.buffs.clear();
+        cr->sparks = {};
+    }
     // The ability time shown: the host's when the swing is new (another ability, or the same one
     // started again: the host's time went back), otherwise never behind what is shown already.
     const float sent = get<float>(r, ABILITY_TIME);
@@ -2109,18 +2199,18 @@ void SpawnedCreatures::setAggro(const cwnet::AggroRecord &notice) {
 }
 
 void SpawnedCreatures::hitPlayer(const std::array<uint8_t, 0x48> &number) {
-    if (!hasPlayer || !lastWorld)
+    if (!hasPlayer)
         return;
     if (!nativePlayer) { // CubeVulkan's own player takes it its own way
         if (playerNumber)
             playerNumber(number);
         return;
     }
-    // 0x29dcf0 on this client's world: with the target the local player, it applies.
-    std::map<int64_t, nativeai::Creature *> byId;
-    nativehit::World hw = hitWorld(*lastWorld, byId);
-    nativehit::apply(hw, number);
-    keepHitRecords(hw);
+    player.side.record = player.record.data();
+    const auto applied = nativeplayerhit::apply(player.side, number);
+    worldEvents.buffs.insert(worldEvents.buffs.end(), applied.buffNotices.begin(), applied.buffNotices.end());
+    worldEvents.sounds.insert(worldEvents.sounds.end(), applied.sounds.begin(), applied.sounds.end());
+    sounds.insert(sounds.end(), applied.sounds.begin(), applied.sounds.end());
 }
 
 void SpawnedCreatures::flash(int64_t id) {
@@ -2222,9 +2312,13 @@ void SpawnedCreatures::advanceClock(double dtMs) {
         return;
     constexpr double DAY_MS = 86400000.0;
     double t = (double)dayMs + dtMs * clockRate;
-    while (t >= DAY_MS) {
+    while (t > DAY_MS) {
         t -= DAY_MS;
         dayCount++;
+        worldgen::setWorldDay(dayCount);
+        worldgen::setRefreshDay(dayCount);
+        worldReset();
+        worldEvents.sleeps.push_back(0);
     }
     dayMs = (float)t;
 }
@@ -2238,11 +2332,17 @@ void SpawnedCreatures::worldReset() {
                 it = list.erase(it);
             } else
                 ++it;
-    zoneResidents.clear(), zoneRand.clear(), zoneMissions.clear(), zoneSpots.clear(), zoneChests.clear();
     made.clear();
-    for (auto it = zones.begin(); it != zones.end();)
-        it = it->first == NETWORK_ZONE ? std::next(it) : zones.erase(it);
+    // Loaded zones and their previous refresh day survive the native reset. Keeping
+    // that day lets the next visited-zone pass restore the new day's base objects.
     worldDead.clear();
+    if (respawnSettings.mode != enemyrespawn::Mode::Permanent) {
+        // Native resets must not bypass either configured enemy lifecycle.
+        const auto pending = enemyDeaths.ids();
+        worldDead.insert(pending.begin(), pending.end());
+    } else
+        enemyDeaths.clear();
+    protectedDead.clear();
     dead.clear();
     seenAlive.clear();
     if (storedZones)

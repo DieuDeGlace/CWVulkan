@@ -121,6 +121,9 @@ int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
 int frontendTests();       // tests/FrontendTests.cpp
 int windContinueTests();   // tests/WindContinueTests.cpp
+int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
+int playerHitTests();      // tests/PlayerHitTests.cpp
+int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -8359,7 +8362,7 @@ static void soundRules() {
         CHECK(s.threshold == 30000.0f && about(s.volume, 0.5f)); // 29 s: still playing
         stepMusic(s, desert, true, 2000, options, false, 0);
         CHECK(s.volume < 0.5f); // past 30 s: fading
-        for (int i = 0; i < 400 && s.volume >= MUSIC_STOP_VOLUME; i++)
+        for (int i = 0; i < 800 && s.volume >= MUSIC_STOP_VOLUME; i++)
             stepMusic(s, desert, true, 16, options, false, 0);
         CHECK(s.volume < MUSIC_STOP_VOLUME && s.current == "woodlands");
         stepMusic(s, desert, false, 16, options, false, 0); // stopped: the new track starts
@@ -8399,7 +8402,19 @@ static void soundRules() {
         MusicState success;
         stepMusic(success, Track{"success", false, 500}, false, 16, options, true, 0);
         CHECK(success.threshold == 10000.0f && success.current == "success");
-        CHECK(about(easeMusicVolume(0.4f, 0.0f, 0), 0.4f) && easeMusicVolume(0.4f, 0.0f, 100000) == 0.0f);
+        CHECK(about(easeMusicVolume(0.4f, 0.0f, 0), 0.4f));
+        CHECK(easeMusicVolume(0.4f, 0.0f, 100000) == easeMusicVolume(0.4f, 0.0f, 1000));
+        MusicState fading;
+        fading.current = "old", fading.playedMs = 20000, fading.threshold = 1;
+        fading.firstDifference = false, fading.volume = 0.5f;
+        MusicState fast = fading, recovering = fading;
+        stepMusic(fading, Track{"new", false, 0}, true, 16, options, false, 0);
+        stepMusic(fast, Track{"boss", false, 0}, true, 16, options, false, 0);
+        CHECK(about(fading.volume, easeMusicVolume(0.5f, 0, 16, 0.0004f)));
+        CHECK(about(fast.volume, easeMusicVolume(0.5f, 0, 16, 0.005f)) && fast.volume < fading.volume);
+        recovering.volume = 0.015f;
+        stepMusic(recovering, Track{"old", false, 0}, true, 16, options, false, 0);
+        CHECK(about(recovering.volume, easeMusicVolume(0.015f, 0.5f, 16, 0.001f)));
     }
     { // §4: the staggered ticks.
         CHECK(staggeredTick(999, 2, 0, 1000) && !staggeredTick(0, 999, 0, 1000) && staggeredTick(0, 1000, 0, 1000));
@@ -8837,6 +8852,13 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "dialogue")
+        return dialoguePageTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "playerhit")
+        return playerHitTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "respawn")
+        return enemyRespawnTests() ? 1 : 0;
+
     if (const char *day = std::getenv("CW_DAY")) // the world's day the compared zones were made on
         worldgen::setWorldDay(std::atoi(day));
     if (const char *day = std::getenv("CW_REFRESH_DAY"); day && *day) // zones as the game has them after loading (0x31c540)
@@ -10078,6 +10100,9 @@ int main(int argc, char **argv) {
     failures += ownerSetupTests();     // tests/OwnerSetupTests.cpp
     failures += poseHudTests();        // tests/PoseHudTests.cpp
     failures += lootWindowTests();     // tests/LootWindowTests.cpp
+    failures += enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
+    failures += playerHitTests();      // tests/PlayerHitTests.cpp
+    failures += dialoguePageTests();   // tests/DialoguePageTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

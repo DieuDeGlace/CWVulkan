@@ -10,17 +10,47 @@
 #include "GameOptions.h"
 
 #include <array>
+#include <cstdint>
 #include <vector>
 
 struct GLFWwindow;
+
+// XInput user zero, interpreted using remaining-runtime-gaps.md §4.
+struct GamepadButtons {
+    bool dpadUp = false, dpadDown = false, back = false, start = false;
+    bool dpadLeft = false, dpadRight = false, a = false, b = false, x = false, y = false;
+    bool leftShoulder = false, rightShoulder = false, leftThumb = false, rightThumb = false;
+    uint8_t leftTrigger = 0, rightTrigger = 0;
+    int16_t leftX = 0, leftY = 0, rightX = 0, rightY = 0;
+    bool connected = false;
+};
+struct GamepadStick { float x = 0, y = 0; };
+GamepadStick gamepadStick(int16_t x, int16_t y);
+std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad, bool ui = false,
+                                                     bool conversation = false, bool suppressJump = false);
+struct GamepadCamera { double yaw = 0, pitch = 0; }; // degrees to subtract
+GamepadCamera gamepadCamera(GamepadStick stick, double elapsedMs, float trackingDistance = -1);
+
+class GamepadFrame {
+  public:
+    void update(const GamepadButtons &pad, bool ui, bool conversation);
+    void clear(); // Lost foreground/capture: release inputs without clearing the B latch.
+    std::array<bool, gameoptions::BINDINGS> held{};
+    GamepadStick movement{}, look{};
+    bool dismiss = false;
+  private:
+    bool suppressJump = false;
+};
 
 class GameInput {
   public:
     // Reads every binding. `pressedKeys` and `pressedButtons` are the GLFW key and mouse button
     // presses since the last frame, so a tap shorter than a frame still counts as a press.
-    // With `enabled` false (a menu has the keys) every control reads as up.
+    // `enabled` gates keyboard/mouse bindings; fixed pad mappings follow their UI rules.
     void update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
-                const std::vector<int> &pressedButtons, bool enabled);
+                const std::vector<int> &pressedButtons, bool enabled, bool ui = false,
+                bool conversation = false, bool capturingBinding = false);
+    const GamepadFrame &gamepad() const { return padFrame; }
     // Whether the control is down now, and whether it went down this frame.
     bool held(int action) const { return action >= 0 && action < gameoptions::BINDINGS && down[(size_t)action]; }
     bool pressed(int action) const { return action >= 0 && action < gameoptions::BINDINGS && edge[(size_t)action]; }
@@ -35,13 +65,5 @@ class GameInput {
 
   private:
     std::array<bool, gameoptions::BINDINGS> down{}, edge{};
+    GamepadFrame padFrame;
 };
-
-// The gamepad's fixed mappings (frontend-options.md §4.1, read in 0x1355a0): which controls the
-// d-pad and the Back and Start buttons press. The rest of the pad is open question 5.
-struct GamepadButtons {
-    bool dpadUp = false, dpadDown = false, back = false, start = false;
-};
-// The controls those buttons hold: d-pad up Zoom In, d-pad down Zoom Out, Back the Crafting Menu
-// and the Inventory, Start the System Menu.
-std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad);

@@ -129,7 +129,7 @@ bool Speech::load(const fs::path &dictionary, std::string &error) {
 }
 
 std::string Speech::expand(const std::string &text, size_t &at, char until, const Context &context,
-                           std::mt19937 &random, int depth) const {
+                           std::mt19937 &random, int depth, bool pages) const {
     std::string out;
     if (depth > 24)
         return out; // a rule that refers to itself
@@ -157,7 +157,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 chosen = free[std::uniform_int_distribution<size_t>(0, free.size() - 1)(random)];
             if (chosen) {
                 size_t inner = 0;
-                out += expand(*chosen, inner, '\0', context, random, depth + 1);
+                out += expand(*chosen, inner, '\0', context, random, depth + 1, pages);
             }
             at = end + 1;
         } else if (c == '[') {
@@ -165,7 +165,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
             if (std::uniform_int_distribution<int>(0, 1)(random)) {
                 std::string inner = text.substr(at + 1, end - at - 1);
                 size_t i = 0;
-                out += expand(inner, i, '\0', context, random, depth + 1);
+                out += expand(inner, i, '\0', context, random, depth + 1, pages);
             }
             at = end + 1;
         } else if (c == '*' || c == '@' || c == '$' || c == '#') {
@@ -178,7 +178,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 auto it = lines.find(id);
                 if (it != lines.end()) {
                     size_t inner = 0;
-                    out += expand(it->second, inner, '\0', context, random, depth + 1);
+                    out += expand(it->second, inner, '\0', context, random, depth + 1, pages);
                 } else
                     out += name(id);
             } else if (c == '@') {
@@ -199,6 +199,20 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                     out += value.back() == 's' ? "'" : "'s";
             }
             // $colour and #condition tags print nothing.
+        } else if (pages && c != '\n') {
+            const size_t from = at;
+            while (at < text.size() && text[at] != until && text[at] != '\n' &&
+                   std::string("{[*@$#").find(text[at]) == std::string::npos)
+                ++at;
+            const std::string part = text.substr(from, at - from);
+            const size_t first = part.find_first_not_of(" \t\r"), last = part.find_last_not_of(" \t\r");
+            const std::string node = first == std::string::npos ? "" : part.substr(first, last - first + 1);
+            if (node == "%")
+                out += '\x1e'; // Internal separator, consumed by sayPages, never displayed.
+            else if (node == "%%")
+                out += " % ";
+            else
+                out += part;
         } else {
             out += c;
             at++;
@@ -213,6 +227,24 @@ std::string Speech::say(const std::string &id, const Context &context, std::mt19
         return "";
     size_t at = 0;
     return tidy(expand(it->second, at, '\0', context, random, 0));
+}
+
+std::vector<std::string> Speech::sayPages(const std::string &id, const Context &context, std::mt19937 &random) const {
+    const auto found = lines.find(id);
+    if (found == lines.end())
+        return {};
+    size_t at = 0;
+    const std::string expanded = expand(found->second, at, '\0', context, random, 0, true);
+    std::vector<std::string> result;
+    size_t from = 0;
+    for (;;) {
+        const size_t end = expanded.find('\x1e', from);
+        result.push_back(tidy(expanded.substr(from, end == std::string::npos ? end : end - from)));
+        if (end == std::string::npos)
+            break;
+        from = end + 1;
+    }
+    return result;
 }
 
 std::string Speech::name(const std::string &id, bool plural) const {

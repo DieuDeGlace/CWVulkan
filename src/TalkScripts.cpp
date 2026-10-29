@@ -171,8 +171,7 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
         if (std::find(play.unrendered.begin(), play.unrendered.end(), what) == play.unrendered.end())
             play.unrendered.push_back(what);
     };
-    // A line of the dictionary with what the defines bound, into `into`; "%" starts a new line.
-    auto say = [&](const std::string &id, std::vector<std::string> &into) {
+    auto say = [&](const std::string &id) {
         Speech::Context context;
         context.tags = tags;
         context.tags.insert(lineTags.begin(), lineTags.end());
@@ -196,25 +195,50 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
                 missing.insert("@" + fn);
             return value;
         };
-        const std::string said = speech.say(id, context, random);
+        const auto said = speech.sayPages(id, context, random);
         for (const std::string &fn : missing) // (realms' and rulers' names are not made yet)
             unrendered(id + ": " + fn);
-        size_t from = 0;
-        while (from <= said.size()) {
-            size_t cut = said.find('%', from);
-            std::string part = said.substr(from, cut == std::string::npos ? std::string::npos : cut - from);
-            size_t a = part.find_first_not_of(' '), b = part.find_last_not_of(' ');
-            if (a != std::string::npos)
-                into.push_back(part.substr(a, b - a + 1));
-            if (cut == std::string::npos)
-                break;
-            from = cut + 1;
+        return said;
+    };
+    bool pendingBreak = false;
+    auto appendSpeech = [&](const std::string &id) {
+        const bool choice = id.back() == '?';
+        size_t words = 0;
+        if (!play.pages.empty()) {
+            std::istringstream in(play.pages.back().text);
+            for (std::string word; in >> word;)
+                ++words;
+        }
+        if (choice || pendingBreak || play.pages.empty() || words > 10)
+            play.pages.emplace_back();
+        pendingBreak = false;
+        if (choice)
+            play.pages.back().choiceId = id;
+        const auto parts = say(id);
+        for (size_t i = 0; i < parts.size(); ++i) {
+            if (i)
+                play.pages.emplace_back();
+            auto &text = play.pages.back().text;
+            if (!text.empty() && !parts[i].empty())
+                text += ' ';
+            text += parts[i];
         }
     };
     for (size_t i = 0; i < t.size(); i++) {
         const std::string &token = t[i];
-        if (token == "new_page" || token.empty() || token[0] == '!')
-            continue; // pauses and emotes: nothing to say
+        if (token.empty())
+            continue;
+        if (token == "new_page") {
+            pendingBreak = true;
+            continue;
+        }
+        if (token[0] == '!') {
+            if (play.pages.empty() || !play.pages.back().text.empty())
+                play.pages.emplace_back();
+            play.pages.back().emotes.push_back(token);
+            pendingBreak = true;
+            continue;
+        }
         if (token[0] == '#') {
             lineTags.insert(token.substr(1));
             continue;
@@ -310,7 +334,7 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
             i += 2;
             std::vector<std::string> said;
             if (!id.empty() && speech.has(id))
-                say(id, said);
+                said = say(id);
             specialization = said.empty() ? "" : said[0];
         } else if (token == "define_realm" && i + 2 < t.size()) {
             i += 2; // (realm names are not made yet: the lines that use one say so)
@@ -318,13 +342,12 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
             i += 1; // (nor rulers' titles)
         } else if (token == "mark_location" && i + 2 < t.size()) {
             play.marked.push_back({numberAt(i + 1), numberAt(i + 2), zone, item});
+            if (play.pages.empty())
+                play.pages.emplace_back();
+            play.pages.back().marks.push_back(play.marked.back());
             i += 2;
         } else if (speech.has(token)) {
-            if (token.back() == '?') { // an answer the player may choose
-                say(token, play.choices);
-                play.choiceIds.push_back(token);
-            } else
-                say(token, play.lines);
+            appendSpeech(token);
             lineTags.clear();
         } else {
             if (play.unknown.empty())
@@ -332,5 +355,13 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
             unrendered(token);
         }
     }
+    for (const TalkPlay::Page &page : play.pages)
+        if (page.choiceId.empty()) {
+            play.lines.push_back(page.text);
+            play.lineMarks.push_back(page.marks);
+        } else {
+            play.choices.push_back(page.text);
+            play.choiceIds.push_back(page.choiceId);
+        }
     return play;
 }

@@ -77,6 +77,8 @@ class HostWorld {
     // Step 6: `dtMs` of play (at most 1000), in 16-ms world steps, then the drawn-position
     // smoothing and the zone lists of what changed.
     virtual void advance(uint32_t dtMs) = 0;
+    // Optional engine timers take actual elapsed host time, before the simulation cap.
+    virtual void advanceTimers(uint32_t elapsedMs) {}
     // The world's event lists of this tick (world+0x90 .. +0x170), which the tick hands out to
     // the guests and then empties.
     virtual WorldEvents &events() = 0;

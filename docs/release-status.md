@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Runtime follow-up: incoming local-player hit rules, native music smoothing,
+  gameplay XInput mapping/sticks/camera, page-scoped dialogue marks and daily world/
+  character reset behavior now follow the independent runtime-gap specification.
+  The complete EngineTests run passed, including the new focused regressions and
+  owner-data comparisons. GUI controller navigation, dialogue answer activation,
+  pet updates and the other roadmap gaps remain open.
+- Enemy lifecycle: configurable Timed/Instance/Permanent modes. Timed defaults to
+  300 seconds; Instance resets on spawn-zone unload for all players. Temporary
+  deaths do not enter permanent saves, and mirrors handle repeated deaths.
+  Synthetic and owner-data generated-world integration checks cover these paths.
+
 - Water: implemented the written Steam surface curve, colour/depth passes, full-height
   exposed water faces, wet-ground films and underwater tint. Alpha dynamic models
   follow water. Default-on lilies use owner assets as independent render decoration.
@@ -46,9 +57,10 @@ checkpoint. Captures are private and excluded from the source archive.
 - Water: Steam vertex occlusion/point-light parity, Alpha's far-static-model threshold,
   and wider waterfall, underwater, wet-ground, dusk/night and material comparisons.
 - Frontend: exact panel opacity and logo shading require further independent evidence.
-- Gameplay edges from the handoff: sound coverage/music fades, ability/AI cases,
-  pets, controller sticks, conversation give/take commands and network feat/guest-quest/
-  monster-hit details. Recorded comparisons do not prove complete gameplay parity.
+- Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
+  pets, controller GUI/aim tracking, conversation choices/emotes/numeric item actions,
+  and network feat production. See the [audited roadmap](roadmap.md). Recorded
+  comparisons do not prove complete gameplay parity.
 - Human/system checks: two Steam accounts and an original-game peer, a real first-run
   wizard session, a fresh-machine install and extended save/load gameplay.
 - Publication: complete provenance/rights review; the source-license choice is complete.

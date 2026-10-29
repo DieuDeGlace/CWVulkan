@@ -8,9 +8,9 @@
 // (docs/dialogue.md "The game's conversations").
 //
 // A script is a list of tokens:
-//   <speech id>                  a line from dict_en.xml (a "%" in it starts a new line);
+//   <speech id>                  words from dict_en.xml (a whole "%" node starts a page);
 //                                one ending in "?" is an answer the player may choose
-//   new_page                     a pause (the next line follows on the next press)
+//   new_page                     a deferred break before the next speech
 //   !alert, !love, !sweat ...    an emote over the speaker's head
 //   #tag                         a grammar tag for the next line ("#inn", "#kindness")
 //   define_location x y type     a place: 1024-block cell (x, y) and its kind (Rock, Rocks...)
@@ -90,6 +90,13 @@ struct TalkPlay {
         std::string place;   // "Jakor Rocks"
         std::string item;    // what is there, if the script named one
     };
+    struct Page {
+        std::string text, choiceId;
+        std::vector<std::string> emotes;
+        std::vector<Marked> marks;
+    };
+    std::vector<Page> pages; // Ordered logical pages, before choices are separated.
+    std::vector<std::vector<Marked>> lineMarks; // Effects aligned with ordinary lines.
     std::vector<Marked> marked; // places marked on the map
     std::string unknown;        // a token CubeVulkan cannot play yet (empty: all played)
     // What could not be said in full: unknown tokens, and lines missing a value CubeVulkan

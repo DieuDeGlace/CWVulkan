@@ -1,5 +1,6 @@
 #pragma once
 #include "Combat.h"
+#include "EnemyRespawn.h"
 // Live creatures and NPCs built on the recordings in Creatures.h. The game's
 // AI is code inside cubeworld.exe and cannot be extracted, so behaviour here is
 // CubeVulkan's own, kept simple and driven by the game's own data:
@@ -19,6 +20,7 @@ class Actors {
     using Floor = std::function<bool(float x, float y, float z, float &height)>;
 
     void build(const CreatureRecordings &recordings, bool none = false);
+    void setEnemyRespawn(enemyrespawn::Settings settings) { respawnSettings = settings; }
     // `playerDefense` and `playerDamage`: monsters in reach hit the player; the
     // damage dealt this frame is added to `playerDamage`.
     void update(double dt, glm::vec3 player, const Floor &floor, combat::Defender playerDefense, float &playerDamage,
@@ -123,6 +125,8 @@ class Actors {
     std::vector<Actor> actors;
     std::vector<std::pair<size_t, float>> poisonHits;
     std::mt19937 random{1234};
+    enemyrespawn::Settings respawnSettings{enemyrespawn::Mode::Permanent, 300};
+    void revive(Actor &actor);
     std::vector<glm::mat4> bodyFrame(const CreatureRecordings::Creature &c, size_t frame) const;
     void enter(Actor &a, State s, double length);
 };

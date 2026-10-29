@@ -48,12 +48,35 @@ A test on 2026-10-22, with the vanilla game and the TEST warrior:
 
 The ids are the creatures' own (the same ones the extractor records). They look like packed zone coordinates plus an index: for example `0x7ffffd40 7fffffc2` for the pack, whose members end in c0–c3.
 
-**In CubeVulkan:**
-- Recorded creatures whose ids are in the game's set, or in CubeVulkan's own kill list for that world, start out dead.
-- A creature killed in CubeVulkan stays dead; the old one-minute respawn is gone.
-- CubeVulkan never writes the game's `world.db`. Its kills go in its own save, as `killed` lines in every character's section.
-- On loading, the kills of every character in the same world are joined, as the game shares one world state.
-- In multiplayer, the host's kill message now names the creature, so clients remember it too.
+This describes the native evidence and CubeVulkan's optional `Permanent` mode.
+CubeVulkan writes its own `Save/world.db`; the installed game's saves remain read only.
+
+## Configurable enemy deaths
+
+`[Creatures] DeathMode` in `CubeVulkan.ini` selects CubeVulkan's enemy lifecycle:
+
+| Mode | When a defeated enemy returns |
+| --- | --- |
+| `Timed` (default) | After `RespawnSeconds` of active host time; default 300 seconds |
+| `Instance` | After its original spawn zone unloads for every player |
+| `Permanent` | Native saved-death behavior, including the world's ordinary reset rules |
+
+Timed and instance modes are engine options. They apply to generated hostile/wild
+spawn-point creatures and the older recorded monsters. A generated enemy returns
+through its original spawn point at full health; prerequisites still apply. A zone
+unloading early does not bypass a timed death. The host controls this for all guests;
+client mirrors reset their death effects when an id comes back, so repeated kills
+work. Timers use elapsed host time, independent of the day/night speed or sleep.
+
+Temporary deaths are excluded from permanent save entries; restarting starts a new
+instance. Old saved enemy deaths are recovered as their zones first load in a
+respawning mode. Other saved state is retained. Players, friendly NPCs, pets and
+objects are not respawned by this option, and taming during an instance keeps the
+old wild id excluded. Script-created event creatures retain their event lifecycle.
+
+Restart after changing these settings. Invalid modes fall back to Timed; the delay
+is bounded to 1 second through 7 days. Native permanent mode remains available for
+comparisons with the Steam game.
 
 ## Not established
 

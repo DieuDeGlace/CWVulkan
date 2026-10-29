@@ -22,6 +22,15 @@ namespace field = nativesaves::item;
 
 namespace nativeprogress {
 
+void resetDay(SaveGame &progress) {
+    progress.perPlayerTaken.clear();
+    progress.finishedMissions.clear();
+    progress.purchases.clear();
+    progress.bag.erase(std::remove_if(progress.bag.begin(), progress.bag.end(),
+                                      [](const SaveGame::Bagged &item) { return item.category == 0x16; }),
+                       progress.bag.end());
+}
+
 namespace {
 constexpr double UNITS = 65536.0;      // world units in a block
 constexpr float RECORD_ABOVE_FEET = 1.0f; // SpawnedCreatures::NATIVE_FEET

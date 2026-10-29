@@ -582,6 +582,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // decides every creature that is not a player and keeps Save/world.db.
     SpawnedCreatures spawned;   // the client world (with the native player)
     SpawnedCreatures hostWorld; // the host world
+    const enemyrespawn::Settings enemyRespawns = enemyrespawn::Settings::read(config);
+    spawned.setEnemyRespawn(enemyRespawns);
+    hostWorld.setEnemyRespawn(enemyRespawns);
     bool spawnedReady = false;
     bool nativePlayer = false;         // [Player] Native: the game's controller and update move the player
     nativecontrol::Input controlInput; // this frame's keys for it
@@ -1020,8 +1023,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // With the game's own creatures (people included, who say the game's own scripts),
     // the recordings stand in for none of them.
     actors.build(creatures, spawnedReady);
-    // Death is permanent in the game: creatures that died in Steam Cube World (its
-    // Save/world.db, read only) or in CubeVulkan in this world stay dead.
+    actors.setEnemyRespawn(enemyRespawns);
+    // Other modes recover old enemy deaths as their spawn zones load, while
+    // preserving unrelated world state. Permanent mode retains native death history.
     {
         std::set<int64_t> dead(saves.world().dead.begin(), saves.world().dead.end()), kills;
         const size_t fromWorld = dead.size();
@@ -1032,13 +1036,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         dead.insert(kills.begin(), kills.end());
         int marked = 0;
         for (size_t k = 0; k < actors.count(); k++)
-            if (dead.count(actors.creatureId(k)))
+            if (enemyRespawns.mode == enemyrespawn::Mode::Permanent && dead.count(actors.creatureId(k)))
                 actors.alreadyDead(k), marked++;
         saveGame.killed.assign(kills.begin(), kills.end());
         spawned.setWorldDead(dead);
         hostWorld.setWorldDead(dead);
         logLine("Dead creatures: " + std::to_string(fromWorld) + " in Save/world.db, " + std::to_string(kills.size()) +
                 " known to this character; " + std::to_string(marked) + " of the recorded creatures stay dead");
+        const char *deathMode = enemyRespawns.mode == enemyrespawn::Mode::Timed ? "Timed" :
+                                enemyRespawns.mode == enemyrespawn::Mode::Instance ? "Instance" : "Permanent";
+        logLine(std::string("Enemy deaths: ") + deathMode + "; respawn delay " + std::to_string(enemyRespawns.seconds) + " seconds");
     }
     if (actors.count())
         logLine("Creatures: " + actors.summary());
@@ -1624,6 +1631,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         int count = 0;
     };
     std::vector<Carried> bag;
+    auto resetDailyProgress = [&] {
+        nativeprogress::resetDay(saveGame);
+        bag.erase(std::remove_if(bag.begin(), bag.end(), [](const Carried &item) { return item.item.category == 0x16; }), bag.end());
+    };
     // The artifacts carried (Lore.h, spec 5.2): each stack of the artifact tab adds a level and a
     // point to the skill its modifier names.
     auto carriedArtifacts = [&]() {
@@ -1965,6 +1976,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // then gold and sometimes an item in a pouch.
     // The world remembers who died (saved with the character, shared by the world).
     auto rememberKill = [&](size_t k) {
+        if (enemyRespawns.mode != enemyrespawn::Mode::Permanent)
+            return;
         int64_t id = actors.creatureId(k);
         if (id && std::find(saveGame.killed.begin(), saveGame.killed.end(), id) == saveGame.killed.end())
             saveGame.killed.push_back(id);
@@ -2170,7 +2183,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         bool fromObject = false;
         glm::vec3 objectAt{0};
         std::vector<lore::Cell> loreCells;
-        std::vector<TalkPlay::Marked> marks;
+        std::vector<std::vector<TalkPlay::Marked>> pageMarks;
+        size_t effectsPage = SIZE_MAX;
         bool lastPageDone = false;
     };
     std::optional<Talk> talk;
@@ -2307,15 +2321,19 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         logLine("Marked on the map: " + m.place + (m.item.empty() ? "" : " (" + m.item + ")") + ", cell " + std::to_string(m.x) + "," +
                 std::to_string(m.y));
     };
-    // What a page does once shown: a tale's last page credits its lore and marks its places.
+    // Page activation credits final-page lore first, then this page's mission marks.
     auto pageShown = [&]() {
-        if (!talk || talk->lastPageDone || talk->line + 1 < talk->lines.size())
+        if (!talk || talk->effectsPage == talk->line)
             return;
-        talk->lastPageDone = true;
-        for (const lore::Cell &cell : talk->loreCells)
-            creditLore(cell);
-        for (const TalkPlay::Marked &m : talk->marks)
-            markPlace(m);
+        talk->effectsPage = talk->line;
+        if (!talk->lastPageDone && talk->line + 1 == talk->lines.size()) {
+            talk->lastPageDone = true;
+            for (const lore::Cell &cell : talk->loreCells)
+                creditLore(cell);
+        }
+        if (talk->line < talk->pageMarks.size())
+            for (const TalkPlay::Marked &m : talk->pageMarks[talk->line])
+                markPlace(m);
     };
     // A lore object's tale, played as a talk with no speaker's name (spec 2.3), its wording
     // chosen by the cell's own seed so it reads the same each time.
@@ -2336,7 +2354,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         t.objectAt = examined.at;
         t.lines = play.lines;
         t.loreCells = {cell};
-        t.marks = play.marked;
+        t.pageMarks = play.lineMarks;
         talk = t;
         pageShown();
     };
@@ -2355,7 +2373,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         t.fromObject = true;
         t.objectAt = at;
         t.lines = play.lines;
+        t.pageMarks = play.lineMarks;
         talk = t;
+        pageShown();
     };
     // A ground item this player picked up, received as the game receives its pick-up notice
     // (loot-pickup.md §4): an item that stays for others only once per character, the region
@@ -2471,22 +2491,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // The game's script for this person, for today (it changes daily).
             TalkPlay play = playScript(script, speech, chatter, &talkNames);
             t.lines = play.lines;
+            t.pageMarks = play.lineMarks;
             for (const std::string &what : play.unrendered)
                 logLine("Conversation: " + script.speaker + " cannot say this in full yet: " + what);
-            // The answers offered are shown; CubeVulkan takes the inn's rest itself (World's
-            // interaction pass, kind 5 with the innkeeper: until 7:00 of the next day).
+            // Choice activation is separate from displaying the offered answers.
             for (const std::string &answer : play.choices)
                 t.lines.push_back("> " + answer);
-            if (std::find(play.choiceIds.begin(), play.choiceIds.end(), "rest_inn?") != play.choiceIds.end()) {
-                day++;
-                hour = 7.0f;
-                logLine("Rested at the inn until 7:00 of day " + std::to_string(day));
-            } else if (!play.choiceIds.empty())
+            if (!play.choiceIds.empty())
                 logLine("Conversation: " + script.speaker + " offers answers CubeVulkan cannot choose yet");
-            for (const TalkPlay::Marked &m : play.marked) // (a person's marks: as the talk starts)
-                markPlace(m);
             if (!t.lines.empty()) {
                 talk = t;
+                pageShown();
                 return; // the game ends them without a goodbye
             }
         } else if (inventedQuests && c && !mine && c->id % 3 == 0 && std::count_if(quests.begin(), quests.end(), [](auto &q) { return q.state < 2; }) < 3) {
@@ -2635,7 +2650,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "FEAT!", PURPLE, 0, true});
                 audio.playInterface(nativeinteract::SLEEP_SOUND); // (sound 0x1f)
             };
-            mirror->dayChanged = [&](int32_t newDay) { logLine("World: day " + std::to_string(newDay)); };
+            mirror->dayChanged = [&](int32_t newDay) {
+                resetDailyProgress();
+                logLine("World: day " + std::to_string(newDay));
+            };
             mirror->startedOver = [&] { // the ground items shown are the new host's from now on
                 zoneItemsLoaded.clear();
                 loot.erase(std::remove_if(loot.begin(), loot.end(), [](const Loot &l) { return l.zoneItem[0] != INT_MIN; }), loot.end());
@@ -2650,7 +2668,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         saveGame.killed.push_back(d.id);
                 }
             };
-            host->reset = [&] { logLine("World: reset by a night's sleep"); };
+            host->reset = [&] {
+                resetDailyProgress();
+                logLine("World: daily reset");
+            };
         }
     } else
         logLine("Multiplayer: none (it needs the game's own creatures)");
@@ -2679,8 +2700,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         saveGame.hour = hour;
         saveGame.day = day;
         saveGame.quests = quests;
-        if (spawnedReady && !session.guestElsewhere()) // (the world's dead are its host world's)
-            saveGame.killed.assign(hostWorld.worldDeadSet().begin(), hostWorld.worldDeadSet().end());
+        if (spawnedReady && !session.guestElsewhere()) { // the world's dead are its host world's
+            const auto persistentDead = hostWorld.persistentDeadSet();
+            saveGame.killed.assign(persistentDead.begin(), persistentDead.end());
+            saves.world().dead = persistentDead;
+        } else if (!spawnedReady && enemyRespawns.mode != enemyrespawn::Mode::Permanent)
+            saveGame.killed.clear();
         saveGame.bag.clear();
         for (const Carried &c : bag) {
             SaveGame::Bagged b;
@@ -2900,6 +2925,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
     float viewYaw = player.yaw, viewPitch = player.pitch, viewZoom = player.zoom;
+    glm::vec2 mapPadAngles{0}; // The map's controller angles are separate from the camera's.
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -2908,7 +2934,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             lastSave = std::chrono::steady_clock::now();
         }
         auto now = std::chrono::steady_clock::now();
-        double dt = std::min(.1, std::chrono::duration<double>(now - previous).count());
+        const double frameMs = std::chrono::duration<double, std::milli>(now - previous).count();
+        double dt = std::min(.1, frameMs / 1000.0);
         double time = std::chrono::duration<double>(now - start).count();
         previous = now;
         steam.pump();
@@ -2923,6 +2950,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
         // The screens over the game take their keys first (the interface keys F1 to F6 always,
         // everything while one is open). Start Menu and Exit Game end the session.
+        const bool panelsBeforeInput = inventoryOpen || mapOpen || (menusReady && menus.open());
+        const bool capturingBeforeInput = menusReady && menus.capturingControl();
         if (menusReady)
             switch (menus.frame(dt * 1000.0)) {
             case frontend::Result::Title:
@@ -2932,7 +2961,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             case frontend::Result::Quit: glfwSetWindowShouldClose(window, 1); break;
             default: break;
             }
-        const bool menusOpen = menusReady && menus.open();
+        bool menusOpen = menusReady && menus.open();
         std::vector<int> pressed = input.pressed;
         input.pressed.clear();
         // The chat's input line (ChatLine.h): Enter opens it, or sends what was typed (packet 14);
@@ -2955,7 +2984,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             pressed = std::move(rest);
         }
         input.typed.clear();
-        gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing());
+        gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing(),
+                         panelsBeforeInput || menusOpen || chat.typing() || talk.has_value(), talk.has_value(),
+                         capturingBeforeInput || (menusReady && menus.capturingControl()));
+        if (gameInput.gamepad().dismiss) {
+            inventoryOpen = craftingOpen = mapOpen = false;
+            bagShown = true;
+            talk.reset();
+            if (menusReady)
+                menus.dismiss();
+            menusOpen = false;
+        }
         // Escape and the System Menu binding (default O; Start on a gamepad) close the inventory
         // first, then the map, then show the system menu.
         auto escape = [&] {
@@ -3066,6 +3105,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         lastX = mx;
         lastY = my;
+        const GamepadCamera padTurn = gamepadCamera(gameInput.gamepad().look, frameMs);
+        constexpr double PAD_RADIANS = 0.017453292519943295;
+        if (mapOpen) {
+            mapPadAngles.x = (float)((double)mapPadAngles.x + padTurn.yaw * PAD_RADIANS);
+            mapPadAngles.y = (float)((double)mapPadAngles.y + padTurn.pitch * PAD_RADIANS);
+        } else {
+            player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
+            player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
+        }
         static double inventoryWheel = 0; // (the wheel scrolls the inventory while it is open)
         if (inventoryOpen)
             inventoryWheel += input.scroll;
@@ -3149,6 +3197,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             controlInput.back = free && gameInput.held(DOWN);
             controlInput.left = free && gameInput.held(LEFT);
             controlInput.right = free && gameInput.held(RIGHT);
+            controlInput.stickX = free ? gameInput.gamepad().movement.x : 0;
+            controlInput.stickY = free ? gameInput.gamepad().movement.y : 0;
             controlInput.jump = free && gameInput.held(JUMP);
             controlInput.dodge = free && gameInput.held(DODGE);
             controlInput.classSkill = free && gameInput.held(CLASS_SKILL);
@@ -6098,7 +6148,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             view.center = mapPosition;
             view.level = mapZoom;
             view.radius = radius;
-            view.pitch = viewPitch, view.yaw = viewYaw; // the camera as drawn (§4.2)
+            view.pitch = viewPitch + mapPadAngles.y, view.yaw = viewYaw + mapPadAngles.x;
             view.cursor = mapViewCentre;
             view.viewScale = minimapScale * mapLabelScale; // options mapScale x the eased scale (§4.1)
             view.screen = glm::vec2(w, h);
@@ -6365,7 +6415,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             static double worldSaved = 0;
             if (spawnedReady && savesWritable && saves.isOpen() && time - worldSaved > 60) {
                 worldSaved = time;
-                saves.saveWorld(hostWorld.day(), hostWorld.timeOfDay(), hostWorld.worldDeadSet());
+                const auto persistentDead = hostWorld.persistentDeadSet();
+                saves.world().dead = persistentDead;
+                saves.saveWorld(hostWorld.day(), hostWorld.timeOfDay(), persistentDead);
             }
             Sleep(16);
         } else {
@@ -6490,9 +6542,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     }
     if (spawnedReady) // every zone in memory records what changed in it (native-saves.md open question 3)
         hostWorld.recordAllZones();
-    if (serverMode && spawnedReady && savesWritable && saves.isOpen())
-        logLine(saves.saveWorld(hostWorld.day(), hostWorld.timeOfDay(), hostWorld.worldDeadSet()) ? "Save: world written"
-                                                                                                 : "Save: world not written");
+    if (serverMode && spawnedReady && savesWritable && saves.isOpen()) {
+        const auto persistentDead = hostWorld.persistentDeadSet();
+        saves.world().dead = persistentDead;
+        logLine(saves.saveWorld(hostWorld.day(), hostWorld.timeOfDay(), persistentDead) ? "Save: world written"
+                                                                                    : "Save: world not written");
+    }
     if (saving) {
         std::string where = saveProgress();
         logLine(where.empty() ? "Save: not written" : "Save: written (" + where + ")");

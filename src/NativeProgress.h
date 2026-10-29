@@ -15,6 +15,10 @@ class Gear;
 
 namespace nativeprogress {
 
+// Daily reset 0x2c34c0: clear temporary loot/mission/shop data and category-22 items.
+// Solved missions, discoveries, knowledge and regional counters persist.
+void resetDay(SaveGame &progress);
+
 // Where CubeVulkan's local blocks sit in the game's world: the local origin in world units
 // (ExtractedWorld::originDotsX/Y; 0 without an extracted world). A position in the save is the
 // creature record's, a block above the feet CubeVulkan keeps (SpawnedCreatures::NATIVE_FEET).

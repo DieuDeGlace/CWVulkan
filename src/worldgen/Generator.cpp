@@ -14,8 +14,8 @@ namespace {
 
 struct Settings {
     WorldValues world = worldValues(0);
-    int32_t day = 0;
-    int32_t refreshDay = -1;
+    std::atomic<int32_t> day{0};
+    std::atomic<int32_t> refreshDay{-1};
     bool tablesLoaded = false;
 };
 Settings settings;
@@ -63,14 +63,14 @@ void setWorldSeed(int32_t seed) {
 const WorldValues &currentWorld() { return settings.world; }
 
 void setWorldDay(int32_t day) {
-    settings.day = day;
-    settingsVersion++;
+    if (settings.day.exchange(day) != day)
+        settingsVersion++;
 }
 int32_t worldDay() { return settings.day; }
 
 void setRefreshDay(int32_t day) {
-    settings.refreshDay = day;
-    settingsVersion++;
+    if (settings.refreshDay.exchange(day) != day)
+        settingsVersion++;
 }
 
 bool loadCreatureTables(const std::filesystem::path &oracleDir, std::string *why) {
@@ -152,8 +152,9 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
             }
     }
     ZoneContents z = makeZone(zx, zy, false);
-    if (settings.refreshDay >= 0 && settings.tablesLoaded)
-        refreshZoneCreatures(z, settings.world, creatureTables(), settings.refreshDay);
+    const int32_t refreshDay = settings.refreshDay.load();
+    if (refreshDay >= 0 && settings.tablesLoaded)
+        refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
     // The column values were the generator's working state; a kept zone has no use for them.
     z.terrain.field = {};
     auto made = std::make_shared<const ZoneContents>(std::move(z));

@@ -1,5 +1,15 @@
 // The game's controls read each frame, from docs/specs/frontend-options.md §4.1.
 #include "GameInput.h"
+#include "NativeCrt.h"
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#include <Xinput.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -40,15 +50,30 @@ bool bindingDown(GLFWwindow *window, const gameoptions::Binding &b) {
 
 GamepadButtons readGamepad() {
     GamepadButtons pad;
-    for (int joystick = GLFW_JOYSTICK_1; joystick <= GLFW_JOYSTICK_LAST; joystick++) {
-        GLFWgamepadstate state;
-        if (!glfwJoystickIsGamepad(joystick) || !glfwGetGamepadState(joystick, &state))
-            continue;
-        pad.dpadUp = pad.dpadUp || state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] == GLFW_PRESS;
-        pad.dpadDown = pad.dpadDown || state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] == GLFW_PRESS;
-        pad.back = pad.back || state.buttons[GLFW_GAMEPAD_BUTTON_BACK] == GLFW_PRESS;
-        pad.start = pad.start || state.buttons[GLFW_GAMEPAD_BUTTON_START] == GLFW_PRESS;
-    }
+    using GetState = DWORD(WINAPI *)(DWORD, XINPUT_STATE *);
+    static const GetState getState = [] {
+        // Use the OS runtime; never load an XInput DLL from the game directory.
+        for (const wchar_t *name : {L"xinput1_4.dll", L"xinput9_1_0.dll", L"xinput1_3.dll"})
+            if (HMODULE module = LoadLibraryExW(name, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32))
+                if (auto entry = GetProcAddress(module, "XInputGetState"))
+                    return reinterpret_cast<GetState>(entry);
+        return GetState(nullptr);
+    }();
+    XINPUT_STATE state{};
+    if (!getState || getState(0, &state) != ERROR_SUCCESS)
+        return pad;
+    pad.connected = true;
+    const auto &p = state.Gamepad;
+    auto has = [&](WORD mask) { return (p.wButtons & mask) != 0; };
+    pad.dpadUp = has(XINPUT_GAMEPAD_DPAD_UP), pad.dpadDown = has(XINPUT_GAMEPAD_DPAD_DOWN);
+    pad.dpadLeft = has(XINPUT_GAMEPAD_DPAD_LEFT), pad.dpadRight = has(XINPUT_GAMEPAD_DPAD_RIGHT);
+    pad.back = has(XINPUT_GAMEPAD_BACK), pad.start = has(XINPUT_GAMEPAD_START);
+    pad.a = has(XINPUT_GAMEPAD_A), pad.b = has(XINPUT_GAMEPAD_B);
+    pad.x = has(XINPUT_GAMEPAD_X), pad.y = has(XINPUT_GAMEPAD_Y);
+    pad.leftShoulder = has(XINPUT_GAMEPAD_LEFT_SHOULDER), pad.rightShoulder = has(XINPUT_GAMEPAD_RIGHT_SHOULDER);
+    pad.leftThumb = has(XINPUT_GAMEPAD_LEFT_THUMB), pad.rightThumb = has(XINPUT_GAMEPAD_RIGHT_THUMB);
+    pad.leftTrigger = p.bLeftTrigger, pad.rightTrigger = p.bRightTrigger;
+    pad.leftX = p.sThumbLX, pad.leftY = p.sThumbLY, pad.rightX = p.sThumbRX, pad.rightY = p.sThumbRY;
     return pad;
 }
 
@@ -78,13 +103,18 @@ bool GameInput::keyIsBound(const gameoptions::Controls &controls, int glfwKey) {
 }
 
 void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
-                       const std::vector<int> &pressedButtons, bool enabled) {
-    const std::array<bool, gameoptions::BINDINGS> pad = gamepadControls(readGamepad());
+                       const std::vector<int> &pressedButtons, bool enabled, bool ui, bool conversation, bool capturingBinding) {
+    const bool focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
+    if (focused && !capturingBinding)
+        padFrame.update(readGamepad(), ui, conversation);
+    else
+        padFrame.clear();
     for (int i = 0; i < gameoptions::BINDINGS; i++) {
         const gameoptions::Binding &b = controls[(size_t)i];
-        bool now = enabled && (bindingDown(window, b) || pad[(size_t)i]);
+        const bool zoom = i == gameoptions::ZOOM_IN || i == gameoptions::ZOOM_OUT;
+        bool now = (focused && enabled && !zoom && bindingDown(window, b)) || padFrame.held[(size_t)i];
         bool tapped = false;
-        if (enabled) {
+        if (focused && enabled && !zoom) {
             for (int key : pressedKeys)
                 tapped = tapped || keyMatches(b, key);
             for (int button : pressedButtons)
@@ -95,12 +125,67 @@ void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls
     }
 }
 
-std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad) {
+std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad, bool ui, bool conversation, bool suppressJump) {
     std::array<bool, gameoptions::BINDINGS> held{};
     held[gameoptions::ZOOM_IN] = pad.dpadUp;
     held[gameoptions::ZOOM_OUT] = pad.dpadDown;
     held[gameoptions::CRAFTING_MENU] = pad.back;
     held[gameoptions::INVENTORY] = pad.back;
     held[gameoptions::SYSTEM_MENU] = pad.start;
+    held[gameoptions::ATTACK] = pad.rightShoulder;
+    held[gameoptions::SPECIAL_ATTACK] = pad.rightTrigger > 128;
+    if (!ui || conversation) {
+        held[gameoptions::LAMP] = pad.dpadRight;
+        held[gameoptions::CALL_PET] = pad.leftThumb;
+        held[gameoptions::RING_MENU] = pad.rightThumb;
+        held[gameoptions::WORLD_MAP] = pad.dpadLeft;
+    }
+    if (!ui && !conversation) {
+        held[gameoptions::ULTIMATE_SKILL] = pad.y;
+        held[gameoptions::JUMP] = pad.b && !suppressJump;
+        held[gameoptions::DODGE] = pad.leftShoulder;
+        held[gameoptions::CLASS_SKILL] = pad.leftTrigger > 128;
+        held[gameoptions::QUICK_ITEM] = pad.x;
+        held[gameoptions::USE] = pad.a;
+    }
     return held;
+}
+
+GamepadStick gamepadStick(int16_t x, int16_t y) {
+    const float halfX = (float)x * (1.0f / 65536.0f), halfY = (float)y * (1.0f / 65536.0f);
+    GamepadStick stick{halfX + halfX, halfY + halfY};
+    if (stick.x * stick.x + stick.y * stick.y < 0.04000000283122063f)
+        return {};
+    return stick;
+}
+
+GamepadCamera gamepadCamera(GamepadStick stick, double elapsedMs, float trackingDistance) {
+    float rate = 0.4f;
+    if (trackingDistance >= 0)
+        rate *= std::max(1.0f - trackingDistance / 50.0f, 0.3f);
+    const double ms = std::min(elapsedMs, 1000.0);
+    return {(double)(nativecrt::powf(stick.x, 3.0f) * rate) * ms,
+            (double)(nativecrt::powf(stick.y, 3.0f) * rate) * ms};
+}
+
+void GamepadFrame::clear() {
+    held = {}, movement = {}, look = {};
+    dismiss = false;
+}
+
+void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool conversation) {
+    const GamepadStick previousLook = look;
+    clear();
+    if (!pad.connected)
+        return;
+    if (!pad.b)
+        suppressJump = false;
+    else if (ui)
+        suppressJump = dismiss = true;
+    held = gamepadControls(pad, ui, conversation, suppressJump);
+    if (!ui || conversation) {
+        movement = gamepadStick(pad.leftX, pad.leftY);
+        look = gamepadStick(pad.rightX, pad.rightY);
+    } else
+        look = previousLook; // The ordinary UI branch does not write a fresh right pair.
 }

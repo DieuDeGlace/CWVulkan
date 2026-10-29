@@ -23,29 +23,36 @@ void HostSide::receiveCreature(const cwnet::CreatureDelta &delta) {
 }
 
 void HostSide::advance(uint32_t dtMs) {
-    // The zones near every player, the AI (its own thread in the game, every 40 ms), the world's
-    // 16-ms steps, the clock, the drawn positions and the lists of the zones that changed.
-    world.update(blocks, standIn);
-    world.think(blocks, (double)dtMs, world.timeOfDay() / 3600000.0f);
-    world.simulate(blocks, (double)dtMs);
-    world.advanceClock((double)dtMs);
-    world.smooth((float)dtMs);
-    world.zoneChangeLists();
+    // The native world advances in 16-ms slices, including its spawn and reset passes.
+    // Keep notices for transmission, but consume each notice only once in this host tick.
+    size_t consumedSleeps = 0;
+    for (uint32_t left = dtMs; left;) {
+        const uint32_t step = std::min(left, uint32_t(16));
+        left -= step;
+        world.advanceClock((double)step);
+        world.update(blocks, standIn);
+        world.think(blocks, (double)step, world.timeOfDay() / 3600000.0f);
+        world.simulate(blocks, (double)step);
+        world.smooth((float)step);
+        world.zoneChangeLists();
+        std::vector<SpawnedCreatures::Death> died = world.takeDeaths(blocks);
+        if (deaths && !died.empty())
+            deaths(died);
+        const auto &sleeps = world.events().sleeps;
+        const bool resetRequested = std::find(sleeps.begin() + consumedSleeps, sleeps.end(), 0) != sleeps.end();
+        consumedSleeps = sleeps.size();
+        if (resetRequested) {
+            // Midnight resets before spawning and again at the notice pass (§6.2).
+            world.worldReset();
+            if (reset)
+                reset();
+        }
+    }
     // Nothing hears or draws the host world: what it keeps for that is let go.
     world.takeSounds();
     world.takeDrops();
     world.takeTames();
     world.takeInnNights();
-    std::vector<SpawnedCreatures::Death> died = world.takeDeaths(blocks);
-    if (deaths && !died.empty())
-        deaths(died);
-    // A night slept (a sleep notice of 0) resets the world (native-saves.md §5.6).
-    const std::vector<int32_t> &sleeps = world.events().sleeps;
-    if (std::find(sleeps.begin(), sleeps.end(), 0) != sleeps.end()) {
-        world.worldReset();
-        if (reset)
-            reset();
-    }
 }
 
 // --- The client world --------------------------------------------------------------------------

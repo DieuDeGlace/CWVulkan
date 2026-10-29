@@ -1,5 +1,6 @@
 // The rules of the game's sound and music (docs/specs/sound.md). See SoundRules.h.
 #include "SoundRules.h"
+#include "GameMath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -156,12 +157,12 @@ Track chooseTrack(const MusicPlace &place, const std::string &current) {
     return t;
 }
 
-float easeMusicVolume(float volume, float target, float dtMs) {
-    const float share = std::min(1.0f, MUSIC_EASE_PER_SECOND * dtMs / 1000.0f);
+float easeMusicVolume(float volume, float target, double dtMs, float rate) {
+    const float share = gamemath::blendFactor(std::min(dtMs, 1000.0), rate);
     return volume + (target - volume) * share;
 }
 
-void stepMusic(MusicState &s, const Track &wanted, bool playing, float dtMs, const MusicOptions &options,
+void stepMusic(MusicState &s, const Track &wanted, bool playing, double dtMs, const MusicOptions &options,
                bool successRunning, float duckMs) {
     const bool differs = wanted.name != s.current;
     if (differs && wanted.threshold > 0)
@@ -177,7 +178,7 @@ void stepMusic(MusicState &s, const Track &wanted, bool playing, float dtMs, con
         s.firstDifference = true;
         return;
     }
-    s.playedMs += dtMs;
+    s.playedMs = (float)((double)s.playedMs + dtMs);
     if (!differs) {
         // Place music fades after five minutes unless the player loops it.
         s.threshold = wanted.placeMusic && !options.loop ? PLACE_FADE_MS : s.playedMs + PLACE_FADE_MS;
@@ -192,14 +193,18 @@ void stepMusic(MusicState &s, const Track &wanted, bool playing, float dtMs, con
             s.threshold = s.playedMs + LATE_CHANGE_WAIT_MS;
         s.firstDifference = false;
     }
-    float target;
-    if (duckMs > 0)
+    float target, rate;
+    if (duckMs > 0) {
         target = DUCKED_MUSIC_VOLUME;
-    else if (s.playedMs <= s.threshold)
+        rate = 0.005f;
+    } else if (s.playedMs <= s.threshold) {
         target = full;
-    else
+        rate = 0.001f;
+    } else {
         target = 0;
-    s.volume = easeMusicVolume(s.volume, target, dtMs);
+        rate = wanted.name == "boss" || successRunning ? 0.005f : 0.0004f;
+    }
+    s.volume = easeMusicVolume(s.volume, target, dtMs, rate);
 }
 
 // --- Ambient emitters ---------------------------------------------------------------------------

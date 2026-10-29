@@ -14,6 +14,7 @@
 #include "SoundRules.h"
 #include "ZoneStates.h"
 #include "GroundItems.h"
+#include "EnemyRespawn.h"
 #include <list>
 #include <functional>
 #include "worldgen/Residents.h"
@@ -115,6 +116,10 @@ class SpawnedCreatures {
     // stored zone states emptied, every creature not a player let go (they are made again).
     void worldReset();
     const std::set<int64_t> &worldDeadSet() const { return worldDead; }
+    void setEnemyRespawn(enemyrespawn::Settings settings);
+    void advanceRespawns(double elapsedMs);
+    // Temporary enemy deaths stay in the live world, but never become permanent save entries.
+    std::set<int64_t> persistentDeadSet() const;
     // Lays an item (0xa0 bytes) on the ground at `pos` (1/65536 block), `count` of it, as a drop
     // lays one (0x2a5b70): into its zone's ground items. For mods and tests.
     void layItem(ExtractedWorld &ew, const uint8_t *item, const int64_t pos[3], int count);
@@ -498,6 +503,10 @@ class SpawnedCreatures {
     std::set<int64_t> dead;          // creatures whose death was reported
     std::set<int64_t> rewarded;      // world+0x30: the residents who gave their reward
     std::set<int64_t> worldDead;     // the world's dead (not made again)
+    enemyrespawn::Settings respawnSettings{enemyrespawn::Mode::Permanent, 300};
+    enemyrespawn::Deaths enemyDeaths;
+    std::set<int64_t> protectedDead; // renamed by taming: not a defeated enemy
+    void releaseDeaths(const std::vector<int64_t> &ids);
     std::vector<int64_t> markedDead; // dead by taming, for the save
     std::vector<grounditems::Tamed> tames;
     std::map<std::pair<int, int>, std::vector<int64_t>> zoneMissions; // zone+0x498 of the near zones

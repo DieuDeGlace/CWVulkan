@@ -15,6 +15,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <vector>
 
 class Speech {
   public:
@@ -29,6 +30,8 @@ class Speech {
     bool has(const std::string &id) const { return lines.count(id) > 0; }
     // A sentence for <speech id> (or <macro id>), spaces and punctuation tidied.
     std::string say(const std::string &id, const Context &context, std::mt19937 &random) const;
+    // Expanded dialogue pages. Whole-text % nodes break pages; %% is a literal percent.
+    std::vector<std::string> sayPages(const std::string &id, const Context &context, std::mt19937 &random) const;
     // A <name id> ("Wizard"), or its plural.
     std::string name(const std::string &id, bool plural = false) const;
     // A place: the <name> template for its kind ("Plains": "{@ #named} Plains") with
@@ -48,5 +51,5 @@ class Speech {
     std::map<std::string, std::string> lines; // speech and macro bodies
     std::map<std::string, std::pair<std::string, std::string>> names; // id -> body, tags
     std::string expand(const std::string &text, size_t &at, char until, const Context &context,
-                       std::mt19937 &random, int depth) const;
+                       std::mt19937 &random, int depth, bool pages = false) const;
 };

@@ -135,14 +135,11 @@ struct MusicOptions {
 // One frame of the music choice (§3.4): `playing` says whether the streamer is playing. Moves
 // the state on and returns the path to request (Music\<current>.ogg) through state.current
 // and the volume through state.volume.
-void stepMusic(MusicState &state, const Track &wanted, bool playing, float dtMs, const MusicOptions &options,
+void stepMusic(MusicState &state, const Track &wanted, bool playing, double dtMs, const MusicOptions &options,
                bool successRunning, float duckMs);
-// The music volume easing toward its target. The game's rate (0x16ee0 with arguments from
-// 0xa7a0) is open question 3; see MUSIC_EASE_PER_SECOND.
-float easeMusicVolume(float volume, float target, float dtMs);
-// Placeholder for open question 3: the fraction of the remaining way the volume moves in a
-// second. Not from the spec; replace with the recorded curve.
-constexpr float MUSIC_EASE_PER_SECOND = 1.5f;
+// Native frame smoothing; the rate depends on ducking, recovery and the wanted track.
+// See remaining-runtime-gaps.md §8.1 for the verified coefficients and frame cap.
+float easeMusicVolume(float volume, float target, double dtMs, float rate = 0.001f);
 
 // --- Ambient emitters (§4) ----------------------------------------------------------------------
 

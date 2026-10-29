@@ -329,6 +329,8 @@ class InGameMenus {
     void toggleMultiplayerMenu();
     // Whether a screen is open, which then has the keys and the pointer.
     bool open() const;
+    bool capturingControl() const;
+    void dismiss();
     // One frame: the interface keys always; the keys and clicks of this frame while a screen is
     // open (those are taken from the input). Stay, Title (Start Menu) or Quit (Exit Game).
     Result::Action frame(double dtMs);

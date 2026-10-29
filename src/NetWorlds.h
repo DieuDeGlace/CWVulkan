@@ -40,6 +40,7 @@ class HostSide : public cwnet::HostWorld {
     }
     void applyGuestEvents(const cwnet::GuestEvents &events) override { world.applyGuestEvents(blocks, events); }
     void advance(uint32_t dtMs) override;
+    void advanceTimers(uint32_t elapsedMs) override { world.advanceRespawns(elapsedMs); }
     cwnet::WorldEvents &events() override { return world.events(); }
     bool zoneAnswer(const cwnet::ZoneKey &zone, cwnet::ZoneAnswer &out) override { return world.zoneAnswer(blocks, zone, out); }
     cwnet::Time clock() override { return {world.day(), (int32_t)world.timeOfDay()}; }

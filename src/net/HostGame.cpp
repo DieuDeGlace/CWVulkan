@@ -90,6 +90,7 @@ void HostGame::tick(uint32_t nowMs, uint32_t elapsedMs) {
     world.applyGuestEvents(caused);
 
     // 6. The world runs.
+    world.advanceTimers(elapsedMs);
     world.advance(std::min(elapsedMs, MAX_STEP_MS));
 
     for (const PickupRecord &p : world.events().pickups) // (for the log: who took what)

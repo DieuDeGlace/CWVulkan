@@ -188,6 +188,8 @@ class Session {
     Result::Action gameFrame(double dtMs);
     void gameDraw(std::vector<OverlayVertex> &out);
     bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || helpOpen || friendsOpen; }
+    bool capturingControl() const { return controlsOpen && controls.waiting >= 0; }
+    void dismissMenus() { while (anyOpen()) back(true); }
     void toggleSystemMenu() { systemShown = !systemShown; }
     void toggleMultiplayerMenu();
     bool interfaceVisible() const { return interfaceShown; }
@@ -1539,6 +1541,8 @@ void InGameMenus::toggleMultiplayerMenu() {
         session->services().audio->playInterface(SOUND_MENU_OPEN);
 }
 bool InGameMenus::open() const { return session->anyOpen(); }
+bool InGameMenus::capturingControl() const { return session->capturingControl(); }
+void InGameMenus::dismiss() { session->dismissMenus(); }
 Result::Action InGameMenus::frame(double dtMs) { return session->gameFrame(dtMs); }
 void InGameMenus::draw(std::vector<OverlayVertex> &out) { session->gameDraw(out); }
 bool InGameMenus::interfaceShown() const { return session->interfaceVisible(); }

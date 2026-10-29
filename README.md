@@ -78,6 +78,22 @@ save formats in the engine's own `Save/` directory. `[Saves] ImportFrom=` can im
 an owner's native Save directory when no engine save exists; the originals are read
 only. See [menus](docs/menu.md) and [saves](docs/saves.md).
 
+Enemy deaths are configurable in `CubeVulkan.ini`:
+
+```ini
+[Creatures]
+DeathMode=Timed
+RespawnSeconds=300
+```
+
+`Timed` is the default: defeated spawn-point enemies return after five minutes of
+active host time, even if their zone unloads meanwhile. `Instance` keeps them dead
+until their original spawn zone unloads for every player. `Permanent` retains native
+saved-death behavior. These are host settings; restart to apply changes. In respawn
+modes, temporary deaths are not saved and old enemy death entries are recovered as
+their zones load. Player deaths, friendly NPCs, pets and world objects keep their
+own rules. See [enemy lifecycle](docs/creatures.md#configurable-enemy-deaths).
+
 Controls come from `controls.cfg` and are editable in Options. Defaults include
 WASD movement, left/right mouse attacks, middle mouse dodge, Shift class skill,
 B inventory, Enter chat, J multiplayer and Esc/O system menu. Development shortcuts:
