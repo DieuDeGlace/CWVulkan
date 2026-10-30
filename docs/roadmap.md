@@ -109,12 +109,14 @@ individual feature documents.
   bindings use full CUB dimensions, posed matrices and native coordinate rounding;
   loaded neighboring zones participate before they have meshes. Source-reader,
   CPU boundary and10 synthetic GPU checks pass, including offset70 and more than
-  64 candidates. Fresh native light capture is still pending: older exports omit
-  static-light copies; the updated extractor adds them and F5 refreshes cached zones.
-  The latest full owner-data run has two failing region-oracle assertions: all
-  3,823 region pairs differ while the other23 sampled terrain fields match. The
-  current original-game capture has BigRegions Scale2 enabled; a fresh isolated
-  vanilla reference is required. Expected values/checks have not been weakened.
+  64 candidates. The isolated recapture refreshed1,590 zones with both auxiliary
+  light lists and coherent cache metadata. The engine reader and neighboring-zone
+  light solve match all 8 model and 9 static lights in 15 nonempty zones.
+  Both region-oracle failures are resolved using that vanilla reference: all
+  3,823 points across 25 terrain fields and 4,847 block samples match. The earlier
+  reference had BigRegions Scale2 enabled. Generation code and expected values
+  were unchanged; the full owner-data suite passes. Snapshot-only characters
+  are reported as lacking attack recordings; supplied broken clips still fail.
   Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
   creature/item/transient lights and personal used-cell wiring, special shader
   controls, undefined

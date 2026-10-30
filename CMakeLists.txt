@@ -330,3 +330,5 @@ target_sources(engine PRIVATE src/SteamPointLights.cpp)
 target_sources(EngineTests PRIVATE tests/SteamPointLightsTests.cpp)
 
 target_sources(engine PRIVATE src/ExtractedLights.cpp)
+
+target_sources(EngineTests PRIVATE tests/SteamLightOracleTests.cpp)

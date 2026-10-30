@@ -1,4 +1,5 @@
 #include "Extracted.h"
+#include "DataCheck.h"
 #include "AlphaLook.h"
 #include <array>
 #include <algorithm>
@@ -169,6 +170,9 @@ int steamTerrainTests() {
           "auxiliary water flag is sticky independently of the live model list");
     const auto loaded = lightWorld.loadedLightZones();
     check(loaded.size() >= 9, "light binding includes loaded neighboring zones before they have their own meshes");
+    const auto lightReport = dataCheck::inspect(root, root, true);
+    check(lightReport.text().find("1/9 zones have auxiliary light snapshots") != std::string::npos,
+          "data check distinguishes refreshed light snapshots from older exports");
     writeLights(false, true, false);
     check(!lightWorld.lightSources(0, 0, solved), "duplicate auxiliary list is rejected");
     writeLights(false, false, true);

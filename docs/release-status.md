@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-10-29
+# Source review checkpoint — 2026-10-30
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -6,6 +6,15 @@ describe prototypes that have since been replaced; the current README and this
 checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
+
+- Isolated reference capture now runs automatically after game-session
+  initialization and refreshes cached light snapshots. The real-install run
+  captured both auxiliary lists in 1,590 zones; all 8 model and 9 static lights
+  match the engine reader, including mesh-time light samples. All3,823 terrain
+  reference points across 25 fields and 4,847 block samples match. The two region
+  failures came from the earlier BigRegions-modified reference. The full suite
+  passes, and original Save, Mods and ReShade were restored byte-for-byte.
+  These sampled comparisons do not establish full visual parity.
 
 - Pyro regional difficulty now uses the first entrant's level while a region has
   occupants. The host shares it in multiplayer; single player uses the same path.

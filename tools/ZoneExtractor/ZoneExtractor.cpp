@@ -6889,6 +6889,14 @@ static void tick(cube::Game *g) {
     cube::Creature *player = w->local_creature;
     if (session != w || sessionSeed != w->seed)
         startSession(w, player);
+    if (DeleteFileA("Extract\\scene-reference.request")) {
+        // The request runs on the normal game tick after session initialization,
+        // so a transient key pulse and an old on-disk saved set cannot skip it.
+        saved.clear();
+        genoracle::dump(g);
+        blockprobe::dump();
+        log("Scene reference capture queued (refreshing native zone/light snapshots)");
+    }
     writeSpriteTable(w);
     saveZones(w);
     calibration::install(w);

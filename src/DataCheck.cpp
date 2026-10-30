@@ -30,7 +30,9 @@ std::string examples(const std::vector<std::string> &items) {
     if (items.size() > 4) out += "; ...";
     return out;
 }
-bool placementFile(const fs::path &file, std::string &error) {
+bool placementFile(const fs::path &file, std::string &error, bool &nativeLights) {
+    nativeLights = false;
+    bool modelLights = false, objectLights = false;
     std::ifstream in(file, std::ios::binary | std::ios::ate);
     auto length = in ? in.tellg() : std::streampos(-1);
     if (length < 4 || length > 128 * 1024 * 1024) { error = "invalid placement file size"; return false; }
@@ -44,9 +46,19 @@ bool placementFile(const fs::path &file, std::string &error) {
         at += 12;
         uint64_t bytes = (uint64_t)header[1] * header[2];
         if (!header[1] || bytes > (uint64_t)(length - at)) { error = "truncated placement records"; return false; }
+        if (header[0] == 0x90 || header[0] == 0xc0) {
+            bool &seen = header[0] == 0x90 ? modelLights : objectLights;
+            const uint32_t stride = header[0] == 0x90 ? 0x40 : 0xe0;
+            if (seen || header[1] != stride) {
+                error = "duplicate or invalid native light list";
+                return false;
+            }
+            seen = true;
+        }
         at += (std::streamoff)bytes;
         in.seekg(at);
     }
+    nativeLights = modelLights && objectLights;
     return true;
 }
 }
@@ -126,6 +138,7 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
     add(fonts ? Status::Pass : Status::Error, "Original fonts", fonts ? "both font resources present" : "font resource missing or empty",
         fonts ? "" : "Repair the owner's Steam installation.");
 
+    size_t lightSnapshots = 0;
     r.world = wantedWorld.empty() ? ExtractedWorld::find(game) : wantedWorld;
     ExtractedWorld world; bool terrain = !r.world.empty() && world.open(r.world, why);
     if (terrain) {
@@ -145,8 +158,10 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
             if (nonempty(rec)) {
                 r.placements++;
                 if (deep) {
-                    if (!placementFile(rec, why)) badPlacements.push_back(utf8(rec.filename()) + " (" + why + ")");
+                    bool nativeLights = false;
+                    if (!placementFile(rec, why, nativeLights)) badPlacements.push_back(utf8(rec.filename()) + " (" + why + ")");
                     else {
+                        lightSnapshots += nativeLights;
                         for (const auto &p : world.propsAbsolute(x, y)) {
                             propsChecked++;
                             if (p.beam) continue; // generated primitive, not a missing owner voxel asset
@@ -165,6 +180,9 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
         add(props ? Status::Pass : Status::Warning, "Placement records", std::to_string(r.placements) + "/" + std::to_string(r.zones) +
             " zones have records" + (badPlacements.empty() ? "" : "; " + examples(badPlacements)), props ? "" : "Revisit those zones with ZoneExtractor to record their objects.");
         if (deep) {
+            add(lightSnapshots == r.zones ? Status::Pass : Status::Warning, "Native lights",
+                std::to_string(lightSnapshots) + "/" + std::to_string(r.zones) + " zones have auxiliary light snapshots",
+                lightSnapshots == r.zones ? "" : "Update the extractor, restart the original game and press F5 in affected zones.");
             r.estimatedObjectTypes.assign(estimates.begin(), estimates.end());
             add(missingModels.empty() ? Status::Pass : Status::Warning, "Placed sprites", std::to_string(propsChecked) +
                 " decoded placements; " + std::to_string(missingModels.size()) + " missing model files" +

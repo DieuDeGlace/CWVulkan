@@ -136,6 +136,7 @@ int steamVoxelTests();
 int steamTerrainTests();
 int steamShaderTests();
 int steamPointLightsTests();
+int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -840,8 +841,24 @@ static void nativeAttackPlayback() {
     Assets assets;
     if (assets.locate("")) {
         for (auto &entry : listCharacters(assets.gameDir())) {
+            std::error_code scanError;
+            bool hasClips = false;
+            for (const auto &file : fs::directory_iterator(entry.dir, scanError))
+                hasClips |= file.is_regular_file(scanError) && file.path().extension() == ".cwa";
+            CHECK(!scanError);
+            if (scanError)
+                continue;
+            if (!hasClips) {
+                std::printf("SKIP recorded attacks for %s: appearance snapshot only, no animation clips\n", entry.id.c_str());
+                continue;
+            }
             CharacterRecording actual;
-            CHECK(actual.load(entry.dir, error));
+            const bool loaded = actual.load(entry.dir, error);
+            CHECK(loaded);
+            if (!loaded) {
+                std::printf("Recorded character %s: %s\n", entry.id.c_str(), error.c_str());
+                continue; // Report the bad provided clip once, without cascading pose failures.
+            }
             auto moves = classMoves(entry.classType, entry.specialization);
             for (int id : moves.attack) {
                 CHECK(actual.abilityDuration(id) > 0);
@@ -9005,6 +9022,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 4 && std::string(argv[1]) == "steamlights")
+        return steamLightOracleTests(pathOfUtf8(argv[2]), pathOfUtf8(argv[3]));
     if (argc == 2 && std::string(argv[1]) == "steampoints")
         return steamPointLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamshader")

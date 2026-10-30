@@ -835,7 +835,7 @@ std::string ExtractionRun::instructions() const {
 
 bool isHeadlessCommand(const std::vector<std::wstring> &args) {
     for (const auto &a : args)
-        if (a == L"--setup-check" || a == L"--setup-extract" || a == L"--setup-restore")
+        if (a == L"--setup-check" || a == L"--setup-extract" || a == L"--setup-restore" || a == L"--setup-capture")
             return true;
     return false;
 }
@@ -857,13 +857,15 @@ std::string hex8(uint32_t v) {
 } // namespace
 
 int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, std::ostream &out) {
-    bool check = false, extract = false, dryRun = false, restoreRun = false;
+    bool check = false, extract = false, dryRun = false, restoreRun = false, capture = false;
     fs::path game;
     for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == L"--setup-check")
             check = true;
         else if (args[i] == L"--setup-extract")
             extract = true;
+        else if (args[i] == L"--setup-capture")
+            capture = true;
         else if (args[i] == L"--setup-restore")
             restoreRun = true;
         else if (args[i] == L"--dry-run")
@@ -871,7 +873,7 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
         else if (args[i] == L"--game" && i + 1 < args.size())
             game = args[++i];
         else {
-            out << "Unknown argument. Use --setup-check, --setup-extract [--dry-run] or --setup-restore, with --game PATH optional.\n";
+            out << "Unknown argument. Use --setup-check, --setup-extract, --setup-capture [--dry-run] or --setup-restore, with --game PATH optional.\n";
             return 2;
         }
     }
@@ -916,7 +918,7 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
     out << "\nExtracted data:\n" << data.text();
     if (check)
         return !steamOk ? 2 : data.readyToPlay() ? 0 : 1;
-    if (!extract)
+    if (!extract && !capture)
         return 0;
 
     // --setup-extract: what a run would do.
@@ -938,6 +940,27 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
         blockers.push_back("An earlier run must be put back first (--setup-restore).");
     if (host->gameRunning(game))
         blockers.push_back("Cube World is running; quit it first.");
+    if (capture) {
+        out << "\nIsolated reference capture" << (dryRun ? " (dry run)" : "") << ":\n"
+            << "  Back up Save and temporarily set aside Mods and ReShade.\n"
+            << "  Install only ZoneExtractor; existing Extract data stays in place.\n"
+            << "  Launch Cube World; the extractor captures once a world is available.\n"
+            << "  F5 and O remain available for manual refreshes. Quit afterward.\n"
+            << "  Run --setup-restore to restore Mods, ReShade and Save exactly.\n";
+        for (const auto &blocker : blockers)
+            out << "  Cannot run now: " << blocker << '\n';
+        if (dryRun || !blockers.empty())
+            return blockers.empty() ? 0 : 2;
+        PrepareOptions options;
+        options.extractorDll = dll;
+        options.requests = {"scene-reference.request"};
+        if (!prepare(game, options, *host, why)) {
+            out << why << '\n';
+            return 2;
+        }
+        out << "Capture prepared. Recovery journal: " << utf8(journalFile(game)) << '\n';
+        return 0;
+    }
     out << "\nExtraction run" << (dryRun ? " (dry run: nothing is changed)" : "") << ":\n";
     if (targets.empty()) {
         out << "  Nothing to extract.\n";

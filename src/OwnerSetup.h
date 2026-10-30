@@ -204,6 +204,7 @@ class ExtractionRun {
     RestoreResult restored_;
 };
 
+// --setup-capture prepares an isolated reference session even with complete data.
 // --- Headless use ----------------------------------------------------------------------------
 
 // `--setup-check [--game PATH]`: finds the game, checks its build, Steam and the licence, and

@@ -85,3 +85,41 @@ run. In particular, a BigRegions Scale2 region query is not a vanilla Scale1 ora
 Keep capture provenance separate instead of changing expected values to hide the
 difference. Native light-layout fixtures and synthetic GPU checks can be run with
 `EngineTests steampoints`, `EngineTests steamterrain` and `EngineTests steamshader`.
+
+
+## Isolated reference recapture
+
+`CubeVulkanSetup.exe --setup-capture --game "<Cube World folder>"` prepares a
+vanilla reference session even when the normal completeness check finds nothing
+missing. Add `--dry-run` to inspect the preparation without changing files.
+The command uses the same journaled Save backup and temporary Mods/ReShade
+isolation as the first-run wizard. Existing exports remain in place.
+
+Launch the game and choose Yes for the extractor-only mod session. The queued
+`scene-reference.request` runs on a normal game tick after session initialization:
+it writes terrain reference values and refreshes loaded zone/light snapshots,
+even when those zones were already exported. The title flyover is sufficient;
+loading a character and timed key presses are unnecessary. F5 and O remain
+available for manual refreshes. Allow the writer a few seconds to finish, close
+the game, then use `--setup-restore --game "<Cube World folder>"` to restore Save,
+Mods and ReShade. A pending journal is also detected after an interruption.
+
+Deep data checking reports how many zones contain both auxiliary light lists.
+A valid empty list counts as a captured list; an omitted list does not. Old
+exports remain readable, with a refresh warning rather than guessed lighting.
+
+The optional owner-data light oracle checks a list of fresh `.rec` filenames
+(one filename per line) against the engine reader and neighboring-zone light
+solve, including the native mesh-written model light samples:
+
+```
+EngineTests steamlights "<Extract/seed_N>" "<fresh-zone-filenames.txt>"
+```
+
+It fails on mismatches, missing neighborhoods or no nonempty light samples.
+Keep the file list and captured records local. The 2026-10-30 isolated run captured
+both auxiliary lists and cache metadata in 1,590 zones; all 8 model and 9 static
+light records in 15 nonempty zones matched. The same vanilla run resolved both
+region-oracle failures: all 3,823 sampled points across 25 terrain fields and 4,847
+block samples matched. The earlier region reference came from a BigRegions-modified
+session. No generator or expected-value changes were needed.

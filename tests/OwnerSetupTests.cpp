@@ -478,6 +478,8 @@ void extractionRun() {
 
 int ownerSetupTests() {
     failures = 0;
+    SETUP_CHECK(isHeadlessCommand({L"--setup-capture"}));
+    SETUP_CHECK(isHeadlessCommand({L"--setup-capture", L"--dry-run"}));
     std::printf("owner setup tests...\n");
     std::fflush(stdout);
     try {
