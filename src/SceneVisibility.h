@@ -20,6 +20,11 @@ struct Bounds {
 using Columns = std::function<std::optional<Column>(int64_t x, int64_t y)>;
 using BlockType = std::function<uint8_t(int64_t x, int64_t y, int64_t z)>;
 Bounds build(int32_t zx, int32_t zy, const Columns &, const BlockType &);
+struct Projection {
+    std::array<int64_t, 3> offset{};
+    glm::mat4 view{1}, perspective{1}; // native positive-Z, without Vulkan Y flip
+};
+struct Sphere { std::array<int64_t,3> centre{}; float radius = 0; };
 using Planes = std::array<glm::vec4, 6>;
 Planes planes(const glm::mat4 &clip);
 bool sphere(const std::array<int64_t, 3> &center, float radius, glm::vec3 eye, const Planes &, float range);

@@ -1,6 +1,9 @@
 #include "Hud.h"
 #include "DialogueChoices.h"
 #include "DialoguePanel.h"
+#include "NpcSpeech.h"
+#include <set>
+#include <algorithm>
 #include <cmath>
 
 float Hud::dialogueWordWidth(const std::wstring &word) const {
@@ -16,6 +19,49 @@ float Hud::dialogueWordWidth(const std::wstring &word) const {
     plasma::TextBox bounds;
     if (!plasma::textBounds(plasmaFonts[0], style, matrix, bounds)) return 0;
     return bounds.maximum.x - bounds.minimum.x;
+}
+
+void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t guiTime,
+                        std::vector<OverlayVertex> &out,
+                        const std::function<void(int64_t, const dialoguepanel::Layout &, glm::vec2)> &onDraw) const {
+    if (!guiLoaded) return;
+    if (!frontScene) frontScene = std::make_unique<plasma::Scene>(gui);
+    frontScene->setScale(guiScale);
+    const std::string prefix = "npc-speech-";
+    std::set<std::string> retained;
+    for (const auto &bubble : bubbles) retained.insert(prefix + std::to_string(bubble.speaker));
+    for (auto it = frontNodes.begin(); it != frontNodes.end();) {
+        if (!it->first.starts_with(prefix) || retained.count(it->first)) { ++it; continue; }
+        const auto nodes = it->second;
+        auto &children = frontScene->root().children;
+        std::erase_if(children, [&](const auto &node) { return std::find(nodes.begin(),nodes.end(),node.get()) != nodes.end(); });
+        it = frontNodes.erase(it);
+    }
+    for (const auto &bubble : bubbles) {
+        auto &nodes = frontNodes[prefix + std::to_string(bubble.speaker)];
+        if (nodes.empty()) {
+            auto *node = frontScene->instance("speech", &frontScene->root());
+            if (!node) continue;
+            if (node->widget) {
+                node->widget = plasma::reboundWidget(*node->widget);
+                node->widget->kind = "DialogWidget";
+            }
+            nodes.push_back(node);
+        }
+        auto &node = *nodes.front();
+        node.visible = bubble.visible;
+        if (!node.visible || !node.widget) continue;
+        // moveTo compensates the existing frame origin; offsets remain GUI units.
+        frontScene->moveTo(node, bubble.screenPoint + glm::vec2(-125,-170) * guiScale);
+        sceneNode(out, node, glm::vec4(1), frontScene.get());
+        if (bubble.page >= bubble.pages.size()) continue;
+        const auto frame = frontScene->contentSize(node);
+        const auto layout = dialoguepanel::layout(bubble.pages[bubble.page].words, bubble.elapsedMs, frame.x,
+            [this](const auto &word) { return dialogueWordWidth(word); });
+        const glm::vec2 at = frontScene->viewPosition(node) / guiScale;
+        drawDialogueWords(layout, at, guiTime, out);
+        if (onDraw) onDraw(bubble.speaker, layout, frame);
+    }
 }
 
 bool Hud::dialogueChoicesHit(glm::vec2 point) const {
@@ -78,6 +124,22 @@ dialoguepanel::Layout Hud::drawGeneralDialogue(const dialoguepanel::General &dia
     background.at = at;
     background.size = {320,180};
     drawScreen({background}, out);
+    drawDialogueWords(layout, at, guiTime, out);
+    if (const auto indicator = dialogue.indicator(); indicator != dialoguepanel::General::Hidden) {
+        const float nextWidth = templateSize("speech-next").x;
+        ScreenItem symbol;
+        symbol.kind = ScreenItem::Template;
+        symbol.name = indicator == dialoguepanel::General::Next ? "speech-next" : "speech-end";
+        symbol.instance = "dialogue-indicator-" + symbol.name;
+        symbol.at = at + glm::vec2((320 - nextWidth) / 2, 180 - 50);
+        if (indicator == dialoguepanel::General::Next) symbol.at.y += 5 * std::cos((float)guiTime * .01f);
+        drawScreen({symbol}, out); // retain the copied owner's primitive dimensions
+    }
+    return layout;
+}
+
+void Hud::drawDialogueWords(const dialoguepanel::Layout &layout, glm::vec2 at, int32_t guiTime,
+                            std::vector<OverlayVertex> &out) const {
     for (const auto &run : layout.runs) {
         ScreenItem label;
         label.at = at + run.at;
@@ -97,15 +159,4 @@ dialoguepanel::Layout Hud::drawGeneralDialogue(const dialoguepanel::General &dia
             pen += dialogueGlyphAdvance(glyph); // single-unit draws do not pair-kern
         }
     }
-    if (const auto indicator = dialogue.indicator(); indicator != dialoguepanel::General::Hidden) {
-        const float nextWidth = templateSize("speech-next").x;
-        ScreenItem symbol;
-        symbol.kind = ScreenItem::Template;
-        symbol.name = indicator == dialoguepanel::General::Next ? "speech-next" : "speech-end";
-        symbol.instance = "dialogue-indicator-" + symbol.name;
-        symbol.at = at + glm::vec2((320 - nextWidth) / 2, 180 - 50);
-        if (indicator == dialoguepanel::General::Next) symbol.at.y += 5 * std::cos((float)guiTime * .01f);
-        drawScreen({symbol}, out); // retain the copied owner's primitive dimensions
-    }
-    return layout;
 }

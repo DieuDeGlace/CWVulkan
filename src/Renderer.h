@@ -80,7 +80,7 @@ struct OverlayVertex {
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block
 // they are in.
-enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain };
+enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain, Emote };
 constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
 constexpr uint32_t STEAM_WORLD = 1u << 9; // ordinary world/water pass; excludes sky and menu art
 
@@ -119,6 +119,7 @@ struct DrawItem {
     std::shared_ptr<const scenevisibility::Bounds> nativeZone; // containing zone for native model/beam gates
     std::shared_ptr<const steampoints::ZoneSources> nativeLights;
     // Reflections reverse triangle winding (the native right foot uses one).
+    std::optional<scenevisibility::Sphere> nativeActor; // shared actor gate for overhead models
     bool mirrored() const {
         return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0;
     }
@@ -190,6 +191,7 @@ class Renderer {
                const std::vector<DrawItem> &opaque, const std::vector<DrawItem> &water);
     const std::string &deviceName() const { return gpuName; }
     unsigned drawsLastFrame() const { return lastDraws; }
+    const std::optional<scenevisibility::Projection> &speechProjection() const { return lastSpeechProjection; }
     // Death effects query the completed scene state before the next camera setup.
     bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
     // Saves the next presented frame as a PNG (for screenshots and tests).
@@ -248,6 +250,7 @@ class Renderer {
         scenevisibility::Planes planes{};
     };
     std::optional<SphereState> lastSceneSphere;
+    std::optional<scenevisibility::Projection> lastSpeechProjection;
     bool noGpu = false;
     uint32_t headlessIds = 0;
     VkInstance instance = VK_NULL_HANDLE;

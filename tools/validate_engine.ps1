@@ -1,0 +1,39 @@
+param(
+    [switch]$SkipGpu,
+    [string]$LogDirectory
+)
+
+$ErrorActionPreference = 'Stop'
+$sourceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$testProgram = Join-Path $sourceRoot 'build/EngineTests.exe'
+if (!(Test-Path -LiteralPath $testProgram -PathType Leaf)) {
+    throw 'Build EngineTests first with build.cmd --target EngineTests.'
+}
+if (!$LogDirectory) {
+    $LogDirectory = Join-Path $sourceRoot ('build/validation-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
+}
+$null = New-Item -ItemType Directory -Path $LogDirectory -Force
+$LogDirectory = (Resolve-Path -LiteralPath $LogDirectory).Path
+
+Push-Location $sourceRoot
+try {
+    $cpuLog = Join-Path $LogDirectory 'engine-tests.log'
+    & $testProgram *> $cpuLog
+    if ($LASTEXITCODE -ne 0) { throw "Engine tests failed; read $cpuLog" }
+    Write-Output "CPU/owner-data engine suite passed: $cpuLog"
+
+    if ($SkipGpu) {
+        Write-Output 'SKIP Vulkan image checks: requested with -SkipGpu.'
+    } else {
+        # steamvoxel is a CPU data test. steamshader creates the Vulkan device,
+        # renders captures and compares the resulting image pixels.
+        $gpuLog = Join-Path $LogDirectory 'vulkan-images.log'
+        & $testProgram steamshader *> $gpuLog
+        if ($LASTEXITCODE -ne 0) { throw "Vulkan image tests failed; read $gpuLog" }
+        $passed = @(Select-String -LiteralPath $gpuLog -Pattern '^Steam shader .* PASS$')
+        if (!$passed.Count) { throw "No Vulkan image results were produced; read $gpuLog" }
+        Write-Output "Vulkan image checks passed: $($passed.Count); $gpuLog"
+    }
+} finally {
+    Pop-Location
+}

@@ -30,6 +30,7 @@
 //   mark_location x y            the place is shown on the player's map
 // The exporter adds name=, item= and key= right after the command they belong to.
 #include "Speech.h"
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -96,6 +97,7 @@ struct TalkPlay {
         std::vector<dialoguewords::Word> words;
         std::vector<std::string> emotes;
         std::vector<Marked> marks;
+        std::vector<std::array<int32_t, 2>> loreCells; // credited when this page activates
     };
     std::vector<Page> pages; // Ordered logical pages, before choices are separated.
     std::vector<std::vector<Marked>> lineMarks; // Effects aligned with ordinary lines.

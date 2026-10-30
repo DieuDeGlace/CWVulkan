@@ -83,6 +83,8 @@ class SpawnedCreatures {
     steampoints::GroundSources groundLights(ExtractedWorld &ew, int zx, int zy);
     std::vector<steampoints::EffectSource> effectLights() const;
     void collectLights(const steampoints::Frame &, std::vector<steampoints::Light> &) const;
+    struct SpriteAsset { int model = -1; glm::ivec3 header{0}; };
+    std::optional<SpriteAsset> spriteAsset(World &, int catalogId);
     void addEffect(const cwnet::EffectRecord &effect);     // to the live effect objects
     // Whether creature `id` is in this world, the local player included.
     bool hasCreature(int64_t id) const { return (hasPlayer && id == localId) || record(id) != nullptr; }

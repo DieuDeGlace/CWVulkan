@@ -139,6 +139,7 @@ int steamPointLightsTests();
 int steamTransientLightsTests();
 int steamCreatureLightsTests();
 int dialogueChoicesTests();
+int npcSpeechTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
@@ -1659,6 +1660,15 @@ static void groundItemRules() {
         boat[0] = type::VEHICLE, boat[4] = 1;
         r = receive(keeper, boat, boat, 1, 0, at, region, 0, true);
         CHECK(r.holdUpAbility == 0x78 && r.dialog.back() == "new_page");
+        auto described = receive(keeper, boat, boat, 1, 0, at, region, 0, true, ReceiptRegion{13,-47});
+        CHECK(described.dialog.size() == 12 && described.dialog[8] == "define_land" && described.dialog[9] == "13" &&
+              described.dialog[10] == "-47" && described.dialog.back() == "description_hang_glider");
+        boat[4] = 17;
+        described = receive(keeper, boat, boat, 1, 0, at, region, 0, true, ReceiptRegion{2,91});
+        CHECK(described.dialog.back() == "description_crafting_book4");
+        boat[4] = 4;
+        described = receive(keeper, boat, boat, 1, 0, at, region, 0, true, ReceiptRegion{2,91});
+        CHECK(described.dialog.size() == 11 && described.dialog.back() == "91");
         boat[4] = 2;
         CHECK(receive(keeper, boat, boat, 1, 0, at, region, 0, true).holdUpAbility == 0);
         CHECK(receive(keeper, boat, boat, 1, 0, at, region, 2, true).holdUpAbility == 0x79);
@@ -9025,6 +9035,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "npcspeech")
+        return npcSpeechTests();
     if (argc == 2 && std::string(argv[1]) == "steamcreatures")
         return steamCreatureLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamtransients")
@@ -10312,6 +10324,7 @@ int main(int argc, char **argv) {
     failures += steamTransientLightsTests();
     failures += steamCreatureLightsTests();
     failures += dialogueChoicesTests();
+    failures += npcSpeechTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;

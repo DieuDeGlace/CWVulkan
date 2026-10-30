@@ -26,16 +26,25 @@ std::wstring prefix(const std::wstring &text, size_t count) {
     return out;
 }
 }
-int General::duration() const {
-    if (index >= content.size()) return 0;
+int duration(const std::vector<dialoguewords::Word> &words) {
     uint32_t count = 0;
-    for (const auto &word : content[index].words) count += (uint32_t)units(word.text) + 1;
+    for (const auto &word : words) count += (uint32_t)units(word.text) + 1;
     const uint32_t bits = count * 40;
     int32_t milliseconds;
     std::memcpy(&milliseconds, &bits, sizeof milliseconds);
     return milliseconds;
 }
-std::optional<int> General::update(float elapsedMs, bool primary, bool use) {
+int General::duration() const {
+    return index < content.size() ? dialoguepanel::duration(content[index].words) : 0;
+}
+std::vector<std::string> General::append(const TalkScript &script, const Speech &speech, std::mt19937 &random,
+                                          const TalkNames *names, std::optional<std::array<int32_t, 2>> loreCell) {
+    auto compiled = playScript(script, speech, random, names, content);
+    if (loreCell && !compiled.pages.empty()) compiled.pages.back().loreCells.push_back(*loreCell);
+    content = std::move(compiled.pages);
+    return std::move(compiled.unrendered);
+}
+std::optional<int> General::update(double elapsedMs, bool primary, bool use) {
     if (content.empty()) {
         index = 0;
         clock = displayed = 0;
@@ -43,7 +52,7 @@ std::optional<int> General::update(float elapsedMs, bool primary, bool use) {
         previousPrimary = previousUse = false;
         return {};
     }
-    clock += elapsedMs;
+    clock = (float)((double)clock + std::min(elapsedMs, 1000.0));
     if (!(clock > duration() + 100)) {
         previousPrimary = previousUse = false;
         return {};
@@ -63,20 +72,21 @@ General::Indicator General::indicator() const {
     if (content.empty() || !(clock > duration() + 100)) return Hidden;
     return index + 1 < content.size() ? Next : End;
 }
-Layout General::layout(const std::function<float(const std::wstring &)> &measure) const {
+Layout layout(const std::vector<dialoguewords::Word> &words, float elapsedMs, float frameWidth,
+              const std::function<float(const std::wstring &)> &measure) {
     Layout out;
-    if (index >= content.size() || !measure) return out;
-    const int budget = (int)(clock / 40.f);
+    if (!measure) return out;
+    const int budget = (int)(elapsedMs / 40.f);
     int cursor = 0, top = 0;
     bool suppressGap = true;
-    for (const auto &word : content[index].words) {
+    for (const auto &word : words) {
         if (word.text.empty()) continue;
         if (budget < out.revealed) break;
         const bool mark = punctuation(word.text);
         if (!suppressGap) cursor += mark ? 4 : 12;
         suppressGap = word.text == L"-" || word.text == L"'";
         const int advance = (int)measure(word.text) + (word.text == L"'" ? 4 : 0);
-        if (!mark && cursor + advance > 284) {
+        if (!mark && cursor + advance > frameWidth - 36) {
             cursor = 0;
             top = (int)((float)top + 12.f * 1.350000023841858f);
         }
@@ -89,8 +99,11 @@ Layout General::layout(const std::function<float(const std::wstring &)> &measure
     }
     return out;
 }
-std::optional<float> General::voice(const Layout &layout, std::optional<float> speakerWidth,
-                                   const std::function<int()> &random) {
+Layout General::layout(const std::function<float(const std::wstring &)> &measure) const {
+    return index < content.size() ? dialoguepanel::layout(content[index].words, clock, 320, measure) : Layout{};
+}
+std::optional<float> voice(float &displayed, const Layout &layout, std::optional<float> speakerWidth,
+                           const std::function<int()> &random) {
     std::optional<float> pitch;
     if ((int)displayed / 3 != layout.revealed / 3 && random) {
         float value = speakerWidth ? .9600000381469727f / *speakerWidth : 1;
@@ -100,5 +113,9 @@ std::optional<float> General::voice(const Layout &layout, std::optional<float> s
     }
     displayed = (float)layout.revealed;
     return pitch;
+}
+std::optional<float> General::voice(const Layout &layout, std::optional<float> speakerWidth,
+                                   const std::function<int()> &random) {
+    return dialoguepanel::voice(displayed, layout, speakerWidth, random);
 }
 } // namespace dialoguepanel

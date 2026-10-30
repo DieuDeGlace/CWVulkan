@@ -238,6 +238,18 @@ glm::vec2 Widget::innerSize() const {
     return glm::max(frameSize + innerBindSize - bindSize, glm::max(glm::vec2(0), minimumSize + innerBindSize - bindSize));
 }
 
+Widget reboundWidget(const Widget &source) {
+    Widget widget;
+    widget.bind = source.bind;
+    widget.inverseBind = source.inverseBind;
+    widget.bindPos = widget.framePos = source.framePos;
+    widget.bindSize = widget.frameSize = source.effectiveSize();
+    widget.innerBindPos = source.innerPosition();
+    widget.innerBindSize = source.innerSize();
+    widget.minimumSize = widget.bindSize - widget.innerBindSize;
+    return widget;
+}
+
 Widget widgetOf(const plx::Object &o) {
     Widget w;
     w.kind = o.kind;

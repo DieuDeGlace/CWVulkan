@@ -24,6 +24,7 @@
 
 namespace dialoguechoice { class Panel; }
 namespace dialoguepanel { class General; struct Layout; }
+namespace npcspeech { struct Bubble; }
 
 class Hud {
   public:
@@ -338,6 +339,8 @@ class Hud {
                              std::vector<OverlayVertex> &, std::vector<glm::vec2> *navigation = nullptr) const;
     bool dialogueChoicesHit(glm::vec2 point) const;
     bool generalDialogueHit(glm::vec2 point) const;
+    void drawNpcSpeech(const std::vector<npcspeech::Bubble> &, int32_t guiTime, std::vector<OverlayVertex> &,
+        const std::function<void(int64_t, const dialoguepanel::Layout &, glm::vec2 frame)> &onDraw = {}) const;
     dialoguepanel::Layout drawGeneralDialogue(const dialoguepanel::General &, glm::vec2 screen, int32_t guiTime,
                                                std::vector<OverlayVertex> &) const;
     void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation = nullptr) const;
@@ -366,6 +369,7 @@ class Hud {
     std::map<std::tuple<int, std::array<int, 8>, bool, wchar_t>, TextGlyph> textGlyphs;
     float dialogueWordWidth(const std::wstring &word) const;
     float dialogueGlyphAdvance(wchar_t glyph) const;
+    void drawDialogueWords(const dialoguepanel::Layout &, glm::vec2 at, int32_t guiTime, std::vector<OverlayVertex> &) const;
     int fontIndex(const std::string &name) const { return name == "resource2.dat" ? 1 : 0; }
     // What a frame changes of the nodes: a child's deformation replaced by `fills` (by child
     // name: the bars' x scale), and the string of every text shape under a node of a name

@@ -104,7 +104,7 @@ int moneyValue(const Item &item) {
 }
 
 Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int count, uint8_t flags, const int64_t position[3],
-                const int32_t region[2], uint32_t playerFlags, bool abilityFree) {
+                const int32_t region[2], uint32_t playerFlags, bool abilityFree, std::optional<ReceiptRegion> descriptionRegion) {
     Receipt r;
     // 3.1: an item that stays for others is taken once per character, by its block.
     if (flags & ground::STAYS_FOR_OTHERS) {
@@ -139,8 +139,30 @@ Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int
                     std::to_string(adapted[MATERIAL]),
                     std::to_string(adapted[RARITY]),
                     fine ? "you_received_the_item" : "you_received_an_item"};
-        if (t == type::VEHICLE)
-            r.dialog.push_back("new_page"); // then define_land and the vehicle's text (not specified)
+        if (t == type::VEHICLE) {
+            r.dialog.push_back("new_page");
+            if (descriptionRegion) {
+                r.dialog.insert(r.dialog.end(), {"define_land", std::to_string(descriptionRegion->biome),
+                                                std::to_string(descriptionRegion->seed)});
+                const int subtype = get<int32_t>(adapted.data(), SUBTYPE);
+                const char *description = nullptr;
+                switch (subtype) {
+                case 1: description = "description_hang_glider"; break;
+                case 2: description = "description_boat"; break;
+                case 3: description = "description_reins"; break;
+                case 5: description = "description_harp"; break;
+                case 7: description = "description_whistle"; break;
+                case 8: description = "description_bell"; break;
+                case 9: description = "description_treasure_spirit"; break;
+                case 14: description = "description_crafting_book1"; break;
+                case 15: description = "description_crafting_book2"; break;
+                case 16: description = "description_crafting_book3"; break;
+                case 17: description = "description_crafting_book4"; break;
+                case 18: description = "description_climbing_spikes"; break;
+                }
+                if (description) r.dialog.emplace_back(description);
+            }
+        }
         if (abilityFree) {
             const int32_t subtype = get<int32_t>(adapted.data(), SUBTYPE);
             if (t == type::VEHICLE && subtype == 1)

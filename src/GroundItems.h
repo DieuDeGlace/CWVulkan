@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -104,8 +105,9 @@ struct Receipt {
 // adaptation (0x10a720), `count` and `flags` the notice's, `position` its position (1/65536
 // block), `region` the player's current region, `playerFlags` its +0x5c, `abilityFree` whether its
 // ability is 0 or over.
+struct ReceiptRegion { int biome = 0; int32_t seed = 0; };
 Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int count, uint8_t flags, const int64_t position[3],
-                const int32_t region[2], uint32_t playerFlags, bool abilityFree);
+                const int32_t region[2], uint32_t playerFlags, bool abilityFree, std::optional<ReceiptRegion> descriptionRegion = {});
 
 // --- Items given without a ground item (§5) ---------------------------------------------------
 

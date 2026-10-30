@@ -236,8 +236,11 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
             continue;
         }
         if (token[0] == '!') {
-            if (play.pages.empty() || !play.pages.back().text.empty())
+            if (play.pages.empty() || !play.pages.back().words.empty())
                 play.pages.emplace_back();
+            dialoguewords::Builder literal;
+            literal.fragment(dialoguewords::wide(token), {});
+            play.pages.back().words = std::move(literal.pages.front());
             play.pages.back().emotes.push_back(token);
             pendingBreak = true;
             continue;

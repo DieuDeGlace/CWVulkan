@@ -120,6 +120,8 @@ struct Widget {
     glm::vec2 innerSize() const;
 };
 Widget widgetOf(const plx::Object &w);
+// New widget baseline from an existing live frame, without its behavior flags/alignment.
+Widget reboundWidget(const Widget &);
 
 // ---------------------------------------------------------------------------------------------
 // The tree.

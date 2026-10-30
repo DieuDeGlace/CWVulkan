@@ -1906,6 +1906,13 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
     worldEvents.calls.insert(worldEvents.calls.end(), w.calls.begin(), w.calls.end());
 }
 
+std::optional<SpawnedCreatures::SpriteAsset> SpawnedCreatures::spriteAsset(World &world, int catalogId) {
+    const float white[4] = {1,1,1,1};
+    const int model = worldModel(world, catalogId, white, false);
+    if (model < 0 || !world.modelMesh(model)) return {};
+    return SpriteAsset{model, glm::ivec3(world.modelSize(model))};
+}
+
 int SpawnedCreatures::worldModel(World &world, int id, const float *tint, bool hair) {
     if (id < 0 || (size_t)id >= sprites.size() || sprites[id].name.empty())
         return -1;

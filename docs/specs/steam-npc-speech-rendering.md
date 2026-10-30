@@ -312,11 +312,223 @@ drawn. There is no extra text-bubble distance fade, no individual emote
 screen-edge clamp, and no separate terrain-occlusion query in its actor
 admission branch; geometry depth testing handles occlusion after drawing.
 
-The exact GPU depth-state setup of the **generic GUI speech-template
-pass** has not been separately traced in this audit. The verified text
-placement has no terrain-depth test and uses the standard GUI subtree;
-the explicit opaque world depth state above applies to the emote model,
+The **generic GUI speech-template pass** depth state is now verified in
+§11 below. The opaque world depth state above applies to the emote model,
 not to that GUI template. Exact dimensions/decorations of the shipped
 speech template have not been measured here: they are owner GUI data,
 retained by the clone, not supplied numerically by the native attachment
 or placement functions. No original-game oracle was run for this work.
+
+## 8. Consecutive emote tokens and independent timer lifetime
+
+Compiler **0x1694e0 at0x16a501–0x16a5a7** recognizes a nonempty input
+token whose **first byte is `!`**. It does not parse it into a dedicated
+emote-command record. It converts the complete token to a wide string
+and appends it through **0x16c880** as ordinary stored word data, with
+**RGBA(1,1,1,1), shake0**. The leading exclamation mark remains part of
+that word. This append helper splits whitespace, not punctuation, so
+`!alert` remains one word rather than `!` followed by `alert`.
+
+Before appending, the compiler creates a fresh blank page when the
+destination page vector is empty **or the last page's word count is
+nonzero**. Otherwise it reuses the last empty-word page, preserving its
+existing page metadata. After appending the token it sets the pending
+new-page state for the next ordinary phrase. A later `!` token makes its
+own page by that same nonempty-last-page test; it does not join the
+previous command page. Thus ordinary separated tokens
+**`!alert !question` produce two successive pages, each containing its
+one complete literal word**. They are neither two actions attached to a
+single page nor a combined first word. Following normal speech starts
+another page because of the pending new-page state. Existing page/word
+append behavior is retained; this path does not clear a widget's pages.
+
+The updater recognizes the exact first stored word of the current page
+as already specified in remaining-runtime-gaps §5.7. Tokens concatenated
+without a tokenizer boundary, for example `!alert!question`, are not
+silently split into two emotes by this compiler branch. The first-byte
+test accepts such a token as literal stored data; the later exact-word
+recognizer is a separate decision.
+
+**“Live creatures” in the earlier timing prose means retained world
+entries, not HP>0.** The timer loop in **0xb40d0 at0xb5734–0xb57b1**
+walks the creature linked list **World+0x40**, directly taking each node's
+creature pointer. For every entry with nonnull **+0xc50**, it performs
+the initial age-zero sound, increments age and clears pointer/age after
+the strict2000-ms threshold as specified in §5.7. It has **no HP test,
+speaker-ID resolution, bubble existence, bubble visibility or renderer
+admission requirement**. A dead retained creature's timer therefore
+still advances even though §7's3D emote renderer rejects its HP.
+
+This state belongs to the creature, independently of the speech widget.
+Removing an exhausted final-page bubble does not clear its emote. A
+speaker missing from the ID map is not a reason for this world-list loop
+to stop another retained entry's clock; conversely a creature absent
+from this world list is not visited by this loop. The loop assumes valid
+list-entry pointers and does not manufacture a missing speaker or keep
+a separate timer alive after the creature itself is removed.
+
+### 8.1 Exact clock precision and missing-speaker behavior
+
+The elapsed argument supplied to0xb40d0 is the frame's **capped double
+milliseconds**, retaining the fractional part, from the producer in
+steam-scene-lighting §5. It is not first converted to float32 for these
+updates.
+
+The integer emote clock update at **0xb5786–0xb579b** converts the stored
+**signed32 age to double**, adds elapsed in **double**, then truncates
+the double sum toward zero to **signed32** and stores it. There is no
+float32 addition and no separate fractional carry. Ordinary nonnegative
+ages consequently discard each update's remaining fractional millisecond.
+The sound guard is literally age zero, without a separate once-only bit;
+if the completed integer age remains zero, a later update can visit that
+same sound guard again.
+
+The final retained-bubble clock loop at **0xb618d–0xb61a1** resolves the
+speaker through0xe720. When the speaker is missing **or its active model
+pointer+0xc50 is null**, convert the stored float32 clock to double, add
+the elapsed double, then narrow the completed sum to float32. The elapsed
+value is **not rounded to float first**. If a speaker resolves with a
+nonnull active model, set the stored float clock to zero instead. A
+missing speaker therefore permits this final clock increment, although
+the earlier anchor/projection branch has no missing-speaker fallback
+(§3). Missing speaker and HP≤0 are different cases.
+
+This final clock pass follows the world-list emote timer update. If that
+earlier update clears a model for age>2000, the same frame's final bubble
+pass sees it cleared and can increment the clock. General-dialogue clock
+addition at **0xb5f1d–0xb5f31** uses the same float-to-double, double-add,
+double-to-float order. Page activation/advancement order otherwise remains
+the existing §5.7 contract.
+
+## 9. Exact width source and construction changes
+
+The shared word renderer **0x2904b0** obtains wrap width through
+**0x32a1d0**, which returns the X component of **0x32a110**, the speech
+widget's **current effective local frame size**. It does not measure the
+background's glyphs/shape ink bounds, project its frame to screen pixels,
+use the viewport width or use the placement offset125 as half a width.
+With the constructor's font12, the comparison is the existing strict
+**current effective width minus36** versus current integer word-cursor
+position plus full measured word width. It is queried during word draw,
+so a genuine widget-frame change changes wrapping.
+
+For clarity, 0x32a110's width uses widget floats **inner bind width+0x70,
+bind width+0x80, frame width+0x90 and minimum width+0x98**. First form
+minimum width plus inner bind width minus bind width, clamped upward
+to zero. Form frame width plus inner bind width minus bind width and
+raise it to at least that first result. Add bind width to the result,
+then subtract inner bind width. Every addition/subtraction is float32
+in that order. This is the existing nine-slice effective-size rule in
+plasma-format-and-scene §2.7.2; it is **not** a transformed screen AABB.
+
+Attachment0xa3170 clones the speech template. Base widget construction
+**0x328ff0 /0x334410** then replaces any template widget on the copied
+root with the new speech widget. Its binding helper **0x329c70** preserves
+the template widget's **current frame position and size**, its current
+inner-rectangle position/raw size, and its binding matrix as the new
+baseline. Its new frame size is the old current frame size; it is not
+reset to an arbitrary numeric250/300/320 width. The minimum size is
+initialized to the new bind size minus the new inner bind size.
+
+The new widget's own flags and horizontal/vertical alignment start at
+**zero**, from0x328ff0; the geometry-transfer helper does not copy the
+old widget's flags/alignment. The copied primitive tree retains its
+template geometry/appearance. Calls **0x335830 /0x3356d0** in the text
+constructor make shared transform/display objects unique when needed;
+they do not set fit-to-content, distance-scale or always-on-top flags.
+The ordinary attachment and per-frame bubble placement do **not** call
+the numeric frame-size setter or resize-to-text. Thus reading the copied
+speech frame through the native effective-size rule is the correct
+adapter; using a general-dialogue panel width is not equivalent.
+If a supplied template root has no old widget, the geometry-transfer
+branch is skipped; this path supplies no special numeric speech-size
+fallback in its place.
+
+## 10. Matrix point transform and handedness for bubble projection
+
+**0x2b680** accepts a float32 XYZ point, implicitly W=1, and16 float32
+matrix entries stored **column-major**. Number those entries0 through15.
+It forms four raw components with the following precise accumulation
+orders, with float32 rounding after each product and addition:
+
+- Raw X: **Y times entry4**, plus **X times entry0**, then **Z times
+  entry8**, then entry12.
+- Raw Y: **X times entry1**, plus **Y times entry5**, then **Z times
+  entry9**, then entry13.
+- Raw Z: **X times entry2**, plus **Y times entry6**, then **Z times
+  entry10**, then entry14.
+- Raw W: **X times entry3**, plus **Y times entry7**, then **Z times
+  entry11**, then entry15.
+
+It calculates **one float32 reciprocal1/raw W**, then multiplies each
+raw XYZ by that same reciprocal, rounding each result to float32. This
+is not three direct coordinate/W divisions or a reciprocal approximation.
+There is no W-zero check, epsilon, clip test or identity-W shortcut in
+this helper. The ordinary view matrix is affine and gives W=1; applying
+the projection next gives clip W equal to the incoming view Z.
+
+The cached native camera matrices are the same positive-forward-Z
+camera already specified in steam-scene-lighting §1 and
+steam-world-shader-output §1.1. With **the same eye, target, rolled up
+vector and render-origin convention**, a conventional right-handed
+look-at result converts to native view coordinates by **negating X and
+Z, retaining Y**. Thus the bubble's strictly-positive native view-Z
+test corresponds to **strictly-negative RH view Z**, not positive RH Z.
+Only after that view test does the updater call the same point helper
+with the cached projection.
+
+Native perspective has **negative width/height aspect**, positive Y
+scale, zero-to-one depth and W=view Z. It has **no Vulkan-style Y flip**.
+Its negative projection-X scale cancels the view-X reversal relative to
+the matching conventional RH positive-aspect projection; do not add an
+extra screen-X reflection. Use the screen-Y inversion already specified
+in §3, and preserve the cached-matrix scheduling there. A view matrix
+already using the origin-adjusted eye must not have that origin applied
+again. These conditional basis equivalences do not establish equivalence
+for an engine camera with different roll, eye, target or origin inputs.
+
+The timing separation is deliberate: bubble projection uses the matrices
+cached before the current scene render, whereas **actor/emote admission
+uses the current scene's +0x4a0** and its current frustum during0xd3170.
+The scene has already updated adaptive/derived ranges before calling that
+actor pass. Do not make actor admission use a previous bubble matrix/range
+snapshot merely to preserve the text projection's cache schedule.
+
+## 11. Generic speech GUI GPU depth state, resolved
+
+Ordinary speech text and template geometry use the **GUI renderer**,
+after the ordinary world/3D-overlay queues. At the end of0xe2e00, the
+world renderer's slot0x10 dispatches **0xc4af0**, which calls GUI traversal
+**0x33e170**. This is separate from the emote's voxel draw described in §6.
+
+The D3D GUI renderer constructs its depth-stencil state in **0x38fb90**,
+from the descriptor constants at **0x480520**. The descriptor is:
+**DepthEnable=false, DepthWriteMask=ALL(1), DepthFunc=LESS_EQUAL(4),
+StencilEnable=false**. The write-mask and comparison values are latent:
+with depth disabled this pass neither rejects against world depth nor
+updates the depth buffer. In particular, the retained ALL mask is not
+evidence of an actual depth write while this state is bound.
+
+Setup **0x38e800** explicitly binds that state from GUI renderer+0x388,
+with stencil reference0. This setup is reached through GUI vtable slot
+**0x80**. Generic shape drawing **0x3913d0** calls it before its draw;
+font/word draw preparation **0x269210** goes through GUI slot0x88,
+**0x38ec30**, which calls the same slot0x80 setup. Thus the disabled
+depth test applies to both ordinary bubble background geometry and its
+words; it is not simply inherited from a previous world's draw state.
+
+The same GUI setup binds its ordinary alpha-blend state: source-alpha
+and one-minus-source-alpha for RGB, source-one and
+one-minus-source-alpha for alpha, additive operations and RGBA writes.
+It binds the raster state made from **0x480500/0x480510**: solid fill,
+no face culling, **depth clipping enabled**, scissor disabled, multisample
+rasterization enabled and antialiased lines disabled. GUI clipping/masks
+remain the normal GUI appearance path; disabled depth testing does not
+mean all clipping is disabled.
+
+Consequently terrain and actors do **not occlude the ordinary GUI speech
+bubble through their depth buffer**. Its own visibility is still governed
+by §3's view-Z/projection/emote decisions and the GUI tree's visibility
+and clipping. The neighboring3D emote retains its ordinary world
+LESS_EQUAL depth test and can be occluded. No world-depth readback,
+depth compare or special bubble-specific shader was found in this path.

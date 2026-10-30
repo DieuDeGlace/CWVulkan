@@ -1,6 +1,6 @@
 # Engine readiness checklist
 
-Audited against the source and tests on 2026-10-28. The checkboxes in the first
+Audited against the source and tests on 2026-10-30. The checkboxes in the first
 section mean implemented and exercised in the stated checks; they do not certify
 complete Steam or pixel parity. Older progress notes are in Git history and the
 individual feature documents.
@@ -57,14 +57,14 @@ individual feature documents.
   B-after-menu jump latch. FrontendTests cover thresholds and the context gates.
 - [x] Dialogue page grouping and per-page mission marks. DialoguePageTests cover
   deferred breaks, dictionary breaks, percentages, choice separation and emotes.
-  NPC bubble/emote playback remains below.
+  Native playback and owner-template checks are described below.
 - [x] String-script answer selection, native inn/specialization actions and saved
   specialization changes. Labels retain dictionary word colors and native glue;
   owner widget/font tests cover row picking, sizing and controller points. The
   general feedback panel follows native reveal, release, voice and indicator rules.
   Answer-visible action gates preserve movement, jump and earlier ultimate input;
   focused DialogueChoicesTests cover the distinction. Broader live visual comparisons
-  and NPC bubble/emote playback remain open.
+  remain open.
 - [x] Authoritative day rollover, loaded-zone refresh and daily character data
   reset. Ground/block lists remain loaded; elapsed respawn timers survive resets.
   Synthetic and generated-world tests cover the clock boundary and timer behavior;
@@ -144,11 +144,18 @@ individual feature documents.
   implemented from the independent spec, including answer rows. Identification points, interactive-map
   shoulder routing and hardware comparisons remain. Region-distance ties beyond
   32 choices still need an exact specification.
-- [ ] NPC bubble/emote playback, numeric-script item actions and complete recipe
-  sources. String-script answers and general feedback are integrated above; string
-  scripts have no give/take tokens. Only numeric item-receipt feedback has a verified
-  producer so far. Native NPC speech/emote timing is independently specified and
-  still needs integration.
+- [x] NPC bubbles and emotes: per-speaker retained pages, native timeout/repeat-Use
+  behavior, fixed-point smoothing/cached projection, owner speech frames and all five
+  owner emote models. Emotes use the actor's culling sphere and ordinary world depth.
+  Lore/receipt scripts append to the general panel; lore credit occurs on final-page
+  activation with the distinct general/speaker sound gates. Region-bound special
+  item descriptions and hold-up admission use the verified receipt rules. Full
+  CPU/owner-data tests and 33 actual Vulkan image cases pass; a hidden no-save live
+  frame confirms the speech template and colored prefixes. These are bounded checks.
+- [ ] Complete saved/default recipe-source integration and remaining page-item action
+  inputs. The independent dialogue/item source audit is now complete. String scripts
+  have no give/take commands; numeric8/9/10 have no verified award producer. Their
+  decoder capability does not justify creating synthetic gameplay grants.
 - [ ] Network feat production/payload meaning. Its display consumer is traced;
   the [producer audit](specs/steam-feat-production-audit.md) found no verified award
   source. Generating awards remains unspecified. Guest mission marks are client-local,

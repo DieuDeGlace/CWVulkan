@@ -66,6 +66,10 @@ Last</speech>
     if (emote.pages.size() == 3)
         check(emote.pages[1].text.empty() && emote.pages[1].emotes.size() == 1 && emote.pages[1].marks.size() == 1,
               "empty emote page owns its metadata");
+    auto consecutive = play({"!alert", "!question", "short"});
+    check(consecutive.pages.size() == 3 && consecutive.pages[0].words.size() == 1 &&
+          consecutive.pages[0].words[0].text == L"!alert" && consecutive.pages[1].words.size() == 1 &&
+          consecutive.pages[1].words[0].text == L"!question", "each literal emote token owns a separate word page");
     auto choice = play({"short", "answer?", "pages", "mark_location", "7", "8"});
     check(choice.choices.size() == 1 && choice.choiceIds[0] == "answer?", "choice page is separate");
     check(!choice.lineMarks.empty() && choice.lineMarks.back().size() == 1, "dictionary split owns following mark");

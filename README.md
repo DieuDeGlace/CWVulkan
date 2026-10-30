@@ -114,7 +114,12 @@ are evidence for the tested cases, not complete gameplay or pixel parity.
 On Windows with a Vulkan driver, `build\EngineTests.exe steamshader` additionally
 checks lit/Glow/White color references and full-fog interpolation with synthetic
 geometry, native point-light limits and storage-buffer offsets. It needs no game
-assets and is separate from the default CPU suite.
+assets and is separate from the default CPU suite. Run
+`powershell -File tools/validate_engine.ps1` for both suites, or add `-SkipGpu`
+when Vulkan is unavailable. The script prints the checks actually executed.
+For local UI inspection, `--play --hidden --no-save --talk 0 --run-seconds 7
+--capture-speech speech.png` captures the first visible NPC text prefix; it does
+not wait until the conversation expires during terrain loading.
 
 The [current checklist](docs/roadmap.md) tracks remaining work. In particular:
 

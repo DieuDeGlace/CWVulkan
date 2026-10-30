@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- NPC speech/emotes now use owner templates and models, with per-speaker playback,
+  repeat-Use advancement, exact capped clocks, cached projection and native emote
+  pose/depth/culling rules. Lore and receipt scripts append to the general panel;
+  final-page lore activation preserves its distinct sound rule. Category24 item
+  descriptions receive the item's region context and verified description phrase.
+  The full CPU/owner-data suite, 33 actual Vulkan image checks and a hidden no-save
+  live speech capture pass. `tools/validate_engine.ps1` runs the full suite followed
+  by actual `steamshader` rendering; `steamvoxel` is a CPU data test. These checks
+  do not establish complete native visual parity. Recipe persistence and the other
+  implementation/system checks below still need work.
+
 - Live lighting now reads personal used-cell state, kind3/4 projectiles and
   glowing ground items from gameplay. It preserves native ownership, timer,
   quantity, coordinate conversion and fade rules. Model and terrain light ranges
@@ -67,7 +78,7 @@ checkpoint describe the intended setup and remaining limits.
   specialization changes and the general feedback panel are now integrated, with
   native word colors, row picking, navigation points and distinct UI action gates.
   Focused tests include the owner's fonts/templates at unit and 1.5 GUI scale.
-  Broader GUI controller coverage, NPC bubble/emote playback and the other roadmap
+  Broader GUI controller coverage and the other roadmap
   gaps remain open. The subsequent equipped-pet update pass
   also builds and passes the full suite, with focused creation, naming, health,
   inheritance, authority, travel and detachment regressions.
@@ -120,7 +131,7 @@ checkpoint. Captures are private and excluded from the source archive.
 - Frontend: exact panel opacity and logo shading require further independent evidence.
 - Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
   integrated pet combat/appearance comparisons, controller GUI/aim tracking,
-  NPC bubble/emote playback and numeric item actions,
+  saved/default recipe integration and verified page-item inputs,
   and network feat production. See the [audited roadmap](roadmap.md). Recorded
   comparisons do not prove complete gameplay parity.
 - Human/system checks: two Steam accounts and an original-game peer, a real first-run

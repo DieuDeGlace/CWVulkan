@@ -12,6 +12,7 @@
 #include "Speech.h"
 #include "DialogueChoices.h"
 #include "DialoguePanel.h"
+#include "NpcSpeech.h"
 #include "SteamTransientLights.h"
 #include "Multiplayer.h"
 #include "Creatures.h"
@@ -154,6 +155,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // Command line (mostly for screenshots and testing):
     //   --pos X Y  --z Z  --hour H  --yaw R  --pitch R  --zoom Z  --capture FILE.png
     std::string capture;
+    std::string captureSpeech; // --capture-speech FILE: first visible eight-unit NPC prefix (testing)
+    bool speechCaptured = false;
     std::string captureDeath; // --capture-death PREFIX: frames 0.3 s and 1.2 s after the first death burst (testing)
     bool forceMenu = returningToMenu, directPlay = false;
     std::vector<std::pair<std::string, std::string>> settingOverrides; // --set Section.Key=Value (after CubeVulkan.ini)
@@ -244,6 +247,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             next(startZoom);
         else if (a == "--capture" && i + 1 < argc)
             capture = argv[++i];
+        else if (a == "--capture-speech" && i + 1 < argc)
+            captureSpeech = argv[++i];
         else if (a == "--capture-death" && i + 1 < argc)
             captureDeath = argv[++i];
         else if (a == "--showcase" && i + 1 < argc)
@@ -432,7 +437,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // copies the game's two files in (read only) when CubeVulkan has none yet. The owner's real
     // saves are never written.
     nativeprogress::ProgressFile saves;
-    const bool savesWritable = !noSave && capture.empty() && benchmark <= 0 && !listOnly;
+    const bool savesWritable = !noSave && capture.empty() && captureSpeech.empty() && benchmark <= 0 && !listOnly;
     saves.open(saveFolder.empty() ? root / "Save" : pathOfUtf8(saveFolder), assets.gameDir() / "Save", pathOfUtf8(bootstrap.text("Saves", "ImportFrom")), savesWritable,
                [](const std::string &line) { logLine(line); });
     nativeprogress::SpriteTable sprites; // (the game's model list, for the looks of saved characters)
@@ -487,7 +492,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     };
     // Captures, benchmarks and the dedicated server keep a window of the INI's size: a test run
     // does not take the owner's screen.
-    const bool testRun = !capture.empty() || benchmark > 0 || runSeconds > 0 || serverMode || hiddenWindow;
+    const bool testRun = !capture.empty() || !captureSpeech.empty() || benchmark > 0 || runSeconds > 0 || serverMode || hiddenWindow;
 
     if (!glfwInit()) {
         fatal("Cannot initialise the window system.");
@@ -710,7 +715,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     audio.setMusicLoop(gameOptions.musicLoop != 0);
     if (logSounds || config.flag("Audio", "LogSounds", false))
         audio.setLog([](const std::string &line) { logLine(line); });
-    if (!capture.empty() || serverMode || !audio.init(assets))
+    if (!capture.empty() || !captureSpeech.empty() || serverMode || !audio.init(assets))
         logLine("Audio disabled");
     else if (!audio.soundsKnown())
         logLine("Audio: no sound list (Extract/sounds.txt, written by tools/ZoneExtractor in the game); only music plays");
@@ -764,7 +769,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
     // The front screens (Frontend.h): the title over the running world, character select and
     // creation, the options.
-    const bool launchMenu = forceMenu || (!directPlay && capture.empty() && benchmark <= 0 &&
+    const bool launchMenu = forceMenu || (!directPlay && capture.empty() && captureSpeech.empty() && benchmark <= 0 &&
         std::isnan(startX) && runSeconds <= 0 && poseAbility <= 0 && !autoAttack && !openInventory && showcase.empty());
     frontend::Services front;
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
@@ -2203,18 +2208,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         std::vector<std::string> lines;
         size_t line = 0;
         double shown = 0;
-        // A lore object's tale (Lore.h) is told from the object, not by a person. When its last
-        // page is shown, its lore cells count as read and the places it marks are marked.
-        bool fromObject = false;
-        glm::vec3 objectAt{0};
-        std::vector<lore::Cell> loreCells;
         std::vector<std::vector<TalkPlay::Marked>> pageMarks;
         size_t effectsPage = SIZE_MAX;
-        bool lastPageDone = false;
     };
     std::optional<Talk> talk;
     dialoguechoice::Panel answers;
     dialoguepanel::General generalDialogue;
+    npcspeech::Playback npcSpeech;
+    std::optional<Speaker> lastTalkedSpeaker;
     size_t talkedTo = SIZE_MAX; // --talk: who was talked to
     std::mt19937 chatter(std::random_device{}());
     auto personOf = [&](const Speaker &s) {
@@ -2307,8 +2308,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         out = *exported;
         return true;
     };
-    // Where the one talking stands: the person, or the examined object.
-    auto talkerAt = [&](const Talk &t) { return t.fromObject ? t.objectAt : speakerAt(t.npc); };
+    // Recorded actors retain their preview UI; native actors use npcSpeech.
+    auto talkerAt = [&](const Talk &t) { return speakerAt(t.npc); };
     // A realm's name ("realmname"), when the dictionary can say it; empty otherwise.
     auto realmName = [&](uint32_t realm) {
         TalkScript script;
@@ -2319,7 +2320,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     };
     // A lore cell read (Lore.h, spec 4.1): a used cell, and a piece of its realm's lore told in
     // the realm's colours with the quest sound.
-    auto creditLore = [&](lore::Cell cell) {
+    auto creditLore = [&](lore::Cell cell, bool speakerSound) {
         const lore::Credit credit = lore::credit(cell, usedCells, loreBook);
         if (credit.newlyUsed)
             saveGame.usedCells.push_back(cell);
@@ -2330,7 +2331,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // (spec: open question: the game adds a chat line, the realm's name in (1, 0.8, 0.5) and
         // the rest in (0.6, 1, 1); CubeVulkan has no chat, so it rises over the player.)
         texts.push_back({player.position + glm::vec3(0, 0, 3.4f), line, glm::u8vec4(153, 255, 255, 255), 0, true});
-        audio.playInterface(soundrules::soundid::QUEST_PROGRESS);
+        if (speakerSound) audio.playInterface(soundrules::soundid::QUEST_PROGRESS);
         logLine("Lore: cell " + std::to_string(cell[0]) + " " + std::to_string(cell[1]) + " of realm " + std::to_string(credit.realm) +
                 ", now " + std::to_string(lore::percent(credit.pieces)) + "%");
     };
@@ -2348,69 +2349,41 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         logLine("Marked on the map: " + m.place + (m.item.empty() ? "" : " (" + m.item + ")") + ", cell " + std::to_string(m.x) + "," +
                 std::to_string(m.y));
     };
-    // Page activation credits final-page lore first, then this page's mission marks.
+    // Recorded-actor preview page activation; native effects use the page consumers below.
     auto pageShown = [&]() {
         if (!talk || talk->effectsPage == talk->line)
             return;
         talk->effectsPage = talk->line;
-        if (!talk->lastPageDone && talk->line + 1 == talk->lines.size()) {
-            talk->lastPageDone = true;
-            for (const lore::Cell &cell : talk->loreCells)
-                creditLore(cell);
-        }
         if (talk->line < talk->pageMarks.size())
             for (const TalkPlay::Marked &m : talk->pageMarks[talk->line])
                 markPlace(m);
     };
-    // A lore object's tale, played as a talk with no speaker's name (spec 2.3), its wording
-    // chosen by the cell's own seed so it reads the same each time.
+    // Lore and receipt scripts append to the general panel, retaining its clock and speaker.
+    // The lore cell belongs to the final compiled page (steam-dialogue-item-actions 1.1).
     auto startTale = [&](const Examined &examined) {
-        if (examined.reading.tale.empty())
-            return;
+        if (examined.reading.tale.empty()) return;
         const lore::Cell cell = examined.reading.cell;
         TalkScript script;
         script.tokens = examined.reading.tale;
         std::mt19937 seeded(worldgen::random((uint32_t)cell[0] + 57u * (uint32_t)cell[1]));
-        const TalkPlay play = playScript(script, speech, seeded, &talkNames);
-        for (const std::string &what : play.unrendered)
+        for (const auto &what : generalDialogue.append(script, speech, seeded, &talkNames, cell))
             logLine("Lore tale: cannot say this in full yet: " + what);
-        if (play.lines.empty())
-            return;
-        Talk t;
-        t.fromObject = true;
-        t.objectAt = examined.at;
-        t.lines = play.lines;
-        t.loreCells = {cell};
-        t.pageMarks = play.lineMarks;
-        talk = t;
-        pageShown();
     };
-    // A text in the dialog window (an examined thing, a chest's gift): a script played with the
-    // seed given and no speaker's name, told from `at`.
-    auto showDialog = [&](const std::vector<std::string> &tokens, uint32_t seed, glm::vec3 at) {
+    auto showDialog = [&](const std::vector<std::string> &tokens, uint32_t seed) {
         TalkScript script;
         script.tokens = tokens;
         std::mt19937 seeded(seed);
-        const TalkPlay play = playScript(script, speech, seeded, &talkNames);
-        for (const std::string &what : play.unrendered)
+        for (const auto &what : generalDialogue.append(script, speech, seeded, &talkNames))
             logLine("Dialog: cannot say this in full yet: " + what);
-        if (play.lines.empty())
-            return;
-        Talk t;
-        t.fromObject = true;
-        t.objectAt = at;
-        t.lines = play.lines;
-        t.pageMarks = play.lineMarks;
-        talk = t;
-        pageShown();
     };
     // A ground item this player picked up, received as the game receives its pick-up notice
     // (loot-pickup.md §4): an item that stays for others only once per character, the region
     // counter, money, coins into the gold counter, the used cell of treasure, the receipt dialog
     // and holding it up. Returns how many of it go on into the bag or gear (collect).
     auto receivePickup = [&](const Loot &l) -> int {
-        const nativeplayer::Item adapted = nativeplayer::item(l.item.category, l.item.id, l.item.material, l.item.rarity, l.item.modifier,
+        nativeplayer::Item adapted = nativeplayer::item(l.item.category, l.item.id, l.item.material, l.item.rarity, l.item.modifier,
                                                               l.item.region[0], l.item.region[1], l.item.formula);
+        Gear::cubesInto(l.item, adapted.data());
         nativeplayer::Item noticeItem = adapted;
         noticeItem[0] = (uint8_t)l.noticeType;
         const int64_t position[3] = {(int64_t)std::llround((double)l.at.x * 65536) + extractedWorld.originDotsX(),
@@ -2423,8 +2396,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             std::memcpy(&playerFlags, who + 0x5c, 4); // (the record's flags +0x5c)
         }
         grounditems::Keeper keeper{saveGame.perPlayerTaken, saveGame.regionCounters};
-        const grounditems::Receipt r =
-            grounditems::receive(keeper, noticeItem, adapted, l.count, l.flags, position, region, playerFlags, true);
+        const auto *playerRecord = spawned.playerRecord();
+        float abilityMs = 0;
+        if (playerRecord) std::memcpy(&abilityMs, playerRecord + 0x6c, sizeof abilityMs);
+        const bool abilityFree = !playerRecord || playerRecord[0x68] == 0 || abilityMs > spawned.playerAbilityDuration();
+        const grounditems::ReceiptRegion descriptionRegion{
+            worldgen::regionBiome(l.item.region[0], l.item.region[1]),
+            (int32_t)worldgen::random((uint32_t)l.item.region[0] + 57u * (uint32_t)l.item.region[1])};
+        const auto r = grounditems::receive(keeper, noticeItem, adapted, l.count, l.flags, position, region,
+                                          playerFlags, abilityFree, descriptionRegion);
         saveGame.perPlayerTaken = std::move(keeper.perPlayerTaken);
         saveGame.regionCounters = std::move(keeper.regionCounters);
         if (!r.announce)
@@ -2432,7 +2412,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (r.markCell && usedCells.insert(r.cell).second)
             saveGame.usedCells.push_back(r.cell);
         if (!r.dialog.empty()) {
-            showDialog(r.dialog, chatter() % 10000, l.at);
+            showDialog(r.dialog, chatter() % 10000);
             if (nativeai::Creature *me = spawned.localPlayer(); me && r.holdUpAbility) {
                 useprompt::Scene holder;
                 holder.player = me->record;
@@ -2468,7 +2448,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         const int64_t who = speakerId(k);
         if (!who)
             return;
+        lastTalkedSpeaker = k;
+        if (k.native && npcSpeech.repeatUse(who)) return;
         answers.clear(); // a newly addressed conversation replaces its offered answers
+        if (k.native) {
+            TalkScript script;
+            if (!conversationFor(k, who, script)) return;
+            auto play = playScript(script, speech, chatter, &talkNames);
+            for (const auto &what : play.unrendered)
+                logLine("Conversation: " + script.speaker + " cannot say this in full yet: " + what);
+            std::vector<dialoguechoice::Row> rows;
+            for (size_t index = 0; index < play.choiceIds.size(); ++index)
+                rows.push_back({play.choiceIds[index], play.choiceWords[index]});
+            answers.offer(who, std::move(rows));
+            std::vector<TalkPlay::Page> pages;
+            for (auto &page : play.pages) if (page.choiceId.empty()) pages.push_back(std::move(page));
+            const auto speaker = npcspeech::actor(spawned.record(who));
+            npcSpeech.attach(who, spawned.playerId(), std::move(pages), speaker.drawn);
+            for (const auto &line : play.lines) logLine("Talk: " + line);
+            return;
+        }
         Talk t;
         t.npc = k;
         auto say = [&](const char *id, const Speech::Context &context) {
@@ -2891,7 +2890,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
     bool shadowsEnabled = renderSettings.shadows;
     double lastX = 0, lastY = 0;
-    const bool mouseLook = capture.empty() && config.number("Input", "MouseLook", 1, 0, 1) != 0;
+    const bool mouseLook = capture.empty() && captureSpeech.empty() && config.number("Input", "MouseLook", 1, 0, 1) != 0;
     glfwGetCursorPos(window, &lastX, &lastY);
     auto pointerPosition = [&](double *x, double *y) {
         if (input.pointerSampled)
@@ -4454,7 +4453,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             scene.useDown = gameInput.held(gameoptions::USE) || std::exchange(autoUsePress, false);
             scene.dodgeHeld = gameInput.held(gameoptions::DODGE);
             scene.walkHeld = gameInput.held(gameoptions::WALK);
-            scene.dialogOpen = talk && talk->fromObject;
+            scene.dialogOpen = generalDialogue.visible();
             scene.inventoryOpen = inventoryOpen;
 
             // The static objects of the zones within 8 blocks of the player (zone +0x60), each
@@ -4604,7 +4603,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     reviveNow = true;
                     break;
                 case Action::ExaminePetrified:
-                    showDialog({"define_model", std::to_string(race), "he_is_petrified"}, (uint32_t)(p.creature % 100000), creatureAt);
+                    showDialog({"define_model", std::to_string(race), "he_is_petrified"}, (uint32_t)(p.creature % 100000));
                     break;
                 case Action::Shop:
                     vendorTrade = {true, shopkeeperOf(p.creature)};
@@ -4627,12 +4626,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     flightmasterMode = true;
                     break;
                 case Action::Converse:
-                    // A second press while it speaks only hurries its text, which CubeVulkan shows
-                    // whole; otherwise its conversation starts. It is activated either way.
-                    if (!(talk && !talk->fromObject && talk->npc.native && talk->npc.id == p.creature)) {
-                        startTalk(Speaker{true, SIZE_MAX, p.creature, race});
-                        spawned.activate(p.creature);
-                    }
+                    startTalk(Speaker{true, SIZE_MAX, p.creature, race});
+                    spawned.activate(p.creature);
                     break;
                 case Action::Shrine:
                     mapOpen = true;
@@ -4689,7 +4684,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     break;
                 }
                 case Action::GoddessGift:
-                    showDialog({"gift_of_the_goddess"}, chatter() % 10000, scene.objects[(size_t)p.object].at);
+                    showDialog({"gift_of_the_goddess"}, chatter() % 10000);
                     break;
                 case Action::UseInventoryItem:
                     logLine("Use: the inventory's selected item (no selection in CubeVulkan's inventory yet)");
@@ -5591,10 +5586,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 // The dialog names it, a special or a fine piece of gear as "the" item.
                 const int type = got.category;
                 const bool fine = type == 0x17 || type == 0x18 || (((type >= 3 && type <= 9) || type == 0x1a) && got.rarity > 2);
-                const int64_t dots[3] = {chest.x, chest.y, chest.z};
                 showDialog({"define_item", std::to_string(type), std::to_string(got.id), std::to_string(got.modifier), std::to_string(got.material),
                             std::to_string(got.rarity), fine ? "you_received_the_item" : "you_received_an_item"},
-                           chatter() % 10000, extractedWorld.toLocal(dots));
+                           chatter() % 10000);
                 // The player holds it up.
                 if (nativeai::Creature *me = spawned.localPlayer()) {
                     useprompt::Scene holder;
@@ -5828,9 +5822,39 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             hs.showXp = mode == progression::Mode::Pyro;
             hs.xp = playerXp;
             hs.xpMax = progression::xpToNext(playerLevel);
-            if (generalDialogue.visible() && generalDialogue.elapsed() == 0 && generalDialogue.page() < generalDialogue.pages().size())
-                for (const auto &mark : generalDialogue.pages()[generalDialogue.page()].marks) markPlace(mark);
-            if (const auto sound = generalDialogue.update((float)std::min(frameMs, 1000.0),
+            npcspeech::Environment speechEnvironment;
+            speechEnvironment.localPlayer = spawned.playerId();
+            speechEnvironment.find = [&](int64_t id) -> std::optional<npcspeech::Actor> {
+                const auto *record = spawned.record(id);
+                return record ? std::optional<npcspeech::Actor>(npcspeech::actor(record)) : std::nullopt;
+            };
+            speechEnvironment.eachActor = [&](const auto &visit) {
+                if (const auto *record = spawned.playerRecord()) visit(npcspeech::actor(record));
+                spawned.forEach([&](const uint8_t *record) { visit(npcspeech::actor(record)); });
+            };
+            speechEnvironment.hasModel = [&](int model) { return spawned.spriteAsset(world, model).has_value(); };
+            speechEnvironment.project = [&](npcspeech::Point point) -> std::optional<glm::vec2> {
+                if (!renderer.speechProjection()) return {};
+                const auto screen = renderer.screenSize();
+                return npcspeech::project(point, *renderer.speechProjection(), {(float)screen.width,(float)screen.height}, hud.interfaceScale());
+            };
+            speechEnvironment.effects = [&](int64_t, int64_t recipient, const TalkPlay::Page &page, bool) {
+                if (recipient != spawned.playerId()) return;
+                for (const auto &cell : page.loreCells) creditLore(cell, true);
+                for (const auto &mark : page.marks) markPlace(mark);
+            };
+            speechEnvironment.finished = [&](int64_t speaker) {
+                auto request = nativeinteract::fresh(4);
+                std::memcpy(request.data() + nativeinteract::TARGET, &speaker, sizeof speaker);
+                spawned.queueInteraction(spawned.playerId(), request);
+            };
+            speechEnvironment.sound = [&](int sound, const npcspeech::Point &at) { audio.playAt(sound, at.data(), 1, 1); };
+            npcSpeech.update(frameMs, speechEnvironment);
+            if (const auto page = generalDialogue.activation()) {
+                for (const auto &cell : page->loreCells) creditLore(cell, false);
+                for (const auto &mark : page->marks) markPlace(mark);
+            }
+            if (const auto sound = generalDialogue.update(frameMs,
                     gameInput.held(gameoptions::ATTACK), gameInput.held(gameoptions::USE)))
                 audio.playInterface(*sound);
             if (!(mapOpen && input.lastUsedPad)) {
@@ -6098,11 +6122,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 talkTo = -1;
             }
-            if (talkAgain > 0 && time > talkAgain && talkedTo != SIZE_MAX) { // --talk-again
-                player.position = actors.position(talkedTo) + glm::vec3(2, 0, 0);
-                startTalk(Speaker{false, talkedTo});
-                for (auto &line : talk->lines)
-                    logLine("Talk: " + line);
+            if (talkAgain > 0 && time > talkAgain && lastTalkedSpeaker) { // --talk-again
+                player.position = speakerAt(*lastTalkedSpeaker) + glm::vec3(2,0,0);
+                startTalk(*lastTalkedSpeaker);
+                if (talk) for (const auto &line : talk->lines) logLine("Talk: " + line);
                 talkAgain = -1;
             }
             if (talk) { // the line being said, a few seconds each (longer lines longer)
@@ -6117,19 +6140,36 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 if (talk && glm::length(talkerAt(*talk) - player.position) > 10)
                     talk.reset(); // walked away
-                answers.updateVisibility(talk.has_value());
-                if (nativePlayer) {
-                    const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
-                    const bool leaning = (spawned.playerToggles() & 0x400) != 0;
-                    hs.crosshair = !generalDialogue.visible() && !ordinaryUi && !leaning && ability != 156;
-                    hs.zoomCrosshair = !generalDialogue.visible() && !ordinaryUi && leaning;
-                }
                 Hud::State::Bubble bubble;
-                if (talk && project(talkerAt(*talk) + glm::vec3(0, 0, talk->fromObject ? 1.5f : 2.7f), bubble.at)) {
+                if (talk && project(talkerAt(*talk) + glm::vec3(0, 0, 2.7f), bubble.at)) {
                     bubble.text = talk->lines[talk->line];
                     hs.bubbles.push_back(bubble);
                 }
             }
+            answers.updateVisibility(talk.has_value() || npcSpeech.addressedTo(spawned.playerId()));
+            if (nativePlayer) {
+                const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
+                const bool leaning = (spawned.playerToggles() & 0x400) != 0;
+                hs.crosshair = !generalDialogue.visible() && !ordinaryUi && !leaning && ability != 156;
+                hs.zoomCrosshair = !generalDialogue.visible() && !ordinaryUi && leaning;
+            }
+            if (!npcSpeech.emotes().empty()) speechEnvironment.eachActor([&](const npcspeech::Actor &actor) {
+                const auto active = npcSpeech.emotes().find(actor.id);
+                if (active == npcSpeech.emotes().end() || !(actor.health > 0)) return;
+                const auto pose = npcspeech::emotePose(active->second);
+                const auto asset = spawned.spriteAsset(world, pose.model);
+                if (!asset) return;
+                const npcspeech::Point offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY(), 0};
+                const auto game = npcspeech::emoteTransform(actor, pose, asset->header, offset);
+                DrawItem draw;
+                draw.mesh = world.modelMesh(asset->model);
+                draw.model = glm::translate(glm::mat4(1), glm::vec3(0,0,(float)ExtractedWorld::Z_OFFSET)) * game *
+                    glm::translate(glm::mat4(1), glm::vec3(asset->header.x*.5f,asset->header.y*.5f,0));
+                draw.flags = GLOW;
+                draw.kind = DrawKind::Emote;
+                draw.nativeActor = npcspeech::actorSphere(actor);
+                opaque.push_back(std::move(draw));
+            });
             for (auto &q : quests) { // the tracker: what is left to do, in the game's words
                 if (q.state == 2)
                     continue;
@@ -6284,6 +6324,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 const auto pixels = renderer.screenSize();
                 double mouseX, mouseY;
                 pointerPosition(&mouseX, &mouseY);
+                hud.drawNpcSpeech(npcSpeech.bubbles(), (int32_t)(int64_t)(time * 1000), out,
+                    [&](int64_t speaker, const dialoguepanel::Layout &layout, glm::vec2) {
+                        if (!captureSpeech.empty() && !speechCaptured && layout.revealed >= 8) {
+                            renderer.capture(captureSpeech);
+                            speechCaptured = true;
+                            logLine("NPC speech capture: " + captureSpeech);
+                        }
+                        std::optional<float> width;
+                        if (const auto actor = speechEnvironment.find(speaker)) width = actor->body.x;
+                        if (const auto pitch = npcSpeech.voice(speaker, layout, width, clientRand)) {
+                            int64_t at[3]; playerUnits(at);
+                            audio.playAt(0x35, at, 1, *pitch);
+                        }
+                    });
                 hud.drawDialogueChoices(answers, {(float)pixels.width, (float)pixels.height},
                                         {(float)mouseX, (float)mouseY}, out, &answerPoints);
                 if (generalDialogue.visible()) {
@@ -6767,6 +6821,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (settledFrames == 32 || time > 120 + runSeconds)
                 break;
         }
+    }
+    if (lastTalkedSpeaker && lastTalkedSpeaker->native) {
+        logLine("NPC speech retained: " + std::to_string(npcSpeech.bubbles().size()) + " bubbles, " +
+                std::to_string(npcSpeech.emotes().size()) + " emotes");
+        for (const auto &bubble : npcSpeech.bubbles())
+            logLine("NPC speech root: page " + std::to_string(bubble.page) + "/" + std::to_string(bubble.pages.size()) +
+                " clock " + std::to_string(bubble.elapsedMs) + " visible " + std::to_string(bubble.visible) +
+                " at " + std::to_string(bubble.screenPoint.x) + "," + std::to_string(bubble.screenPoint.y));
     }
     if (spawnedReady) // every zone in memory records what changed in it (native-saves.md open question 3)
         hostWorld.recordAllZones();

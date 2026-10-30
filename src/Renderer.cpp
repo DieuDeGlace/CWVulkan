@@ -1260,6 +1260,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
     lastSceneSphere = SphereState{{(int64_t)(worldProbe.origin.x * 65536),
                                    (int64_t)(worldProbe.origin.y * 65536), 0}, nativeEye, nativePlanes};
+    auto speechView = glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0,0,1));
+    for (int column = 0; column < 4; ++column) {
+        speechView[column][0] = -speechView[column][0];
+        speechView[column][2] = -speechView[column][2];
+    }
+    lastSpeechProjection = scenevisibility::Projection{
+        {-(int64_t)(worldProbe.origin.x * 65536), -(int64_t)(worldProbe.origin.y * 65536), 0},
+        speechView, glm::perspectiveLH_ZO(glm::radians(settings.fov), -aspect, .05f, 1920.f)};
     std::unordered_map<const scenevisibility::Bounds *, bool> zoneVisibility;
     auto nativeZoneVisible = [&](const DrawItem &item) {
         if (!item.nativeZone)
@@ -1682,6 +1690,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             return false;
         if (!meshes[item.mesh].indexCount)
             return false;
+        if (item.nativeActor) {
+            const auto &actor = *item.nativeActor;
+            const steampoints::Point relative{
+                actor.centre[0] - (int64_t)(worldProbe.origin.x * 65536),
+                actor.centre[1] - (int64_t)(worldProbe.origin.y * 65536), actor.centre[2]};
+            return scenevisibility::sphere(relative, actor.radius, nativeEye, nativePlanes,
+                steampoints::abilityRange(settings.fogDistance, settings.nativeZoneRadius));
+        }
         glm::vec3 c;
         float r;
         sphereOf(item, c, r);
@@ -1974,6 +1990,7 @@ bool Renderer::steamSphereVisible(const steampoints::Point &position, float radi
 
 void Renderer::shutdown() {
     lastSceneSphere.reset();
+    lastSpeechProjection.reset();
     if (!device)
         return;
     vkDeviceWaitIdle(device);

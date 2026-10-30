@@ -311,6 +311,44 @@ int steamShaderTests() {
     ground.items.assign(10, book);
     renderer.setWorldProbe(probe);
     checkPoints("ground-rebased-origin", {item}, {82,214,60});
+    // Emotes share the ordinary opaque depth pass and their actor's sphere gate.
+    probe.origin = {};
+    ground.items.clear();
+    probe.loadedLightZones = [] { return std::vector<steampoints::ZoneKey>{{0,0}}; };
+    renderer.setWorldProbe(probe);
+    DrawItem emote = item;
+    emote.model = glm::mat4(1);
+    emote.nativeZone.reset(); emote.nativeLights.reset();
+    emote.kind = DrawKind::Emote;
+    emote.flags = GLOW;
+    emote.nativeActor = scenevisibility::Sphere{{0,0,65536},2};
+    checkPoints("emote-native-glow", {emote}, {82,214,60});
+    const auto emptyPath = root / "empty-emote-scene.png";
+    renderer.capture(emptyPath.string());
+    renderer.frame(camera,lighting,{0,0,0},0,{},{});
+    const auto emptyColour = centre(emptyPath);
+    if (!emptyColour) ++failures;
+    else {
+        emote.nativeActor->centre = {10000LL*65536,0,65536};
+        checkPoints("emote-actor-range", {emote}, *emptyColour);
+        emote.nativeActor->centre = {0,-100*65536,65536};
+        checkPoints("emote-actor-frustum", {emote}, *emptyColour);
+    }
+    emote.nativeActor->centre = {0,0,65536};
+    DrawItem blocker = emote;
+    blocker.nativeActor.reset();
+    blocker.flash = 1;
+    blocker.kind = DrawKind::Model;
+    blocker.model = glm::translate(glm::mat4(1), glm::normalize(camera.eye-camera.target)*.5f) *
+                    glm::scale(glm::mat4(1),glm::vec3(3));
+    const auto blockerPath = root / "emote-blocker.png";
+    renderer.capture(blockerPath.string());
+    renderer.frame(camera,lighting,{0,0,0},0,{blocker},{});
+    const auto blockerColour = centre(blockerPath);
+    if (!blockerColour) ++failures;
+    else checkPoints("emote-world-depth", {blocker,emote}, *blockerColour);
+    blocker.model = emote.model;
+    checkPoints("emote-equal-depth", {blocker,emote}, {82,214,60});
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

@@ -348,3 +348,6 @@ target_sources(EngineTests PRIVATE tests/SteamTransientLightsTests.cpp)
 target_sources(engine PRIVATE src/SteamCreatureLights.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamCreatureLightsTests.cpp)
+
+target_sources(engine PRIVATE src/NpcSpeech.cpp)
+target_sources(EngineTests PRIVATE tests/NpcSpeechTests.cpp)

@@ -4,6 +4,7 @@
 #include "NativeControl.h"
 #include "NativePlayer.h"
 #include <cstring>
+#include <cmath>
 #include "Hud.h"
 #include "Speech.h"
 #include "Assets.h"
@@ -192,6 +193,27 @@ int dialogueChoicesTests() {
     check(compiled.pages.size() == 1 && compiled.pages[0].words.size() == 11, "phrase appends to a last page of exactly10 stored words");
     compiled = playScript(append, speech, random, nullptr, compiled.pages);
     check(compiled.pages.size() == 2, "phrase starts a new page when last page already exceeds10 words");
+
+    // Appending lore must retain the running page and place credit on the resulting final page.
+    dialoguepanel::General lorePanel;
+    lorePanel.applyCompilation({existing});
+    lorePanel.update(1, false, false);
+    const double halfUlpPlus = 5.960464477539063e-8 + 1e-15;
+    lorePanel.update(halfUlpPlus, false, false);
+    check(lorePanel.elapsed() == std::nextafter(1.f, 2.f), "general clock adds in double before float storage");
+    lorePanel.append(append, speech, random, nullptr, std::array<int32_t,2>{5,6});
+    check(lorePanel.page() == 0 && lorePanel.elapsed() == std::nextafter(1.f, 2.f) && !lorePanel.activation(),
+          "appending lore leaves running playback and its activation guard unchanged");
+    lorePanel.append(append, speech, random, nullptr, std::array<int32_t,2>{7,8});
+    check(lorePanel.pages().size() == 2 && lorePanel.pages()[0].loreCells == std::vector<std::array<int32_t,2>>{{5,6}} &&
+          lorePanel.pages()[1].loreCells == std::vector<std::array<int32_t,2>>{{7,8}}, "lore attaches after ordinary dictionary page splitting");
+    lorePanel.update(100000, true, false);
+    check(lorePanel.elapsed() < 1002, "general update applies native 1000-ms elapsed cap");
+    lorePanel.update(1000, true, false); // the full first page needs a second capped update
+    check(lorePanel.update(0, false, false) == 0x7b && lorePanel.page() == 1 && lorePanel.activation(),
+          "release schedules next-page credit for its zero-clock update");
+    lorePanel.update(0, false, false);
+    check(lorePanel.activation().has_value(), "zero elapsed does not manufacture a once-only page-effect bit");
 
     Assets assets;
     if (assets.locate("")) {

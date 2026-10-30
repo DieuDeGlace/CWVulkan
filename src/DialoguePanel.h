@@ -15,17 +15,32 @@ struct Layout {
     int revealed = 0;
     uint8_t lastFlag = 0;
 };
+// Shared speech-word rules used by both screen panels and NPC bubbles.
+int duration(const std::vector<dialoguewords::Word> &);
+Layout layout(const std::vector<dialoguewords::Word> &, float elapsedMs, float frameWidth,
+              const std::function<float(const std::wstring &)> &measure);
+std::optional<float> voice(float &displayed, const Layout &, std::optional<float> speakerWidth,
+                           const std::function<int()> &random);
+
 class General {
   public:
     const std::vector<TalkPlay::Page> &pages() const { return content; }
     void applyCompilation(std::vector<TalkPlay::Page> pages) { content = std::move(pages); }
+    // Compile into the existing last page without resetting playback or speaker identity.
+    std::vector<std::string> append(const TalkScript &, const Speech &, std::mt19937 &, const TalkNames * = nullptr,
+                                    std::optional<std::array<int32_t, 2>> loreCell = {});
     bool visible() const { return !content.empty(); }
     float elapsed() const { return clock; }
+    // A copy permits receipt feedback to append while the current page is consumed.
+    std::optional<TalkPlay::Page> activation() const {
+        if (clock == 0 && index < content.size()) return content[index];
+        return {};
+    }
     int duration() const;
     size_t page() const { return index; }
     int64_t speaker() const { return speakerId; }
     // Update uses the native capped frame duration, not the physics substep.
-    std::optional<int> update(float elapsedMs, bool primary, bool use);
+    std::optional<int> update(double elapsedMs, bool primary, bool use);
     Layout layout(const std::function<float(const std::wstring &)> &measure) const;
     std::optional<float> voice(const Layout &, std::optional<float> speakerWidth, const std::function<int()> &random);
     enum Indicator { Hidden, Next, End };

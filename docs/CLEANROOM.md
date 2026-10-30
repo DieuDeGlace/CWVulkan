@@ -62,6 +62,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- per-speaker NPC speech/emote lifecycle, literal emote-word pages, cached projection,
+  owner-template placement, world emote transforms/depth/culling and general lore/
+  receipt routing, from `steam-npc-speech-rendering.md` and
+  `steam-dialogue-item-actions.md`. Tests use synthetic state, owner templates and
+  Vulkan captures; no native code or replacement assets are included.
 - live static-object clocks/pose synchronization, generated light shafts, native
   mesh-time model sunlight/glow/fade queues and castle unsigned-choice arithmetic,
   from `worldgen-parity-gaps.md` §§2.1,4.4,9–10. Verification separates fresh
