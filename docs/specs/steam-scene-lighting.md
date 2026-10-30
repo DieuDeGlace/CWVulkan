@@ -1247,6 +1247,29 @@ substep, simulation remainder, time-of-day delta or speed-scaled clock**.
 World update may consume its own substeps, but their remaining duration does
 not replace this renderer argument.
 
+Rechecked at **all four0xa7a0 call sites in0xecda0**: the+0x4a8 easing,
+both ordinary range-transition branches and the flight/glide range branch
+all use **double(float32(cappedDoubleMS))**.0xe2e00 passes that same
+float scene argument to0xecda0 at0xe3096; its saved float is promoted
+afresh at each coefficient call. None recovers the original capped Game
+double, truncates to integer ms, or substitutes a simulation step. The
+retained-double Game camera/FOV call described next is a different boundary.
+
+**Sky eased-palette clock uses the same boundary.** Normal sky1/sky2/fog/
+sun transitions and their current-block override path in0xe2e00 likewise
+use **double(float32(cappedDoubleMS))**, not the original Game double.
+For the normal path the float scene argument is explicitly promoted at
+**0xe3696**; the override path reloads the same float argument and
+promotes its low lane at **0xe37cc–0xe37dc**. RGBA helper **0xcb5c0**
+receives that already-promoted **double as its third argument** and
+forwards it unchanged to0xa7a0 at **0xcb621**, with its fourth float
+rate argument. The sky calls at0xe3781/0xe379c and override calls at
+0xe3884/0xe389f do not introduce a separate timestamp or another integer
+truncation. Direct fog/sun coefficient calls in those branches use the
+same promoted scene duration. Thus the 'frameMS' in §2.7's sky easing
+contract denotes this rounded scene duration; keep the Game camera/FOV
+double contract below separate.
+
 **FOV precision distinction:** the call to0xadcd0 at **0xaaf02** passes the
 capped interval still as **double**, without passing through the renderer's
 float conversion.0xadcd0 retains that double for its0xa7a0 calls, including the

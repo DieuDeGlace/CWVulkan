@@ -1,4 +1,5 @@
 #include "Hud.h"
+#include "FeatText.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #include "stb_image.h"
@@ -352,6 +353,13 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
         for (int s : {stroke, 0})
             for (bool scalable : {false, true})
                 bakeStyle(labelStyle(size, s, 0, scalable), root);
+    plasma::TextStyle featStyle;
+    featStyle.font = "resource1.dat";
+    featStyle.pixelSize = feattext::FONT_SIZE;
+    featStyle.strokeRadius = feattext::OUTLINE;
+    bakeStyle(featStyle, glm::mat4(1));
+    featStyle.strokeRadius = 0;
+    bakeStyle(featStyle, glm::mat4(1));
 }
 
 void Hud::layout(Renderer &renderer, VkExtent2D screen) {
@@ -861,6 +869,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     out.clear();
     if (!ready)
         return;
+    if (state.feats)
+        drawFeatText(*state.feats, out);
     drawMapMarkers(state, out);
     // Over-head plates and damage numbers first, so the bars stay on top.
     for (auto &p : state.plates) {

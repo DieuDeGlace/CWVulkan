@@ -147,6 +147,7 @@ int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
+int featTextTests();
 int lootWindowTests();     // tests/LootWindowTests.cpp: the identify window, upgrade widget, chat line
 int addTestLoot(const char *folder);
 int poseStateOracle(const std::vector<std::string> &files);
@@ -9077,6 +9078,8 @@ int main(int argc, char **argv) {
         return plasmaHitTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "scenecost")
         return steamMeshCostTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "feattext")
+        return featTextTests();
     if (argc == 2 && std::string(argv[1]) == "lootwindows")
         return lootWindowTests();
     if (argc == 2 && std::string(argv[1]) == "scenerange")
@@ -10332,6 +10335,7 @@ int main(int argc, char **argv) {
     failures += netTests();            // tests/NetTests.cpp
     failures += ownerSetupTests();     // tests/OwnerSetupTests.cpp
     failures += poseHudTests();        // tests/PoseHudTests.cpp
+    failures += featTextTests();
     failures += lootWindowTests();     // tests/LootWindowTests.cpp
     failures += enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
     failures += playerHitTests();      // tests/PlayerHitTests.cpp

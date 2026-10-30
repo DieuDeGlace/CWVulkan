@@ -62,6 +62,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- received-feat projection, lifetime and physical-pixel owner-font display, from
+  `steam-chat-feat-presentation.md` sections4.1-4.4. Synthetic geometry/timing and
+  live owner-font captures check this display without inferring awards. Scene/sky
+  clock narrowing and stock water-opacity lifecycle follow their independent specs.
+- the stackable-type mask correction, from `steam-inventory-slot-lifecycle.md`:
+  type22 merges, type18 stays separate, and an equal stack wins over a prior free
+  slot. These helpers do not replace the remaining canonical player-slot work.
 - chat history/editor, entered commands and friend-game UI eligibility, from
   `steam-chat-feat-presentation.md`. Owner fonts/templates stay external; synthetic
   editor/wrap/queue/command records and a live owner-font frame check the bounded

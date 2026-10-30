@@ -368,7 +368,7 @@ int Inventory::tabOf(uint8_t category) {
 
 bool Inventory::stackable(uint8_t category) {
     switch (category) {
-    case 1: case 10: case 11: case 12: case 13: case 18: case 28: return true;
+    case 1: case 10: case 11: case 12: case 13: case 22: case 28: return true;
     default: return false;
     }
 }

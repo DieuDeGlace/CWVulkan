@@ -2,6 +2,7 @@
 #include "Assets.h"
 #include "Extracted.h"
 #include "AlphaLook.h"
+#include "GameMath.h"
 #include <cmath>
 #include <iostream>
 #include <map>
@@ -166,12 +167,19 @@ int steamSceneRangeTests() {
     frame.zoneRadius = 15;
     frame.elapsedMs = 1000;
     State warm;
+    check(warm.waterOpacity() == 1, "stock water opacity starts at one");
     check(warm.update(frame) && warm.value().scene > 256 && warm.value().models == 192 && warm.value().abilities == 256,
           "initial growth and the distinct default model/ability caps");
     State capped;
     frame.elapsedMs = 100000;
     capped.update(frame);
-    check(capped.value().scene == warm.value().scene && capped.readiness() == warm.readiness(), "range/readiness share the capped double frame time");
+    check(capped.value().scene == warm.value().scene && capped.waterOpacity() == warm.waterOpacity(), "scene coefficients share the capped, float-rounded wall interval");
+    State fractional;
+    frame.elapsedMs = 9.9999999; // rounds to float10 before the hundredths-ms count
+    fractional.update(frame);
+    const float expected = *candidate(frame) * gamemath::blendFactor(10.0, .0005f);
+    check(fractional.value().scene == expected && fractional.waterOpacity() == 1,
+          "scene time rounds to float before integration, while stock opacity stays one");
     State flagged = warm;
     const float before = flagged.value().scene;
     frame.elapsedMs = 16;
@@ -200,10 +208,10 @@ int steamSceneRangeTests() {
     flight.update(frame);
     check(flight.value().scene == .001f, "the special flight gate is strictly after1000ms");
     const auto derived = warm.value();
-    const float ready = warm.readiness();
+    const float ready = warm.waterOpacity();
     warm.reset();
     check(warm.value().scene == 0 && warm.value().models == derived.models && warm.value().abilities == derived.abilities &&
-          warm.readiness() == ready, "world reset clears only the current range until the next scene update");
+          warm.waterOpacity() == ready, "world reset clears only the current range until the next scene update");
     std::cout << "Steam adaptive scene range: " << (failures ? "FAIL\n" : "PASS\n");
     return failures;
 }

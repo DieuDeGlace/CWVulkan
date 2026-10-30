@@ -212,6 +212,13 @@ void steamPaletteKeys() {
     SKY_CHECK(near(eased.value().fog, noon.fog + (night.fog - noon.fog) * fogStep, 1e-5f));
     SKY_CHECK(near(eased.value().sun, noon.sun + (night.sun - noon.sun) * sunStep, 1e-5f));
     SKY_CHECK(fogStep > 0 && fogStep < sunStep && sunStep < .1f);
+    steamsky::EasedPalette rounded;
+    rounded.update(noon, 0);
+    rounded.update(night, 9.9999999); // scene narrows this interval to float10
+    const float roundedFogStep = gamemath::blendFactor(10, .0005f);
+    const float roundedSunStep = gamemath::blendFactor(10, .002f);
+    SKY_CHECK(rounded.value().fog == (night.fog - noon.fog) * roundedFogStep + noon.fog);
+    SKY_CHECK(rounded.value().sun == (night.sun - noon.sun) * roundedSunStep + noon.sun);
 }
 
 void steamSunAndStars() {

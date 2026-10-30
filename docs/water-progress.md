@@ -1,3 +1,19 @@
+# Shared surface and underwater style target
+
+Water appearance is to be selected independently of `[Render] Style`, so switching
+between Alpha and Steam lighting retains the same chosen water treatment. The
+requested Omega-inspired surface is clear blue water with visible shallow geometry,
+crisp reflections of the voxel banks and small highlights. The underwater target
+uses deep blue distance haze, teal foreground tones and strong scene silhouettes.
+These are visual targets for original CubeVulkan shaders, not a port of Omega code.
+
+The owner's local `water lillies.PNG` and `underwater shader.PNG` are the references.
+They remain outside the repository and distribution packages. The older Alpha-water
+pictures do not supersede this choice. This shared style still needs implementation
+and comparison in both lighting modes; the native water work below is its baseline.
+
+---
+
 # Water implementation progress — 2026-10-28
 
 Implementation uses the existing behavioural specification, `specs/water-rendering.md`, and CubeVulkan sources. No decompile, native shader blob, or third-party reconstruction was opened during this pass. The specification's section E describes the earlier implementation; the changes below supersede those particular findings.

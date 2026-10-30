@@ -726,6 +726,22 @@ void residentChecks() {
     inv.tabs[0][0].quantity = 0; // an emptied stack takes the next item that does not stack
     inv.add(sword, 1);
     WC_CHECK(inv.tabs[0].size() == 2 && inv.tabs[0][0].quantity == 1);
+
+    // The native mask includes type22, not18 (inventory-slot-lifecycle §2).
+    // Merging a later equal stack wins over an earlier free slot.
+    wg::Inventory specials;
+    wg::Item type22, type18;
+    type22.category = 22, type22.id = 9;
+    type18.category = 18, type18.id = 1;
+    specials.tabs.resize(3);
+    specials.tabs[1] = {{0, {}}, {2, type22}};
+    specials.add(type22, 3);
+    WC_CHECK(specials.tabs[1].size() == 2 && specials.tabs[1][0].quantity == 0 && specials.tabs[1][1].quantity == 5);
+    specials.add(type22, -1);
+    WC_CHECK(specials.tabs[1][1].quantity == -1);
+    specials.add(type18, 1);
+    specials.add(type18, 1);
+    WC_CHECK(specials.tabs[2].size() == 2 && specials.tabs[2][0].quantity == 1 && specials.tabs[2][1].quantity == 1);
 }
 
 // Pets (§7.4): every pet of a race draws srand(race)'s numbers, so it always has the same looks

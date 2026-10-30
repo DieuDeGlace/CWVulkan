@@ -69,7 +69,9 @@ std::optional<float> candidate(const Frame &frame) {
 bool State::update(const Frame &frame) {
     const auto distance = candidate(frame);
     if (!distance) return false;
-    const double ms = std::min(frame.elapsedMs,1000.0);
+    // The scene boundary narrows the capped wall interval to float, then the
+    // native integration helper receives that rounded value as double.
+    const double ms = (double)(float)std::min(frame.elapsedMs, 1000.0);
     const auto &player = frame.player;
     colour = (player.blockFlags & 0x22) == 0x22 ? groundColour(player.physical) : glm::vec3(0);
     const bool flagged = colour.r != 0 || colour.g != 0 || colour.b != 0;
@@ -83,7 +85,7 @@ bool State::update(const Frame &frame) {
         snap = target <= current;
     } else target = 256;
     ranges.scene = snap ? target : current + (target-current) * gamemath::blendFactor(ms,rate);
-    ready = ready + (1.f-ready) * gamemath::blendFactor(ms,.05f);
+    opacity = opacity + (1.f-opacity) * gamemath::blendFactor(ms,.05f);
     const float width = zoneWidth(frame.zoneRadius);
     ranges.models = std::min(std::min(width*.2f,ranges.scene),200.f);
     ranges.abilities = std::min(std::min(width*.5f,ranges.scene),256.f);

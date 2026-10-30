@@ -26,6 +26,7 @@
 namespace dialoguechoice { class Panel; }
 namespace dialoguepanel { class General; struct Layout; }
 namespace npcspeech { struct Bubble; }
+namespace feattext { struct Label; }
 
 class ChatLine;
 
@@ -124,6 +125,7 @@ class Hud {
         int hoverItem = -1, hoverSlot = -1;
     };
     struct State {
+        const std::vector<feattext::Label> *feats = nullptr; // root textFX precedes all ordinary UI/lifebars
         float hp = 0, maxHp = 1, mp = 0, maxMp = 100;
         float stamina = 1;       // 0..1; a small bar under the character while below full
         glm::vec2 staminaAt{0};  // screen position of the character's feet
@@ -347,6 +349,7 @@ class Hud {
     void updateChat(ChatLine &, const std::function<std::optional<std::u16string>(int64_t)> & = {}) const;
     void appendChat(ChatLine &, const std::u16string &, std::array<uint8_t, 3>) const;
     void drawChat(ChatLine &, int32_t guiClock, std::vector<OverlayVertex> &) const;
+    void drawFeatText(const std::vector<feattext::Label> &, std::vector<OverlayVertex> &) const;
     void drawNpcSpeech(const std::vector<npcspeech::Bubble> &, int32_t guiTime, std::vector<OverlayVertex> &,
         const std::function<void(int64_t, const dialoguepanel::Layout &, glm::vec2 frame)> &onDraw = {}) const;
     dialoguepanel::Layout drawGeneralDialogue(const dialoguepanel::General &, glm::vec2 screen, int32_t guiTime,

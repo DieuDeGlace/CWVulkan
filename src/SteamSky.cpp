@@ -138,7 +138,7 @@ void EasedPalette::update(const Palette &target, double elapsedMs) {
         primed = true;
         return;
     }
-    const double ms = std::clamp(elapsedMs, 0.0, LONGEST_EASE_MS);
+    const double ms = (double)(float)std::clamp(elapsedMs, 0.0, LONGEST_EASE_MS);
     auto ease = [&](glm::vec3 &value, glm::vec3 to, float rate) {
         const glm::vec3 difference = to - value;
         value = difference * gamemath::blendFactor(ms, rate) + value;

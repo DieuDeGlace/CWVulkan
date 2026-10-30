@@ -1,9 +1,11 @@
 #include "Hud.h"
 #include "ChatLine.h"
+#include "FeatText.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 plasma::SceneNode *Hud::placeChat() const {
-    if (!scene || !panels.chat) return nullptr;
+    if (!scene || !panels.chat)
+        return nullptr;
     scene->setScale(guiScale);
     auto &node = *panels.chat;
     scene->setPosition(node, screen - scene->viewSize(node), {-20, -20});
@@ -11,7 +13,8 @@ plasma::SceneNode *Hud::placeChat() const {
 }
 
 float Hud::chatWordWidth(const std::wstring &word) const {
-    if (!scene || !panels.chat) return 0;
+    if (!scene || !panels.chat)
+        return 0;
     plasma::TextStyle style;
     style.font = "resource1.dat";
     style.pixelSize = 12;
@@ -19,25 +22,25 @@ float Hud::chatWordWidth(const std::wstring &word) const {
     style.scalable = true;
     style.string = word;
     plasma::TextBox bounds;
-    if (!plasma::textBounds(plasmaFonts[0], style, scene->matrix(*panels.chat), bounds)) return 0;
+    if (!plasma::textBounds(plasmaFonts[0], style, scene->matrix(*panels.chat), bounds))
+        return 0;
     return bounds.maximum.x - bounds.minimum.x;
 }
 
 void Hud::updateChat(ChatLine &chat, const std::function<std::optional<std::u16string>(int64_t)> &name) const {
     if (auto *node = placeChat())
-        chat.consumeIncoming(scene->contentSize(*node).x,
-                             [this](const auto &word) { return chatWordWidth(word); }, name);
+        chat.consumeIncoming(scene->contentSize(*node).x, [this](const auto &word) { return chatWordWidth(word); }, name);
 }
 
 void Hud::appendChat(ChatLine &chat, const std::u16string &text, std::array<uint8_t, 3> colour) const {
     if (auto *node = placeChat())
-        chat.append(text, colour, scene->contentSize(*node).x,
-                    [this](const auto &word) { return chatWordWidth(word); });
+        chat.append(text, colour, scene->contentSize(*node).x, [this](const auto &word) { return chatWordWidth(word); });
 }
 
 void Hud::drawChat(ChatLine &chat, int32_t guiClock, std::vector<OverlayVertex> &out) const {
     auto *node = placeChat();
-    if (!node) return;
+    if (!node)
+        return;
     const auto frame = scene->contentSize(*node);
     chat.trim(frame.y);
     const glm::vec4 black(0, 0, 0, 1), white(1);
@@ -45,7 +48,10 @@ void Hud::drawChat(ChatLine &chat, int32_t guiClock, std::vector<OverlayVertex> 
     for (const auto &row : chat.rows()) {
         float x = 3;
         for (const auto &word : row) {
-            if (word.text == L" ") { x += 5; continue; }
+            if (word.text == L" ") {
+                x += 5;
+                continue;
+            }
             const glm::vec4 colour(word.colour[0] / 255.0f, word.colour[1] / 255.0f, word.colour[2] / 255.0f, 1);
             widgetText(out, *node, word.text, {x, y}, 12, 3, colour, black, 0, 0);
             x += chatWordWidth(word.text);
@@ -73,4 +79,22 @@ bool Hud::requireText(const std::u16string &text) {
         if (unit >= 32 && !(unit < 127 || unit == 0xb0 || unit == 0xae || unit == 0xb1))
             changed = additionalGlyphs.insert((wchar_t)unit).second || changed;
     return changed;
+}
+
+void Hud::drawFeatText(const std::vector<feattext::Label> &labels, std::vector<OverlayVertex> &out) const {
+    for (const auto &label : labels) {
+        glm::mat4 matrix(1);
+        matrix[3] = glm::vec4(label.at, 0, 1);
+        plasma::TextStyle style;
+        style.font = "resource1.dat";
+        style.string = L"FEAT!";
+        style.pixelSize = feattext::FONT_SIZE;
+        style.strokeRadius = feattext::OUTLINE;
+        style.color = glm::vec4(0);
+        style.strokeColor = label.outline;
+        plasmaText(out, style, matrix);
+        style.strokeRadius = 0;
+        style.color = label.fill;
+        plasmaText(out, style, matrix);
+    }
 }

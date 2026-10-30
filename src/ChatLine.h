@@ -13,8 +13,11 @@ class ChatLine {
   public:
     using Colour = std::array<uint8_t, 3>;
     using Measure = std::function<float(const std::wstring &)>;
-    using Name = std::function<std::optional<std::u16string>(int64_t)>;
-    struct Word { std::wstring text; Colour colour; };
+    using NameResolver = std::function<std::optional<std::u16string>(int64_t)>;
+    struct Word {
+        std::wstring text;
+        Colour colour;
+    };
     using Row = std::vector<Word>;
     enum class Key { Left, Right, Home, End, Delete, Backspace };
     bool typing() const { return open; }
@@ -33,9 +36,10 @@ class ChatLine {
     const std::deque<Row> &rows() const { return history; }
     void receive(std::optional<std::u16string> sender, std::u16string body);
     void receive(int64_t sender, std::u16string body);
-    void consumeIncoming(float frameWidth, const Measure &, const Name & = {});
+    void consumeIncoming(float frameWidth, const Measure &, const NameResolver & = {});
     size_t pending() const { return incoming.size(); }
     static constexpr float WIDTH = 400, HEIGHT = 250;
+
   private:
     void clampSelection();
     void eraseSelection();

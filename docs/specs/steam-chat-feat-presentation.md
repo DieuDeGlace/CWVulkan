@@ -210,6 +210,148 @@ after this update **only when age>lifetime**, after traversal. At equal
 age3000 the record remains and can draw alpha0 before its next increment.
 This is a fade of floating text; it does not impose a chat-row fade.
 
+### 4.2 Exact float matrix and screen arithmetic
+
+Assembly **0xb6350–0xb655f** refines the real-number shorthand in §4.1.
+All geometry arithmetic below is **float32**, with separate multiply/add/
+divide instructions; there is no double dot product or fused contraction.
+First complete the signed64 origin additions, convert each completed X/Y
+and unchanged Z to float, then multiply each by float **1/65536**. Do not
+truncate fixed coordinates to integer blocks before these conversions.
+
+The retained view/projection matrices begin at **G+0x1f24/+0x1f64**.
+Their coefficient byte offsets for a point's X/Y/Z/translation products
+are:
+
+| Output component | X coefficient | Y coefficient | Z coefficient | Translation |
+|---|---|---|---|---|
+|X|+0x00|+0x10|+0x20|+0x30|
+|Y|+0x04|+0x14|+0x24|+0x34|
+|Z|+0x08|+0x18|+0x28|+0x38|
+|W|+0x0c|+0x1c|+0x2c|+0x3c|
+
+For **each component**, first add the separately rounded **Y product and
+X product**, then add the Z product, then translation, rounding after
+every operation. This **Y, X, Z, translation** accumulation is intentional;
+do not substitute a generic X,Y,Z-first matrix helper or a higher-precision
+sum on the assumption that the formulas are interchangeable.
+
+For view, compute one float reciprocal **1/viewW**, then multiply each
+view X/Y/Z numerator by that same reciprocal. Require the resulting view
+Z to be positive; a failed/unordered comparison skips construction. For
+projection, compute X/Y/W numerators from those divided view coordinates
+using the same coefficient order, compute one float **1/projectionW**,
+then **multiply X/Y numerators by that reciprocal first**. The projection
+Z numerator is not needed by this consumer's admission or screen placement.
+
+Read signed32 physical dimensions from **GUI engine+0x1c4 width/+0x1c8
+height**, not an integer-halved frame rectangle. Screen placement order:
+
+- Convert width to float, multiply by0.5, then multiply by the already
+  divided projected X. Add a separately computed float(width) times0.5.
+- Negate signed32 height, convert that result to float, multiply by0.5,
+  then multiply by the already divided projected Y. Add separately
+  computed float(positive height) times0.5.
+
+There is **no integer division by2**, and no addition of1 to NDC before
+the half-size multiply. For width801/height601 and divided projection
+X=Y=0, pre-record-offset screen position is exactly **(400.5,300.5)**,
+not(400,300). This is a scalar arithmetic reference, not a game capture.
+
+Then use q=float(age)/float(lifetime), with old age. Outline placement
+adds float0 to projected screen X, then its stored X offset. Its Y first
+adds the separate float product q times drift to screen Y, then Y offset.
+The foreground reuses that zero-adjusted projected X before its X offset;
+for Y it adds float0 to q times drift before adding screen Y and Y offset.
+Those are still separate float operations. The normal finite feat positions
+are the same for both layers. Final glyph translation rounding is §4.4.
+
+### 4.3 `textFX` is independent of the game-UI root
+
+Creation **0xf9ac0 at0xf9b7e–0xf9ba9** names the container **textFX**
+and supplies **GUI engine+0x140 scene root as parent**. It stores that
+new node at UI[0xab], i.e. **G+0x670**. Factory0x33cd30 attaches its
+fifth parent argument through0x32f640. This is **not a child of G+0x220**;
+the ordinary game-UI root is a separate descendant of the GUI scene root.
+
+Consequently the five-front-root condition that hides G+0x220 (§7.2) does
+not independently hide textFX. Conversely physical **F4/VK0x73** in
+0x96e70 toggles the **GUI scene root's live display visibility** at
+engine+0x140, so it hides both roots and their descendants. Do not implement
+F4 as merely hiding G+0x220 while leaving native floating text visible.
+Other normal ancestor visibility/mask rules still apply.
+
+0xb6240 does not consult either root's visibility before clearing/rebuilding
+textFX and advancing ages. Hiding via F4 is therefore not a pause/reset of
+floating-text lifetime. Newly created text nodes use textFX as parent; no
+copied speech template, ordinary bubble visibility or general DialogWidget
+is involved.
+
+**Paint placement, not an always-on-top layer.** The root-child construction
+order in0xf9ac0 is **textFX G+0x670 first**, then **lifebars G+0x678**,
+then **game UI G+0x220**, then the frontend roots beginning **G+0x118**,
+followed by the later actual widget/template clones. Options G+0x650 and
+Controls G+0x658 each clone their frame directly under the GUI scene root
+later in this construction. The owner **cursor.plx** container is created
+near the function's end, **UI[0x66]=G+0x448**, directly under that same
+scene root and after the ordinary menu/options/control construction.
+
+Attachment **0x32f640 appends at the parent's child-list end**. Ordinary
+GUI painting follows that list **first to last**, later siblings over
+earlier ones (plasma-format-and-scene §2.1/§2.6). Thus textFX paints
+**before lifebars, before the entire game-UI subtree and before later
+frontend/options/control/cursor siblings**, rather than after the HUD.
+Game-UI children such as chat and the speech/answer panels remain above
+it in this paint ordering; their actual shape alpha/visibility still
+determines what covers the label. Put native feat/floating labels at
+this early root position, not in a final unrestricted overlay pass.
+
+No textFX-parent detach/reappend/promotion was found in its update path.
+0xb6240 clears/replaces **its children**, preserving the parent's root
+list position.0xf9ac0's prototype detach calls0x3347f0 remove template
+nodes, not textFX. Its finishing0x340d60/0x333820 calls refresh widget
+ownership/layout and do not sort that root's child list. Merely showing
+a menu through0xa3a20 changes visibility without moving the sibling.
+The traced focus/capture operations likewise do not promote textFX;
+**0x33c410 is the engine capture-pointer setter**, not a bring-to-front
+operation. Existing reparent/append operations on other widget children
+do not turn this persistent first root child into a last-painted label.
+
+### 4.4 Code-created TextShapes use the pixel raster path
+
+Factory **0x33da70** allocates a new **TextShape0x367590**, not a GUI-file
+template instance. These code-created shapes retain the **scalable bit
+clear**: they do not receive PLX loader flag0x20. The draw therefore uses
+the native **pixel font mode**, **not** the scalable/hinted path used by
+many owner gui.plx widgets. Constructor/base0x38cef0 and the font draw's
+mode selection remain plasma-shapes-and-text §§4.2/6.1–6.4.
+
+Both floating layers explicitly set **resource1.dat**, pixelSize=record
+font size (feat30), and the record's TextShape alignment/wrap flags
+(feat0). Constructor **spacing0, lineSpacing0** remain untouched; a
+newline's line advance is therefore font size30 for this feat, independent
+of the font ascender/descender/gap. Flags0 means left line origin and first
+baseline at the translated origin. No GUI-scale multiplier is added.
+
+For the identity linear ancestor transform here, pixel mode gives
+FreeType **30×30 em pixels**, char sizes1920 in26.6, and load flags
+**NO_HINTING|NO_BITMAP =10**. Outline3.75 gives stroker radius240 in26.6,
+round joins/caps and the existing full-stroke glyph path. Use its unhinted
+pixel-mode advance/kerning/atlas rules, not a scalable-widget font30 atlas.
+The generic pixel path retains the node linear transform for glyph
+rasterization, then draws with **translation int(C.tx+0.5),
+int(C.ty+0.5)**, truncating toward zero after addition. Apply this after
+the completed parent/node transform; keep the projected position fractional
+until that font-boundary rounding. No integer half-viewport is introduced.
+
+Shape fill/stroke flags stay at constructor value **3**; no extrusion
+flag0x10 is enabled. Although this consumer assigns extrusion-color arrays
+as well as fill/stroke arrays, **TrueType text does not render extrusion**.
+There is no inherited speech-template extrusion, depth or line-spacing
+setting. The outline layer's radius3.75 and foreground layer's default
+radius0 are separate TextShapes, as §4.1 specifies; do not merge them into
+an unrelated scalable widget-text style.
+
 ## 5. Editor controls: verified core and remaining dispatch boundary
 
 The core editor uses UTF-16 indices. **0x26b600 has four ordered tests**:

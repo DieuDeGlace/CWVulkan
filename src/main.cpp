@@ -62,6 +62,7 @@
 #include "HudCoin.h"
 #include "ChatLine.h"
 #include "ChatCommands.h"
+#include "FeatText.h"
 #include "IdentifyWindow.h"
 #include "UpgradeWidget.h"
 #include "SteamSession.h"
@@ -163,6 +164,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // Command line (mostly for screenshots and testing):
     //   --pos X Y  --z Z  --hour H  --yaw R  --pitch R  --zoom Z  --capture FILE.png
     std::string capture;
+    std::string captureFeat; // --capture-feat FILE: local display fixture, never an award or network send
+    bool featFixtureQueued = false, featFixtureCaptured = false;
     std::vector<std::string> chatTestLines; // --chat-line TEXT: local capture fixture, never transmitted
     std::string captureSpeech; // --capture-speech FILE: first visible eight-unit NPC prefix (testing)
     bool speechCaptured = false;
@@ -256,6 +259,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             next(startZoom);
         else if (a == "--capture" && i + 1 < argc)
             capture = argv[++i];
+        else if (a == "--capture-feat" && i + 1 < argc)
+            captureFeat = argv[++i];
         else if (a == "--chat-line" && i + 1 < argc)
             chatTestLines.push_back(argv[++i]);
         else if (a == "--capture-speech" && i + 1 < argc)
@@ -448,7 +453,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // copies the game's two files in (read only) when CubeVulkan has none yet. The owner's real
     // saves are never written.
     nativeprogress::ProgressFile saves;
-    const bool savesWritable = !noSave && capture.empty() && captureSpeech.empty() && benchmark <= 0 && !listOnly;
+    const bool savesWritable = !noSave && capture.empty() && captureSpeech.empty() && captureFeat.empty() && benchmark <= 0 && !listOnly;
     saves.open(saveFolder.empty() ? root / "Save" : pathOfUtf8(saveFolder), assets.gameDir() / "Save", pathOfUtf8(bootstrap.text("Saves", "ImportFrom")), savesWritable,
                [](const std::string &line) { logLine(line); });
     nativeprogress::SpriteTable sprites; // (the game's model list, for the looks of saved characters)
@@ -503,7 +508,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     };
     // Captures, benchmarks and the dedicated server keep a window of the INI's size: a test run
     // does not take the owner's screen.
-    const bool testRun = !capture.empty() || !captureSpeech.empty() || benchmark > 0 || runSeconds > 0 || serverMode || hiddenWindow;
+    if (!captureFeat.empty() && runSeconds <= 0) runSeconds = 6;
+    const bool testRun = !capture.empty() || !captureSpeech.empty() || !captureFeat.empty() || benchmark > 0 || runSeconds > 0 || serverMode || hiddenWindow;
 
     if (!glfwInit()) {
         fatal("Cannot initialise the window system.");
@@ -732,7 +738,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     audio.setMusicLoop(gameOptions.musicLoop != 0);
     if (logSounds || config.flag("Audio", "LogSounds", false))
         audio.setLog([](const std::string &line) { logLine(line); });
-    if (!capture.empty() || !captureSpeech.empty() || serverMode || !audio.init(assets))
+    if (!capture.empty() || !captureSpeech.empty() || !captureFeat.empty() || serverMode || !audio.init(assets))
         logLine("Audio disabled");
     else if (!audio.soundsKnown())
         logLine("Audio: no sound list (Extract/sounds.txt, written by tools/ZoneExtractor in the game); only music plays");
@@ -786,7 +792,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
     // The front screens (Frontend.h): the title over the running world, character select and
     // creation, the options.
-    const bool launchMenu = forceMenu || (!directPlay && capture.empty() && captureSpeech.empty() && benchmark <= 0 &&
+    const bool launchMenu = forceMenu || (!directPlay && capture.empty() && captureSpeech.empty() && captureFeat.empty() && benchmark <= 0 &&
         std::isnan(startX) && runSeconds <= 0 && poseAbility <= 0 && !autoAttack && !openInventory && showcase.empty());
     frontend::Services front;
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
@@ -1421,6 +1427,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     CubModel upgradeModel;                       // the hand's weapon model
     std::string upgradeModelSprite, upgradePictureKey;
     ChatLine chat;
+    feattext::Store featTexts;
+    size_t pendingFeatDisplays = 0;
     chatInput.clear(); // discard frontend events before gameplay starts
     captureChatInput = true;
     for (const auto &text : chatTestLines)
@@ -2710,11 +2718,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     floating.push_back({extractedWorld.toLocal(at) + glm::vec3(0, 0, 2.4f), (int)std::lround(damage), 0,
                                         target == spawned.playerId()});
             };
-            mirror->featDone = [&](const cwnet::FeatRecord &) {
-                hud.appendChat(chat, u"FEAT!\n", {200, 100, 255});
-                texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "FEAT!", PURPLE, 0, true});
-                audio.playInterface(nativeinteract::SLEEP_SOUND); // (sound 0x1f)
-            };
+            mirror->featDone = [&](const cwnet::FeatRecord &) { ++pendingFeatDisplays; };
             mirror->dayChanged = [&](int32_t newDay) {
                 resetDailyProgress();
                 logLine("World: day " + std::to_string(newDay));
@@ -2929,7 +2933,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
     bool shadowsEnabled = renderSettings.shadows;
     double lastX = 0, lastY = 0;
-    const bool mouseLook = capture.empty() && captureSpeech.empty() && config.number("Input", "MouseLook", 1, 0, 1) != 0;
+    const bool mouseLook = capture.empty() && captureSpeech.empty() && captureFeat.empty() && config.number("Input", "MouseLook", 1, 0, 1) != 0;
     glfwGetCursorPos(window, &lastX, &lastY);
     auto pointerPosition = [&](double *x, double *y) {
         if (input.pointerSampled)
@@ -3638,9 +3642,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 default: return 2;
                 }
             };
-            auto stacks = [](int category) {
-                return category == 1 || category == 10 || category == 11 || category == 12 || category == 13 || category == 22 || category == 28;
-            };
+            auto stacks = [](int category) { return worldgen::Inventory::stackable((uint8_t)category); };
             auto rarityColour = [](int rarity) {
                 static const glm::vec4 colours[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
                 return colours[std::clamp(rarity, -1, 4) + 1];
@@ -5153,6 +5155,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             return {};
         });
+        // The addressed feat consumer follows the ordinary received-chat visit.
+        if (!captureFeat.empty() && !featFixtureQueued && time >= 2 && spawned.playerRecord()) {
+            ++pendingFeatDisplays;
+            featFixtureQueued = true;
+        }
+        if (const auto *me = spawned.playerRecord())
+            while (pendingFeatDisplays) {
+                --pendingFeatDisplays;
+                feattext::Point physical;
+                std::memcpy(physical.data(), me + 0x10, sizeof physical);
+                featTexts.received(physical);
+                hud.appendChat(chat, u"FEAT!\n", {200, 100, 255});
+                audio.playInterface(feattext::SOUND);
+            }
         bool chatFontChanged = hud.requireText(chat.text());
         for (const auto &row : chat.rows())
             for (const auto &word : row)
@@ -5885,6 +5901,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             for (size_t i = 0; i < pose.size() && i < characterModels.size(); i++)
                 drawPart(characterModels[i], place * pose[i]);
         }
+        const auto featViewport = renderer.screenSize();
+        const auto featLabels = featTexts.visit(renderer.speechProjection(), {(float)featViewport.width, (float)featViewport.height},
+                                               (int32_t)std::clamp(frameMs, 0.0, 1000.0));
         if (hudReady) {
             VkExtent2D screen = renderer.screenSize();
             if (screen.width != hudSize.width || screen.height != hudSize.height) {
@@ -5905,6 +5924,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 return true;
             };
             Hud::State hs;
+            hs.feats = &featLabels;
             hs.hp = playerHp;
             hs.maxHp = playerMaxHp;
             hs.mp = playerMp * 100; // The game shows mana out of 100.
@@ -6462,6 +6482,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     input.gamepadNavigationPoints.push_back({(int32_t)(point.x * width / std::max(1u, size.width)),
                                                             (int32_t)(point.y * height / std::max(1u, size.height))});
             }
+            if (!captureFeat.empty() && !featFixtureCaptured && !featLabels.empty() &&
+                (!menusReady || menus.interfaceShown()) && hud.hasInterface()) {
+                renderer.capture(captureFeat);
+                featFixtureCaptured = true;
+            }
             if (menusReady && !menus.interfaceShown()) // F4: the whole interface hidden
                 hudVertices.clear();
             else if (hs.gold >= 0 && hud.hasInterface()) { // the money's turning coin (hud-money.md §2)
@@ -6911,6 +6936,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (settledFrames == 32 || time > 120 + runSeconds)
                 break;
         }
+    }
+    if (!captureFeat.empty()) {
+        logLine(featFixtureCaptured ? "Feat capture: visible owner-font frame captured" : "Feat capture: no visible frame");
+        if (!featFixtureCaptured) exitCode = 1;
     }
     if (lastTalkedSpeaker && lastTalkedSpeaker->native) {
         logLine("NPC speech retained: " + std::to_string(npcSpeech.bubbles().size()) + " bubbles, " +

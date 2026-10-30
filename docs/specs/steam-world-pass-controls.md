@@ -116,6 +116,54 @@ stored float advances by float **s times(1−old)+old**, with
 replacement is established by this producer. The water PS's own opacity
 formula is distinct from this submitted scalar.
 
+### 3.1 Complete identified+0x4a8 lifecycle and reset separation
+
+The supported native Renderer field has **two identified assignments**:
+
+- Constructor **0xcbd10 at0xcbeb4** writes an eight-byte value with low
+  word **0x3f800000**, giving float **+0x4a8=1** and the adjacent
+  +0x4ac word0. This is initialization, not an uninitialized water value.
+- Scene updater **0xecda0 at0xed5d2–0xed604** loads the old float and
+  stores the easing toward literal float1 described below. No observed
+  wet-block, water-depth, weather, menu, world-change or underwater branch
+  assigns this field0 or another target.
+
+The second assignment uses **float32 scene frame-ms** (0xe2e00 argument7,
+also stored renderer+0x330). It promotes that already rounded float to
+double for **0xa7a0**, passing rate float **0.05** (0x42e524, word
+0x3d4ccccd). The helper's exact integration remains steam-scene-lighting
+§2.5; it is not a simple rate-times-dt replacement. Its return is float.
+Then perform **float1 minus old**, multiply that float difference by the
+returned float coefficient, and add old, rounding after each SSE scalar
+operation. There is no fused multiply/add, post-clamp, integer-ms truncation
+or private opacity timestamp. The original capped double wall frame-ms
+producer/narrowing is steam-scene-lighting §5. This update occurs once per
+scene0xe2e00 call inside0xecda0, after its current block/status queries
+and before its adaptive-range assignments; it does not require actual
+water geometry to be present. If the scene call is skipped, there is no
+new opacity clock/update in this helper.
+
+**Scene-range reset0xe8a30 writes four bytes0 at+0x4a4 only.** It does
+not clear+0x4a8. The normal world-identity-change caller from0xa5a50
+and the derived+0x49c/+0x4a0 writes likewise do not change water opacity.
+The neighboring wide store found in terrain mesher0xe9530 at0xea7be is
+to a **local stack frame**, not this Renderer; it is not an opacity reset.
+
+Water draw0xe85e0 **reads**+0x4a8 and submits that value through renderer
+vtable+0x70 to the shader Opacity input. Its exit submission of Opacity1,
+and ordinary model/per-draw shader Opacity submissions, change the shader
+binding rather than overwriting this field. Do not mistake those uniform
+setters for a new scene-water target or CPU-field reset.
+
+The source/assembly audit included explicit and overlapping stores,
+constructor defaults and the common range reset; other+0x4a8 matches are
+different object types or stack locals. There is no identified native
+positive origin for an opacity other than1. Starting from the constructor
+and ordinary finite native frame inputs, **the stored field remains exactly1**
+under its own update. External mutation could subsequently ease back to1,
+but is not a stock gameplay fade producer. Keep this lifecycle separate
+from the water pixel formula and retained scene/material inputs.
+
 ## 4. Screen overlays and exact logo lighting
 
 Overlay setup **0xe4d90–0xe4f22** installs identity view and builds its

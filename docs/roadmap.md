@@ -178,12 +178,18 @@ individual feature documents.
   and protocol checks. Focused regressions and the full CPU/owner suite pass;
   all 40 existing Vulkan image cases pass. A hidden/no-save Alpha frame confirms
   chat placement/font/color and selected render style, not native pixel parity.
-- [ ] Remaining sound-event wiring and exact floating feat presentation.
-  Feat receipts now add the verified purple chat line, but the separate floating
-  record still needs its exact physical anchor, projection, font, fade and aging.
-  The [chat specification](specs/steam-chat-feat-presentation.md) and
-  [sound addenda](specs/steam-sound-event-addenda.md) are independently traced;
-  these remaining consumers are not implied complete by the chat implementation.
+- [x] Addressed feat presentation: purple chat receipt followed by the captured
+  physical-point label, native float projection order, physical 30px pixel/unhinted
+  font with 3.75px colored outline, linear 3000ms fade/drift and old-age draw before
+  strict expiry. The textFX layer precedes lifebars, ordinary UI and cursor; hiding
+  the interface does not pause its age. Projection/lifetime cases and the full
+  CPU/owner suite pass, as do all 40 existing Vulkan image cases. Owner-font captures
+  at GUI scales 1/1.5 keep the same 112x19 colored-glyph bounds; those UI-only early
+  frames are not settled-world lighting or native-game pixel-parity evidence.
+  No feat producer, award or descriptor meaning was invented.
+- [ ] Remaining sound-event wiring. The independently traced
+  [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
+  their actual runtime wiring and broader listening checks still remain.
 - [x] Living-creature light source branches: carried/toggled lamps, effect/race/state
   lights, casting and four equipment spirit-glow anchors. The renderer reads live
   player/NPC records and buffs in world traversal order, including actors without
@@ -201,13 +207,20 @@ individual feature documents.
   including readiness loss/recovery and new cached bounds with old geometry. A hidden
   no-save settled-world capture with native radius15 passed; sampled peak private
   memory was1,687MiB. This is bounded evidence, not a whole-game/performance guarantee.
+- [ ] Shared Omega-inspired water and underwater appearance, independent of the
+  Alpha/Steam lighting selection. Use the owner's surface/reflection and submerged
+  haze references, retaining a native appearance option for parity checks. This is
+  a visual rendering change; world geometry and generation stay unchanged.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs
   are now available. Their remaining consumers and native visual comparisons still
-  need implementation/validation. In particular the adaptive readiness scalar and
-  flagged-block color do not yet establish complete shader-state parity.
+  need implementation/validation. Scene range and Steam sky easing now use the
+  verified float-rounded scene interval, distinct from the double camera interval.
+  Stock water opacity initializes to 1 and retains 1 through range reset; the native
+  audit found no zero/fade-reset writer. The previous zero initializer was corrected.
+  Flagged-block color and the remaining shader controls still need their consumers.
   Hit flashes now consume local and received visual records, select current spirit
   weapons, retain the fixed hit position and use native first-frame aging/strict
   expiration. They share the scene sort/zone slots. CPU and Vulkan regressions

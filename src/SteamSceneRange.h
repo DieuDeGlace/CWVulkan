@@ -50,11 +50,11 @@ class State {
     bool update(const Frame &);
     void reset() { ranges.scene = 0; } // native reset leaves derived fields until the next scene call
     const Ranges &value() const { return ranges; }
-    float readiness() const { return ready; }
+    float waterOpacity() const { return opacity; }
     glm::vec3 flaggedColour() const { return colour; }
   private:
     Ranges ranges;
-    float ready = 0;
+    float opacity = 1; // native constructor; scene reset leaves this field alone
     glm::vec3 colour{0};
 };
 } // namespace scenerange
