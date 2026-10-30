@@ -3,6 +3,7 @@
 // see AlphaLight.h), shared by terrain and .cub models. Faces between two solid voxels are
 // skipped.
 #include <glm/glm.hpp>
+#include "SteamVoxel.h"
 #include <cstdint>
 #include <vector>
 
@@ -10,7 +11,7 @@
 // 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z.
 struct Vertex {
     float x, y, z;
-    uint8_t r, g, b, ao; // ao: 0 (dark corner) .. 255 (open)
+    uint8_t r, g, b, ao; // Native: packed RGB/light V. Classic: RGB/corner AO.
     uint8_t normal, flags, pad0, pad1;
 };
 enum VertexFlags : uint8_t {
@@ -21,6 +22,7 @@ enum VertexFlags : uint8_t {
     PACKED_NORMAL = 16, // normal/pad0/pad1 hold an arbitrary unit normal as UNORM8.
     WORLD_MAP = 32, // (DrawItem only) the world map's own pass: DrawItem::map, shaders/map.*.
     MENU_BACKGROUND = 64, // Screen-space interface art, blended behind the menu's models.
+    STEAM_VERTEX = 128, // Native packed RGB/V semantics; shader doubles only RGB.
 };
 
 struct Mesh {
@@ -52,22 +54,39 @@ struct CornerShade {
     uint8_t r, g, b, a;
 };
 
+enum class VoxelLayout { Classic, SteamCub, SteamTerrain };
+using MeshSelector = std::function<Mesh &(int x, int y, int z)>;
+inline void appendFaceIndices(Mesh &mesh, uint32_t base, const CornerShade (&corners)[4], VoxelLayout layout) {
+    auto indices = steamvoxel::CUB_TRIANGLES;
+    if (layout == VoxelLayout::SteamTerrain)
+        indices = steamvoxel::terrainTriangles({glm::u8vec3(corners[0].r, corners[0].g, corners[0].b),
+            glm::u8vec3(corners[1].r, corners[1].g, corners[1].b), glm::u8vec3(corners[2].r, corners[2].g, corners[2].b),
+            glm::u8vec3(corners[3].r, corners[3].g, corners[3].b)});
+    else if (layout == VoxelLayout::Classic && corners[0].a + corners[2].a < corners[1].a + corners[3].a)
+        indices = {1, 2, 3, 1, 3, 0};
+    for (uint32_t index : indices)
+        mesh.indices.push_back(base + index);
+}
+
 // Meshes every solid voxel in [lo, hi), emitting the faces that border a non-solid voxel.
 // `solid(x,y,z)` may be queried outside the range. `color(x,y,z)` gives a solid voxel's
 // colour. `shade(x, y, z, face, corner, colour)` gives each face corner's final colour and
 // fourth byte (ambient occlusion or baked light; higher is brighter): `corner` indexes
 // FACE_CORNERS[face]. Vertices are `offset + p * scale`.
 template <class Solid, class Color, class Shade>
-void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade &&shade, Mesh &mesh,
-               float scale = 1, glm::vec3 offset = glm::vec3(0)) {
+void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade &&shade, Mesh &output,
+               float scale = 1, glm::vec3 offset = glm::vec3(0), VoxelLayout layout = VoxelLayout::Classic,
+               const MeshSelector &select = {}) {
     for (int z = lo.z; z < hi.z; z++)
         for (int y = lo.y; y < hi.y; y++)
             for (int x = lo.x; x < hi.x; x++) {
                 if (!solid(x, y, z))
                     continue;
+                Mesh &mesh = select ? select(x, y, z) : output;
                 VoxelColor c{};
                 bool haveColor = false;
-                for (int f = 0; f < 6; f++) {
+                for (int face = 0; face < 6; face++) {
+                    const int f = layout == VoxelLayout::Classic ? face : steamvoxel::FACE_ORDER[face];
                     const int *n = FACE_NORMALS[f];
                     if (solid(x + n[0], y + n[1], z + n[2]))
                         continue;
@@ -80,7 +99,7 @@ void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade
                         corners[k] = shade(x, y, z, f, k, c);
                     uint32_t base = (uint32_t)mesh.vertices.size();
                     for (int k = 0; k < 4; k++) {
-                        const int *corner = FACE_CORNERS[f][k];
+                        const int *corner = layout == VoxelLayout::Classic ? FACE_CORNERS[f][k] : steamvoxel::CORNERS[f][k];
                         glm::vec3 p = offset + glm::vec3(x + corner[0], y + corner[1],
                                                          z + corner[2]) * scale;
                         const CornerShade &s = corners[k];
@@ -88,13 +107,7 @@ void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade
                         mesh.min = glm::min(mesh.min, p);
                         mesh.max = glm::max(mesh.max, p);
                     }
-                    // Split along the brighter diagonal so the shading interpolates evenly.
-                    if (corners[0].a + corners[2].a >= corners[1].a + corners[3].a)
-                        mesh.indices.insert(mesh.indices.end(),
-                                            {base, base + 1, base + 2, base, base + 2, base + 3});
-                    else
-                        mesh.indices.insert(mesh.indices.end(), {base + 1, base + 2, base + 3,
-                                                                 base + 1, base + 3, base});
+                    appendFaceIndices(mesh, base, corners, layout);
                 }
             }
 }

@@ -90,6 +90,12 @@ individual feature documents.
   containing-zone/model gates and coherent cache-oracle capture are implemented.
   Native scene palette targets/RGBA easing now have numeric checks and Steam RGB
   integration, including regional/structure/effect13 blends and capped wall timing.
+  Steam voxel inputs now use weighted front-layer occlusion/light, encoded CUB
+  colors and native face corners/diagonals. Terrain reuses one retained light solve
+  for mesh corners and models; lava has its own opaque palette group. Water films,
+  the optimized sea quad and post-solve air-byte tests have fixture regressions.
+  The full suite and Vulkan smoke pass; the 300-zone terrain-only light oracle
+  matches all 482,880 eligible columns and 1,541,581 compared blocks.
   Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
   point-light registration, remaining shader/color details, undefined
   consumed lamp turns and broader dungeon/theme oracles still prevent a complete
@@ -110,7 +116,7 @@ individual feature documents.
   generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Water vertex occlusion/point lights, Alpha far-static-model ordering,
+- [ ] Native world/water shader composition and point lights, Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   These need reference comparisons or an independent behavioral specification.
 

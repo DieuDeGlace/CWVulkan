@@ -582,43 +582,56 @@ std::pair<float, bool> ExtractedWorld::objectScale(int type, const std::string &
     return {scale * partScale(name), measuredScale.count(name) == 0};
 }
 
-void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery) {
-    std::vector<std::array<int64_t, 3>> positions;
-    for (const Scenery &s : scenery)
-        if (s.modelType >= 0)
-            positions.push_back(s.modelPosition);
-    if (positions.empty())
+std::optional<worldgen::MeshLightVolume> ExtractedWorld::lightsFor(int ax, int ay,
+                                                                    const std::shared_ptr<Zone> (&around)[3][3]) {
+    for (const auto &row : around)
+        for (const auto &zone : row)
+            if (!zone)
+                return std::nullopt;
+    std::vector<worldgen::TerrainColumn> columns[3][3];
+    for (auto &row : columns)
+        for (auto &zone : row)
+            zone.resize(64 * 64);
+    // The solver reads only64+8+8 columns. Copy that window, not all nine zones.
+    for (int x = -8; x < 72; ++x)
+        for (int y = -8; y < 72; ++y) {
+            const int dx = x < 0 ? -1 : x >= 64 ? 1 : 0, dy = y < 0 ? -1 : y >= 64 ? 1 : 0;
+            const int index = (x - dx * 64) * 64 + y - dy * 64;
+            const auto &source = around[dy + 1][dx + 1]->columns[index];
+            auto &target = columns[dy + 1][dx + 1][index];
+            target.base = source.baseZ;
+            target.blocks.reserve(source.blocks.size());
+            for (const auto &block : source.blocks)
+                target.blocks.push_back({block.r, block.g, block.b, block.field3, block.type, block.breakable});
+        }
+    return worldgen::meshZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & {
+        return columns[y - ay + 1][x - ax + 1];
+    });
+}
+
+void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved) {
+    if (std::none_of(scenery.begin(), scenery.end(), [](const Scenery &s) { return s.modelType >= 0; }))
         return;
     const int ax = zx + originX, ay = zy + originY;
     std::shared_ptr<Zone> neighbors[3][3];
-    for (int x = 0; x < 3; ++x)
-        for (int y = 0; y < 3; ++y) {
-            neighbors[x][y] = load(ax + x - 1, ay + y - 1);
-            if (!neighbors[x][y])
-                return; // An incomplete export has no complete native mesh-light input.
+    for (int y = -1; y <= 1; ++y)
+        for (int x = -1; x <= 1; ++x) {
+            neighbors[y + 1][x + 1] = load(ax + x, ay + y);
+            if (!neighbors[y + 1][x + 1])
+                return;
         }
-    std::vector<worldgen::TerrainColumn> columns[3][3];
-    for (int x = 0; x < 3; ++x)
-        for (int y = 0; y < 3; ++y) {
-            auto &out = columns[x][y];
-            out.resize(64 * 64);
-            for (size_t i = 0; i < out.size(); ++i) {
-                const Column &in = neighbors[x][y]->columns[i];
-                out[i].base = in.baseZ;
-                out[i].blocks.reserve(in.blocks.size());
-                for (const Block &b : in.blocks)
-                    out[i].blocks.push_back({b.r, b.g, b.b, b.field3, b.type, b.breakable});
-            }
-        }
-    const auto samples = worldgen::sampleZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & {
-        return columns[x - ax + 1][y - ay + 1];
-    }, positions);
-    size_t at = 0;
+    std::optional<worldgen::MeshLightVolume> computed;
+    if (!solved || solved->columns.empty()) {
+        computed = lightsFor(ax, ay, neighbors);
+        if (!computed)
+            return;
+        solved = &*computed;
+    }
     Zone &center = *neighbors[1][1];
     std::lock_guard modelLock(center.modelLights->mutex);
     for (Scenery &s : scenery)
         if (s.modelType >= 0) {
-            s.light = (float)samples[at++] / 255.0f;
+            s.light = (float)solved->fixed(s.modelPosition) / 255.0f;
             const auto &p = s.modelPosition;
             if (gameBlock(p[0] >> 16, p[1] >> 16, (int32_t)(p[2] >> 16))[4] == WATER_TYPE)
                 center.modelLights->waterModels.insert(s.listPosition);
@@ -1025,7 +1038,10 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
     return boundsFor((int)ax, (int)ay, around);
 }
 
-bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds) {
+bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds,
+                          worldgen::MeshLightVolume *nativeLight, Mesh *lava) {
+    if (nativeLight)
+        *nativeLight = {};
     if (nativeBounds)
         nativeBounds->reset();
     const int64_t absoluteX = (int64_t)zx + originX, absoluteY = (int64_t)zy + originY;
@@ -1039,8 +1055,16 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     auto self = around[1][1];
     if (!self)
         return false;
+    const bool alphaLook = renderStyle() == RenderStyle::Alpha;
+    const auto nativeBox = (!alphaLook || nativeBounds) ? boundsFor(ax, ay, around) : std::nullopt;
     if (nativeBounds)
-        *nativeBounds = boundsFor(ax, ay, around); // exactly the terrain snapshot this job meshes
+        *nativeBounds = nativeBox;
+    worldgen::MeshLightVolume localLight;
+    auto &solvedLight = nativeLight ? *nativeLight : localLight;
+    if (!alphaLook)
+        if (auto solved = lightsFor(ax, ay, around))
+            solvedLight = std::move(*solved);
+    const bool nativeEncoding = !alphaLook && !solvedLight.columns.empty();
     // Column lookup over the zone and a one-column border from its neighbours.
     // Missing neighbours count as this zone's edge column (no cliff walls at
     // the edge of the extracted area).
@@ -1068,6 +1092,28 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         out = c.blocks[i];
         return true;
     };
+    auto effectiveBlock = [&](int x, int y, int64_t z) -> Block {
+        const auto &c = column(x, y);
+        if (z < c.baseZ)
+            return {200, 200, 200, 0, 1, 0};
+        const uint64_t index = (uint64_t)(z - c.baseZ);
+        if (index < c.blocks.size()) {
+            auto block = c.blocks[(size_t)index];
+            // Native2a3260 writes solved red onto target-zone stored air/water
+            // before mesh queries. Overlay it on this immutable job snapshot.
+            if (nativeEncoding && x >= 0 && y >= 0 && x < 64 && y < 64 && (block.type == 0 || block.type == 2))
+                block.r = solvedLight.at((int64_t)ax * 64 + x, (int64_t)ay * 64 + y, z);
+            if (block.type || z > 0 || (block.breakable & DRY_AIR))
+                return block;
+        } else if (z > 0)
+            return {255, 255, 255, 0, 0, 0};
+        return {255, 255, 255, 0, 2, 0};
+    };
+    const steamvoxel::Probe nativeProbe = [&](steamvoxel::Point p) {
+        const auto block = effectiveBlock((int)p.x, (int)p.y, p.z);
+        return steamvoxel::Sample{block.type == 0 || block.type == 2,
+            solvedLight.at((int64_t)ax * 64 + p.x, (int64_t)ay * 64 + p.y, p.z)};
+    };
     // Height range worth meshing: from the lowest surface in the 66x66 area
     // (anything lower is hidden) to the highest stored block.
     int lo = INT32_MAX, hi = INT32_MIN;
@@ -1082,6 +1128,10 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     auto solid = [&](int lx, int ly, int z) {
         if (z <= lo)
             return true; // Below the meshed range: buried.
+        if (nativeEncoding) {
+            const uint8_t type = effectiveBlock(lx, ly, z).type;
+            return type != 0 && type != 2; // rendering is distinct from collision solidity
+        }
         Block b;
         return blockAt(column(lx, ly), z, b) && solidType(b.type);
     };
@@ -1089,18 +1139,19 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     auto colour = [&](int lx, int ly, int z) {
         Block b{};
         blockAt(column(lx, ly), z, b);
-        // Vanilla's world shader doubles vertex colours (vc = v1 + v1).
-        VoxelColor c{(uint8_t)std::min(255, b.r * 2), (uint8_t)std::min(255, b.g * 2),
-                     (uint8_t)std::min(255, b.b * 2), 0};
+        // Native bytes are shaded first and doubled only in the shader. Keep
+        // the old full-RGB encoding for Alpha/incomplete terrain snapshots.
+        VoxelColor c = nativeEncoding ? VoxelColor{b.r, b.g, b.b, STEAM_VERTEX}
+                                     : VoxelColor{(uint8_t)std::min(255, b.r * 2), (uint8_t)std::min(255, b.g * 2),
+                                                   (uint8_t)std::min(255, b.b * 2), 0};
         // Vanilla never moves a block; the leaf sway is CubeVulkan's WorldMotion option
         // ([Motion] LeafSway, off by default), which the vertex shader applies to these.
         if (b.type == LEAVES_TYPE || b.type == SNOW_LEAVES_TYPE)
-            c.flags = SWAY;
+            c.flags |= SWAY;
         return c;
     };
     // The Alpha look bakes the block light (docs/specs/alpha-rendering.md 9.2-9.4): the light
     // is flooded through the zone and a 16-block border, then every corner samples it.
-    const bool alphaLook = renderStyle() == RenderStyle::Alpha;
     std::unique_ptr<alphalight::LightVolume> light;
     if (alphaLook) {
         constexpr int BORDER = 16;
@@ -1126,40 +1177,87 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             return alphalight::shadeCorner(*light, {x + corner[0], y + corner[1], z + corner[2]}, face, c);
         };
         meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset);
+    } else if (nativeEncoding) {
+        auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
+            const int *corner = steamvoxel::CORNERS[face][k];
+            const auto encoded = steamvoxel::terrainCorner(glm::vec4(glm::vec3(c.r, c.g, c.b) / 255.0f, 1),
+                {x + corner[0], y + corner[1], z + corner[2]}, face, nativeProbe, effectiveBlock(x, y, z).type == 0x14);
+            return CornerShade{encoded.r, encoded.g, encoded.b, encoded.a};
+        };
+        const MeshSelector group = [&](int x, int y, int z) -> Mesh & {
+            return lava && effectiveBlock(x, y, z).type == LAVA_TYPE ? *lava : opaque;
+        };
+        meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset,
+                  VoxelLayout::SteamTerrain, group);
     } else
         meshVoxels({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, opaque, 1.f, offset);
     // Water geometry from water-rendering.md A.1/B.1: exposed full block
     // faces, including sides/bottoms, and a coplanar film over exposed wet ground.
     auto typeAt = [&](int x, int y, int z) {
+        if (nativeEncoding)
+            return effectiveBlock(x, y, z).type;
         Block block{};
         blockAt(column(x, y), z, block);
         if (block.type == AIR_TYPE && z <= 0 && !(block.breakable & DRY_AIR)) return WATER_TYPE;
         return block.type;
     };
+    bool wholeWater = nativeEncoding && nativeBox && nativeBox->lowest < 1 && nativeBox->upper >= 0;
+    for (int x = 0; x < 64 && wholeWater; ++x)
+        for (int y = 0; y < 64; ++y)
+            if (effectiveBlock(x, y, 0).type != WATER_TYPE || effectiveBlock(x, y, 1).r != 255) {
+                wholeWater = false;
+                break;
+            }
+    if (wholeWater) {
+        const uint32_t base = (uint32_t)water.vertices.size();
+        const glm::ivec2 corners[]{{0,0}, {64,0}, {64,64}, {0,64}};
+        for (auto corner : corners) {
+            const glm::vec3 at = offset + glm::vec3(corner, 1);
+            water.vertices.push_back({at.x, at.y, at.z, 63, 127, 127, 255, 4, WATER_SURFACE | STEAM_VERTEX, 0, 0});
+            water.min = glm::min(water.min, at);
+            water.max = glm::max(water.max, at);
+        }
+        for (uint32_t index : steamvoxel::CUB_TRIANGLES)
+            water.indices.push_back(base + index);
+    }
     auto emitWater = [&](int x, int y, int z, int face) {
-        uint32_t base = (uint32_t)water.vertices.size();
+        const uint32_t base = (uint32_t)water.vertices.size();
+        CornerShade corners[4];
         for (int k = 0; k < 4; k++) {
-            const int *corner = FACE_CORNERS[face][k];
-            glm::vec3 at = offset + glm::vec3(x + corner[0], y + corner[1], z + corner[2]);
-            CornerShade shade{128, 255, 255, 255}; // native colour after vertex doubling
+            const int *corner = nativeEncoding ? steamvoxel::CORNERS[face][k] : FACE_CORNERS[face][k];
+            const glm::vec3 at = offset + glm::vec3(x + corner[0], y + corner[1], z + corner[2]);
+            CornerShade shade{128, 255, 255, 255};
             if (alphaLook) {
                 glm::vec3 rgb = alphalight::waterColour(light->light({x, y, z}) / 255.f);
                 shade = alphalight::shadeCorner(*light, {x + corner[0], y + corner[1], z + corner[2]}, face,
                     VoxelColor{alphalight::toByte(rgb.r), alphalight::toByte(rgb.g), alphalight::toByte(rgb.b), 0});
+            } else if (nativeEncoding) {
+                const auto encoded = steamvoxel::terrainCorner({.25f, .5f, .5f, 1},
+                    {x + corner[0], y + corner[1], z + corner[2]}, 4, nativeProbe);
+                shade = {encoded.r, encoded.g, encoded.b, encoded.a};
             }
+            corners[k] = shade;
+            const uint8_t flags = WATER_SURFACE | (nativeEncoding ? STEAM_VERTEX : 0);
             water.vertices.push_back({at.x, at.y, at.z, shade.r, shade.g, shade.b, shade.a,
-                                      (uint8_t)(alphaLook ? face : 4), WATER_SURFACE, 0, 0});
+                                      (uint8_t)(alphaLook ? face : 4), flags, 0, 0});
             water.min = glm::min(water.min, at);
             water.max = glm::max(water.max, at);
         }
-        water.indices.insert(water.indices.end(), {base, base+1, base+2, base, base+2, base+3});
+        if (nativeEncoding)
+            appendFaceIndices(water, base, corners, VoxelLayout::SteamTerrain);
+        else
+            for (uint32_t index : steamvoxel::CUB_TRIANGLES)
+                water.indices.push_back(base + index);
     };
     for (int y = 0; y < 64; y++)
         for (int x = 0; x < 64; x++)
             for (int z = lo + 1; z <= std::max(hi, 0); z++) {
                 uint8_t type = typeAt(x, y, z);
                 if (type == WATER_TYPE) {
-                    for (int face = 0; face < 6; face++) {
+                    if (wholeWater && z == 0)
+                        continue;
+                    for (int index = 0; index < 6; index++) {
+                        const int face = nativeEncoding ? steamvoxel::FACE_ORDER[index] : index;
                         const int *normal = FACE_NORMALS[face];
                         if (typeAt(x + normal[0], y + normal[1], z + normal[2]) == AIR_TYPE)
                             emitWater(x, y, z, face);

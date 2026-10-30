@@ -2,6 +2,7 @@
 #include "worldgen/ZoneLight.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace worldgen {
 namespace {
@@ -74,9 +75,14 @@ public:
         return out;
     }
 
-    uint8_t sample(const std::array<int64_t, 3> &position) const {
-        return (uint8_t)at((int32_t)(position[0] >> 16) - x0, (int32_t)(position[1] >> 16) - y0,
-                           (int32_t)(position[2] >> 16));
+    MeshLightVolume takeVolume() {
+        MeshLightVolume volume;
+        volume.x0 = x0;
+        volume.y0 = y0;
+        volume.columns.reserve(cells.size());
+        for (auto &cell : cells)
+            volume.columns.push_back({cell.column->base, std::move(cell.light)});
+        return volume;
     }
 
 private:
@@ -133,14 +139,34 @@ std::vector<TerrainColumn> lightZone(int32_t zx, int32_t zy, const ZoneColumnsSo
     return map.lit();
 }
 
-std::vector<uint8_t> sampleZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones,
-                                    const std::vector<std::array<int64_t, 3>> &positions) {
+uint8_t MeshLightVolume::at(int64_t x, int64_t y, int64_t z) const {
+    const int64_t i = x - x0, j = y - y0;
+    if (i < 0 || j < 0 || i >= SIZE || j >= SIZE || columns.size() != SIZE * SIZE)
+        return SKY;
+    const auto &column = columns[(size_t)i * SIZE + (size_t)j];
+    if (z < column.base)
+        return DARK;
+    const uint64_t index = (uint64_t)(z - column.base);
+    return index >= column.values.size() ? SKY : column.values[(size_t)index];
+}
+
+uint8_t MeshLightVolume::fixed(const std::array<int64_t, 3> &position) const {
+    return at(position[0] >> 16, position[1] >> 16, position[2] >> 16);
+}
+
+MeshLightVolume meshZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones) {
     LightMap map(zx, zy, zones);
     map.spread();
+    return map.takeVolume();
+}
+
+std::vector<uint8_t> sampleZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones,
+                                    const std::vector<std::array<int64_t, 3>> &positions) {
+    const auto volume = meshZoneLight(zx, zy, zones);
     std::vector<uint8_t> samples;
     samples.reserve(positions.size());
     for (const auto &position : positions)
-        samples.push_back(map.sample(position));
+        samples.push_back(volume.fixed(position));
     return samples;
 }
 

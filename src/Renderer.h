@@ -78,12 +78,13 @@ struct OverlayVertex {
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block
 // they are in.
-enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam };
+enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain };
+constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
 
 struct DrawItem {
     uint32_t mesh = 0;
     glm::mat4 model{1};
-    uint32_t flags = 0;  // VertexFlags added to every vertex.
+    uint32_t flags = 0;  // Draw flags combined with each vertex's flags.
     float height = 0;    // Model height in local units (plants bend from the base).
     bool castShadow = true;
     DrawKind kind = DrawKind::Model;

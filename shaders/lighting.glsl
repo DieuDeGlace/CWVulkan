@@ -73,11 +73,15 @@ struct Shade {
 };
 
 Shade shade(vec3 w, vec3 n, bool receiveShadow, float materialLight) {
-    vec3 L = f.lightDir.xyz;
+    bool lava = (uint(pc.params.x) & LAVA_LIGHTING) != 0u;
+    vec3 L = lava ? vec3(0, 0, 1) : f.lightDir.xyz;
+    vec3 frontColour = lava ? vec3(1, 1, .5) : f.front.rgb;
+    vec3 backColour = lava ? vec3(.5, .30000001192092896, 0) : f.back.rgb;
+    vec3 ambientColour = lava ? vec3(.4000000059604645) : f.ambient.rgb;
     // Native world shader terms (front/back/ambient, orientation).
     float orientation = .5 + .5 * abs(dot(n, vec3(.597022294998169, .3980148732662201, .696526050567627)));
     float facing = max(0, .3 + .7 * dot(n, L));
-    vec3 back = f.back.rgb * orientation;
+    vec3 back = backColour * orientation;
     // Player lantern at night (native-style point light around the player).
     vec3 local = vec3(0);
     float protection = 0;
@@ -89,8 +93,8 @@ Shade shade(vec3 w, vec3 n, bool receiveShadow, float materialLight) {
         local = vec3(1, .72, .42) * falloff * falloff * toward * (1 - f.sky.w) * .9;
         protection = clamp(4 * falloff * falloff * toward, 0, 1) * (1 - f.sky.w);
     }
-    vec3 ambient = f.ambient.rgb * orientation + local;
-    vec3 full = clamp(ambient + clamp(back + f.front.rgb * facing, 0, 1) * materialLight, 0, 1);
+    vec3 ambient = ambientColour * orientation + local;
+    vec3 full = clamp(ambient + clamp(back + frontColour * facing, 0, 1) * materialLight, 0, 1);
     vec3 indirect = clamp(ambient + clamp(back, 0, 1) * materialLight, 0, 1);
     Shade s;
     s.light = full;

@@ -13,6 +13,7 @@
 #include "SoundRules.h"
 #include "SceneCapture.h"
 #include "SceneVisibility.h"
+#include "worldgen/ZoneLight.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -70,7 +71,8 @@ class ExtractedWorld {
         return generatedMode || zones.count({zx + originX, zy + originY}) > 0 || worldgen::hooksChange(zx + originX, zy + originY);
     }
     // Opaque and water meshes in local world coordinates (thread-safe).
-    bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr);
+    bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,
+              worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr);
     // Independent mesh-prepass bounds in absolute native fixed coordinates.
     // Missing neighbor data yields no assertion of native bounds.
     std::optional<scenevisibility::Bounds> meshBounds(int zx, int zy);
@@ -107,7 +109,7 @@ class ExtractedWorld {
     // game's own sprite tables (Extract/sprite-groups.txt).
     std::vector<Scenery> props(int zx, int zy);
     // Bake native model light from current neighboring terrain, when all nine zones exist.
-    void lightModels(int zx, int zy, std::vector<Scenery> &scenery);
+    void lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved = nullptr);
     // The block the game's lookup (0xe9a0, 0xeb90) gives at absolute game block (x, y, z):
     // r, g, b, -, type, flags. Only zones already in memory are read; elsewhere the game's
     // default for a missing zone (grey stone, type 1) and `loaded` false.
@@ -164,6 +166,7 @@ class ExtractedWorld {
         // Block edits copy the terrain snapshot; runtime model state stays shared.
         std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
     };
+    static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     using Key = std::pair<int, int>;
     std::filesystem::path folder;

@@ -49,7 +49,7 @@ layout(push_constant) uniform Push {
     uvec4 lights; // Alpha look: up to 10 point-light indices, 8 bits each in x..z; w count
 } pc;
 
-const uint SWAY = 1u, GLOW = 2u, WATER = 4u;
+const uint SWAY = 1u, GLOW = 2u, WATER = 4u, STEAM_VERTEX = 128u, LAVA_LIGHTING = 256u;
 
 // Vanilla's colour stages (Steam world pixel shader, as re-expressed in
 // SteamShadows' InlineTerrain.h). Lit surface colours get a saturation boost

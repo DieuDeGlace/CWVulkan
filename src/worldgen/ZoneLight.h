@@ -19,6 +19,21 @@ using ZoneColumnsSource = std::function<const std::vector<TerrainColumn> &(int32
 // Zone (zx, zy)'s columns, lit: the red byte of every open block set by the light pass.
 std::vector<TerrainColumn> lightZone(int32_t zx, int32_t zy, const ZoneColumnsSource &zones);
 
+// Independent retained result of the completed80x80 mesh-light pass. It owns its
+// bytes, so the source terrain snapshots may be released after solving.
+struct MeshLightVolume {
+    static constexpr int SIZE = 80;
+    struct Column {
+        int32_t base = 0;
+        std::vector<uint8_t> values;
+    };
+    int64_t x0 = 0, y0 = 0;
+    std::vector<Column> columns; // X-major, thenY
+    uint8_t at(int64_t x, int64_t y, int64_t z) const;
+    uint8_t fixed(const std::array<int64_t, 3> &position) const;
+};
+MeshLightVolume meshZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones);
+
 // Sample the completed mesh light volume at fixed model positions, including
 // solid entries which cannot be recovered from terrain air-light bytes.
 std::vector<uint8_t> sampleZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones,

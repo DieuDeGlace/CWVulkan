@@ -318,3 +318,9 @@ target_sources(EngineTests PRIVATE tests/SceneVisibilityTests.cpp)
 target_sources(engine PRIVATE src/SteamLighting.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamLightingTests.cpp)
+
+target_sources(engine PRIVATE src/SteamVoxel.cpp)
+
+target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
+
+target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)

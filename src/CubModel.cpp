@@ -1,6 +1,7 @@
 #include "CubModel.h"
 #include "AlphaLight.h"
 #include "AlphaLook.h"
+#include "SteamVoxel.h"
 #include <cstring>
 #include <fstream>
 
@@ -80,7 +81,22 @@ Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour) const {
             return CornerShade{channel(c.r, closed.r), channel(c.g, closed.g), channel(c.b, closed.b), 255};
         };
         meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, colour, shade, m, 1.f, offset);
-    } else
-        meshVoxels({0, 0, 0}, {sx, sy, sz}, isSolid, colour, m, 1.f, offset);
+    } else {
+        const steamvoxel::Probe probe = [&](steamvoxel::Point p) {
+            return steamvoxel::Sample{!solid((int)p.x, (int)p.y, (int)p.z), 0};
+        };
+        auto nativeColour = [&](int x, int y, int z) {
+            auto c = colour(x, y, z);
+            c.flags |= STEAM_VERTEX;
+            return c;
+        };
+        auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
+            const int *corner = steamvoxel::CORNERS[face][k];
+            const auto encoded = steamvoxel::cubCorner({c.r, c.g, c.b},
+                {x + corner[0], y + corner[1], z + corner[2]}, face, probe);
+            return CornerShade{encoded.r, encoded.g, encoded.b, encoded.a};
+        };
+        meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, nativeColour, shade, m, 1.f, offset, VoxelLayout::SteamCub);
+    }
     return m;
 }

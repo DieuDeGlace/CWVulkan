@@ -84,7 +84,7 @@ class World {
         mutable bool voxelsRead = false;
     };
     struct Generated {
-        Mesh opaque, water;
+        Mesh opaque, water, lava;
         std::optional<scenevisibility::Bounds> nativeBounds;
         std::vector<Scenery> scenery;
     };
@@ -102,7 +102,7 @@ class World {
     };
     ObjectProvider objectProvider;
     struct Zone {
-        uint32_t opaque = 0, water = 0;
+        uint32_t opaque = 0, water = 0, lava = 0;
         std::shared_ptr<const scenevisibility::Bounds> nativeBounds;
         std::vector<DrawItem> scenery;
         std::vector<Moving> moving;

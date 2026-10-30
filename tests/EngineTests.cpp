@@ -132,6 +132,8 @@ int sceneCaptureTests();
 int regionLevelsTests();
 int sceneVisibilityTests();
 int steamLightingTests();
+int steamVoxelTests();
+int steamTerrainTests();
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -9001,6 +9003,10 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "steamterrain")
+        return steamTerrainTests();
+    if (argc == 2 && std::string(argv[1]) == "steamvoxel")
+        return steamVoxelTests();
     if (argc == 2 && std::string(argv[1]) == "hitui")
         return plasmaHitTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "padui")
@@ -10266,6 +10272,8 @@ int main(int argc, char **argv) {
     failures += regionLevelsTests();
     failures += sceneVisibilityTests();
     failures += steamLightingTests();
+    failures += steamVoxelTests();
+    failures += steamTerrainTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;

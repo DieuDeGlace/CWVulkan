@@ -444,6 +444,7 @@ void World::update(glm::vec3 focus) {
         if (auto old = zones.find(key); old != zones.end()) { // meshed again
             renderer.release(old->second.opaque);
             renderer.release(old->second.water);
+            renderer.release(old->second.lava);
         }
         Zone z;
         if (extracted && land.config().lilies) {
@@ -465,6 +466,7 @@ void World::update(glm::vec3 focus) {
         }
         z.opaque = renderer.upload(g.opaque);
         z.water = renderer.upload(g.water);
+        z.lava = renderer.upload(g.lava);
         if (extracted && g.nativeBounds) {
             const int64_t shift[] = {-extracted->originDotsX(), -extracted->originDotsY(), 0};
             for (int axis = 0; axis < 3; ++axis) {
@@ -472,7 +474,7 @@ void World::update(glm::vec3 focus) {
                 g.nativeBounds->maximum[axis] += shift[axis];
                 g.nativeBounds->center[axis] += shift[axis];
             }
-            g.nativeBounds->meshed = z.opaque || z.water; // actual published geometry, not planned bands
+            g.nativeBounds->meshed = z.opaque || z.water || z.lava; // actual published geometry, not planned bands
             z.nativeBounds = std::make_shared<const scenevisibility::Bounds>(*g.nativeBounds);
         }
         for (auto &s : g.scenery) {
@@ -542,6 +544,7 @@ void World::update(glm::vec3 focus) {
         if (std::max(std::abs(it->first.first - cx), std::abs(it->first.second - cy)) > viewZones + 1) {
             renderer.release(it->second.opaque);
             renderer.release(it->second.water);
+            renderer.release(it->second.lava);
             it = zones.erase(it);
         } else
             ++it;
@@ -604,12 +607,14 @@ void World::update(glm::vec3 focus) {
             ExtractedWorld *ex = extracted;
             jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook] {
                 Generated g;
-                ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds);
+                worldgen::MeshLightVolume nativeLight;
+                ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds,
+                         alphaLook ? nullptr : &nativeLight, &g.lava);
                 g.scenery = ex->props(k.first, k.second);
                 if (alphaLook)
                     lightScenery(g.scenery);
                 else
-                    ex->lightModels(k.first, k.second, g.scenery);
+                    ex->lightModels(k.first, k.second, g.scenery, &nativeLight);
                 return g;
             });
             continue;
@@ -643,6 +648,8 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
     for (auto &[key, z] : zones) {
         if (z.opaque)
             opaque.push_back({z.opaque, glm::mat4(1), 0, 0, true, DrawKind::Terrain});
+        if (z.lava)
+            opaque.push_back({z.lava, glm::mat4(1), LAVA_LIGHTING, 0, true, DrawKind::LavaTerrain});
         if (z.water)
             water.push_back({z.water, glm::mat4(1), 0, 0, false, DrawKind::Terrain});
         const size_t first = opaque.size();
