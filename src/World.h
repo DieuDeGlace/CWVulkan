@@ -29,6 +29,12 @@ class World {
     void collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const;
     using ObjectProvider = std::function<std::optional<objectvisual::State>(int zx, int zy, const objectvisual::Key &)>;
     void setObjectProvider(ObjectProvider provider) { objectProvider = std::move(provider); }
+    // Queried each frame: personal lights follow the current character immediately.
+    void setUsedCellProvider(steampoints::UsedCellQuery provider) { usedCellProvider = std::move(provider); }
+    using EffectLightProvider = std::function<std::vector<steampoints::EffectSource>()>;
+    void setEffectLightProvider(EffectLightProvider provider) { effectLightProvider = std::move(provider); }
+    using GroundLightProvider = std::function<steampoints::GroundSources(steampoints::ZoneKey)>;
+    void setGroundLightProvider(GroundLightProvider provider) { groundLightProvider = std::move(provider); }
     // How many zones are drawn each way around the focus (the view distance changed).
     void setViewZones(int zones) { viewZones = zones; }
     int viewZoneCount() const { return viewZones; }
@@ -102,6 +108,9 @@ class World {
         glm::vec3 position, dimensions;
     };
     ObjectProvider objectProvider;
+    steampoints::UsedCellQuery usedCellProvider;
+    EffectLightProvider effectLightProvider;
+    GroundLightProvider groundLightProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0, lava = 0;
         std::shared_ptr<const scenevisibility::Bounds> nativeBounds;

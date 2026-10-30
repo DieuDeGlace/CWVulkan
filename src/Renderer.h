@@ -132,7 +132,7 @@ struct SkyColumn {
     float cloudGround = 0;    // Steam clouds: the ground height in mode 1
 };
 
-// What the renderer asks the world (World sets these; any may be empty).
+// World supplies terrain and live scene data; every callback is optional.
 struct WorldProbe {
     std::function<bool(glm::vec3)> water;               // the block there is water
     std::function<alpha::ZoneFactors(glm::vec3)> zone;  // the zone factors of that column
@@ -143,6 +143,9 @@ struct WorldProbe {
     glm::dvec3 origin{0};
     std::function<steamlighting::Environment(glm::vec3)> sceneLighting;
     std::function<std::vector<steampoints::ZoneKey>()> loadedLightZones;
+    steampoints::UsedCellQuery usedCell; // local player's personal discovery state
+    std::function<std::vector<steampoints::EffectSource>()> effectLights;
+    std::function<steampoints::GroundSources(steampoints::ZoneKey)> groundLights;
 };
 
 // The models the sky draws, as uploaded meshes (World makes them from the owner's install).

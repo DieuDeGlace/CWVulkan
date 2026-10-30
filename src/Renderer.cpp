@@ -1336,9 +1336,11 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         }
         steampoints::Frame points;
         points.camera = eye;
-        points.range = settings.fogDistance;
+        points.range = settings.sceneryDistance;
+        points.terrainRange = settings.fogDistance;
         points.daylight = nativeDaylight;
         points.clockMs = lighting.timeMs;
+        points.usedCell = worldProbe.usedCell;
         points.visible = [&](const steampoints::Point &p, float radius, float range) {
             const steampoints::Point relative{p[0] - origin[0], p[1] - origin[1], p[2]};
             return scenevisibility::sphere(relative, radius, nativeEye, nativePlanes, range);
@@ -1348,9 +1350,22 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             ? worldProbe.loadedLightZones() : std::vector<steampoints::ZoneKey>{};
         for (const auto &[key, draw] : sourceZones) {
             loaded.push_back(key);
-            if (nativeZoneVisible(*draw))
+            if (nativeZoneVisible(*draw)) {
+                if (worldProbe.groundLights && draw->nativeZone) {
+                    auto centre = draw->nativeZone->center;
+                    // Mesh bounds retain native Z but have renderer-relative XY.
+                    centre[0] += origin[0];
+                    centre[1] += origin[1];
+                    const float distance = steampoints::squaredDistance(centre, eye);
+                    const float itemLimit = points.terrainRange + 64;
+                    if (distance < itemLimit * itemLimit)
+                        steampoints::collectGround(worldProbe.groundLights(key), distance, points, lights);
+                }
                 steampoints::collect(*draw->nativeLights, points, lights);
+            }
         }
+        if (worldProbe.effectLights)
+            steampoints::collectEffects(worldProbe.effectLights(), points, lights);
         const auto tables = steampoints::distribute(std::move(lights), eye, loaded);
         for (const auto &[key, table] : tables) {
             const auto count = (uint32_t)std::min<size_t>(table.size(), 10);

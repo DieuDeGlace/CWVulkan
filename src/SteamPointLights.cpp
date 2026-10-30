@@ -1,5 +1,6 @@
 #include "SteamPointLights.h"
 #include "worldgen/Noise.h"
+#include "SteamScenery.h"
 #include "worldgen/StructureTables.h"
 #include <algorithm>
 #include <cmath>
@@ -27,6 +28,18 @@ float flicker(const Point &point, float clockMs) {
     const double x = (double)signedBits((uint64_t)point[0] * 10) * (1.0 / 65536.0);
     const double y = (double)signedBits((uint64_t)point[1] * 10) * (1.0 / 65536.0);
     return std::cos(10 * worldgen::simplex(x, y) + .01f * clockMs);
+}
+// Personal cells narrow to signed32 blocks before the negative exactness
+// correction and floor division (steam-scene-lighting.md section 3.5.1).
+int32_t personalCell(int64_t fixed) {
+    uint32_t bits = (uint32_t)(fixed / 65536);
+    int32_t block;
+    std::memcpy(&block, &bits, sizeof block);
+    if (fixed < 0 && (int64_t)block * 65536 != fixed) {
+        --bits;
+        std::memcpy(&block, &bits, sizeof block);
+    }
+    return block >= 0 ? block / 16 : (int32_t)(((int64_t)block - 15) / 16);
 }
 bool visible(const Frame &frame, const Point &point, float radius) {
     return frame.visible && frame.visible(point, radius, frame.range);
@@ -138,10 +151,42 @@ void collect(const ZoneSources &zone, const Frame &frame, std::vector<Light> &ou
         }
         if (dayGate && !(frame.daylight < .4000000059604645f))
             continue;
-        if (personal && (!frame.usedCell || !frame.usedCell(base[0] >> 20, base[1] >> 20)))
+        if (personal && (!frame.usedCell || !frame.usedCell(personalCell(base[0]), personalCell(base[1]))))
             continue;
         if (visible(frame, test, testRadius))
             out.push_back({position, radius, colour});
+    }
+}
+
+float squaredDistance(const Point &position, const Point &camera) { return rawDistance(position, camera); }
+
+void collectGround(const GroundSources &sources, float zoneDistanceSquared, const Frame &frame, std::vector<Light> &out) {
+    const float limit = frame.terrainRange + 64;
+    if (!(zoneDistanceSquared < limit * limit))
+        return;
+    for (const auto &item : sources.items) {
+        if (item.timerMs != 0 || item.quantity == 0 ||
+            (sources.player && item.owner != 0 && item.owner != *sources.player))
+            continue;
+        glm::vec3 colour(0);
+        if (item.category == 0x0b && item.id == 0x13) colour = {.1f, .3f, .3f};
+        else if (item.category == 0x0e) colour = {.1f, .3f, .5f};
+        else if (item.category == 0x13 && item.id == 0) colour = {.6f, .6f, .2f};
+        else if (item.category == 0x13 && item.id == 1) colour = {0, .6f, .2f};
+        else continue;
+        const auto position = raised(item.position, 3);
+        if (frame.visible && frame.visible(position, 16, frame.terrainRange)) {
+            const float fade = steamscenery::fade(rawDistance(position, frame.camera), frame.terrainRange);
+            out.push_back({position, 16, colour * fade}); // zero fade still consumes a native light slot
+        }
+    }
+}
+
+void collectEffects(const std::vector<EffectSource> &effects, const Frame &frame, std::vector<Light> &out) {
+    for (const auto &effect : effects) {
+        if ((effect.kind == 3 || effect.kind == 4) && frame.visible &&
+            frame.visible(effect.position, 16, frame.terrainRange))
+            out.push_back({effect.position, 16, glm::vec3(.5f, .5f, .2f) * effect.strength});
     }
 }
 

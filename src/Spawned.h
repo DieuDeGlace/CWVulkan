@@ -80,6 +80,8 @@ class SpawnedCreatures {
     void setAggro(const cwnet::AggroRecord &notice);       // +0xb88 of the angered creature
     void hitPlayer(const std::array<uint8_t, 0x48> &number); // a monster's hit, on the local player's own record
     void flash(int64_t id);                                // +0x994 = 1.0
+    steampoints::GroundSources groundLights(ExtractedWorld &ew, int zx, int zy);
+    std::vector<steampoints::EffectSource> effectLights() const;
     void addEffect(const cwnet::EffectRecord &effect);     // to the live effect objects
     // Whether creature `id` is in this world, the local player included.
     bool hasCreature(int64_t id) const { return (hasPlayer && id == localId) || record(id) != nullptr; }

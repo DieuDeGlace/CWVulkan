@@ -108,7 +108,7 @@ individual feature documents.
   batches, so a global64-light cap cannot discard another zone's lights. Sprite
   bindings use full CUB dimensions, posed matrices and native coordinate rounding;
   loaded neighboring zones participate before they have meshes. Source-reader,
-  CPU boundary and10 synthetic GPU checks pass, including offset70 and more than
+  CPU boundary and 21 synthetic GPU checks pass, including offset70 and more than
   64 candidates. The isolated recapture refreshed1,590 zones with both auxiliary
   light lists and coherent cache metadata. The engine reader and neighboring-zone
   light solve match all 8 model and 9 static lights in 15 nonempty zones.
@@ -117,9 +117,16 @@ individual feature documents.
   reference had BigRegions Scale2 enabled. Generation code and expected values
   were unchanged; the full owner-data suite passes. Snapshot-only characters
   are reported as lacking attack recordings; supplied broken clips still fail.
-  Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
-  creature/item/transient lights and personal used-cell wiring, special shader
-  controls, undefined
+  Personal object lights now use the local character's live used-cell state,
+  including native signed32 block narrowing before cell flooring. Live kind3/4
+  projectile lights and glowing ground items are also connected. Ground sources
+  preserve ownership, zero-timer/quantity gates, strict cached-center admission,
+  Z+3 emission, native fade and pickup changes. Model and terrain light ranges
+  remain separate. Synthetic Vulkan checks cover state changes without remeshing,
+  projectile kinds/removal and item ownership/delay/pickup; packet-backed CPU
+  checks verify the live-item adapter. These do not establish native pixel parity.
+  Native adaptive range/camera state, fresh cached-box comparisons, remaining
+  creature/frame-transient lights, special shader controls, undefined
   consumed lamp turns and broader dungeon/theme oracles still prevent a complete
   parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
@@ -138,7 +145,7 @@ individual feature documents.
   generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Remaining native creature/item/transient lights and personal used-cell wiring,
+- [ ] Remaining native creature and frame-transient lights,
   water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.

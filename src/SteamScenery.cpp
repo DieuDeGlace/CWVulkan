@@ -40,8 +40,6 @@ float distanceSquared(const std::array<int64_t, 3> &position, glm::vec3 eye) {
 }
 
 float fade(float squared, float range) {
-    if (!(range > 0))
-        return 0;
     if (squared <= range * 0.809999942779541f * range)
         return 1;
     return std::max(0.0f, 1.0f - (std::sqrt(squared) - range * 0.8999999761581421f) /

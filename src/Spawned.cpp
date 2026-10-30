@@ -2269,6 +2269,36 @@ void SpawnedCreatures::flash(int64_t id) {
         put<float>(c->record, HIT_FLASH, 1.0f);
 }
 
+steampoints::GroundSources SpawnedCreatures::groundLights(ExtractedWorld &ew, int zx, int zy) {
+    steampoints::GroundSources sources;
+    if (record(localId)) sources.player = localId;
+    const auto *items = groundItems(ew, zx, zy);
+    if (!items) return sources;
+    sources.items.reserve(items->size());
+    for (const auto &record : *items) {
+        auto &item = sources.items.emplace_back();
+        item.category = record[nativesaves::item::TYPE];
+        std::memcpy(&item.id, record.data() + nativesaves::item::SUBTYPE, sizeof item.id);
+        std::memcpy(item.position.data(), record.data() + grounditems::ground::POSITION, sizeof item.position);
+        std::memcpy(&item.timerMs, record.data() + grounditems::ground::TIMER, sizeof item.timerMs);
+        std::memcpy(&item.quantity, record.data() + grounditems::ground::COUNT, sizeof item.quantity);
+        std::memcpy(&item.owner, record.data() + grounditems::ground::OWNER, sizeof item.owner);
+    }
+    return sources;
+}
+
+std::vector<steampoints::EffectSource> SpawnedCreatures::effectLights() const {
+    std::vector<steampoints::EffectSource> sources;
+    sources.reserve(effects.size());
+    for (const auto &record : effects) {
+        auto &source = sources.emplace_back();
+        std::memcpy(&source.kind, record.data() + 0x68, sizeof source.kind);
+        std::memcpy(source.position.data(), record.data() + 8, sizeof source.position);
+        std::memcpy(&source.strength, record.data() + 0x54, sizeof source.strength);
+    }
+    return sources;
+}
+
 void SpawnedCreatures::addEffect(const cwnet::EffectRecord &effect) { effects.push_back(effect); }
 
 bool SpawnedCreatures::isDead(int64_t id) const {

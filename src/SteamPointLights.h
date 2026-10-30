@@ -5,6 +5,7 @@
 #include <array>
 #include <functional>
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 #include <glm/glm.hpp>
@@ -21,21 +22,42 @@ struct ZoneSources {
     std::vector<ModelSource> models; // auxiliary +0x90, including null markers
     std::vector<worldgen::StaticObject> objects; // auxiliary +0xc0
 };
+struct GroundSource {
+    uint8_t category = 0;
+    int32_t id = 0, timerMs = 0, quantity = 0;
+    int64_t owner = 0;
+    Point position{};
+};
+struct GroundSources {
+    std::optional<int64_t> player;
+    std::vector<GroundSource> items;
+};
+struct EffectSource {
+    int32_t kind = 0;
+    Point position{};
+    float strength = 0; // native effect +0x54, not its damage or visual size
+};
 struct Light {
     Point position{};
     float radius = 0;
     glm::vec3 colour{0};
     float distanceKey = 0;
 };
+using UsedCellQuery = std::function<bool(int32_t cellX, int32_t cellY)>;
 struct Frame {
     Point camera{};
     float range = 0, daylight = 1, clockMs = 0;
+    float terrainRange = 0; // projectile/item range; auxiliary models use range
     std::function<bool(const Point &, float radius, float range)> visible;
-    std::function<bool(int64_t cellX, int64_t cellY)> usedCell;
+    UsedCellQuery usedCell;
 };
 // Registration retains source order. Distribution sorts all source families
 // together by native squared camera distance and retains16 per existing zone.
 void collect(const ZoneSources &, const Frame &, std::vector<Light> &out);
+// Ground sources precede auxiliary model/object lights within each accepted zone.
+void collectGround(const GroundSources &, float zoneDistanceSquared, const Frame &, std::vector<Light> &out);
+float squaredDistance(const Point &, const Point &camera);
+void collectEffects(const std::vector<EffectSource> &, const Frame &, std::vector<Light> &out);
 float distanceKey(const Point &, const Point &camera);
 // Full sprite center transformed by the final draw matrix; gameOrigin reverses
 // the renderer's translation after the native float-to-fixed conversion.

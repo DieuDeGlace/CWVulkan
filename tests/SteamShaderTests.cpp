@@ -1,5 +1,6 @@
 // Explicit GPU integration check. No game assets or Steam process are needed.
 // Reference colors are independently derived in steam-world-shader-output.md.
+#include <set>
 #include "Renderer.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -28,7 +29,7 @@ int steamShaderTests() {
     settings.style = RenderStyle::Steam;
     settings.vsync = settings.shadows = settings.taa = settings.smaa = false;
     settings.resolution = settings.nearResolution = 64;
-    settings.fogDistance = 1000000;
+    settings.fogDistance = settings.sceneryDistance = 1000000;
     std::string error;
     if (!renderer.init(window, settings, error)) {
         renderer.shutdown();
@@ -199,6 +200,62 @@ int steamShaderTests() {
     probe.loadedLightZones = [] { return std::vector<steampoints::ZoneKey>{{0,0}, {0,1}}; };
     renderer.setWorldProbe(probe);
     checkPoints("no-global64-cap", {sourceOnly, item}, {82,214,60});
+    // Change personal state without rebuilding geometry or rebinding the probe.
+    // Ten nearby warm sources saturate all illumination components, matching
+    // the independent fully lit RGB reference above.
+    sources->key = {0,0};
+    sources->models.clear();
+    worldgen::StaticObject personal;
+    personal.type = 0x7e;
+    personal.scale = 0; // emitted position remains (0,0,1)
+    sources->objects.assign(10, personal);
+    item.model = glm::mat4(1);
+    probe.loadedLightZones = [] { return std::vector<steampoints::ZoneKey>{{0,0}}; };
+    std::set<std::array<int32_t, 2>> usedCells;
+    probe.usedCell = [&](int32_t x, int32_t y) { return usedCells.count({x,y}) != 0; };
+    renderer.setWorldProbe(probe);
+    checkPoints("personal-before-use", {item}, {7,52,5});
+    usedCells.insert({0,0});
+    checkPoints("personal-after-use", {item}, {82,214,60});
+    usedCells.clear();
+    checkPoints("personal-other-character", {item}, {7,52,5});
+    sources->objects.clear();
+    std::vector<steampoints::EffectSource> liveEffects{{3, {0,0,65536}, 40}};
+    probe.effectLights = [&] { return liveEffects; };
+    renderer.setWorldProbe(probe);
+    checkPoints("projectile-kind3", {item}, {82,214,60});
+    liveEffects[0].kind = 4;
+    checkPoints("projectile-kind4", {item}, {82,214,60});
+    liveEffects[0].kind = 7;
+    checkPoints("projectile-unlit-kind", {item}, {7,52,5});
+    liveEffects.clear();
+    checkPoints("projectile-removed", {item}, {7,52,5});
+    auto bounds = std::make_shared<scenevisibility::Bounds>();
+    bounds->minimum = {-4*65536,-4*65536,-4*65536};
+    bounds->maximum = {4*65536,4*65536,4*65536};
+    bounds->radius = 8;
+    bounds->meshed = true;
+    item.nativeZone = bounds;
+    steampoints::GroundSource book;
+    book.category = 0x13;
+    book.quantity = 1;
+    book.owner = 42;
+    book.position[2] = -2 * 65536; // emitted at Z1, independently of hop animation
+    steampoints::GroundSources ground;
+    ground.player = 7;
+    ground.items.assign(10, book);
+    probe.groundLights = [&](steampoints::ZoneKey key) {
+        if (key != steampoints::ZoneKey(0,0)) ++failures;
+        return ground;
+    };
+    renderer.setWorldProbe(probe);
+    checkPoints("ground-other-owner", {item}, {7,52,5});
+    ground.player = 42;
+    checkPoints("ground-own-item", {item}, {82,214,60});
+    for (auto &entry : ground.items) entry.timerMs = 1;
+    checkPoints("ground-delayed", {item}, {7,52,5});
+    ground.items.clear();
+    checkPoints("ground-picked-up", {item}, {7,52,5});
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

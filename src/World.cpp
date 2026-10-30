@@ -48,6 +48,13 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
     probe.water = [this](glm::vec3 p) { return waterAt(p); };
     probe.zone = [this](glm::vec3 p) { return zoneFactors(p); };
     probe.light = [this](glm::vec3 p) { return blockLight(p); };
+    probe.usedCell = [this](int32_t x, int32_t y) { return usedCellProvider && usedCellProvider(x, y); };
+    probe.effectLights = [this] {
+        return effectLightProvider ? effectLightProvider() : std::vector<steampoints::EffectSource>{};
+    };
+    probe.groundLights = [this](steampoints::ZoneKey key) {
+        return groundLightProvider ? groundLightProvider(key) : steampoints::GroundSources{};
+    };
     if (extracted) {
         // The sky's questions go to the game's generator, in the game's own coordinates.
         probe.origin = glm::dvec3(extracted->originZoneX() * 64.0, extracted->originZoneY() * 64.0,

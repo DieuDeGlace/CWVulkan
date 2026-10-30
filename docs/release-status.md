@@ -7,10 +7,18 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Live lighting now reads personal used-cell state, kind3/4 projectiles and
+  glowing ground items from gameplay. It preserves native ownership, timer,
+  quantity, coordinate conversion and fade rules. Model and terrain light ranges
+  are separate. CPU regressions and 21 Vulkan cases cover personal state updates,
+  projectile filtering/removal and owned/delayed/picked-up items. Creature and
+  frame-transient source families, adaptive camera/range state and broader
+  native visual comparisons remain open.
+
 - Isolated reference capture now runs automatically after game-session
   initialization and refreshes cached light snapshots. The real-install run
   captured both auxiliary lists in 1,590 zones; all 8 model and 9 static lights
-  match the engine reader, including mesh-time light samples. All3,823 terrain
+  match the engine reader, including mesh-time light samples. All 3,823 terrain
   reference points across 25 fields and 4,847 block samples match. The two region
   failures came from the earlier BigRegions-modified reference. The full suite
   passes, and original Save, Mods and ReShade were restored byte-for-byte.

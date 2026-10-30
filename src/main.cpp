@@ -1594,6 +1594,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     std::set<std::array<int32_t, 2>> usedCells(saveGame.usedCells.begin(), saveGame.usedCells.end());
     lore::Book loreBook = lore::rebuild(usedCells);
     spawned.setUsedCells(&usedCells);
+    world.setUsedCellProvider([&usedCells](int32_t x, int32_t y) { return usedCells.count({x, y}) != 0; });
+    world.setEffectLightProvider([&spawned] { return spawned.effectLights(); });
+    world.setGroundLightProvider([&](steampoints::ZoneKey key) {
+        return spawnedReady ? spawned.groundLights(extractedWorld, key.first, key.second) : steampoints::GroundSources{};
+    });
     world.setObjectProvider([&spawned](int zx, int zy, const objectvisual::Key &key) { return spawned.objectVisual(zx, zy, key); });
     // The places and lands discovered (the map names them), and the places townspeople marked.
     std::set<std::array<int32_t, 2>> discoveredPlaces(saveGame.discoveredPlaces.begin(), saveGame.discoveredPlaces.end());

@@ -1,5 +1,6 @@
 #include "Extracted.h"
 #include "DataCheck.h"
+#include "Spawned.h"
 #include "AlphaLook.h"
 #include <array>
 #include <algorithm>
@@ -173,6 +174,35 @@ int steamTerrainTests() {
     const auto lightReport = dataCheck::inspect(root, root, true);
     check(lightReport.text().find("1/9 zones have auxiliary light snapshots") != std::string::npos,
           "data check distinguishes refreshed light snapshots from older exports");
+    // A live packet replacement feeds the light adapter; pickup empties that
+    // same slot immediately, without relying on the captured placement list.
+    SpawnedCreatures liveItems;
+    cwnet::ZoneObjects itemPacket;
+    itemPacket.key = {0,0};
+    itemPacket.records.resize(1);
+    auto &rawItem = itemPacket.records[0];
+    rawItem[0] = 0x0b;
+    const int32_t itemId = 0x13, timer = -7, quantity = 3;
+    const int64_t owner = 99;
+    const steampoints::Point itemPosition{123,456,789};
+    std::memcpy(rawItem.data() + 4, &itemId, 4);
+    std::memcpy(rawItem.data() + 0xa0, itemPosition.data(), sizeof itemPosition);
+    std::memcpy(rawItem.data() + 0xcc, &timer, 4);
+    std::memcpy(rawItem.data() + 0xd4, &quantity, 4);
+    std::memcpy(rawItem.data() + 0xd8, &owner, 8);
+    liveItems.replaceGroundItems(lightWorld, itemPacket);
+    const auto ground = liveItems.groundLights(lightWorld, 0, 0);
+    check(ground.items.size() == 1, "live item packet supplies ground-light inputs");
+    if (ground.items.size() == 1) {
+        const auto &item = ground.items[0];
+        check(item.category == 0x0b && item.id == 0x13 && item.position == itemPosition &&
+              item.timerMs == -7 && item.quantity == 3 && item.owner == 99,
+              "ground-light adapter reads live item identity, position, timer, quantity and owner");
+    }
+    liveItems.takeGroundItem(0, 0, 0);
+    const auto taken = liveItems.groundLights(lightWorld, 0, 0);
+    check(taken.items.size() == 1 && taken.items[0].category == 0,
+          "pickup clears the item used by light registration");
     writeLights(false, true, false);
     check(!lightWorld.lightSources(0, 0, solved), "duplicate auxiliary list is rejected");
     writeLights(false, false, true);

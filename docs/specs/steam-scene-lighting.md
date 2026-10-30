@@ -764,6 +764,76 @@ by **0xce300(position,renderer+0x49c)**. This branch uses its Z+3 position for
 both rank and fade. It is not the ordinary model's scaled-height midpoint.
 There is no day-factor gate on these lights.
 
+#### 3.4.1 Cached center-distance producer and exact fade arithmetic
+
+The cached **zone+0x234** value is a **float32 full XYZ squared distance in
+blocks²**, produced by **0xd3170 at 0xd3804–0xd388f**. The position is the
+zone's signed64 fixed mesh-cache center **+0x218/+0x220/+0x228**. The camera
+reference is renderer's signed64 fixed XYZ **+0x338/+0x340/+0x348**. Its X
+pointer is established at **0xd34dd**. These are world-coordinate values;
+this calculation does not add the render-origin translation+0x428/+0x430,
+multiply a view matrix, or substitute the player's position or a ground
+item's position. It includes the center's Z distance, not only horizontal
+distance, and does not subtract the cached radius+0x230.
+
+For each axis, subtract camera fixed coordinate from center fixed coordinate
+in signed64 integer arithmetic **before** either value converts to float.
+Convert that difference directly to float32, then multiply by the exact
+float **1/65536**, constant word **0x37800000** at **0x42e510**. Square the
+three resulting float32 block components separately, add **X²+Y² first**,
+then add **Z²**, rounding at each float32 operation. Store that final value
+at +0x234, at **0xd388f**. There is no block-floor conversion, signed32
+narrowing, integer-square reduction/shift or fused multiply-add here.
+
+The store follows the nonzero active-group-count and 0xe0680 zone checks,
+and insertion into the renderer's accepted-zone list+0x300. It precedes the
+strict center-distance gate for that zone's model records. The ground-light
+collector reads this stored value; it does not recalculate it from the
+item position. At **0xce713–0xce737**, it loads the float32 range from
+renderer+0x49c, **adds the float32 constant 64.0** (word 0x42800000 at
+0x42e5b4), squares that
+rounded sum in float32, and admits the item-list scan only when the cached
+distance is **strictly below** that squared threshold. Equality fails; an
+unordered comparison fails as well. The added 64 belongs to this containing-
+zone gate, not the item fade or its individual point/sphere test.
+
+The item fade is literally **the same 0xce300 helper used by ordinary models**
+in `worldgen-parity-gaps.md` §9.6, with different sampled positions. Its
+ground-light call at **0xce945** receives the range loaded at **0xce93c**:
+**L=renderer+0x49c**, with no +64 and no addition of the light's 16-block radius.
+The sampled fixed point is item+0xa0/+0xa8/+0xb0, with exactly **196608 fixed
+units (3 blocks)** added to Z in integer arithmetic. Ordinary scenery's
+asset-height midpoint does not apply to this item call.
+
+Inside 0xce300, the full XYZ sampled-point-minus-camera differences use the
+same signed64-subtract, direct float32 conversion, multiply by1/65536,
+separate squares, **X²+Y² then Z²** sequence described above; sources
+**0xce30f–0xce377**. This fade distance is separate from both the cached
+zone-center distance and the collector's integer-reduced light-ranking key.
+
+The helper's ordered finite-input fade arithmetic is:
+
+- Form the full-opacity squared threshold by multiplying **L by
+  0.809999942779541015625**, rounding to float32, then multiplying by **L**
+  again and rounding. Its constant is **word 0x3f4f5c28 at 0x43ef70**. This is
+  the actual multiplication order, not a newly evaluated square of 0.9×L.
+  At or below that threshold, return exactly 1.
+- Above that threshold, take the float32 square root of the squared distance.
+  Separately form **L×0.89999997615814208984375** and
+  **L×0.100000001490116119384765625**, each rounded to float32; constants
+  **word 0x3f666666 at 0x42e534** and **word 0x3dcccccd at 0x42e528**.
+  Subtract the first product from the square root, divide that result by
+  the second product, then subtract that quotient from float 1.0. Each step
+  is float32 and preserves that order. Finally take the maximum with 0.
+  There is no subsequent upper clamp in this helper.
+
+The threshold path is **0xce364–0xce37e**, and the square-root/ramp/clamp
+path is **0xce380–0xce3b5**. There is **no explicit zero-range branch or safe
+denominator replacement** in 0xce300; no additional special case is assigned
+here. Ground-light RGB components are multiplied individually by its result
+at **0xce968–0xce98c**, after which the light is appended. This call site does
+not add the ordinary descriptor queue's separate nonpositive-fade rejection.
+
 ### 3.5 Static object-light auxiliary records, complete branch
 
 After model lights, scan **zone+0xc0/+0xc8**, stride**0xe0**, in list order.
@@ -800,14 +870,78 @@ X/Y remain P.x/P.y in every row. “P.z+h” denotes that shifted XYZ point,
 not a scalar position. The order is exactly the table order while processing
 one object; matching type cases do not cause other objects to be skipped.
 
-For types0 and0x7e, derive the16-block cell pair by flooring each fixed X/Y
-to integer blocks, then flooring those coordinates divided by16. Require
+For types0 and0x7e, derive the16-block cell pair using the exact signed-width
+and conversion order in §3.5.1 below. Require
 that pair to be **present** in the local player's personal used-cell set
 **personal state+0xa8**, reached through world+0x448 then player+0x1528.
 Neither the object's live open/closed state nor its animation timer replaces
 this membership test. The branch assumes that local-player/personal-state
 context exists, as does the native lookup. These conditional lights still
 rank by their emitted, height-shifted position.
+
+#### 3.5.1 Used-cell key widths and fixed-coordinate conversion order
+
+Verified in collector **0xce5f0**, type 0 coordinate paths
+**0xcf446–0xcf4f2**, and type 0x7e paths **0xcf7ea–0xcf896**. Both branches
+perform the same integer conversion independently for object fixed X at
+**+0x08** and fixed Y at **+0x10**. Z and the subsequent emission-height
+offset do not participate in this key. No floating-point conversion occurs.
+
+The lookup key is exactly **8 bytes: signed 32-bit cell X followed by signed 32-bit
+cell Y**. The personal-state **+0xa8** set compares X first, then Y, using
+signed 32-bit comparisons. Native tree nodes hold those two key fields at
+**node+0x1c/+0x20**; the comparison walks two 4-byte elements and stops at
+node+0x24. This is not a pair of signed 64-bit cells or a comparison of a packed
+unsigned 64-bit number. The type 0 lookup is **0xcf560–0xcf652**, with the
+corresponding type 0x7e lookup **0xcf900–0xcf9f2**. The earlier personal-state
+pointer chain and requirement for a present key remain as stated in §3.5.
+
+For each signed 64-bit fixed coordinate, the observed conversion order is:
+
+1. Divide the signed 64-bit fixed value by **65536**, truncating toward zero.
+   Native integer arithmetic adds 65535 to negative inputs before the
+   arithmetic 16-bit right shift. The full quotient is still 64-bit here;
+   the fixed coordinate itself has not first been narrowed to 32 bits.
+2. Retain the quotient's low 32 bits and interpret them as a **signed 32-bit block
+   coordinate**. This narrowing precedes the negative exactness test and
+   the division by 16.
+3. If the **original signed 64-bit fixed value is negative**, sign-extend the
+   narrowed signed 32-bit block coordinate back to signed 64-bit and multiply that
+   value by 65536. Compare this reconstructed fixed value with the original
+   signed 64-bit coordinate. If they differ, subtract 1 from the **32-bit block
+   coordinate**, retaining 32-bit wraparound. Otherwise keep it unchanged.
+   For nonnegative original coordinates, this correction is skipped.
+4. Floor the resulting **signed 32-bit block coordinate divided by 16** to obtain
+   the signed 32-bit cell coordinate. Native negative handling gives the
+   mathematical floor here, rather than truncation toward zero. The final
+   cell component lies in **[−134217728,134217727]**.
+
+The negative reconstruction test is specifically visible at
+**0xcf45e–0xcf46a** for type 0 X, **0xcf4b7–0xcf4c3** for type 0 Y,
+**0xcf802–0xcf80e** for type 0x7e X, and **0xcf85b–0xcf867** for type 0x7e Y.
+The narrowing is therefore material even before the cell division. For
+coordinates whose block quotient fits signed 32-bit, this is the familiar
+fixed-to-block floor followed by block-to-cell floor. Outside that range,
+the narrowed reconstruction can differ even for an exact negative whole
+block. Do not replace the complete sequence with a signed 64-bit floor directly
+to 16-block cells or defer all narrowing until after cell division.
+
+Arithmetic reference examples below apply to either component. These are
+derived from the verified integer operations, not new runtime captures:
+
+| Signed 64-bit fixed input | Block after narrowing and correction | Signed 32-bit cell |
+| --- | --- | --- |
+|−1|−1|−1|
+|−1048576 (exactly−16 blocks)|−16|−1|
+|−1048577|−17|−2|
+|140737488355328 (exactly 2147483648 blocks)|−2147483648|−134217728|
+|281474976710656 (exactly 4294967296 blocks)|0|0|
+|−281474976710656 (exactly−4294967296 blocks)|−1|−1|
+
+In the final row, the truncated 64-bit block quotient narrows to 0, but the
+original negative fixed value is not equal to reconstructed 0; the native
+32-bit decrement therefore produces −1. This distinguishes the observed
+sequence from merely flooring in 64 bits and then narrowing the block result.
 
 ### 3.6 World projectile/effect and frame-transient sources
 

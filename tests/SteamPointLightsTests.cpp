@@ -1,4 +1,6 @@
 #include "SteamPointLights.h"
+#include "Spawned.h"
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -85,6 +87,115 @@ int steamPointLightsTests() {
     frame.usedCell = [](int64_t x, int64_t y) { return x == -1 && y == -1; };
     collect(zone, frame, lights);
     POINT_CHECK(lights.size() == 1 && lights[0].position[2] == 5 * 65536);
+
+    // The native key narrows block coordinates before flooring to cells.
+    const std::pair<int64_t, int32_t> cellCases[] = {
+        {-1, -1}, {-1048576, -1}, {-1048577, -2},
+        {140737488355328LL, -134217728}, {281474976710656LL, 0},
+        {-281474976710656LL, -1}, {-140737488355329LL, 134217727},
+        {std::numeric_limits<int64_t>::min(), -1}, {std::numeric_limits<int64_t>::max(), -1}
+    };
+    for (int type : {0, 0x7e}) {
+        zone.objects = {object(type)};
+        for (const auto &[fixed, expected] : cellCases) {
+            zone.objects[0].x = fixed;
+            zone.objects[0].y = -1048577;
+            bool queried = false;
+            frame.usedCell = [&](int32_t x, int32_t y) {
+                queried = true;
+                POINT_CHECK(x == expected && y == -2);
+                return true;
+            };
+            lights.clear(); collect(zone, frame, lights);
+            POINT_CHECK(queried && lights.size() == 1);
+        }
+    }
+
+    GroundSources ground;
+    GroundSource glowing;
+    glowing.category = 0x13;
+    glowing.quantity = 1;
+    glowing.position = {95 * 65536, 0, -3 * 65536};
+    ground.items = {glowing};
+    frame.camera = {};
+    frame.terrainRange = 100;
+    frame.range = 1;
+    frame.visible = [](const Point &p, float radius, float range) {
+        return p[2] == 0 && radius == 16 && range == 100;
+    };
+    lights.clear(); collectGround(ground, 0, frame, lights);
+    POINT_CHECK(lights.size() == 1);
+    if (!lights.empty()) {
+        POINT_CHECK(near(lights[0].colour.r, .3f) && near(lights[0].colour.b, .1f));
+        POINT_CHECK(lights[0].position[2] == 0 && lights[0].radius == 16);
+    }
+    const float zoneLimit = 164 * 164;
+    lights.clear(); collectGround(ground, zoneLimit, frame, lights);
+    POINT_CHECK(lights.empty()); // cached-center admission is strictly less
+    collectGround(ground, std::nextafter(zoneLimit, 0.f), frame, lights);
+    POINT_CHECK(lights.size() == 1);
+    ground.player = 42;
+    ground.items[0].owner = 43;
+    lights.clear(); collectGround(ground, 0, frame, lights);
+    POINT_CHECK(lights.empty());
+    ground.player.reset();
+    collectGround(ground, 0, frame, lights);
+    POINT_CHECK(lights.size() == 1); // no local player: no owner restriction
+    ground.player = 43;
+    for (int timer : {-1, 1}) {
+        ground.items[0].timerMs = timer;
+        lights.clear(); collectGround(ground, 0, frame, lights);
+        POINT_CHECK(lights.empty());
+    }
+    ground.items[0].timerMs = 0;
+    ground.items[0].quantity = 0;
+    lights.clear(); collectGround(ground, 0, frame, lights);
+    POINT_CHECK(lights.empty());
+    ground.items[0].quantity = 1;
+    ground.items[0].position[0] = 101 * 65536;
+    collectGround(ground, 0, frame, lights);
+    POINT_CHECK(lights.size() == 1 && lights[0].colour == glm::vec3(0)); // keep zero-fade slot
+    ground.items[0].position[0] = 0;
+    frame.terrainRange = 0;
+    frame.visible = [](const Point &, float, float) { return true; };
+    lights.clear(); collectGround(ground, 0, frame, lights);
+    POINT_CHECK(lights.size() == 1 && near(lights[0].colour.r, .6f)); // zero range, coincident
+    POINT_CHECK(squaredDistance({0,0,65536}, {}) == 1);
+    POINT_CHECK(squaredDistance({200,200,0}, {}) > 0); // no integer square reduction
+
+    // The gameplay adapter preserves list order and uses contact-radius +0x54,
+    // not damage +0x50. Only kinds3/4 emit, using terrain rather than model range.
+    SpawnedCreatures spawned;
+    for (int32_t kind : {3, 7, 4}) {
+        cwnet::EffectRecord record{};
+        const Point position{kind * 65536, -123, 456};
+        const float damage = 99, strength = kind * .5f;
+        std::memcpy(record.data() + 8, position.data(), sizeof position);
+        std::memcpy(record.data() + 0x50, &damage, sizeof damage);
+        std::memcpy(record.data() + 0x54, &strength, sizeof strength);
+        std::memcpy(record.data() + 0x68, &kind, sizeof kind);
+        spawned.addEffect(record);
+    }
+    const auto effects = spawned.effectLights();
+    POINT_CHECK(effects.size() == 3);
+    frame.terrainRange = 23;
+    frame.range = 91;
+    frame.daylight = 1;
+    frame.visible = [&](const Point &p, float radius, float range) {
+        POINT_CHECK(radius == 16 && range == 23 && p[1] == -123 && p[2] == 456);
+        return true;
+    };
+    lights.clear(); collectEffects(effects, frame, lights);
+    POINT_CHECK(lights.size() == 2);
+    if (lights.size() == 2) {
+        POINT_CHECK(lights[0].position[0] == 3 * 65536 && lights[1].position[0] == 4 * 65536);
+        POINT_CHECK(lights[0].colour == glm::vec3(.75f, .75f, .3f));
+        POINT_CHECK(lights[1].colour == glm::vec3(1, 1, .4f));
+        POINT_CHECK(lights[0].radius == 16 && lights[1].radius == 16);
+    }
+    frame.visible = [](const Point &, float, float) { return false; };
+    lights.clear(); collectEffects(effects, frame, lights);
+    POINT_CHECK(lights.empty());
 
     POINT_CHECK(distanceKey({200, 200, 0}, {}) == 0); // divide EACH square before summing
     POINT_CHECK(distanceKey({257, 257, 0}, {}) == 2.0f / 65536);
