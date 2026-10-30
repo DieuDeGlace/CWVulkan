@@ -201,6 +201,13 @@ individual feature documents.
   for identification. The save reader fixes above do not replace the current flat
   gameplay views/reconstruction. Identification still needs its verified owner
   template layout, release gates, live selection binding and ordinary 3D item icons.
+- [x] Complete-record inventory slot backend and starter-kit consumer: six native
+  kit lengths, equal-stack-before-hole insertion, separate counted fields, page
+  versus creature removal, direct UI clearing and native key-only refresh followed
+  by compaction. Refresh retains original tab membership, nonzero negative counts,
+  unsigned subtype comparisons and the verified empty-slot predicate. Stat queries
+  are explicit local-player inputs. Starter-kit contents and random draws remain
+  covered by the existing frontend tests. Main gameplay routing remains open above.
 - [x] Complete item records survive gameplay/save views: received items, bag entries,
   carried/equipped gear and crafting comparisons use a shared conversion that
   retains uninterpreted bytes while writing current metadata/attributes. Removing

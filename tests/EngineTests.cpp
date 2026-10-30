@@ -149,6 +149,7 @@ int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (sr
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
 int waterLookTests();
 int alphaSceneryTests();
+int inventorySlotTests();
 int alphaSceneryShaderTests();
 int waterShaderTests();
 int featTextTests();
@@ -9088,6 +9089,8 @@ int main(int argc, char **argv) {
         return alphaSceneryTests();
     if (argc == 2 && std::string(argv[1]) == "saveformat")
         return saveFormatTests();
+    if (argc == 2 && std::string(argv[1]) == "inventoryslots")
+        return inventorySlotTests();
     if (argc == 2 && std::string(argv[1]) == "alphasceneryshader")
         return alphaSceneryShaderTests();
     if (argc == 2 && std::string(argv[1]) == "waterlook")
@@ -10351,6 +10354,7 @@ int main(int argc, char **argv) {
     failures += poseHudTests();        // tests/PoseHudTests.cpp
     failures += waterLookTests();
     failures += alphaSceneryTests();
+    failures += inventorySlotTests();
     failures += featTextTests();
     failures += lootWindowTests();     // tests/LootWindowTests.cpp
     failures += enemyRespawnTests();   // tests/EnemyRespawnTests.cpp

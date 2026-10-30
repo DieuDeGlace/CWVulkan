@@ -1,6 +1,7 @@
 // A creature's gear, written from docs/specs/worldgen-creatures.md §4.3. The steps are named A-H
 // as there.
 #include "worldgen/Gear.h"
+#include "ItemTypes.h"
 
 #include "worldgen/CreatureTables.h"
 #include "worldgen/StructureTables.h"
@@ -356,21 +357,11 @@ constexpr uint8_t COUNTED_CATEGORY = 12, COUNTED_MATERIAL = 11, COUNTED_CATEGORY
 } // namespace
 
 int Inventory::tabOf(uint8_t category) {
-    switch (category) {
-    case 3: case 4: case 5: case 6: case 7: case 8: case 9: case 15: case 25: case 26: return 0;
-    case 22: case 24: case 29: return 1;
-    case 2: case 11: return 3;
-    case 20: case 21: return 4;
-    case 23: return 5;
-    default: return 2;
-    }
+    return itemtypes::inventoryTab(category);
 }
 
 bool Inventory::stackable(uint8_t category) {
-    switch (category) {
-    case 1: case 10: case 11: case 12: case 13: case 22: case 28: return true;
-    default: return false;
-    }
+    return itemtypes::stackable(category);
 }
 
 void Inventory::add(const Item &item, int32_t quantity, int tab) {

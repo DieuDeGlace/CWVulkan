@@ -1,5 +1,6 @@
 // CubeVulkan's progress in the game's save format; see NativeProgress.h.
 #include "NativeProgress.h"
+#include "ItemTypes.h"
 
 #include "Gear.h"
 #include "NativePlayer.h"
@@ -265,14 +266,7 @@ bool isGear(int category) { return category >= 3 && category <= 9; }
 
 // The inventory tab an item goes in (the game's tab of an item, as the inventory screen sorts).
 int tabOf(int category) {
-    switch (category) {
-    case 3: case 4: case 5: case 6: case 7: case 8: case 9: case 15: case 25: case 26: return 0;
-    case 20: case 21: return 4;
-    case 2: case 11: return 3;
-    case 22: case 24: case 29: return 1;
-    case 23: return 5;
-    default: return 2;
-    }
+    return itemtypes::inventoryTab((uint8_t)category);
 }
 
 // The equipment slot gear of a category is found for (as gameplay places it).

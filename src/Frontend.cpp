@@ -3,6 +3,7 @@
 #include "Frontend.h"
 
 #include "GameInput.h"
+#include "InventorySlots.h"
 #include "NativeInteract.h"
 #include "GameMath.h"
 #include "TalkGen.h"
@@ -258,25 +259,6 @@ namespace field = nativesaves::item;
 constexpr int WEAPON = 3, CHEST = 4, FOOD = 1;
 constexpr int SLOT_CHEST = 2, SLOT_LEFT = 6, SLOT_RIGHT = 7;
 
-worldgen::Item kitItem(int type, int subtype, int material) {
-    worldgen::Item it;
-    it.category = (uint8_t)type, it.id = subtype, it.material = (uint8_t)material;
-    return it;
-}
-
-nativesaves::Item toSave(const worldgen::Item &it) {
-    nativesaves::Item out{};
-    out[field::TYPE] = it.category;
-    std::memcpy(&out[field::SUBTYPE], &it.id, 4);
-    std::memcpy(&out[field::MODIFIER], &it.modifier, 4);
-    std::memcpy(&out[field::REGION], &it.region.x, 4);
-    std::memcpy(&out[field::REGION + 4], &it.region.y, 4);
-    out[field::RARITY] = it.rarity;
-    std::memcpy(&out[field::FORMULA], &it.realm, 4);
-    out[field::MATERIAL] = it.material;
-    return out;
-}
-
 void stamp(nativesaves::Item &it, nativesaves::Cell region, uint32_t modifier) {
     std::memcpy(&it[field::REGION], region.data(), 8);
     std::memcpy(&it[field::MODIFIER], &modifier, 4);
@@ -301,12 +283,8 @@ void giveStartingKit(nativesaves::Character &c, uint32_t account, nativesaves::C
     talkgen::CRand rand;
     rand.seed(account);
     c.equipment = {};
-    worldgen::Inventory inventory;
-    inventory.tabs.resize(nativesaves::INVENTORY_TABS);
-    for (int t : {0, 1, 2})
-        inventory.tabs[(size_t)t].resize(10);
-    for (int t : {3, 4})
-        inventory.tabs[(size_t)t].resize(30);
+    inventoryslots::Inventory inventory;
+    inventory.initializeKitTabs();
     if (c.classType >= 1 && c.classType <= 4) {
         const Kit &k = KITS[c.classType - 1];
         c.equipment[SLOT_RIGHT] = nativesaves::makeItem(WEAPON, k.right, k.rightMaterial);
@@ -315,22 +293,20 @@ void giveStartingKit(nativesaves::Character &c, uint32_t account, nativesaves::C
         c.equipment[SLOT_CHEST] = nativesaves::makeItem(CHEST, 0, k.chestMaterial);
         for (const Kit::Carried &carried : k.carried)
             for (int n = 0; n < carried.count; n++)
-                inventory.add(kitItem(WEAPON, carried.subtype, carried.material), 1);
+                inventory.add(nativesaves::makeItem(WEAPON, carried.subtype, carried.material), 1);
     }
     for (int n = 0; n < 5; n++)
-        inventory.add(kitItem(FOOD, 1, 0), 1);
+        inventory.add(nativesaves::makeItem(FOOD, 1, 0), 1);
     // The random parts: each worn weapon and the chest, then the carried gear in order.
     for (int slot : {SLOT_LEFT, SLOT_RIGHT, SLOT_CHEST})
         if (c.equipment[(size_t)slot][field::TYPE] != 0)
             stamp(c.equipment[(size_t)slot], region, (uint32_t)rand.next());
-    c.inventory.assign(inventory.tabs.size(), {});
-    for (size_t t = 0; t < inventory.tabs.size(); t++)
-        for (const worldgen::Stack &s : inventory.tabs[t]) {
-            nativesaves::Stack stack{s.quantity, toSave(s.item)};
+    c.inventory = std::move(inventory.tabs);
+    for (auto &tab : c.inventory)
+        for (auto &stack : tab) {
             const int type = stack.item[field::TYPE];
             if ((type >= 3 && type <= 9) || type == 0x1a)
                 stamp(stack.item, region, (uint32_t)rand.next());
-            c.inventory[t].push_back(stack);
         }
     c.recipes.clear();
     addDefaultRecipes(c, 0);

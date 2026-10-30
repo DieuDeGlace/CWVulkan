@@ -230,6 +230,7 @@ add_library(engine STATIC
     src/SteamSky.cpp
     src/AlphaLight.cpp
     src/AlphaScenery.cpp
+    src/InventorySlots.cpp
     src/Renderer.cpp
     src/RendererPost.cpp
     src/RendererWater.cpp
@@ -267,6 +268,7 @@ add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp test
 target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 target_sources(EngineTests PRIVATE tests/AlphaSceneryTests.cpp)
+target_sources(EngineTests PRIVATE tests/InventorySlotTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)
 target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp tests/SteamSceneRangeTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
