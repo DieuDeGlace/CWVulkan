@@ -16,8 +16,12 @@ checkpoint describe the intended setup and remaining limits.
   adjustment stores its rescale before the second maximum-health callback/cap.
   All five build targets, focused inventory/save/loot-window checks and the full
   CPU/owner-data suite pass. A hidden read-only native-character run rendered
-  the inventory and stopped normally. Auxiliary UI geometry/3D icons, map-item mode
-  presentation, selector completion and extended owner validation remain open.
+  the inventory and stopped normally. Native identification uses the owner's
+  blackwidget/itemframe tree, native text/footer positions, live selection and
+  release gates. Transformed edge/navigation tests and the CPU/owner suite pass;
+  read-only captures at GUI scales1/1.5 exercise the owner artwork and typography.
+  Shared3D icons still use cached bitmap compatibility previews; map-item/selector
+  presentation and extended owner validation remain open.
 - Native adaptive scene range is integrated: actual unmerged face costs/readiness,
   option-derived window, native equal-key sort, budget threshold, easing and player
   state feed distinct terrain/model/actor/light ranges. Pending cache metadata is

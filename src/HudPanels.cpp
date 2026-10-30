@@ -95,6 +95,11 @@ void Hud::buildPanels() {
     } else
         panels.details = nullptr;
 
+    if ((panels.identification = s.instance("blackwidget", panels.inGame)) && panels.identification->widget) {
+        panels.identificationFrame = s.instance("itemframe", panels.identification);
+        s.resizeTo(*panels.identification, glm::vec2(350, 285));
+        panels.identification->visible = false;
+    }
     // The equipment slots: "equipmentboxright" for even slots, "equipmentboxleft" for odd.
     for (int i = 0; i < 10; i++) {
         plasma::SceneNode *slot = s.instance(i % 2 ? "equipmentboxleft" : "equipmentboxright", panels.inGame);
@@ -178,6 +183,7 @@ float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &
     style.string = text;
     style.font = "resource1.dat";
     style.pixelSize = size;
+    style.lineSpacing = 1;
     style.flags = flags;
     style.wrapWidth = wrap;
     style.scalable = true;
@@ -660,7 +666,7 @@ int Hud::inventoryRowCount(const Inventory &inv, int which) const {
     return hasPanels() ? invRowCount(invPanel(which), listOf(inv, which)) : 1;
 }
 
-std::vector<glm::vec2> Hud::inventoryNavigationPoints(const Inventory &inv) const {
+std::vector<glm::vec2> Hud::inventoryNavigationPoints(const Inventory &inv, const std::vector<glm::vec2> &afterShop) const {
     std::vector<glm::vec2> points;
     if (!hasPanels())
         return points;
@@ -702,6 +708,7 @@ std::vector<glm::vec2> Hud::inventoryNavigationPoints(const Inventory &inv) cons
             frameCentre(*panels.craftButton);
     }
     grid(1, inv.vendor.open);
+    points.insert(points.end(), afterShop.begin(), afterShop.end());
     grid(0, inv.bagShown);
     return points;
 }

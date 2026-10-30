@@ -1,7 +1,7 @@
-// Checks of the loot windows' wiring: the identify window (loot-shops.md §5), the weapon upgrade
-// widget (loot-crafting.md §4) with its picture and picking, the upgrade cubes kept with the
-// gear and in the save, and the chat's input line (frontend-options.md §3, netcode-packets.md
-// §2.11).
+// Checks of the loot windows' wiring: the identify window (loot-shops.md Â§5), the weapon upgrade
+// widget (loot-crafting.md Â§4) with its picture and picking, the upgrade cubes kept with the
+// gear and in the save, and the chat's input line (frontend-options.md Â§3, netcode-packets.md
+// Â§2.11).
 #include "ChatLine.h"
 #include "ChatCommands.h"
 #include "GameCraft.h"
@@ -12,6 +12,7 @@
 #include "UpgradeWidget.h"
 
 #include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -98,21 +99,33 @@ void identifyWindowRules() {
     std::memcpy(region, &weapon.made[0x0c], 8);
     LOOT_CHECK(weapon.paid == 4 && weapon.made[0] == 3 && weapon.made[0x14] == 3);
     LOOT_CHECK(region[0] == 4 && region[1] == -2);
-    LOOT_CHECK(even.calls == 1 + 16); // loot-shops.md §5: 1 + the weapon generator's 16
+    LOOT_CHECK(even.calls == 1 + 16); // loot-shops.md Â§5: 1 + the weapon generator's 16
     Draws odd;
     odd.first = 1;
     const identifywindow::Outcome armour = identifywindow::identifyOnce(w, std::ref(odd));
     LOOT_CHECK(armour.made[0] >= 4 && armour.made[0] <= 7 && armour.made[0x14] == 3);
     LOOT_CHECK(odd.calls == 1 + 28); // 1 + the armour generator's 28 with class -1
 
-    // The layout: the slot and the button inside the window, beside the bag.
-    const identifywindow::Layout l = identifywindow::layout({1600, 900});
-    LOOT_CHECK(l.inWindow(l.slotAt + glm::vec2(1)) && l.onSlot(l.slotAt + glm::vec2(1)));
-    LOOT_CHECK(l.onButton(l.buttonAt + glm::vec2(1)) && !l.onSlot(l.buttonAt + glm::vec2(1)));
-    LOOT_CHECK(l.at.x >= 800 + 200); // right of the 400-unit bag
-    identifywindow::Shown shown;
-    shown.slotted = true, shown.name = "Unknown Item", shown.price = 4, shown.gold = 2;
-    LOOT_CHECK(identifywindow::screen(l, shown).size() >= 5);
+    identifywindow::Layout geometry;
+    geometry.valid = true;
+    geometry.size = {350, 285};
+    geometry.slotSize = {80, 96};
+    geometry.nodeToScreen = glm::scale(glm::translate(glm::mat4(1), glm::vec3(500, 70, 0)), glm::vec3(1.5f, 2, 1));
+    geometry.frameToScreen =
+        geometry.nodeToScreen * glm::translate(glm::mat4(1), glm::vec3(9, 11, 0)) * glm::scale(glm::mat4(1), glm::vec3(2, .5f, 1));
+    geometry.textToScreen = geometry.nodeToScreen * glm::translate(glm::mat4(1), glm::vec3(3, 4, 0));
+    auto point = [&](glm::vec2 local) {
+        const auto origin = geometry.frameToScreen * glm::vec4(0, 0, 0, 1);
+        return glm::vec2(origin) + glm::vec2(local.x * 1.5f, local.y * 2);
+    };
+    LOOT_CHECK(geometry.onButton(point({100, 265})) && !geometry.onButton(point({100, 265}), false));
+    LOOT_CHECK(geometry.onGoodbye(point({250, 265})));
+    for (const auto p : {glm::vec2(0, 265), {175, 265}, {350, 265}, {100, 255}, {100, 285}})
+        LOOT_CHECK(!geometry.onButton(point(p)) && !geometry.onGoodbye(point(p)));
+    LOOT_CHECK(geometry.local(point({100, 265})) == glm::vec2(100, 265));
+    // The frame's bind-origin offset does not enter navigation: live pivot then node projection, truncated twice.
+    const auto points = geometry.navigation();
+    LOOT_CHECK(points[0] == glm::vec2(678, 608) && points[1] == glm::vec2(854, 608));
 }
 
 // A rod 3 x 3 x 8 voxels standing up (a stand-in for a weapon model).

@@ -26,6 +26,10 @@
 namespace dialoguechoice { class Panel; }
 namespace dialoguepanel { class General; struct Layout; }
 namespace npcspeech { struct Bubble; }
+namespace identifywindow {
+struct Shown;
+struct Layout;
+} // namespace identifywindow
 namespace feattext { struct Label; }
 
 class ChatLine;
@@ -183,6 +187,7 @@ class Hud {
         // The in-game windows drawn over the inventory (the identify window, the upgrade widget,
         // the chat line): items as drawScreen takes them; none when null.
         const std::vector<ScreenItem> *windows = nullptr;
+        const identifywindow::Shown *identification = nullptr;
         // The map's markers (the map overlay's draw, MapMarks.h), far ones first, and the
         // interface's clock their icons bob by; also the quest sprites over people's heads.
         using MapMarker = mapmarks::Marker;
@@ -228,7 +233,7 @@ class Hud {
     int inventoryButtonAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
     // Tests this panel's own node tree, independent of overlapping panels (native 0x333e70).
     bool inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
-    std::vector<glm::vec2> inventoryNavigationPoints(const Inventory &inv) const;
+    std::vector<glm::vec2> inventoryNavigationPoints(const Inventory &inv, const std::vector<glm::vec2> &afterShop = {}) const;
     int inventoryFirstItem(const Inventory &inv, int which = 0) const;
     int inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const;
     bool hasPanels() const { return scene && panels.bag.node; }
@@ -357,6 +362,8 @@ class Hud {
     void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation = nullptr) const;
     // A gui.plx template's size (its frame, interface units); zero when there is none.
     glm::vec2 templateSize(const std::string &name) const;
+    identifywindow::Layout identificationLayout() const;
+    void drawIdentification(const identifywindow::Shown &, std::vector<OverlayVertex> &) const;
     bool hasInterface() const { return guiLoaded; }
     glm::ivec2 iconSize(const std::string &key) const {
         auto it = icons.find(key);
@@ -424,7 +431,7 @@ class Hud {
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
-        plasma::SceneNode *chat = nullptr;
+        plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr;
         InvPanel bag, vendor, crafting;
         std::vector<plasma::SceneNode *> slots;
         int cellWidth = 40, cellHeight = 40;

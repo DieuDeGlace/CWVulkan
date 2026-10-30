@@ -29,6 +29,10 @@ other manual GUI points: it applies the current widget/root placement
 and composed transform, projects with its homogeneous reciprocal, then
 truncates each final screen coordinate to signed32 before appending.
 Use the shared transform contract, not a second viewport-scale guess.
+The exact manual-point transform, footer mouse-local hybrid and text
+basis are distinguished in **steam-identification-ui §3.2**. In
+particular the point transform is node-world plus pivot, not the
+widget's full frame matrix containing bindInverse/framePos.
 
 Their global order is after crafting/details/shop registration and
 before answers/inventory in the native GUI tree; interface equipment

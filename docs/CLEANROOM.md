@@ -62,6 +62,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- identification owner-tree layout, independent footer mouse/navigation adapters,
+  caption/details/cost typography and release/Goodbye behavior, from
+  `steam-identification-ui.md` and `steam-controller-handoff.md`. The implementation
+  clones owner data at runtime; cached bitmap icon previews remain explicitly
+  separate from the unfinished shared3D GUI item renderer.
 - canonical native-save gameplay inventory/equipment/counters, direct item actions,
   live identification indices and shop transactions, from
   `steam-inventory-slot-lifecycle.md`, `steam-identification-ui.md`, `loot-crafting.md`

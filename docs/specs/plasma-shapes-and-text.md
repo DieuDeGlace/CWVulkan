@@ -809,12 +809,16 @@ Game widgets keep a text style object with setters: font by name 0x269130 (throu
 0x269160, outline colour 0x2691c0, flags 0x269190 (spacing is a field with no setter seen).
 Its draw:
 
-1. Position = (the widget node's translation + (x, y)) × the current matrix scale.
+1. Position = (the widget node's live **pivot** + (x, y)) × the current matrix xx scale.
+   The pivot is transformation property index+0x244 / values+0x278;
+   translation is the distinct index+0xac / values+0xe0 property. The distinction
+   follows transformation recomputation0x3733f0 and the0x269210 loads. See
+   steam-identification-ui §3.2 for the separate mouse and navigation bases.
 2. If the radius ≤ 0: one text draw with colour and outline colour.
 3. Otherwise **two** text draws, both in scalable mode: first with the radius, a fully
    transparent text colour and the outline colour (only the outline shows); then with radius
    0 and the text colour. The outline therefore sits behind the glyphs.
-4. The returned pen is divided back by the scale and the translation removed.
+4. The returned pen is divided back by the scale and that pivot removed.
 
 Values found:
 

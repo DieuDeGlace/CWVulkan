@@ -205,11 +205,17 @@ individual feature documents.
   Explicit direct/nested refresh order is covered by transaction regressions. Legacy
   recording sessions retain their compatibility path. Full original-game comparison
   and extended gameplay/save-load checks remain below.
-- [ ] Finish identification's owner template layout, footer regions/navigation,
-  detail text and ordinary 3D icons. Its live index binding, nonzero quantity test,
-  persistent selection and visible-at-down/left-release admission are integrated;
-  the visible panel still uses its earlier geometry. Complete map-item mode/target
-  presentation and the Ring Menu selector, including its common down-tail close.
+- [x] Identification's owner blackwidget/itemframe hierarchy, requested350x285 root,
+  effective-frame placement, native captions/details/cost runs, strict footer halves
+  and two-stage controller point truncation. Mouse footer picking retains the
+  verified frame-origin/inverse-node hybrid, rather than inverting the full frame.
+  Native release/Goodbye behavior retains selection and does not identify on down.
+  Explicit opening/toggle refreshes preserve actual sort counts and selected region.
+  Synthetic affine/edge/gate checks and the full CPU/owner-data suite cover these paths.
+- [ ] Ordinary WORLD-shader 3D GUI item icons, replacing the existing cached bitmap
+  compatibility previews. Complete map-item mode/target presentation and the Ring
+  Menu selector, including its common down-tail close. Broader original-game UI and
+  layout-callback timing comparisons remain part of validation.
 - [x] Complete-record inventory slot backend and starter-kit consumer: six native
   kit lengths, equal-stack-before-hole insertion, separate counted fields, page
   versus creature removal, direct UI clearing and native key-only refresh followed

@@ -1,7 +1,7 @@
-// The identify window (docs/specs/loot-shops.md §5). See IdentifyWindow.h.
+// The identify window (docs/specs/loot-shops.md Â§5). See IdentifyWindow.h.
 #include "IdentifyWindow.h"
 
-#include "ScreenItems.h"
+#include <glm/gtc/matrix_inverse.hpp>
 
 #include <algorithm>
 
@@ -29,49 +29,44 @@ Outcome identifyOnce(const Window &w, const std::function<int()> &rand) {
 }
 
 namespace {
-// Placed by CubeVulkan (the spec gives no geometry): right of the bag, as the vendor's widget
-// (the bag is 400 units wide, its top 340 units above the middle); the slot in the middle near
-// the top, the button at the bottom.
-constexpr float BESIDE_BAG_X = 210, ABOVE_MIDDLE = 340, MARGIN = 10;
-constexpr float SLOT_TOP = 45, BUTTON_FROM_BOTTOM = BUTTON_SIZE.y + BUTTON_DRAWN_EXTRA + 12;
+glm::vec2 project(const glm::mat4 &matrix, glm::vec2 point) {
+    const auto p = matrix * glm::vec4(point, 0, 1);
+    return glm::vec2(p) / p.w;
+}
 } // namespace
-
-Layout layout(glm::vec2 window) {
-    Layout l;
-    l.at = glm::vec2(window.x * 0.5f + BESIDE_BAG_X, window.y * 0.5f - ABOVE_MIDDLE);
-    l.at.x = std::min(l.at.x, window.x - WINDOW_SIZE.x - MARGIN);
-    l.at.y = std::max(l.at.y, MARGIN);
-    l.slotAt = l.at + glm::vec2((WINDOW_SIZE.x - SLOT_SIZE.x) * 0.5f, SLOT_TOP);
-    l.buttonAt = l.at + glm::vec2((WINDOW_SIZE.x - BUTTON_SIZE.x) * 0.5f, WINDOW_SIZE.y - BUTTON_FROM_BOTTOM);
-    return l;
+glm::vec2 Layout::local(glm::vec2 screen) const {
+    // Native manual footer picking uses the frame origin but the inverse node's linear part.
+    const auto delta = screen - project(frameToScreen, {0, 0});
+    const auto inverse = glm::inverse(nodeToScreen);
+    return {delta.x * inverse[0][0] + delta.y * inverse[1][0], inverse[0][1] * delta.x + inverse[1][1] * delta.y};
 }
-
-bool Layout::inWindow(glm::vec2 p) const { return screenitems::inside(p, at, WINDOW_SIZE); }
-bool Layout::onSlot(glm::vec2 p) const { return screenitems::inside(p, slotAt, SLOT_SIZE); }
-bool Layout::onButton(glm::vec2 p) const { return screenitems::inside(p, buttonAt, BUTTON_SIZE + glm::vec2(0, BUTTON_DRAWN_EXTRA)); }
-
-Hud::Screen screen(const Layout &l, const Shown &s) {
-    using namespace screenitems;
-    Hud::Screen out;
-    const float middle = l.at.x + WINDOW_SIZE.x * 0.5f;
-    out.push_back(square(l.at + glm::vec2(4), WINDOW_SIZE - glm::vec2(8), WINDOW_SHADE));
-    out.push_back(widget("blackwidget", l.at, WINDOW_SIZE));
-    out.push_back(text("Identify", l.at + glm::vec2(15, 25), TITLE_COLOUR));
-    out.push_back(widget("itembox", l.slotAt, SLOT_SIZE, "", s.overSlot ? glm::vec4(0.75f, 1, 1, 1) : glm::vec4(1)));
-    float y = l.slotAt.y + SLOT_SIZE.y + 22;
-    if (s.slotted) {
-        if (!s.icon.empty())
-            out.push_back(icon(s.icon, l.slotAt + glm::vec2(6), SLOT_SIZE.x - 12));
-        if (s.count > 1)
-            out.push_back(text(std::to_string(s.count), l.slotAt + SLOT_SIZE - glm::vec2(4, 5), glm::vec4(1), 2));
-        out.push_back(text(s.name, {middle, y}, s.colour, 1));
-        y += 22;
-        out.push_back(text("Price: " + std::to_string(s.price) + " \xae", {middle, y}, s.price <= s.gold ? PRICE_COLOUR : REFUSED_COLOUR, 1));
-    } else
-        out.push_back(text("Put an item here", {middle, y}, HINT_COLOUR, 1));
-    const glm::vec4 tint = !s.ready ? DISABLED_TINT : s.overButton ? HOVER_COLOUR : glm::vec4(1);
-    out.push_back(widget("button", l.buttonAt, BUTTON_SIZE, "Identify", tint));
-    return out;
+bool Layout::inWindow(glm::vec2 screen) const {
+    if (!valid)
+        return false;
+    const auto p = local(screen);
+    return p.x >= 0 && p.y >= 0 && p.x < size.x && p.y < size.y;
 }
-
+bool Layout::onSlot(glm::vec2 screen) const {
+    if (!valid)
+        return false;
+    const auto p = project(glm::inverse(slotToScreen), screen);
+    return p.x >= 0 && p.y >= 0 && p.x < slotSize.x && p.y < slotSize.y;
+}
+bool Layout::onButton(glm::vec2 screen, bool resolved) const {
+    if (!valid || !resolved)
+        return false;
+    const auto p = local(screen);
+    return p.x > 0 && p.x < size.x * .5f && p.y > size.y - 30 && p.y < size.y;
+}
+bool Layout::onGoodbye(glm::vec2 screen) const {
+    if (!valid)
+        return false;
+    const auto p = local(screen);
+    return p.x > size.x * .5f && p.x < size.x && p.y > size.y - 30 && p.y < size.y;
+}
+std::array<glm::vec2, 2> Layout::navigation() const {
+    const float y = (float)(int32_t)(size.y - 20);
+    return {glm::vec2(glm::ivec2(project(textToScreen, {(float)(int32_t)(size.x / 3), y}))),
+            glm::vec2(glm::ivec2(project(textToScreen, {(float)(int32_t)((size.x * 2) / 3), y})))};
+}
 } // namespace identifywindow

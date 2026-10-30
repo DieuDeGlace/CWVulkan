@@ -1429,6 +1429,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // (right-clicking a worn weapon in the inventory) and the chat's input line (Enter), drawn
     // through the interface's screens (lootWindowItems, a frame's items).
     identifywindow::Window identify;
+    identifywindow::Shown identificationView;
     upgradewidget::Widget upgrade;
     upgradewidget::View upgradeView;
     CubModel upgradeModel;                       // the hand's weapon model
@@ -1871,8 +1872,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!actor)
             actor = fallback.data();
         inventoryslots::SortContext context;
-        const auto region = regionHere();
-        context.selectedRegion = inventoryRegionActive ? inventoryView.activeRegion : nativesaves::Cell{region.x, region.y};
+        context.selectedRegion = inventoryView.activeRegion;
         context.usable = [actor](const auto &item) { return nativerules::mayUse(actor, item.data()); };
         context.power = [actor](const auto &item) { return nativerules::itemPower(item.data(), actor); };
         nativeInventory->inventory.refresh(context);
@@ -1890,9 +1890,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         } else if (--bag[row].count <= 0)
             bag.erase(bag.begin() + (long long)row);
     };
+    auto refreshBagOpening = [&] {
+        const auto region = regionHere();
+        inventoryView.activeRegion = {region.x, region.y};
+        inventoryRegionActive = true;
+        refreshInventory();
+    };
     rebuildInventoryViews();
     if (nativeInventory && haveGear)
         applyGear();
+    if (inventoryOpen && bagShown)
+        refreshBagOpening();
 
     // Conversations and quests, in the game's own words: every sentence comes from
     // dict_en.xml through its grammar (Speech.h). Quests use the game's objective
@@ -3272,6 +3280,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (gameInput.pressed(gameoptions::INVENTORY)) {
             bagShown = !(inventoryOpen && bagShown);
             inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
+            if (inventoryOpen && bagShown)
+                refreshBagOpening();
             if (!inventoryOpen)
                 craftingOpen = false, bagShown = true;
         }
@@ -3283,6 +3293,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (!wasOpen)
                 bagShown = false;
             inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
+            if (nativeInventory && !nativeInventory->inventory.tabs.empty())
+                refreshInventory();
+            if (craftingOpen)
+                refreshInventory();
             if (!inventoryOpen)
                 craftingOpen = false, bagShown = true;
         }
@@ -3728,6 +3742,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             inventoryOpen = hud.hasInventoryArt();
             bagShown = true;
             identify.show();
+            refreshBagOpening();
             for (const Carried &c : bag)
                 if (c.item.category == gameshop::UNIDENTIFIED) {
                     if (nativeInventory)
@@ -3753,6 +3768,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!inventoryOpen) // (the shop, the identify window and the upgrade widget close with the inventory)
             vendorTrade.open = upgrade.open = false, inventoryRegionActive = false, identify.close();
         lootWindowItems.clear();
+        identificationView = {};
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
@@ -4170,75 +4186,80 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 Carried *slotted = selectedForIdentification();
                 if (!slotted && !nativeInventory)
                     identify.takeOut();
-                const identifywindow::Layout idLayout = identifywindow::layout(guiWindow);
-                const int slottedCount = slotted ? slotted->count : 0;
+                const auto idLayout = hud.identificationLayout();
+                const glm::vec2 idMouse = pointerTestX >= 0 ? glm::vec2((float)pointerTestX, (float)pointerTestY) : mouse;
                 for (int button : input.buttons) {
-                    if (nativeInventory && identify.open && (button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT)) {
+                    if (!identify.open || (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT)) {
+                        unclaimed.push_back(button);
+                        continue;
+                    }
+                    if (nativeInventory) {
                         const auto *stack = nativeInventory->inventory.slot(hoveredNative);
                         if (stack && stack->count != 0) {
                             identify.bind(hoveredNative);
                             slotted = selectedForIdentification();
                             continue;
                         }
-                        if (idLayout.inWindow(guiMouse))
-                            continue;
-                        unclaimed.push_back(button);
-                        continue;
-                    }
-                    if (!identify.open || button != GLFW_MOUSE_BUTTON_LEFT) {
-                        unclaimed.push_back(button);
-                        continue;
-                    }
-                    if (idLayout.onButton(guiMouse)) { // the button pressed (0x965e0)
-                        if (!identifywindow::canIdentify(identify, slottedCount, playerGold)) {
-                            audio.playInterface(gameshop::SOUND_REFUSED);
-                            continue;
-                        }
-                        const identifywindow::Outcome o = identifywindow::identifyOnce(identify, [&] { return (int)(lootDice() % 32768); });
-                        playerGold -= o.paid;
-                        takeOne(identify.item);
-                        receive(o.made);
-                        audio.playInterface(gameshop::SOUND_IDENTIFIED);
-                        logLine("Identify: paid " + std::to_string(o.paid) + " gold for an item of type " + std::to_string(o.made[0]));
-                        slotted = nullptr; // (found again next frame)
-                    } else if (idLayout.onSlot(guiMouse)) // taken out of the slot
-                        identify.takeOut();
-                    else if (inventoryView.hoverItem >= (int)gearRows && inventoryView.hoverItem - gearRows < bag.size()) // put in the slot from the bag
+                    } else if (inventoryView.hoverItem >= (int)gearRows && (size_t)inventoryView.hoverItem - gearRows < bag.size()) {
                         identify.put(rawOf(bag[(size_t)inventoryView.hoverItem - gearRows].item));
-                    else if (!idLayout.inWindow(guiMouse))
+                        slotted = selectedForIdentification();
+                        continue;
+                    }
+                    if (!idLayout.inWindow(idMouse))
                         unclaimed.push_back(button);
                 }
                 input.buttons = std::move(unclaimed);
-                if (nativeInventory)
-                    for (int button : input.released)
-                        if (identify.acceptsRelease(button) && idLayout.onButton(guiMouse)) {
-                            slotted = selectedForIdentification();
-                            if (identifywindow::canIdentify(identify, slotted ? slotted->count : 0, playerGold)) {
-                                const auto outcome = identifywindow::identifyOnce(identify, [&] { return (int)(lootDice() % 32768); });
-                                playerGold -= outcome.paid;
+                for (int button : input.released) {
+                    if (!identify.acceptsRelease(button))
+                        continue;
+                    slotted = selectedForIdentification();
+                    if (idLayout.onButton(idMouse, slotted && identify.item[0] == gameshop::UNIDENTIFIED)) {
+                        if (identifywindow::canIdentify(identify, slotted ? slotted->count : 0, playerGold)) {
+                            const auto outcome = identifywindow::identifyOnce(identify, [&] { return (int)(lootDice() % 32768); });
+                            playerGold -= outcome.paid;
+                            if (nativeInventory)
                                 nativeInventory->inventory.consumeOne(identify.selection);
-                                receive(outcome.made);
-                                audio.playInterface(gameshop::SOUND_IDENTIFIED);
-                                slotted = selectedForIdentification();
-                            } else
-                                audio.playInterface(gameshop::SOUND_REFUSED);
+                            else
+                                takeOne(identify.item);
+                            receive(outcome.made);
+                            audio.playInterface(gameshop::SOUND_IDENTIFIED);
+                            slotted = selectedForIdentification();
                         }
+                    } else if (idLayout.onGoodbye(idMouse)) {
+                        identify.close();
+                        bagShown = false;
+                        inventoryOpen = craftingOpen;
+                    }
+                }
                 if (identify.open) {
-                    identifywindow::Shown shown;
-                    if (identify.slotted && slotted) {
+                    auto &shown = identificationView;
+                    if (identify.slotted && slotted && identify.item[0] == gameshop::UNIDENTIFIED) {
                         shown.slotted = true;
                         shown.name = bagName(slotted->item, itemName(slotted->item));
                         shown.icon = iconOf(!slotted->item.sprite.empty() ? slotted->item.sprite
-                                            : spawnedReady ? spawned.itemSprite(identify.item.data()) : std::string());
-                        shown.colour = rarityColour(slotted->item.rarity);
+                                            : spawnedReady                ? spawned.itemSprite(identify.item.data())
+                                                                          : std::string());
+                        int32_t region[2] = {here.x, here.y};
+                        if (const auto *actor = spawned.playerRecord())
+                            std::memcpy(region, actor + worldgen::creature::REGION, 8);
+                        const int rarity = nativerules::itemLevel(identify.item.data(), region);
+                        shown.colour = rarityColour(rarity);
+                        shown.regionColour = rarity == slotted->item.rarity ? glm::vec4(1, .9f, .5f, 1) : glm::vec4(.75f, .75f, .75f, 1);
+                        static const char *const kinds[] = {"Plains",    "Ocean",      "Hills",     "Woodlands", "Jungle",
+                                                            "DarkWoods", "SnowForest", "Mountains", "Wetlands",  "Desert",
+                                                            "Savannah",  "Snowlands",  "Deadlands", "Firelands"};
+                        const int x = slotted->item.region[0], y = slotted->item.region[1];
+                        const int kind = worldgen::regionBiome(x, y);
+                        if (kind >= 0 && kind < 14 && speech.hasEntry(kinds[kind]))
+                            shown.regionDescription = speech.place(
+                                kinds[kind], itemNameParts.name((int32_t)worldgen::random((uint32_t)x + 57u * (uint32_t)y), -1));
                         shown.count = slotted->count;
                     }
                     shown.price = identifywindow::price(identify);
                     shown.gold = playerGold;
                     shown.ready = identifywindow::canIdentify(identify, slotted ? slotted->count : 0, playerGold);
-                    shown.overButton = idLayout.onButton(guiMouse), shown.overSlot = idLayout.onSlot(guiMouse);
-                    const Hud::Screen items = identifywindow::screen(idLayout, shown);
-                    lootWindowItems.insert(lootWindowItems.end(), items.begin(), items.end());
+                    shown.overButton = idLayout.onButton(idMouse, shown.slotted);
+                    shown.overGoodbye = idLayout.onGoodbye(idMouse);
                 }
 
                 // The weapon upgrade widget (loot-crafting.md §4), opened by right-clicking a worn
@@ -4988,15 +5009,22 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     identify.close(), upgrade.open = false; // (they stand where the shop's widget goes)
                     inventoryOpen = hud.hasInventoryArt() && haveGear;
                     bagShown = true;
-                    inventoryView.vendor.tab = 0, inventoryView.vendor.scroll = 0;
+                    craftingOpen = false;
+                    refreshBagOpening();
+                    refreshInventory(); // shop rebuild's bound widget refresh
+                    if (!nativeInventory)
+                        inventoryView.vendor.tab = 0, inventoryView.vendor.scroll = 0;
                     logLine("Use: trading with " + std::to_string(p.creature) + " (class " + std::to_string(vendorTrade.shop.cls) + ")");
                     break;
                 case Action::ClassWindow: // the identify window beside the inventory (loot-shops.md §5)
                     inventoryOpen = hud.hasInventoryArt() && haveGear;
                     bagShown = true;
                     vendorTrade.open = upgrade.open = false;
-                    if (inventoryOpen)
+                    if (inventoryOpen) {
                         identify.show();
+                        craftingOpen = false;
+                        refreshBagOpening();
+                    }
                     logLine("Use: the identify window of " + std::to_string(p.creature));
                     break;
                 case Action::FlightMaster:
@@ -6648,6 +6676,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             if (inventoryOpen)
                 hs.inventory = &inventoryView;
+            if (identify.open)
+                hs.identification = &identificationView;
             { // the identify window, the upgrade widget and the chat line (Hud::State::windows)
                 if (!lootWindowItems.empty())
                     hs.windows = &lootWindowItems;
@@ -6766,21 +6796,23 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     }
                 }
             });
-            if (!answerPoints.empty()) {
-                int width, height;
-                glfwGetWindowSize(window, &width, &height);
-                const auto pixels = renderer.screenSize();
-                for (auto point : answerPoints)
-                    input.gamepadNavigationPoints.push_back({(int32_t)(point.x * width / std::max(1u, pixels.width)),
-                                                            (int32_t)(point.y * height / std::max(1u, pixels.height))});
+            std::vector<glm::vec2> afterShop;
+            if (hs.identification) {
+                const auto layout = hud.identificationLayout();
+                if (layout.valid) {
+                    const auto points = layout.navigation();
+                    afterShop.insert(afterShop.end(), points.begin(), points.end());
+                }
             }
-            if (hs.inventory && (menusReady ? menus.interfaceShown() : true)) {
+            afterShop.insert(afterShop.end(), answerPoints.begin(), answerPoints.end());
+            if (menusReady ? menus.interfaceShown() : true) {
+                const auto points = hs.inventory && hud.hasPanels() ? hud.inventoryNavigationPoints(*hs.inventory, afterShop) : afterShop;
                 int width, height;
                 glfwGetWindowSize(window, &width, &height);
                 const auto size = renderer.screenSize();
-                for (glm::vec2 point : hud.inventoryNavigationPoints(*hs.inventory))
-                    input.gamepadNavigationPoints.push_back({(int32_t)(point.x * width / std::max(1u, size.width)),
-                                                            (int32_t)(point.y * height / std::max(1u, size.height))});
+                for (const auto &point : points)
+                    input.gamepadNavigationPoints.push_back(
+                        {(int32_t)(point.x * width / std::max(1u, size.width)), (int32_t)(point.y * height / std::max(1u, size.height))});
             }
             if (!captureFeat.empty() && !featFixtureCaptured && !featLabels.empty() &&
                 (!menusReady || menus.interfaceShown()) && hud.hasInterface()) {

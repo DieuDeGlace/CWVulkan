@@ -126,6 +126,60 @@ Cost is shown **only with a resolved selected item**; empty state draws
 neither `COST: 0` nor an invented placeholder instruction/name/icon.
 The itemframe's owner artwork itself remains part of the tree.
 
+### 3.2 Footer mouse, text and navigation coordinate bases
+
+The strict footer tests0x277d70/0x277cd0 obtain their mouse coordinates
+through **0x32b180**. This is **not the full inverse of the widget frame
+matrix**. Define M as the composed node-world matrix of widget root
++0x178, I as its inverse from **0x100ee0**, and F as the frame matrix
+from **0x32ce40**. Existing plasma-format-and-scene §2.7.2 specifies
+**F = M × bindInverse × Translate(framePos)**. Frame origin O is the
+projected **F×(0,0,0,1)** from **0x32cf50**, including its homogeneous
+division. Thus bind inverse and current framePos affect O.
+
+0x32b180 reads the GUI engine's cached cursor floats **+0x180/+0x184**.
+Subtract O componentwise in float32 to obtain dx,dy. Its returned X is
+the float32 sum **dx×I00 + dy×I10**; Y is the float32 sum
+**I01×dx + I11×dy**. In the native column-major16-float storage these
+coefficients are indices0,4,1,5 respectively. Each product is float32,
+then the indicated pair is added in float32. It uses no inverse-matrix
+translation or homogeneous divide on this delta, no additional bind
+matrix, and no separate post-transform pivot addition/subtraction.
+The node-world inverse already carries the node/ancestor transform
+linear effects. A replacement that feeds the cursor through F inverse
+will generally differ when bind has a nonidentity linear part.
+
+Compare those continuous returned coordinates against **local effective
+W/H** from0x32a1d0/0x329e00, using the strict inequalities in §3.1 and
+steam-controller-handoff §1. There is no rounding to physical pixels
+before those rectangle comparisons. These helpers do not additionally
+call the drawing-outline hit tree, repeat GUI ancestor clipping tests,
+or derive their regions from glyph ink bounds. Release visibility and
+shown-at-down gates still apply separately as §6 specifies.
+
+Manual footer navigation registration **0xf97e0** uses another explicit
+basis. It composes M through0x100fa0 and the node's local matrix+0x2a0,
+adds the root's live **pivot** to its already truncated integer local
+point, then projects that point through M, dividing by homogeneous W
+and finally truncating screen X/Y to signed32. It does **not** insert
+widget bindInverse or Translate(framePos). Therefore replacing this
+registration with generic frame-to-screen F is also not established by
+the native contract. Its two local inputs remain §3's W/3,H−20 and
+2W/3,H−20, truncated before registration.
+
+Footer text0x269210 begins that same root node in the GUI engine, reads
+the current node draw matrix, adds the live pivot to the caller's
+**float** local text origin, and scales those origin components by the
+matrix's xx component for the scalable-font submission. It follows the
+shared two-pass font contract (plasma-shapes-and-text §7.1); it does not
+explicitly construct/apply widget F or a bind inverse to those text
+arguments. Unlike registration, the Identification footer caller does
+not truncate W/3,2W/3 or H−20 before submitting text. Do not silently
+merge the text, manual-point and mouse-local adapters into one generic
+frame-space matrix merely because their ordinary owner-template
+results align. Itemframe world origin/size for the3D icon is a distinct
+frame-geometry query, as §4 already specifies.
+
 ## 4. Item icon and item-information inputs
 
 The selected item is **the existing original category15 record**, with

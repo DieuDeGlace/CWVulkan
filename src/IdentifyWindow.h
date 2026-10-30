@@ -1,24 +1,18 @@
 #pragma once
-// The identify window (docs/specs/loot-shops.md §5: the window at controller +0x360, its frame
-// routine 0x965e0). Talking to a townsperson of class 0x83 opens it beside the inventory. The
-// player puts an item from the inventory in its slot; the window shows its price (half the item's
-// price, at least 1, 0x277bc0), and its button turns a type-15 item into a random weapon or
-// armour piece of the item's rarity, for any class, bound to the item's region
-// (gameshop::identify).
-//
-// The spec gives the rules, not the window's look: its geometry here is CubeVulkan's, built of
-// the game's gui.plx templates like the shop windows (a black widget, an item box, a button).
+// Identification state and transformed footer geometry, from steam-identification-ui.md.
+// The owner blackwidget/itemframe tree is instantiated and drawn by HudIdentification.cpp.
 #include "GameShop.h"
 #include "InventorySlots.h"
-#include "Hud.h"
+#include <glm/glm.hpp>
+#include <array>
 
 #include <functional>
 #include <string>
 
 namespace identifywindow {
 
-// The window's state: shown or not, and the item in its slot (a copy; the inventory's stack is
-// found again by item equality, as its tab and index would point at it).
+// Native selection is a live pair; item/slotted are presentation scratch. Legacy
+// recording sessions can still supply a copied item with put().
 struct Window {
     bool open = false;
     bool slotted = false;
@@ -55,30 +49,28 @@ Outcome identifyOnce(const Window &w, const std::function<int()> &rand);
 
 // --- The window on screen -------------------------------------------------------------------
 
-constexpr glm::vec2 WINDOW_SIZE{260, 260}, SLOT_SIZE{60, 60}, BUTTON_SIZE{120, 15};
-// The "button" template drawn at BUTTON_SIZE reaches this much lower than its size (its frame's
-// margin, measured on a capture); the button takes clicks over all of it.
-constexpr float BUTTON_DRAWN_EXTRA = 47;
-
+constexpr glm::vec2 WINDOW_SIZE{350, 285};
 struct Layout {
-    glm::vec2 at{0}, slotAt{0}, buttonAt{0};
-    bool inWindow(glm::vec2 p) const;
-    bool onSlot(glm::vec2 p) const;
-    bool onButton(glm::vec2 p) const;
+    bool valid = false;
+    glm::vec2 size{0}, slotSize{0};
+    glm::mat4 frameToScreen{1}, nodeToScreen{1}, textToScreen{1}, slotToScreen{1};
+    glm::vec2 local(glm::vec2 screen) const;
+    bool inWindow(glm::vec2 screen) const;
+    bool onSlot(glm::vec2 screen) const;
+    bool onButton(glm::vec2 screen, bool resolved = true) const;
+    bool onGoodbye(glm::vec2 screen) const;
+    std::array<glm::vec2, 2> navigation() const;
 };
-// For a window `window` interface units in size: where the vendor's widget goes, right of the bag.
-Layout layout(glm::vec2 window);
 
 // What the window shows.
 struct Shown {
     bool slotted = false;
-    std::string name, icon; // the slotted item's name and icon key (Hud::addIcon)
-    glm::vec4 colour{1};    // its rarity's colour
+    std::string name, icon, regionDescription; // the slotted item's name and icon key (Hud::addIcon)
+    glm::vec4 colour{1}, regionColour{1};      // its rarity's colour
     int count = 0;
     int price = 0, gold = 0;
     bool ready = false;     // canIdentify
-    bool overButton = false, overSlot = false;
+    bool overButton = false, overSlot = false, overGoodbye = false;
 };
-Hud::Screen screen(const Layout &layout, const Shown &shown);
 
 } // namespace identifywindow

@@ -191,6 +191,7 @@ add_library(engine STATIC
     src/GameNames.cpp
     src/PlasmaScene.cpp
     src/HudPanels.cpp
+    src/HudIdentification.cpp
     src/HudFrontend.cpp
     src/GameShop.cpp
     src/GameCraft.cpp

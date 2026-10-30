@@ -1,4 +1,5 @@
 #include "Hud.h"
+#include "IdentifyWindow.h"
 #include "FeatText.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
@@ -1068,6 +1069,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     }
     if (state.inventory)
         drawInventory(*state.inventory, out);
+    if (state.identification)
+        drawIdentification(*state.identification, out);
     if (state.windows)
         drawScreen(*state.windows, out);
     if (overlays) overlays(out);

@@ -879,8 +879,9 @@ Game+0x1e98/+0x1ea0, then calls0xb75d0. That rebuild ends in shop
 opening inventory and once through rebuilding shop. The identifier
 class0x83 press sets G+0x360 shown then calls0x102db0(0); it adds the
 inventory-opening sort but no independent identification refresh/sort.
-Identification Goodbye hides that identification root, retaining its
-selection (steam-identification-ui §6). It does not itself sort.
+Identification Goodbye hides both identification and inventory roots,
+retaining its selection (steam-identification-ui §6). It does not
+itself sort.
 
 Simple root visibility changes do not call0xb3ed0. In particular the
 movement/full-map close paths which only hide roots are not a substitute
@@ -892,3 +893,202 @@ template+0x228 is non-null, then0x280c80 after rebuilding its hit frames;
 it adds a sort if the widget is bound, including while hidden. Do not
 generalize the toggle counts into a count for every surrounding layout
 or transaction event.
+
+## 9. Ring Menu selector: construction, content and input
+
+### 9.1 Owner node and live candidate identity
+
+The selector is the owner gui.plx node **`selector`**, installed by
+0xf9ac0 at Game+0x310/Interface+0x1f8, reparented under game UI
+G+0x220, then hidden. It is not constructed by0x27c950 and has no
+InventoryWidget backing-collection bind, tab selection or mouse-hover
+slot pair. Game constructor0x7ea80 initializes the signed32 selection
+index **G+0x20c0=0**, displayed float angle **G+0x1e8c=0** and float
+radius **G+0x1e90=0**. There is no item transfer into creature+a08/a0c.
+This setup does not register separate native down/up callbacks on selector
+or its arrow children. Normal interface layout0x101bd0, at0x102409,
+places the node with0x334700: the target point is
+**(float(trunc32(layout width/2)),float(trunc32(layout height/2)))**,
+where the division is signed integer division toward zero before float
+conversion; the additional offset is **(0,−200.0)** in parent/frame
+units.0x334510 transforms the target point into parent coordinates,
+adds that offset and subtracts the node's owner-defined pivot before
+storing position. Thus the target uses the physical layout midpoint;
+the−200 offset is transformed by its GUI parent, not independently
+subtracted from physical screen Y after that conversion. Preserve the
+owner selector subtree, geometry, text style and pivot.
+
+Candidate builder **0x93e60** scans every canonical tab, then every slot,
+in current stored order. It appends a pair of **signed32 tab/index**
+precisely when **quantity!=0 and item category==1**. Negative nonzero
+quantities qualify. It does not test subtype, region, class, usability,
+stun, equipment or the retained cursor item. In particular category28,
+although directly consumable elsewhere, is absent. The returned vector
+has eight-byte pairs and is freshly rebuilt by each caller; it neither
+sorts nor compacts canonical storage.
+
+The selection is a retained signed32 running index, not a retained item
+or canonical pair. Nonempty lists select by wrapping it to the current
+candidate count. The stored running index is not rewritten with that
+wrapped value. Sorting, insertion/removal and changes in candidate count
+can therefore change the selected live item without resetting the index.
+For positive candidate counts up to signed32 maximum, the result is
+mathematical nonnegative modulo for **every signed32 index**, including
+−2147483648. The native negative adjustment first negates the index in
+**32 bits**, sign-extends that result, takes its unsigned64 quotient by
+the count, adds one to that quotient, multiplies by count, adds the
+original sign-extended index, then takes unsigned64 remainder by count
+(instructions0x8e09b–0x8e0d0 and0xac90e–0xac94b). The intermediate
+machine negation at−2147483648 wraps, but this final remainder still
+has the stated nonnegative-modulo result for that bounded count range.
+Do not introduce a new UI reset for negative indices or use undefined
+signed32 negation to implement their mathematical normalization.
+
+### 9.2 Toggle, visibility and close ordering
+
+Ring Menu is action16: state byte **G+0x1a80**, previous byte **0x5514ff**,
+default Tab scan0x0f/device0. XInput supplies its ordinary action16
+state from right-stick press; this is not a new mouse-widget event.
+In frame0xa5a50, when chat editor G+0x398 byte+0x1d8 is inactive and
+the roots at G+0x118, G+0x130 and G+0x170 are hidden, a rising action16
+edge toggles selector shown state. The prior byte updates within that
+same admitted block, even without an edge; it is not updated by this
+block while one of those gates prevents entry. No canonical refresh,
+sort, candidate-index reset or default selection is performed by toggle.
+
+Later in that frame a shown selector is hidden if forward action5 or
+back action6 is held, or left analog Y is **strictly>0.25 or<−0.25**.
+Chat activity does not add a gate to this selector-specific close test.
+The earlier broad movement-close test for ordinary panels is separate.
+The subsequent interface update **0x103200** also hides selector whenever
+full-map Game+0x668 is true; a selector opened during that frame can
+therefore close before its content/update/render stage. The selector
+alone is absent from ordinary-UI predicate0x1014f0; do not globally
+disable ordinary movement/camera merely because Ring Menu is shown.
+
+The common0x94900 inventory-down tail closes selector after its shared
+health adjustment and chat-editor deactivation (§7.7), including a
+reached button0 or1 down. This is distinct from choosing an item in
+InventoryWidget G+0x330. Quick-use closes are specified below. Ordinary
+visibility changes do not sort, consume or put back an item.
+Open/close sounds are sampled later in0xa5a50, not requested directly
+by the selector toggle: the observed state is ordinary-UI0x9ae70
+**OR selector shown**. Its rising/falling edges request0x56/0x57 at
+the listener. Another open ordinary panel can keep that combined state
+true while selector closes, so selector hide alone does not imply0x57.
+
+### 9.3 Selected text and render-list production
+
+Frame **0xa5a50 at0xac4a5** rebuilds the candidates even while selector
+is hidden. With any candidates, it resolves the current wrapped index
+and updates the ordinary quick-item HUD's selected item/count/name.
+This does not equip or copy that item into the retained cursor record.
+The subsequent selector-specific update is at0xac7xx–0xacdxx.
+
+While shown and empty, child **`count`** is cleared, **`name`** becomes
+the literal **“You don't have any usable items.”**, and that name's RGBA
+becomes white. No per-item render entry is produced. While shown and
+nonempty, resolve the current index **before** handling this frame's
+left/right changes. `count` is the signed decimal slot quantity only
+when0x5f0e0 marks its item stackable; otherwise it is empty. `name` is
+the full item name from0x1628b0, colored by0x10a600 using the item's
+region and the local player's current region. Do not substitute a
+plain category label or a new color scheme.
+
+Also append one16-byte scene input per candidate, in candidate order:
+first pointer null, second pointer the live canonical **item payload**
+(slot+4). These are temporary draw references, not semantic item copies
+or inventory transfers. The scene call0xe2e00 receives this list along
+with the selector radius and displayed angle. All owner nodes named
+**`brackets`** under selector are shown exactly when this list is
+nonempty, hidden otherwise. Hidden selector produces no such draw list.
+Changing the running index later in the frame does not retroactively
+change the name/count selected earlier in that update.
+
+### 9.4 Left/right neutral latch, repeat and animation
+
+Only a **shown, nonempty** selector enters its selection-repeat branch.
+Left means action7 held **or left analog X<0**; right means action8 held
+**or left analog X>0**. Selection itself has no additional0.2/0.25 analog
+threshold. Global byte **0x551554** is the neutral-seen latch, and
+signed32 **0x551558/0x55155c** are independent left/right repeat
+countdowns in milliseconds. Their static initial values are zero.
+
+A hidden selector clears the neutral latch and zeros displayed angle
+and radius, but does not reset the running selection index or repeat
+countdowns. A shown **empty** selector zeros angle/radius without
+resetting that latch or advancing either countdown. Therefore holding
+left/right through opening does not immediately select: a shown,
+nonempty update with neither direction held must first set the latch.
+An empty interval while still shown retains whatever latch state it
+already had.
+
+Inside an admitted selection update, a released direction first has its
+own countdown set0. Once the neutral latch is set, each held direction
+whose countdown is≤0 changes G+0x20c0 by one (left−1, right+1), resets
+its countdown to **200**, and requests sound **0x58**, volume/pitch1,
+at the current listener. Left is handled before right; both can execute
+and both can sound in the same frame. There is no initial400-ms period
+and no multi-step catch-up loop. A newly reset200 is reduced in the same
+update. When latched, or when both directions are neutral (which sets
+the latch), each countdown is promoted to double, subtracts the
+frame's **capped double elapsed ms**, truncates toward zero to signed32,
+then clamps negatives to0. If a direction remains held while the latch
+is clear, neither countdown is decremented. This is frame timing,
+distinct from successful-XInput-poll repeat clocks. The Game frame
+upper cap at0xa5afc is **1000.0 ms**; it is not newly capped to200 here.
+
+After the possible index changes, target angle in degrees is the
+float32 product **float(index)×−360.0**, divided in float32 by the
+candidate/render-entry count. If radius≤0, or absolute displayed-minus-
+target difference≥**270.0**, set displayed angle directly to target;
+otherwise ease via0x16ee0/0xa7a0 using capped double elapsed and
+coefficient float **0x3c23d70a** (approximately0.01). A zero radius
+also explicitly forces the angle to target. Then ease radius toward
+the float32 product **GUI scale G+0x664×200.0**, using that same helper,
+elapsed and coefficient. These stored floats, rather than an instant
+wrapped angle/index, are supplied to the scene.
+
+Interface0x103200 separately colors owner children **`left`** and
+**`right`** for held feedback. Its analog thresholds are **X<−0.2** and
+**X>0.2**, respectively, in addition to the action7/8 bytes. This
+feedback threshold differs from the any-nonzero selector movement test.
+It writes the selected child shape-color entry through0xf88f0: idle
+**RGBA(1,1,1,1)**; held **RGBA(1,0,0.2,1)**, where0.2 is float word
+**0x3e4ccccd**. Calls0x1061ba/0x1061f7 handle left and
+0x10624c/0x106289 handle right. The child drawing geometry and text
+geometry remain owner GUI data; these are color overrides on that
+subtree, not newly drawn arrow geometry.
+
+### 9.5 Use and Quick Item are separate rising-edge routes
+
+In admitted target/use update **0x8ae50**, call prompt routine0x98180
+first. When it returns0 and selector is shown, rising action11
+**Use/Interact** (G+0x1a7b versus prior byte0x5515a3) rebuilds0x93e60.
+If nonempty, resolve the current running index, call **0xb7740 on that
+live slot**, then hide selector even if the helper did nothing, such as
+while stunned. If empty, leave selector shown. This shown-selector
+branch suppresses later ground pickup/vehicle fallbacks in the
+no-prompt route, including frames without an action11 edge. A prompt
+return1 takes its own earlier branch instead. The previous action11
+byte is updated later in0x8ae50 whichever of those branches ran.
+
+Independently, later in0x8ae50, rising **action4 Quick Item**
+(G+0x1a74 versus0x5515a5; default Q scan0x10/device0) rebuilds the same
+category1 candidates. With a nonempty list, resolve the retained index,
+call0xb7740 on that live slot, then hide selector. This does **not**
+require selector shown, and is not contingent on0x98180 returning0.
+The action4 previous byte updates after that branch. Both action11 and
+action4 can be rising in one update; their branches rebuild separately
+and can act successively on the changed live inventory. This code is
+before0x8ae50's later ordinary-UI predicate branch; do not add a new
+0x1014f0 test inside it. The outer admission conditions for calling
+0x8ae50 remain use-prompt §1.
+
+The selector caller adds no inventory refresh, canonical sort, equip
+sound or generic cursor action. Category1 quantity/clearing and the
+subtype13 exception are the exact0xb7740 rules already in §7.6 and
+steam-item-map-selection. In particular closing the selector does not
+prove a quantity was consumed. This section closes input/data/visibility
+behavior; the complete0xee5a0 queued sprite-descriptor transform and
+later sprite draw-state path are not newly claimed here.
