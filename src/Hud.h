@@ -14,6 +14,7 @@
 #include "PlasmaScene.h"
 #include <array>
 #include <memory>
+#include <optional>
 #include <glm/glm.hpp>
 #include <filesystem>
 #include <map>
@@ -25,6 +26,8 @@
 namespace dialoguechoice { class Panel; }
 namespace dialoguepanel { class General; struct Layout; }
 namespace npcspeech { struct Bubble; }
+
+class ChatLine;
 
 class Hud {
   public:
@@ -254,6 +257,8 @@ class Hud {
     bool load(const std::filesystem::path &gameDir, std::string &error);
     // Builds (or rebuilds after a resize) the atlas for a window of this size.
     void layout(Renderer &renderer, VkExtent2D screen);
+    // Rebuild the atlas only when newly received/editor text needs another owner glyph.
+    bool requireText(const std::u16string &);
     void draw(const State &state, std::vector<OverlayVertex> &out,
               const std::function<void(std::vector<OverlayVertex> &)> &overlays = {}) const;
     // Display name for a creature from its head or body sprite ("radish-creature-head"
@@ -339,6 +344,9 @@ class Hud {
                              std::vector<OverlayVertex> &, std::vector<glm::vec2> *navigation = nullptr) const;
     bool dialogueChoicesHit(glm::vec2 point) const;
     bool generalDialogueHit(glm::vec2 point) const;
+    void updateChat(ChatLine &, const std::function<std::optional<std::u16string>(int64_t)> & = {}) const;
+    void appendChat(ChatLine &, const std::u16string &, std::array<uint8_t, 3>) const;
+    void drawChat(ChatLine &, int32_t guiClock, std::vector<OverlayVertex> &) const;
     void drawNpcSpeech(const std::vector<npcspeech::Bubble> &, int32_t guiTime, std::vector<OverlayVertex> &,
         const std::function<void(int64_t, const dialoguepanel::Layout &, glm::vec2 frame)> &onDraw = {}) const;
     dialoguepanel::Layout drawGeneralDialogue(const dialoguepanel::General &, glm::vec2 screen, int32_t guiTime,
@@ -362,6 +370,7 @@ class Hud {
     // glyphs as the text shapes drawn here rasterise them, in the atlas: by font, raster
     // (plasma::Raster::key), plain or outline, and character.
     plasma::Font plasmaFonts[2];
+    std::set<wchar_t> additionalGlyphs;
     struct TextGlyph {
         glm::ivec2 atlas{0}, size{0}; // the glyph's texture in the atlas
         glm::vec2 offset{0}, extent{0};
@@ -412,6 +421,7 @@ class Hud {
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
+        plasma::SceneNode *chat = nullptr;
         InvPanel bag, vendor, crafting;
         std::vector<plasma::SceneNode *> slots;
         int cellWidth = 40, cellHeight = 40;
@@ -422,6 +432,8 @@ class Hud {
     void layoutDetails();
     void drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     InvList craftingList(const Inventory &inv) const;
+    plasma::SceneNode *placeChat() const;
+    float chatWordWidth(const std::wstring &) const;
     void buildPanels();
     void buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons, int tabs, const char *selection = nullptr);
     InvList listOf(const Inventory &inv, int which) const;

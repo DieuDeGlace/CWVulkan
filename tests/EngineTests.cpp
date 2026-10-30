@@ -9077,6 +9077,8 @@ int main(int argc, char **argv) {
         return plasmaHitTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "scenecost")
         return steamMeshCostTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "lootwindows")
+        return lootWindowTests();
     if (argc == 2 && std::string(argv[1]) == "scenerange")
         return steamSceneRangeTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "padui")

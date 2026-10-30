@@ -295,6 +295,7 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
         characters.push_back(c);
     for (wchar_t c : {0xb0, 0xae, 0xb1})
         characters.push_back(c);
+    characters.insert(characters.end(), additionalGlyphs.begin(), additionalGlyphs.end());
     auto bakeStyle = [&](const plasma::TextStyle &style, const glm::mat4 &m) {
         if (style.pixelSize <= 0.0f)
             return;

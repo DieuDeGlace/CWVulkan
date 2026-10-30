@@ -6,6 +6,10 @@ exporter, build files or owner captures were inspected; no game was run.
 Addresses are RVAs. Business actions remain loot-shops §5; controller points
 and release hit tests are consolidated in steam-controller-handoff §1.
 
+**steam-inventory-slot-lifecycle.md** specifies the canonical tab/index
+storage, loading, hole reuse, removal and actual in-place sort/compaction
+that can change what this widget's retained selection resolves to.
+
 ## 1. Owner templates and construction
 
 Interface constructor **0xf9ac0**, constructor call **0x10055e**, creates

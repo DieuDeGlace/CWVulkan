@@ -3,6 +3,7 @@
 // gear and in the save, and the chat's input line (frontend-options.md §3, netcode-packets.md
 // §2.11).
 #include "ChatLine.h"
+#include "ChatCommands.h"
 #include "GameCraft.h"
 #include "Gear.h"
 #include "IdentifyWindow.h"
@@ -255,23 +256,103 @@ void cubesKept() {
     LOOT_CHECK(found);
 }
 
+void chatCommands() {
+    using namespace chatcommand;
+    LOOT_CHECK(parse(u"  /wave extra").kind == Kind::Motion && parse(u"  /wave extra").ability == 0xa1);
+    LOOT_CHECK(parse(u"/sit").ability == 0x57 && parse(u"/pet").ability == 0xa2 && parse(u"/dance").ability == 0xa3);
+    LOOT_CHECK(parse(u"/Wave").kind == Kind::Text && parse(u"/unknown").kind == Kind::Text);
+    LOOT_CHECK(parse(u"/check ignored").kind == Kind::Check);
+    LOOT_CHECK(parse(u"/namepet One Two").argument == u"One" && parse(u"/namepet").argument.empty());
+    std::array<uint8_t, 0xa0> item;
+    item.fill(0xa5);
+    item[0] = 20;
+    const auto before = item;
+    LOOT_CHECK(!namePet(item.data(), u"") && !namePet(item.data(), std::u16string(16, u'X')) && item == before);
+    LOOT_CHECK(namePet(item.data(), u"A\u0142"));
+    for (size_t i = 0; i < item.size(); ++i) {
+        const uint8_t expected = i == 0x20 ? 'A' : i == 0x24 ? 0x42 : i == 0x9d ? 2 : before[i];
+        LOOT_CHECK(item[i] == expected);
+    }
+    item[0] = 3;
+    LOOT_CHECK(!namePet(item.data(), u"Pet"));
+    std::array<uint8_t, 0x100> creature{};
+    float clock = 100;
+    std::memcpy(creature.data() + 0x6c, &clock, 4);
+    LOOT_CHECK(!startMotion(creature.data(), 100, 0xa3)); // strict clock gate
+    LOOT_CHECK(startMotion(creature.data(), 99, 0xa3) && creature[0x68] == 0xa3);
+    std::memcpy(&clock, creature.data() + 0x6c, 4);
+    LOOT_CHECK(clock == 0 && !startMotion(nullptr, 0, 0x57));
+}
+
 void chatLine() {
     ChatLine chat;
     LOOT_CHECK(!chat.typing());
-    chat.type("ignored"); // nothing is typed while it is closed
-    LOOT_CHECK(!chat.enter() && chat.typing() && chat.text().empty()); // Enter opens it
+    chat.type("ignored");
+    LOOT_CHECK(!chat.enter() && chat.typing() && chat.text().empty());
     chat.type("hello\x01 there");
     chat.backspace();
     LOOT_CHECK(chat.text() == u"hello ther");
-    LOOT_CHECK(chat.screen({1600, 900}).size() == 1);
-    const std::optional<std::u16string> sent = chat.enter(); // Enter sends and closes it
-    LOOT_CHECK(sent && *sent == u"hello ther" && !chat.typing() && chat.screen({1600, 900}).empty());
+    chat.key(ChatLine::Key::Home);
+    chat.key(ChatLine::Key::Right, true);
+    chat.key(ChatLine::Key::Right, true);
+    LOOT_CHECK(chat.caretIndex() == 2 && chat.selectedUnits() == -2);
+    chat.type("H");
+    LOOT_CHECK(chat.text() == u"Hllo ther" && chat.caretIndex() == 1);
+    chat.key(ChatLine::Key::End);
+    chat.key(ChatLine::Key::Left, true);
+    chat.key(ChatLine::Key::Delete);
+    LOOT_CHECK(chat.text() == u"Hllo the");
+    chat.stopEditing();
+    LOOT_CHECK(!chat.typing() && chat.text() == u"Hllo the");
     chat.enter();
-    LOOT_CHECK(!chat.enter() && !chat.typing()); // an empty line sends nothing
+    LOOT_CHECK(chat.text() == u"Hllo the");
+    const auto sent = chat.enter();
+    LOOT_CHECK(sent && *sent == u"Hllo the" && !chat.typing() && chat.text().empty());
     chat.enter();
-    chat.type("never mind");
-    chat.cancel();
-    LOOT_CHECK(!chat.typing() && chat.text().empty());
+    LOOT_CHECK(!chat.enter() && !chat.typing());
+    chat.enter();
+    chat.type(std::string(1, (char)0xc8));
+    LOOT_CHECK(chat.text() == std::u16string(1, (char16_t)0xffc8));
+    LOOT_CHECK(!ChatLine::caretVisible(0) && !ChatLine::caretVisible(499));
+    LOOT_CHECK(ChatLine::caretVisible(500) && ChatLine::caretVisible(999) && !ChatLine::caretVisible(1000));
+
+    const auto measure = [](const std::wstring &) { return 10.75f; };
+    ChatLine history;
+    history.append(u"A B", {1, 2, 3}, 55, measure); // equality wraps: 10+5+10 == 25
+    LOOT_CHECK(history.rows().size() == 2 && history.rows()[0].size() == 2);
+    LOOT_CHECK(history.rows()[1][0].text == L"B");
+    history.append(u"C", {4, 5, 6}, 50, measure); // old row width retains its fraction; one glue allowance
+    LOOT_CHECK(history.rows().size() == 2 && history.rows()[1].size() == 2);
+    LOOT_CHECK(history.rows()[1][1].colour == ChatLine::Colour({4, 5, 6}));
+    history.append(u"\r\n", {1, 1, 1}, 400, measure);
+    LOOT_CHECK(history.rows().size() == 4 && history.rows()[2].empty() && history.rows()[3].empty());
+    history.trim(36);
+    LOOT_CHECK(history.rows().size() == 2 && history.rows()[0].empty());
+
+    ChatLine glue;
+    glue.append(u"A", {0, 0, 0}, 50, measure);
+    glue.append(u"\nB", {0, 0, 0}, 35, measure); // glue survives the explicit break
+    LOOT_CHECK(glue.rows().size() == 2 && glue.rows()[1][0].text == L"B");
+    ChatLine spaces;
+    spaces.append(u"A B", {0, 0, 0}, 50, [](const auto &) { return 15.75f; });
+    LOOT_CHECK(spaces.rows().size() == 3 && spaces.rows()[1].empty() && spaces.rows()[2][0].text == L"B");
+
+    ChatLine delivery;
+    delivery.receive(u"Ada", u"hello");
+    delivery.receive(std::nullopt, u"\u03a9");
+    delivery.consumeIncoming(400, measure);
+    LOOT_CHECK(delivery.pending() == 1 && delivery.rows().size() == 2);
+    LOOT_CHECK(delivery.rows()[0][0].text == L"Ada:" && delivery.rows()[0][0].colour == ChatLine::Colour({0, 255, 255}));
+    LOOT_CHECK(delivery.rows()[0].back().text == L"hello" && delivery.rows()[0].back().colour == ChatLine::Colour({255, 255, 255}));
+    delivery.consumeIncoming(400, measure);
+    LOOT_CHECK(delivery.pending() == 0 && delivery.rows()[1][0].text == L"\u03a9");
+    delivery.receive((int64_t)12, u"later");
+    std::u16string currentName = u"Renamed";
+    delivery.consumeIncoming(400, measure, [&](int64_t id) -> std::optional<std::u16string> {
+        LOOT_CHECK(id == 12);
+        return currentName;
+    });
+    LOOT_CHECK(delivery.rows()[2][0].text == L"Renamed:");
 }
 
 } // namespace
@@ -309,6 +390,7 @@ int lootWindowTests() {
     upgradePicture();
     cubesKept();
     chatLine();
+    chatCommands();
     std::printf("loot windows: identify, upgrade widget, cubes kept, chat line %s\n", failures ? "FAILED" : "ok");
     return failures;
 }

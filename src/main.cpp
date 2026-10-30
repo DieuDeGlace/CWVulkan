@@ -61,6 +61,7 @@
 #include "Renderer.h"
 #include "HudCoin.h"
 #include "ChatLine.h"
+#include "ChatCommands.h"
 #include "IdentifyWindow.h"
 #include "UpgradeWidget.h"
 #include "SteamSession.h"
@@ -100,6 +101,13 @@ fs::path exeDir() {
 }
 
 MenuInput input;
+struct ChatInputEvent {
+    enum Kind { Key, Character, MouseDown } kind;
+    int value = 0;
+    bool shift = false, repeat = false;
+};
+std::vector<ChatInputEvent> chatInput;
+bool captureChatInput = false;
 
 // Third-person player state (Cube World style orbit camera).
 struct Player {
@@ -155,6 +163,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // Command line (mostly for screenshots and testing):
     //   --pos X Y  --z Z  --hour H  --yaw R  --pitch R  --zoom Z  --capture FILE.png
     std::string capture;
+    std::vector<std::string> chatTestLines; // --chat-line TEXT: local capture fixture, never transmitted
     std::string captureSpeech; // --capture-speech FILE: first visible eight-unit NPC prefix (testing)
     bool speechCaptured = false;
     std::string captureDeath; // --capture-death PREFIX: frames 0.3 s and 1.2 s after the first death burst (testing)
@@ -247,6 +256,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             next(startZoom);
         else if (a == "--capture" && i + 1 < argc)
             capture = argv[++i];
+        else if (a == "--chat-line" && i + 1 < argc)
+            chatTestLines.push_back(argv[++i]);
         else if (a == "--capture-speech" && i + 1 < argc)
             captureSpeech = argv[++i];
         else if (a == "--capture-death" && i + 1 < argc)
@@ -531,23 +542,29 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     GLFWwindow *window = glfwCreateWindow(windowMode.width, windowMode.height, "CubeVulkan",
                                           windowMode.fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
     glfwSetScrollCallback(window, [](GLFWwindow *, double, double y) { input.scroll += y; });
+    captureChatInput = false;
     glfwSetCharCallback(window, [](GLFWwindow *, unsigned int c) {
+        if (captureChatInput) chatInput.push_back({ChatInputEvent::Character, (int)(c & 255)});
         if (c >= 32 && c < 127)
             input.typed += (char)c; // names are plain text, as the game's
     });
-    glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int) {
-        if (action == GLFW_PRESS)
-            input.pressed.push_back(key);
+    glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int modifiers) {
+        if (action == GLFW_PRESS) input.pressed.push_back(key);
+        if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
+            chatInput.push_back({ChatInputEvent::Key, key, (modifiers & GLFW_MOD_SHIFT) != 0, action == GLFW_REPEAT});
     });
     glfwSetMouseButtonCallback(window, [](GLFWwindow *, int button, int action, int) {
-        if (action == GLFW_PRESS)
+        if (action == GLFW_PRESS) {
             input.buttons.push_back(button);
+            if (captureChatInput) chatInput.push_back({ChatInputEvent::MouseDown, button});
+        }
         else if (action == GLFW_RELEASE)
             input.released.push_back(button);
     });
 
     RenderSettings renderSettings;
     renderSettings.read(config);
+    logLine(std::string("Render look: ") + (renderSettings.style == RenderStyle::Alpha ? "Alpha" : "Steam"));
     renderSettings.nativeZoneRadius = gameOptions.zonesDrawn();
     // The options' vsync and render distance ([Graphics] VSync and ViewDistance unless the command
     // line sets them): the default render distance (50 %) is CubeVulkan's 400 blocks.
@@ -1404,6 +1421,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     CubModel upgradeModel;                       // the hand's weapon model
     std::string upgradeModelSprite, upgradePictureKey;
     ChatLine chat;
+    chatInput.clear(); // discard frontend events before gameplay starts
+    captureChatInput = true;
+    for (const auto &text : chatTestLines)
+        chat.receive(std::u16string(character.name.begin(), character.name.end()), std::u16string(text.begin(), text.end()));
     Hud::Screen lootWindowItems;
     // A shopkeeper as its record has it: its id, class and home.
     auto shopkeeperOf = [&](int64_t id) {
@@ -2690,6 +2711,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                         target == spawned.playerId()});
             };
             mirror->featDone = [&](const cwnet::FeatRecord &) {
+                hud.appendChat(chat, u"FEAT!\n", {200, 100, 255});
                 texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "FEAT!", PURPLE, 0, true});
                 audio.playInterface(nativeinteract::SLEEP_SOUND); // (sound 0x1f)
             };
@@ -2949,7 +2971,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     friendsMenu.list = [&] {
         std::vector<frontend::FriendRow> rows;
         for (const Multiplayer::FriendRow &f : session.friends())
-            rows.push_back({f.id, f.name, f.hostOfMine, f.joined, f.invited, f.invitation});
+            rows.push_back({f.id, f.name, f.hostOfMine, f.joined, f.invited, f.invitation, f.eligible});
         return rows;
     };
     friendsMenu.hostButton = [&](uint64_t id) { session.hostButton(id); };
@@ -2975,6 +2997,35 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
     float viewYaw = player.yaw, viewPitch = player.pitch, viewZoom = player.zoom;
+
+    auto submitChat = [&](const std::u16string &line) {
+        const auto command = chatcommand::parse(line);
+        auto feedback = [&](const std::u16string &text) { hud.appendChat(chat, text + u"\n", {255, 127, 127}); };
+        switch (command.kind) {
+        case chatcommand::Kind::Check:
+            feedback(std::u16string(u"multiplayerWidget->checkGame = ") + (session.toggleGameCheck() ? u"1" : u"0"));
+            break;
+        case chatcommand::Kind::NamePet:
+            if (command.argument.size() >= 16) feedback(u"Name is too long.");
+            else if (auto *me = spawned.localPlayer(); me && me->record) {
+                auto *item = me->record + 0x8b8;
+                if (chatcommand::namePet(item, command.argument) && gear.equipped(Gear::Pet).category == 20) {
+                    auto pet = gear.equipped(Gear::Pet);
+                    Gear::cubesFrom(item, pet);
+                    gear.updateWorn(Gear::Pet, pet);
+                }
+            }
+            break;
+        case chatcommand::Kind::Motion:
+            if (auto *me = spawned.localPlayer())
+                chatcommand::startMotion(me->record, spawned.playerAbilityDuration(), command.ability);
+            break;
+        case chatcommand::Kind::Text:
+            if (session.started()) session.say(line);
+            else chat.receive(std::u16string(character.name.begin(), character.name.end()), line);
+            break;
+        }
+    };
 
     while (!glfwWindowShouldClose(window)) {
         input.gamepadSampled = false;
@@ -3031,25 +3082,39 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         bool menusOpen = menusReady && menus.open();
         std::vector<int> pressed = input.pressed;
         input.pressed.clear();
-        // The chat's input line (ChatLine.h): Enter opens it, or sends what was typed (packet 14);
-        // while it is open it takes the keys and the typed text, and the controls read as up.
-        if ((session.started() && !session.dedicated() && !menusOpen) || chat.typing()) {
-            const bool wasTyping = chat.typing();
-            std::vector<int> rest;
-            for (int key : pressed)
-                if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
-                    if (std::optional<std::u16string> line = chat.enter())
-                        session.say(*line);
-                } else if (!chat.typing())
-                    rest.push_back(key);
-                else if (key == GLFW_KEY_BACKSPACE)
-                    chat.backspace();
-                else if (key == GLFW_KEY_ESCAPE)
-                    chat.cancel();
-            if (wasTyping)
-                chat.type(input.typed);
-            pressed = std::move(rest);
+        // Preserve callback order: a character before Enter belongs to that send;
+        // a mouse-down later in the same frame must not erase retained editor text.
+        // Binding capture completes in the later polling phase; its entry wait
+        // blocks these queued keys. Ordinary GUI-edit blur has a different order.
+        const bool chatEligible = !session.dedicated() && !capturingBeforeInput &&
+            (!menusReady || (menus.interfaceShown() && !menus.capturingControl()));
+        for (const auto &event : chatInput) {
+            if (event.kind == ChatInputEvent::MouseDown) { chat.stopEditing(); continue; }
+            // Character insertion has no root-visibility/binding-wait gate.
+            // This runtime has no focused gameplay text editor besides chat.
+            if (event.kind == ChatInputEvent::Character) {
+                chat.type(std::string(1, (char)event.value));
+                continue;
+            }
+            if (!chatEligible) continue;
+            const int key = event.value;
+            bool consumed = chat.typing() && key != GLFW_KEY_ESCAPE;
+            if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+                consumed = true;
+                if (auto line = chat.enter()) submitChat(*line);
+            } else if (chat.typing()) switch (key) {
+            case GLFW_KEY_LEFT: chat.key(ChatLine::Key::Left, event.shift); break;
+            case GLFW_KEY_RIGHT: chat.key(ChatLine::Key::Right, event.shift); break;
+            case GLFW_KEY_HOME: chat.key(ChatLine::Key::Home, event.shift); break;
+            case GLFW_KEY_END: chat.key(ChatLine::Key::End, event.shift); break;
+            case GLFW_KEY_DELETE: chat.key(ChatLine::Key::Delete); break;
+            case GLFW_KEY_BACKSPACE: chat.backspace(); break;
+            default: break;
+            }
+            if (consumed && !event.repeat)
+                if (const auto found = std::find(pressed.begin(), pressed.end(), key); found != pressed.end()) pressed.erase(found);
         }
+        chatInput.clear();
         input.typed.clear();
         gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing(),
                          panelsBeforeInput || menusOpen || chat.typing(), mapOpen,
@@ -5079,13 +5144,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         for (const Multiplayer::Notice &n : session.takeNotices()) // ("You were invited by" in the game's orange)
             texts.push_back({player.position + glm::vec3(0, 0, 3), n.text,
                              n.invitation ? glm::u8vec4(255, 128, 51, 255) : glm::u8vec4(120, 220, 255, 255)});
-        for (const cwnet::ChatLine &line : session.takeChat()) {
-            std::string text;
-            for (char16_t c : line.text) // (the game's interface font is drawn from plain text)
-                text += c < 128 ? (char)c : '?';
-            logLine("Chat: " + std::to_string(line.speaker) + ": " + text);
-            texts.push_back({player.position + glm::vec3(0, 0, 3.4f), text, {255, 255, 255, 255}});
-        }
+        for (const cwnet::ChatLine &line : session.takeChat()) chat.receive(line.speaker, line.text);
+        hud.updateChat(chat, [&](int64_t id) -> std::optional<std::u16string> {
+            if (const uint8_t *record = spawned.record(id)) {
+                std::u16string name;
+                for (int i = 0; i < 16 && record[0x958 + i]; ++i) name.push_back((char16_t)record[0x958 + i]);
+                return name;
+            }
+            return {};
+        });
+        bool chatFontChanged = hud.requireText(chat.text());
+        for (const auto &row : chat.rows())
+            for (const auto &word : row)
+                chatFontChanged = hud.requireText(std::u16string(word.text.begin(), word.text.end())) || chatFontChanged;
+        if (chatFontChanged) hud.layout(renderer, renderer.screenSize());
         // A creature that just died bursts into the voxels it was drawn with (only a
         // fresh death: a player joining later sees no bursts for older ones).
         wasDead.resize(actors.count(), 0);
@@ -6257,9 +6329,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (inventoryOpen)
                 hs.inventory = &inventoryView;
             { // the identify window, the upgrade widget and the chat line (Hud::State::windows)
-                const VkExtent2D px = renderer.screenSize();
-                const Hud::Screen line = chat.screen(glm::vec2((float)px.width, (float)px.height) / hud.interfaceScale());
-                lootWindowItems.insert(lootWindowItems.end(), line.begin(), line.end());
                 if (!lootWindowItems.empty())
                     hs.windows = &lootWindowItems;
             }
@@ -6342,6 +6411,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             hud.draw(hs, hudVertices, [&](std::vector<OverlayVertex> &out) {
                 if (menusReady && !menus.interfaceShown()) return;
                 const auto pixels = renderer.screenSize();
+                hud.drawChat(chat, (int32_t)(int64_t)(time * 1000), out);
                 double mouseX, mouseY;
                 pointerPosition(&mouseX, &mouseY);
                 hud.drawNpcSpeech(npcSpeech.bubbles(), (int32_t)(int64_t)(time * 1000), out,

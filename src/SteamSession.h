@@ -44,6 +44,8 @@ class SteamSession {
     // The account's immediate friends (GetFriendCount / GetFriendByIndex with flag 4).
     std::vector<uint64_t> friendIds() const;
     std::string friendName(uint64_t id) const;
+    // UI eligibility only; does not replace license checks or network admission.
+    bool friendInThisGame(uint64_t id) const;
 
   private:
     struct State;

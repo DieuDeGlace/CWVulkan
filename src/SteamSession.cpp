@@ -1,6 +1,7 @@
 #include "SteamSession.h"
 #include <windows.h>
 #include <algorithm>
+#include <array>
 
 namespace {
 struct EnvironmentValue {
@@ -68,6 +69,7 @@ struct SteamSession::State {
     int (*friendCount)(void *, int) = nullptr;
     uint64_t (*friendAt)(void *, int, int) = nullptr;
     const char *(*friendName)(void *, uint64_t) = nullptr;
+    bool (*friendGame)(void *, uint64_t, void *) = nullptr;
     void (*registerCallback)(CallbackBase *, int) = nullptr;
     void (*unregisterCallback)(CallbackBase *) = nullptr;
     void *networking = nullptr, *friendsApi = nullptr;
@@ -170,6 +172,7 @@ bool SteamSession::start(const std::filesystem::path &gameDir, std::string &erro
         s->bind(s->unregisterCallback, "SteamAPI_UnregisterCallback")) {
         s->networking = s->interfaceFor(handle, "SteamNetworking005");
         s->friendsApi = s->interfaceFor(handle, "SteamFriends017");
+        s->bind(s->friendGame, "SteamAPI_ISteamFriends_GetFriendGamePlayed");
     }
     if (!s->user || !s->apps || !s->utils) {
         error = "Steam could not provide the account and application interfaces for Cube World.";
@@ -292,4 +295,12 @@ std::vector<uint64_t> SteamSession::friendIds() const {
 std::string SteamSession::friendName(uint64_t id) const {
     const char *name = networkReady() ? state->friendName(state->friendsApi, id) : nullptr;
     return name ? name : "";
+}
+
+// Native menu's full output ABI and low24 rule: chat-feat-presentation §6.1.
+bool SteamSession::friendInThisGame(uint64_t id) const {
+    if (!networkReady() || !state->friendGame || !state->utils) return false;
+    alignas(8) std::array<uint64_t, 3> game{};
+    if (!state->friendGame(state->friendsApi, id, game.data())) return false;
+    return (game[0] & 0xffffffu) == state->applicationId(state->utils);
 }

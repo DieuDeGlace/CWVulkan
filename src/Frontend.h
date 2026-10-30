@@ -268,6 +268,7 @@ struct FriendRow {
     bool joined = false;     // connected to this player's host
     bool invited = false;    // in this player's host's invited set
     bool invitation = false; // that friend's invitation to this player is live
+    bool eligible = true;
 };
 // What the menu needs from the game's multiplayer; the game (or a mod) fills it in.
 struct FriendsMenu {

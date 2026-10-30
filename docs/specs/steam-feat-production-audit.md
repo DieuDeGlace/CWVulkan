@@ -1,5 +1,10 @@
 # Steam feat records: producer audit and supported behavior
 
+The complete received-event display, chat colors, floating-text projection/
+age/fade and sound are now independently specified in
+**steam-chat-feat-presentation.md §§3–4**. That presentation does not resolve
+the producer/payload boundary documented below.
+
 Independent clean-room audit of the original native executable, its exported
 call references, assembly and constant data. No engine, tests, exporter,
 third-party reconstruction or original game execution was used. Analysis

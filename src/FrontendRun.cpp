@@ -1364,7 +1364,7 @@ int Session::hoveredFriend(glm::vec2 m) const {
     if (m.x < 0 || m.x >= FRIENDS_SIZE.x || m.y < top)
         return -1;
     const int row = (int)std::floor((m.y - top) / FRIEND_ROW_HEIGHT);
-    return row < (int)friendRows.size() ? row : -1;
+    return row < (int)friendRows.size() && friendRows[(size_t)row].eligible ? row : -1;
 }
 
 glm::vec2 Session::friendButtonAt(int row, bool right) const {
@@ -1392,6 +1392,7 @@ void Session::friendsItems(Hud::Screen &out) {
             colour = FRIEND_INVITATION_COLOUR;
         if (i == hovered)
             colour = HOVERED;
+        if (!row.eligible) colour = glm::vec4(.5f, .5f, .5f, 1);
         out.push_back(text(friendRowText(row), at + glm::vec2(15, y), 12, 3, colour, ALIGN_LEFT));
         // The left button only while the row is hovered; the right one also while the friend's
         // invitation is live.

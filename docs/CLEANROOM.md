@@ -62,6 +62,10 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- chat history/editor, entered commands and friend-game UI eligibility, from
+  `steam-chat-feat-presentation.md`. Owner fonts/templates stay external; synthetic
+  editor/wrap/queue/command records and a live owner-font frame check the bounded
+  implementation. No new feat producer/award or ownership bypass was added.
 - adaptive mesh-readiness ranges, native face-cost metadata and key-only tie ordering,
   from `steam-scene-lighting.md` §§2.6/6 and `steam-controller-handoff.md` §4. Pending
   metadata is independently published from worker jobs without asserting new geometry

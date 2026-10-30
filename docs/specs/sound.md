@@ -4,6 +4,12 @@ Follow-up evidence: `remaining-runtime-gaps.md` §8 resolves the music-fade
 coefficients (old question 3) and sound-queue lifetime. Use that independently
 authored clarification together with this specification.
 
+Further native evidence: **steam-sound-event-addenda.md** resolves old
+questions5/12 and the area block-breaking pitch base, corrects the map-list
+sound site's earlier pickup/salvage label, and specifies sampled UI open/
+close edges. **steam-chat-feat-presentation.md** supplies the received-feat
+consumer's actual UI without inferring an award from its sound filename.
+
 Behavioural specification of Steam Cube World's sound system: the sound list, how a sound is
 placed and mixed, the music choice and its fades, the ambient sounds of the world, and which
 events play which sound. Written from the decompiled executable (RVAs, image base 0x140000000),

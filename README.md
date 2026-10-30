@@ -66,7 +66,11 @@ Edit `CubeVulkan.ini` beside the executable (the template is in `config/`).
   tables are still required for complete content. See [world generation](docs/worldgen.md).
 - `[World] Source=Generated` is an older experimental terrain mode for development.
 - `[Render] Style=Alpha` is the default lighting/sky style; `Steam` selects Steam's
-  style. Rendering still has parity gaps. Neither setting establishes a 1:1 match.
+  style. This changes the lighting, sky and fog, while the world source, generation
+  and object placement stay the same. Restart after changing it because mesh light
+  data is baked for the selected style. Parity test captures may explicitly select
+  Steam even when your configured default is Alpha. Neither style is fully validated
+  as a 1:1 visual match yet.
 - Shadows, TAA/SMAA, moonlight and default-on water lilies are optional CubeVulkan
   additions. `[Shadows] Enabled=0`, `[Render] Moon=0`, and `[WaterLilies] Enabled=0`
   disable the corresponding additions. Lilies decorate rendering without changing

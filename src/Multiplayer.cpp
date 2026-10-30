@@ -265,6 +265,7 @@ std::vector<Multiplayer::FriendRow> Multiplayer::friends() const {
         FriendRow row;
         row.id = id;
         row.name = nameOf(id);
+        row.eligible = how != Way::Steam || !checkGame || (steam && steam->friendInThisGame(id));
         if (client) {
             row.hostOfMine = client->link().host() == id && id != transport->self();
             row.invitation = client->link().hasInvitation(id);

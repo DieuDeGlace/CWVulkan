@@ -167,7 +167,23 @@ individual feature documents.
   the [producer audit](specs/steam-feat-production-audit.md) found no verified award
   source. Generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
-- [ ] Remaining sound-event wiring and exact feat/chat presentation.
+- [x] Native chat history/editor and entered commands: plain 400x250 owner-font
+  widget at bottom right; colored word boxes, strict wrapping, retained rows,
+  UTF-16 selection, global-clock caret, mouse dismissal and ordered callbacks.
+  Incoming entries consume one per frame and resolve the sender's current name
+  at that visit. New owner glyphs join the atlas rather than replacing received
+  text with ASCII question marks. Commands use the verified six-token dispatch,
+  strict motion clock and narrow pet-name writes. `/check` toggles the actual
+  Steam friend-game eligibility/color/action gate, independently of ownership
+  and protocol checks. Focused regressions and the full CPU/owner suite pass;
+  all 40 existing Vulkan image cases pass. A hidden/no-save Alpha frame confirms
+  chat placement/font/color and selected render style, not native pixel parity.
+- [ ] Remaining sound-event wiring and exact floating feat presentation.
+  Feat receipts now add the verified purple chat line, but the separate floating
+  record still needs its exact physical anchor, projection, font, fade and aging.
+  The [chat specification](specs/steam-chat-feat-presentation.md) and
+  [sound addenda](specs/steam-sound-event-addenda.md) are independently traced;
+  these remaining consumers are not implied complete by the chat implementation.
 - [x] Living-creature light source branches: carried/toggled lamps, effect/race/state
   lights, casting and four equipment spirit-glow anchors. The renderer reads live
   player/NPC records and buffs in world traversal order, including actors without

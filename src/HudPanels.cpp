@@ -115,6 +115,13 @@ void Hud::buildPanels() {
     }
     // The character panel (CharacterWidget: a node with no shape, drawn in code).
     panels.character = s.create(panels.inGame, "character");
+    // ChatWidget is an empty node with its own frame, not an edit/blackwidget asset.
+    panels.chat = s.create(&s.root(), "chat");
+    panels.chat->widget.emplace();
+    auto &chatFrame = *panels.chat->widget;
+    chatFrame.kind = "Widget";
+    chatFrame.bindSize = chatFrame.innerBindSize = chatFrame.frameSize = {400, 250};
+    chatFrame.flags = plasma::WIDGET_OWN_SURFACE;
     panels.inGame->visible = false;
 }
 

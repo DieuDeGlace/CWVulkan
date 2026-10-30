@@ -105,9 +105,12 @@ class Multiplayer {
         bool joined = false;      // connected to this player's host: " (joined)"
         bool invited = false;     // invited by this player's host: " (invited)"
         bool invitation = false;  // that friend's invitation to this player is live
+        bool eligible = true;
     };
     // The immediate Steam friends, as the menu lists them when it opens (Steam only).
     std::vector<FriendRow> friends() const;
+    bool toggleGameCheck() { return checkGame = !checkGame; }
+    bool gameCheckEnabled() const { return checkGame; }
     // The menu's two buttons on a friend's row.
     void hostButton(uint64_t friendId);  // invite, or uninvite / kick
     void guestButton(uint64_t friendId); // join, or leave
@@ -126,6 +129,7 @@ class Multiplayer {
     void say(const std::u16string &line);
 
   private:
+    bool checkGame = true; // native MultiplayerWidget constructor; /check toggles it
     Way how = Way::Local;
     SteamSession *steam = nullptr;
     std::unique_ptr<cwnet::LoopbackNetwork> loopback;

@@ -504,7 +504,7 @@ here are from its start:
    tabs are empty). This happens before step 5, so even a counted item makes the tabs.
 5. Category 12 with material 11: counter A += q, done. Category 14: counter B += q, done.
 6. Otherwise walk the tab's stacks in order, remembering the first stack whose quantity is 0.
-   If the item is **stackable** (category 1, 10, 11, 12, 13, 18 or 28; mask 0x10403c02, 0x5f0e0)
+   If the item is **stackable** (category 1, 10, 11, 12, 13, 22 or 28; mask 0x10403c02, 0x5f0e0)
    and the stack holds the **same item** (0x4df60: equal category, id, modifier, the i32s at
    +0xc, +0x10 and +0x18, material +0x1c, attachment count +0x9d and level +0x14, then the
    first "count" 4-byte attachments from +0x1d byte for byte): its quantity += q (or becomes −1

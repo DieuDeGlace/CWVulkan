@@ -198,6 +198,8 @@ add_library(engine STATIC
     src/IdentifyWindow.cpp
     src/UpgradeWidget.cpp
     src/ChatLine.cpp
+    src/ChatCommands.cpp
+    src/HudChat.cpp
     src/WorldMap.cpp
     src/MapLook.cpp
     src/HudCoin.cpp
