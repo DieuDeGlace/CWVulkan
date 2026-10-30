@@ -113,7 +113,8 @@ does not verify all game comparisons. GPU smoke captures and recorded data check
 are evidence for the tested cases, not complete gameplay or pixel parity.
 On Windows with a Vulkan driver, `build\EngineTests.exe steamshader` additionally
 checks lit/Glow/White color references and full-fog interpolation with synthetic
-geometry. It needs no game assets and is separate from the default CPU suite.
+geometry, native point-light limits and storage-buffer offsets. It needs no game
+assets and is separate from the default CPU suite.
 
 The [current checklist](docs/roadmap.md) tracks remaining work. In particular:
 

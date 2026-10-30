@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include "SteamVoxel.h"
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 // 20 bytes. Normal ids match the native game's face ids:
@@ -29,6 +30,7 @@ struct Mesh {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     glm::vec3 min{1e30f}, max{-1e30f};
+    std::optional<glm::vec3> nativeCentre; // full sprite dimensions in this mesh's local coordinates
     bool empty() const { return indices.empty(); }
 };
 

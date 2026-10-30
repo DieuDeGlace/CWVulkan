@@ -609,6 +609,104 @@ transformed center location; missing-zone fallback tables are zero. The shader
 radial/normal attenuation remains `worldgen-parity-gaps.md` §9.3. Helper
 **0xce580** binds all-zero tables for draw paths that explicitly request it.
 
+### 3.2.1 Exact per-draw sprite center and zone-table binding
+
+Sources: opaque draw consumer **0xe6e60**, including the center/conversion
+sequence **0xe6f78–0xe70e8**; faded color consumer **0xe7980**; descriptor
+append **0xee2f0/0xee990**; matrix composition **0x173e0**; scenery submission
+and creature-pose call in **0xd3170**; per-part submissions in **0x17ab0**.
+
+**The local center is half the full sprite voxel-array dimensions.** Read
+signed32 dimensions from the selected sprite at **+0x88,+0x8c,+0x90**,
+convert each to float32 and multiply by float0.5. Thus the center is
+**(sizeX/2,sizeY/2,sizeZ/2,1)** in that sprite's local voxel coordinates,
+including half-voxel values for odd dimensions. It is not the center of
+occupied voxels, emitted vertices, an occupied-vertex AABB, the creature's
+overall extent, or another separately stored center/pivot field. Hidden
+markers and empty padding do not change this calculation unless the sprite's
+dimension fields themselves change.
+
+Transform that center by the **final per-descriptor model/world matrix**:
+the same matrix that this descriptor uploads for drawing.0xee2f0 and the
+mirrored0xee990 construct it from the queue base matrix at queue+0x50 and
+the submitted transform. With column vectors it is **queueBase×submitted**,
+so the submitted transform acts first. The lookup does not use the view or
+projection matrix, screen coordinates, or the shader's clip depth offset.
+
+For ordinary zone scenery, the submitted matrix built by0xd3170 already
+contains its record placement, size, yaw, sprite centering and any selected
+flag0x04 sway-table transform or flag0x10/0x20 pivot rotation. These affect
+the center used for light binding through the final matrix, just as they
+affect the drawn geometry. The consumer does not substitute an undeformed
+record foot position or redo a separate unswayed bounds calculation. The
+ordinary world vertex shader has no additional plant-wind deformation stage
+outside that matrix path.
+
+**Coordinate arithmetic:** retain float32 rounding through this sequence.
+For the center's homogeneous W, multiply each half dimension by its
+corresponding fourth-row matrix coefficient, add the X and Y products,
+then the Z product, then the translation/W coefficient. Compute **1/W once
+by float32 division**. For each X/Y numerator, likewise form its separate
+dimension-times-matrix products, add X and Y products first, then Z, then
+translation. Multiply each numerator by that rounded reciprocal, then by
+float32 **65536**. There is no fused multiply-add or double accumulator in
+the traced CPU sequence. Only transformed X/Y and W are needed for the zone
+lookup; local Z still affects X/Y when the world matrix tilts the sprite.
+
+Convert each scaled X/Y float to **signed64 toward zero**. **After** this
+conversion subtract the matching signed64 renderer origin translation,
+**+0x428 for X / +0x430 for Y**. This restores the world fixed coordinate
+from the matrix's render-origin-adjusted coordinate. Then floor from fixed
+units to whole blocks, including negative fractions, and floor-divide the
+block coordinate by64 to obtain the signed32 zone key. The native arithmetic
+uses signed32 whole-block/zone intermediates in its normal coordinate domain;
+there is no nearest-zone rounding and no use of the actor's raw position.
+
+Do not replace these stages by direct floating floor(center/64). For example,
+with origin0 a transformed X of **−1/131072 block** scales to−0.5 fixed unit
+and truncates to0, hence zoneX0. A transformed X of **−1/65536 block** scales
+to−1 exactly and yields whole block−1, hence zoneX−1. Flooring the float
+before its fixed conversion would give a different result in the first case.
+
+The world-zone-map lookup requires an existing entry and non-null zone
+pointer. It does not additionally require that selected zone to have a mesh,
+pass a frustum test, or equal the zone containing the object's record foot.
+If the entry/pointer is missing, supply an all-zero16-entry table for both
+position/radius and color. Otherwise bind **that zone's +0x240/+0x340 tables**
+through0xc7010, retaining §3.2's16 cached/10 uploaded distinction.
+
+**This is per drawable descriptor, not once per actor or shared sprite.**
+The original scene0xd3170 passes queue **renderer+0x138** into creature pose
+**0x17ab0**. Body parts and held models are submitted there through0xee2f0,
+or through0xee990 for the mirrored winding path; the calls in0x17ab0 include
+the main per-part range beginning **0x25b63**. Each uses that part's own
+sprite dimensions and its complete pose/scale/centering transform. A head,
+hand, weapon and body from one creature can therefore select different
+zone tables at a zone boundary. They do not inherit a single root-creature
+zone binding. Reused instances of one sprite also perform the lookup for
+their separate stored transforms.
+
+The normal scene calls both opaque and faded consumers with draw flag2
+set.0xe6e60 applies the selection to both ordinary/mirrored opaque lists;
+0xe7980 applies it to both winding lists' **color passes**. The latter's
+depth-only prepasses do not repeat the lookup. Ordinary scenery in the
+flag0x08 queue renderer+0x1d0 uses the same consumer rule. The lookup is
+not skipped merely because a descriptor has Glow1.
+
+This selection is gated by **consumer drawFlags&2**, not by a model-record
+flag. When that consumer bit is clear,0xe6e60 instead calls0xce580 to bind
+zero light tables;0xe7980 skips per-descriptor zone selection. The normal
+overlay caller clears lights before its overlay draws. Terrain and water
+keep their mesh-containing-zone table binding, rather than applying this
+sprite-center rule to each quad.
+
+A bounded distinguishing case is sprite dimensions **(8,4,6)**, occupied
+geometry only within local[0,1]³, and an otherwise identity matrix translated
+by **(61.5,0,0)** blocks, origin0. Its full-header center transforms to
+**(65.5,2,3)** and selects zone(1,0); an occupied-AABB center would wrongly
+select zone(0,0). A per-part actor case should likewise preserve each
+sprite's dimensions and final matrix, rather than only the actor root.
+
 ### 3.3 Model-light auxiliary records, complete branch
 
 The collector reads **zone+0x90/+0x98**, stride0x40, rather than submitting

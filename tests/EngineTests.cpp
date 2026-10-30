@@ -135,6 +135,7 @@ int steamLightingTests();
 int steamVoxelTests();
 int steamTerrainTests();
 int steamShaderTests();
+int steamPointLightsTests();
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -9004,6 +9005,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "steampoints")
+        return steamPointLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamshader")
         return steamShaderTests();
     if (argc == 2 && std::string(argv[1]) == "steamterrain")
@@ -10277,6 +10280,7 @@ int main(int argc, char **argv) {
     failures += steamLightingTests();
     failures += steamVoxelTests();
     failures += steamTerrainTests();
+    failures += steamPointLightsTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;

@@ -325,3 +325,8 @@ target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp)
+
+target_sources(engine PRIVATE src/SteamPointLights.cpp)
+target_sources(EngineTests PRIVATE tests/SteamPointLightsTests.cpp)
+
+target_sources(engine PRIVATE src/ExtractedLights.cpp)

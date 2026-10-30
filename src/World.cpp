@@ -53,6 +53,7 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
         probe.origin = glm::dvec3(extracted->originZoneX() * 64.0, extracted->originZoneY() * 64.0,
                                   -(double)ExtractedWorld::Z_OFFSET);
         probe.column = [](int32_t x, int32_t y) { return skyColumnAt(x, y); };
+        probe.loadedLightZones = [this] { return extracted->loadedLightZones(); };
         probe.sceneLighting = [this](glm::vec3 p) {
             const int64_t fixedX = (int64_t)((double)p.x * 65536) + extracted->originDotsX();
             const int64_t fixedY = (int64_t)((double)p.y * 65536) + extracted->originDotsY();
@@ -467,6 +468,7 @@ void World::update(glm::vec3 focus) {
         z.opaque = renderer.upload(g.opaque);
         z.water = renderer.upload(g.water);
         z.lava = renderer.upload(g.lava);
+        z.nativeLights = std::move(g.nativeLights);
         if (extracted && g.nativeBounds) {
             const int64_t shift[] = {-extracted->originDotsX(), -extracted->originDotsY(), 0};
             for (int axis = 0; axis < 3; ++axis) {
@@ -613,8 +615,10 @@ void World::update(glm::vec3 focus) {
                 g.scenery = ex->props(k.first, k.second);
                 if (alphaLook)
                     lightScenery(g.scenery);
-                else
+                else {
                     ex->lightModels(k.first, k.second, g.scenery, &nativeLight);
+                    g.nativeLights = ex->lightSources(k.first, k.second, nativeLight);
+                }
                 return g;
             });
             continue;
@@ -646,12 +650,19 @@ void World::refreshZone(int zx, int zy) { stale.insert({zx, zy}); }
 void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const {
     const bool steamLook = renderStyle() == RenderStyle::Steam;
     for (auto &[key, z] : zones) {
-        if (z.opaque)
-            opaque.push_back({z.opaque, glm::mat4(1), 0, 0, true, DrawKind::Terrain});
-        if (z.lava)
-            opaque.push_back({z.lava, glm::mat4(1), LAVA_LIGHTING, 0, true, DrawKind::LavaTerrain});
-        if (z.water)
-            water.push_back({z.water, glm::mat4(1), 0, 0, false, DrawKind::Terrain});
+        auto terrainDraw = [&](uint32_t mesh, std::vector<DrawItem> &draws, DrawKind kind, uint32_t flags = 0, bool castShadow = true) {
+            if (!mesh)
+                return;
+            DrawItem draw{mesh, glm::mat4(1), flags, 0, castShadow, kind};
+            if (steamLook) {
+                draw.nativeZone = z.nativeBounds;
+                draw.nativeLights = z.nativeLights;
+            }
+            draws.push_back(std::move(draw));
+        };
+        terrainDraw(z.opaque, opaque, DrawKind::Terrain);
+        terrainDraw(z.lava, opaque, DrawKind::LavaTerrain, LAVA_LIGHTING);
+        terrainDraw(z.water, water, DrawKind::Terrain, 0, false);
         const size_t first = opaque.size();
         opaque.insert(opaque.end(), z.scenery.begin(), z.scenery.end());
         for (const Moving &m : z.moving)

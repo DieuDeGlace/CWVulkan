@@ -103,8 +103,21 @@ individual feature documents.
   only after the native two-stage fog blend. Synthetic Vulkan checks match the
   three derived RGB references and full-fog endpoints; day/night and Alpha
   smoke captures pass. GPU world clip planes now match the native CPU gate.
+  Auxiliary model/static-object light registration now follows the source gates,
+  flicker, camera ranking and per-zone16/10 limits. Vulkan uses per-frame storage
+  batches, so a global64-light cap cannot discard another zone's lights. Sprite
+  bindings use full CUB dimensions, posed matrices and native coordinate rounding;
+  loaded neighboring zones participate before they have meshes. Source-reader,
+  CPU boundary and10 synthetic GPU checks pass, including offset70 and more than
+  64 candidates. Fresh native light capture is still pending: older exports omit
+  static-light copies; the updated extractor adds them and F5 refreshes cached zones.
+  The latest full owner-data run has two failing region-oracle assertions: all
+  3,823 region pairs differ while the other23 sampled terrain fields match. The
+  current original-game capture has BigRegions Scale2 enabled; a fresh isolated
+  vanilla reference is required. Expected values/checks have not been weakened.
   Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
-  point-light registration, remaining special shader controls, undefined
+  creature/item/transient lights and personal used-cell wiring, special shader
+  controls, undefined
   consumed lamp turns and broader dungeon/theme oracles still prevent a complete
   parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
@@ -123,7 +136,8 @@ individual feature documents.
   generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Native point-light registration, remaining water/model/overlay shader controls,
+- [ ] Remaining native creature/item/transient lights and personal used-cell wiring,
+  water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   These need reference comparisons or an independent behavioral specification.

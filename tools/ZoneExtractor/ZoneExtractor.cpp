@@ -648,15 +648,15 @@ static bool measured(int slot) {
 } // namespace calibration
 
 // --- Placement records ------------------------------------------------------
-// Six std::vectors in cube::Zone hold sprites, objects and spawns (layouts as
-// TerrainVariance found them). They are saved raw for decoding.
+// Zone placement and auxiliary lists, saved raw for independent decoding.
+// Record contracts are documented in docs/specs/steam-scene-lighting.md.
 struct Placement {
     size_t array, stride;
 };
 // 0xa8: the zone's ambient sound emitters (docs/specs/sound.md §4), read by CubeVulkan's
 // ExtractedWorld::soundEmitters.
 constexpr Placement PLACEMENTS[] = {{0x18, 0x40}, {0x30, 0xe0}, {0x48, 0xe0},
-                                    {0x60, 0xe0}, {0x78, 0xe0}, {0x90, 0x40}, {0xa8, 0x40}};
+                                    {0x60, 0xe0}, {0x78, 0xe0}, {0x90, 0x40}, {0xa8, 0x40}, {0xc0, 0xe0}};
 
 static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCacheLocked = false) {
     std::vector<unsigned char> out;
@@ -6361,8 +6361,13 @@ static void tick(cube::Game *g) {
     {
         static bool f5 = false, f4 = false;
         bool down5 = GetAsyncKeyState(VK_F5) & 0x8000, down4 = GetAsyncKeyState(VK_F4) & 0x8000;
-        if (down5 && !f5)
+        if (down5 && !f5) {
             character::snapshot(g->world, g->world->local_creature);
+            // Refresh older exports too: current auxiliary lists and mesh-time
+            // metadata must accompany this character/world snapshot.
+            saved.clear();
+            log("Zone snapshot refresh queued (including native light lists)");
+        }
         if (down4 && !f4)
             character::toggle(g->world->local_creature);
         f5 = down5;

@@ -63,6 +63,7 @@ bool CubModel::exposed(int x, int y, int z) const {
 
 Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour) const {
     Mesh m;
+    m.nativeCentre = glm::vec3(0, 0, (float)sz * .5f); // x/y are already centered in emitted vertices
     auto isSolid = [&](int x, int y, int z) { return solid(x, y, z); };
     auto colour = [&](int x, int y, int z) {
         auto c = color(x, y, z);

@@ -1,4 +1,5 @@
 #pragma once
+#include "SteamPointLights.h"
 // Vulkan 1.3 renderer: sky, voxel scene, water, and two directional shadow
 // cascades (MoonandShadow's near/far maps) drawn with dynamic rendering. It draws the world
 // in one of two looks ([Render] Style): Cube World Alpha's (the default) or the Steam
@@ -115,6 +116,7 @@ struct DrawItem {
         float white = 0;            // how far toward white (an outline's pulse)
     } map;
     std::shared_ptr<const scenevisibility::Bounds> nativeZone; // containing zone for native model/beam gates
+    std::shared_ptr<const steampoints::ZoneSources> nativeLights;
     // Reflections reverse triangle winding (the native right foot uses one).
     bool mirrored() const {
         return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0;
@@ -140,6 +142,7 @@ struct WorldProbe {
     std::function<SkyColumn(int32_t x, int32_t y)> column;
     glm::dvec3 origin{0};
     std::function<steamlighting::Environment(glm::vec3)> sceneLighting;
+    std::function<std::vector<steampoints::ZoneKey>()> loadedLightZones;
 };
 
 // The models the sky draws, as uploaded meshes (World makes them from the owner's install).
@@ -204,6 +207,7 @@ class Renderer {
         VkDeviceSize indexOffset = 0;
         uint32_t indexCount = 0;
         glm::vec3 min{0}, max{0};
+        std::optional<glm::vec3> nativeCentre;
         bool live = false;
     };
     struct Image {
@@ -221,7 +225,8 @@ class Renderer {
         VkCommandBuffer cmd = VK_NULL_HANDLE;
         VkFence fence = VK_NULL_HANDLE;
         VkSemaphore acquired = VK_NULL_HANDLE;
-        Buffer uniforms;
+        Buffer uniforms, nativePoints;
+        VkDeviceSize nativePointCapacity = 0;
         VkDescriptorSet set = VK_NULL_HANDLE;
         std::vector<Buffer> staging;      // Freed when this frame's fence signals.
         std::vector<uint32_t> releases;   // Meshes released while this frame was in flight.

@@ -12,6 +12,7 @@
 #include "Terrain.h" // Biome, for skies and music
 #include "SoundRules.h"
 #include "SceneCapture.h"
+#include "SteamPointLights.h"
 #include "SceneVisibility.h"
 #include "worldgen/ZoneLight.h"
 #include <array>
@@ -73,6 +74,8 @@ class ExtractedWorld {
     // Opaque and water meshes in local world coordinates (thread-safe).
     bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,
               worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr);
+    std::shared_ptr<const steampoints::ZoneSources> lightSources(int zx, int zy, const worldgen::MeshLightVolume &);
+    std::vector<steampoints::ZoneKey> loadedLightZones() const;
     // Independent mesh-prepass bounds in absolute native fixed coordinates.
     // Missing neighbor data yields no assertion of native bounds.
     std::optional<scenevisibility::Bounds> meshBounds(int zx, int zy);
@@ -162,6 +165,7 @@ class ExtractedWorld {
         struct ModelLightState {
             std::mutex mutex;
             std::set<int> waterModels; // flag8 is ORed, retained for this zone's lifetime
+            std::set<size_t> waterAuxiliary; // +0x90 is a separate model copy/list
         };
         // Block edits copy the terrain snapshot; runtime model state stays shared.
         std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();

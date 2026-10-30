@@ -1,17 +1,22 @@
+struct SteamPoint { vec4 position; vec4 colour; };
+layout(std430, set = 0, binding = 3) readonly buffer SteamPointTable {
+    SteamPoint entries[];
+} steamPointsBuffer;
+
 // Ordinary Steam world vertex lighting, independently expressed from
 // docs/specs/worldgen-parity-gaps.md §9.3 and steam-voxel-vertex-inputs.md §5.
 // RGB has already been decoded from the CPU's packed palette; alpha remains V.
 vec3 steamPoints(vec3 world, vec3 normal) {
     vec3 sum = vec3(0);
     for (uint slot = 0u; slot < min(pc.lights.w, 10u); ++slot) {
-        uint index = (pc.lights[slot / 4u] >> (8u * (slot % 4u))) & 0xffu;
-        vec4 light = f.pointLights[index];
+        SteamPoint entry = steamPointsBuffer.entries[pc.lights.x + slot];
+        vec4 light = entry.position;
         if (light.w <= 0)
             continue;
         vec3 delta = world - light.xyz;
         float radial = 1 - min(dot(delta, delta) / (light.w * light.w), 1);
         float facing = clamp(-4 * dot(normal, normalize(delta)), .3, 1);
-        sum += facing * radial * radial * f.pointColours[index].rgb;
+        sum += facing * radial * radial * entry.colour.rgb;
     }
     return sum;
 }

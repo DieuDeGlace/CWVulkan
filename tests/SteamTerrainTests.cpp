@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <cstring>
+#include <limits>
 
 int steamTerrainTests() {
     int failures = 0;
@@ -115,6 +117,62 @@ int steamTerrainTests() {
     };
     check(roofSea(255).water.vertices.size() == 4, "sea eligibility checksZ1 red byte, not air type");
     check(roofSea(254).water.vertices.size() == 4095 * 4, "a non255 solid red byte disables the whole-zone optimization");
+    // Auxiliary light records are independent copies, not the live draw lists.
+    // A poisoned captured +0x28 must be replaced by this mesh's light solve.
+    auto writeLights = [&](bool moved, bool duplicate, bool wrongStride) {
+        std::ofstream out(root / "z_0_0.rec", std::ios::binary);
+        out.write("CWR1", 4);
+        auto block = [&](uint32_t kind, uint32_t stride, uint32_t count, const std::vector<uint8_t> &bytes) {
+            const uint32_t header[]{kind, stride, count};
+            out.write((const char *)header, sizeof header);
+            out.write((const char *)bytes.data(), bytes.size());
+        };
+        auto store = [](auto &bytes, size_t offset, auto value) {
+            std::memcpy(bytes.data() + offset, &value, sizeof value);
+        };
+        std::vector<uint8_t> model(2 * 0x40);
+        store(model, 0, int32_t(0x4c));
+        store(model, 24, int64_t(moved ? 5 * 65536 : 0));
+        store(model, 40, std::numeric_limits<float>::quiet_NaN());
+        store(model, 44, .2f); store(model, 48, .4f); store(model, 52, .6f);
+        store(model, 0x40, int32_t(20));
+        store(model, 0x40 + 24, int64_t(5 * 65536));
+        store(model, 0x40 + 56, int32_t(1));
+        block(0x18, 0x40, 1, std::vector<uint8_t>(model.begin(), model.begin() + 0x40));
+        block(0x90, wrongStride ? 0x41 : 0x40, 2, model);
+        if (duplicate)
+            block(0x90, 0x40, 0, {});
+        std::vector<uint8_t> object(0xe0);
+        store(object, 0, int32_t(0x3f)); store(object, 36, 1.5f);
+        block(0xc0, 0xe0, 1, object);
+        block(0x60, 0xe0, 1, object); // duplicate live object does not add another source
+    };
+    writeLights(false, false, false);
+    ExtractedWorld lightWorld;
+    std::string lightError;
+    Mesh lightOpaque, lightWater;
+    worldgen::MeshLightVolume solved;
+    check(lightWorld.open(root, lightError) && lightWorld.mesh(0, 0, lightOpaque, lightWater, nullptr, &solved),
+          "source-record fixture has a complete retained light solve");
+    const auto sources = lightWorld.lightSources(0, 0, solved);
+    check(sources && sources->key == steampoints::ZoneKey(0,0) && sources->models.size() == 2 && sources->objects.size() == 1,
+          "only auxiliary lists provide light sources; origin-position/null-marker records survive");
+    if (sources && sources->models.size() == 2 && sources->objects.size() == 1) {
+        check(sources->models[0].record.type == 0x4c && sources->models[0].bakedLight == 255 &&
+              (sources->models[0].record.flags & 8), "auxiliary light/water writes replace poisoned capture bytes");
+        check(!(sources->models[1].record.flags & 8) && sources->objects[0].scale == 1.5f,
+              "dry auxiliary models and native object scales retain distinct inputs");
+    }
+    writeLights(true, false, false);
+    const auto moved = lightWorld.lightSources(0, 0, solved);
+    check(moved && !moved->models.empty() && (moved->models[0].record.flags & 8),
+          "auxiliary water flag is sticky independently of the live model list");
+    const auto loaded = lightWorld.loadedLightZones();
+    check(loaded.size() >= 9, "light binding includes loaded neighboring zones before they have their own meshes");
+    writeLights(false, true, false);
+    check(!lightWorld.lightSources(0, 0, solved), "duplicate auxiliary list is rejected");
+    writeLights(false, false, true);
+    check(!lightWorld.lightSources(0, 0, solved), "wrong auxiliary stride is rejected");
     setRenderStyle(previousStyle);
     fs::remove_all(root);
     std::printf("Steam terrain: %s\n", failures ? "FAIL" : "PASS");

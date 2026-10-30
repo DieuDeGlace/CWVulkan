@@ -132,6 +132,73 @@ int steamShaderTests() {
         std::cout << "Steam shader full fog " << test.name << (matches ? " PASS\n" : " FAIL\n");
         failures += !matches;
     }
+    renderer.settings.fogDistance = 1000000;
+    mesh.vertices[0].y = 0;
+    mesh.max.y = 0;
+    item.mesh = renderer.upload(mesh);
+    item.flags = 0;
+    item.flash = 0;
+    auto sourceModel = [](float x, float y, float intensity) {
+        steampoints::ModelSource source;
+        source.record.type = 20;
+        source.record.flags = 1;
+        source.record.x = (int64_t)(x * 65536);
+        source.record.y = (int64_t)(y * 65536);
+        source.record.z = 65536;
+        source.record.r = source.record.g = source.record.b = intensity;
+        return source;
+    };
+    auto checkPoints = [&](const char *name, const std::vector<DrawItem> &draws, std::array<int,3> expected) {
+        const auto capture = root / (std::string(name) + ".png");
+        renderer.capture(capture.string());
+        renderer.frame(camera, lighting, {0,0,0}, 0, draws, {});
+        const auto actual = centre(capture);
+        bool matches = actual.has_value();
+        if (matches)
+            for (int c = 0; c < 3; ++c)
+                matches &= std::abs((*actual)[c] - expected[c]) <= 2;
+        std::cout << "Steam shader points " << name << (matches ? " PASS\n" : " FAIL\n");
+        failures += !matches;
+    };
+    auto sources = std::make_shared<steampoints::ZoneSources>();
+    sources->key = {0,0};
+    for (int i = 0; i < 10; ++i)
+        sources->models.push_back(sourceModel(i / 16.f, 0, 0));
+    sources->models.push_back(sourceModel(1, 0, 10));
+    item.nativeLights = sources;
+    checkPoints("first-ten", {item}, {7,52,5}); // eleventh light is retained CPU-side, not uploaded
+    sources->models.erase(sources->models.begin(), sources->models.begin() + 10);
+    // Intensity10 saturates illumination to1 at every vertex; the resulting
+    // non-glow palette equals the independent Glow1 RGB reference above.
+    checkPoints("registered", {item}, {82,214,60});
+
+    auto distant = std::make_shared<steampoints::ZoneSources>();
+    distant->key = {-1,1};
+    std::vector<steampoints::ZoneKey> loaded{{0,0}};
+    for (int y = 1; y <= 7; ++y) {
+        loaded.push_back({-1,y});
+        for (int i = 0; i < 10; ++i)
+            distant->models.push_back(sourceModel(-8, y * 64.f + 32 + i / 16.f, 0));
+    }
+    WorldProbe probe;
+    probe.loadedLightZones = [loaded] { return loaded; };
+    renderer.setWorldProbe(probe);
+    DrawItem sourceOnly;
+    sourceOnly.nativeLights = distant;
+    checkPoints("storage-offset70", {sourceOnly, item}, {82,214,60});
+
+    // Seventy nearer lights in another zone must not consume a global64 budget.
+    auto near = std::make_shared<steampoints::ZoneSources>();
+    near->key = {0,0};
+    for (int i = 0; i < 70; ++i)
+        near->models.push_back(sourceModel(0, i / 64.f, 0));
+    sourceOnly.nativeLights = near;
+    sources->key = {0,1};
+    sources->models = {sourceModel(0, 100, 10)};
+    item.model[3].y = 100;
+    probe.loadedLightZones = [] { return std::vector<steampoints::ZoneKey>{{0,0}, {0,1}}; };
+    renderer.setWorldProbe(probe);
+    checkPoints("no-global64-cap", {sourceOnly, item}, {82,214,60});
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

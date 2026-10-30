@@ -49,6 +49,9 @@ struct FrameUniforms {
     glm::vec4 pointLights[MAX_POINT_LIGHTS], pointColours[MAX_POINT_LIGHTS];
     glm::vec4 steamSun, steamMaterial; // direction/ambient alpha, frame material RGBA
 };
+struct NativeGpuPoint {
+    glm::vec4 position, colour;
+};
 struct PushConstants {
     glm::mat4 model;
     glm::vec4 params;
@@ -830,9 +833,10 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
         {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
         {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
     };
     VkDescriptorSetLayoutCreateInfo sli{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    sli.bindingCount = 3;
+    sli.bindingCount = 4;
     sli.pBindings = bindings;
     vkCreateDescriptorSetLayout(device, &sli, nullptr, &setLayout);
     VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -844,10 +848,11 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
     pli.pPushConstantRanges = &push;
     vkCreatePipelineLayout(device, &pli, nullptr, &layout);
     VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, FRAMES},
-                                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * FRAMES}};
+                                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * FRAMES},
+                                    {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, FRAMES}};
     VkDescriptorPoolCreateInfo dpi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     dpi.maxSets = FRAMES;
-    dpi.poolSizeCount = 2;
+    dpi.poolSizeCount = 3;
     dpi.pPoolSizes = sizes;
     vkCreateDescriptorPool(device, &dpi, nullptr, &descriptorPool);
 
@@ -869,6 +874,13 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
         dai.descriptorSetCount = 1;
         dai.pSetLayouts = &setLayout;
         vkAllocateDescriptorSets(device, &dai, &fr.set);
+        fr.nativePointCapacity = sizeof(NativeGpuPoint);
+        fr.nativePoints = createBuffer(fr.nativePointCapacity, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        if (!fr.nativePoints.mapped) {
+            error = "Cannot allocate native point-light buffer";
+            return false;
+        }
         VkDescriptorBufferInfo bi{fr.uniforms.buffer, 0, sizeof(FrameUniforms)};
         VkDescriptorImageInfo farInfo{shadowSampler, shadowFar.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         VkDescriptorImageInfo nearInfo{shadowSampler, shadowNear.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
@@ -885,6 +897,14 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
         writes[1].pImageInfo = &farInfo;
         writes[2].pImageInfo = &nearInfo;
         vkUpdateDescriptorSets(device, 3, writes, 0, nullptr);
+        VkDescriptorBufferInfo points{fr.nativePoints.buffer, 0, fr.nativePointCapacity};
+        VkWriteDescriptorSet pointWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        pointWrite.dstSet = fr.set;
+        pointWrite.dstBinding = 3;
+        pointWrite.descriptorCount = 1;
+        pointWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        pointWrite.pBufferInfo = &points;
+        vkUpdateDescriptorSets(device, 1, &pointWrite, 0, nullptr);
     }
     if (!createPipelines(error) || !createOverlayPipeline(error) || !createMapPipeline(error) || !createPostResources(error))
         return false;
@@ -938,6 +958,7 @@ uint32_t Renderer::upload(const Mesh &mesh) {
     gm.indexCount = (uint32_t)mesh.indices.size();
     gm.min = mesh.min;
     gm.max = mesh.max;
+    gm.nativeCentre = mesh.nativeCentre;
     gm.live = true;
     uint32_t id;
     if (!freeIds.empty()) {
@@ -1152,6 +1173,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     };
     std::vector<PointLight> pointLights;
     bool underwater = false;
+    float nativeDaylight = 1;
     glm::vec3 mapFog(0); // the world map's backdrop: this frame's fog colour
     if (alphaLook) {
         for (const DrawItem &item : opaque) {
@@ -1209,6 +1231,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (!worldProbe.sceneLighting)
             environment.region = here.region;
         environment.effect13RemainingMs = lighting.effect13RemainingMs;
+        nativeDaylight = steamlighting::collectorDaylight(lighting.timeMs, environment.region.forest);
         if (elapsedMs < 0)
             steamLights.reset();
         steamLights.update(steamlighting::targets(lighting.timeMs, environment), steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
@@ -1229,6 +1252,22 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         mapFog = palette.fog;
         steamStarValue = steamsky::starValue(dayMs, here.region.forest);
     }
+    glm::vec3 nativeEye = camera.eye, nativeTarget = camera.target;
+    nativeEye.z += (float)worldProbe.origin.z;
+    nativeTarget.z += (float)worldProbe.origin.z;
+    const auto nativePlanes = scenevisibility::planes(
+        glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) *
+        glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
+    std::unordered_map<const scenevisibility::Bounds *, bool> zoneVisibility;
+    auto nativeZoneVisible = [&](const DrawItem &item) {
+        if (!item.nativeZone)
+            return true; // older/incomplete terrain has no asserted native cache box
+        auto [it, fresh] = zoneVisibility.try_emplace(item.nativeZone.get(), false);
+        if (fresh)
+            it->second = scenevisibility::visible(*item.nativeZone, nativeEye, nativePlanes,
+                                                  settings.fogDistance, settings.sceneryDistance);
+        return it->second;
+    };
     // History is released on toggles and large camera jumps (teleports, respawns).
     if (settings.taa != previousTaa || glm::length(camera.eye - previousEye) > 8)
         historyValid = false;
@@ -1279,6 +1318,79 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     u.focus = glm::vec4(focus, alphaLook ? 0.f : 12.f); // MoonandShadow's 12-block lantern (Steam look).
     u.sunDisk = glm::vec4(lighting.sunDir, glm::smoothstep(-.1f, .05f, lighting.sunDir.z));
     u.moonDisk = glm::vec4(lighting.moonDir, lighting.moonWeight);
+    std::map<steampoints::ZoneKey, glm::uvec2> nativeBatches;
+    std::vector<NativeGpuPoint> nativeGpuPoints;
+    if (!alphaLook && !menuSky) {
+        std::map<steampoints::ZoneKey, const DrawItem *> sourceZones;
+        auto rememberSources = [&](const std::vector<DrawItem> &draws) {
+            for (const auto &draw : draws)
+                if (draw.nativeLights)
+                    sourceZones.try_emplace(draw.nativeLights->key, &draw);
+        };
+        rememberSources(opaque);
+        rememberSources(water);
+        steampoints::Point origin{}, eye{};
+        for (int axis = 0; axis < 3; ++axis) {
+            origin[axis] = (int64_t)(worldProbe.origin[axis] * 65536);
+            eye[axis] = origin[axis] + (int64_t)((double)camera.eye[axis] * 65536);
+        }
+        steampoints::Frame points;
+        points.camera = eye;
+        points.range = settings.fogDistance;
+        points.daylight = nativeDaylight;
+        points.clockMs = lighting.timeMs;
+        points.visible = [&](const steampoints::Point &p, float radius, float range) {
+            const steampoints::Point relative{p[0] - origin[0], p[1] - origin[1], p[2]};
+            return scenevisibility::sphere(relative, radius, nativeEye, nativePlanes, range);
+        };
+        std::vector<steampoints::Light> lights;
+        std::vector<steampoints::ZoneKey> loaded = worldProbe.loadedLightZones
+            ? worldProbe.loadedLightZones() : std::vector<steampoints::ZoneKey>{};
+        for (const auto &[key, draw] : sourceZones) {
+            loaded.push_back(key);
+            if (nativeZoneVisible(*draw))
+                steampoints::collect(*draw->nativeLights, points, lights);
+        }
+        const auto tables = steampoints::distribute(std::move(lights), eye, loaded);
+        for (const auto &[key, table] : tables) {
+            const auto count = (uint32_t)std::min<size_t>(table.size(), 10);
+            nativeBatches[key] = {(uint32_t)nativeGpuPoints.size(), count};
+            for (uint32_t i = 0; i < count; ++i) {
+                const auto &light = table[i];
+                glm::vec3 position;
+                for (int axis = 0; axis < 3; ++axis)
+                    position[axis] = (float)((double)(light.position[axis] - origin[axis]) / 65536);
+                nativeGpuPoints.push_back({glm::vec4(position, light.radius), glm::vec4(light.colour, 0)});
+            }
+        }
+    }
+    if (nativeGpuPoints.empty())
+        nativeGpuPoints.push_back({}); // a valid descriptor even when every draw has count0
+    const VkDeviceSize pointBytes = nativeGpuPoints.size() * sizeof(NativeGpuPoint);
+    if (pointBytes > fr.nativePointCapacity) {
+        const VkDeviceSize capacity = std::max(pointBytes, fr.nativePointCapacity * 2);
+        auto replacement = createBuffer(capacity, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        if (replacement.mapped) {
+            // This frame's fence has completed; the other frame owns its own buffer.
+            destroyBuffer(fr.nativePoints);
+            fr.nativePoints = replacement;
+            fr.nativePointCapacity = capacity;
+            VkDescriptorBufferInfo info{fr.nativePoints.buffer, 0, capacity};
+            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            write.dstSet = fr.set;
+            write.dstBinding = 3;
+            write.descriptorCount = 1;
+            write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            write.pBufferInfo = &info;
+            vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+        } else {
+            destroyBuffer(replacement);
+            nativeBatches.clear(); // retain a usable frame if a larger allocation fails
+            nativeGpuPoints.assign(1, {});
+        }
+    }
+    std::memcpy(fr.nativePoints.mapped, nativeGpuPoints.data(), nativeGpuPoints.size() * sizeof(NativeGpuPoint));
     std::memcpy(fr.uniforms.mapped, &u, sizeof(u));
 
     VkCommandBuffer cmd = fr.cmd;
@@ -1340,6 +1452,17 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (!alphaLook && !menuSky && shading) {
             pc.params.x = (float)(item.flags | STEAM_WORLD);
             pc.look.y = item.flash;
+            steampoints::ZoneKey key;
+            if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
+                key = item.nativeLights->key;
+            } else {
+                const steampoints::Point origin{(int64_t)(worldProbe.origin.x * 65536),
+                    (int64_t)(worldProbe.origin.y * 65536), 0};
+                key = steampoints::bindingZone(item.model, m.nativeCentre.value_or((m.min + m.max) * .5f), origin);
+            }
+            if (const auto batch = nativeBatches.find(key); batch != nativeBatches.end())
+                pc.lights = {batch->second.x, 0, 0, batch->second.y};
+
             if (item.kind == DrawKind::Scenery && item.standingLight >= 0)
                 pc.look.x = item.standingLight; // baked sunlight, separate from pixel opacity
         }
@@ -1532,23 +1655,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     Frustum frustum(u.viewProj);
     // Native CPU culling uses unnormalized W±X/Y/Z planes, no projection Y flip
     // and its fixed .05/1920 clip distances (including the loose W+Z near gate).
-    glm::vec3 nativeEye = camera.eye, nativeTarget = camera.target;
-    nativeEye.z += (float)worldProbe.origin.z;
-    nativeTarget.z += (float)worldProbe.origin.z;
-    const auto nativePlanes = scenevisibility::planes(
-        glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) *
-        glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
-    std::unordered_map<const scenevisibility::Bounds *, bool> zoneVisibility;
-    auto nativeZoneVisible = [&](const DrawItem &item) {
-        if (!item.nativeZone)
-            return true; // older/incomplete terrain has no asserted native cache box
-        auto [it, fresh] = zoneVisibility.try_emplace(item.nativeZone.get(), false);
-        if (fresh)
-            it->second = scenevisibility::visible(*item.nativeZone, nativeEye, nativePlanes,
-                                                  settings.fogDistance, settings.sceneryDistance);
-        return it->second;
-    };
     auto visible = [&](const DrawItem &item) {
+        if (!alphaLook && !nativeZoneVisible(item))
+            return false;
         if (!meshes[item.mesh].indexCount)
             return false;
         glm::vec3 c;
@@ -1847,6 +1956,7 @@ void Renderer::shutdown() {
         for (auto &b : fr.staging)
             destroyBuffer(b);
         destroyBuffer(fr.uniforms);
+        destroyBuffer(fr.nativePoints);
         vkDestroyFence(device, fr.fence, nullptr);
         vkDestroySemaphore(device, fr.acquired, nullptr);
     }

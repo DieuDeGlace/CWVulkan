@@ -101,8 +101,17 @@ int steamVoxelTests() {
     }
     setRenderStyle(RenderStyle::Alpha);
     const Mesh alphaMesh = cube.mesh();
+    check(alphaMesh.nativeCentre && alphaMesh.nativeCentre->z == (float)cube.sz * .5f,
+          "CUB keeps full-header center independently of occupied mesh bounds");
     check(!alphaMesh.vertices.empty() && alphaMesh.vertices.front().normal == 0 &&
           !(alphaMesh.vertices.front().flags & STEAM_VERTEX), "Alpha keeps its classic layout and own RGB encoding");
+    CubModel padded;
+    padded.sx = padded.sy = 1; padded.sz = 8;
+    padded.rgb.assign(24, 0);
+    padded.rgb[0] = padded.rgb[1] = padded.rgb[2] = 255;
+    const auto sparse = padded.mesh();
+    check(sparse.nativeCentre && sparse.nativeCentre->z == 4 && sparse.max.z == 1,
+          "empty CUB padding changes binding center without changing occupied bounds");
     setRenderStyle(previousStyle);
 
     // Retained light bytes must outlive the terrain used to solve them and match

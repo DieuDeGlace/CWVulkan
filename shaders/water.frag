@@ -20,7 +20,7 @@ void main() {
     float blue = nativeVertex ? mix(vIndirect.b, vColor.b, sunShare(vWorld, normal))
                               : clamp(vColor.b * light.light.b, 0, 1);
     vec3 body = mix(f.steamSky[0].rgb, f.steamSky[1].rgb, .8 * steamSmooth(Y + 1));
-    vec3 reflected = reflect(-f.lightDir.xyz, normal);
+    vec3 reflected = reflect(-(nativeVertex ? f.steamSun.xyz : f.lightDir.xyz), normal);
     float sheen = max(dot(normalize(reflected), normalize(toEye)), 0);
     vec3 colour = clamp(blue * body + sheen * .25 * f.steamSky[0].rgb, 0, 1);
     float scale = 1 / max(f.fog.w, .001);

@@ -64,3 +64,24 @@ Quick mode checks the executable's x64 PE header and supported extractor timesta
 Close the original game before installing or updating the extractor. Setup checks that the supported game is closed, checks its x64 loader/DLL prerequisites, stages the new DLL, and only then replaces the old extractor. Existing exports can be checked repeatedly without reinstalling or running the game.
 
 All exports stay local to the owner. The source archive includes the readers and extraction tools, while excluding game content, recordings, screenshots, native executables and Steam DLLs. See [PUBLICATION.md](../PUBLICATION.md) for the separate source and rights review still required before publication.
+
+
+## Refreshing zone and light snapshots
+
+The updated extractor records the separate auxiliary model and static-object light
+lists, including invisible light markers. Older zone exports can omit the static
+light list even when their terrain and visible placements are usable.
+
+Close the original game before replacing its extractor DLL. After restarting with
+the updated DLL and loading a character, press **F5** once. It saves the character
+snapshot and queues a refresh of loaded zone snapshots, including previously
+cached exports. Allow the writer a few seconds to finish. F4 remains the animation
+recording toggle. The engine reads these records directly; it does not create
+replacement lamp assets or infer the missing auxiliary list from sprite names.
+
+For vanilla parity comparisons, use the wizard's isolated extraction workflow.
+Captures made with gameplay/world-generation mods enabled describe that modified
+run. In particular, a BigRegions Scale2 region query is not a vanilla Scale1 oracle.
+Keep capture provenance separate instead of changing expected values to hide the
+difference. Native light-layout fixtures and synthetic GPU checks can be run with
+`EngineTests steampoints`, `EngineTests steamterrain` and `EngineTests steamshader`.
