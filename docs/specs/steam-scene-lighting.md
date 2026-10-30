@@ -887,3 +887,108 @@ inventory; all resulting records go through the same sort/zone limits in §3.2.
   direction. Capture ambient.w as a fourth component, not an inferred channel.
 
 No new runtime recording has been requested or performed by this spec author.
+
+## 5. Frame-time producer, interruptions and camera-coordinate precision
+
+This is the follow-up on the actual input to the easing coefficients above.
+Sources: main loop **0x1355a0**, frame wrapper **0x134420**, game frame
+**0xa5a50** (longer-budget decompile plus assembly), camera/FOV **0xadcd0**,
+renderer **0xe2e00** and palette provider **0x2b0400**. No original game was
+run for this trace.
+
+### 5.1 Wall-clock source and the1000-ms cap
+
+0x134420 obtains the standard-library high-resolution performance frequency
+and counter. It converts the counter to **signed64 integer nanoseconds**:
+whole seconds×1000000000 plus the integer division of remaining ticks×
+1000000000 by frequency. Subtract the previously stored nanoseconds at
+global **0x551cb0** to obtain a signed64 elapsed interval, then store the
+**current full timestamp immediately**, before running the game frame.
+The supplied game-frame double milliseconds is computed as
+**(double(elapsedNanoseconds)/1000000000.0)×1000.0** in that order.
+
+At game-frame entry0xa5a50, **0xa5afc–0xa5b0a** caps this double interval to
+**1000.0 ms**. The native code adds no lower clamp. For the ordinary finite
+nonnegative performance-clock intervals this is min(elapsedMS,1000). The
+1000 double constant is at0x437fd8. Excess elapsed time is **discarded**:
+the previous timestamp was already replaced with the complete current
+timestamp, so a long interruption does not leave a multi-frame catch-up
+debt in this frame-time producer.
+
+The renderer's argument7 to0xe2e00 is **float32(cappedDoubleMS)**, preserved
+through the game frame; renderer also stores this float at+0x330. The scene
+RGBA easing, adaptive-range transitions and other renderer calls to0xa7a0
+therefore promote that rounded float to double for the coefficient helper.
+This is elapsed render/game-frame time, **not a consumed world-update
+substep, simulation remainder, time-of-day delta or speed-scaled clock**.
+World update may consume its own substeps, but their remaining duration does
+not replace this renderer argument.
+
+**FOV precision distinction:** the call to0xadcd0 at **0xaaf02** passes the
+capped interval still as **double**, without passing through the renderer's
+float conversion.0xadcd0 retains that double for its0xa7a0 calls, including the
+FOV transition in §1.3. Thus scene easing and FOV use the same capped wall
+interval, but not necessarily the same floating representation. Near a
+hundredth-millisecond boundary, **trunc(doubleMS×100)** can differ from
+**trunc(double(float32(doubleMS))×100)**. Preserve this distinction when
+comparing exact helper coefficients; do not silently round the FOV input to
+the renderer's float merely because both ultimately update float fields.
+
+### 5.2 First call, focus, delays and skipped calls
+
+The previous high-resolution timestamp is a function-local static initialized
+on the **first valid0x134420 invocation** with its own performance-counter
+sample; the routine immediately samples again for the first elapsed interval.
+Consequently the first interval is the short time between those two samples,
+not elapsed time since application startup and not a fixed16-ms bootstrap.
+Subsequent valid calls use the saved timestamp. This static is not reset by
+changing a palette target, opening a menu or changing worlds in the traced
+producer.
+
+0x134420 performs its update only while the global renderer/device-related
+pointer0x551a90 and Game pointer0x551a80 are nonnull. When that outer guard
+skips the routine, it does not update the previous timestamp there. The next
+valid call therefore measures the accumulated performance-clock interval and
+the game-frame1000-ms cap still applies.
+
+The main loop's inactive/not-foreground route at **0x137b83** sleeps16 ms,
+then joins the normal call to0x134420 at **0x137b8e**. It does **not** replace
+the frame interval with zero or bypass that call. The traced producer has
+no separate minimized-window elapsed-time reset. If a window/message/device
+operation blocks frame calls, its resulting long clock interval is handled
+by the same cap, rather than a special pause-time subtraction. This statement
+does not assume how a particular OS clock counts suspend; it specifies what
+the native producer does with the interval that the clock supplies.
+
+0x134420's later optional frame-rate sleep and presentation happen after the
+game update. Its timeGetTime calls measure that pacing budget; they are not
+the elapsed-time source passed to0xa5a50. Such sleeps, presentation waits and
+ordinary background-loop delays are included in the next high-resolution
+interval. Menus/input eligibility don't zero the scene interval: even if a
+world clock remains unchanged, the renderer can continue easing toward its
+unchanged target while frames continue.
+
+### 5.3 Palette camera XY: confirmed truncation, separate block reads
+
+The statement in §2.7 is confirmed at **every direct camera XY region/height
+call in0x2b0400**:
+
+- **0x358e0 neighbourhood:** camera fixed X/Y divided by65536 with signed
+  truncation toward zero.
+- **0x35ce0 place-at-point:** the same truncated block coordinates.
+- **0x35ea0 ground height, mode0:** the same truncated block coordinates.
+
+The subsequent warmth0x2d9b60,dryness0x2b5960,lava0x2b9750 and forest0x2d9f30
+calls consume the resulting neighbourhood/place records, not a new fractional
+camera XY. The interior big-structure query similarly starts with truncated
+camera block XY and then floor-divides those integers by1024, as §2.7 states.
+For example fixed X=−1 (−1/65536 block) becomes integer block0 for these
+queries, whereas fixed X=−65536 becomes−1. Do not replace this with mathematical
+floor of the original fixed coordinate.
+
+There is a deliberate separate path: the provider's effective-world-block
+reads0xeab0 for the interior flag and final water test receive the **original
+fixed camera XYZ**. They are not supplied the truncated region-query inputs.
+The far-flight helper0x2b8050 consumes its own player/anchor fields (§2.8),
+not a fractional camera-height query. Capturing raw camera fixed XYZ plus
+the actual truncated region/height query XY makes this distinction testable.

@@ -314,3 +314,7 @@ target_sources(engine PRIVATE src/RegionLevels.cpp src/SceneVisibility.cpp)
 target_sources(EngineTests PRIVATE tests/RegionLevelsTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SceneVisibilityTests.cpp)
+
+target_sources(engine PRIVATE src/SteamLighting.cpp)
+
+target_sources(EngineTests PRIVATE tests/SteamLightingTests.cpp)

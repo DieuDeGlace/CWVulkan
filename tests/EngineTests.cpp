@@ -131,6 +131,7 @@ int objectVisualTests();
 int sceneCaptureTests();
 int regionLevelsTests();
 int sceneVisibilityTests();
+int steamLightingTests();
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -10264,6 +10265,7 @@ int main(int argc, char **argv) {
     failures += sceneCaptureTests();
     failures += regionLevelsTests();
     failures += sceneVisibilityTests();
+    failures += steamLightingTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;

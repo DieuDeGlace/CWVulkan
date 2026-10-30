@@ -88,6 +88,8 @@ individual feature documents.
   Full structure/light-list checks pass on all 789 snapshots; fresh-generation RNG
   checks are distinct from partial daily-refresh traces. Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.
+  Native scene palette targets/RGBA easing now have numeric checks and Steam RGB
+  integration, including regional/structure/effect13 blends and capped wall timing.
   Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
   point-light registration, remaining shader/color details, undefined
   consumed lamp turns and broader dungeon/theme oracles still prevent a complete

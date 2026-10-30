@@ -1,8 +1,9 @@
 #pragma once
 // The Steam look's lights by time of day. The sun follows the Steam release's path
 // (docs/specs/sky-and-clouds.md §B.5, SteamSky.h); the sky's colours are the Steam palette's,
-// worked out by the renderer (SteamSky.h). The light colours themselves (the palette's P7..P9)
-// are not specified yet, so the front, back and ambient light here are CubeVulkan's stand-in.
+// worked out by the renderer (SteamSky.h). Steam world's front/back/ambient use
+// SteamLighting's native palette state. These legacy preview terms and the optional
+// moon additions remain available separately.
 //
 // The moon is CubeVulkan's own addition, not the game's (the Steam release has none): the
 // user's MoonandShadow mod (MoonRules.h) gives its path, its moonlight and when shadows switch
@@ -10,6 +11,7 @@
 #include "MoonRules.h"
 #include "SteamSky.h"
 #include <glm/glm.hpp>
+#include <optional>
 
 struct Lighting {
     glm::vec3 lightDir{0, 0, 1};      // Towards the shadow-casting light (sun or moon).
@@ -18,6 +20,9 @@ struct Lighting {
     float daylight = 1;               // 0 night .. 1 day.
     float hour = 12;                  // Time of day (0..24) the light is for.
     float moonWeight = 0;
+    float timeMs = 43200000;
+    glm::vec3 moonFront{0}, moonBack{0}; // optional additions, separate from native palette
+    std::optional<float> effect13RemainingMs;
     glm::vec3 sunDir{0, 0, 1}, moonDir{0, 0, -1}; // Sky positions (always set).
     // Optional screen-space sky captured from the original menu draw. The
     // regular world clock leaves these zero and keeps the normal sky path.
@@ -39,6 +44,7 @@ inline Lighting lightingAt(float hour, const DayNightSettings &s, const RegionLo
     Lighting l;
     l.hour = hour;
     float ms = hour * 3600000.f;
+    l.timeMs = ms;
     auto moon = moonrules::state(ms, s.nightStrength);
     l.moonWeight = moon.weight;
     l.moonDir = glm::normalize(glm::vec3(moon.direction[0], moon.direction[1], moon.direction[2]));
@@ -62,8 +68,10 @@ inline Lighting lightingAt(float hour, const DayNightSettings &s, const RegionLo
     l.ambient = glm::mix(glm::vec3(.10f, .12f, .20f), glm::vec3(.30f, .32f, .38f), day);
     // MoonLight: moonlit front/back terms (same tints as moonrules::lighting).
     float w = moon.weight * (1 - day);
-    l.front += glm::vec3(.32f, .38f, .5f) * w * (s.moonBrightness * 10);
-    l.back += glm::vec3(.07f, .085f, .12f) * w;
+    l.moonFront = glm::vec3(.32f, .38f, .5f) * w * (s.moonBrightness * 10);
+    l.moonBack = glm::vec3(.07f, .085f, .12f) * w;
+    l.front += l.moonFront;
+    l.back += l.moonBack;
     l.front *= glm::mix(1.f, region.daylight, day);
     l.ambient *= glm::mix(1.f, region.daylight, day);
     return l;

@@ -22,9 +22,15 @@ checkpoint describe the intended setup and remaining limits.
   A versioned owner-export record captures coherent bounds/counts/triangle cost
   for future comparisons. Synthetic/file-format regressions and no-save Vulkan
   captures pass; no fresh native cached-box oracle or pixel match is claimed.
-- The separate clean-room author has completed the scene-lighting/cache/palette
-  specification. Full native palette smoothing, point-light registration and
-  remaining shader/color behavior still need implementation and comparison.
+- Native Steam front/back/ambient RGBA targets and state smoothing now follow
+  the separate author's completed specification. Steam world RGB uses the native
+  targets, with optional moon additions kept separate. Tests cover ordered regional/
+  structure blends, effect13, low/high day interpolation, constructor values and
+  exact native coefficient words. The frame input uses the verified1000-ms wall-time
+  cap before float conversion; rendering reads the current client clock/buff state.
+  Day/night no-save GPU captures pass. Native ambient alpha is retained in CPU state,
+  but its shader saturation/composition stage is still pending. Point registration,
+  sky/fog special overrides and remaining shader/color behavior still need work.
 - Runtime follow-up: incoming local-player hit rules, native music smoothing,
   gameplay XInput mapping/sticks/camera, page-scoped dialogue marks and daily world/
   character reset behavior now follow the independent runtime-gap specification.

@@ -8,6 +8,7 @@
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
 #include "worldgen/Height.h"
+#include "worldgen/CellObjects.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <climits>
@@ -52,6 +53,25 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
         probe.origin = glm::dvec3(extracted->originZoneX() * 64.0, extracted->originZoneY() * 64.0,
                                   -(double)ExtractedWorld::Z_OFFSET);
         probe.column = [](int32_t x, int32_t y) { return skyColumnAt(x, y); };
+        probe.sceneLighting = [this](glm::vec3 p) {
+            const int64_t fixedX = (int64_t)((double)p.x * 65536) + extracted->originDotsX();
+            const int64_t fixedY = (int64_t)((double)p.y * 65536) + extracted->originDotsY();
+            // Palette metadata truncates to blocks; effective block lookup floors.
+            const int32_t x = (int32_t)(fixedX / 65536), y = (int32_t)(fixedY / 65536);
+            steamlighting::Environment environment;
+            environment.region = skyColumnAt(x, y).region;
+            const auto block = extracted->gameBlock((int64_t)std::floor((double)fixedX / 65536),
+                                                    (int64_t)std::floor((double)fixedY / 65536),
+                                                    (int)std::floor((double)p.z - ExtractedWorld::Z_OFFSET));
+            environment.blockFlag20 = (block[5] & 0x20) != 0;
+            if (environment.blockFlag20) {
+                const auto place = worldgen::placeAt(x, y);
+                const int32_t cellX = (int32_t)std::floor((double)x / 1024);
+                const int32_t cellY = (int32_t)std::floor((double)y / 1024);
+                environment.structureKind = worldgen::bigStructure(cellX, cellY, place.kind, place.big);
+            }
+            return environment;
+        };
     }
     renderer.setWorldProbe(std::move(probe));
     loadSkyModels();

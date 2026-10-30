@@ -1113,7 +1113,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // The original menu's captured scene keeps the look it was captured with.
     const bool menuSky = lighting.menuSky[5].w > 0;
     const bool alphaLook = settings.style == RenderStyle::Alpha && !menuSky;
-    const double dayMs = std::fmod(std::max(0.0, (double)lighting.hour), 24.0) * 3600000.0;
+    const double dayMs = alphaLook ? std::fmod(std::max(0.0, (double)lighting.hour), 24.0) * 3600000.0
+                                  : (double)lighting.timeMs;
     const float S = alpha::sunlight(dayMs);
     const glm::vec3 D = alpha::sunDirection(dayMs);
     // Milliseconds since the last frame (-1 on the first, or when the clock went back).
@@ -1201,6 +1202,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     } else if (!alphaLook) {
         underwater = worldProbe.water && worldProbe.water(camera.eye);
         const SkyColumn &here = cameraColumn(eyeGame);
+        auto environment = worldProbe.sceneLighting ? worldProbe.sceneLighting(camera.eye) : steamlighting::Environment{};
+        if (!worldProbe.sceneLighting)
+            environment.region = here.region;
+        environment.effect13RemainingMs = lighting.effect13RemainingMs;
+        if (elapsedMs < 0)
+            steamLights.reset();
+        steamLights.update(steamlighting::targets(lighting.timeMs, environment), steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
         // §B.3, eased as §B.4.
         const steamsky::Palette target = steamsky::palette(alpha::paletteDaylight(dayMs), here.region, underwater);
         if (elapsedMs < 0)
@@ -1247,6 +1255,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     u.front = glm::vec4(lighting.front, settings.sunWarmth);
     u.back = glm::vec4(lighting.back, settings.fadeStart);
     u.ambient = glm::vec4(lighting.ambient, settings.cameraFade ? 1.f : 0.f);
+    if (!alphaLook && !menuSky) {
+        const auto &native = steamLights.value();
+        u.front = glm::vec4(glm::vec3(native.front) + lighting.moonFront, settings.sunWarmth);
+        u.back = glm::vec4(glm::vec3(native.back) + lighting.moonBack, settings.fadeStart);
+        // Uniform ambient.w is still camera-fade; native ambient alpha is separate
+        // state until the native shader composition stage is connected.
+        u.ambient = glm::vec4(glm::vec3(native.ambient), settings.cameraFade ? 1.f : 0.f);
+    }
     u.fog = glm::vec4(mapFog, settings.fogDistance);
     u.sky = glm::vec4(0, 0, 0, lighting.daylight);
     float invSpan = 1 / (2 * LIGHT_DEPTH);

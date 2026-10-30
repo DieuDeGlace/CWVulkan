@@ -12,6 +12,7 @@
 #include "LightBeam.h"
 #include "SteamScenery.h"
 #include "SceneVisibility.h"
+#include "SteamLighting.h"
 #include <memory>
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -136,6 +137,7 @@ struct WorldProbe {
     // is in the game's blocks (game = renderer position + origin).
     std::function<SkyColumn(int32_t x, int32_t y)> column;
     glm::dvec3 origin{0};
+    std::function<steamlighting::Environment(glm::vec3)> sceneLighting;
 };
 
 // The models the sky draws, as uploaded meshes (World makes them from the owner's install).
@@ -307,6 +309,7 @@ class Renderer {
     SkyModels skyModels;
     std::map<std::pair<int32_t, int32_t>, std::optional<clouds::Cloud>> cloudCells;
     steamsky::EasedPalette steamPalette;
+    steamlighting::EasedColours steamLights;
     SkyColumn skyColumn;
     glm::ivec2 skyColumnAt{0};
     bool skyColumnValid = false;

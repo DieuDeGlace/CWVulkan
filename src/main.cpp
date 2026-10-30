@@ -6529,6 +6529,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             Sleep(16);
         } else {
             renderer.setWorldDay(day); // the moon's phase
+            if (spawnedReady) {
+                lighting.timeMs = (float)spawned.timeOfDay();
+                float strength, remainingMs;
+                if (spawned.playerBuff(0x13, strength, remainingMs))
+                    lighting.effect13RemainingMs = remainingMs;
+            }
             renderer.frame(camera, lighting, player.position, time, opaque, water);
         }
         auto column = columnAt(player.position.x, player.position.y);
