@@ -1,9 +1,19 @@
 #include "ObjectVisual.h"
 #include "worldgen/StructureTables.h"
 #include <algorithm>
+#include <cstring>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace objectvisual {
+State read(const uint8_t *record) {
+    State state;
+    std::memcpy(&state.type, record, 4);
+    state.turn = record[0x20];
+    std::memcpy(&state.scale, record + 0x24, 4);
+    state.closed = record[0x28];
+    std::memcpy(&state.elapsedMs, record + 0x2c, 4);
+    return state;
+}
 float visualFactor(int type) {
     switch (type) {
     case 0x41: return 1.8f;

@@ -109,7 +109,7 @@ struct Corridor {
         if (r.type != 0)
             return r;
         r = {};
-        if (cellRandom(x, y, 0x71504) % 5 != 0)
+        if (cellRandomUnsigned(x, y, 0x71504) % 5u != 0)
             return r;
         CastleRoom neighbours[4] = {corridorRoom(x - 1, y), corridorRoom(x + 1, y), corridorRoom(x, y - 1), corridorRoom(x, y + 1)};
         int sides[4], count = 0;
@@ -118,11 +118,11 @@ struct Corridor {
                 sides[count++] = i + 1;
         if (count == 0)
             return r;
-        const int pick = sides[cellRandom(x, y, 0x55260) % count];
+        const int pick = sides[cellRandomUnsigned(x, y, 0x55260) % (uint32_t)count];
         r.side = pick;
         r.steps = neighbours[pick - 1].steps;
         r.flags = 1;
-        r.type = cellRandom(x, y, 0x57b071) % 3 != 0 ? 5 : 4;
+        r.type = cellRandomUnsigned(x, y, 0x57b071) % 3u != 0 ? 5 : 4;
         r.b2 = r.type == 5 ? 2 : (structure == 42 || structure == 44) ? 1 : 0;
         if (!smallStructure(structure) && (cellRandom(x, y, 0xe0fae) & 1))
             r.flags = 3;
@@ -512,7 +512,7 @@ int32_t BuildingRules::castleFloor(int32_t cx, int32_t cy) {
     const Int2 m = cellPoint(c1.x, c1.y, big);
     const Corridor corridor{c1, structure, corridorDirection(c1, m), floorDiv(m.x, 7), floorDiv(m.y, 7)};
     if (corridor.room(floorDiv(cx, 3), floorDiv(cy, 3)).flags & 4)
-        t += cellRandom(cx / 3, cy / 3, 0x7b7e8) % 6;
+        t += (int32_t)(cellRandomUnsigned(cx / 3, cy / 3, 0x7b7e8) % 6u);
     return t;
 }
 

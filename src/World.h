@@ -27,6 +27,8 @@ class World {
     // Starts and finishes zone jobs around `focus`; drops zones out of range.
     void update(glm::vec3 focus);
     void collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const;
+    using ObjectProvider = std::function<std::optional<objectvisual::State>(int zx, int zy, const objectvisual::Key &)>;
+    void setObjectProvider(ObjectProvider provider) { objectProvider = std::move(provider); }
     // How many zones are drawn each way around the focus (the view distance changed).
     void setViewZones(int zones) { viewZones = zones; }
     int viewZoneCount() const { return viewZones; }
@@ -91,10 +93,18 @@ class World {
         size_t draw = 0; // its index in Zone::scenery
         vegetationwind::Placement placement;
     };
+    struct AnimatedObject {
+        size_t draw;
+        objectvisual::Key key;
+        objectvisual::State captured;
+        glm::vec3 position, dimensions;
+    };
+    ObjectProvider objectProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0;
         std::vector<DrawItem> scenery;
         std::vector<Moving> moving;
+        std::vector<AnimatedObject> objects;
     };
     struct Instance {
         int model = -1;
@@ -109,6 +119,7 @@ class World {
     Renderer &renderer;
     int viewZones;
     class ExtractedWorld *extracted;
+    uint32_t beamMesh = 0;
     std::vector<Model> models;
     std::unordered_map<std::string, int> modelIndex;
     std::map<Key, Zone> zones;

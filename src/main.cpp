@@ -1590,6 +1590,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // rebuilt from them (Lore.h).
     std::set<std::array<int32_t, 2>> usedCells(saveGame.usedCells.begin(), saveGame.usedCells.end());
     lore::Book loreBook = lore::rebuild(usedCells);
+    spawned.setUsedCells(&usedCells);
+    world.setObjectProvider([&spawned](int zx, int zy, const objectvisual::Key &key) { return spawned.objectVisual(zx, zy, key); });
     // The places and lands discovered (the map names them), and the places townspeople marked.
     std::set<std::array<int32_t, 2>> discoveredPlaces(saveGame.discoveredPlaces.begin(), saveGame.discoveredPlaces.end());
     std::set<std::array<int32_t, 2>> discoveredAreas(saveGame.discoveredAreas.begin(), saveGame.discoveredAreas.end());
@@ -5113,7 +5115,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         Lighting lighting = lightingAt(hour, dayNight, regionLook(columnAt(player.position.x, player.position.y)));
         opaque.clear();
         water.clear();
-        world.collect(opaque, water);
+        if (!spawnedReady)
+            world.collect(opaque, water);
         if (spawnedReady) {
             const auto now = std::chrono::steady_clock::now();
             const double ms = std::min(100.0, std::chrono::duration<double, std::milli>(now - spawnedClock).count());
@@ -5150,6 +5153,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (nativePlayer && !player.fly)
                 spawned.control(controlInput, ms);
             spawned.simulate(extractedWorld, ms);
+            world.collect(opaque, water); // draw this step's live object state, not the previous frame's
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
             if (netTrace >= 0 && time >= netTrace && time < netTrace + 1) { // (testing: what is drawn each frame)
                 std::string line = "Net trace: " + std::to_string((int)(time * 1000)) + " ms:";
@@ -6211,6 +6215,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             renderer.overlay(hudVertices);
         }
         Camera camera{eye, target};
+        camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
         // The map (the game's frame update, the map rendering): its position, its overlay between the
         // corner and the middle, its regions.
         if (useExtracted && !serverMode) {

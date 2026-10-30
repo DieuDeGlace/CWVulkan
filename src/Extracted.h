@@ -99,6 +99,8 @@ class ExtractedWorld {
     // objects (doors, windows, furniture, statues), from its .rec file and the
     // game's own sprite tables (Extract/sprite-groups.txt).
     std::vector<Scenery> props(int zx, int zy);
+    // Bake native model light from current neighboring terrain, when all nine zones exist.
+    void lightModels(int zx, int zy, std::vector<Scenery> &scenery);
     // The block the game's lookup (0xe9a0, 0xeb90) gives at absolute game block (x, y, z):
     // r, g, b, -, type, flags. Only zones already in memory are read; elsewhere the game's
     // default for a missing zone (grey stone, type 1) and `loaded` false.
@@ -148,6 +150,12 @@ class ExtractedWorld {
         std::vector<worldgen::ZoneObject> objects;           // the generator's static objects (zone+0x60)
         bool generated = false;     // made by the generator rather than read
         bool objectsMade = false;   // objects made (for a read zone, once gameObjects asks)
+        struct ModelLightState {
+            std::mutex mutex;
+            std::set<int> waterModels; // flag8 is ORed, retained for this zone's lifetime
+        };
+        // Block edits copy the terrain snapshot; runtime model state stays shared.
+        std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
     };
     using Key = std::pair<int, int>;
     std::filesystem::path folder;

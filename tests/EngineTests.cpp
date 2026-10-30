@@ -127,7 +127,8 @@ int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
 int gamepadUiTests();      // tests/GamepadUiTests.cpp
 int plasmaHitTests();      // tests/PlasmaHitTests.cpp
-int objectVisualTests();   // tests/ObjectVisualTests.cpp
+int objectVisualTests();
+int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -465,6 +466,8 @@ static void extractedPlacements() {
         memcpy(model.data() + 0x20, &size, sizeof size);
         memcpy(model.data() + 0x24, &yaw, sizeof yaw);
         memcpy(model.data() + 0x38, &flags, sizeof flags);
+        const float light = 21;
+        memcpy(model.data() + 0x28, &light, sizeof light);
         append(0x18, 0x40, model);
         append(0x90, 0x40, model); // Derived light list must not duplicate the model as a building part.
         append(0xa8, 0x40, model); // Nor should ambient emitter records draw a voxel model.
@@ -477,6 +480,57 @@ static void extractedPlacements() {
     CHECK(sceneProps.size() == 5);
     CHECK(sceneProps.back().model == "flower" && sceneProps.back().scale == 2.5f);
     CHECK(sceneProps.back().modelFlags == 4 && sceneProps.back().listPosition == 1);
+    CHECK(sceneProps.back().modelType == 0 && std::abs(sceneProps.back().light - 21.0f / 255) < 1e-6f);
+    CHECK(sceneProps[0].objectKey.index == 0 && sceneProps[3].objectKey.index == 3);
+    {
+        std::ofstream out(records, std::ios::binary | std::ios::app);
+        std::array<uint8_t, 0x40> beam{};
+        const uint32_t header[] = {0x18, 0x40, 1};
+        const int32_t type = 0x59;
+        const int64_t position[] = {-65LL * 65536, -65536, 8LL * 65536};
+        const float height = 20, width = 0.7f;
+        memcpy(beam.data(), &type, sizeof type);
+        memcpy(beam.data() + 8, position, sizeof position);
+        memcpy(beam.data() + 0x20, &height, sizeof height);
+        memcpy(beam.data() + 0x24, &width, sizeof width);
+        out.write((const char *)header, sizeof header);
+        out.write((const char *)beam.data(), beam.size());
+    }
+    const auto shafts = ex.props(0, 0);
+    CHECK(shafts.size() == 6 && shafts.back().beam.has_value());
+    CHECK(shafts.back().beam->height == 20 && shafts.back().beam->width == 0.7f);
+    CHECK(shafts.back().beam->position[0] == 63LL * 65536);
+    CHECK(shafts.back().beam->position[2] == (8LL + ExtractedWorld::Z_OFFSET) * 65536);
+    // Complete mesh-neighbor input, then a water edit and its removal: baked light
+    // uses current terrain, while the native runtime water flag remains ORed.
+    for (int zx = -3; zx <= -1; ++zx)
+        for (int zy = -2; zy <= 0; ++zy) {
+            if (zx == -2 && zy == -1) continue;
+            std::ofstream out(seed / ("z_" + std::to_string(zx) + "_" + std::to_string(zy) + ".cwz"), std::ios::binary);
+            out.write("CWZ1", 4);
+            const int32_t header[] = {zx, zy, 0, 0};
+            out.write((const char *)header, sizeof header);
+            const uint64_t emptyColumn = 0;
+            for (int i = 0; i < 4096; ++i) out.write((const char *)&emptyColumn, sizeof emptyColumn);
+        }
+    CHECK(ex.open(seed, error));
+    nativesaves::BlockChange wet;
+    const int32_t editedBlock[] = {-65, -1, 8};
+    memcpy(wet.bytes.data(), editedBlock, sizeof editedBlock);
+    wet.bytes[0x12 + 4] = 2;
+    ex.setBlockChanges(-2, -1, {wet});
+    auto wetModels = ex.props(0, 0);
+    ex.lightModels(0, 0, wetModels);
+    CHECK(wetModels[4].light == 1 && (wetModels[4].modelFlags & 8));
+    wet.bytes[0x12 + 4] = 0;
+    ex.setBlockChanges(-2, -1, {wet});
+    auto dryModels = ex.props(0, 0);
+    ex.lightModels(0, 0, dryModels);
+    CHECK(dryModels[4].light == 1 && (dryModels[4].modelFlags & 8));
+    for (int zx = -3; zx <= -1; ++zx)
+        for (int zy = -2; zy <= 0; ++zy)
+            if (zx != -2 || zy != -1)
+                fs::remove(seed / ("z_" + std::to_string(zx) + "_" + std::to_string(zy) + ".cwz"));
     writeRecords(0xe0, 5, payload); // Truncated payload.
     CHECK(ex.props(0, 0).empty());
     writeRecords(0, UINT32_MAX, {});
@@ -10175,7 +10229,8 @@ int main(int argc, char **argv) {
     failures += petTests();            // tests/PetTests.cpp
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp
     failures += plasmaHitTests();     // tests/PlasmaHitTests.cpp
-    failures += objectVisualTests();  // tests/ObjectVisualTests.cpp
+    failures += objectVisualTests();
+    failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

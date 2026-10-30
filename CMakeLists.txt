@@ -73,7 +73,8 @@ set(SHADER_HEADERS)
 foreach(shader scene.vert scene.frag shadow.vert water.frag sky.vert sky.frag overlay.vert overlay.frag
         post.vert copy.frag taa.frag smaa_edge.vert smaa_edge.frag smaa_weight.vert smaa_weight.frag
         smaa_blend.vert smaa_blend.frag alpha_scene.vert alpha_scene.frag alpha_water.frag alpha_sky.frag
-        alpha_sprite.vert alpha_sprite.frag alpha_cloud.frag steam_cloud.frag steam_star.frag map.vert map.frag)
+        alpha_sprite.vert alpha_sprite.frag alpha_cloud.frag steam_cloud.frag steam_star.frag map.vert map.frag
+        light_beam.vert light_beam.frag)
     string(REPLACE "." "_" symbol ${shader})
     set(out ${SHADER_OUT}/${symbol}.h)
     add_custom_command(OUTPUT ${out}
@@ -303,3 +304,7 @@ endif()
 add_executable(HudExtract tools/HudExtract.cpp)
 target_include_directories(HudExtract PRIVATE ${stb_SOURCE_DIR})
 set_target_properties(HudExtract PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
+
+target_sources(engine PRIVATE src/LightBeam.cpp)
+target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp)
+target_sources(engine PRIVATE src/SteamScenery.cpp)

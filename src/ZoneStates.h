@@ -54,6 +54,11 @@ class ZoneStates {
     const nativesaves::ZoneLists *find(Cell zone) const;
     // The zones in memory.
     std::vector<Cell> zonesInMemory() const;
+    // Early world-step pass (worldgen-parity-gaps.md §4.4). Only existing zones
+    // within three zones of a player advance; overlapping rectangles count once.
+    // A non-null usedCells means a local player exists, including an empty set.
+    void advanceObjects(float milliseconds, const std::vector<Cell> &playerZones,
+                        const std::set<Cell> *usedCells = nullptr);
 
     // A zone is made with what the generator gave it; the stored state goes on top (0x2ae0c0):
     // its saved ground items and static objects replace the generated ones, its block changes

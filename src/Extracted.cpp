@@ -1,6 +1,7 @@
 #include "Extracted.h"
 #include "AlphaLight.h"
 #include "AlphaLook.h"
+#include "worldgen/ZoneLight.h"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -581,6 +582,53 @@ std::pair<float, bool> ExtractedWorld::objectScale(int type, const std::string &
     return {scale * partScale(name), measuredScale.count(name) == 0};
 }
 
+void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery) {
+    std::vector<std::array<int64_t, 3>> positions;
+    for (const Scenery &s : scenery)
+        if (s.modelType >= 0)
+            positions.push_back(s.modelPosition);
+    if (positions.empty())
+        return;
+    const int ax = zx + originX, ay = zy + originY;
+    std::shared_ptr<Zone> neighbors[3][3];
+    for (int x = 0; x < 3; ++x)
+        for (int y = 0; y < 3; ++y) {
+            neighbors[x][y] = load(ax + x - 1, ay + y - 1);
+            if (!neighbors[x][y])
+                return; // An incomplete export has no complete native mesh-light input.
+        }
+    std::vector<worldgen::TerrainColumn> columns[3][3];
+    for (int x = 0; x < 3; ++x)
+        for (int y = 0; y < 3; ++y) {
+            auto &out = columns[x][y];
+            out.resize(64 * 64);
+            for (size_t i = 0; i < out.size(); ++i) {
+                const Column &in = neighbors[x][y]->columns[i];
+                out[i].base = in.baseZ;
+                out[i].blocks.reserve(in.blocks.size());
+                for (const Block &b : in.blocks)
+                    out[i].blocks.push_back({b.r, b.g, b.b, b.field3, b.type, b.breakable});
+            }
+        }
+    const auto samples = worldgen::sampleZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & {
+        return columns[x - ax + 1][y - ay + 1];
+    }, positions);
+    size_t at = 0;
+    Zone &center = *neighbors[1][1];
+    std::lock_guard modelLock(center.modelLights->mutex);
+    for (Scenery &s : scenery)
+        if (s.modelType >= 0) {
+            s.light = (float)samples[at++] / 255.0f;
+            const auto &p = s.modelPosition;
+            if (gameBlock(p[0] >> 16, p[1] >> 16, (int32_t)(p[2] >> 16))[4] == WATER_TYPE)
+                center.modelLights->waterModels.insert(s.listPosition);
+            if ((s.modelFlags & 8) || center.modelLights->waterModels.count(s.listPosition)) {
+                s.modelFlags |= 8;
+                center.modelLights->waterModels.insert(s.listPosition);
+            }
+        }
+}
+
 std::vector<Scenery> ExtractedWorld::props(int zx, int zy) {
     int64_t ax = (int64_t)zx + originX, ay = (int64_t)zy + originY;
     if (ax < INT32_MIN || ax > INT32_MAX || ay < INT32_MIN || ay > INT32_MAX) return {};
@@ -599,6 +647,16 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
         int listPosition = 0; // (vegetation-wind.md §4.3: every record counts, from 1)
         for (const worldgen::Model &m : zone->things->models) {
             listPosition++;
+            if (m.type == 0x59 && std::isfinite(m.size) && std::isfinite(m.yaw)) {
+                Scenery shaft{};
+                const glm::vec3 point = local(m.x, m.y, m.z);
+                shaft.x = point.x, shaft.y = point.y, shaft.z = point.z;
+                shaft.beam = lightbeam::Placement{{m.x - (int64_t)originX * 64 * 65536,
+                                                   m.y - (int64_t)originY * 64 * 65536,
+                                                   m.z + (int64_t)Z_OFFSET * 65536}, m.size, m.yaw};
+                out.push_back(std::move(shaft));
+                continue;
+            }
             if (m.type < 0 || m.type >= (int)environment.size() || environment[m.type].empty() || !(m.size > 0) || !std::isfinite(m.size) ||
                 !std::isfinite(m.yaw))
                 continue;
@@ -606,14 +664,19 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
             const glm::vec3 p = local(m.x, m.y, m.z);
             // Which models sway is the record's flag 4, never the name (vegetation-wind.md §3.1).
             out.push_back({name, p.x, p.y, p.z, glm::radians(m.yaw), m.size, 0, false, m.flags, listPosition});
+            out.back().modelType = m.type;
+            out.back().modelPosition = {m.x, m.y, m.z};
         }
+        int objectIndex = 0;
         for (const worldgen::ZoneObject &o : zone->objects) {
+            const int index = objectIndex++;
             if (o.type < 0 || o.type >= (int)buildingParts.size() || buildingParts[o.type].empty() || !(o.scale > 0) || !std::isfinite(o.scale))
                 continue;
             const glm::vec3 p = local(o.x, o.y, o.z);
             const auto [scale, estimated] = objectScale(o.type, buildingParts[o.type], o.scale);
             Scenery placed{buildingParts[o.type], p.x, p.y, p.z, o.turn * 1.5707963f, scale, 0, estimated};
             placed.object = {o.type, o.turn, (uint8_t)o.active, o.scale, o.swing};
+            placed.objectKey = {o.type, index, {o.x, o.y, o.z}};
             out.push_back(std::move(placed));
         }
         return out;
@@ -662,6 +725,17 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
                 float scale, degrees;
                 memcpy(&scale, r + 32, 4);
                 memcpy(&degrees, r + 36, 4);
+                if (id == 0x59 && std::isfinite(scale) && std::isfinite(degrees)) {
+                    int64_t position[3];
+                    std::memcpy(position, r + 8, sizeof position);
+                    Scenery shaft{};
+                    shaft.x = x, shaft.y = y, shaft.z = z;
+                    shaft.beam = lightbeam::Placement{{position[0] - (int64_t)originX * 64 * 65536,
+                                                       position[1] - (int64_t)originY * 64 * 65536,
+                                                       position[2] + (int64_t)Z_OFFSET * 65536}, scale, degrees};
+                    out.push_back(std::move(shaft));
+                    continue;
+                }
                 if (id < 0 || id >= (int)environment.size() || environment[id].empty() || !(scale > 0) || !std::isfinite(scale) || !std::isfinite(degrees))
                     continue;
                 // The record's flags (+0x38) say whether it sways or shines; its place in the
@@ -670,6 +744,12 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
                 if (offset == 0x18)
                     memcpy(&flags, r + MODEL_FLAGS, 4);
                 out.push_back({environment[id], x, y, z, glm::radians(degrees), scale, 0, false, flags, offset == 0x18 ? (int)i + 1 : 0});
+                out.back().modelType = id;
+                std::memcpy(out.back().modelPosition.data(), r + 8, sizeof(int64_t) * 3);
+                float baked;
+                std::memcpy(&baked, r + 0x28, sizeof baked);
+                if (std::isfinite(baked) && baked >= 0 && baked <= 255)
+                    out.back().light = baked / 255.0f;
             } else if (stride == 0xe0 && offset == 0x60) {
                 // Object record: building part, position, quarter turns, scale.
                 // The array at 0x78 repeats these objects. Use the measured
@@ -689,6 +769,9 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
                 float elapsed;
                 memcpy(&elapsed, r + 0x2c, sizeof elapsed);
                 placed.object = {id, turns, r[0x28], scale, elapsed};
+                int64_t position[3];
+                std::memcpy(position, r + 8, sizeof position);
+                placed.objectKey = {id, (int)i, {position[0], position[1], position[2]}};
                 out.push_back(std::move(placed));
             }
         }

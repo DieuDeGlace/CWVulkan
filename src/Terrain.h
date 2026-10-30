@@ -1,5 +1,6 @@
 #pragma once
 #include "ObjectVisual.h"
+#include "LightBeam.h"
 // Procedural terrain built around the ten region types Steam Cube World's own
 // biome function reports (see reference/README.md), with colours measured from
 // vanilla reference shots (Palette.h). Relief uses TerrainVariance's rules, or
@@ -108,6 +109,10 @@ struct Scenery {
     // the zone; below 0 when not known.
     float light = -1;
     objectvisual::State object; // type<0 for ordinary zone models.
+    objectvisual::Key objectKey;
+    std::optional<lightbeam::Placement> beam;
+    int modelType = -1; // native zone-model record, distinct from a static object
+    std::array<int64_t, 3> modelPosition{}; // exact fixed world position for mesh lighting
 };
 
 struct ZoneData {

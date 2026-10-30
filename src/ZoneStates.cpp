@@ -5,6 +5,7 @@
 #include "NativePlayer.h"
 
 #include <cstring>
+#include <cstdlib>
 
 namespace zonestates {
 
@@ -58,8 +59,8 @@ Record staticObjectRecord(const worldgen::ZoneObject &o) {
     put<int64_t>(r.data(), OBJECT_POSITION + 16, o.z);
     r[OBJECT_TURN] = o.turn;
     put<float>(r.data(), OBJECT_SCALE, o.scale);
-    r[nativeinteract::OBJECT_STATE] = 1;
-    put<float>(r.data(), nativeinteract::OBJECT_SWING, nativeinteract::FULL_SWING); // (the generator's doors start with a finished swing)
+    r[nativeinteract::OBJECT_STATE] = o.active ? 1 : 0;
+    put<float>(r.data(), nativeinteract::OBJECT_SWING, o.swing);
     if (o.takes.category) {
         const nativeplayer::Item item = gameItem(o.takes);
         std::memcpy(r.data() + nativeinteract::OBJECT_ITEM, item.data(), item.size());
@@ -106,6 +107,35 @@ std::vector<Cell> ZoneStates::zonesInMemory() const {
     for (const auto &[zone, lists] : zones)
         out.push_back(zone);
     return out;
+}
+
+void ZoneStates::advanceObjects(float milliseconds, const std::vector<Cell> &playerZones,
+                                const std::set<Cell> *usedCells) {
+    for (auto &[zone, lists] : zones) {
+        bool nearPlayer = false;
+        for (Cell player : playerZones)
+            if (std::abs((int64_t)zone[0] - player[0]) <= 3 && std::abs((int64_t)zone[1] - player[1]) <= 3) {
+                nearPlayer = true;
+                break;
+            }
+        if (!nearPlayer)
+            continue;
+        for (Record &object : lists.staticObjects) {
+            auto *r = object.data();
+            put<float>(r, nativeinteract::OBJECT_SWING, get<float>(r, nativeinteract::OBJECT_SWING) + milliseconds);
+            const int type = get<int32_t>(r, OBJECT_TYPE);
+            if (usedCells && (type == 0 || type == 0x16)) {
+                const Cell cell{(int32_t)(get<int64_t>(r, OBJECT_POSITION) >> 20),
+                                (int32_t)(get<int64_t>(r, OBJECT_POSITION + 8) >> 20)};
+                const uint8_t state = usedCells->count(cell) ? 0 : 1;
+                if (r[nativeinteract::OBJECT_STATE] != state) {
+                    r[nativeinteract::OBJECT_STATE] = state;
+                    put<float>(r, nativeinteract::OBJECT_SWING, 0);
+                }
+            }
+        }
+        // Clock and personal-state synchronization do not emit object-change notices.
+    }
 }
 
 nativesaves::ZoneLists &ZoneStates::load(Cell zone, std::vector<Record> groundItems, std::vector<Record> staticObjects) {

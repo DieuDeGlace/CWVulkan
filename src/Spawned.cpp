@@ -1123,6 +1123,20 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     };
     pets.setup = a.adopt;
     auto step = [&](float dt) {
+        std::vector<nativesaves::Cell> playerZones;
+        auto includePlayer = [&](const uint8_t *record) {
+            if (record[0x60] == 0) {
+                int64_t position[2];
+                std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
+                playerZones.push_back(zonestates::zoneOfBlock(position[0] >> 16, position[1] >> 16));
+            }
+        };
+        for (const uint8_t *record : w.creatures)
+            includePlayer(record);
+        if (hasPlayer && !playerMoves)
+            includePlayer(player.record.data());
+        const std::set<nativesaves::Cell> noUsedCells;
+        zoneStates.advanceObjects(dt, playerZones, hasPlayer ? (usedCells ? usedCells : &noUsedCells) : nullptr);
         pets.creatures = sides;
         nativepet::step(pets);
         worldEvents.buffs.insert(worldEvents.buffs.end(), pets.buffNotes.begin(), pets.buffNotes.end());
@@ -1504,6 +1518,27 @@ const std::vector<nativeai::Object> *SpawnedCreatures::zoneObjects(int zx, int z
     return lists ? &lists->staticObjects : nullptr;
 }
 
+std::optional<objectvisual::State> SpawnedCreatures::objectVisual(int zx, int zy, const objectvisual::Key &key) const {
+    const auto *objects = zoneObjects(zx, zy);
+    if (!objects)
+        return std::nullopt;
+    auto matches = [&](const nativeai::Object &object) {
+        int type;
+        std::array<int64_t, 3> position;
+        std::memcpy(&type, object.data(), 4);
+        std::memcpy(position.data(), object.data() + 8, sizeof position);
+        return type == key.type && position == key.position;
+    };
+    // Captured and regenerated lists can differ after daily refresh. Never animate
+    // an unrelated object merely because it occupies the same array slot.
+    if (key.index >= 0 && (size_t)key.index < objects->size() && matches((*objects)[key.index]))
+        return objectvisual::read((*objects)[key.index].data());
+    for (const auto &object : *objects)
+        if (matches(object))
+            return objectvisual::read(object.data());
+    return std::nullopt;
+}
+
 void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool serverMode) {
     storedZones = world;
     if (world && respawnSettings.mode != enemyrespawn::Mode::Permanent)
@@ -1560,8 +1595,10 @@ void SpawnedCreatures::setObjectActive(int zx, int zy, size_t index, bool active
     nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     if (!lists || index >= lists->staticObjects.size())
         return;
-    lists->staticObjects[index][nativeinteract::OBJECT_STATE] = active ? 1 : 0;
-    zoneStates.objectsChanged({zx, zy});
+    if (nativeinteract::openOrShut(lists->staticObjects[index], active ? 1 : 0, worldEvents.sounds)) {
+        zoneStates.objectsChanged({zx, zy});
+        objectsChanged.insert({zx, zy});
+    }
 }
 
 void SpawnedCreatures::changeBlock(ExtractedWorld &ew, int32_t x, int32_t y, int32_t z, const std::array<uint8_t, 6> &block) {

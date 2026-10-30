@@ -196,6 +196,8 @@ class SpawnedCreatures {
     // A zone's static objects as the world's AI and interactions keep them (0xe0 bytes each:
     // a door's shut byte +0x28, a seat's user +0x30); null until the zone is in memory.
     const std::vector<nativeai::Object> *zoneObjects(int zx, int zy) const;
+    std::optional<objectvisual::State> objectVisual(int zx, int zy, const objectvisual::Key &key) const;
+    void setUsedCells(const std::set<nativesaves::Cell> *cells) { usedCells = cells; }
     // --- What changed in the zones (ZoneStates.h, native-saves.md §5.3) ---
     // The world's stored zone states (Save/world.db): put on each zone as it is made, recorded
     // into as it leaves memory. Null: zones are kept for the session only.
@@ -461,6 +463,7 @@ class SpawnedCreatures {
     uint32_t randState = 0x12345678;                      // rand() for the creatures' update
     std::map<int64_t, nativeai::Entry> ai;                // the AI's record of each creature
     zonestates::ZoneStates zoneStates; // the zones in memory: their objects, ground items and block changes
+    const std::set<nativesaves::Cell> *usedCells = nullptr;
     nativesaves::WorldState *storedZones = nullptr;
     std::vector<std::pair<int, int>> unloadedZones;
     // The zone's lists, made with the zone (its objects from the generator, the stored state on

@@ -332,7 +332,7 @@ void compareRecords(const GameZone &g, const std::vector<wg::StaticObject> &obje
 // +0xa8 is not in these .rec files). Compared: type, position and +0x20..+0x38 but +0x28 (not
 // modelled); the uncopied +0x04 and +0x3c are left out.
 struct ModelListTally {
-    int zones = 0, rulesWhole = 0, oursWhole = 0, emittersWhole = 0, sideTorches = 0;
+    int zones = 0, rulesWhole = 0, oursWhole = 0, emittersWhole = 0;
     long long lights = 0, emitters = 0;
 };
 bool sameModel(const std::vector<uint8_t> &game, const wg::Model &m) {
@@ -372,22 +372,12 @@ void checkModelLists(const GameZone &g, const wg::ZoneContents *ours, ModelListT
     t.lights += (long long)lights.size();
     t.rulesWhole += whole(rule.lights);
     if (ours) {
-        // The rooms' side model of kind 1 (type 0x43, buildings file §6, 0x6a9a0) is a light in the
-        // game (tint (0.6, 0.5, 0.2), flags 1); the spec gives it no tint or flags, so ours is not.
-        // Those records are left out of the comparison until the spec says.
-        constexpr int32_t SIDE_TORCH = 0x43;
-        std::vector<std::vector<uint8_t>> withoutTorches;
-        for (const auto &r : lights)
-            if (field<int32_t>(r, 0) != SIDE_TORCH)
-                withoutTorches.push_back(r);
-        t.sideTorches += (int)(lights.size() - withoutTorches.size());
-        bool same = ours->modelLights.size() == withoutTorches.size();
-        for (size_t i = 0; same && i < withoutTorches.size(); i++)
-            same = sameModel(withoutTorches[i], ours->modelLights[i]);
+        // All initialized side-torch metadata is now independently specified.
+        // Compare the full list in order; there is no torch exception.
+        bool same = whole(ours->modelLights);
         if (!same && std::getenv("WS_LIGHTS")) { // debugging: a zone whose light list is not ours
-            std::printf("  zone %d %d lights: game %zu (%zu but the side torches), ours %zu\n", g.zx, g.zy, lights.size(),
-                        withoutTorches.size(), ours->modelLights.size());
-            for (const auto &r : withoutTorches)
+            std::printf("  zone %d %d lights: game %zu, ours %zu\n", g.zx, g.zy, lights.size(), ours->modelLights.size());
+            for (const auto &r : lights)
                 std::printf("    game type %d flags %d at %lld %lld\n", field<int32_t>(r, 0), field<int32_t>(r, 0x38),
                             (long long)field<int64_t>(r, 8), (long long)field<int64_t>(r, 0x10));
             for (const wg::Model &m : ours->modelLights)
@@ -550,8 +540,10 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose) {
         }
         compareRecords(g, z.objects, z.models, z.items, mine, verbose, shown);
         checkModelLists(g, &z, modelLists);
-        // The draws, to the first creature draw.
-        if (!g.trace.empty()) {
+        // This prefix belongs to fresh generation. genr captures only a partial
+        // daily refresh: its trace cannot be compared to the fresh A/B prefix.
+        // Full model/block comparisons above still apply to that snapshot set.
+        if (!g.trace.empty() && name != "genr_seed_123") {
             traces++;
             size_t firstCreature = g.trace.size();
             for (size_t k = 0; k < g.trace.size(); k++)
@@ -598,13 +590,15 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose) {
     }
     std::printf("wgstructures zones %d (%s, day %d):\n", mine.zones, name.c_str(), day);
     printTotals("new", mine);
+    if (name == "genr_seed_123")
+        std::printf("  refresh RNG: partial capture; fresh-generation prefix check not applicable\n");
     std::printf("  new: of the differing columns, %d differ only in the flag 0x40 of blocks inside static objects, %d otherwise\n",
                 markOnlyColumns, otherColumns);
     std::printf("  rand(): %d traces; %d zones match up to their first creature draw (%lld of %lld draws)\n", traces, tracesToCreature,
                 prefixTotal, creatureTotal);
-    std::printf("  light lists (+0x90, %lld records): the rule on the game's models whole in %d of %d zones, ours in %d (%d side torches left out); emitters "
+    std::printf("  light lists (+0x90, %lld records): the rule on the game's models whole in %d of %d zones, ours in %d (complete lists); emitters "
                 "(+0xa8, %lld) as the rule on the game's models in %d\n",
-                modelLists.lights, modelLists.rulesWhole, modelLists.zones, modelLists.oursWhole, modelLists.sideTorches, modelLists.emitters,
+                modelLists.lights, modelLists.rulesWhole, modelLists.zones, modelLists.oursWhole, modelLists.emitters,
                 modelLists.emittersWhole);
     if (verbose) {
         for (auto &[k, n] : columnsByType)
@@ -734,9 +728,9 @@ void worldOracle(const fs::path &dir, int maxZones, bool verbose) {
     }
     std::printf("wgstructures world %s: %d zones, %lld of %lld columns exact but for the light; structure blocks %lld of %lld the same\n",
                 name.c_str(), zones, exact, columns, structSame, structGame);
-    std::printf("  light lists (+0x90, %lld records): the rule on the game's models whole in %d of %d zones, ours in %d (%d side torches left out); emitters %lld, "
+    std::printf("  light lists (+0x90, %lld records): the rule on the game's models whole in %d of %d zones, ours in %d (complete lists); emitters %lld, "
                 "as the rule on the game's models in %d\n",
-                modelLists.lights, modelLists.rulesWhole, modelLists.zones, modelLists.oursWhole, modelLists.sideTorches, modelLists.emitters,
+                modelLists.lights, modelLists.rulesWhole, modelLists.zones, modelLists.oursWhole, modelLists.emitters,
                 modelLists.emittersWhole);
     WS_CHECK(modelLists.rulesWhole == modelLists.zones);
     if (verbose)
@@ -760,6 +754,12 @@ fs::path generatedZonesDir(const fs::path &game) {
 
 // The fast subset in the default test run.
 void plannerDoorChecks() {
+    // Independent arithmetic examples from worldgen-parity-gaps.md §10.
+    WS_CHECK(wg::cellRandomUnsigned(26966, 0, 0x4e6289) == 0xffffffffu);
+    WS_CHECK(wg::cellRandomUnsigned(26966, 0, 0x4e6289) % 3u == 0);
+    WS_CHECK(wg::cellRandomUnsigned(26541, 0, 0x71504) % 5u == 0);
+    WS_CHECK(wg::cellRandomUnsigned(70386, 0, 0x55260) % 3u == 0);
+    WS_CHECK(wg::cellRandomUnsigned(63861 / 3, 0, 0x7b7e8) % 6u == 2);
     const wg::WorldValues world = wg::worldValues(123);
     wg::CellObjects cells(world);
     wg::BuildingRules rules(cells);

@@ -74,6 +74,11 @@ public:
         return out;
     }
 
+    uint8_t sample(const std::array<int64_t, 3> &position) const {
+        return (uint8_t)at((int32_t)(position[0] >> 16) - x0, (int32_t)(position[1] >> 16) - y0,
+                           (int32_t)(position[2] >> 16));
+    }
+
 private:
     int32_t x0, y0;
     std::vector<LitColumn> cells;
@@ -95,6 +100,7 @@ private:
                 sky = false;
                 light = std::min<int>(light, b.glow);
             } else if (sky) {
+                light = SKY;
                 c.light[k] = SKY;
             } else {
                 // A glowing open block (the cliff pass's overhang light) lights the open blocks
@@ -111,10 +117,10 @@ private:
         if (i < 0 || j < 0 || i >= AREA || j >= AREA)
             return SKY;
         const LitColumn &c = cells[i * AREA + j];
-        if (c.column->empty() || z >= c.column->top())
-            return SKY;
         if (z < c.column->base)
             return DARK;
+        if (c.column->empty() || z >= c.column->top())
+            return SKY;
         return c.light[(size_t)(z - c.column->base)];
     }
 };
@@ -125,6 +131,17 @@ std::vector<TerrainColumn> lightZone(int32_t zx, int32_t zy, const ZoneColumnsSo
     LightMap map(zx, zy, zones);
     map.spread();
     return map.lit();
+}
+
+std::vector<uint8_t> sampleZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones,
+                                    const std::vector<std::array<int64_t, 3>> &positions) {
+    LightMap map(zx, zy, zones);
+    map.spread();
+    std::vector<uint8_t> samples;
+    samples.reserve(positions.size());
+    for (const auto &position : positions)
+        samples.push_back(map.sample(position));
+    return samples;
 }
 
 } // namespace worldgen

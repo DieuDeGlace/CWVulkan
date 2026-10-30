@@ -9,6 +9,7 @@
 #include "worldgen/ZoneTerrain.h"
 
 #include <functional>
+#include <array>
 
 namespace worldgen {
 
@@ -17,5 +18,10 @@ using ZoneColumnsSource = std::function<const std::vector<TerrainColumn> &(int32
 
 // Zone (zx, zy)'s columns, lit: the red byte of every open block set by the light pass.
 std::vector<TerrainColumn> lightZone(int32_t zx, int32_t zy, const ZoneColumnsSource &zones);
+
+// Sample the completed mesh light volume at fixed model positions, including
+// solid entries which cannot be recovered from terrain air-light bytes.
+std::vector<uint8_t> sampleZoneLight(int32_t zx, int32_t zy, const ZoneColumnsSource &zones,
+                                    const std::vector<std::array<int64_t, 3>> &positions);
 
 } // namespace worldgen

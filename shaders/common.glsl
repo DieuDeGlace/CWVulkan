@@ -43,7 +43,7 @@ layout(set = 0, binding = 0) uniform Frame {
 
 layout(push_constant) uniform Push {
     mat4 model;
-    vec4 params; // x instance flags, y shadow cascade (0 far, 1 near), z model height (voxels)
+    vec4 params; // x instance flags, y shadow cascade (0 far, 1 near), z model height (voxels), w pixel opacity (separate from material light)
     vec4 look;   // Alpha look: x light where the object stands (0..1), y hit flash, z shimmer, w 1 for clouds;
                  // Steam look's star and cloud passes: x opacity, y fog scale
     uvec4 lights; // Alpha look: up to 10 point-light indices, 8 bits each in x..z; w count

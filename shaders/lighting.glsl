@@ -72,10 +72,10 @@ struct Shade {
     vec3 add;   // Added (warm sunlight).
 };
 
-Shade shade(vec3 w, vec3 n, bool receiveShadow) {
+Shade shade(vec3 w, vec3 n, bool receiveShadow, float materialLight) {
     vec3 L = f.lightDir.xyz;
     // Native world shader terms (front/back/ambient, orientation).
-    float orientation = .5 + .5 * abs(dot(n, vec3(.597022, .398015, .696526)));
+    float orientation = .5 + .5 * abs(dot(n, vec3(.597022294998169, .3980148732662201, .696526050567627)));
     float facing = max(0, .3 + .7 * dot(n, L));
     vec3 back = f.back.rgb * orientation;
     // Player lantern at night (native-style point light around the player).
@@ -90,8 +90,8 @@ Shade shade(vec3 w, vec3 n, bool receiveShadow) {
         protection = clamp(4 * falloff * falloff * toward, 0, 1) * (1 - f.sky.w);
     }
     vec3 ambient = f.ambient.rgb * orientation + local;
-    vec3 full = clamp(ambient + clamp(back + f.front.rgb * facing, 0, 1), 0, 1);
-    vec3 indirect = clamp(ambient + clamp(back, 0, 1), 0, 1);
+    vec3 full = clamp(ambient + clamp(back + f.front.rgb * facing, 0, 1) * materialLight, 0, 1);
+    vec3 indirect = clamp(ambient + clamp(back, 0, 1) * materialLight, 0, 1);
     Shade s;
     s.light = full;
     s.add = vec3(0);
@@ -121,4 +121,8 @@ vec3 applyFog(vec3 color, vec3 w) {
     float d = length(w - f.eye.xyz);
     float t = smoothstep(f.fog.w * .55, f.fog.w, d);
     return mix(color, steamSkyAt(steamScreen()), t);
+}
+
+Shade shade(vec3 w, vec3 n, bool receiveShadow) {
+    return shade(w, n, receiveShadow, 1.0);
 }

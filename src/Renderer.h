@@ -9,6 +9,8 @@
 #include "DayNight.h"
 #include "SteamSky.h"
 #include "Mesher.h"
+#include "LightBeam.h"
+#include "SteamScenery.h"
 #include <volk.h>
 #include <glm/glm.hpp>
 #include <functional>
@@ -61,6 +63,7 @@ struct RenderSettings {
 struct Camera {
     glm::vec3 eye{0}, target{0, 1, 0};
     float aspect = 16.f / 9;
+    std::optional<float> displayedYawDegrees; // Steam beam orientation, before eye collision adjustments
 };
 
 // One corner of an interface quad, in screen pixels (origin top left).
@@ -72,7 +75,7 @@ struct OverlayVertex {
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block
 // they are in.
-enum class DrawKind : uint8_t { Model, Terrain, Scenery };
+enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam };
 
 struct DrawItem {
     uint32_t mesh = 0;
@@ -81,6 +84,9 @@ struct DrawItem {
     float height = 0;    // Model height in local units (plants bend from the base).
     bool castShadow = true;
     DrawKind kind = DrawKind::Model;
+    lightbeam::Placement beam; // only DrawKind::LightBeam consumes this
+    std::optional<steamscenery::Bounds> nativeScenery;
+    float opacity = 1; // independent from the baked sunlight/material factor
     // A point light the object gives off in the Alpha look (lamps, torches, fires): its colour
     // at night, its reach in blocks (0 = none) and where it is.
     glm::vec3 lightColour{0};
@@ -277,6 +283,9 @@ class Renderer {
                waterPipeline = VK_NULL_HANDLE, waterDepthPipeline = VK_NULL_HANDLE, shadowPipeline = VK_NULL_HANDLE, skyPipeline = VK_NULL_HANDLE;
     // The Alpha look's pipelines: world, world with reversed winding, water, sky, and the
     // stars and sun sprite.
+    VkPipeline beamPipeline = VK_NULL_HANDLE;
+    VkPipeline sceneryDepthPipeline = VK_NULL_HANDLE, sceneryMirroredDepthPipeline = VK_NULL_HANDLE,
+               sceneryFadePipeline = VK_NULL_HANDLE, sceneryMirroredFadePipeline = VK_NULL_HANDLE;
     VkPipeline alphaScenePipeline = VK_NULL_HANDLE, alphaMirroredPipeline = VK_NULL_HANDLE,
                alphaWaterPipeline = VK_NULL_HANDLE, alphaSkyPipeline = VK_NULL_HANDLE,
                alphaSpritePipeline = VK_NULL_HANDLE, alphaCloudPipeline = VK_NULL_HANDLE;

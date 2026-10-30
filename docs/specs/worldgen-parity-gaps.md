@@ -130,6 +130,33 @@ For H=20 and W=1 its upper width is 1 block, lower width 10 blocks and height
 the fixed record position, then converts the final coordinates to float blocks
 (with its normal x/y render-origin translation).
 
+**Camera-angle clarification (0xadcd0, 0xad9d4, 0x295d00, 0xe2e00):** renderer
++0x358 is the **float conversion of the current displayed yaw double at
+game+0x1d90**. The frame passes the three current pitch/roll/yaw values from
+game+0x1d80 through 0x295d00; 0xe2e00 copies the third float to +0x358. It is
+not recomputed from eye and target. With native roll0 and nonvertical viewing,
+forward=(sin(yaw)×sin(pitch), −cos(yaw)×sin(pitch), cos(pitch)), while the
+beam's horizontal width direction is **(cos(yaw),sin(yaw),0)**. Thus its angle
+can equivalently be recovered as **atan2(forward.x,−forward.y)** in that
+restricted case. **atan2(−forward.x,forward.y)** gives the opposite direction,
+180 degrees away. That swaps the symmetric quad's two sides; it is not the
+native stored angle. Use the displayed yaw for exact behavior, especially with
+roll, nearly vertical viewing or eye collision adjustments. At yaw0 the beam's
+positive-width direction is +worldX; at yaw90 it is +worldY.
+
+**Fixed-corner arithmetic order (0xc4b00):** compute sine/cosine from the float
+angle conversion described above. For an upper x/y directional offset, multiply
+the relevant cosine/sine by **float0.5**, then by W, then by **float65536**, with
+float rounding after each multiplication, and truncate that result to signed64.
+For a lower x/y offset the order is relevant sine/cosine **×W ×float0.25 ×H
+×float65536**, again with float rounding at every step before signed64
+truncation. The vertical drop is **float(H×65536)** truncated to signed64.
+Add the fixed x/y render-origin translation to P first; subtract/add those
+integer offsets for the two sides. For each final integer coordinate, convert
+that combined signed64 value to float, then multiply by **float1/65536**.
+Do not independently convert P and a floating offset to block coordinates and
+add them there: the native rounding and truncation occur in the order above.
+
 **Colors and fade:** every vertex's RGB is white. The two lower alpha bytes are
 zero. The upper alpha byte is the truncated integer **fade×(100×D)**, retained
 as a byte. D is the integer read through the executable's Windows CRT
@@ -152,7 +179,9 @@ distance squared**. Equal-distance ordering is not guaranteed stable.
 0xc4b00. Color uses source-alpha / one-minus-source-alpha with add; alpha uses
 one / zero with add. Depth testing is enabled with **less-or-equal**, with depth
 writes disabled. Rasterization is solid with culling disabled. Depth clipping
-is disabled in the selected native rasterizer state. The model tint and flag
+is **enabled** in the selected native rasterizer state: the constructor's
+descriptor at0xc324c/0xc3254 sets DepthClipEnable=1. This corrects the earlier
+reading of that descriptor. The model tint and flag
 bits are not substituted for those fixed states. Thus skipping every null model
 entry would omit this actual native render path.
 
@@ -162,8 +191,8 @@ white tint and flags=2. The tree interior helper **0x68790** also creates type
 0x59 with explicit height and width **rand mod 3 + 2**. Its width is not always 1.
 These initialized fields remain strict generation comparisons even though the
 primitive ignores tint/flags. These checked producer blocks do not initialize
-+0x28; its later initialization for a complete loaded-world record is not
-established here. Its value is not consumed by this primitive. For a pixel oracle,
++0x28; its later mesh-build initialization is now specified in §9. Its value
+is not consumed by this primitive. For a pixel oracle,
 capture D, renderer angle, L, camera position and the complete source record.
 
 ### 2.2 Comparison policy for null-table markers
@@ -178,8 +207,8 @@ ignores them. A different documented producer can set different width values.
 For 0x1f, **no generation initializer is verified**, so classify any occurrence
 by its actual producer before deciding which raw fields can be compared. Do not
 declare arbitrary 0x1f data initialized, zero, or ignorable merely from its id.
-The unverified later initialization of +0x28 is an explicit remaining question,
-not permission to apply a blanket mask to drawable models.
+The later initialization of +0x28 is now resolved in §9; its phase must be
+identified before comparing it. This does not permit a blanket drawable-model mask.
 
 ### 2.3 Zone+0x90 is an auxiliary light list, not extra geometry
 
@@ -564,7 +593,7 @@ after simulation steps.
 | Theme/culture coverage | TableT9 / **0x25ea50** maps regional biome and realm style to cultures0..6. The mapping has explicit biome branches and a style-dependent default; style comes from **0x2bb060**. | Annotate fixtures by public seed, actual **world+0x244 zone seed**, realm/style, biome, culture, place/big/variant, cell type, roof and room/detail kinds. Ensure cultures0..6 and all biome branches are represented; multiple datasets or zone totals alone do not prove that matrix. |
 | Old unspecific furniture/mason branches | The old open list names wall-piece kinds8..10, center kinds1..3, mason pattern2 and additional cap kinds. It also says the relevant room lists were not filled in the checked stock setup. | Establish a reachable stock producer/list and a fixture exercising it before treating it as a mandatory missing generated case. Do not invent those choices or fill unused lists to increase visual variety. |
 | River model0x1f | Null table and ambient consumer are verified; the old audit found no such model in31,940 exported zones and no producer. | A source producer or actual captured occurrence. Its consumer alone does not establish a missing river-generation pass. |
-| Model+0x28 | Initializer0x2f92c0 leaves it unwritten; ordinary voxel rendering reads it for non-flag1 material alpha, while the null/special marker consumers above do not. | Determine whether a later loaded-world/mesh-light update establishes it, or whether a producer leaves it consumed as stack data. Do not conflate the proven unused leaf-size exception with this **unfinished** lighting-field audit. |
+| Model+0x28 | **Resolved in §9:** mesh building fills f32 light samples; fresh generation leaves this field unwritten in the checked producers. Ordinary geometry consumes it as a sunlight multiplier. | Compare mesh-built values using the light-volume and neighboring-column inputs, separately from the fresh-generation oracle. |
 
 The current fixture data establishes many exact deterministic paths; it is not
 a coverage manifest for every dungeon, culture, room and generation stage.
@@ -572,7 +601,7 @@ The next useful captures are the labeled branch/block/deep-record oracles above,
 not further undifferentiated zone-count totals. This spec author has changed
 only this prose file and has not run the original game or edited engine/tests.
 
-## 9. Implementation checkpoint (reported by the separate implementer)
+## Implementation checkpoint before runtime continuation (historical)
 
 The engine now derives generic object scale from its type extents, visual factor
 and the actual owner's voxel-X dimension, applying the record multiplier once.
@@ -684,5 +713,504 @@ after details, or after **full generation including occupancy marking**.
 
 That evidence can establish a current geometry/color/flag mismatch. Matching
 model metadata alone cannot, and the historical warning alone cannot. This is
-a **stable written checkpoint**; the model+0x28 lighting-field trace remains
-explicitly unfinished in §7.2, and no further game execution was performed.
+a **stable written checkpoint** from the previous pass; the then-unfinished
+model+0x28 trace is continued and resolved in §9. No game execution was performed.
+
+## 9. Model+0x28 lifecycle resolved: baked light is produced during mesh build
+
+This continues and supersedes the earlier unfinished +0x28 notes. Sources:
+**0xe9530**, its light-volume helpers **0xcb9c0 / 0x2a3260 / 0xe0a20**,
+the model consumer **0xd3170**, and the frame setup **0xe2e00**.
+
+### 9.1 Field type, production and material consumption
+
+**+0x28 is f32, not an integer or a normalized0..1 opacity.** It stores a light
+sample on a **0..255 scale** after mesh building. For example a stored word
+0x437f0000 means **float255**, not integer1132396544. The constructor0x2f92c0
+and the already audited fresh-generation producers leave it unwritten; append
+0x69b30 copies those raw bytes. Fresh-generation comparisons therefore cannot
+require a deterministic +0x28 value from those producers. This differs from
+the later meshed/render-ready state.
+
+**0xe9530(renderer,zoneX,zoneY)** looks up the zone in the world's +0x460 map,
+caches pointers to the neighboring zones through **0xcbfc0**, constructs a temporary
+light volume with **8-column horizontal padding**, and computes that volume
+through **0x2a3260**. Then it visits the zone's model records **+0x18/+0x20**
+in list order. For each record it floors **all three fixed coordinates to
+integer blocks**, samples the completed light volume at that exact block
+through **0xe0a20**, converts the returned unsigned byte to float and writes
+**record+0x28** at **0xe97c5–0xe97d4**. It does not sample a model-height
+midpoint or add the creature renderer's0.1-block z offset.
+
+The same routine then repeats this operation over the auxiliary light-record
+copies **+0x90/+0x98**, writing their own +0x28 at **0xe98e5–0xe98f4**.
+It does not rely on aliases between those lists. Immediately after each light
+write it obtains the block at the record's fixed position via **0xda750**.
+When that block's **type byte equals2 (water)** it **ORs flag0x08** into the
+record's flags+0x38. It does not clear that bit in the non-water case. This
+applies separately to both lists, and explains a runtime flag difference
+between fresh-generation and mesh-built captures.
+This is the effective block getter through **0xda660 → 0xeb90**, including
+the ordinary implicit sea-water conversion of eligible air at z≤0, rather
+than a direct read of a raw stored block's type. The light-volume sample and
+this effective-water test are separate operations.
+
+**Sampling boundary behavior:** 0xe0a20 returns byte255 outside the temporary
+volume's horizontal bounds. Within a column, below its stored base returns0;
+inside its stored byte range returns that byte; at/above its stored end returns
+255. Positions use floor, including negatives. These are light-volume lookup
+rules, not reads of a terrain block's emitted-light/glow byte. The precise
+volume-construction algorithm is a separate step; do not replace the lookup
+with block glow or a global sky color.
+
+**Consumer:** at **0xd3d9b**, an ordinary drawable model with **flag0x01 set**
+gets material alpha **1**, bypassing this field. Otherwise it receives
+**renderer+0x53c × (float(record+0x28)/255)**. No integer reinterpretation,
+normalization clamp or new world-block lookup occurs in this consumer. The
+frame initializes renderer material RGBA to **(1,1,1,1)** in0xe2e00; its
+underwater-color branch also keeps alpha1. Thus the ordinary initial material
+factor is the baked sample/255. Distance fade is supplied separately.
+
+This material-alpha channel scales the Steam shader's **sun/back light term**,
+as described in `alpha-rendering.md` §14; it does not eliminate the unscaled
+ambient term. A light sample0 is not a request to remove the model or set its
+geometric opacity to0. The special0x59 beam and null-marker consumers retain
+their separate rules in §2.
+
+**Oracle consequence:** record +0x28 and runtime water flag0x08 should be checked
+after this mesh-build phase, with the neighboring column/light-volume inputs
+identified. Preserve the distinction from the fresh full-generation record
+oracle. Existing owner captures confirm different states: gen_seed_123 raw
+models contain unwritten float values, while sampled seed_123 loaded records
+include actual float255 and float21 light values. Those observations corroborate
+the traced writer; they are not a substitute for its phase-specific rules.
+
+### 9.2 Steam light-volume solver, confirmed against the existing terrain spec
+
+The Steam solver is **0x2a3260**. `worldgen-terrain-zone.md` §6 already specifies
+it, including its erratum about retaining glow beneath a glowing open block.
+The following clarifies its implementation inputs and buffer/update ordering.
+No equivalence to an unspecified Alpha solver is assumed.
+
+For zone lower corner (X0,Y0), construct light columns over the half-open square
+**[X0−8,X0+72) × [Y0−8,Y0+72)** from the **3×3 existing-zone neighborhood**
+captured by0xcbfc0. Each available terrain column contributes its actual base
+and number of stored six-byte blocks; there is one light byte per such block.
+0xcb9c0 /0xe8a40 initialize these byte arrays to0. Missing columns have no stored
+light bytes. Light lookup is0 below a stored base and255 at/above the end or
+outside the horizontal map. The six-byte terrain block order is **R,G,B,glow,
+type,flags**; the glow input is byte3, not the air-light output described below.
+
+**Vertical initialization**, x outer/y inner, each available column top down:
+incoming light starts255, with direct-sky status true. Type**20 (0x14)** resets direct
+sky true and running light to that block's glow, storing that value. Types**0
+and2** are open: with direct sky, set running light to255 and store255;
+otherwise set running light to the
+maximum of itself and glow, then store that running value. For other types,
+store the incoming running value first, set direct sky false, then lower the
+running light to min(previous running light, that solid block's glow). Store
+these initialized values in **both** the primary and work maps. This vertical
+pass does not impose a distance attenuation between successive open blocks.
+
+**Propagation:** padding−3 gives **five rounds**. Each round visits the same
+horizontal domain with the outermost single column removed:
+**[X0−7,X0+71) × [Y0−7,Y0+71)**. Its bounds do not shrink again each round.
+Only stored **open type0/2** blocks with current primary light below255 are
+updated. Read six neighbors from the primary map, in west/east/south/north/
+down/up order; clamp each neighbor value to at least**25**, choose the maximum,
+then write **floor(maximum×85/100)** to the work map. Existing255 values remain
+255. In particular six zero/dark neighbors yield **21**, not0, and a neighbor255
+can propagate **216**. The current cell is not a seventh neighbor, and this
+round does not additionally maximize against its own glow or prior value.
+There is no averaging, exponential convergence test,
+unbounded flood queue, or additional RNG.
+
+After computing the entire round, copy work-map values back to the primary map
+for **open** blocks over the full padded square. Solid/type20 initialized values
+remain fixed inputs; work cells that were skipped retain their prior values.
+Consequently this is a two-buffer round, not an in-place sweep whose outcome
+depends on the column iteration direction.
+
+After the fifth round, the target zone's own open stored blocks get their
+computed light as **red byte0 only**. **0xa36e0** writes back the six-byte block
+with its other five bytes preserved. Thus this post-generation phase changes
+air/water stored RGB data without recoloring a solid surface block. For example
+a stored water block can become **(light,127,127,0,2,flags)**. The temporary
+map also retains the light entries at solid coordinates, which can be sampled
+by models; it is not equivalent to sampling an arbitrary rendered vertex's AO.
+0xe9530 reads model light from this completed map as specified in §9.1, before
+constructing its zone mesh faces.
+
+### 9.3 Model tint versus voxel material; exact Steam sunlight composition
+
+**Model-record RGB at +0x2c/+0x30/+0x34 is not multiplied into the ordinary
+model's voxel palette color.** The ordinary model branch of0xd3170 submits
+material RGB from **renderer+0x530/+0x534/+0x538**, and alpha by §9.1. It does
+not read those three record tint fields for this geometry material. The record
+tint is consumed by the auxiliary light effects in0xce5f0 and by relevant
+emitter effects such as leaf particles in0xaf110. Its light can affect nearby
+geometry indirectly through point-light shading. This distinction does not
+excuse any initialized generation tint mismatch. The0x59 primitive retains
+its fixed white vertices.
+
+There is a second +0x28 consumer in the auxiliary-list light collector:
+**0xceaa1–0xcecc5** within0xce5f0. For visible flag0x01 models of types
+**0x17/0x18/0x19**, form U by multiplying float+0x28 by renderer+0x52c,
+then dividing by255. The light is admitted only when **U ≤0.4000000059604645**.
+Its record RGB is multiplied by **1−U** before registration. Other types in
+that ordinary flag1 branch do not get this particular gate or attenuation.
+The separate0x4c light branch also uses record RGB. Renderer+0x52c is a
+frame-dependent input; the baked model sample itself is not recomputed as
+time of day changes. This is further evidence that record tint and baked
+light are light-effect data, rather than a tint applied to voxel geometry.
+
+The compiled Steam world vertex shader is at **RVA0x4387b0**, world pixel shader
+at **0x43a010**. These shader constants come from the normal draw material;
+they are separate from the special untextured beam shader. For the ordinary
+non-flag1 model let A be its submitted material alpha, V the normalized vertex
+color-alpha/light input, N the normalized world-transformed face normal, D the
+submitted sunlight direction, and F/B/C the submitted front/back/ambient RGB.
+The shader uses a fixed normalized axis
+**(0.597022294998169,0.3980148732662201,0.696526050567627)**.
+
+The directional weight is **max(0.7×dot(N,D)+0.3,0)**. The fixed-axis weight is
+**0.5+0.5×abs(dot(N,axis))**. Front RGB times its directional weight plus back
+RGB times the fixed-axis weight is **componentwise clamped0..1 first**. That
+clamped front/back sum is then multiplied by **V×A**. Add ambient RGB times
+the fixed-axis weight, and the point-light contribution, then clamp the resulting
+RGB0..1. Ambient and point lights are **not** multiplied by A or V. Thus the
+order of the first clamp matters; do not scale the front/back terms before
+their clamp or darken the ambient term by the model's baked light.
+
+The shader considers up to**10 point lights**. For a positive-radius light,
+let q be vertex-minus-light position and r its radius. Radial weight is
+**(1−min(dot(q,q)/(r×r),1))²**. Its normal weight is
+**clamp(−4×dot(N,normalize(q)),0.3,1)**. Multiply these weights by that light's
+RGB and sum before the final lighting clamp. The light-list collector supplies
+positions/radii/colors; this formula does not itself choose or register lights.
+
+For the ordinary non-glow color path, double the normalized stored vertex RGB
+to get palette color P. Let L be the clamped lighting RGB. Saturation gain is
+**clamp(1+0.5×(ambient.w−L.green),1,2)**. Using luminance weights
+**(0.299,0.587,0.114)**, apply that gain about P's luminance and clamp the
+boosted palette to0..2. Multiply it by L and the submitted material RGB.
+The separate glow/white effects, fog and final color grading remain described
+in `alpha-rendering.md` §14. Pixel output alpha is a **separate pixel constant**;
+the model's material A is not substituted for that geometric-opacity value.
+
+### 9.4 Mesh scheduling and a useful light oracle
+
+The normal scheduling path in **0x842d0** considers a zone for a new mesh when
+its triangle-count field **+0x444 is0**, or its dirty byte **+0x23c is nonzero**.
+It also requires **0xce3e0** to succeed: that helper locks the world and checks
+that all nine zone-map entries in the centered3×3 square exist and have
+non-null zone pointers. A mesh batch accepts at most**8 zones**, with additional
+budget/distance selection before scheduling. These are mesh scheduling rules,
+not additional generation stages. The task wrapper **0x7d680** reaches0xe9530;
+0xe9530 clears the target zone's dirty byte at **0xecb1b** after constructing
+its mesh. The neighboring-zone cache is a pointer cache, not a deep copy of
+the nine zones' columns.
+
+Consequently the light sample is a result of a mesh job, rather than a value
+updated on every model draw or every simulation tick. To verify it without
+mixing phases, label a capture **before mesh/light solve** or **after mesh/light
+solve**, and preserve the target zone coordinates, all nine available zones,
+each padded column's signed base and ordered six-byte block records, the
+ordinary and auxiliary model positions, and the resulting float+0x28 and
+water flag. A finer oracle can capture the completed temporary light volume
+at the return of0x2a3260 to **0xe96f7**, before model sampling and face building.
+Its primary and work light bytes distinguish vertical initialization from the
+five propagation rounds. A raw fresh-generation record cannot establish this
+post-mesh output, nor does a changed float+0x28 prove a generation mismatch.
+
+### 9.5 Flag 0x08 model queue and exact position relative to water
+
+**Flag 0x08 selects renderer descriptor queue+0x1d0**, while ordinary models
+without that bit use queue**+0x138**. These are per-frame draw descriptor
+queues, separate from the zone's model and auxiliary-light record lists.
+0xd3170 makes this selection immediately before **0xee2f0** appends the
+model descriptor. It retains the same world transform, material, lighting,
+glow bit and distance fade. This flag does not itself select the water pixel
+shader or replace the model material by a blue tint.
+
+0xee2f0 omits nonpositive fades. A fade≥1 goes into the queue's opaque,
+model-grouped descriptors. A positive fade<1 goes into its first faded vector,
+at queue+0x20/+0x28. For the audited ordinary model append it is this first
+vector that0xe7980 consumes; the general queue routine also supports a second
+vector with reversed winding.
+
+The relevant order in **0xe2e00** is:
+
+1. **0xe5070:** solid terrain meshes.
+2. **0xe6e60(queue+0x138,2):** ordinary queue's opaque models.
+3. **0xe6e60(queue+0x1d0,2):** flag0x08 queue's opaque models.
+4. **0xe7980(queue+0x1d0,2):** flag0x08 queue's faded models.
+5. **0xe6270**, conditional0xe6840 and light-constant setup.
+6. **0xe85e0:** water depth pre-pass and water color pass.
+7. A projected-effect pass at **0xc43d0**, then
+   **0xe7980(queue+0x138,2):** ordinary queue's faded models.
+8. Later clouds/stars and the0x59 beam pass **0xc4b00**.
+
+Thus **both opaque model queues precede water**, and the flag0x08 queue's
+faded models also precede water. Only the ordinary queue's faded models are
+deferred until after water. A model's flag0x08 must not be interpreted as an
+instruction to draw that model after the water surface.
+
+**State:**0xe6e60 selects state0;0xe7980 first selects state3 for the first
+faded vector's depth-only draw, then state6 for that vector's color draw.
+The general second vector uses corresponding states4 and7. All of these use
+the **ordinary world shaders**, bound through **0xc5de0**; the state selection
+is **0xc3dc0**, and state creation is0xc3150. They use depth testing enabled,
+**less-or-equal**, depth writes enabled, stencil disabled and solid fill.
+State0 disables alpha blending and writes RGBA. State3 writes **no color**.
+State6 writes RGBA with source-alpha / inverse-source-alpha blending, add;
+its alpha channel uses one/zero, add. **Depth writes remain enabled in the
+faded color pass.** These are not a conventional no-depth-write transparency
+pass. States4/7 reverse the front-winding setting relative to3/6.
+
+The native ordinary raster state uses **CullMode=FRONT** and
+FrontCounterClockwise=false; the alternate winding state changes the latter
+to true. Depth clipping is enabled. State descriptors are created from
+**0x438710/0x4386f0** and **0x438740**. The water shader and its two-pass
+states remain as specified in `water-rendering.md` §B.2. No flag0x08-specific
+water shader or distinct depth-comparison rule was found.
+
+### 9.6 Ordinary model fade uses its raised center, without a64-block extension
+
+For the ordinary asset-backed zone models, **0xd3a19–0xd3a90** and
+**0xd3e0f–0xd3ecb** establish two facts that distinguish them from the zone
+gate and the0x59 primitive:
+
+- Their fade radius is **L=renderer+0x49c**, with **no +64**.
+- The sampled position is **record position with its Z raised by half the
+  model's scaled voxel-Z extent**, not its unshifted foot position.
+
+The fixed-point Z increment is computed in float32 order: convert voxel-Z
+count to float, multiply by0.5, by the record's size+0x20, then by65536;
+truncate that result to signed64, then add it to the record's fixed Z. Fixed
+X/Y remain the record's X/Y. Both the ordinary and flag0x08 queues use this
+same raised position and L when calling **0xce300**.
+
+0xce300 is the same fade function as for the beam. Convert each fixed
+camera-to-sampled-position difference to float and multiply by float1/65536;
+sum the three squared components in float32. Its full-fade threshold is
+**float32(float32(L×0.809999942779541)×L)**. At/below that threshold return1;
+above it, return **max(0,1−(sqrt(d²)−L×0.8999999761581421) /
+(L×0.10000000149011612))**, with float32 operations.0xee2f0 omits a descriptor
+whose resulting fade is not positive.
+
+Before this fade, **0xe08c0** tests that raised center against the render
+distance L and all six frustum planes, using radius
+**max(voxel-X count,voxel-Z count)×record size** for the plane tests. Its
+distance comparison itself uses the fixed-point squared-distance sum and a
+float32 L²×65536 threshold, rejecting only when the distance is greater.
+Thus there is no separate ordinary-model test of strict d²<L² at the raw
+record foot. The later nonpositive-fade omission supplies the fade cutoff.
+The beam retains its separate strict distance test at its raw record
+position, and does not get this asset-height/radius test.
+
+The **+64** mentioned in older vegetation prose belongs to the **containing
+zone's broad distance gates**, described next. It must not be added to the
+ordinary model's0xce300 input. This corrects that ambiguous distance wording.
+
+### 9.7 Containing-zone visibility, including zones containing beams
+
+**Yes: normal zone-model rendering requires the containing zone's visibility
+gate.** In the normal-world branch of0xd3170 (frame flag0x80 clear), a zone
+must exist, have nonzero **zone+0x1d0** meshed-group count, and pass **0xe0680**
+at **0xd37d5** before its ordinary model records are considered. This zone
+field is unrelated to the identically numbered renderer descriptor-queue
+offset in §9.5. The0x59 branch is inside this zone gate too.
+
+0xe0680 receives the cached fixed-point box **minimum at zone+0x1e8**, maximum
+at **zone+0x200**, and distance radius **renderer+0x4a4+64 blocks**. First it
+compares horizontal camera distance from the box's XY midpoint against that
+radius. Its comparison retains equality and uses fixed-point squared
+differences and the float32 radius²×65536 threshold. It then tests the box
+against **five** of the six renderer planes at+0x43c, stride16: indices
+**0,1,2,4,5**. **Index3 is deliberately omitted.**
+
+For each tested plane choose, independently per axis, the maximum bound when
+that plane's coefficient is positive and the minimum otherwise. Reject only
+when this selected corner's plane expression is strictly negative. Apply
+renderer fixed XY origin translation+0x428/+0x430 before conversion to the
+render-coordinate floats; Z has no corresponding origin translation here.
+Touching a plane is retained. Plane normalization is unnecessary for this box
+test. **0xdf8f0** constructs the planes from the combined projection/view
+matrix:0/1 are clip-w±clip-x,2/3 are clip-w±clip-y,4/5 are clip-w±clip-z.
+Therefore the omitted index3 is the **upper screen edge**, not the far plane.
+
+After that gate,0xd3170 also requires the cached zone center
+**+0x218/+0x220/+0x228** to be strictly closer than
+**renderer+0x49c+64** in three dimensions before iterating model records.
+The individual asset-backed model test/fade is then §9.6. A beam instead
+gets its raw-position strict d²<L² test and fade from §2.1; it does not get
+the model-asset sphere test. There is no individual expanded beam-quad
+frustum test in this branch.
+
+The cached box is written by mesh builder0xe9530 at **0xec804–0xec82b**;
+its center and radius are established just before it. Its horizontal bounds
+are **[64×zoneX,64×zoneX+65]** and the corresponding Y interval, in blocks.
+Vertical extents come from that meshing job's column/face prepass, not from
+the ordinary model heights or the beam's width/height. The native box is not
+enlarged to contain the beam's lower corners. Exact native visibility therefore
+requires the cached mesh-stage box and center, not a raw-record point test.
+
+**Conservative fallback, explicitly an inference rather than another native
+algorithm:** where a renderer cannot yet reproduce the cached vertical box,
+keep the native XY interval and use a vertical interval enclosing all columns
+of the loaded3×3 zone neighborhood, using the same mesh-stage column inputs.
+A sufficient interval is from
+**min(0,all available stored bases−1)** to
+**max(2,all available stored exclusive ends+1)**, in blocks. The meshing prepass
+uses the target columns and their immediate neighbors, so this interval
+contains its vertical bounds, including its z=0/1 treatment. Use the five
+plane indices above and preserve the original XY midpoint for the horizontal
+gate. Enlarging the box cannot introduce a new positive-corner plane rejection.
+If the required neighboring column bounds are unknown, retaining that zone
+for the frustum test is conservative; guessing a finite Z range is not proven.
+
+For a beam-geometry-conservative box, additionally union in the four current
+beam vertices from §2.1. That also cannot reject a zone the original box
+accepted. **Do not recenter an expanded box and apply the native3D center
+distance gate to the new center:** that can introduce a false rejection.
+Retain the original cached center when available; otherwise omit that broad
+center rejection and retain the beam's individual distance/fade checks.
+These fallbacks may draw a beam that native zone culling would omit, so they
+must not be represented as exact native culling parity. The exact oracle is
+the mesh-stage min/max/center, renderer radii and six planes, plus camera and
+render origin, with the zone gate and beam gate outcomes labeled separately.
+
+### 9.8 Zone flag0x02 is not the ordinary model's glow input
+
+**Zone-model flags bit0x02 does not set shader glow or white in the audited
+ordinary voxel-model path.** In0xd3170, the submitted glow scalar is exactly
+**float(flags&0x01)**:0 or1. The other effect scalars submitted alongside it,
+including white and depth offset, are0. This applies to both descriptor
+queues in §9.5. The submission is at **0xd3e33–0xd3f09**;0xee2f0 preserves
+these scalars in both the opaque grouped descriptors and faded descriptors.
+The draw consumers0xe6e60/0xe7980 restore them for each model draw. Thus a
+record with flags2 alone has glow0 and white0, while flags1 supplies glow1.
+
+This agrees with the checked producers in §5: constructor0x2f92c0 supplies
+default flags2, and many crops/ordinary decorations keep that value. The
+audited warm light furnishings explicitly use flags1. Flag0x02 remains
+initialized record metadata and must still be compared; absence of a direct
+glow mapping here is not a claim that the bit has no other consumer anywhere.
+An engine's separate per-vertex flag whose numeric value is2 is a different
+format; its number must not determine this zone-record mapping.
+
+**Exact shader effect:** the world vertex shader at **0x4387b0** has separate
+scalar **Glow at vertex constant buffer9** and **White at buffer7**. The glow
+setter is **0xc59f0 → 0xc6c50** and the white setter **0xc5aa0 → 0xc7a20**;
+0xc68c0 binds those buffers. This is a per-draw effect, not an additional
+zone-record RGB tint or an emitted-light value written into nearby blocks.
+
+Let P be doubled normalized voxel RGB, M the submitted material RGB, and C
+the normally lit, saturation-adjusted color from §9.3 before the final white
+operation. For positive glow g, the shader replaces C by the interpolation
+**C+g×(P×M−C)**. Therefore the zone flag1 value **g=1** yields exactly
+**P×M** before final clamping: it bypasses directional, ambient, point-light,
+vertex-light/AO and shade-saturation contributions to this geometry color.
+This is distinct from the same flag's separate auxiliary point-light effect.
+For glow0 the normal lighting path remains. The shader also supports negative
+glow values, replacing the saturation-adjusted palette by P's luminance
+before multiplying by normal lighting and M; ordinary zone-model flags do
+not select that negative branch.
+
+After choosing the glow result, the white scalar w applies
+**componentwise clamp(C+w×(1−C),0,1)**. White1 gives white; white0 still
+performs the final0..1 clamp. For all ordinary zone-model submissions traced
+above, white is0. Glow does not bypass the later pixel-shader fog/color
+grading or replace the separate opacity/fade constant. In particular flags2
+alone must not make a crop or furnishing emissive, white or independent of
+its baked/world light.
+
+## 10. Additional castle-floor and room arithmetic clarification
+
+The re-audit of **0x2a8290 / 0x2aa450 / 0x2ab0a0** confirms the existing
+building spec's room topology, floor-neighbor ordering and detail11/12 rules.
+No additional missing ceiling shape or generator pass was established by
+this trace. One precision gap in that prose is the type of several R
+remainders. R can represent signed−1/−2/−3; the following native sites take
+its **unsigned32-bit representation** before remainder:
+
+- **0x2a8290:** all four castle room-margin draws, salts **0x4e6289,0x21d4a,
+  0x11a43f,0x14f747**, use unsigned remainder3.
+- **0x2aa450:** the off-corridor room activation draw at **0x71504** uses
+  unsigned remainder5; candidate selection at **0x55260** uses unsigned
+  remainder by the number of available candidates; type selection at
+  **0x57b071** uses unsigned remainder3. The candidate list remains the
+  existing ordered nonempty neighbors **west,east,south,north**.
+- **0x2ab0a0:** the floor increment for room **flags&0x04** uses unsigned
+  remainder6 at salt **0x7b7e8**. Its hash coordinates are the cell coordinates
+  divided by3 with **signed division toward zero**, independently on each
+  axis. This coordinate division is different from the unsigned R remainder.
+
+These statements are site-specific; they do not change signed uses of R
+elsewhere. Useful arithmetic checks, using the terrain spec's H/R definition:
+
+| Input to the named draw | Signed R | Native unsigned remainder/result |
+| --- | --- | --- |
+| Room(26966,0), margin salt0x4e6289 | −1 |0 modulo3 |
+| Room(26541,0), activation salt0x71504 | −1 |0 modulo5, so this activation test passes |
+| Room(70386,0), candidate salt0x55260, three candidates | −1 |0 modulo3 |
+| Cell(63861,0), floor salt0x7b7e8 after division by3 | −2 |2 modulo6 |
+
+These are arithmetic test inputs, not claims that a particular world seed
+naturally places those cells in a qualifying castle room. Earlier corridor,
+place and candidate conditions still apply. The implementer's existing
+unsigned R helper may already satisfy them; the trace does not establish an
+implementation defect.
+
+For **0x2ab0a0** boundary smoothing, choose only the first matching room edge
+in **west,south,east,north** order. Raise the selected neighbor's height to at
+least the current floor height, add that height to the current one, then use
+**signed integer division toward zero by2**. A corner does not combine both
+adjacent neighbor heights. For example current−41 and chosen neighbor−40
+produce−40, whereas current40 and chosen neighbor41 produce40. Apply the
+qualifying room's unsigned modulo6 increment afterward. This confirms and
+makes explicit the existing floor formula; it is not the common dome's
+floating-point blend followed by floor in §8.3.
+
+The remaining dungeon verification need is still **labeled branch coverage**:
+native place kind/big flag, room tuple including flags and side, selected
+neighbor and both pre-average floor heights, floor after smoothing and after
+the optional increment, style/detail/top/depth and the ordered final six-byte
+block runs. In particular a detail11/12 ceiling claim needs the §8.3 inputs
+and a final-stage block difference; counts or model agreement alone cannot
+decide it. This pass has not run the original game or inspected the engine.
+
+
+## 11. Runtime implementation checkpoint (separate implementer)
+
+The implementer used only this independent prose, existing engine sources and
+owner exports. No native/decompiled code was inspected. The runtime now advances
+all live static-object timers in the documented selected zones/substeps, before
+interactions, with local personal-state resets and no timer-only dirty notices.
+Render poses read live state/time after simulation; placement identity checks
+prevent a shifted snapshot list from animating an unrelated object. Captured
+placement scale and turn remain intact, including consumed undefined lamp turns.
+
+The generated 0x59 path now uses a CPU-defined quad and dedicated untextured shader,
+displayed camera yaw, fixed-point corners, process CRT daylight alpha, distance
+fade and descending-distance order. The corrected depth-clipping fact in §2.1
+supersedes the earlier draft's disabled-clipping statement.
+
+Ordinary model light is sampled from the existing independently implemented Steam
+solver over current neighboring terrain, including solid light-map entries. The
+mesh path requires all nine neighbor inputs for a new bake. Incomplete exports
+retain available captured light/default behavior, not a full native mesh claim.
+Water flags are ORed and retained for the loaded zone's lifetime across terrain
+snapshot copies. Record RGB is not applied as a geometry tint. Native flag1 maps
+to glow, not flag 2. Raised-center model fade and the dry/water opaque/faded queues
+use the specified depth/color phases; baked sunlight is separate from opacity.
+
+The site-specific unsigned castle remainders in §10 are implemented; the four
+margin choices and signed floor averaging already had the specified semantics.
+Broader checks now compare complete auxiliary light lists, including side torches
+previously excluded by an outdated test. Partial refreshed-only RNG captures are
+labeled as inapplicable to the fresh A/B prefix test; block/model/list checks still
+run. The raw object parity gate remains open for the consumed undefined lamp turns.
+Exact native cached-zone culling, complete auxiliary light registration and shader
+color details, and the broader labeled dungeon/theme oracles remain unfinished.

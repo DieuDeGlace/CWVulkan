@@ -19,9 +19,26 @@ size/angle, tint and flags. The full engine test suite passes; a deep read of
 31,151 exported zones finds no invalid terrain records, but still reports a
 missing owner `stone-stool` model. These are bounded checks: the historical
 coverage table below is not proof of all seeds, cultures or dungeons. Live
-object animation synchronization, light-beam rendering, model lighting and the
-consumed undefined lamp-turn bytes remain open in the
-[parity audit](specs/worldgen-parity-gaps.md) and [roadmap](roadmap.md).
+object animation synchronization and initial Steam model-light/fade paths have
+since been implemented in the runtime continuation below. Remaining limits are
+tracked in the [parity audit](specs/worldgen-parity-gaps.md) and [roadmap](roadmap.md).
+
+**2026-10-29 runtime continuation:** object clocks advance once per native world
+substep in the deduplicated three-zone player neighborhoods, including dead
+players; only state/time update captured render poses. Item hand-ins use the
+native reversal routine. Generated 0x59 light shafts use their camera-yaw quad,
+fixed-point corners, CRT daylight alpha and native depth/blend behavior. Ordinary
+models use mesh-time light sampled from the current three-by-three terrain
+neighborhood, flag 1 glow, raised-center distance fade and the separate dry/water
+opaque/faded queues. Runtime water flags survive terrain snapshot copies.
+Castle room activation/selection and floor increments now preserve unsigned R
+remainders at the independently audited sites. The historical ceiling warning
+has not established a missing generator branch. All 789 bounded structure/light
+list snapshots pass; the 300-zone natural-light oracle covers 482,880 exact
+columns and 1,541,581 blocks. Partial daily-refresh traces are explicitly separate
+from fresh-generation prefix checks. This is not all-seed or pixel certification:
+exact cached-zone visibility, complete native point-light collection/color
+shading, undefined lamp turns and labeled broader dungeon oracles remain open.
 
 The generator is now `src/worldgen/` (namespace `worldgen`), rebuilt clean-room from
 `docs/specs/worldgen-*.md` (see `docs/CLEANROOM.md`); the engine uses it through

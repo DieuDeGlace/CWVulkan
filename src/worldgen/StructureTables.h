@@ -14,6 +14,8 @@ namespace worldgen {
 // R(x, y, k) = rnd(H(x, y) + k), read as a signed number (the game's remainders are signed
 // unless a step says otherwise).
 inline int32_t cellRandom(int32_t x, int32_t y, uint32_t salt) { return (int32_t)random(cellKey(x, y) + salt); }
+// Some castle choices take an unsigned remainder even when R represents -1..-3.
+inline uint32_t cellRandomUnsigned(int32_t x, int32_t y, uint32_t salt) { return random(cellKey(x, y) + salt); }
 inline int32_t cellRandom(Int2 c, uint32_t salt) { return cellRandom(c.x, c.y, salt); }
 // rnd(n) as a signed number.
 inline int32_t signedRandom(uint32_t n) { return (int32_t)random(n); }

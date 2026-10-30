@@ -62,6 +62,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- live static-object clocks/pose synchronization, generated light shafts, native
+  mesh-time model sunlight/glow/fade queues and castle unsigned-choice arithmetic,
+  from `worldgen-parity-gaps.md` §§2.1,4.4,9–10. Verification separates fresh
+  generation, partial refresh traces and mesh-time light inputs. No original
+  source code or replacement game assets are included.
 - static-object visual sizing, captured door/window transforms and crop/furnishing
   model metadata, from `worldgen-parity-gaps.md`. Owner voxel dimensions are read
   from local model headers; no replacement assets or reference source code are included.

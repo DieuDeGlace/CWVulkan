@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 
 #include "scene_vert.h"
 #include "scene_frag.h"
@@ -26,6 +27,8 @@
 #include "alpha_cloud_frag.h"
 #include "steam_cloud_frag.h"
 #include "steam_star_frag.h"
+#include "light_beam_vert.h"
+#include "light_beam_frag.h"
 #include "stb_image_write.h"
 
 namespace {
@@ -476,7 +479,9 @@ bool Renderer::createPipelines(std::string &error) {
                    spriteF = module(spv_alpha_sprite_frag, sizeof(spv_alpha_sprite_frag)),
                    alphaCloudF = module(spv_alpha_cloud_frag, sizeof(spv_alpha_cloud_frag)),
                    steamCloudF = module(spv_steam_cloud_frag, sizeof(spv_steam_cloud_frag)),
-                   steamStarF = module(spv_steam_star_frag, sizeof(spv_steam_star_frag));
+                   steamStarF = module(spv_steam_star_frag, sizeof(spv_steam_star_frag)),
+                   beamV = module(spv_light_beam_vert, sizeof(spv_light_beam_vert)),
+                   beamF = module(spv_light_beam_frag, sizeof(spv_light_beam_frag));
 
     VkVertexInputBindingDescription binding{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
     VkVertexInputAttributeDescription attributes[] = {
@@ -520,8 +525,17 @@ bool Renderer::createPipelines(std::string &error) {
         VkColorComponentFlags colourMask = 0xf;
     };
     Desc descs[] = {
-        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS, &scenePipeline},
-        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS, &mirroredScenePipeline,
+        {beamV, beamF, true, false, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &beamPipeline,
+         VK_FRONT_FACE_COUNTER_CLOCKWISE},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &scenePipeline},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &mirroredScenePipeline,
+         VK_FRONT_FACE_CLOCKWISE},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryDepthPipeline,
+         VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredDepthPipeline,
+         VK_FRONT_FACE_CLOCKWISE, nullptr, 0},
+        {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryFadePipeline},
+        {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredFadePipeline,
          VK_FRONT_FACE_CLOCKWISE},
         {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS, &menuPipeline},
         {sceneV, sceneF, true, false, true, false, false, VK_COMPARE_OP_ALWAYS, &menuBackgroundPipeline},
@@ -599,7 +613,7 @@ bool Renderer::createPipelines(std::string &error) {
         }
     }
     for (auto m : {sceneV, sceneF, shadowV, waterF, skyV, skyF, alphaV, alphaF, alphaWaterF, alphaSkyF, spriteV, spriteF,
-                   alphaCloudF, steamCloudF, steamStarF})
+                   alphaCloudF, steamCloudF, steamStarF, beamV, beamF})
         vkDestroyShaderModule(device, m, nullptr);
     return true;
 }
@@ -1301,8 +1315,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         VkDeviceSize zero = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
-        PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, 0), glm::vec4(1, 0, 0, 0),
+        PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, item.opacity), glm::vec4(1, 0, 0, 0),
                          glm::uvec4(0)};
+        if (!alphaLook && shading && item.kind == DrawKind::Scenery && item.standingLight >= 0)
+            pc.look.x = item.standingLight; // baked sunlight factor, separate from pixel opacity
         if (alphaLook && shading) {
             // Creatures and items take the light of the block just above where they are (11.2).
             // Zone models take the light where they stand too (vegetation-wind.md §4.5), which
@@ -1508,7 +1524,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         for (auto &item : opaque) {
             // Alpha's creatures follow the depth-writing water (water-rendering.md A.6).
             const bool late = alphaLook && item.kind == DrawKind::Model;
-            if (late != afterWater || (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
+            if ((!alphaLook && item.nativeScenery) || item.kind == DrawKind::LightBeam || late != afterWater ||
+                (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
             const VkPipeline desired = item.mirrored() ? mirroredPipeline : worldPipeline;
             if (desired != boundScene) {
@@ -1519,6 +1536,45 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         }
     };
     drawScene(false);
+    std::array<std::vector<DrawItem>, 5> sceneryQueues;
+    if (!alphaLook)
+        for (const DrawItem &item : opaque) {
+            if (!item.nativeScenery)
+                continue;
+            const auto &bounds = *item.nativeScenery;
+            const glm::vec3 center = glm::vec3((float)bounds.center[0], (float)bounds.center[1], (float)bounds.center[2]) / 65536.0f;
+            if (!frustum.sphere(center, bounds.radius))
+                continue;
+            const float opacity = steamscenery::fade(steamscenery::distanceSquared(bounds.center, camera.eye), settings.sceneryDistance);
+            const auto queue = steamscenery::queue(bounds, opacity);
+            if (queue != steamscenery::Queue::Hidden) {
+                DrawItem draw = item;
+                draw.opacity = opacity;
+                sceneryQueues[(size_t)queue].push_back(draw);
+            }
+        }
+    auto drawSceneryQueue = [&](steamscenery::Queue queue, bool faded) {
+        const auto &items = sceneryQueues[(size_t)queue];
+        // Native fades first write nearest depth with no color, then write blended
+        // color at LEQUAL with depth writes still enabled. Both are world shaders.
+        VkPipeline bound = VK_NULL_HANDLE;
+        for (int pass = faded ? 0 : 1; pass < 2; ++pass)
+            for (const DrawItem &item : items) {
+                const bool mirrored = item.mirrored();
+                VkPipeline pipeline = mirrored ? mirroredScenePipeline : scenePipeline;
+                if (faded)
+                    pipeline = pass == 0 ? (mirrored ? sceneryMirroredDepthPipeline : sceneryDepthPipeline)
+                                         : (mirrored ? sceneryMirroredFadePipeline : sceneryFadePipeline);
+                if (pipeline != bound) {
+                    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                    bound = pipeline;
+                }
+                bindAndDraw(item, 0);
+            }
+    };
+    drawSceneryQueue(steamscenery::Queue::OrdinaryOpaque, false);
+    drawSceneryQueue(steamscenery::Queue::WaterOpaque, false);
+    drawSceneryQueue(steamscenery::Queue::WaterFaded, true);
     // Alpha's clouds, opaque and lit as §4's cloud row (pc.look.w = 1 marks them).
     if (alphaLook && !cloudDraws.empty()) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaCloudPipeline);
@@ -1560,6 +1616,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             bindAndDraw(item, 0);
     if (alphaLook)
         drawScene(true);
+    else
+        drawSceneryQueue(steamscenery::Queue::OrdinaryFaded, true);
     // Steam's clouds after the world (§B.7): the opaque ones, then the faded ones laid down at no
     // opacity (only their depth counts) and drawn again over that with their opacity, so each
     // shows only its nearest surface. The fog scale is CubeVulkan's choice (an open point of
@@ -1589,6 +1647,33 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             const glm::mat4 model = centre * steamsky::starMatrix(star, radiusUnits);
             if (modelInView(skyModels.starCube, model))
                 drawSkyModel(skyModels.starCube, model, glm::vec4(opacity, 0, 0, 0));
+        }
+    }
+    // Generated transparent shafts: fixed-point corners, midpoint range/fade,
+    // and back-to-front ordering (worldgen-parity-gaps.md §2.1).
+    std::vector<std::pair<const DrawItem *, lightbeam::Quad>> beams;
+    int daylightMode = 0;
+#ifdef _WIN32
+    _get_daylight(&daylightMode);
+#else
+    daylightMode = ::daylight;
+#endif
+    const float yaw = camera.displayedYawDegrees.value_or(glm::degrees(std::atan2(forward.x, -forward.y)));
+    for (const DrawItem &item : opaque)
+        if (item.kind == DrawKind::LightBeam)
+            if (auto quad = lightbeam::sample(item.beam, camera.eye, yaw, settings.sceneryDistance, daylightMode))
+                beams.push_back({&item, *quad});
+    std::sort(beams.begin(), beams.end(), [](const auto &a, const auto &b) {
+        return a.second.distanceSquared > b.second.distanceSquared;
+    });
+    if (!beams.empty()) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, beamPipeline);
+        for (const auto &[item, quad] : beams) {
+            DrawItem draw = *item;
+            for (int i = 0; i < 4; ++i)
+                draw.model[i] = glm::vec4(quad.corners[i], 1);
+            draw.height = (float)quad.alpha / 255.0f;
+            bindAndDraw(draw, 0);
         }
     }
     // The original title and avatar use their own captured projection. Draw
@@ -1725,7 +1810,8 @@ void Renderer::shutdown() {
     }
     for (auto p : {scenePipeline, mirroredScenePipeline, menuPipeline, menuBackgroundPipeline, waterPipeline, waterDepthPipeline, shadowPipeline, skyPipeline,
                    alphaScenePipeline, alphaMirroredPipeline, alphaWaterPipeline, alphaSkyPipeline, alphaSpritePipeline,
-                   alphaCloudPipeline, steamCloudPipeline, steamStarPipeline})
+                   alphaCloudPipeline, steamCloudPipeline, steamStarPipeline, beamPipeline, sceneryDepthPipeline,
+                   sceneryMirroredDepthPipeline, sceneryFadePipeline, sceneryMirroredFadePipeline})
         vkDestroyPipeline(device, p, nullptr);
     destroyBuffer(starBuffer);
     destroyMapPipeline();

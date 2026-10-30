@@ -149,6 +149,7 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
                     else {
                         for (const auto &p : world.propsAbsolute(x, y)) {
                             propsChecked++;
+                            if (p.beam) continue; // generated primitive, not a missing owner voxel asset
                             if (p.estimatedScale) estimates.insert(p.model);
                             if (!safeSprite(p.model) || !nonempty(game / "sprites" / (p.model + ".cub"))) missingModels.insert(p.model);
                         }

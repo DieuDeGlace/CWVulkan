@@ -77,9 +77,16 @@ individual feature documents.
   unwritten marker-size fields are excluded and reported separately. The loader now
   draws only live model/object lists, retains full captured turn bytes, and derives
   object scale from type extents and owner voxel dimensions. Captured door/window
-  pivots and sliding extents have corner regressions. Live animation synchronization,
-  model0x59 rendering, model+0x28 lighting, undefined consumed lamp turns and broader
-  dungeon/theme block oracles still prevent a complete parity claim.
+  pivots and sliding extents have corner regressions. The runtime continuation now
+  advances object clocks in the native player-zone/substep pass, reads live poses,
+  renders the generated 0x59 quad, bakes model sunlight from current neighboring
+  terrain, maps native flag 1 glow, and orders model fades around water. Castle
+  room choices/floor increments now use their documented unsigned remainders.
+  Full structure/light-list checks pass on all 789 snapshots; fresh-generation RNG
+  checks are distinct from partial daily-refresh traces. Exact cached-zone culling,
+  auxiliary point-light registration, remaining shader/color details, undefined
+  consumed lamp turns and broader dungeon/theme oracles still prevent a complete
+  parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
   currently supplied, including integrated pet combat and appearance comparisons.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor

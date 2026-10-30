@@ -41,6 +41,7 @@ SkyColumn skyColumnAt(int32_t x, int32_t y) {
 
 World::World(const Terrain &t, const Assets &a, Renderer &r, int view, ExtractedWorld *ex)
     : land(t), assets(a), renderer(r), viewZones(view), extracted(ex) {
+    beamMesh = renderer.upload(lightbeam::mesh());
     // What the Alpha look asks about the world around the camera.
     WorldProbe probe;
     probe.water = [this](glm::vec3 p) { return waterAt(p); };
@@ -57,6 +58,8 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
 }
 
 World::~World() {
+    if (beamMesh)
+        renderer.release(beamMesh);
     renderer.setWorldProbe({});
     renderer.setSkyModels({});
     for (uint32_t mesh : {skyModels.cloud, skyModels.darkCloud, skyModels.starCube})
@@ -443,6 +446,15 @@ void World::update(glm::vec3 focus) {
         z.opaque = renderer.upload(g.opaque);
         z.water = renderer.upload(g.water);
         for (auto &s : g.scenery) {
+            if (s.beam) {
+                DrawItem shaft;
+                shaft.mesh = beamMesh;
+                shaft.castShadow = false;
+                shaft.kind = DrawKind::LightBeam;
+                shaft.beam = *s.beam;
+                z.scenery.push_back(shaft);
+                continue;
+            }
             int m = loadModel(s.model);
             if (m < 0)
                 continue;
@@ -454,10 +466,21 @@ void World::update(glm::vec3 focus) {
             Instance i{m, {s.x, s.y, s.z}, s.yaw, s.scale, (uint32_t)(s.flags & ~SWAY), true};
             z.scenery.push_back(instanceDraw(i));
             DrawItem &d = z.scenery.back();
-            if (s.object.type >= 0)
+            if (s.object.type >= 0) {
                 d.model = objectvisual::matrix(s.object, i.position, models[m].size);
+                z.objects.push_back({z.scenery.size() - 1, s.objectKey, s.object, i.position, models[m].size});
+            }
             d.kind = DrawKind::Scenery;
-            d.standingLight = s.light;
+            if (s.modelType >= 0 && extracted) {
+                auto position = s.modelPosition;
+                position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
+                position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
+                position[2] += (int64_t)ExtractedWorld::Z_OFFSET * 65536;
+                d.nativeScenery = steamscenery::bounds(position, models[m].size, s.scale, (uint32_t)modelFlags);
+            }
+            d.standingLight = (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT) ? 1.0f : s.light;
+            if (renderStyle() == RenderStyle::Steam && s.modelType >= 0 && (modelFlags & vegetationwind::modelflag::OWN_LIGHT))
+                d.flags |= GLOW; // Native record flag0x01 drives glow; flag0x02 does not.
             using namespace vegetationwind::modelflag;
             if (modelFlags & (SWAYS | SWINGS_Y | SWINGS_X)) {
                 vegetationwind::Placement p;
@@ -553,6 +576,8 @@ void World::update(glm::vec3 focus) {
                 g.scenery = ex->props(k.first, k.second);
                 if (alphaLook)
                     lightScenery(g.scenery);
+                else
+                    ex->lightModels(k.first, k.second, g.scenery);
                 return g;
             });
             continue;
@@ -592,6 +617,20 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
         opaque.insert(opaque.end(), z.scenery.begin(), z.scenery.end());
         for (const Moving &m : z.moving)
             opaque[first + m.draw].model = vegetationwind::modelMatrix(m.placement, clockMs, steamLook);
+        for (const AnimatedObject &object : z.objects) {
+            auto state = object.captured;
+            if (objectProvider && object.key.index >= 0 && extracted) {
+                const auto live = objectProvider(key.first + extracted->originZoneX(), key.second + extracted->originZoneY(),
+                                                 object.key);
+                if (live && live->type == state.type) {
+                    // Placement metadata belongs to this source snapshot. In particular,
+                    // regenerated lamps must not replace a captured undefined turn byte.
+                    state.closed = live->closed;
+                    state.elapsedMs = live->elapsedMs;
+                }
+            }
+            opaque[first + object.draw].model = objectvisual::matrix(state, object.position, object.dimensions);
+        }
     }
     for (auto &i : instances)
         if (i.live)
