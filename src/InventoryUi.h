@@ -1,5 +1,7 @@
 #pragma once
 // Inventory panel state and region choices (remaining-runtime-gaps.md §4.9, §4.15).
+#include "NativeKeyOrder.h"
+#include <bit>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -13,12 +15,14 @@ inline std::vector<Region> regionChoices(std::vector<Region> regions, Region her
     std::sort(regions.begin(), regions.end());
     regions.erase(std::unique(regions.begin(), regions.end()), regions.end());
     auto distance = [&](Region region) {
-        const int64_t x = (int64_t)region[0] - here[0], y = (int64_t)region[1] - here[1];
-        return std::max(x < 0 ? -x : x, y < 0 ? -y : y);
+        auto difference = [](int32_t value, int32_t origin) {
+            const uint32_t word = (uint32_t)value - (uint32_t)origin;
+            const int32_t delta = std::bit_cast<int32_t>(word);
+            return delta < 0 ? std::bit_cast<int32_t>(0u - word) : delta;
+        };
+        return std::max(difference(region[0], here[0]), difference(region[1], here[1]));
     };
-    // The verified insertion path preserves lexicographic ties through 32 entries.
-    // Larger distance ties retain that order until their native permutation is specified.
-    std::stable_sort(regions.begin(), regions.end(), [&](Region a, Region b) { return distance(a) < distance(b); });
+    keyorder::sort(regions, distance);
     return regions;
 }
 

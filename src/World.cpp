@@ -42,6 +42,7 @@ SkyColumn skyColumnAt(int32_t x, int32_t y) {
 
 World::World(const Terrain &t, const Assets &a, Renderer &r, int view, ExtractedWorld *ex)
     : land(t), assets(a), renderer(r), viewZones(view), extracted(ex) {
+    renderer.resetSceneRange();
     beamMesh = renderer.upload(lightbeam::mesh());
     // What the Alpha look asks about the world around the camera.
     WorldProbe probe;
@@ -67,6 +68,34 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
                                   -(double)ExtractedWorld::Z_OFFSET);
         probe.column = [](int32_t x, int32_t y) { return skyColumnAt(x, y); };
         probe.loadedLightZones = [this] { return extracted->loadedLightZones(); };
+        probe.sceneZone = [this](int64_t x, int64_t y) -> std::optional<scenevisibility::Bounds> {
+            const int64_t localX = x - extracted->originZoneX(), localY = y - extracted->originZoneY();
+            if (localX < INT32_MIN || localX > INT32_MAX || localY < INT32_MIN || localY > INT32_MAX) return {};
+            const Key key{(int)localX,(int)localY};
+            const auto found = zones.find(key);
+            const bool active = found != zones.end() && found->second.nativeBounds && found->second.nativeBounds->meshed;
+            if (const auto pending = pendingBounds.find(key); pending != pendingBounds.end())
+                if (auto bounds = pending->second->read()) {
+                    bounds->meshed = active;
+                    return bounds; // freshly completed absolute cache, independently of old GPU groups
+                }
+            if (found == zones.end() || !found->second.nativeBounds) return {};
+            auto bounds = *found->second.nativeBounds;
+            const int64_t offset[]{extracted->originDotsX(),extracted->originDotsY()};
+            for (int axis = 0; axis < 2; ++axis) {
+                bounds.minimum[axis] += offset[axis]; bounds.maximum[axis] += offset[axis]; bounds.center[axis] += offset[axis];
+            }
+            return bounds;
+        };
+        probe.scenePlayer = [this]() -> std::optional<scenerange::Player> {
+            auto player = scenePlayerProvider ? scenePlayerProvider() : std::nullopt;
+            if (player) {
+                const auto &at = player->physical;
+                const auto block = extracted->gameBlock(at[0] >> 16,at[1] >> 16,(int)(at[2] >> 16));
+                player->blockFlags = block[5];
+            }
+            return player;
+        };
         probe.sceneLighting = [this](glm::vec3 p) {
             const int64_t fixedX = (int64_t)((double)p.x * 65536) + extracted->originDotsX();
             const int64_t fixedY = (int64_t)((double)p.y * 65536) + extracted->originDotsY();
@@ -453,6 +482,7 @@ void World::update(glm::vec3 focus) {
         Generated g = it->second.get();
         Key key = it->first;
         it = jobs.erase(it);
+        pendingBounds.erase(key);
         if (std::max(std::abs(key.first - cx), std::abs(key.second - cy)) > viewZones + 1)
             continue; // Walked away meanwhile.
         if (auto old = zones.find(key); old != zones.end()) { // meshed again
@@ -620,11 +650,14 @@ void World::update(glm::vec3 focus) {
                 continue;
             }
             ExtractedWorld *ex = extracted;
-            jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook] {
+            auto publication = std::make_shared<scenerange::CachePublication>();
+            pendingBounds[k] = publication;
+            jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook, publication] {
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
                 ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds,
                          alphaLook ? nullptr : &nativeLight, &g.lava);
+                if (g.nativeBounds) publication->publish(*g.nativeBounds);
                 g.scenery = ex->props(k.first, k.second);
                 if (alphaLook)
                     lightScenery(g.scenery);

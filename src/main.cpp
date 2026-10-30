@@ -577,7 +577,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         " style, regions " + std::to_string((int)terrainSettings.regionSize) + " blocks, seed " +
         std::to_string(terrainSettings.seed));
     Terrain terrain(terrainSettings);
-    int viewZones = (int)std::ceil(renderSettings.fogDistance / ZONE);
+    int viewZones = renderSettings.style == RenderStyle::Steam ? gameOptions.zonesDrawn() : (int)std::ceil(renderSettings.fogDistance / ZONE);
     // [World] Source=Extracted (default): the real world blocks
     // saved from the user's game by tools/ZoneExtractor. Generated: CubeVulkan's
     // own generator.
@@ -747,7 +747,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         renderer.settings.nativeZoneRadius = renderSettings.nativeZoneRadius = o.zonesDrawn();
         if (!setOnCommandLine("graphics.viewdistance")) {
             renderer.settings.fogDistance = renderSettings.fogDistance = o.viewDistance();
-            world.setViewZones((int)std::ceil(renderSettings.fogDistance / ZONE));
+            world.setViewZones(renderSettings.style == RenderStyle::Steam ? o.zonesDrawn() : (int)std::ceil(renderSettings.fogDistance / ZONE));
         }
     };
     const nativeprogress::Frame saveFrame{useExtracted ? extractedWorld.originDotsX() : 0, useExtracted ? extractedWorld.originDotsY() : 0};
@@ -1624,6 +1624,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     world.setTransientLightProvider([&transientLights] { return transientLights.values(); });
     world.setEffectLightProvider([&spawned] { return spawned.effectLights(); });
     world.setCreatureLightCollector([&spawned](const auto &frame, auto &out) { spawned.collectLights(frame, out); });
+    world.setScenePlayerProvider([&spawned]() -> std::optional<scenerange::Player> {
+        const auto *record = spawned.playerRecord();
+        if (!record) return {};
+        scenerange::Player player;
+        std::memcpy(player.physical.data(),record+0x10,24);
+        player.ability = record[0x68];
+        std::memcpy(&player.abilityMs,record+0x6c,4);
+        float strength, remaining;
+        player.effect13 = spawned.playerBuff(0x13,strength,remaining);
+        return player;
+    });
     world.setGroundLightProvider([&](steampoints::ZoneKey key) {
         return spawnedReady ? spawned.groundLights(extractedWorld, key.first, key.second) : steampoints::GroundSources{};
     });
@@ -6857,6 +6868,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
+    if (const auto ranges = renderer.nativeRanges())
+        logLine("Steam scene ranges: scene " + std::to_string(ranges->scene) + " models " + std::to_string(ranges->models) +
+                " abilities " + std::to_string(ranges->abilities) + " zone radius " + std::to_string(world.viewZoneCount()));
     logLine("CubeVulkan stopped");
     return returnToTitle && !exitCode ? 2 : exitCode;
 }

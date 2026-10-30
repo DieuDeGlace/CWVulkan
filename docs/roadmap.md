@@ -132,18 +132,20 @@ individual feature documents.
   remain separate. Synthetic Vulkan checks cover state changes without remeshing,
   projectile kinds/removal and item ownership/delay/pickup; packet-backed CPU
   checks verify the live-item adapter. These do not establish native pixel parity.
-  Native adaptive range/camera state, fresh cached-box comparisons, remaining
-  creature/frame-transient lights, special shader controls, undefined
-  consumed lamp turns and broader dungeon/theme oracles still prevent a complete
-  parity claim.
+  Adaptive ranges, pending cache publication and the listed live-light branches
+  are integrated below. All12 sampled clean native cache bounds/centers/radii and
+  weighted costs match. Native camera/pass/shader state, undefined consumed lamp
+  turns and broader dungeon/theme oracles still prevent a complete parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
   currently supplied, including integrated pet combat and appearance comparisons.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are
   implemented from the independent spec, including answer rows. Identification points, interactive-map
-  shoulder routing and hardware comparisons remain. Region-distance ties beyond
-  32 choices still need an exact specification.
+  shoulder routing, aim integration and hardware comparisons remain. Large region
+  lists now follow the verified key-only insertion/partition/heap order, including
+  signed32 distance wrapping. Tests cover the independently derived33-choice tie
+  fixture, heap ties and finite-key ordering without inventing a stable tie-break.
 - [x] NPC bubbles and emotes: per-speaker retained pages, native timeout/repeat-Use
   behavior, fixed-point smoothing/cached projection, owner speech frames and all five
   owner emote models. Emotes use the actor's culling sphere and ordinary world depth.
@@ -171,12 +173,25 @@ individual feature documents.
   player/NPC records and buffs in world traversal order, including actors without
   submitted geometry; dead actors emit none. CPU cases cover raw/displayed yaw,
   fixed truncations, physical/drawn anchors, timing and range distinctions. GPU
-  cases cover live/dead/restored actors without rebuilding geometry. Native mesh-
-  adaptive frame inputs and wider original-game visual comparisons remain below.
-- [ ] Native adaptive scene range and camera state, water/model/overlay shader controls,
+  cases cover live/dead/restored actors without rebuilding geometry. Adaptive range
+  inputs are integrated below; wider original-game visual comparisons remain.
+- [x] Native adaptive scene range: current option-derived zone window, mesh readiness,
+  native unmerged weighted triangle costs, tie-sensitive budgets, asymmetric easing,
+  exceptional block/effect/flight gates and distinct scene/model/actor ranges. New
+  bounds/cost metadata can be published while older GPU geometry remains active;
+  culling and ground-light admission read a coherent frame snapshot. Legacy meshes
+  without native cost data retain an explicit unavailable result. All12 sampled clean
+  owner min/max/center/radius and weighted mesh costs match. Full CPU/owner-data and40 actual Vulkan image checks pass,
+  including readiness loss/recovery and new cached bounds with old geometry. A hidden
+  no-save settled-world capture with native radius15 passed; sampled peak private
+  memory was1,687MiB. This is bounded evidence, not a whole-game/performance guarantee.
+- [ ] Native gameplay camera state, water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
-  These need reference comparisons or an independent behavioral specification.
+  Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs
+  are now available. Their remaining consumers and native visual comparisons still
+  need implementation/validation. In particular the adaptive readiness scalar and
+  flagged-block color do not yet establish complete shader-state parity.
   Hit flashes now consume local and received visual records, select current spirit
   weapons, retain the fixed hit position and use native first-frame aging/strict
   expiration. They share the scene sort/zone slots. CPU and Vulkan regressions

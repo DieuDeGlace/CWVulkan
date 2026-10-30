@@ -72,13 +72,10 @@ bool sphere(const std::array<int64_t, 3> &center, float radius, glm::vec3 eye, c
     return true;
 }
 
-bool visible(const Bounds &bounds, glm::vec3 eye, const Planes &planes, float terrainRange, float modelRange) {
-    if (!bounds.meshed)
-        return false;
+bool box(const Bounds &bounds, glm::vec3 eye, const Planes &planes, float radius) {
     const std::array<int64_t, 3> xyCenter{(bounds.minimum[0] + bounds.maximum[0]) / 2,
                                          (bounds.minimum[1] + bounds.maximum[1]) / 2, 0};
-    const float horizontalRange = terrainRange + 64;
-    if (!steamscenery::earlyWithin(xyCenter, eye, horizontalRange, true))
+    if (!steamscenery::earlyWithin(xyCenter, eye, radius, true))
         return false;
     for (int plane : {0, 1, 2, 4, 5}) {
         glm::vec3 corner;
@@ -87,6 +84,10 @@ bool visible(const Bounds &bounds, glm::vec3 eye, const Planes &planes, float te
         if (glm::dot(glm::vec3(planes[plane]), corner) + planes[plane].w < 0)
             return false;
     }
+    return true;
+}
+bool visible(const Bounds &bounds, glm::vec3 eye, const Planes &planes, float terrainRange, float modelRange) {
+    if (!bounds.meshed || !box(bounds,eye,planes,terrainRange+64)) return false;
     const float centerRange = modelRange + 64;
     return steamscenery::distanceSquared(bounds.center, eye) < centerRange * centerRange;
 }

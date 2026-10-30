@@ -261,7 +261,7 @@ add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp test
 target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)
-target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp)
+target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp tests/SteamSceneRangeTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
@@ -310,7 +310,7 @@ target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp)
 target_sources(engine PRIVATE src/SteamScenery.cpp)
 target_sources(EngineTests PRIVATE tests/SceneCaptureTests.cpp)
 
-target_sources(engine PRIVATE src/RegionLevels.cpp src/SceneVisibility.cpp)
+target_sources(engine PRIVATE src/RegionLevels.cpp src/SceneVisibility.cpp src/SteamSceneRange.cpp)
 target_sources(EngineTests PRIVATE tests/RegionLevelsTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SceneVisibilityTests.cpp)

@@ -37,6 +37,8 @@ class World {
     void setTransientLightProvider(TransientLightProvider provider) { transientLightProvider = std::move(provider); }
     using CreatureLightCollector = std::function<void(const steampoints::Frame &, std::vector<steampoints::Light> &)>;
     void setCreatureLightCollector(CreatureLightCollector collector) { creatureLightCollector = std::move(collector); }
+    using ScenePlayerProvider = std::function<std::optional<scenerange::Player>()>;
+    void setScenePlayerProvider(ScenePlayerProvider provider) { scenePlayerProvider = std::move(provider); }
     using GroundLightProvider = std::function<steampoints::GroundSources(steampoints::ZoneKey)>;
     void setGroundLightProvider(GroundLightProvider provider) { groundLightProvider = std::move(provider); }
     // How many zones are drawn each way around the focus (the view distance changed).
@@ -117,6 +119,7 @@ class World {
     TransientLightProvider transientLightProvider;
     CreatureLightCollector creatureLightCollector;
     GroundLightProvider groundLightProvider;
+    ScenePlayerProvider scenePlayerProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0, lava = 0;
         std::shared_ptr<const scenevisibility::Bounds> nativeBounds;
@@ -143,6 +146,7 @@ class World {
     std::unordered_map<std::string, int> modelIndex;
     std::map<Key, Zone> zones;
     std::map<Key, std::future<Generated>> jobs;
+    std::map<Key, std::shared_ptr<scenerange::CachePublication>> pendingBounds;
     std::set<Key> stale; // zones to mesh again
     std::vector<Instance> instances;
     DrawItem instanceDraw(const Instance &i) const;

@@ -114,7 +114,10 @@ frame sets a gamma ramp. There is no post-processing of the world image (§13).
     then particle effects.
 13. **Water** chunk meshes with the water pixel shader, culling off, depth write on
     (0x4ba13e..0x4ba445), then back to clockwise culling and the world pixel shader.
-14. Static models and items (0x4bd160, 0x4be760), then creatures (§11, from 0x4ba5d0).
+14. Deferred far static models/objects (0x4bd160,0x4be760), then creatures (§11,
+    from0x4ba5d0). Near static geometry already drew before water. See
+    [the focused ordering audit](alpha-far-static-ordering.md) for the shared
+    mixed far vector, thresholds, descending-distance order and retained depth.
 15. Interface drawing.
 
 ---

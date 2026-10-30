@@ -13,6 +13,7 @@
 #include "LightBeam.h"
 #include "SteamScenery.h"
 #include "SceneVisibility.h"
+#include "SteamSceneRange.h"
 #include "SteamLighting.h"
 #include <memory>
 #include <volk.h>
@@ -145,6 +146,8 @@ struct WorldProbe {
     glm::dvec3 origin{0};
     std::function<steamlighting::Environment(glm::vec3)> sceneLighting;
     std::function<std::vector<steampoints::ZoneKey>()> loadedLightZones;
+    std::function<std::optional<scenevisibility::Bounds>(int64_t x, int64_t y)> sceneZone;
+    std::function<std::optional<scenerange::Player>()> scenePlayer;
     steampoints::UsedCellQuery usedCell; // local player's personal discovery state
     std::function<std::vector<steampoints::EffectSource>()> effectLights;
     std::function<std::vector<steampoints::TransientSource>()> transientLights;
@@ -170,6 +173,10 @@ class Renderer {
         skyColumnValid = false;
     }
     void setSkyModels(SkyModels models) { skyModels = models; }
+    void resetSceneRange() { steamRange.reset(); nativeRangeActive = false; }
+    std::optional<scenerange::Ranges> nativeRanges() const {
+        return nativeRangeActive ? std::optional<scenerange::Ranges>(steamRange.value()) : std::nullopt;
+    }
     // The view cut to somewhere else (the title to the game): the TAA history is dropped.
     void cutHistory() { historyValid = false; }
     // Horizontal distance from the player to the nearest ground not loaded yet (blocks); the
@@ -250,6 +257,8 @@ class Renderer {
         scenevisibility::Planes planes{};
     };
     std::optional<SphereState> lastSceneSphere;
+    scenerange::State steamRange;
+    bool nativeRangeActive = false;
     std::optional<scenevisibility::Projection> lastSpeechProjection;
     bool noGpu = false;
     uint32_t headlessIds = 0;

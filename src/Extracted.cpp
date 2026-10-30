@@ -1,4 +1,5 @@
 #include "Extracted.h"
+#include "SteamSceneRange.h"
 #include "AlphaLight.h"
 #include "AlphaLook.h"
 #include "worldgen/ZoneLight.h"
@@ -1040,6 +1041,7 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
 
 bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds,
                           worldgen::MeshLightVolume *nativeLight, Mesh *lava) {
+    const size_t opaqueStart = opaque.indices.size(), waterStart = water.indices.size(), lavaStart = lava ? lava->indices.size() : 0;
     if (nativeLight)
         *nativeLight = {};
     if (nativeBounds)
@@ -1265,6 +1267,9 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 } else if (type == WET_TYPE && typeAt(x, y, z + 1) == AIR_TYPE)
                     emitWater(x, y, z, 4);
             }
+    if (nativeEncoding && nativeBounds && *nativeBounds)
+        (*nativeBounds)->triangleCost = scenerange::triangleCost(opaque.indices.size() - opaqueStart, water.indices.size() - waterStart,
+                                                               lava ? lava->indices.size() - lavaStart : 0);
     return true;
 }
 

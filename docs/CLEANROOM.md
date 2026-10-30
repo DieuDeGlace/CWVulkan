@@ -62,6 +62,10 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- adaptive mesh-readiness ranges, native face-cost metadata and key-only tie ordering,
+  from `steam-scene-lighting.md` §§2.6/6 and `steam-controller-handoff.md` §4. Pending
+  metadata is independently published from worker jobs without asserting new geometry
+  is active. Owner cache costs and CPU/Vulkan regressions verify the supported paths.
 - saved/default recipe lifecycle and full crafting-result item retention, from
   `steam-dialogue-item-actions.md` §4 and `zone-object-interaction.md` §0.7.
   Synthetic bridge/default/equality cases and the full owner-data suite verify

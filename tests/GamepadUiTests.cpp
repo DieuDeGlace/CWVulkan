@@ -1,6 +1,9 @@
 #include "GamepadUi.h"
 #include "InventoryUi.h"
 #include <cstdio>
+#include <limits>
+#include <numeric>
+#include <random>
 
 int gamepadUiTests() {
     using namespace gamepadui;
@@ -173,6 +176,52 @@ int gamepadUiTests() {
     inventoryui::changeRegion(active, regions, 1);
     check(active == Region{9, 9}, "an absent active region stays unchanged");
     check(inventoryui::regionChoices({}, {3, 7}) == std::vector<Region>({{3, 7}}), "empty tabs retain the player's region choice");
-    std::puts("gamepad UI: button gates, ranking, cursor, repeat, tab rows and region rules checked");
+    std::vector<Region> shell;
+    for (int x = -4; x <= 4; ++x) for (int y = -4; y <= 4; ++y)
+        if (std::max(std::abs(x), std::abs(y)) == 4) shell.push_back({x,y});
+    auto lexical = shell;
+    lexical.push_back({0,0});
+    std::sort(lexical.begin(), lexical.end());
+    std::vector<Region> expected{lexical[16]};
+    expected.insert(expected.end(), lexical.begin() + 1, lexical.begin() + 16);
+    expected.push_back(lexical[0]);
+    expected.insert(expected.end(), lexical.begin() + 17, lexical.end());
+    check(inventoryui::regionChoices(shell, {0,0}) == expected,
+          "33-choice shell matches the independently derived native tie permutation");
+    const int32_t low = std::numeric_limits<int32_t>::min(), high = std::numeric_limits<int32_t>::max();
+    check(inventoryui::regionChoices({{low,low},{0,0}}, {high,high}) ==
+          std::vector<Region>{{high,high},{low,low},{0,0}}, "region distance subtracts with native signed32 wrapping");
+    check(inventoryui::regionChoices({{low,low}}, {0,0}) == std::vector<Region>{{low,low},{0,0}},
+          "INT_MIN remains negative after native absolute-value wrapping");
+
+    struct Entry { float key; int id; };
+    const auto byKey = [](const Entry &entry) { return entry.key; };
+    std::vector<Entry> ties;
+    for (int id = 0; id < 6; ++id) ties.push_back({1.f,id});
+    keyorder::detail::Sorter<Entry, decltype(byKey)>(ties, byKey).heap(0,ties.size());
+    std::vector<int> tieIds;
+    for (const auto &entry : ties) tieIds.push_back(entry.id);
+    // Independently derived from the specified right-on-equality heap descent.
+    check(tieIds == std::vector<int>{3,4,1,0,2,5}, "heap fallback retains native equal-child and repair decisions");
+    std::mt19937 random(0x51ced);
+    for (int count : {0,1,2,31,32,33,41,42,63,256,513}) for (int pattern = 0; pattern < 4; ++pattern) {
+        std::vector<Entry> entries;
+        for (int id = 0; id < count; ++id) {
+            const float value = pattern == 0 ? (float)id : pattern == 1 ? (float)(count-id) :
+                                pattern == 2 ? (float)(random()%13) : 100000000.f + (float)(random()%64);
+            entries.push_back({value,id});
+        }
+        if (pattern == 3) keyorder::detail::Sorter<Entry, decltype(byKey)>(entries, byKey).sort(0,entries.size(),0);
+        else keyorder::sort(entries, byKey);
+        check(std::is_sorted(entries.begin(), entries.end(), [](const Entry &a, const Entry &b) { return a.key < b.key; }),
+              "sample, partition and heap paths order finite float keys");
+        std::vector<int> ids;
+        for (const auto &entry : entries) ids.push_back(entry.id);
+        std::sort(ids.begin(), ids.end());
+        std::vector<int> original((size_t)count);
+        std::iota(original.begin(), original.end(), 0);
+        check(ids == original, "key ordering preserves the complete entry multiset");
+    }
+    std::puts("gamepad UI: button gates, ranking, cursor, repeat, tab rows and native region/key ordering checked");
     return failures;
 }

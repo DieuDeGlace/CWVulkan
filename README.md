@@ -121,6 +121,11 @@ For local UI inspection, `--play --hidden --no-save --talk 0 --run-seconds 7
 --capture-speech speech.png` captures the first visible NPC text prefix; it does
 not wait until the conversation expires during terrain loading.
 
+`build\EngineTests.exe scenerange` checks mesh-readiness/budget timing and native
+range boundaries. `build\EngineTests.exe scenecost` compares up to12 recent completed
+owner mesh-cache snapshots, including bounds, center, radius and weighted cost.
+Missing/dirty/pending snapshots are reported separately.
+
 The [current checklist](docs/roadmap.md) tracks remaining work. In particular:
 
 - real two-account Steam sessions and an original-game peer remain untested;

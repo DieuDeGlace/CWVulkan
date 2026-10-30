@@ -7,6 +7,16 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native adaptive scene range is integrated: actual unmerged face costs/readiness,
+  option-derived window, native equal-key sort, budget threshold, easing and player
+  state feed distinct terrain/model/actor/light ranges. Pending cache metadata is
+  separate from active GPU geometry and is reused coherently for culling and ground
+  lights. Missing legacy cost evidence is not replaced by a guessed triangle count.
+  All12 sampled clean native min/max/center/radius and weighted costs match; the full CPU/owner-data suite and
+  40 actual Vulkan image checks pass. Native radius15 also completed a hidden no-save
+  settled-world capture (sampled private peak1,687MiB). Camera, inherited shader/pass
+  inputs, readiness-opacity consumption and wider native visuals remain open.
+
 - NPC speech/emotes now use owner templates and models, with per-speaker playback,
   repeat-Use advancement, exact capped clocks, cached projection and native emote
   pose/depth/culling rules. Lore and receipt scripts append to the general panel;
@@ -40,9 +50,9 @@ checkpoint describe the intended setup and remaining limits.
   supply carried/toggled lamps, race/state effects, casting and equipment spirit
   glow, with native anchor/rotation/truncation and source ordering. The casting
   sphere range has its separate native zone-window calculation and 256 cap.
-  The renderer still supplies its existing configured scene range: native mesh-
-  budget/adaptive range state, camera state and broader native visual comparisons
-  remain open. Source-branch tests do not prove complete frame-input parity.
+  Native mesh-budget/adaptive range inputs are now connected as described above.
+  Camera state, shader/pass inheritance and broader native visual comparisons remain
+  open. Source-branch tests do not prove complete frame-input parity.
 
 - Isolated reference capture now runs automatically after game-session
   initialization and refreshes cached light snapshots. The real-install run
@@ -64,10 +74,11 @@ checkpoint describe the intended setup and remaining limits.
   exact early fixed-distance arithmetic and raw six-plane model-sphere test.
   Native CPU coordinates retain unshifted game Z. Missing neighbor data retains a
   conservative fallback. The camera lens/distance settings remain configurable;
-  native adaptive range and camera-state matching still need implementation.
+  adaptive inputs are integrated above; native camera-state matching remains open.
   A versioned owner-export record captures coherent bounds/counts/triangle cost
   for future comparisons. Synthetic/file-format regressions and no-save Vulkan
-  captures pass; no fresh native cached-box oracle or pixel match is claimed.
+  captures pass. The later12-cache oracle above matches fresh native boxes/costs;
+  no complete pixel match is claimed.
 - Native Steam front/back/ambient RGBA targets and state smoothing now follow
   the separate author's completed specification. Steam world RGB uses the native
   targets, with optional moon additions kept separate. Tests cover ordered regional/

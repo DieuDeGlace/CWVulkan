@@ -125,6 +125,8 @@ int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
+int steamSceneRangeTests();
+int steamMeshCostTests();
 int gamepadUiTests();      // tests/GamepadUiTests.cpp
 int plasmaHitTests();      // tests/PlasmaHitTests.cpp
 int objectVisualTests();
@@ -9073,6 +9075,10 @@ int main(int argc, char **argv) {
         return steamVoxelTests();
     if (argc == 2 && std::string(argv[1]) == "hitui")
         return plasmaHitTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "scenecost")
+        return steamMeshCostTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "scenerange")
+        return steamSceneRangeTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "padui")
         return gamepadUiTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "pets")
@@ -10329,6 +10335,8 @@ int main(int argc, char **argv) {
     failures += playerHitTests();      // tests/PlayerHitTests.cpp
     failures += dialoguePageTests();   // tests/DialoguePageTests.cpp
     failures += petTests();            // tests/PetTests.cpp
+    failures += steamSceneRangeTests();
+    failures += steamMeshCostTests();
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp
     failures += plasmaHitTests();     // tests/PlasmaHitTests.cpp
     failures += objectVisualTests();

@@ -8,6 +8,9 @@ self-contained and completes the previously unspecified region-sort tie order.
 
 ## 1. Identification GUI navigation points and activation
 
+Complete verified template construction, placement, labels, slot/icon
+and visual states are in **steam-identification-ui.md**.
+
 The identification widget is **G+0x360**, constructed through0x277060.
 Draw **0x277250** registers **two points every time the widget draws**,
 even when **0x277c00 finds no valid slotted item**. In order they are:
@@ -43,13 +46,16 @@ coordinates **0<X<W/2 and H−30<Y<H**. Goodbye test **0x277cd0** uses
 including the exact midline, do not satisfy either strict test.
 
 The ordinary press/release route remains **down0x94900**, which records
-button pressed state, followed by **up0x965e0 with button0**, which
-commits the identification only with the native shown/global-held/pressed,
+whether identification was visible, followed by **up0x965e0 with button0**, which
+commits the identification only with the native shown/visibility-snapshot/gate-word,
 affordability, valid-slot and category15 gates. Goodbye's successful
 release hides both identification and inventory. The controller A's
 mouse-down/up synthesis must retain these phases; registration of a
 point is not a direct call to a business action. Price, generated result,
 inventory consumption and RNG order remain loot-shops §5.
+The exact snapshot polarity, unchanged constructor-set+0x1f0 word and
+live tab/index binding are clarified in **steam-identification-ui §6**;
+the older “button was pressed” interpretation is not its native contract.
 
 ## 2. Interactive-map shoulders: list, edges and resulting state
 
@@ -263,6 +269,11 @@ whole entry, move the larger child up repeatedly to the hole, choosing
 the **right child on equal keys**. A final left-only child is moved up
 when present. Then insert the saved entry upward, moving parents down
 only while their key is strictly smaller; equal parent keys stop it.
+During heap **creation**, upward insertion is bounded by the **original
+parent index being repaired**, not root0. During **extraction**, repair
+starts at root0 and that is its upward limit. This distinction is explicit
+in0x27b9a0's top-index argument to0x27c230 and the corresponding finite-float
+repair in0xc8b50/0xca310; the held entry must not escape its build subheap.
 
 Extraction moves the current root to the final unextracted position,
 saves that position's prior entry, shrinks the heap by one, and repairs

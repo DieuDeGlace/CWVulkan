@@ -349,6 +349,63 @@ int steamShaderTests() {
     else checkPoints("emote-world-depth", {blocker,emote}, *blockerColour);
     blocker.model = emote.model;
     checkPoints("emote-equal-depth", {blocker,emote}, {82,214,60});
+    // Native adaptive ranges must reach the actual light/actor/terrain rendering inputs.
+    renderer.resetSceneRange();
+    renderer.settings.nativeZoneRadius = 3;
+    bool rangeMeshesReady = true;
+    probe.sceneZone = [&](int64_t, int64_t) -> std::optional<scenevisibility::Bounds> {
+        scenevisibility::Bounds zone;
+        zone.minimum = {-4*65536,-4*65536,-4*65536};
+        zone.maximum = {4*65536,4*65536,4*65536};
+        zone.radius = 8;
+        zone.meshed = rangeMeshesReady;
+        zone.triangleCost = 0;
+        return zone;
+    };
+    renderer.setWorldProbe(probe);
+    renderer.frame(camera,lighting,{0,0,0},1,{},{}); // one capped second of native range growth
+    const auto liveRanges = renderer.nativeRanges();
+    if (!liveRanges || liveRanges->models != 38.4f || liveRanges->abilities != liveRanges->scene ||
+        liveRanges->abilities <= 42 || liveRanges->abilities >= 96) {
+        ++failures;
+        std::cerr << "Adaptive scene range did not reach the live renderer\n";
+    }
+    emote.nativeActor->centre = {0,40*65536,65536};
+    checkPoints("range-actor-distinct-from-model", {emote}, {82,214,60});
+    const auto rangeEmptyPath = root / "range-empty.png";
+    renderer.capture(rangeEmptyPath.string());
+    renderer.frame(camera,lighting,{0,0,0},0,{},{});
+    const auto rangeEmpty = centre(rangeEmptyPath);
+    if (!rangeEmpty) ++failures;
+    else {
+        emote.nativeActor->centre = {0,70*65536,65536};
+        checkPoints("range-actor-budget-cutoff", {emote}, *rangeEmpty);
+        rangeMeshesReady = false;
+        emote.nativeActor->centre = {0,40*65536,65536};
+        checkPoints("range-readiness-lost", {emote}, *rangeEmpty);
+        if (!renderer.nativeRanges() || renderer.nativeRanges()->scene != .001f) {
+            ++failures;
+            std::cerr << "Missing mesh readiness did not snap the live range down\n";
+        }
+        rangeMeshesReady = true;
+        renderer.frame(camera,lighting,{0,0,0},1,{},{});
+        checkPoints("range-readiness-restored", {emote}, {82,214,60});
+    }
+    auto oldZone = std::make_shared<scenevisibility::Bounds>();
+    oldZone->minimum = {0,0,-4*65536}; oldZone->maximum = {65*65536,65*65536,4*65536};
+    oldZone->center = {32*65536,32*65536,0}; oldZone->meshed = true; oldZone->triangleCost = 0;
+    auto pendingZone = *oldZone;
+    probe.sceneZone = [&](int64_t, int64_t) { return std::optional<scenevisibility::Bounds>(pendingZone); };
+    renderer.setWorldProbe(probe);
+    DrawItem pendingDraw = emote;
+    pendingDraw.nativeActor.reset(); pendingDraw.nativeZone = oldZone;
+    checkPoints("pending-cache-original-visible", {pendingDraw}, {82,214,60});
+    if (rangeEmpty) {
+        pendingZone.minimum[2] += 1000*65536; pendingZone.maximum[2] += 1000*65536; pendingZone.center[2] += 1000*65536;
+        checkPoints("pending-cache-new-bounds-old-geometry", {pendingDraw}, *rangeEmpty);
+        pendingZone = *oldZone;
+        checkPoints("pending-cache-committed-bounds", {pendingDraw}, {82,214,60});
+    }
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
