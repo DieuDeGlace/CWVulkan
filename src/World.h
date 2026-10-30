@@ -85,6 +85,7 @@ class World {
     };
     struct Generated {
         Mesh opaque, water;
+        std::optional<scenevisibility::Bounds> nativeBounds;
         std::vector<Scenery> scenery;
     };
     // A zone model whose matrix changes with the clock: it sways (flag 4) or, in the Steam
@@ -102,6 +103,7 @@ class World {
     ObjectProvider objectProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0;
+        std::shared_ptr<const scenevisibility::Bounds> nativeBounds;
         std::vector<DrawItem> scenery;
         std::vector<Moving> moving;
         std::vector<AnimatedObject> objects;

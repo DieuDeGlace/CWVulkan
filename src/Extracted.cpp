@@ -629,6 +629,46 @@ void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery) 
         }
 }
 
+std::optional<scenecapture::MeshCache> ExtractedWorld::meshCapture(int zx, int zy) const {
+    const int64_t ax = (int64_t)zx + originX, ay = (int64_t)zy + originY;
+    if (generatedMode || ax < INT32_MIN || ax > INT32_MAX || ay < INT32_MIN || ay > INT32_MAX)
+        return std::nullopt;
+    const auto path = folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec");
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in || in.tellg() < 4 || in.tellg() > 128 * 1024 * 1024)
+        return std::nullopt;
+    std::vector<uint8_t> bytes((size_t)in.tellg());
+    in.seekg(0);
+    if (!in.read((char *)bytes.data(), bytes.size()) || std::memcmp(bytes.data(), "CWR1", 4))
+        return std::nullopt;
+    std::optional<scenecapture::MeshCache> captured;
+    for (size_t at = 4; at < bytes.size();) {
+        if (bytes.size() - at < 12)
+            return std::nullopt;
+        uint32_t header[3];
+        std::memcpy(header, bytes.data() + at, sizeof header);
+        at += sizeof header;
+        const size_t stride = header[1], count = header[2];
+        if (!stride || count > (bytes.size() - at) / stride)
+            return std::nullopt;
+        if (header[0] == scenecapture::MESH_CACHE_RECORD) {
+            if (captured || count != 1)
+                return std::nullopt;
+            captured = scenecapture::decode(bytes.data() + at, stride);
+            if (!captured)
+                return std::nullopt;
+        }
+        at += stride * count;
+    }
+    if (captured) {
+        // Native horizontal cache bounds are fixed by the zone, not by its models.
+        if (captured->minimum[0] != ax * 64 * 65536 || captured->maximum[0] != (ax * 64 + 65) * 65536 ||
+            captured->minimum[1] != ay * 64 * 65536 || captured->maximum[1] != (ay * 64 + 65) * 65536)
+            return std::nullopt;
+    }
+    return captured;
+}
+
 std::vector<Scenery> ExtractedWorld::props(int zx, int zy) {
     int64_t ax = (int64_t)zx + originX, ay = (int64_t)zy + originY;
     if (ax < INT32_MIN || ax > INT32_MAX || ay < INT32_MIN || ay > INT32_MAX) return {};
@@ -943,8 +983,55 @@ int ExtractedWorld::biomeAt(double x, double y) {
     return zone ? biomeOf(zone->region) : PLAINS;
 }
 
-bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water) {
-    int ax = zx + originX, ay = zy + originY;
+std::optional<scenevisibility::Bounds> ExtractedWorld::boundsFor(int ax, int ay,
+                                                                         const std::shared_ptr<Zone> (&around)[3][3]) {
+    for (const auto &row : around)
+        for (const auto &zone : row)
+            if (!zone)
+                return std::nullopt;
+    auto column = [&](int64_t x, int64_t y) -> const Column & {
+        const int lx = (int)(x - (int64_t)ax * 64), ly = (int)(y - (int64_t)ay * 64);
+        const int dx = lx < 0 ? -1 : lx >= 64 ? 1 : 0, dy = ly < 0 ? -1 : ly >= 64 ? 1 : 0;
+        return around[dy + 1][dx + 1]->columns[(lx - dx * 64) * 64 + ly - dy * 64];
+    };
+    return scenevisibility::build(ax, ay,
+        [&](int64_t x, int64_t y) -> std::optional<scenevisibility::Column> {
+            const auto &c = column(x, y);
+            return scenevisibility::Column{c.baseZ, c.baseZ + (int)c.blocks.size()};
+        },
+        [&](int64_t x, int64_t y, int64_t z) -> uint8_t {
+            const auto &c = column(x, y);
+            if (z < c.baseZ)
+                return 1;
+            const uint64_t index = (uint64_t)(z - c.baseZ);
+            if (index < c.blocks.size()) {
+                const auto &b = c.blocks[(size_t)index];
+                if (b.type || z > 0 || (b.breakable & DRY_AIR))
+                    return b.type;
+            } else if (z > 0)
+                return 0;
+            return 2;
+        });
+}
+
+std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy) {
+    const int64_t ax = (int64_t)zx + originX, ay = (int64_t)zy + originY;
+    if (ax <= INT32_MIN || ax >= INT32_MAX || ay <= INT32_MIN || ay >= INT32_MAX)
+        return std::nullopt;
+    std::shared_ptr<Zone> around[3][3];
+    for (int j = -1; j <= 1; ++j)
+        for (int i = -1; i <= 1; ++i)
+            around[j + 1][i + 1] = load((int)ax + i, (int)ay + j);
+    return boundsFor((int)ax, (int)ay, around);
+}
+
+bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds) {
+    if (nativeBounds)
+        nativeBounds->reset();
+    const int64_t absoluteX = (int64_t)zx + originX, absoluteY = (int64_t)zy + originY;
+    if (absoluteX <= INT32_MIN || absoluteX >= INT32_MAX || absoluteY <= INT32_MIN || absoluteY >= INT32_MAX)
+        return false;
+    const int ax = (int)absoluteX, ay = (int)absoluteY;
     std::shared_ptr<Zone> around[3][3];
     for (int j = -1; j <= 1; j++)
         for (int i = -1; i <= 1; i++)
@@ -952,6 +1039,8 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water) {
     auto self = around[1][1];
     if (!self)
         return false;
+    if (nativeBounds)
+        *nativeBounds = boundsFor(ax, ay, around); // exactly the terrain snapshot this job meshes
     // Column lookup over the zone and a one-column border from its neighbours.
     // Missing neighbours count as this zone's edge column (no cliff walls at
     // the edge of the extracted area).

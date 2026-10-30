@@ -25,8 +25,10 @@
 #include "net/ClientGame.h"
 #include "net/HostGame.h"
 #include "net/Transport.h"
+#include "RegionLevels.h"
 
 #include <functional>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -70,6 +72,12 @@ class Multiplayer {
     void beginFrame(uint32_t nowMs);
     void consume();
     void endFrame(uint32_t nowMs);
+    // Pyro's world-shared baseline lasts only while a region has occupants.
+    // The host decides; negotiated CubeVulkan extras mirror it to guests.
+    void setRegionScaling(bool enabled);
+    int regionLevel(worldgen::Int2 region, int relativeFallback) const;
+    void visitLocalRegion(worldgen::Int2 region, int level); // no transport/recorded-world fallback
+    std::function<void()> regionLevelsChanged;
 
     // The pieces, for the game frame's hooks and for mods.
     HostSide *hostSide() { return hostWorld.get(); }
@@ -128,6 +136,15 @@ class Multiplayer {
     std::unique_ptr<cwnet::ClientGame> client;
     std::vector<Notice> notices;
     size_t guestsBefore = 0;
+    regionlevels::Occupancy regionOccupancy;
+    std::atomic<bool> sharedRegions{false}, remoteRegionView{false};
+    mutable std::mutex regionViewMutex;
+    std::optional<regionlevels::Snapshot> regionView;
+    cwnet::PeerId requestedRegionHost = 0;
+    std::map<cwnet::PeerId, cwnet::Bytes> sentRegionLevels;
+
+    void clearRegionView();
+    void sendRegionLevels();
 
     void notice(const std::string &line, bool invitation = false);
     std::string nameOf(uint64_t peer) const;

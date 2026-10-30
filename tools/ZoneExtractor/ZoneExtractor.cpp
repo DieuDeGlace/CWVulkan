@@ -1,4 +1,5 @@
-﻿// ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
+﻿#include "../../src/SceneCapture.h"
+// ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
 //
@@ -657,7 +658,7 @@ struct Placement {
 constexpr Placement PLACEMENTS[] = {{0x18, 0x40}, {0x30, 0xe0}, {0x48, 0xe0},
                                     {0x60, 0xe0}, {0x78, 0xe0}, {0x90, 0x40}, {0xa8, 0x40}};
 
-static std::vector<unsigned char> serialiseRecords(cube::Zone *zone) {
+static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCacheLocked = false) {
     std::vector<unsigned char> out;
     out.insert(out.end(), {'C', 'W', 'R', '1'});
     for (auto p : PLACEMENTS) {
@@ -672,6 +673,28 @@ static std::vector<unsigned char> serialiseRecords(cube::Zone *zone) {
         out.insert(out.end(), (unsigned char *)&count, (unsigned char *)&count + 4);
         if (bytes)
             out.insert(out.end(), range[0], range[0] + bytes);
+    }
+    if (meshCacheLocked) {
+        // saveZones holds this exact native lock and the zone-map lifetime lock.
+        static_assert(offsetof(cube::World, zones_mesh_critical_section) == 0x3c8,
+                      "Mesh-cache capture requires the supported native world layout");
+        const auto *raw = (const unsigned char *)zone;
+        scenecapture::MeshCache cache;
+        std::memcpy(&cache.activeGroups, raw + 0x1d0, 8);
+        std::memcpy(&cache.pendingGroups, raw + 0x1e0, 8);
+        if (cache.activeGroups || cache.pendingGroups) {
+            std::memcpy(cache.minimum.data(), raw + 0x1e8, 24);
+            std::memcpy(cache.maximum.data(), raw + 0x200, 24);
+            std::memcpy(cache.center.data(), raw + 0x218, 24);
+            std::memcpy(&cache.radius, raw + 0x230, 4);
+            cache.dirty = raw[0x23c];
+            std::memcpy(&cache.triangleCost, raw + 0x444, sizeof cache.triangleCost);
+            const auto bytes = scenecapture::encode(cache);
+            const uint32_t header[] = {scenecapture::MESH_CACHE_RECORD, (uint32_t)bytes.size(), 1};
+            const auto *begin = (const unsigned char *)header;
+            out.insert(out.end(), begin, begin + sizeof header);
+            out.insert(out.end(), bytes.begin(), bytes.end());
+        }
     }
     return out;
 }
@@ -740,7 +763,7 @@ static void saveZones(cube::World *w) {
         if (saved.count(id) || zone->chunk.chunkbuffers.empty())
             continue;
         std::string stem = folder + "\\z_" + std::to_string(id.first) + "_" + std::to_string(id.second);
-        Job blocks{stem + ".cwz", serialise(w, zone)}, records{stem + ".rec", serialiseRecords(zone)};
+        Job blocks{stem + ".cwz", serialise(w, zone)}, records{stem + ".rec", serialiseRecords(zone, true)};
         saved.insert(id);
         count++;
         {

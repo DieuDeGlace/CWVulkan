@@ -308,3 +308,9 @@ set_target_properties(HudExtract PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN
 target_sources(engine PRIVATE src/LightBeam.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp)
 target_sources(engine PRIVATE src/SteamScenery.cpp)
+target_sources(EngineTests PRIVATE tests/SceneCaptureTests.cpp)
+
+target_sources(engine PRIVATE src/RegionLevels.cpp src/SceneVisibility.cpp)
+target_sources(EngineTests PRIVATE tests/RegionLevelsTests.cpp)
+
+target_sources(EngineTests PRIVATE tests/SceneVisibilityTests.cpp)

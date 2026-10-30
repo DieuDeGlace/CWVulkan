@@ -128,6 +128,9 @@ int petTests();            // tests/PetTests.cpp
 int gamepadUiTests();      // tests/GamepadUiTests.cpp
 int plasmaHitTests();      // tests/PlasmaHitTests.cpp
 int objectVisualTests();
+int sceneCaptureTests();
+int regionLevelsTests();
+int sceneVisibilityTests();
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -408,6 +411,34 @@ static void extractedPlacements() {
     CHECK(ex.open(seed, error));
     auto props = ex.props(0, 0);
     CHECK(props.size() == 4);
+    CHECK(!ex.meshCapture(0, 0)); // legacy files remain valid without an oracle
+    scenecapture::MeshCache captured;
+    captured.minimum = {-128LL * 65536, -64LL * 65536, -10LL * 65536};
+    captured.maximum = {-63LL * 65536, 65536, 90LL * 65536};
+    captured.center = {-95LL * 65536 - 32768, -31LL * 65536 - 32768, 40LL * 65536};
+    captured.activeGroups = 0x100000001ull;
+    captured.radius = 112.5f;
+    captured.triangleCost = 12345;
+    auto appendCapture = [&] {
+        std::ofstream out(records, std::ios::binary | std::ios::app);
+        const uint32_t header[] = {scenecapture::MESH_CACHE_RECORD, scenecapture::MESH_CACHE_BYTES, 1};
+        const auto bytes = scenecapture::encode(captured);
+        out.write((const char *)header, sizeof header);
+        out.write((const char *)bytes.data(), bytes.size());
+    };
+    appendCapture();
+    auto metadata = ex.meshCapture(0, 0);
+    CHECK(metadata && metadata->activeGroups == captured.activeGroups && metadata->minimum == captured.minimum &&
+          metadata->center == captured.center && metadata->triangleCost == 12345);
+    CHECK(ex.props(0, 0).size() == 4); // metadata never becomes scenery
+    appendCapture();
+    CHECK(!ex.meshCapture(0, 0)); // ambiguous duplicate metadata is not evidence
+    writeRecords(0xe0, 4, payload);
+    captured.minimum[0] += 64LL * 65536;
+    captured.maximum[0] += 64LL * 65536;
+    appendCapture();
+    CHECK(!ex.meshCapture(0, 0)); // a coherent record from the wrong zone is rejected
+    writeRecords(0xe0, 4, payload);
     for (size_t i = 0; i < props.size(); i++) {
         CHECK(props[i].model == "window");
         CHECK(std::abs(props[i].x - 63.5f) < 1e-5f);
@@ -10230,6 +10261,9 @@ int main(int argc, char **argv) {
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp
     failures += plasmaHitTests();     // tests/PlasmaHitTests.cpp
     failures += objectVisualTests();
+    failures += sceneCaptureTests();
+    failures += regionLevelsTests();
+    failures += sceneVisibilityTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;

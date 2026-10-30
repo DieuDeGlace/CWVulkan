@@ -19,7 +19,21 @@ void HostSide::receiveCreature(const cwnet::CreatureDelta &delta) {
     if (uint8_t *record = world.networkCreature(delta.id, made)) {
         cwnet::applyDelta(delta, record);
         world.receivedUpdate(delta.id, made);
+        if (!delta.cut) {
+            auto &fields = playerFields[delta.id];
+            fields |= delta.mask;
+            constexpr uint64_t REQUIRED = (1ull << 0) | (1ull << 7) | (1ull << 21); // position, hostility, level
+            if ((fields & REQUIRED) == REQUIRED && record[cwnet::creature::HOSTILITY] == 0 && playerObserved)
+                playerObserved(record);
+        }
     }
+}
+
+void HostSide::removeCreature(int64_t id) {
+    if (playerLeft)
+        playerLeft(id);
+    playerFields.erase(id);
+    world.remove(id);
 }
 
 void HostSide::advance(uint32_t dtMs) {

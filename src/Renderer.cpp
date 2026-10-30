@@ -1506,6 +1506,24 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     vkCmdSetScissor(cmd, 0, 1, &sc);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &fr.set, 0, nullptr);
     Frustum frustum(u.viewProj);
+    // Native CPU culling uses unnormalized W±X/Y/Z planes, no projection Y flip
+    // and its fixed .05/1920 clip distances (including the loose W+Z near gate).
+    glm::vec3 nativeEye = camera.eye, nativeTarget = camera.target;
+    nativeEye.z += (float)worldProbe.origin.z;
+    nativeTarget.z += (float)worldProbe.origin.z;
+    const auto nativePlanes = scenevisibility::planes(
+        glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) *
+        glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
+    std::unordered_map<const scenevisibility::Bounds *, bool> zoneVisibility;
+    auto nativeZoneVisible = [&](const DrawItem &item) {
+        if (!item.nativeZone)
+            return true; // older/incomplete terrain has no asserted native cache box
+        auto [it, fresh] = zoneVisibility.try_emplace(item.nativeZone.get(), false);
+        if (fresh)
+            it->second = scenevisibility::visible(*item.nativeZone, nativeEye, nativePlanes,
+                                                  settings.fogDistance, settings.sceneryDistance);
+        return it->second;
+    };
     auto visible = [&](const DrawItem &item) {
         if (!meshes[item.mesh].indexCount)
             return false;
@@ -1542,10 +1560,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             if (!item.nativeScenery)
                 continue;
             const auto &bounds = *item.nativeScenery;
-            const glm::vec3 center = glm::vec3((float)bounds.center[0], (float)bounds.center[1], (float)bounds.center[2]) / 65536.0f;
-            if (!frustum.sphere(center, bounds.radius))
+            if (!nativeZoneVisible(item) ||
+                !scenevisibility::sphere(bounds.center, bounds.radius, nativeEye, nativePlanes, settings.sceneryDistance))
                 continue;
-            const float opacity = steamscenery::fade(steamscenery::distanceSquared(bounds.center, camera.eye), settings.sceneryDistance);
+            const float opacity = steamscenery::fade(steamscenery::distanceSquared(bounds.center, nativeEye), settings.sceneryDistance);
             const auto queue = steamscenery::queue(bounds, opacity);
             if (queue != steamscenery::Queue::Hidden) {
                 DrawItem draw = item;
@@ -1660,7 +1678,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
 #endif
     const float yaw = camera.displayedYawDegrees.value_or(glm::degrees(std::atan2(forward.x, -forward.y)));
     for (const DrawItem &item : opaque)
-        if (item.kind == DrawKind::LightBeam)
+        if (item.kind == DrawKind::LightBeam && (alphaLook || nativeZoneVisible(item)))
             if (auto quad = lightbeam::sample(item.beam, camera.eye, yaw, settings.sceneryDistance, daylightMode))
                 beams.push_back({&item, *quad});
     std::sort(beams.begin(), beams.end(), [](const auto &a, const auto &b) {

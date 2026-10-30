@@ -6,11 +6,13 @@
 
 namespace steamscenery {
 struct Bounds {
-    std::array<int64_t, 3> center{}; // fixed render-space coordinates, raised by half the scaled height
+    std::array<int64_t, 3> center{}; // fixed render XY/game Z, raised by half the scaled height
     float radius = 0;
     bool water = false;
 };
 Bounds bounds(std::array<int64_t, 3> position, glm::vec3 voxels, float size, uint32_t modelFlags);
+// Early native gates divide each signed squared fixed delta before summing.
+bool earlyWithin(const std::array<int64_t, 3> &position, glm::vec3 eye, float range, bool horizontal = false);
 float distanceSquared(const std::array<int64_t, 3> &position, glm::vec3 eye);
 float fade(float distanceSquared, float range);
 enum class Queue { Hidden, OrdinaryOpaque, WaterOpaque, WaterFaded, OrdinaryFaded };

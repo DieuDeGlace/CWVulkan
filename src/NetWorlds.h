@@ -17,6 +17,7 @@
 #include "Spawned.h"
 #include "net/Worlds.h"
 
+#include <map>
 #include <functional>
 #include <vector>
 
@@ -30,11 +31,15 @@ class HostSide : public cwnet::HostWorld {
     // resets (a night slept).
     std::function<void(const std::vector<SpawnedCreatures::Death> &)> deaths;
     std::function<void()> reset;
+    // Optional gameplay policy; observation waits for complete player position,
+    // hostility and level fields. Arrival order is the host's packet order.
+    std::function<void(const uint8_t *)> playerObserved;
+    std::function<void(int64_t)> playerLeft;
 
     void creatures(std::vector<cwnet::CreatureView> &out) override;
     bool hasCreature(int64_t id) override { return world.hasCreature(id); }
     void receiveCreature(const cwnet::CreatureDelta &delta) override;
-    void removeCreature(int64_t id) override { world.remove(id); }
+    void removeCreature(int64_t id) override;
     void queueInteraction(int64_t creatureId, const cwnet::InteractionRecord &record) override {
         world.queueInteraction(creatureId, record);
     }
@@ -48,6 +53,7 @@ class HostSide : public cwnet::HostWorld {
   private:
     SpawnedCreatures &world;
     ExtractedWorld &blocks;
+    std::map<int64_t, uint64_t> playerFields;
 };
 
 class MirrorSide : public cwnet::MirrorWorld {

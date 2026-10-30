@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstring>
 
 namespace {
 constexpr cwnet::PeerId LOCAL_MACHINE = 1; // "me" on the loopback-only network
@@ -21,6 +22,7 @@ uint32_t Multiplayer::clockNow() {
 Multiplayer::Multiplayer() = default;
 
 Multiplayer::~Multiplayer() {
+    regionLevelsChanged = {}; // caller-owned gameplay objects may already be destroyed
     // Leaving: the host tells its guests (packet 2), the client tells its host.
     if (hostGame)
         hostGame->link().dropAll();
@@ -54,22 +56,123 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
     }
     if (setup.hostWorld && setup.blocks) {
         hostWorld = std::make_unique<HostSide>(*setup.hostWorld, *setup.blocks);
+        hostWorld->playerObserved = [this, state = setup.hostWorld](const uint8_t *record) {
+            if (!sharedRegions)
+                return;
+            int64_t id, position[2];
+            int32_t level;
+            std::memcpy(&id, record + worldgen::creature::ID, sizeof id);
+            std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
+            std::memcpy(&level, record + worldgen::creature::LEVEL, sizeof level);
+            const auto region = worldgen::regionAt((int32_t)(position[0] >> 16), (int32_t)(position[1] >> 16));
+            const auto previous = regionOccupancy.regionOf(id);
+            if (previous && *previous == regionlevels::Region{region.x, region.y})
+                return;
+            const auto before = regionOccupancy.snapshot();
+            state->keepHealthShares([&] { regionOccupancy.update(id, region, level); });
+            if (before != regionOccupancy.snapshot() && regionLevelsChanged)
+                regionLevelsChanged();
+        };
+        hostWorld->playerLeft = [this, state = setup.hostWorld](int64_t id) {
+            if (!regionOccupancy.regionOf(id))
+                return;
+            const auto before = regionOccupancy.snapshot();
+            state->keepHealthShares([&] { regionOccupancy.leave(id); });
+            if (before != regionOccupancy.snapshot() && regionLevelsChanged)
+                regionLevelsChanged();
+        };
         hostGame = std::make_unique<cwnet::HostGame>(*transport, *hostWorld);
         hostGame->log = [this](const std::string &line) {
             if (log)
                 log(line);
         };
     }
+    if (hostGame)
+        hostGame->extra = [this](cwnet::PeerId from, const cwnet::CubeVulkanMessage &message) {
+            if (message.channel == "cwv.region-levels.request.v1" && message.payload.empty())
+                sentRegionLevels.erase(from); // requests never contain client-authored region levels
+        };
     if (setup.clientWorld && setup.blocks) {
         mirrorWorld = std::make_unique<MirrorSide>(*setup.clientWorld, *setup.blocks);
         client = std::make_unique<cwnet::ClientGame>(*transport, *mirrorWorld, [this] {
             if (hostGame)
                 hostGame->link().dropAll();
         });
+        client->extra = [this](const cwnet::CubeVulkanMessage &message) {
+            if (message.channel != regionlevels::CHANNEL)
+                return;
+            const auto decoded = regionlevels::decode(message.payload);
+            if (!decoded)
+                return;
+            bool changed;
+            {
+                std::lock_guard hold(regionViewMutex);
+                changed = !regionView || regionView->enabled != decoded->enabled || regionView->levels != decoded->levels;
+                regionView = *decoded;
+            }
+            if (changed && regionLevelsChanged)
+                regionLevelsChanged();
+        };
         // Single player: the client joins its own host through the loopback.
         client->link().goHome(clockNow());
     }
     return true;
+}
+
+void Multiplayer::setRegionScaling(bool enabled) {
+    if (sharedRegions.exchange(enabled) != enabled) {
+        regionOccupancy.clear();
+        sentRegionLevels.clear();
+        if (regionLevelsChanged)
+            regionLevelsChanged();
+    }
+}
+
+int Multiplayer::regionLevel(worldgen::Int2 region, int relativeFallback) const {
+    if (remoteRegionView) {
+        std::lock_guard hold(regionViewMutex);
+        return regionView && regionView->enabled ? regionView->basis(region) : relativeFallback;
+    }
+    return sharedRegions ? regionOccupancy.basis(region) : relativeFallback;
+}
+
+void Multiplayer::visitLocalRegion(worldgen::Int2 region, int level) {
+    if (transport || !sharedRegions)
+        return;
+    const auto before = regionOccupancy.snapshot();
+    regionOccupancy.update(1, region, level);
+    if (before != regionOccupancy.snapshot() && regionLevelsChanged)
+        regionLevelsChanged();
+}
+
+void Multiplayer::clearRegionView() {
+    requestedRegionHost = 0;
+    std::lock_guard hold(regionViewMutex);
+    regionView.reset();
+}
+
+void Multiplayer::sendRegionLevels() {
+    if (!hostGame)
+        return;
+    const bool enabled = sharedRegions;
+    const cwnet::CubeVulkanMessage message{regionlevels::CHANNEL,
+        regionlevels::encode({enabled, enabled ? regionOccupancy.snapshot() : regionlevels::Levels{}})};
+    const auto &connections = hostGame->link().connections();
+    for (auto it = sentRegionLevels.begin(); it != sentRegionLevels.end();)
+        if (!connections.count(it->first))
+            it = sentRegionLevels.erase(it);
+        else
+            ++it;
+    for (const auto &[peer, connection] : connections) {
+        if (!connection.cubeVulkan) {
+            sentRegionLevels.erase(peer);
+            continue;
+        }
+        const auto previous = sentRegionLevels.find(peer);
+        if (previous == sentRegionLevels.end() || previous->second != message.payload)
+            if (hostGame->link().sendExtra(peer, message))
+                sentRegionLevels[peer] = message.payload;
+    }
 }
 
 void Multiplayer::beginFrame(uint32_t nowMs) {
@@ -77,14 +180,25 @@ void Multiplayer::beginFrame(uint32_t nowMs) {
         return;
     transport->pump(nowMs);
     // The host idles while its player is a guest elsewhere (netcode-transport.md §2).
-    if (hostGame && !guestElsewhere())
+    remoteRegionView = guestElsewhere();
+    if (hostGame && !guestElsewhere()) {
         hostGame->frame(nowMs);
+        sendRegionLevels();
+    }
     if (client) {
         client->receive(nowMs);
+        remoteRegionView = guestElsewhere();
+        if (client->link().hostIsCubeVulkan() && requestedRegionHost != client->link().host()) {
+            if (client->link().sendExtra({"cwv.region-levels.request.v1", {}}))
+                requestedRegionHost = client->link().host();
+        }
         for (cwnet::PeerId from : std::exchange(client->invitations, {}))
             notice("You were invited by " + nameOf(from), true);
-        if (std::exchange(client->wentHome, false))
+        if (std::exchange(client->wentHome, false)) {
+            clearRegionView();
+            remoteRegionView = false;
             notice("Back in your own world");
+        }
     }
     // Joins and leaves, as the host sees them.
     const size_t now = guests();
@@ -115,18 +229,26 @@ bool Multiplayer::joinAddress(const std::string &address, uint16_t port, std::st
         error = "cannot resolve " + address;
         return false;
     }
+    clearRegionView();
     client->link().connectTo(host, clockNow());
+    remoteRegionView = guestElsewhere();
     return true;
 }
 
 void Multiplayer::join(uint64_t host) {
-    if (client)
+    if (client) {
+        clearRegionView();
         client->link().connectTo(host, clockNow());
+        remoteRegionView = guestElsewhere();
+    }
 }
 
 void Multiplayer::leave() {
-    if (client)
+    if (client) {
+        clearRegionView();
         client->link().goHome(clockNow());
+        remoteRegionView = false;
+    }
 }
 
 bool Multiplayer::guestElsewhere() const { return client && client->link().isGuestElsewhere(); }

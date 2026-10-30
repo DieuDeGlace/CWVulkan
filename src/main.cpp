@@ -582,6 +582,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // decides every creature that is not a player and keeps Save/world.db.
     SpawnedCreatures spawned;   // the client world (with the native player)
     SpawnedCreatures hostWorld; // the host world
+    // Multiplayer (Multiplayer.h), set up below once the character is known.
+    Multiplayer session;
+    session.log = [](const std::string &line) { logLine(line); };
     const enemyrespawn::Settings enemyRespawns = enemyrespawn::Settings::read(config);
     spawned.setEnemyRespawn(enemyRespawns);
     hostWorld.setEnemyRespawn(enemyRespawns);
@@ -1162,24 +1165,23 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             ", level " + std::to_string(playerLevel));
     // Pyro mode on the game's own creatures (PyroCreatures.h): their numeric levels, and their
     // stats by them through the mod loader's callbacks, as PyroProgression hooks them. The
-    // levels follow the player's, or with the discovery-locked variant ([Progression]
-    // LockDiscoveredRegions; unset: as the owner's game, which records region entries only
-    // when locked) the player's level on first entering each region, kept per character.
+    // regional baseline is set by the first occupant, shared by the host, and cleared
+    // when the last player leaves. Permanent discovery difficulty locks are not used.
     pyrocreatures::RelativeLevels pyroRegions;
     {
         const fs::path gameState = assets.gameDir() / "Mods" / "PyroRelativeLevels.state";
-        const int lock = (int)config.number("Progression", "LockDiscoveredRegions", -1, -1, 1);
-        const bool locked = lock < 0 ? pyrocreatures::RelativeLevels::lockedInGame(gameState) : lock == 1;
         // (A test's --save-folder keeps its own copy; a dedicated server has no character's to keep.)
         const fs::path ownState = (saveFolder.empty() ? root / "Saves" : pathOfUtf8(saveFolder)) / "PyroRelativeLevels.state";
-        pyroRegions.open(gameWorldSeed, gameWorldName, character.name, locked, gameState, ownState, !noSave && !serverMode);
+        pyroRegions.open(gameWorldSeed, gameWorldName, character.name, false, gameState, ownState, !noSave && !serverMode);
         if (mode == progression::Mode::Pyro)
-            logLine(std::string("Progression: enemy levels ") + (locked ? "locked on first entering a region" : "follow the player's"));
+            logLine("Progression: region difficulty refreshes after its last player leaves");
     }
-    auto regionBasis = [&](worldgen::Int2 region) { return pyroRegions.basis(region, playerLevel); };
+    const bool firstEntrantScaling = config.text("Progression", "RegionScaling", "first-player") != "relative";
+    auto regionBasis = [&](worldgen::Int2 region) { return session.regionLevel(region, playerLevel); };
     auto creatureLevel = [&](const uint8_t *creature) { return pyrocreatures::level(creature, gameWorldSeed, regionBasis); };
     std::optional<pyrocreatures::StatHooks> pyroStats;
     auto applyPyroStats = [&] {
+        session.setRegionScaling(mode == progression::Mode::Pyro && firstEntrantScaling);
         if (mode == progression::Mode::Pyro && !pyroStats)
             pyroStats.emplace(gameWorldSeed, regionBasis);
         else if (mode != progression::Mode::Pyro)
@@ -1496,7 +1498,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             uint64_t roll = progression::regionRoll(worldSeed, cellX, cellY);
             int recorded = progression::enemyLevel(1, region, roll, c.id);
             if (mode == progression::Mode::Pyro) {
-                enemyLevels[k] = progression::enemyLevel(playerLevel, region, roll, c.id);
+                enemyLevels[k] = progression::enemyLevel(regionBasis({cellX, cellY}), region, roll, c.id);
                 actors.strength(k, progression::creatureScale(enemyLevels[k]) / progression::creatureScale(recorded));
             } else {
                 enemyLevels[k] = 0;
@@ -1504,6 +1506,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
         }
     };
+    session.regionLevelsChanged = levelEnemies;
     levelEnemies();
     applyGear();
     // Floating purple text ("+5 XP", "LEVEL UP!") and the loot pouches monsters drop.
@@ -1916,9 +1919,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         slot = slotForCategory(category);
         return foundStats(it, slot);
     };
-    // Multiplayer (Multiplayer.h), set up below once the character is known.
-    Multiplayer session;
-    session.log = [](const std::string &line) { logLine(line); };
 
     // XP (pyro) and quest progress for a kill of this player's own (in multiplayer each player's
     // progress is its own: nothing of it is shared, netcode-roles.md §6).
@@ -5113,6 +5113,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             useCamera.tanHalfWidth = useCamera.tanHalfHeight * (screen.height ? (float)screen.width / (float)screen.height : 1.0f);
         }
         Lighting lighting = lightingAt(hour, dayNight, regionLook(columnAt(player.position.x, player.position.y)));
+        if (mode == progression::Mode::Pyro && !session.started())
+            session.visitLocalRegion(regionHere(), playerLevel);
         opaque.clear();
         water.clear();
         if (!spawnedReady)
@@ -5134,8 +5136,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 day = clock.day();
             }
             spawned.update(extractedWorld, player.position);
-            if (mode == progression::Mode::Pyro) // (RelativeTick: a region entered for the first time keeps the player's level)
-                pyroRegions.visit(regionHere(), playerLevel);
             {
                 // The player as the AI sees it (monsters near it notice it, as in the game).
                 static glm::vec3 lastAt = player.position;

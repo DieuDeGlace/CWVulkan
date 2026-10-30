@@ -44,6 +44,9 @@ individual feature documents.
   (until the original spawn zone unloads for all players), and `Permanent`.
   Temporary deaths are excluded from permanent saves. Tests cover actual generated
   enemy return, old death recovery and repeated deaths in client mirrors.
+- [x] Optional first-entrant regional difficulty in Pyro mode. Host-authoritative
+  active baselines refresh after the last occupant leaves; no permanent discovery
+  lock. Actual two-session UDP tests cover synchronization and refreshed re-entry.
 - [x] Source-only GitHub packaging, file hashes, dependency notices and GPL-3.0-only
   for original code. Game content, recordings, native saves and binaries are excluded.
 - [x] Incoming local-player hit arithmetic: blocking, mana shields, healing and
@@ -83,8 +86,10 @@ individual feature documents.
   terrain, maps native flag 1 glow, and orders model fades around water. Castle
   room choices/floor increments now use their documented unsigned remainders.
   Full structure/light-list checks pass on all 789 snapshots; fresh-generation RNG
-  checks are distinct from partial daily-refresh traces. Exact cached-zone culling,
-  auxiliary point-light registration, remaining shader/color details, undefined
+  checks are distinct from partial daily-refresh traces. Mesh-prepass bounds,
+  containing-zone/model gates and coherent cache-oracle capture are implemented.
+  Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
+  point-light registration, remaining shader/color details, undefined
   consumed lamp turns and broader dungeon/theme oracles still prevent a complete
   parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples

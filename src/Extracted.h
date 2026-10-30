@@ -11,6 +11,8 @@
 #include "Mesher.h"
 #include "Terrain.h" // Biome, for skies and music
 #include "SoundRules.h"
+#include "SceneCapture.h"
+#include "SceneVisibility.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -60,13 +62,18 @@ class ExtractedWorld {
     int originZoneX() const { return originX; }
     int originZoneY() const { return originY; }
     const std::filesystem::path &directory() const { return folder; }
+    // Optional coherent native mesh-cache evidence from newer owner captures.
+    std::optional<scenecapture::MeshCache> meshCapture(int zx, int zy) const;
     // Zone coordinates are local (home zone = 0, 0). Also the zones the generator's hooks
     // make anew (load).
     bool has(int zx, int zy) const {
         return generatedMode || zones.count({zx + originX, zy + originY}) > 0 || worldgen::hooksChange(zx + originX, zy + originY);
     }
     // Opaque and water meshes in local world coordinates (thread-safe).
-    bool mesh(int zx, int zy, Mesh &opaque, Mesh &water);
+    bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr);
+    // Independent mesh-prepass bounds in absolute native fixed coordinates.
+    // Missing neighbor data yields no assertion of native bounds.
+    std::optional<scenevisibility::Bounds> meshBounds(int zx, int zy);
     // Surface height (top of the highest solid block, or the water) at a local column.
     bool surface(double x, double y, float &height);
     // True if the block containing local point (x, y, z) is solid. Unloaded
@@ -157,6 +164,7 @@ class ExtractedWorld {
         // Block edits copy the terrain snapshot; runtime model state stays shared.
         std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
     };
+    static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     using Key = std::pair<int, int>;
     std::filesystem::path folder;
     // Game sprite tables: environment type -> sprite, building part -> sprite

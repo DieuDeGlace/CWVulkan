@@ -445,6 +445,16 @@ void World::update(glm::vec3 focus) {
         }
         z.opaque = renderer.upload(g.opaque);
         z.water = renderer.upload(g.water);
+        if (extracted && g.nativeBounds) {
+            const int64_t shift[] = {-extracted->originDotsX(), -extracted->originDotsY(), 0};
+            for (int axis = 0; axis < 3; ++axis) {
+                g.nativeBounds->minimum[axis] += shift[axis];
+                g.nativeBounds->maximum[axis] += shift[axis];
+                g.nativeBounds->center[axis] += shift[axis];
+            }
+            g.nativeBounds->meshed = z.opaque || z.water; // actual published geometry, not planned bands
+            z.nativeBounds = std::make_shared<const scenevisibility::Bounds>(*g.nativeBounds);
+        }
         for (auto &s : g.scenery) {
             if (s.beam) {
                 DrawItem shaft;
@@ -452,6 +462,7 @@ void World::update(glm::vec3 focus) {
                 shaft.castShadow = false;
                 shaft.kind = DrawKind::LightBeam;
                 shaft.beam = *s.beam;
+                shaft.nativeZone = z.nativeBounds;
                 z.scenery.push_back(shaft);
                 continue;
             }
@@ -475,8 +486,9 @@ void World::update(glm::vec3 focus) {
                 auto position = s.modelPosition;
                 position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
                 position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
-                position[2] += (int64_t)ExtractedWorld::Z_OFFSET * 65536;
+                // Native CPU culling keeps game Z; GPU placement alone has Z_OFFSET.
                 d.nativeScenery = steamscenery::bounds(position, models[m].size, s.scale, (uint32_t)modelFlags);
+                d.nativeZone = z.nativeBounds;
             }
             d.standingLight = (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT) ? 1.0f : s.light;
             if (renderStyle() == RenderStyle::Steam && s.modelType >= 0 && (modelFlags & vegetationwind::modelflag::OWN_LIGHT))
@@ -572,7 +584,7 @@ void World::update(glm::vec3 focus) {
             ExtractedWorld *ex = extracted;
             jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook] {
                 Generated g;
-                ex->mesh(k.first, k.second, g.opaque, g.water);
+                ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds);
                 g.scenery = ex->props(k.first, k.second);
                 if (alphaLook)
                     lightScenery(g.scenery);

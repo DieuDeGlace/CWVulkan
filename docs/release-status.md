@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-10-28
+# Source review checkpoint — 2026-10-29
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -7,6 +7,24 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Pyro regional difficulty now uses the first entrant's level while a region has
+  occupants. The host shares it in multiplayer; single player uses the same path.
+  The last departure/disconnect clears it, so re-entry chooses a fresh level.
+  Permanent discovery difficulty locks are ignored. Existing biome/id variation
+  and gear-level records remain. Real two-session UDP tests cover publication,
+  retained occupancy, last departure and refreshed re-entry.
+- Steam model/beam visibility now uses the mesh job's native column/face prepass,
+  published-geometry readiness, five-plane containing-zone test, stored center,
+  exact early fixed-distance arithmetic and raw six-plane model-sphere test.
+  Native CPU coordinates retain unshifted game Z. Missing neighbor data retains a
+  conservative fallback. The camera lens/distance settings remain configurable;
+  native adaptive range and camera-state matching still need implementation.
+  A versioned owner-export record captures coherent bounds/counts/triangle cost
+  for future comparisons. Synthetic/file-format regressions and no-save Vulkan
+  captures pass; no fresh native cached-box oracle or pixel match is claimed.
+- The separate clean-room author has completed the scene-lighting/cache/palette
+  specification. Full native palette smoothing, point-light registration and
+  remaining shader/color behavior still need implementation and comparison.
 - Runtime follow-up: incoming local-player hit rules, native music smoothing,
   gameplay XInput mapping/sticks/camera, page-scoped dialogue marks and daily world/
   character reset behavior now follow the independent runtime-gap specification.

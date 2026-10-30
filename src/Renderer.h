@@ -11,6 +11,8 @@
 #include "Mesher.h"
 #include "LightBeam.h"
 #include "SteamScenery.h"
+#include "SceneVisibility.h"
+#include <memory>
 #include <volk.h>
 #include <glm/glm.hpp>
 #include <functional>
@@ -109,6 +111,7 @@ struct DrawItem {
         glm::vec3 colour{1};        // the instance's colour
         float white = 0;            // how far toward white (an outline's pulse)
     } map;
+    std::shared_ptr<const scenevisibility::Bounds> nativeZone; // containing zone for native model/beam gates
     // Reflections reverse triangle winding (the native right foot uses one).
     bool mirrored() const {
         return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0;

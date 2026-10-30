@@ -27,11 +27,11 @@ This is the variant installed in the owner's game. Its formulas are re-implement
 
 ### Enemies
 
-- An enemy's level follows the player's level by the game's region type:
+- Difficulty regions and their biome tiers remain. An enemy's level uses the active regional baseline (or the player's level in relative mode):
 
   | Region types | Enemy level |
   |---|---|
-  | Easy: plains, hills, woodlands, ocean, wetlands, mountains | 90–98% of the player's |
+  | Easy: plains, hills, woodlands, ocean, wetlands, mountains | 90–98% of the baseline |
   | Moderate: dark woods, snow forest, savannah, snowlands | 108–116% |
   | Hard: jungle, desert, deadlands, lava | 125–133% |
 
@@ -45,10 +45,13 @@ This is the variant installed in the owner's game. Its formulas are re-implement
   - Kills give XP by that level.
   - Life bars read "LV n" for every creature (the mod's display hook at 0xb1966; "K"/"M" past a thousand and a million).
   - OverworldEvents takes its enemies' levels from it (PyroProgressionCreatureLevel).
-  - The discovery-locked variant (`[Progression] LockDiscoveredRegions`; empty follows the owner's game, which is locked when its `Mods/PyroRelativeLevels.state` has region entries). On first entering a region, its enemies keep the player's level at that moment for good.
-    - The entries are kept per character and world: the key is mix(identity ^ regionRoll(0, region)), where the identity mixes seed 123, "world" and the character's name.
-    - CubeVulkan reads the game's file without writing it, and appends its own entries to `Saves/PyroRelativeLevels.state` (not with `--no-save`).
-    - `EngineTests pyroregions <file> <name> <rx> <ry> <radius>` lists the regions a character locked. For the owner's character, 24 of the file's 94 entries were found around the extracted world, which confirms the key.
+  - CubeVulkan's optional shared regional difficulty (`[Progression] RegionScaling=first-player`, the default in Pyro mode):
+    - The first player entering a region sets its level baseline. Existing biome/seed/id variation still produces weaker and stronger enemies around it.
+    - Other players share that baseline. Leveling in place, or the first player leaving while others remain, does not retune it.
+    - When the last player leaves or disconnects, the baseline is discarded. The next entrant chooses a fresh level. Unoccupied/unloaded regions retain no discovery lock or persistent difficulty history.
+    - The host decides arrival order and broadcasts its active baselines to negotiated CubeVulkan clients. Single player uses the same host path. Original Steam clients receive no extension messages.
+    - `RegionScaling=relative` retains player-relative scaling. Legacy `LockDiscoveredRegions` and imported `R` discovery entries no longer affect enemy difficulty. Existing `G` gear entries remain supported.
+    - This is a requested gameplay option, not a claim of vanilla Steam parity. Vanilla mode keeps its original progression rules.
   - Gear levels (the mod's `RelativeItemLevel`; `G <key> <level>` lines in the same state files):
     - A piece of gear (categories 3–9) keeps the first level it is given. The key mixes the same identity with category, id, modifier and material, so identical items share a level.
     - On the first session, gear the character owns gets the mod's old level: `1 + 5·region distance + rand(modifier) % 5`.
