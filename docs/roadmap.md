@@ -154,7 +154,7 @@ individual feature documents.
   source. Generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Remaining native creature lights and the race0x90 death-effects flash,
+- [ ] Remaining native living-creature lights,
   water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
@@ -162,9 +162,11 @@ individual feature documents.
   Hit flashes now consume local and received visual records, select current spirit
   weapons, retain the fixed hit position and use native first-frame aging/strict
   expiration. They share the scene sort/zone slots. CPU and Vulkan regressions
-  cover the store, consumer bridge and zero-fade slots. The death-effects producer
-  and its persistent pose-cache marker are [specified independently](specs/steam-transient-light-producers.md)
-  but still need runtime integration.
+  cover the store, consumer bridge and zero-fade slots. The race0x90 death flash
+  also follows the [independent producer specification](specs/steam-transient-light-producers.md):
+  persistent pose-preparation marker, drawn position, previous renderer sphere/range
+  test, unsigned actor-identity ordering and 800-ms strict expiration. Death births
+  precede hit-display births; the common age pass precedes scene collection.
 
 The independently authored [runtime-gap specification](specs/remaining-runtime-gaps.md)
 resolves several questions in older specs. Remaining checkboxes are intentional.

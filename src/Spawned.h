@@ -360,6 +360,7 @@ class SpawnedCreatures {
         glm::vec3 at{0};
         int race = 0, level = 0;
         std::vector<uint8_t> record; // as it died
+        uintptr_t identity = 0; // actor identity retained for native visual-candidate ordering
     };
     std::vector<Death> takeDeaths(const ExtractedWorld &ew);
     // Ids the world counts as dead without a death: a creature tamed takes a new id and its

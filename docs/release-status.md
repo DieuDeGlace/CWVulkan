@@ -14,7 +14,11 @@ checkpoint describe the intended setup and remaining limits.
   spirit weapons and native fixed positions, first-frame aging and expiration.
   CPU regressions and 25 Vulkan cases cover these sources, including zero-fade
   slots, personal state updates, projectile filtering/removal and owned/delayed/
-  picked-up items. Creature lights, the race0x90 death-effects flash, adaptive
+  picked-up items. The race0x90 death flash is also integrated, using the persistent
+  pose-preparation marker, drawn position, cached previous renderer visibility,
+  fixed 100-block range and native candidate ordering/800-ms lifetime. Death births
+  precede hit-display flashes. Further CPU/GPU checks cover these gates and cached
+  visibility across pending origin changes. Living-creature lights, adaptive
   camera/range state and broader native visual comparisons remain open.
 
 - Isolated reference capture now runs automatically after game-session

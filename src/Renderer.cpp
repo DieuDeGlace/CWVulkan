@@ -1258,6 +1258,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     const auto nativePlanes = scenevisibility::planes(
         glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) *
         glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
+    lastSceneSphere = SphereState{{(int64_t)(worldProbe.origin.x * 65536),
+                                   (int64_t)(worldProbe.origin.y * 65536), 0}, nativeEye, nativePlanes};
     std::unordered_map<const scenevisibility::Bounds *, bool> zoneVisibility;
     auto nativeZoneVisible = [&](const DrawItem &item) {
         if (!item.nativeZone)
@@ -1960,7 +1962,15 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     frameIndex = (frameIndex + 1) % FRAMES;
 }
 
+bool Renderer::steamSphereVisible(const steampoints::Point &position, float radius, float range) const {
+    if (!lastSceneSphere) return false;
+    const auto &state = *lastSceneSphere;
+    const steampoints::Point relative{position[0] - state.origin[0], position[1] - state.origin[1], position[2]};
+    return scenevisibility::sphere(relative, radius, state.eye, state.planes, range);
+}
+
 void Renderer::shutdown() {
+    lastSceneSphere.reset();
     if (!device)
         return;
     vkDeviceWaitIdle(device);

@@ -237,6 +237,20 @@ int steamShaderTests() {
     probe.transientLights = [&] { return flashes.values(); };
     renderer.setWorldProbe(probe);
     checkPoints("transient-born", {item}, {82,214,60});
+    const steampoints::Point previousPoint{0,0,65536};
+    if (!renderer.steamSphereVisible(previousPoint, 1, 100)) {
+        ++failures;
+        std::cerr << "Previous scene sphere unexpectedly rejected\n";
+    }
+    probe.origin = {6400,-12800,-32};
+    renderer.setWorldProbe(probe);
+    if (!renderer.steamSphereVisible(previousPoint, 1, 100) ||
+        renderer.steamSphereVisible({6400LL*65536,-12800LL*65536,-31LL*65536}, 1, 100)) {
+        ++failures;
+        std::cerr << "Pending world origin changed previous scene visibility\n";
+    }
+    probe.origin = {};
+    renderer.setWorldProbe(probe);
     flashes.advance(400);
     checkPoints("transient-zero-fade", {item}, {7,52,5});
     flashes.advance(1);

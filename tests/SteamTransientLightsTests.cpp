@@ -83,6 +83,47 @@ int steamTransientLightsTests() {
     mirror.showDamageNumber(number);
     check(observed.size() == 2 && shown == 2, "headless worlds need no visual observer");
 
+    auto deathRecord = target;
+    int32_t race = 0x90;
+    const float body[3] = {2,6,4};
+    std::memcpy(deathRecord.data() + 0x64, &race, 4);
+    std::memcpy(deathRecord.data() + 0x84, body, sizeof body);
+    std::memcpy(deathRecord.data() + 0xb10, position.data(), sizeof position);
+    TransientLights deathFlashes;
+    int deathVisibleCalls = 0;
+    bool admitted = true;
+    auto deathVisible = [&](const Point &at, float radius, float range) {
+        ++deathVisibleCalls;
+        check(radius == 3 && range == 100, "death uses half maximum body extent and fixed range100");
+        return admitted;
+    };
+    deathFlashes.deaths({{1,deathRecord.data()}}, deathVisible);
+    check(deathFlashes.values().empty() && deathVisibleCalls == 0, "unprepared pose skips death visibility and light");
+    deathRecord[0x1500] = 1;
+    admitted = false;
+    deathFlashes.deaths({{1,deathRecord.data()}}, deathVisible);
+    check(deathFlashes.values().empty() && deathVisibleCalls == 1, "previous renderer rejection suppresses death flash");
+    admitted = true;
+    auto secondDeath = deathRecord;
+    Point secondPosition = position;
+    secondPosition[0] += 123;
+    std::memcpy(secondDeath.data() + 0xb10, secondPosition.data(), sizeof secondPosition);
+    deathFlashes.deaths({{20,deathRecord.data()}, {10,secondDeath.data()}, {20,deathRecord.data()}}, deathVisible);
+    check(deathFlashes.values().size() == 2, "death identities deduplicate before unsigned pointer-order traversal");
+    if (deathFlashes.values().size() == 2) {
+        check(deathFlashes.values()[0].position == secondPosition && deathFlashes.values()[1].position == position &&
+              deathFlashes.values()[0].colour == glm::vec3(1,.8f,.5f) && deathFlashes.values()[0].radius == 16 &&
+              deathFlashes.values()[0].lifetimeMs == 800, "death order, drawn fixed position, color, radius and lifetime");
+    }
+    deathFlashes.advance(800);
+    check(deathFlashes.values().size() == 2 && deathRecord[0x1500] == 1, "death lifetime equality survives without clearing preparation marker");
+    deathFlashes.advance(1);
+    check(deathFlashes.values().empty(), "death flashes expire strictly after800ms");
+    race = 0x91;
+    std::memcpy(deathRecord.data() + 0x64, &race, 4);
+    deathFlashes.deaths({{1,deathRecord.data()}}, deathVisible);
+    check(deathFlashes.values().empty(), "other races produce no explicit death light");
+
     sources.advance(16.9);
     sources.advance(.9);
     check(!sources.values().empty() && sources.values()[0].elapsedMs == 16, "integer age discards each frame's fraction");

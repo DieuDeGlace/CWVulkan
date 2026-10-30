@@ -188,6 +188,8 @@ class Renderer {
                const std::vector<DrawItem> &opaque, const std::vector<DrawItem> &water);
     const std::string &deviceName() const { return gpuName; }
     unsigned drawsLastFrame() const { return lastDraws; }
+    // Death effects query the completed scene state before the next camera setup.
+    bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
     // Saves the next presented frame as a PNG (for screenshots and tests).
     void capture(const std::string &path) { capturePath = path; }
     // GPU time per frame (milliseconds, averaged since start): the whole frame and
@@ -238,6 +240,12 @@ class Renderer {
 
     GLFWwindow *window = nullptr;
     std::string gpuName;
+    struct SphereState {
+        steampoints::Point origin{};
+        glm::vec3 eye{0};
+        scenevisibility::Planes planes{};
+    };
+    std::optional<SphereState> lastSceneSphere;
     bool noGpu = false;
     uint32_t headlessIds = 0;
     VkInstance instance = VK_NULL_HANDLE;

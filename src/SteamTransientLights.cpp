@@ -48,6 +48,26 @@ void TransientLights::hit(const std::array<uint8_t, 0x48> &number, const Lookup 
         append({position, {.3f,.3f,.5f}, 16, 0, 400});
 }
 
+void TransientLights::deaths(std::vector<DeathCandidate> candidates,
+                              const std::function<bool(const Point &, float, float)> &visible) {
+    std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b) { return a.identity < b.identity; });
+    const auto end = std::unique(candidates.begin(), candidates.end(),
+                                 [](const auto &a, const auto &b) { return a.identity == b.identity; });
+    for (auto it = candidates.begin(); it != end; ++it) {
+        const uint8_t *record = it->record;
+        if (!record || !record[0x1500] || !visible) continue;
+        Point position;
+        float body[3];
+        int32_t race;
+        std::memcpy(position.data(), record + 0xb10, sizeof position);
+        std::memcpy(body, record + 0x84, sizeof body);
+        std::memcpy(&race, record + 0x64, sizeof race);
+        const float radius = .5f * std::max({body[0], body[1], body[2]});
+        if (visible(position, radius, 100) && race == 0x90)
+            append({position, {1,.8f,.5f}, 16, 0, 800});
+    }
+}
+
 void TransientLights::advance(double elapsedMs) {
     const int32_t step = (int32_t)std::min(elapsedMs, 1000.0);
     for (auto &source : sources) {

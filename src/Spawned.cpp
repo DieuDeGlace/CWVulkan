@@ -787,7 +787,8 @@ std::vector<SpawnedCreatures::Death> SpawnedCreatures::takeDeaths(const Extracte
             toBurst.insert(id);
             out.push_back({id, get<int64_t>(cr.record, 0x9e0),
                            ew.toLocal(reinterpret_cast<const int64_t *>(&cr.record[worldgen::creature::POSITION])),
-                           get<int32_t>(cr.record, worldgen::creature::RACE), get<int32_t>(cr.record, worldgen::creature::LEVEL), cr.record});
+                           get<int32_t>(cr.record, worldgen::creature::RACE), get<int32_t>(cr.record, worldgen::creature::LEVEL), cr.record,
+                           reinterpret_cast<uintptr_t>(&cr)});
         }
     return out;
 }

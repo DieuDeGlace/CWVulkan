@@ -5232,8 +5232,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 logLine("Test coins: five laid by the host");
             }
-            for (const auto &number : std::exchange(hitVisuals, {}))
-                transientLights.hit(number, [&spawned](int64_t id) { return spawned.record(id); });
             // The hits this player made (the host applies them), shown as the game shows numbers.
             for (const cwnet::DamageRecord &number : spawned.events().damageNumbers) {
                 int64_t attacker, target, at[3];
@@ -5604,7 +5602,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 logLine("Opened a chest: " + itemName(got));
             }
-            for (const SpawnedCreatures::Death &d : spawned.takeDeaths(extractedWorld)) {
+            const auto deaths = spawned.takeDeaths(extractedWorld);
+            std::vector<steampoints::DeathCandidate> deathLights;
+            for (const auto &d : deaths)
+                if (d.record.size() > 0x1500) deathLights.push_back({d.identity, d.record.data()});
+            transientLights.deaths(std::move(deathLights), [&](const auto &position, float radius, float range) {
+                return renderer.steamSphereVisible(position, radius, range);
+            });
+            for (const SpawnedCreatures::Death &d : deaths) {
                 events.death(d.id);
                 if (std::find(saveGame.killed.begin(), saveGame.killed.end(), d.id) == saveGame.killed.end())
                     saveGame.killed.push_back(d.id); // (the world remembers who died)
@@ -5721,6 +5726,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     drawPart(models[i], actorPose[i]);
         }
 
+        // Native death responses precede hit-display flashes in the persistent list.
+        for (const auto &number : std::exchange(hitVisuals, {}))
+            transientLights.hit(number, [&spawned](int64_t id) { return spawned.record(id); });
         transientLights.advance(frameMs); // births age before their first scene collection
 
         // Death fragments (one mesh, rebuilt each frame).
