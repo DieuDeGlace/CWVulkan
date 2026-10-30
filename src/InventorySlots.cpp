@@ -19,6 +19,15 @@ uint32_t subtype(const Item &item) {
     std::memcpy(&value, item.data() + nativesaves::item::SUBTYPE, 4);
     return value;
 }
+void copyItem(Item &destination, const Item &source) {
+    using namespace nativesaves::item;
+    destination[TYPE] = source[TYPE];
+    // Subtype, seed, region and rarity are contiguous; the following padding is not copied.
+    std::memcpy(destination.data() + SUBTYPE, source.data() + SUBTYPE, RARITY - SUBTYPE + 1);
+    std::memcpy(destination.data() + FORMULA, source.data() + FORMULA, 4);
+    // Material, all 32 attribute entries and their count form the final meaningful span.
+    std::memcpy(destination.data() + MATERIAL, source.data() + MATERIAL, ATTRIBUTE_COUNT - MATERIAL + 1);
+}
 struct SortKey {
     bool empty = false, here = false, usable = false;
     int family = 2;
@@ -63,7 +72,7 @@ const Stack *Inventory::slot(Index index) const {
     return contains(index) ? &tabs[(size_t)index.tab][(size_t)index.slot] : nullptr;
 }
 
-std::optional<Index> Inventory::add(const Item &item, int32_t quantity, int tab) {
+std::optional<Index> Inventory::add(Item item, int32_t quantity, int tab) {
     if (quantity == 0 || item[0] == 0 || tab < -1)
         return {};
     if (tab == -1)
@@ -89,16 +98,17 @@ std::optional<Index> Inventory::add(const Item &item, int32_t quantity, int tab)
             return Index{tab, (int)index};
         }
     }
-    if (empty >= 0)
-        list[(size_t)empty] = {quantity, item};
-    else {
+    if (empty < 0) {
         empty = (int)list.size();
-        list.push_back({quantity, item});
+        list.emplace_back();
     }
+    auto &added = list[(size_t)empty];
+    added.count = quantity;
+    copyItem(added.item, item);
     return Index{tab, empty};
 }
 
-void Inventory::takePage(const Item &item, int32_t quantity) {
+void Inventory::takePage(Item item, int32_t quantity) {
     if (quantity == 0 || item[0] == 0)
         return;
     if (item[0] == 12 && item[nativesaves::item::MATERIAL] == 11) {
@@ -114,12 +124,13 @@ void Inventory::takePage(const Item &item, int32_t quantity) {
                 return;
             }
             quantity = minus(quantity, stack.count);
-            stack = {};
+            stack.count = 0;
+            copyItem(stack.item, {});
             if (quantity == 0)
                 return;
         }
 }
-void Inventory::takeCreature(const Item &item, int32_t quantity) {
+void Inventory::takeCreature(Item item, int32_t quantity) {
     for (auto &tab : tabs)
         for (auto &stack : tab) {
             if (!nativeinteract::sameItem(stack.item.data(), item.data()))
@@ -128,7 +139,7 @@ void Inventory::takeCreature(const Item &item, int32_t quantity) {
             stack.count = minus(stack.count, used);
             quantity = minus(quantity, used);
             if (stack.count == 0)
-                stack.item = {};
+                copyItem(stack.item, {});
         }
 }
 

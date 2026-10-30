@@ -454,3 +454,283 @@ hover/crafting interpretations. The positive empty→nonempty retained
 cursor producer remains unverified. The bounded first-write oracle
 described in §6.4 is still the specific missing evidence, and no original
 game execution was performed to obtain it.
+
+## 7. Canonical-slot direct use/equip on mouse down0x94900
+
+This section covers the reached ordinary canonical-slot branch of the
+Steam handler, after resolver0x94600. Shop sale, identification,
+customization and middle-button dropping retain their separate routes.
+It does not introduce a grabbed stack. All addresses below are Steam RVAs.
+
+### 7.1 Common admission, item copies and insertion semantics
+
+The ordinary branch is reached for **button0 left or1 right down**, with
+the current nonnegative live canonical tab/slot pair resolved at0x95013.
+Inventory selection is by current hover indices, not the crafting
+selection pair or a saved item identity. Earlier event/interface handling
+in §6.7 already ran. Identification shown intercepts the pair; shop
+shown takes its sale branch; customization shown takes its own item
+binding branch. The following equip/use rules apply after those routes
+have been excluded. The stored source tab does not itself determine an
+equipment destination; the item's category does.
+
+The resolver reads the widget's stored hover pair and independently
+checks its current frame hit; it does not rerun the grid's cell-picking
+calculation inside this mouse event. Preserve the producer/consumer
+distinction instead of deriving a new slot from the click coordinates
+in0x94600 itself.
+
+The player/item usability test **0x50640 at0x95315** occurs before the
+category dispatch and its repeated source-count check. For creature
+kind byte+0x60!=0 it returns true. Kind0 calls0x1094d0 with the item and
+class byte+0x14c. Failure requests **sound0x35**, then rejoins the
+ordinary handler tail, without consuming/equipping that slot. There is
+no additional level, region, health-positive, stamina or carry-cap test
+in this reached equip admission. The class/material table is
+stat-rules §1.3; it applies to the incoming item, not each displaced item.
+The subsequent quantity==0 check also skips the dispatch. Resolver
+admission and this check use nonzero, not strictly positive, quantities.
+
+Every incoming copy below is a **semantic item copy**, not a reduction
+to category/subtype and not a required160-byte padding comparison.
+Construction0x35400 and assignment0x9cd0 preserve category, subtype,
+modifier, region pair, rarity, wrapped-type field, material, all32
+attribute entries and the trailing attribute count. Semantic padding is
+not assigned by these helpers. “Default empty item” below means all
+those meaningful fields zero, including all attribute entries/count.
+
+“Return an old item” means call **0x4e810 with quantity1 and default
+tab−1**, using the item's actual category to select its destination tab.
+It is not a direct swap into the selected slot. Type0 is ignored;
+otherwise the ordinary merge/first-hole/append rules in §2 apply, with
+no0x50670 carry-cap check added for the displaced item. Therefore an
+already freed source hole can be reused if it lies in the chosen tab;
+the same hole cannot be used before its count becomes0. Saved source
+items in nonstandard tabs do not force displaced equipment into that tab.
+
+“Consume the source” below means decrement that live canonical slot's
+signed32 quantity by1. If the result is below1, write quantity0 and only
+item category0/subtype0; retain its other old fields. There is no−1
+infinite-stack exception in these direct decrements.
+
+### 7.2 Nonweapon equipment: exact destination and operation order
+
+After the common gate, these categories are handled identically for left
+and right down, except rings:
+
+| Incoming category | Old item returned | Incoming destination | Ordering |
+|---|---|---|---|
+|4|Chest+0x3b8|+0x3b8|Copy incoming, consume source, return old, assign incoming|
+|5|Hands+0x4f8|+0x4f8|Same|
+|6|Feet+0x458|+0x458|Same|
+|7|Shoulder+0x598|+0x598|Same|
+|8|Neck+0x318|+0x318|Same|
+|9, left0|Ring+0x818|+0x818|Same|
+|9, right1|Ring+0x778|+0x778|Same|
+|20 (0x14)|+0x8b8|+0x8b8|Copy incoming, return old, assign incoming, **then consume source**|
+|26 (0x1a)|**Chest+0x3b8**|**Head+0x278**|Copy incoming, consume source, return chest, assign head|
+
+The category26 mismatch is verified in native instructions, not an
+inferred intended swap:0x958be selects old+0x3b8, insertion is at
+0x958d4, and0x958e4 selects destination+0x278 for assignment0x958ef.
+The chest is not cleared by that return, and the old head item is not
+returned by this branch. Preserve this observed behavior separately
+from a desired normal equipment swap. Category20's return/assignment
+before source depletion is likewise explicit at0x957a9/0x957c4 before
+the quantity write0x957cd. Other armor/ring branches are0x95933–0x95bf5.
+
+Each successful row then calls ordinary inventory refresh **0x280a40**,
+followed by scrollbar/layout refresh **0x280c80**, then **sound0x5b**.
+For20/26 the calls are0x958fb,0x95907,0x95929; for4–9 the shared finish
+uses refresh0x959a5/0x959b1 and sound wrapper0xa03f0 at0x96226. Refresh can sort
+and compact the actual canonical tabs as §4 specifies. These nonweapon
+finishes do not themselves call the extra crafting rebuild0xb2180 used
+by the weapon path. Later common left-click widget handling still runs.
+
+### 7.3 Category21 starts pet-food presentation without immediate depletion
+
+Category21 (0x15) has no left/right distinction. Admit when current
+ability byte+0x68 is0, or current float32 ability age+0x6c is **strictly
+greater** than the current ability duration returned by0x4f220, converted
+to float32 for the comparison. Equality does not pass this second test.
+Source0x957e7–0x95889.
+
+On admission, copy the selected item to player+0x1d8, set ability0x56,
+set ability age0 and hide ordinary InventoryWidget G+0x330. This branch
+does **not** decrement/clear the source slot, return equipment, invoke
+the ordinary equip refresh pair or request equip sound0x5b. A rejected
+attempt also reaches the common handler tail. The subsequent ability/
+pet interaction lifecycle remains its separate producer/consumer path;
+starting this presentation is not an immediate grant or generic item use.
+
+### 7.4 Weapon selection input is raw Shift, not a rebound action
+
+For the weapon table below, **W1=player+0x638** and **W2=+0x6d8**.
+The relevant Shift input is byte **G+0x1a97**. Its producer is the raw
+virtual-key array at G+0x1a87:0x96e70 sets array[WM key low byte]=1,
+0x97870 clears it, and0x133c70 routes WM_KEYDOWN/UP through those
+handlers. Thus index0x10 is **VK_SHIFT**, independently of the rebound
+Class Skill binding or controller action2. Constructor0x7ea80 zeros
+the256-byte array. The key-down write precedes that handler's later
+chat/menu actions. No Shift splitting or cursor interaction follows
+from this modifier.
+
+Raw Shift affects the ordinary weapon choices below; it does not change
+the ring destinations or the other nonweapon table rows.
+
+### 7.5 Category3 weapon routing, in native decision order
+
+First copy the incoming weapon, then consume its canonical source as
+defined in §7.1. Both operations precede **every** old-weapon insertion
+in this section. The incoming item is retained in a temporary semantic
+copy even if source depletion cleared its original category/subtype.
+
+For these tests, “2H” means **category3, unsigned subtype<24, and subtype
+in {5,6,7,8,10,11,15,16,17,18,23}**, mask0x878de0. It is an exact
+predicate, not a size or owner-asset inference. Test incoming subtypes
+13/14 first, then6/7, before the remaining 2H/ordinary cases. The table
+preserves insertion, assignment and clearing order; a clear replaces the
+whole semantic equipped item with the default empty item from §7.1.
+
+| Incoming subtype / input | Exact old-item and equipment sequence after source depletion |
+|---|---|
+|13 or14, either button, either Shift state|If W2 is2H, return W2 then clear W2. Next return W1, then assign incoming to W1. A non-2H W2 is retained.|
+|6 or7, left0, either Shift state|Return W1, assign incoming to W1, then return W2 and clear W2 unconditionally.|
+|6 or7, right1, either Shift state|Return W2, assign incoming to W2, then return W1 and clear W1 unconditionally.|
+|Any other2H incoming, either button, either Shift state|Return W2, assign incoming to W2, then return W1 and clear W1 unconditionally.|
+|Other incoming, left0 and Shift clear|Return W2, assign incoming to W2. W1 is retained, without an old-W1 2H rejection/clear.|
+|Other incoming, right1 or left0 with Shift held|Return W1. If current W2 is2H, return W2 then clear W2. Finally assign incoming to W1. A non-2H W2 is retained.|
+
+Source is **0x95345–0x95772**. The subtype13/14 unsigned subtract13/<2
+test is0x95362–0x95368; the left subtype6/7 subtract6/<2 test is
+0x9537c–0x95382, with its corresponding right-button branch later;
+0x95518/0x95528 join the remaining incoming-2H choice and the W2
+assignment path. The asymmetry in the last two rows is real: ordinary
+left without Shift does not normalize a previously 2H W1 before
+equipping W2. No special insertion into the original source slot is
+performed; each “return” invokes the ordinary canonical insertion helper.
+The order of multiple returns can therefore determine hole reuse and
+append order before later sorting.
+
+All successful weapon rows finish **inventory refresh0x280a40 at0x95737**,
+then **scrollbar/layout refresh0x280c80 at0x95743**, then request
+**sound0x5b at0x95765**, then rebuild crafting collections through
+**0xb2180 at0x9576d**. They rejoin the common left-widget/tail processing
+at0x9622b. No retained cursor quantity/item is used for a weapon swap.
+
+### 7.6 Other categories dispatched to the shared item-use helper
+
+After the equipment/category21 cases, the caller's exact dispatch mask
+is **0x19000002 with category<29**: categories **1,24,27,28**.
+It enters the World critical section+0x3c8 through0x2abb70, calls
+**0xb7740 with the live canonical slot pointer**, then leaves through
+0x2b9890. Calls are0x95bfc/0x95c07/0x95c10. The incoming button0/1
+does not select different behavior inside this helper.
+
+The caller mask and helper mask are distinct. The helper's first family
+admits1,22,28; the inventory-down caller above does **not** dispatch22.
+Category27 reaches the helper but none of its effect families, so it
+does not consume or change the item here. Do not infer type22 inventory
+click use merely because another caller can invoke0xb7740 for it.
+
+For the reached categories, require float stun timer player+0x130≤0
+before the following helper effects. This is a stun test, not an
+ability-finished, health-positive or carry-cap gate:
+
+| Category/subtype | Helper's immediate changes |
+|---|---|
+|1/subtype9|Append a kind1 queued interaction carrying the incoming item, then consume that canonical source by1. This is the existing bomb producer in skills-and-interactions §2.3, not immediate host damage.|
+|1/subtype13|Set Game bytes+0x668 and+0x669 both to1; append the kind1 item interaction; store this live slot pointer at Game+0x21c0. Do **not** consume its quantity in this path. The subsequent map/interaction consumer determines the continuation.|
+|1/subtypes1,2,3,12|Copy the item to active-item field player+0x1d8; set ability0x54, ability age0, dodge timer+0x12c=0; consume source by1.|
+|Other1 subtypes|Same active-item/age/dodge/count operations, with ability0x55.|
+|28 (0x1c), any subtype|Same operations, with ability0x54.|
+
+These are0xb7740–0xb7a5b. The source count's below1 clear again writes
+only quantity/category/subtype, retaining its other stale fields. The
+queued interaction's item is copied before this clearing. For the
+subtype13 map case, storing the live pointer is not assigning the
+retained cursor and is not a quantity reservation/decrement. No generic
+click-time relocation of that slot is established by the pointer store.
+
+**Category24 (0x18)** has its own helper branch at0xb7a5b–0xb7b56,
+also requiring stun≤0. Require the item's signed32 region pair+0x0c/
++0x10 equal the player's current region+0x150/+0x154. A mismatch
+requests **sound0x34 at0xb7b51**, leaving the item/ability unchanged.
+On a match, first copy the item to active-item field+0x1d8, then:
+
+- Subtype1: if current ability is0x78, set ability0 without clearing its
+  old age. Otherwise set0x78 and age0.
+- Subtype2: the same toggle using ability0x79.
+- Every other subtype: set ability0x89 and age0, even if0x89 was already
+  current.
+
+This category24 branch does not decrement the source quantity or reset
+the dodge timer. No equip refresh pair or equip sound0x5b is requested
+by these delegated caller/helper paths. Later normal ability updates,
+interaction consumers, visibility changes and their sounds are separate.
+The direct caller does not hide ordinary inventory for these delegated
+categories; category21's explicit hide in §7.3 is a distinct path.
+
+All remaining categories take no item-specific action after the common
+class/count gates; they still reach the common handler tail. This does
+not assert that they have no use from other input routes.
+
+### 7.7 Sound arguments, common health adjustment and final UI work
+
+The0x35 rejection and0x5b equip requests described above use the listener/
+camera fixed position **G+0x1dc0**, pitch1 and volume1 through0xa0420;
+wrapper0xa03f0 supplies the same defaults. The callers also write an
+extra final byte1 in the next argument position, which0xa0420 does not
+read; it is not established here as a notice or queued-interaction flag. They
+are not emitted at the selected item's world position. The category24
+region error0x34 uses the same listener position/defaults. This section
+specifies direct requests; later independent state/ability sound events
+retain their separate update order.
+
+Before inventory actions,0x94900 saved float maximum health from
+**0x5fac0 at0x94e8c**, after the earlier GUI down dispatch. All the reached
+success, failure and no-item-action paths above eventually finish at
+**0x9651f**, after any ordinary left-click crafting/customization widget
+processing beginning0x9622b. Thus it is incorrect to add a blanket
+“other panel visible” exclusion to this direct branch merely to avoid
+the later widget processing.
+
+At0x9652a query maximum health again. Divide that new float32 maximum
+by the saved old float32 maximum, then multiply the result by the
+player's current float32 health+0x180, with **float32 division before
+float32 multiplication**; store it. Query maximum health a second time
+at0x96559 and cap stored health to that maximum only when the maximum
+is smaller. Source0x9653a–0x96579. There is no added lower-zero clamp
+or special old-maximum-zero branch in this handler. This preserves the
+health fraction for ordinary finite positive maximum-health inputs; it
+is not an additive equipment-health delta or an unconditional full heal.
+
+Then clear ChatWidget G+0x398's active-editor byte+0x1d8 at0x96588 and
+hide widget G+0x310 through its shown property at0x965a8. No inventory
+cursor put-back occurs in this tail. These common effects also follow
+an unusable-item sound or a category whose direct dispatch did nothing.
+
+### 7.8 Verification boundary
+
+The admitted canonical-slot consumer, category/button decisions,
+raw-Shift producer, semantic copies, operation order, displaced-item
+insertion/count clearing, refreshes, direct sounds and shared health/UI
+tail are verified in the native Steam code/instructions. No game was
+executed. The inventory retained-cursor producer remains the separate
+unverified question in §6.4; none of these direct actions supplies one.
+The full ability-duration helper used by category21 is independently
+specified in effect-objects §2.2, with existing ability update contracts
+governing the later effects. The next map consumer after category1/
+subtype13's request is not newly audited here, nor are catalog names or
+new producers for otherwise unavailable item categories inferred from
+these reachable consumer tests.
+
+An additional storage limit remains explicit: category20 retains the
+source-slot pointer across its old-item insertion, with no new lookup
+before the later decrement. The order above is verified. This audit does
+not define a portable outcome for a native insertion that reallocates
+that source's slot vector and invalidates the pointer. A focused oracle
+for that case would label source tab/index, size/capacity and base address
+before/after insertion, original source quantity, inserted old-item
+location and final live source quantity. No such game execution was
+performed, and no allocator-dependent stale-pointer result is invented.

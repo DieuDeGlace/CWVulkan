@@ -208,6 +208,9 @@ individual feature documents.
   unsigned subtype comparisons and the verified empty-slot predicate. Stat queries
   are explicit local-player inputs. Starter-kit contents and random draws remain
   covered by the existing frontend tests. Main gameplay routing remains open above.
+  Native semantic assignment updates every meaningful item field while retaining
+  destination padding; selected operation inputs remain valid while their slots
+  are cleared or vectors grow. Dedicated regressions cover both distinctions.
 - [x] Complete item records survive gameplay/save views: received items, bag entries,
   carried/equipped gear and crafting comparisons use a shared conversion that
   retains uninterpreted bytes while writing current metadata/attributes. Removing

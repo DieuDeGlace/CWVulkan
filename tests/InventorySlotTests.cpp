@@ -27,6 +27,16 @@ int inventorySlotTests() {
     const auto unknown = nativesaves::makeItem(15, 8);
     auto first = inventory.add(unknown, 1), second = inventory.add(unknown, 1);
     check(first && second && *first == Index{0, 0} && *second == Index{0, 1}, "unidentified records remain separate");
+    auto oldPadding = unknown, newPadding = unknown;
+    oldPadding[1] = 11, oldPadding[0x15] = 22, oldPadding[0x9e] = 77;
+    newPadding[1] = 33, newPadding[0x15] = 44, newPadding[0x9e] = 55;
+    inventory.tabs[0] = {{0, oldPadding}};
+    inventory.add(newPadding, 1);
+    check(inventory.tabs[0][0].item[1] == 11 && inventory.tabs[0][0].item[0x15] == 22 && inventory.tabs[0][0].item[0x9e] == 77,
+          "semantic insertion preserves destination padding");
+    inventory.takePage(unknown, 1);
+    check(inventory.tabs[0][0].count == 0 && inventory.tabs[0][0].item[0] == 0 && inventory.tabs[0][0].item[0x9e] == 77,
+          "default-item clearing copies meaningful fields without assigning padding");
     auto attached = food;
     attached[0x9d] = 1;
     attached[0x1d] = 2;
@@ -39,7 +49,7 @@ int inventorySlotTests() {
     inventory.add(attached, 1);
     check(inventory.tabs[2][0].count == 3 && inventory.tabs[2].size() == 2, "inactive padding is not an equality key");
     inventory.tabs[2] = {{2, food}, {3, food}, {-1, food}};
-    inventory.takePage(food, 4);
+    inventory.takePage(inventory.tabs[2][0].item, 4);
     check(inventory.tabs[2].size() == 3 && inventory.tabs[2][0].count == 0 && inventory.tabs[2][0].item == Item{} &&
               inventory.tabs[2][1].count == 1 && inventory.tabs[2][2].count == -1,
           "page removal keeps indices and skips negative stacks");

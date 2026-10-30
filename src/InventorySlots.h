@@ -29,9 +29,10 @@ struct Inventory {
     void clearTabs();         // the native tab-only reset retains cursor/counters
     Stack *slot(Index);
     const Stack *slot(Index) const;
-    std::optional<Index> add(const Item &, int32_t quantity, int tab = -1);
-    void takePage(const Item &, int32_t quantity);
-    void takeCreature(const Item &, int32_t quantity);
+    // Own the incoming value while insertion grows vectors or removal clears its source slot.
+    std::optional<Index> add(Item, int32_t quantity, int tab = -1);
+    void takePage(Item, int32_t quantity);
+    void takeCreature(Item, int32_t quantity);
     bool consumeOne(Index); // direct UI clearing retains other item bytes
     // Returns false without mutation when tab0 needs unavailable stat queries.
     bool refresh(const SortContext &);
