@@ -6,6 +6,7 @@
 // progress for each of them in Saves/<folder>.sav next to the exe, and never
 // writes to the game's save (characters.db / world.db).
 #include <glm/glm.hpp>
+#include "InventorySlots.h"
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -56,6 +57,8 @@ const char *specializationName(int classType, int specialization);
 
 // CubeVulkan's own progress for one character: where they are and what they wear.
 struct SaveGame {
+    std::optional<inventoryslots::PlayerState> nativeInventory;
+    bool inventoryAuthoritative = false;
     struct Worn {
         int category = 0, id = 0, material = 0, rarity = 0;
         unsigned modifier = 0;

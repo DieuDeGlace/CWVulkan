@@ -162,7 +162,7 @@ R read, W written; "X" marks fields read or written on other creatures.
 | +0x1a8 | i64 | target / ally id |
 | +0x1b0, +0x1b4 | i32 ×2 | flight point (block x, y) |
 | +0x1b8..+0x1c8 | i64 ×3 | where a flight or path started (written) |
-| +0x1d0, +0x1d4 | i32 ×2 | a home cell (ability 0x75) |
+| +0x1d0, +0x1d4 | i32 ×2 | destination16-block cell for ability0x75, including accepted map targets (steam-item-map-selection §2) |
 | +0x1d8 | item (0xa0) | item in use: type byte +0x1d8, subtype i32 +0x1dc |
 | +0x638, +0x63c | u8, i32 | weapon slot A type, subtype |
 | +0x6d8, +0x6dc | u8, i32 | weapon slot B type, subtype |

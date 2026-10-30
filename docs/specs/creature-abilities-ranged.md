@@ -279,7 +279,7 @@ No rand.
 In the deciding world, when t = 0.0: +0x18c = 1.0; stamina = stamina − stamina cost (1.0),
 floor 0.
 
-### 13.4 Return home: 0x75 (0x2c5886)
+### 13.4 Map destination-cell relocation: 0x75 (0x2c5886)
 Only for the local player, when C passes T: with hx = +0x1d0, hy = +0x1d4 (i32): position =
 (((hx × 16) + 6) × 65536, ((hy × 16) + 8) × 65536, 0); then z = 0x2d87f0(W, hx, hy, 0) ×
 65536 (a cell height from the world generator, not specified here). If C's mount/pet
@@ -546,7 +546,10 @@ zone+0x60 … +0x68, 0xe0 bytes per object: kind i32 +0, position i64 ×3 +8, a 
    spec before these branches can be bit-exact.
 2. **Item 0x18's subtypes** (4–11, 0x0d) are named only by behaviour; which special items they
    are, and what the structure at the local player's +0x1528 is, were not established.
-3. **+0x1d0 / +0x1d4** (0x75's home cell) are written elsewhere; their source is unknown.
+3. **+0x1d0 / +0x1d4** (0x75's destination cell) have a verified producer:
+   accepted map-marker left release0x965e0 writes the floored16-block
+   target cell, then starts0x75. See steam-item-map-selection.md §2 for
+   admission/order. This does not establish every other possible writer.
 4. **0x9d sets the velocity to (10, 5, 0)** whatever the heading; this looks like a
    placeholder in the game but is what it does.
 5. **0x1d appends its heal number twice** on an authoritative world (once before the test,

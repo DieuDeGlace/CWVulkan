@@ -57,6 +57,8 @@ class Gear {
     // Stats with the currently equipped items (the game's totals at survey time
     // when nothing has been changed).
     Stats stats() const;
+    // Derived equipment view for canonical inventory. Survey measurements stay available as references.
+    void setEquipmentView(const std::array<Item, SLOTS> &);
     const Item &equipped(Slot s) const { return worn[s]; }
     // Sprite the game draws for slot `s` as equipped now ("" = keep the recorded one).
     std::string sprite(Slot s) const;

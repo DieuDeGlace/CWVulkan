@@ -290,8 +290,13 @@ Each call, in this order:
   the pointed voxel, remember it as carried (its position and material). Nothing changes yet.
 
 Placing a cube takes the cube item; moving costs nothing; dropping a carried cube outside the
-weapon destroys it (its item is not returned). What calls this routine per frame or per click
-inside 0x94900 was not separated (open question 5).
+weapon destroys it (its item is not returned). The identified call is on
+**left mouse-down0x94900 at0x9651a**, after its upgrade-panel admission,
+rather than a per-frame held removal. The exact inline canonical-slot
+decrement and its distinction from0x648b0/0xa2210 are
+steam-inventory-slot-lifecycle §3.4. Placement precedes that decrement;
+only the first full-equal quantity!=0 slot loses one, and below1 only
+quantity/type/subtype clear.0x292650 itself performs no inventory refresh.
 
 ---
 
@@ -338,9 +343,10 @@ Nothing here has a recording. Proposed ZoneExtractor requests (`loot-overview.md
 4. **Releasing the button** sets the speed back to 0.001 but leaves a started item's progress
    running, so it completes. Whether another routine resets the progress on release was not
    checked.
-5. **The palette materials** of the upgrade widget (which materials 0x292990 lists, and in
-   which order) and the widget's 32-entry check versus the 16-entry cap of one-handed weapons
-   (the place routine refuses silently, but the cube item was already taken) — confirm with a
-   recording.
+5. **The palette materials** of the upgrade widget (which materials0x292990 lists,
+   and in which order) remain untraced here. The32-entry widget gate,
+   16/32-entry placer limits, replacement of an existing material and
+   post-attempt cube consumption are verified native behavior, clarified
+   in steam-inventory-slot-lifecycle §3.4; no recording was used.
 6. **Known recipes of types 4–9** are skipped by §2.1. Whether the game ever stores such
    recipes was not checked.

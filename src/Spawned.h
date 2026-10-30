@@ -274,7 +274,7 @@ class SpawnedCreatures {
     std::vector<int64_t> missionIds(int zx, int zy) const;
     // Who the native player is and what it wears (NativePlayer's record): race, class,
     // specialisation, level, flags, region and the 11 worn items.
-    void setPlayerGear(const worldgen::CreatureRecord &from);
+    void setPlayerGear(const worldgen::CreatureRecord &from, bool clampHealth = true);
     void setPlayerHit(std::function<bool(const nativeupkeep::Hit &, const uint8_t *attacker)> f) { playerHit = std::move(f); }
     size_t roadTrips() const { return trips.size(); }
     // The first pack's waypoint (absolute blocks), for the log; false without one.

@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native-save gameplay now uses canonical inventory tabs, equipment and counters.
+  Screens derive live slot views and the save bridge writes those actual records.
+  Direct equipment/use/drop, pickups, quick items, crafting, cube upgrades, shops,
+  identification, pet food and daily reset use their specified distinct operations.
+  Shop regressions check transaction data, separate
+  sale nodes, whole-node buyback attempts and ordered refresh callbacks. Health
+  adjustment stores its rescale before the second maximum-health callback/cap.
+  All five build targets, focused inventory/save/loot-window checks and the full
+  CPU/owner-data suite pass. A hidden read-only native-character run rendered
+  the inventory and stopped normally. Auxiliary UI geometry/3D icons, map-item mode
+  presentation, selector completion and extended owner validation remain open.
 - Native adaptive scene range is integrated: actual unmerged face costs/readiness,
   option-derived window, native equal-key sort, budget threshold, easing and player
   state feed distinct terrain/model/actor/light ranges. Pending cache metadata is

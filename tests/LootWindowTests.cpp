@@ -67,6 +67,27 @@ void identifyWindowRules() {
     w.put(makeItem(3, 0, 1, 2));                // a sword in the slot is priced but not identified
     LOOT_CHECK(identifywindow::price(w) >= 1 && !identifywindow::canIdentify(w, 1, 100000));
 
+    inventoryslots::Inventory live;
+    live.tabs[0] = {{3, rare3}, {1, makeItem(3, 0, 1, 2)}};
+    w.bind({0, 0});
+    LOOT_CHECK(w.resolve(live) && identifywindow::price(w) == 4);
+    live.consumeOne({0, 0});
+    LOOT_CHECK(w.resolve(live) && live.slot(w.selection)->count == 2);
+    std::swap(live.tabs[0][0], live.tabs[0][1]);
+    LOOT_CHECK(!w.resolve(live)); // refresh changed this pair's content; do not follow the original item
+    live.tabs[0][0] = {-1, rare3};
+    LOOT_CHECK(w.resolve(live) && identifywindow::canIdentify(w, -1, 4));
+    w.close();
+    w.show();
+    LOOT_CHECK((w.selection == inventoryslots::Index{0, 0}) && w.resolve(live));
+    w.visibleAtDown = false;
+    LOOT_CHECK(!w.acceptsRelease(0)); // opening after down does not consume that release
+    w.visibleAtDown = true;
+    LOOT_CHECK(w.acceptsRelease(0) && !w.acceptsRelease(1));
+    w.actionGate = 2;
+    LOOT_CHECK(!identifywindow::canIdentify(w, 1, 100));
+    w.actionGate = 1;
+
     // One press: an even first draw makes a weapon, an odd one armour; the rarity and the region
     // are the type-15 item's; the class is any (-1).
     w.put(rare3);

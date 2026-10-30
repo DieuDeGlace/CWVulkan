@@ -62,6 +62,12 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- canonical native-save gameplay inventory/equipment/counters, direct item actions,
+  live identification indices and shop transactions, from
+  `steam-inventory-slot-lifecycle.md`, `steam-identification-ui.md`, `loot-crafting.md`
+  and `loot-shops.md`. Independent tests cover operation order, semantic assignment,
+  signed counts, distinct removal callers, refresh callbacks and raw save retention.
+  No native code or owner asset is included; auxiliary UI presentation remains open.
 - received-feat projection, lifetime and physical-pixel owner-font display, from
   `steam-chat-feat-presentation.md` sections4.1-4.4. Synthetic geometry/timing and
   live owner-font captures check this display without inferring awards. Scene/sky

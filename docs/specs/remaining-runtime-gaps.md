@@ -926,7 +926,7 @@ The assignment trace is decisive:
 | 0xa5a50, WorldMap binding index 15 rising edge | calls 0x1031e0 through the interface at G+0x118 |
 | Interface setup 0xf9ac0 | binds the `worldmap-menu` button to that same 0x1031e0 toggle |
 | Flight-master use in 0x98180 (NPC role 0x9a) | sets G+0x668 to 1 and WorldMap +0x164 to 1 |
-| Shrine creature use in 0x98180 (race 0x10c), or kind-13 use in 0xb7740 | sets **both** G+0x668 and G+0x669 to 1 |
+| Shrine creature use in 0x98180 (race 0x10c), or category1/subtype13 item use in 0xb7740 | sets **both** G+0x668 and G+0x669 to 1; the item queues kind1, with continuation in steam-item-map-selection.md |
 | Interface update 0x103200 with G+0x668 clear | clears G+0x669; the frame also clears WorldMap flight mode when the full map is closed |
 | B UI dismissal in 0x1355a0, Start Menu 0x9fdf0 | clears G+0x668 |
 | A successful flight launch in 0x94900, or accepted shrine-target action in 0x965e0 | clears G+0x668 as the corresponding travel starts |

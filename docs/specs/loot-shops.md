@@ -20,8 +20,10 @@ sale, 0x9de90 when the shop window asks for a refresh.
 
 1. Empty the shop list (controller +0x1870, an inventory-like list of tabs; see
    `worldgen-creatures.md` §4.5 for the record) and give it two tabs.
-2. **Buy-back mode.** If the shop window's mode (window +0x2b4) is 1, tab 0 becomes a copy of
-   the controller's buy-back list (+0x21b0, §4.3) and nothing below is done.
+2. **Buy-back mode.** If the shop window's mode (window +0x2b4) is1,
+   **tab1** becomes a newest-first copy of the controller's buy-back list
+   (+0x21b0, §4.3); tab0 remains empty and nothing below is done. Native
+   0xb75d0 appends to the24-byte tab header at collection begin+0x18.
 3. Otherwise look up the shopkeeper by the id kept at controller +0x1e98. If it does not
    exist, the list stays empty. Otherwise, by the class kept at controller +0x1ea0:
 
@@ -177,11 +179,88 @@ a separate source branch.
 
 ### 4.3 Buying back (mode 1)
 
-In mode 1 tab 0 lists the buy-back entries (§1 step 2). Clicking one buys its units back one
-at a time, each only while gold ≥ the **selling** price: add one to the inventory, pay the
-selling price, announce. (The handler counts the entries from the newest; how many units of a
-multi-unit entry are taken per click and how the entry is shortened were not traced, open
-question 2.)
+In mode1 **tab1** lists the buy-back entries (§1 step2). A reached left/right
+down resolves the displayed row's newest-first ordinal to the underlying
+list node. One click attempts the **entire positive quantity in that
+node**, not just one unit: for each attempt, check0x50670 carry admission;
+if admitted and gold is at least the selling price0x10a390, insert one
+through0x4e810, subtract the selling price and announce one through
+0x9d6f0. A failed affordability check makes no purchase for that attempt
+but does not break the loop or show the regular-stock money error.
+A carry failure shows its warning/sound0x34 and exits the attempts.
+
+The successful-purchase counter is signed32 integer, initialized0 at
+0x95e46 and incremented at0x95ef1. After attempts, subtract **only that
+counter** from the node quantity at0x95fb6. Unlink/free the node only
+when its resulting quantity is exactly0; do not erase a partially bought
+node. Nonpositive initial quantities make no attempts but still reach
+this finalization. Once a matching node has been resolved, the final
+sound0x3c and refresh path below run even if the successful counter is0.
+There is no extra crafting rebuild call on this buyback finish.
+
+### 4.4 Source precedence and exact refresh ordering
+
+The reached inventory/shop branch is **button0 or1 down**, not mouse-up.
+Native0x94900 first tries the live canonical inventory hover pair through
+0x94600; if valid, it takes identification/sale/direct-use routing rather
+than selecting a shop offer behind it. With no valid inventory slot,
+try equipped item under pointer through0x94260. Only if that is null or
+category0 does0x94750 resolve a shop offer. The ten equipped addresses
+and resolver guards are steam-inventory-slot-lifecycle §6.6.
+
+Shop resolver0x94750 requires shop shown, frame hit, and valid stored
+hover tab/slot within Game+0x1870's current collection. It returns the
+payload pointer; it adds no quantity>0 test, so an unlimited stock count−1
+is not rejected. Ordinary rendering normally supplies occupied hover
+rows. Do not introduce a new source count decrement to implement a
+purchase: the bought-item list and shop rebuild govern stock depletion.
+
+A canonical-slot sale is allowed only for source tabs **other than1
+and5**, regardless of item category or a saved item's usual category tab.
+It copies the item, decrements that live quantity by1, clears only
+quantity/category/subtype below1, credits selling price, requests sound
+0x3d at player position with volume0.75/pitch1, appends a **separate
+quantity1** buyback node and clips oldest entries past ten. No full-item
+removal helper or cursor transfer is used. Tabs1/5 instead request0x34
+at the listener and do not sell. Equipped sales have no tab quantity to
+decrement; their equipped type/subtype clear after rebuilding the shop.
+Both append paths retain separate nodes rather than merging equal sales.
+These sale branches add no class-usability, carry-cap or positive-price
+gate. The canonical source's nonzero-count admission is the resolver's
+existing test; a negative nonzero count has no infinite-stack exemption
+from its direct decrement/below1 clear.
+
+After the preceding data mutations, the direct native call order is:
+
+| Action | Direct completion calls, in order |
+|---|---|
+|Regular stock purchase|sound0x3c at player; ordinary inventory0x280a40/0x280c80; shop rebuild0xb75d0; announce0x9d6f0; crafting rebuild0xb2180. Sources0x9617d–0x961be.|
+|Canonical-slot sale|shop rebuild0xb75d0 at0x95251; crafting rebuild0xb2180 at0x95259. Its sound/buyback changes precede these. No explicit G+0x330 refresh pair in this finish.|
+|Equipped-item sale|shop rebuild0xb75d0 at0x95d15, then equipped type/subtype clear. No explicit ordinary inventory or crafting rebuild in this finish.|
+|Buyback finalization|sound0x3c at player at0x96011; shop rebuild0xb75d0 at0x96019; ordinary inventory0x280a40/0x280c80 at0x96025/0x96031.|
+
+For regular stock, insertion and gold subtraction precede the bought-item
+list append, which precedes the table's completion calls. The two
+price/carry error branches do not execute that successful completion.
+The common later left-widget and health/UI tail of0x94900 remains
+steam-inventory-slot-lifecycle §7.7.
+
+Nested refreshes matter:0xb75d0 always ends with the **shop** G+0x350
+0x280a40/0x280c80 pair.0xb2180, when the local inventory has a nonempty
+outer tab vector, ends its rebuild with the **crafting list** G+0x340
+pair; this is not a widget-visibility condition. Each bound0x280a40 can
+sort/compact the **local canonical inventory** again under slot-lifecycle
+§4, even when that widget is hidden. Preserve the action's direct and
+nested order rather than replacing it with one universal refresh or
+one unconditional per-frame sort. None of these sales/purchases writes
+the retained cursor stack.
+
+Regular-stock code retains the resolved offer pointer across shop rebuild
+for the following announcement. This pass specifies the native order;
+it does not invent a portable announcement payload for allocator-dependent
+pointer invalidation by that rebuild. A bounded oracle for that edge
+would label the original offer, rebuilt collection/base and announced
+item separately. No game was run for such an oracle.
 
 ---
 
@@ -260,8 +339,10 @@ No shop has been recorded. Oracles to add to tools/ZoneExtractor (see `loot-over
 1. **The general shop's goods** (type 11 subtypes 0x0c/material 0x19 and 0x26, type 1 subtype
    9) and the tier resources' names are not needed by the rules; the extracted item names give
    them.
-2. **Buy-back details**: how many units one click takes, and how the entry is removed or
-   shortened afterwards (0x94900 after 0x95e60).
-3. **The global input flag** 0x1405514d7 and the button-state values of the identify window
-   were not traced; the rule only needs "the button was pressed".
+2. **Buy-back details** are resolved by the native follow-up in §4.3/§4.4,
+   including tab1, bulk attempts, partial node retention and refresh order.
+3. **Identification input** is resolved in steam-identification-ui §6:
+   0x5514d7 snapshots shown state at down, and button0 release commits
+   under the live visibility/slot/footer gates. It is not a physical
+   held-button latch or a generic “button was pressed” condition.
 4. **Shop window mode values** other than 0 (stock) and 1 (buy-back) were not seen.

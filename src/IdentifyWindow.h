@@ -9,6 +9,7 @@
 // The spec gives the rules, not the window's look: its geometry here is CubeVulkan's, built of
 // the game's gui.plx templates like the shop windows (a black widget, an item box, a button).
 #include "GameShop.h"
+#include "InventorySlots.h"
 #include "Hud.h"
 
 #include <functional>
@@ -21,6 +22,13 @@ namespace identifywindow {
 struct Window {
     bool open = false;
     bool slotted = false;
+    inventoryslots::Index selection;
+    bool visibleAtDown = false;
+    int actionGate = 1;
+    // Native selection retains indices across close/reopen and resolves current content, never an identity match.
+    void bind(inventoryslots::Index index) { selection = index; }
+    bool resolve(const inventoryslots::Inventory &);
+    bool acceptsRelease(int button) const { return open && visibleAtDown && button == 0; }
     gameshop::Item item{};
     void show() { open = true, slotted = false; }
     void close() { open = false, slotted = false; }

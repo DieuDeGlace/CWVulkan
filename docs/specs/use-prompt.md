@@ -36,7 +36,8 @@ records), `lore-and-artifacts.md` (static object record, Examine), `map-markers.
 | shop window | controller +0x350 | mode (i32) at +0x2b4 |
 | window C | controller +0x360 | opened by class 0x83 (§3.6.3); identity not traced |
 | customization window | controller +0x368 | |
-| inventory window | controller +0x310 | |
+| usable-item selector / Ring Menu | controller +0x310 | owner GUI node `selector`; distinct from InventoryWidget, see steam-inventory-slot-lifecycle §7.7 |
+| inventory grid | controller +0x330 | ordinary InventoryWidget |
 | speech bubbles | controller +0x400 .. +0x408 | a vector of bubble pointers; bubble +0x210 = speaker creature id |
 | the object at controller +0x10 | | named WorldMap in map-markers. Here it also holds a collection keyed by creature id (§3.3) and a selected id at +0x148; map flight mode is its byte +0x164 |
 
@@ -483,6 +484,16 @@ name (0x1628b0). When the count (+0xd8) is 2 or more, the text is *count* + " x 
 An object whose active byte is 0, or that has no item, goes on to §3.7.2. The full
 behaviour, including lore braziers, is in lore-and-artifacts §2.1.
 
+The requirement count at O+0xd8 is **unsigned byte**, zero-extended at
+0x99a56/0x99ba2 for both the0x5e780 test and0x648b0 removal call.
+For a normal empty inventory, required count0 passes the sum test even
+without a matching item. Non-type9 objects still call0x648b0 with0;
+object type9 skips removal but still undergoes the sum test. The helper
+does not early-return for request0 and can default-clear matching empty
+records; its exact full-item, tab/slot traversal and clearing semantics
+are steam-inventory-slot-lifecycle §3.2/§3.4. No refresh/sort occurs in
+this producer, and the host kind5 consumer does not repeat the removal.
+
 #### 3.7.2 By type
 
 "Queue kind 5" means: append a kind-5 interaction holding only the targeted zone x, zone y
@@ -582,12 +593,16 @@ The modes found are: 0 anvil and workbench, 1 loom, 3 campfire (and the race 0xb
 
 ## 4. When the prompt routine returns 0 (0x8ae50)
 
-### 4.1 Inventory open
+### 4.1 Usable-item selector / Ring Menu open
 
-If the inventory window is visible, the use key uses the selected inventory item. On press,
-the selected slot is found (controller +0x20c0 into the list from 0x93e60) and used
-(0xb7740, skills-and-interactions §2.3), and the inventory window is hidden. Nothing else
-happens.
+This checks the **selector G+0x310**, not InventoryWidget G+0x330.
+When shown, the use-key rising edge resolves controller+0x20c0 into
+the fresh0x93e60 list of nonzero category1 canonical slots, calls
+0xb7740 on that live slot, then hides the selector if that list was
+nonempty. An empty list leaves it shown. It suppresses the later ground
+pickup/vehicle fallback in this no-prompt branch even without a use
+edge. Selection, close and independent Quick Item action4 details are
+steam-inventory-slot-lifecycle §9.
 
 ### 4.2 Targeted ground item
 
@@ -647,7 +662,7 @@ or special item.
 
 ### 4.4 When the prompt routine returned 1
 
-Unless the inventory window is visible, the targeted ground item is cleared. A press while
+Unless the selector G+0x310 is visible, the targeted ground item is cleared. A press while
 alive, with the targeted object's zone x ≥ 0 and the dialog window closed, calls 0x2c3150.
 That call's result is unused, so it has no effect.
 

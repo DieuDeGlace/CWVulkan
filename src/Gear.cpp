@@ -172,6 +172,11 @@ Gear::Stats Gear::base() const {
     return b;
 }
 
+void Gear::setEquipmentView(const std::array<Item, SLOTS> &items) {
+    std::copy(items.begin(), items.end(), worn);
+    std::fill(std::begin(wornIndex), std::end(wornIndex), -1);
+}
+
 Gear::Stats Gear::stats() const {
     Stats s = base();
     for (auto &w : worn)

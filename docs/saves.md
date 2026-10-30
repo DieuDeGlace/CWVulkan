@@ -100,8 +100,10 @@ A character keeps:
 
 - its position (world units, the record's place a block above the feet);
 - its health, level, experience, class, specialization and gold;
-- the 11 worn items and the six inventory tabs. The records already saved are kept whole, so attributes
-  survive.
+- the 11 worn items, both inventory counters, and the actual stored inventory tabs.
+  Native-save gameplay retains tab membership, empty slots, signed quantities and
+  full item records. Bag/gear lists are presentation views; saving writes the live
+  canonical state. Six tabs are the starter-kit default, not a load/save limit.
 - its name and looks;
 - the recipes;
 - the cells it used, the places and lands it discovered, the finished and solved missions and their timers;

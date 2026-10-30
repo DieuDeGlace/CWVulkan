@@ -17,6 +17,12 @@
 #include <utility>
 #include <vector>
 
+namespace inventoryslots {
+struct Inventory;
+struct PlayerState;
+struct Index;
+} // namespace inventoryslots
+
 namespace gameshop {
 
 using Item = std::array<uint8_t, 0xa0>;
@@ -63,6 +69,20 @@ constexpr size_t BUY_BACK_LENGTH = 10;
 using BuyBack = std::deque<std::pair<Item, int>>;
 // A sale: one of `item` joins the list; past ten entries the oldest goes.
 void rememberSold(BuyBack &list, const Item &item);
+
+// Reached native shop actions. Rebuild callbacks include their own widget refresh;
+// each bound widget can sort the player's canonical slots even while hidden.
+enum class Refusal { Money, Capacity, ProtectedTab };
+struct TradeHooks {
+    std::function<void()> inventory, shop, crafting;
+    std::function<void(const Item &)> announce, rememberBought;
+    std::function<void(int)> sound;
+    std::function<void(Refusal)> refused;
+};
+bool purchase(inventoryslots::Inventory &, Item, const TradeHooks &);
+int repurchase(inventoryslots::Inventory &, BuyBack &, size_t newestRow, const TradeHooks &);
+bool sellSlot(inventoryslots::Inventory &, inventoryslots::Index, BuyBack &, const TradeHooks &);
+bool sellEquipment(inventoryslots::PlayerState &, int slot, BuyBack &, const TradeHooks &);
 
 // --- Identifying (§5) ------------------------------------------------------------------------
 

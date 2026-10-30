@@ -36,7 +36,7 @@ Two drawing routines are covered:
 | +0x50 | the name generator, used for place, mission and land names |
 | +0x664 | **guiScale**, copied from options.cfg `guiScale` (+0x1bcc) at start-up |
 | +0x668 | the map is open and interactive (byte) |
-| +0x669 | **shrine-choice mode** (byte). The game sets +0x668 and +0x669 together, for example from an interaction of kind 13 (0xb7740) |
+| +0x669 | **shrine-choice mode** (byte). The game sets +0x668 and +0x669 together, for example from category1/subtype13 item use (0xb7740). That item queues interaction **kind1**, not kind13; its complete continuation is steam-item-map-selection.md. |
 | +0x1bc8 | options.cfg `showRarity` (int; the options block starts at +0x1b88, see the writer 0x13b1d0) |
 | +0x1bd0 | options.cfg `mapScale` (float) |
 | +0x1db0 | the map is being dragged (byte) |

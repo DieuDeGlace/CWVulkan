@@ -4,11 +4,14 @@
 #include "NativeDrop.h"
 #include "NativeInteract.h"
 #include "NativeRules.h"
+#include "InventorySlots.h"
+#include "UsePrompt.h"
 #include "worldgen/Noise.h"
 #include "worldgen/Planner.h"
 #include "worldgen/Regions.h"
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 
 namespace gameshop {
@@ -146,6 +149,121 @@ void rememberSold(BuyBack &list, const Item &item) {
     list.push_back({item, 1});
     if (list.size() > BUY_BACK_LENGTH)
         list.pop_front();
+}
+
+namespace {
+int32_t moneyWithout(int32_t gold, int32_t cost) {
+    return std::bit_cast<int32_t>((uint32_t)gold - (uint32_t)cost);
+}
+int32_t moneyAfter(int32_t gold, int32_t change) {
+    return std::bit_cast<int32_t>((uint32_t)gold + (uint32_t)change);
+}
+bool mayCarry(const inventoryslots::Inventory &inventory, const Item &item) {
+    int32_t subtype;
+    std::memcpy(&subtype, item.data() + SUBTYPE, 4);
+    return useprompt::mayCarryMore(item[TYPE], subtype, inventory.quantity(item));
+}
+void refresh(const std::function<void()> &callback) {
+    if (callback)
+        callback();
+}
+void tradeSound(const TradeHooks &hooks, int sound) {
+    if (hooks.sound)
+        hooks.sound(sound);
+}
+void refuse(const TradeHooks &hooks, Refusal reason) {
+    if (hooks.refused)
+        hooks.refused(reason);
+}
+void clearEquipped(Item &item) {
+    item[TYPE] = 0;
+    const uint32_t zero = 0;
+    std::memcpy(item.data() + SUBTYPE, &zero, 4);
+}
+} // namespace
+
+bool purchase(inventoryslots::Inventory &inventory, Item offer, const TradeHooks &hooks) {
+    const int cost = price(offer);
+    if (cost > inventory.gold) {
+        refuse(hooks, Refusal::Money);
+        return false;
+    }
+    if (!mayCarry(inventory, offer)) {
+        refuse(hooks, Refusal::Capacity);
+        return false;
+    }
+    inventory.add(offer, 1);
+    inventory.gold = moneyWithout(inventory.gold, cost);
+    if (hooks.rememberBought)
+        hooks.rememberBought(offer);
+    tradeSound(hooks, SOUND_BOUGHT);
+    refresh(hooks.inventory);
+    refresh(hooks.shop);
+    if (hooks.announce)
+        hooks.announce(offer);
+    if (!inventory.tabs.empty())
+        refresh(hooks.crafting);
+    return true;
+}
+
+int repurchase(inventoryslots::Inventory &inventory, BuyBack &list, size_t newestRow, const TradeHooks &hooks) {
+    if (newestRow >= list.size())
+        return -1;
+    const size_t index = list.size() - 1 - newestRow;
+    const auto [item, quantity] = list[index];
+    const int cost = sellPrice(item);
+    int purchased = 0;
+    for (int attempt = 0; attempt < quantity; ++attempt) {
+        if (!mayCarry(inventory, item)) {
+            refuse(hooks, Refusal::Capacity);
+            break;
+        }
+        if (inventory.gold >= cost) {
+            inventory.add(item, 1);
+            inventory.gold = moneyWithout(inventory.gold, cost);
+            ++purchased;
+            if (hooks.announce)
+                hooks.announce(item);
+        }
+    }
+    list[index].second -= purchased;
+    if (list[index].second == 0)
+        list.erase(list.begin() + (ptrdiff_t)index);
+    tradeSound(hooks, SOUND_BOUGHT);
+    refresh(hooks.shop);
+    refresh(hooks.inventory);
+    return purchased;
+}
+
+bool sellSlot(inventoryslots::Inventory &inventory, inventoryslots::Index source, BuyBack &list, const TradeHooks &hooks) {
+    const auto *stack = inventory.slot(source);
+    if (!stack || stack->count == 0)
+        return false;
+    if (source.tab == 1 || source.tab == 5) {
+        refuse(hooks, Refusal::ProtectedTab);
+        return false;
+    }
+    const auto item = stack->item;
+    inventory.consumeOne(source);
+    inventory.gold = moneyAfter(inventory.gold, sellPrice(item));
+    tradeSound(hooks, SOUND_SOLD);
+    rememberSold(list, item);
+    refresh(hooks.shop);
+    if (!inventory.tabs.empty())
+        refresh(hooks.crafting);
+    return true;
+}
+
+bool sellEquipment(inventoryslots::PlayerState &state, int slot, BuyBack &list, const TradeHooks &hooks) {
+    if (slot < 0 || (size_t)slot >= state.equipment.size() || state.equipment[(size_t)slot][TYPE] == 0)
+        return false;
+    const auto item = state.equipment[(size_t)slot];
+    state.inventory.gold = moneyAfter(state.inventory.gold, sellPrice(item));
+    tradeSound(hooks, SOUND_SOLD);
+    rememberSold(list, item);
+    refresh(hooks.shop);
+    clearEquipped(state.equipment[(size_t)slot]);
+    return true;
 }
 
 int identifyPrice(const Item &item) { return std::max(price(item) / 2, 1); }

@@ -7,10 +7,18 @@
 
 namespace identifywindow {
 
+bool Window::resolve(const inventoryslots::Inventory &inventory) {
+    const auto *stack = inventory.slot(selection);
+    slotted = stack && stack->count != 0 && stack->item[0] == gameshop::UNIDENTIFIED;
+    if (slotted)
+        item = stack->item; // presentation scratch; selection remains the live pair
+    return slotted;
+}
+
 int price(const Window &w) { return w.slotted ? gameshop::identifyPrice(w.item) : 0; }
 
 bool canIdentify(const Window &w, int count, int gold) {
-    return w.slotted && count > 0 && w.item[0] == gameshop::UNIDENTIFIED && price(w) <= gold;
+    return w.slotted && w.actionGate == 1 && count != 0 && w.item[0] == gameshop::UNIDENTIFIED && price(w) <= gold;
 }
 
 Outcome identifyOnce(const Window &w, const std::function<int()> &rand) {

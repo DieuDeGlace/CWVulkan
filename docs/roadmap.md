@@ -196,18 +196,28 @@ individual feature documents.
   payloads. Regressions reproduce the previous tab-count change, phantom items
   and a stale empty pet slot replacing the live pet's name; focused save-format
   checks and the full CPU/owner-data suite pass.
-- [ ] Canonical player inventory storage throughout gameplay: retain live tab/slot
-  indices across insertion, removal and native refresh/sort, and use those indices
-  for identification. The save reader fixes above do not replace the current flat
-  gameplay views/reconstruction. Identification still needs its verified owner
-  template layout, release gates, live selection binding and ordinary 3D item icons.
+- [x] Native-save gameplay uses canonical inventory tabs/equipment/counters as its
+  authority. Bag/gear screens derive views with live tab/slot indices; saving writes
+  those actual records, rather than rebuilding six flat categories. Pickups, direct
+  equip/use/drop, quick items, recipes, cube upgrades, shops, identification, pet food
+  and daily reset retain their distinct insertion/removal rules. Native slot and
+  equipped sales have separate sources; buyback attempts its whole selected node.
+  Explicit direct/nested refresh order is covered by transaction regressions. Legacy
+  recording sessions retain their compatibility path. Full original-game comparison
+  and extended gameplay/save-load checks remain below.
+- [ ] Finish identification's owner template layout, footer regions/navigation,
+  detail text and ordinary 3D icons. Its live index binding, nonzero quantity test,
+  persistent selection and visible-at-down/left-release admission are integrated;
+  the visible panel still uses its earlier geometry. Complete map-item mode/target
+  presentation and the Ring Menu selector, including its common down-tail close.
 - [x] Complete-record inventory slot backend and starter-kit consumer: six native
   kit lengths, equal-stack-before-hole insertion, separate counted fields, page
   versus creature removal, direct UI clearing and native key-only refresh followed
   by compaction. Refresh retains original tab membership, nonzero negative counts,
   unsigned subtype comparisons and the verified empty-slot predicate. Stat queries
   are explicit local-player inputs. Starter-kit contents and random draws remain
-  covered by the existing frontend tests. Main gameplay routing remains open above.
+  covered by the existing frontend tests. Native-save gameplay now uses this storage,
+  with its UI/owner-validation gaps explicitly retained above.
   Native semantic assignment updates every meaningful item field while retaining
   destination padding; selected operation inputs remain valid while their slots
   are cleared or vectors grow. Dedicated regressions cover both distinctions.

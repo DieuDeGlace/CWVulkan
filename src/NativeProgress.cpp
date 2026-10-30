@@ -27,6 +27,8 @@ void resetDay(SaveGame &progress) {
     progress.perPlayerTaken.clear();
     progress.finishedMissions.clear();
     progress.purchases.clear();
+    if (progress.inventoryAuthoritative && progress.nativeInventory)
+        progress.nativeInventory->inventory.clearType(0x16);
     progress.bag.erase(std::remove_if(progress.bag.begin(), progress.bag.end(),
                                       [](const SaveGame::Bagged &item) { return item.category == 0x16; }),
                        progress.bag.end());
@@ -377,6 +379,7 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
             s.quests = n.quests, s.marked = n.marked, s.takenItems = n.takenItems, s.usedObjects = n.usedObjects;
         }
     }
+    s.nativeInventory = inventoryslots::PlayerState::fromCharacter(c);
     s.hasPosition = c.position != std::array<int64_t, 3>{0, 0, 0};
     s.position = localFeet(c.position, frame);
     s.yaw = s.heading = 0; // (the game zeroes the orientation on load)
@@ -448,7 +451,6 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
 }
 
 void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame &frame, Character &c, std::string &notes) {
-    ItemPool pool(c);
     if (s.hasPosition)
         c.position = gamePosition(s.position, frame);
     c.health = health;
@@ -457,44 +459,48 @@ void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame
     c.gold = s.gold;
     if (s.recipes) c.recipes = *s.recipes;
     if (s.specialization >= 0) c.specialization = (uint8_t)s.specialization;
-    std::vector<std::vector<nativesaves::Stack>> inventory(nativesaves::INVENTORY_TABS);
-    std::array<Item, nativesaves::EQUIPMENT_SLOTS> equipment{};
-    if (gear) {
-        for (int slot = 0; slot < Gear::SLOTS && slot < nativesaves::EQUIPMENT_SLOTS; slot++) {
-            const Gear::Item &it = gear->equipped((Gear::Slot)slot);
-            if (it.category)
-                equipment[(size_t)slot] = keptGear(pool, it);
-        }
-        for (size_t i = 0; i < gear->itemCount(); i++)
-            if (gear->item(i).found && !gear->isWorn(i))
-                inventory[0].push_back({1, keptGear(pool, gear->item(i))});
+    if (s.inventoryAuthoritative && s.nativeInventory) {
+        s.nativeInventory->writeCharacter(c);
     } else {
-        std::vector<SaveGame::Found> rest = s.found;
-        for (size_t slot = 0; slot < s.worn.size() && slot < equipment.size(); slot++) {
-            const SaveGame::Worn &w = s.worn[slot];
-            if (!w.category)
-                continue;
-            int region[2] = {0, 0};
-            auto same = std::find_if(rest.begin(), rest.end(), [&](const SaveGame::Found &f) {
-                return f.category == w.category && f.id == w.id && f.material == w.material && f.modifier == w.modifier;
-            });
-            if (same != rest.end()) {
-                auto current = *same;
-                current.rarity = w.rarity;
-                equipment[slot] = keptFound(pool, current);
-                rest.erase(same);
-            } else
-                equipment[slot] = pool.take(gameItem(w.category, w.id, w.material, w.rarity, w.modifier, region));
+        ItemPool pool(c);
+        std::vector<std::vector<nativesaves::Stack>> inventory(nativesaves::INVENTORY_TABS);
+        std::array<Item, nativesaves::EQUIPMENT_SLOTS> equipment{};
+        if (gear) {
+            for (int slot = 0; slot < Gear::SLOTS && slot < nativesaves::EQUIPMENT_SLOTS; slot++) {
+                const Gear::Item &it = gear->equipped((Gear::Slot)slot);
+                if (it.category)
+                    equipment[(size_t)slot] = keptGear(pool, it);
+            }
+            for (size_t i = 0; i < gear->itemCount(); i++)
+                if (gear->item(i).found && !gear->isWorn(i))
+                    inventory[0].push_back({1, keptGear(pool, gear->item(i))});
+        } else {
+            std::vector<SaveGame::Found> rest = s.found;
+            for (size_t slot = 0; slot < s.worn.size() && slot < equipment.size(); slot++) {
+                const SaveGame::Worn &w = s.worn[slot];
+                if (!w.category)
+                    continue;
+                int region[2] = {0, 0};
+                auto same = std::find_if(rest.begin(), rest.end(), [&](const SaveGame::Found &f) {
+                    return f.category == w.category && f.id == w.id && f.material == w.material && f.modifier == w.modifier;
+                });
+                if (same != rest.end()) {
+                    auto current = *same;
+                    current.rarity = w.rarity;
+                    equipment[slot] = keptFound(pool, current);
+                    rest.erase(same);
+                } else
+                    equipment[slot] = pool.take(gameItem(w.category, w.id, w.material, w.rarity, w.modifier, region));
+            }
+            for (const SaveGame::Found &f : rest)
+                inventory[0].push_back({1, keptFound(pool, f)});
         }
-        for (const SaveGame::Found &f : rest)
-            inventory[0].push_back({1, keptFound(pool, f)});
+        for (const SaveGame::Bagged &b : s.bag)
+            if (b.category)
+                inventory[(size_t)tabOf(b.category)].push_back({b.count, keptBag(pool, b)});
+        c.equipment = equipment;
+        c.inventory = std::move(inventory);
     }
-    for (const SaveGame::Bagged &b : s.bag)
-        if (b.category)
-            inventory[(size_t)tabOf(b.category)].push_back(
-                {b.count, keptBag(pool, b)});
-    c.equipment = equipment;
-    c.inventory = std::move(inventory);
     c.usedCells = std::set<nativesaves::Cell>(s.usedCells.begin(), s.usedCells.end());
     c.discoveredZones = std::set<nativesaves::Cell>(s.discoveredPlaces.begin(), s.discoveredPlaces.end());
     c.discoveredLands = std::set<nativesaves::Cell>(s.discoveredAreas.begin(), s.discoveredAreas.end());

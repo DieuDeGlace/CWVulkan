@@ -1803,7 +1803,7 @@ bool SpawnedCreatures::startFlight(int32_t x, int32_t y) {
     return true;
 }
 
-void SpawnedCreatures::setPlayerGear(const worldgen::CreatureRecord &from) {
+void SpawnedCreatures::setPlayerGear(const worldgen::CreatureRecord &from, bool clampHealth) {
     gearRecord = from;
     if (!hasPlayer || from.empty())
         return;
@@ -1814,9 +1814,11 @@ void SpawnedCreatures::setPlayerGear(const worldgen::CreatureRecord &from) {
     std::memcpy(&r[0x150], &from[0x150], 8);         // the region it stands in
     std::memcpy(&r[0x278], &from[0x278], 11 * 0xa0); // what it wears
     std::memcpy(&r[worldgen::creature::APPEARANCE], &from[worldgen::creature::APPEARANCE], 0xb0); // and looks like
-    const float maximum = playerMaxHealth();
-    if (nativePlayer && maximum > 0 && playerHealth() > maximum)
-        put<float>(r, worldgen::creature::HEALTH, maximum);
+    if (clampHealth) {
+        const float maximum = playerMaxHealth();
+        if (nativePlayer && maximum > 0 && playerHealth() > maximum)
+            put<float>(r, worldgen::creature::HEALTH, maximum);
+    }
 }
 
 bool SpawnedCreatures::playerState(const ExtractedWorld &ew, glm::vec3 &local, float &headingRad, glm::vec3 &velocity,

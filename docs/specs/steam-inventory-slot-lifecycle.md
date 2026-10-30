@@ -131,6 +131,49 @@ an earlier hole instead of the just-consumed slot; the subsequent sort can
 move the result again. Native does **not** promise the result remains at
 the selected unidentified item's former index.
 
+### 3.4 Removal call-site distinctions for the canonical bridge
+
+These verified consumers do **not** share one general remove operation:
+
+- **One upgrade palette cube,0x292650:** first call weapon attribute
+  placer0x108b90 at0x292743, then walk every canonical tab/slot in order.
+  The first slot with quantity!=0 and full item equality to the selected
+  palette payload (0x4df60 at0x2927a5) loses1; below1, clear only
+  quantity/category/subtype and return. This is an inline decrement,
+  not0x648b0 or0xa2210. Negative quantities have no protection. The
+  palette index/count and weapon-count<32 gate precede it; the palette
+  entry's own quantity is not retested. No rollback of placement occurs
+  if no canonical match remains. Consumption is not conditional on the
+  attribute placer appending: it can replace an existing material, or
+  reject a new coordinate at the one-handed16-cube limit while the
+  widget's looser<32 gate admitted the call.0x292650 itself calls no
+  inventory sort/refresh. Full placement context is loot-crafting §4.
+- **Use-key giving to a static object,0x98180:** call **0x648b0 at
+  0x99bbb**, with the object's full required item O+0x38 and its
+  **unsigned byte count O+0xd8**, zero-extended to signed32. The call
+  occurs even for count0, unless the **object's type is9**, which skips
+  removal. This is not ring item category9. The earlier full-equality
+  quantity-sum admission0x5e780 at0x99a69 applies to type9 as well.
+  Count0 can pass with an empty aggregate and no matching slot. The
+  removal helper has no request0 early return: matching quantity0 slots
+  can still have their stale item payload replaced by the semantic
+  default. Its no-positive-quantity guard/continued traversal remain
+  §3.2, including effects on unusual negative stacks. After optional
+  removal, request sound0x3e at0x99bc8, then append kind5 at0x99c1a with
+  target zone/index and a copy of the **object's** item. No inventory
+  sort/refresh is called. The host object action does not remove it
+  again. See use-prompt §3.7.1 and zone-object-interaction §2.6.
+- **Daily category22 purge,0x2c34c0:** for non-null local creature
+  World+0x448, scan **all canonical tabs/slots**, including saved extra
+  tabs. For each category22 item, regardless of quantity, replace all
+  meaningful item fields/attributes/count with the semantic default,
+  then write quantity0. Type test0x2c3560; quantity clears last at
+  0x2c3613. This is inline clearing, not either removal helper. It does
+  not visit retained cursor/equipment, erase slots, resize tabs or
+  sort/refresh them. Surrounding world-reset timing is
+  remaining-runtime-gaps §6; later independent refreshes can compact
+  these holes.
+
 ## 4. Refresh sorts and compacts canonical storage
 
 **0xb3ed0** receives Game, fetches the local creature's **actual+0x9f0
@@ -179,6 +222,35 @@ merge equal live stacks, transfer items between tabs, or reclassify a
 saved item to the tab currently suggested by0x5f100. A saved type15 in a
 nonstandard tab remains in that tab through this refresh, ordered by that
 tab's comparator.
+
+### 4.1 Pickup-frame call frequency
+
+The call **0xaa7cd** in frame0xa5a50 is **not unconditional once per
+frame**. It is inside the ordered walk of pickup notices at
+World+0x110, after resolving the notice's recipient creature and adapting
+the item through0x10a720. It is reached only when that resolved creature
+is the current local player. A missing recipient or a different recipient
+does not reach this inventory refresh. With notice flags bit0x02 set,
+the per-character position-key lookup at personal+0x88 additionally
+skips the remainder of an already collected notice, including refresh.
+
+For each local, non-skipped notice, first apply its item/counter/gold
+branch, then call0xb3ed0 at0xaa7cd, then ordinary InventoryWidget
+0x280a40 at0xaa7d9, then0x280c80 at0xaa7e5. The refresh is reached
+even for a notice whose application only changed a special counter or
+gold, and is not conditioned on the amount being positive or on an
+insertion helper actually appending a slot. It precedes that notice's
+receipt script/used-cell/announcement processing. This matches the
+existing pickup notice contract in loot-pickup §4.
+
+There is **no inventory-widget visibility test** around these calls.
+Zero local applicable notices means no0xaa7cd call; N applicable local
+notices cause N such calls in list order, not one batched call after the
+walk.0x280a40 itself also calls0xb3ed0 when its bound collection pointer
++0x1e8 is non-null, as §4 already specifies; that invocation likewise
+does not require its widget to be shown. Thus one pickup can cause the
+explicit sort and the widget refresh's additional sort. Do not replace
+this event-specific order with a universal every-frame compaction.
 
 ## 5. Consequences for stored identification indices and scope
 
@@ -640,7 +712,7 @@ ability-finished, health-positive or carry-cap gate:
 | Category/subtype | Helper's immediate changes |
 |---|---|
 |1/subtype9|Append a kind1 queued interaction carrying the incoming item, then consume that canonical source by1. This is the existing bomb producer in skills-and-interactions §2.3, not immediate host damage.|
-|1/subtype13|Set Game bytes+0x668 and+0x669 both to1; append the kind1 item interaction; store this live slot pointer at Game+0x21c0. Do **not** consume its quantity in this path. The subsequent map/interaction consumer determines the continuation.|
+|1/subtype13|Set Game bytes+0x668 and+0x669 both to1; append the kind1 item interaction; store this live slot pointer at Game+0x21c0. Do **not** consume its quantity in this path. The continuation is independently specified in steam-item-map-selection.md.|
 |1/subtypes1,2,3,12|Copy the item to active-item field player+0x1d8; set ability0x54, ability age0, dodge timer+0x12c=0; consume source by1.|
 |Other1 subtypes|Same active-item/age/dodge/count operations, with ability0x55.|
 |28 (0x1c), any subtype|Same operations, with ability0x54.|
@@ -706,9 +778,22 @@ health fraction for ordinary finite positive maximum-health inputs; it
 is not an additive equipment-health delta or an unconditional full heal.
 
 Then clear ChatWidget G+0x398's active-editor byte+0x1d8 at0x96588 and
-hide widget G+0x310 through its shown property at0x965a8. No inventory
+hide the quick usable-item selector G+0x310 through its shown property at0x965a8. No inventory
 cursor put-back occurs in this tail. These common effects also follow
 an unusable-item sound or a category whose direct dispatch did nothing.
+
+**G+0x310 identity:** interface setup0xf9ac0 looks up the owner GUI node
+named **`selector`**, stores it at interface+0x1f8 =Game+0x310,
+reparents it under the dynamically created game-UI container G+0x220,
+and initializes it hidden. Its pointer is distinct from the ordinary
+InventoryWidget G+0x330. The configured **Ring Menu action16**
+(default Tab) toggles its shown property on its rising edge in0xa5a50;
+the held byte is G+0x1a80. Frame display of this selector fills its
+`name`/`count` fields from usable-item choices, including the empty text
+“You don't have any usable items.” Interface0x103200 updates its
+`left`/`right` child feedback and hides it when the full map is open.
+This identifies a quick usable-item selection menu;0x965a8 closes that
+selector, rather than clearing/closing the canonical inventory grid.
 
 ### 7.8 Verification boundary
 
@@ -721,9 +806,10 @@ unverified question in §6.4; none of these direct actions supplies one.
 The full ability-duration helper used by category21 is independently
 specified in effect-objects §2.2, with existing ability update contracts
 governing the later effects. The next map consumer after category1/
-subtype13's request is not newly audited here, nor are catalog names or
-new producers for otherwise unavailable item categories inferred from
-these reachable consumer tests.
+subtype13's request is now independently specified in
+steam-item-map-selection.md. Catalog names and new producers for
+otherwise unavailable item categories are not inferred from these
+reachable consumer tests.
 
 An additional storage limit remains explicit: category20 retains the
 source-slot pointer across its old-item insertion, with no new lookup
@@ -734,3 +820,75 @@ for that case would label source tab/index, size/capacity and base address
 before/after insertion, original source quantity, inserted old-item
 location and final live source quantity. No such game execution was
 performed, and no allocator-dependent stale-pointer result is invented.
+
+## 8. Auxiliary panel binding, opening and canonical sorts
+
+This section concerns explicit calls on the traced panel routes; geometry
+callbacks and later transactions remain separate events. Addresses below
+refer to Steam. The common refresh0x280a40 first requires non-null widget
++0x1e8, builds the region-choice list through0x2806a0, then sorts/compacts
+the **local creature's canonical inventory** through0xb3ed0 at0x280a6d.
+The widget may display crafting or shop collections; the sort still
+targets the local creature. Visibility is not tested.0x280c80 only
+updates scrollbar geometry; it does not call the canonical sort.
+
+**Binding:** constructor0x27c950 initializes the InventoryWidget backing
+pointer+0x1e8 to null. The normal interface update0x103200 assigns:
+
+| Widget | Bound collection at widget+0x1e8 |
+|---|---|
+| Inventory G+0x330 | current local creature+0x9f0 |
+| Crafting G+0x340 | Game+0x17a8 |
+| Shop G+0x350 | Game+0x1870 |
+
+These are direct pointer assignments in that update, independent of panel
+visibility. The assignments themselves do not call refresh/sort or reset
+canonical indices. They are not a copy/reclassification of inventory.
+Identification G+0x360 instead stores its live canonical tab/index pair,
+as specified in steam-identification-ui §6; it is not another bound
+InventoryWidget collection.
+
+**Inventory toggle0x102fe0:** toggle G+0x330 root visibility first. Only
+on the newly shown branch copy local creature region+0x150/+0x154 to
+widget selected region+0x1f0/+0x1f4, call0x280a40 at0x103078 and
+0x280c80, then hide G+0x358's root. Closing by this toggle has no sort.
+The selected tab and canonical selection are not reset by this routine.
+
+**Crafting toggle0x102f10:** toggle G+0x340 root, then call0xb2180
+whether newly shown or newly hidden. If the root is now shown, call an
+additional0x280a40 at0x102f81 and0x280c80.0xb2180's outer gate is a
+nonempty local canonical **outer tab vector**, not widget visibility or
+the presence of positive item quantities. If admitted, it rebuilds its
+six recipe collections in index order0 through5 via0xb2ee0, then calls
+G+0x340 refresh0x280a40 at0xb2bd0 followed by0x280c80. Consequently,
+with a nonempty tab vector and a bound crafting widget, this toggle sorts
+once on close and twice on open. Retain those separate refreshes; larger
+equal-key canonical orders need not be stable across repeated sorts.
+
+**Panel selection0x102db0:** store requested selection at Interface+0x30c,
+hide G+0x330, G+0x340 and G+0x388 roots, then dispatch selection0 to the
+inventory toggle or1 to the crafting toggle. Thus selection0 necessarily
+takes the newly shown inventory branch; it is not an extra inventory
+refresh before that branch. Selection2 is a different auxiliary panel
+and is outside this bounded inventory/crafting contract.
+
+**Shop/identification opening from0x98180:** a reached merchant press
+sets shop G+0x350 shown, calls0x102db0(0), stores merchant ID/class at
+Game+0x1e98/+0x1ea0, then calls0xb75d0. That rebuild ends in shop
+0x280a40/0x280c80, so the ordinarily bound route sorts once through
+opening inventory and once through rebuilding shop. The identifier
+class0x83 press sets G+0x360 shown then calls0x102db0(0); it adds the
+inventory-opening sort but no independent identification refresh/sort.
+Identification Goodbye hides that identification root, retaining its
+selection (steam-identification-ui §6). It does not itself sort.
+
+Simple root visibility changes do not call0xb3ed0. In particular the
+movement/full-map close paths which only hide roots are not a substitute
+for either opening/rebuild route above. Transaction-specific nested
+refreshes remain loot-shops §4.4; a shop mode/category callback can rebuild
+shop and thereby sort even though a mere root hide does not. Widget
+size/layout callback0x27fce0 also calls0x280a40 when its item-frame
+template+0x228 is non-null, then0x280c80 after rebuilding its hit frames;
+it adds a sort if the widget is bound, including while hidden. Do not
+generalize the toggle counts into a count for every surrounding layout
+or transaction event.

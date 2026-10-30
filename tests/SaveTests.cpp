@@ -167,6 +167,20 @@ void inventorySlotLoading() {
     carried.found.erase(carried.found.begin());
     nativeprogress::fromProgress(carried, nullptr, 0, {}, weapons, notes);
     SAVE_CHECK(weapons.inventory[0].size() == 1 && weapons.inventory[0][0].item[item::RARITY] == 3);
+    Character canonical = testCharacter();
+    const auto unknown = makeItem(15, 8);
+    canonical.inventory.resize(8);
+    canonical.inventory[7] = {{0, first}, {-1, unknown}};
+    auto live = nativeprogress::toProgress(canonical, {}, {}, {});
+    live.inventoryAuthoritative = true;
+    live.nativeInventory->inventory.gold = 71;
+    live.nativeInventory->inventory.fieldAb0 = 19;
+    live.nativeInventory->inventory.tabs[7][1].count = 4;
+    Character written;
+    nativeprogress::fromProgress(live, nullptr, canonical.health, {}, written, notes);
+    SAVE_CHECK(written.inventory.size() == 8 && written.inventory[7][0].item == first && written.inventory[7][0].count == 0 &&
+               written.inventory[7][1].count == 4 && written.inventory[7][1].item == unknown && written.gold == 71 &&
+               written.fieldAb0 == 19);
 }
 
 void characterRoundTrip() {

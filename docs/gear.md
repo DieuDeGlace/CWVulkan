@@ -9,6 +9,23 @@ Everything here comes from the user's own game, through ZoneExtractor:
 
 Classes are numbered as the game numbers them: 1 Warrior, 2 Ranger, 3 Mage, 4 Rogue.
 
+## Active inventory storage
+
+Native-save characters use `InventorySlots` as their item/equipment authority.
+The survey remains a source of measurements/model names for compatibility views;
+its flat list no longer reconstructs a native character's saved inventory.
+Empty slots and saved extra tabs remain intact until an explicit native refresh.
+Refresh sorts/compacts the actual tabs; identification keeps its tab/index binding
+and resolves the current record at that pair after a refresh.
+
+Direct left/right and raw-Shift equipment choices follow the independent
+[slot specification](specs/steam-inventory-slot-lifecycle.md), including return order,
+full item attributes and the native category26 chest/head distinction. Shop transactions
+follow [their own action/refresh order](specs/loot-shops.md). The data implementation
+uses checked indices across allocation; allocator-dependent native dangling-pointer
+outcomes are not treated as a portable behavior to reproduce. Exact auxiliary UI
+appearance and broader gameplay comparisons remain on the roadmap.
+
 ## Item categories
 
 | Category | Slot | Notes |
