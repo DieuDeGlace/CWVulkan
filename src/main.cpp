@@ -543,6 +543,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
     RenderSettings renderSettings;
     renderSettings.read(config);
+    renderSettings.nativeZoneRadius = gameOptions.zonesDrawn();
     // The options' vsync and render distance ([Graphics] VSync and ViewDistance unless the command
     // line sets them): the default render distance (50 %) is CubeVulkan's 400 blocks.
     if (!setOnCommandLine("graphics.vsync"))
@@ -738,6 +739,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         if (!setOnCommandLine("graphics.vsync") && benchmark <= 0)
             renderer.settings.vsync = renderSettings.vsync = o.vsync != 0; // (taken up when the swapchain is next made)
+        renderer.settings.nativeZoneRadius = renderSettings.nativeZoneRadius = o.zonesDrawn();
         if (!setOnCommandLine("graphics.viewdistance")) {
             renderer.settings.fogDistance = renderSettings.fogDistance = o.viewDistance();
             world.setViewZones((int)std::ceil(renderSettings.fogDistance / ZONE));
@@ -1610,6 +1612,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     spawned.setHitVisualObserver([&hitVisuals](const cwnet::DamageRecord &number) { hitVisuals.push_back(number); });
     world.setTransientLightProvider([&transientLights] { return transientLights.values(); });
     world.setEffectLightProvider([&spawned] { return spawned.effectLights(); });
+    world.setCreatureLightCollector([&spawned](const auto &frame, auto &out) { spawned.collectLights(frame, out); });
     world.setGroundLightProvider([&](steampoints::ZoneKey key) {
         return spawnedReady ? spawned.groundLights(extractedWorld, key.first, key.second) : steampoints::GroundSources{};
     });

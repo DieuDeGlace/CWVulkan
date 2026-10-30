@@ -1229,3 +1229,142 @@ fixed camera XYZ**. They are not supplied the truncated region-query inputs.
 The far-flight helper0x2b8050 consumes its own player/anchor fields (§2.8),
 not a fractional camera-height query. Capturing raw camera fixed XYZ plus
 the actual truncated region/height query XY makes this distinction testable.
+
+## 6. Frame-input adapters: zone window, adaptive range and creature radius
+
+### 6.1 Producer and units of renderer+0x438
+
+This is a **signed32 horizontal zone-window radius N**, measured in
+**64-block zones**. It is not a total number of visible zones, a block
+distance, a mesh-group count or the CPU-performance setting. The square
+visited by the scene/adaptive-range passes has inclusive zone coordinates
+**cameraZoneX−N through cameraZoneX+N**, and likewise for Y: nominally
+**(2N+1) squared zone positions** before availability/culling tests.
+
+The normal scene caller is **0xa5a50 at0xad863–0xad8b3**. Read signed32
+**Game+0x1b9c**, the `renderDistance` setting, multiply by30 with32-bit
+integer arithmetic, then divide by100 with signed truncation toward zero.
+If that quotient is **less than4**, supply **3**; otherwise supply the
+quotient. This value is **argument11 of0xe2e00**, called at0xad9d4. The
+scene copies it directly to renderer+0x438 at **0xe2fe1**, before updating
+the adaptive range. There is no additional upper/lower clamp in that
+scene assignment.
+
+The settings default is **50**, producing **N=15**, hence a31-by31
+candidate square. The normal options UI permits5 through100, in steps
+of5, producing N=3 through30;5 and10 both produce3,15 produces4,100
+produces30. The file loader **0x13aa50** reads the recognized setting as
+an integer without applying the UI arrow bounds. Thus the UI range is
+not an extra clamp on manually supplied configuration values. The caller
+retains its quotient-below4 fallback even for such inputs. Settings
+defaults/application are otherwise specified in frontend-options §1.
+
+Base renderer constructor **0xcbd10**, store **0xcbea8**, initializes
++0x438 to0. That construction value is not the gameplay setting default:
+the first scene call replaces it with its supplied argument. A replacement
+renderer should use the current scene's caller-derived N, not keep0 or
+replace N with a constant draw-distance guess.
+
+### 6.2 Meaning, persistence, reset and derived ranges
+
+The float32 at **renderer+0x4a4** is the **current adaptive scene range in
+blocks**, produced by **0xecda0** exactly as §2.6 describes: loaded/published
+mesh availability, their cached geometry/cost, camera/player state and its
+previous value determine it. It is not a direct copy of a percentage or
+an independent graphics setting, and is not intrinsically the constant256.
+The normal Render Distance setting influences it through N, the window,
+initial squared-distance bound and triangle budget; CPU-performance is
+not an additional scalar in these formulas.
+
+The constructor initializes +0x4a4 to **0**. Explicit reset helper
+**0xe8a30** writes **0** to that field only. Its identified normal-frame
+caller at **0xad724–0xad752** invokes it when the requested world identity
+differs from the current world: requested seed **Game+0x206c** differs
+from **World+0x220**, or requested name **Game+0x2070** differs from
+**World+0x200** through comparison0x6ddf0. This is before scene submission.
+The reset does not set N or either derived range. There is no reset of
++0x4a4 merely because a new frame starts or Render Distance is changed in
+the traced caller/scene path; preserve the previous value for §2.6's
+asymmetric snap/easing rules.
+
+On **each0xe2e00 call**, it first installs the supplied camera, matrices,
+N and frame inputs, then calls **0xecda0 at0xe3096**. After that update,
+it overwrites the two derived float32 radii at **0xe330d /0xe333c**,
+before scene/model/light collection. The exact finite-value arithmetic is:
+
+- Form **N times64 in signed32**, implemented by shifting its32-bit word
+  left6. Convert that completed signed32 result to float32 once.
+- For **+0x49c**, multiply that float by stored float32 **0.2**
+  (word **0x3e4ccccd**, RVA0x42e700), select the smaller of this product
+  and current+0x4a4, then the smaller of that result and **200**.
+- For **+0x4a0**, multiply the same converted N-times64 float by exact
+  float32 **0.5** (0x4ac964), select the smaller of this product and
+  current+0x4a4, then the smaller of that result and **256**.
+
+Keep the multiplication order; do not first replace the first formula by
+a multiplication of N by a separately rounded12.8 constant. These fields
+are overwritten directly after adaptive updating, without a second ease
+or a positive minimum clamp. At default N=15 their setting-derived limits
+are192 and256 blocks, respectively; adaptive range can reduce either.
+The64-block margins in particular source gates are added later exactly
+where §§3.3–3.10 specify them, not to these stored radii generally.
+
+The candidate floor0.001 and special ability's target minimum64 in §2.6
+are **target rules inside0xecda0**, not a universal post-update clamp on
++0x4a4. In particular the constructor/reset zero participates in the
+first upward easing step. The flagged-block/effect branch's256 target
+is also conditional; it does not justify imposing a global256 ceiling
+on +0x4a4. Use §2.6's complete rules rather than treating the field name
+as a maximum user-configured draw-distance constant.
+
+### 6.3 Physics/rules producer of creature light-radius+0x198
+
+The collector reads an existing **float32 radius in blocks**; it does not
+calculate the stat itself. Creature base-data constructor **0x4d600**, at
+**0x4d6e7**, initializes this field to **10.0**. Its subobject begins at
+creature+0x10, so its local+0x188 store is creature+0x198.
+
+Physics **0x2bb8e0**, in the grip/lamp stage, calls **0x5f6e0 at0x2bbda3**
+and stores the returned float at **0x2bbda8**. This stage writes the radius
+only when either:
+
+- This creature pointer equals **World+0x448**, the local player; or
+- The creature hostility byte **+0x60 is nonzero** and the remote-client
+  byte **World+0x358 is zero**.
+
+Those are the exact authority conditions. It is not every nonlocal
+creature on every client, nor every hostility-zero player on an
+authoritative world. The update does not additionally require a carried
+lamp, lamp-toggle flag, positive emitted RGB, nearby camera, frame-light
+selection, swimming or a particular ability. Outside that authority
+gate this physics stage retains the stored radius. Remote state has its
+own float field34 for+0x198, as documented in netcode-packets; the
+collector must retain/consume that state rather than recomputing all
+remote creatures from local counters every render frame.
+
+Rule **0x5f6e0** chooses a signed32 integer input: for hostility+0x60
+**zero**, use artifact skill counter **+0xb74**; otherwise use
+**10 times level+0x144**, with32-bit integer multiplication. Convert this
+integer to float32. Divide it by20, add1, divide1 by that result,
+subtract the quotient from1, multiply by12, then add8. Every listed
+operation is float32, rounded before the next; there is no fused
+operation, explicit result clamp, percentage scaling or smoothing here.
+Do not replace this evaluation by the real-number-equivalent n/(n+20)
+expression when exact float agreement matters. Stored constants are1 at
+0x4ac980,20 at0x42e5a0,12 at0x42e59c and8 at0x4aca30. Inputs0,10,20
+give radii8,12,14 blocks, respectively. The constructor's10 is therefore
+a startup/default value, not the zero-artifact rule result.
+
+For the local player, **0x66850**, called from world update0x2da6c0,
+rebuilds +0xb74 along with the other six artifact counters from the
+category23 stacks in inventory tab5: each qualifying stack contributes
+one counter increment according to unsigned item-modifier modulo7;
+remainder6 contributes to+0xb74. Stack count does not multiply the
+increment. This provenance and physics ordering are already specified
+in lore-and-artifacts §§5.2–5.3 and creature-physics §3.2.
+
+These traces resolve the normal frame-setting adapter and light-radius
+producer. They do not replace missing mesh readiness/cost/bounds with
+synthetic loaded-zone data: an exact adaptive-range oracle still needs
+the labeled mesh-stage and camera inputs listed in §4. No game execution
+or new owner capture was performed for this clarification.

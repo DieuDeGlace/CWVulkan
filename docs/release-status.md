@@ -12,14 +12,19 @@ checkpoint describe the intended setup and remaining limits.
   quantity, coordinate conversion and fade rules. Model and terrain light ranges
   are separate. Hit flashes now use consumed local/received hit records, current
   spirit weapons and native fixed positions, first-frame aging and expiration.
-  CPU regressions and 25 Vulkan cases cover these sources, including zero-fade
+  CPU regressions and 28 Vulkan cases cover these sources, including zero-fade
   slots, personal state updates, projectile filtering/removal and owned/delayed/
   picked-up items. The race0x90 death flash is also integrated, using the persistent
   pose-preparation marker, drawn position, cached previous renderer visibility,
   fixed 100-block range and native candidate ordering/800-ms lifetime. Death births
   precede hit-display flashes. Further CPU/GPU checks cover these gates and cached
-  visibility across pending origin changes. Living-creature lights, adaptive
-  camera/range state and broader native visual comparisons remain open.
+  visibility across pending origin changes. Live player/NPC records and buffs now
+  supply carried/toggled lamps, race/state effects, casting and equipment spirit
+  glow, with native anchor/rotation/truncation and source ordering. The casting
+  sphere range has its separate native zone-window calculation and 256 cap.
+  The renderer still supplies its existing configured scene range: native mesh-
+  budget/adaptive range state, camera state and broader native visual comparisons
+  remain open. Source-branch tests do not prove complete frame-input parity.
 
 - Isolated reference capture now runs automatically after game-session
   initialization and refreshes cached light snapshots. The real-install run

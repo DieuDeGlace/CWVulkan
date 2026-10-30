@@ -115,7 +115,7 @@ individual feature documents.
   batches, so a global64-light cap cannot discard another zone's lights. Sprite
   bindings use full CUB dimensions, posed matrices and native coordinate rounding;
   loaded neighboring zones participate before they have meshes. Source-reader,
-  CPU boundary and 25 synthetic GPU checks pass, including offset70 and more than
+  CPU boundary and 28 synthetic GPU checks pass, including offset70 and more than
   64 candidates. The isolated recapture refreshed1,590 zones with both auxiliary
   light lists and coherent cache metadata. The engine reader and neighboring-zone
   light solve match all 8 model and 9 static lights in 15 nonempty zones.
@@ -154,8 +154,14 @@ individual feature documents.
   source. Generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Remaining native living-creature lights,
-  water/model/overlay shader controls,
+- [x] Living-creature light source branches: carried/toggled lamps, effect/race/state
+  lights, casting and four equipment spirit-glow anchors. The renderer reads live
+  player/NPC records and buffs in world traversal order, including actors without
+  submitted geometry; dead actors emit none. CPU cases cover raw/displayed yaw,
+  fixed truncations, physical/drawn anchors, timing and range distinctions. GPU
+  cases cover live/dead/restored actors without rebuilding geometry. Native mesh-
+  adaptive frame inputs and wider original-game visual comparisons remain below.
+- [ ] Native adaptive scene range and camera state, water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   These need reference comparisons or an independent behavioral specification.

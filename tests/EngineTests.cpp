@@ -137,6 +137,7 @@ int steamTerrainTests();
 int steamShaderTests();
 int steamPointLightsTests();
 int steamTransientLightsTests();
+int steamCreatureLightsTests();
 int dialogueChoicesTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests();   // tests/ObjectVisualTests.cpp
@@ -9024,6 +9025,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "steamcreatures")
+        return steamCreatureLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamtransients")
         return steamTransientLightsTests();
     if (argc == 2 && std::string(argv[1]) == "dialoguechoices")
@@ -10307,6 +10310,7 @@ int main(int argc, char **argv) {
     failures += steamTerrainTests();
     failures += steamPointLightsTests();
     failures += steamTransientLightsTests();
+    failures += steamCreatureLightsTests();
     failures += dialogueChoicesTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);

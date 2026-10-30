@@ -55,6 +55,9 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
     probe.transientLights = [this] {
         return transientLightProvider ? transientLightProvider() : std::vector<steampoints::TransientSource>{};
     };
+    probe.creatureLights = [this](const steampoints::Frame &frame, std::vector<steampoints::Light> &out) {
+        if (creatureLightCollector) creatureLightCollector(frame, out);
+    };
     probe.groundLights = [this](steampoints::ZoneKey key) {
         return groundLightProvider ? groundLightProvider(key) : steampoints::GroundSources{};
     };

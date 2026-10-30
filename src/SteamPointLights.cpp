@@ -182,6 +182,13 @@ void collectGround(const GroundSources &sources, float zoneDistanceSquared, cons
     }
 }
 
+float abilityRange(float sceneRange, int32_t zoneRadius) {
+    const uint32_t shifted = (uint32_t)zoneRadius << 6;
+    int32_t blocks;
+    std::memcpy(&blocks, &shifted, sizeof blocks);
+    return std::min(std::min((float)blocks * .5f, sceneRange), 256.f);
+}
+
 void collectEffects(const std::vector<EffectSource> &effects, const Frame &frame, std::vector<Light> &out) {
     for (const auto &effect : effects) {
         if ((effect.kind == 3 || effect.kind == 4) && frame.visible &&

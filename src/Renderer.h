@@ -38,6 +38,7 @@ struct RenderSettings {
     // the Alpha look (src/AlphaMoon.h). The Steam look keeps its own MoonLight moon ([Moon]).
     alpha::MoonSettings moon;
     bool vsync = true;
+    int nativeZoneRadius = 15; // current native Render Distance option, not loaded mesh count
     // [Shadows]: same keys as the installed Mods/SteamShadows.ini. CubeVulkan's own: neither
     // game has shadow maps (docs/specs/shadows.md §1), but they are on by default at the
     // user's request; `[Shadows] Enabled=0` turns them off for the vanilla look. The near map
@@ -146,6 +147,7 @@ struct WorldProbe {
     steampoints::UsedCellQuery usedCell; // local player's personal discovery state
     std::function<std::vector<steampoints::EffectSource>()> effectLights;
     std::function<std::vector<steampoints::TransientSource>()> transientLights;
+    std::function<void(const steampoints::Frame &, std::vector<steampoints::Light> &)> creatureLights;
     std::function<steampoints::GroundSources(steampoints::ZoneKey)> groundLights;
 };
 

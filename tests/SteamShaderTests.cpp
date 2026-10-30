@@ -1,3 +1,5 @@
+#include "SteamCreatureLights.h"
+#include "worldgen/Residents.h"
 #include "SteamTransientLights.h"
 // Explicit GPU integration check. No game assets or Steam process are needed.
 // Reference colors are independently derived in steam-world-shader-output.md.
@@ -255,6 +257,23 @@ int steamShaderTests() {
     checkPoints("transient-zero-fade", {item}, {7,52,5});
     flashes.advance(1);
     checkPoints("transient-expired", {item}, {7,52,5});
+    std::vector<worldgen::CreatureRecord> lightActors(10, worldgen::newCreature(1));
+    auto actorField = [&](size_t field, const auto &value) {
+        for (auto &record : lightActors) std::memcpy(record.data() + field, &value, sizeof value);
+    };
+    actorField(0x180, 1.f); actorField(0x128, uint16_t(1)); actorField(0x198, 30.f);
+    actorField(0x80, uint32_t(0)); actorField(0x8c, 4.f);
+    probe.creatureLights = [&](const steampoints::Frame &frame, std::vector<steampoints::Light> &out) {
+        for (const auto &record : lightActors)
+            steampoints::collectCreature(record.data(), [](int) { return false; }, frame, out);
+    };
+    renderer.setWorldProbe(probe);
+    checkPoints("creature-live-without-geometry", {item}, {82,214,60});
+    actorField(0x180, 0.f);
+    checkPoints("creature-dead", {item}, {7,52,5});
+    actorField(0x180, 1.f);
+    checkPoints("creature-restored", {item}, {82,214,60});
+    lightActors.clear();
     auto bounds = std::make_shared<scenevisibility::Bounds>();
     bounds->minimum = {-4*65536,-4*65536,-4*65536};
     bounds->maximum = {4*65536,4*65536,4*65536};

@@ -1340,6 +1340,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         points.camera = eye;
         points.range = settings.sceneryDistance;
         points.terrainRange = settings.fogDistance;
+        points.abilityRange = steampoints::abilityRange(settings.fogDistance, settings.nativeZoneRadius);
         points.daylight = nativeDaylight;
         points.clockMs = lighting.timeMs;
         points.usedCell = worldProbe.usedCell;
@@ -1370,6 +1371,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             steampoints::collectEffects(worldProbe.effectLights(), points, lights);
         if (worldProbe.transientLights)
             steampoints::collectTransient(worldProbe.transientLights(), points, lights);
+        if (worldProbe.creatureLights)
+            worldProbe.creatureLights(points, lights);
         const auto tables = steampoints::distribute(std::move(lights), eye, loaded);
         for (const auto &[key, table] : tables) {
             const auto count = (uint32_t)std::min<size_t>(table.size(), 10);

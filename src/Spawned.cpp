@@ -1,4 +1,5 @@
 #include "Spawned.h"
+#include "SteamCreatureLights.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
 #include "NativeItems.h"
@@ -2288,6 +2289,19 @@ steampoints::GroundSources SpawnedCreatures::groundLights(ExtractedWorld &ew, in
         std::memcpy(&item.owner, record.data() + grounditems::ground::OWNER, sizeof item.owner);
     }
     return sources;
+}
+
+void SpawnedCreatures::collectLights(const steampoints::Frame &frame, std::vector<steampoints::Light> &out) const {
+    auto collect = [&](const Creature &creature) {
+        const nativerules::HasBuff has = [&](int type) {
+            for (const auto &buff : creature.side.buffs) if (buff[0] == type) return true;
+            return false;
+        };
+        steampoints::collectCreature(creature.record.data(), has, frame, out);
+    };
+    if (hasPlayer) collect(player);
+    for (const auto &[zone, list] : zones)
+        for (const auto &creature : list) collect(creature);
 }
 
 std::vector<steampoints::EffectSource> SpawnedCreatures::effectLights() const {

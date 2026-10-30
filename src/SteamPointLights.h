@@ -54,6 +54,7 @@ struct Frame {
     Point camera{};
     float range = 0, daylight = 1, clockMs = 0;
     float terrainRange = 0; // projectile/item range; auxiliary models use range
+    float abilityRange = 0; // distinct native renderer+0x4a0 sphere-test range
     std::function<bool(const Point &, float radius, float range)> visible;
     UsedCellQuery usedCell;
 };
@@ -63,6 +64,7 @@ void collect(const ZoneSources &, const Frame &, std::vector<Light> &out);
 // Ground sources precede auxiliary model/object lights within each accepted zone.
 void collectGround(const GroundSources &, float zoneDistanceSquared, const Frame &, std::vector<Light> &out);
 float squaredDistance(const Point &, const Point &camera);
+float abilityRange(float sceneRange, int32_t zoneRadius);
 void collectEffects(const std::vector<EffectSource> &, const Frame &, std::vector<Light> &out);
 void collectTransient(const std::vector<TransientSource> &, const Frame &, std::vector<Light> &out);
 float distanceKey(const Point &, const Point &camera);
