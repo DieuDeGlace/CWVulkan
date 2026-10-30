@@ -4,6 +4,7 @@
 // Every save here is a test character made by the writer itself, in a temporary folder; no real
 // save is opened.
 #include "NativeSaves.h"
+#include "NativeProgress.h"
 
 #include <cstdio>
 #include <cstring>
@@ -96,6 +97,39 @@ WorldState testWorld() {
     w.zones[{-1, 4}] = z;
     w.zones[{2, 2}] = ZoneState{};
     return w;
+}
+
+void inventorySlotLoading() {
+    for (size_t tabCount : {0u, 2u, 8u}) {
+        Character original = testCharacter();
+        original.inventory.assign(tabCount, {});
+        if (tabCount) {
+            Item stale = makeItem(3, 17, 2);
+            stale[0x9e] = 0x77;
+            original.inventory[0] = {{0, stale}, {-1, makeItem(22, 2)}, {3, makeItem(1, 7)}};
+            original.inventory.back().push_back({2, makeItem(21, 5)});
+        }
+        const auto blob = writeCharacter(original);
+        Character loaded;
+        readCharacter(blob, loaded);
+        SAVE_CHECK(loaded.inventory.size() == tabCount);
+        SAVE_CHECK(writeCharacter(loaded) == blob); // tabs, holes, quantities and all item bytes
+    }
+    Character source;
+    source.inventory[0] = {{0, makeItem(3, 17, 2)}, {0, makeItem(1, 7)}, {-1, makeItem(22, 2)}};
+    const auto view = nativeprogress::toProgress(source, {}, {}, {});
+    SAVE_CHECK(view.found.empty());
+    SAVE_CHECK(view.bag.size() == 1 && view.bag[0].category == 22 && view.bag[0].count == -1);
+    Character pets;
+    auto stalePet = makeItem(20, 1), livePet = stalePet;
+    stalePet[0x9d] = livePet[0x9d] = 1;
+    stalePet[0x20] = 'X';
+    livePet[0x20] = 'N';
+    pets.inventory[4] = {{0, stalePet}, {1, livePet}};
+    const auto petView = nativeprogress::toProgress(pets, {}, {}, {});
+    std::string notes;
+    nativeprogress::fromProgress(petView, nullptr, 0, {}, pets, notes);
+    SAVE_CHECK(pets.inventory[4].size() == 1 && pets.inventory[4][0].item[0x20] == 'N');
 }
 
 void characterRoundTrip() {
@@ -400,6 +434,7 @@ void zoneStates() {
 
 int saveFormatTests() {
     failures = 0;
+    inventorySlotLoading();
     characterRoundTrip();
     worldRoundTrip();
     readingQuirks();

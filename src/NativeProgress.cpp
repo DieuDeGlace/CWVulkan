@@ -308,7 +308,8 @@ class ItemPool {
                 pool.emplace(identityOf(it), it);
         for (const auto &tab : c.inventory)
             for (const auto &s : tab)
-                pool.emplace(identityOf(s.item), s.item);
+                if (s.count != 0)
+                    pool.emplace(identityOf(s.item), s.item);
     }
     Item take(const Item &fresh) {
         auto it = pool.find(identityOf(fresh));
@@ -388,7 +389,7 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
     for (const auto &tab : c.inventory)
         for (const nativesaves::Stack &stack : tab) {
             const Item &it = stack.item;
-            if (isEmpty(it))
+            if (stack.count == 0 || isEmpty(it))
                 continue;
             if (isGear(it[field::TYPE])) {
                 for (int k = 0; k < std::max(1, stack.count); k++)

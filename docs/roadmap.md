@@ -190,6 +190,17 @@ individual feature documents.
 - [ ] Remaining sound-event wiring. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.
+- [x] Saved inventory loading preserves the stored tab count, including zero or
+  fewer than six tabs, holes, negative quantities and complete item bytes. Empty
+  quantity-zero slots contribute neither gameplay entries nor stale raw-item
+  payloads. Regressions reproduce the previous tab-count change, phantom items
+  and a stale empty pet slot replacing the live pet's name; focused save-format
+  checks and the full CPU/owner-data suite pass.
+- [ ] Canonical player inventory storage throughout gameplay: retain live tab/slot
+  indices across insertion, removal and native refresh/sort, and use those indices
+  for identification. The save reader fixes above do not replace the current flat
+  gameplay views/reconstruction. Identification still needs its verified owner
+  template layout, release gates, live selection binding and ordinary 3D item icons.
 - [x] Living-creature light source branches: carried/toggled lamps, effect/race/state
   lights, casting and four equipment spirit-glow anchors. The renderer reads live
   player/NPC records and buffs in world traversal order, including actors without

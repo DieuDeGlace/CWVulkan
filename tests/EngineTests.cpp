@@ -9086,6 +9086,8 @@ int main(int argc, char **argv) {
         return waterShaderTests();
     if (argc == 2 && std::string(argv[1]) == "alphascenery")
         return alphaSceneryTests();
+    if (argc == 2 && std::string(argv[1]) == "saveformat")
+        return saveFormatTests();
     if (argc == 2 && std::string(argv[1]) == "alphasceneryshader")
         return alphaSceneryShaderTests();
     if (argc == 2 && std::string(argv[1]) == "waterlook")

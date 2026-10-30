@@ -298,8 +298,7 @@ void readCharacter(const std::vector<uint8_t> &blob, Character &c) {
     // The inventory: its tabs, each a list of stacks (a count and the item).
     int32_t tabs;
     if (r.count(tabs)) {
-        if ((size_t)tabs > c.inventory.size())
-            c.inventory.resize((size_t)tabs);
+        c.inventory.resize((size_t)tabs);
         for (int32_t t = 0; t < tabs; t++) {
             int32_t n;
             if (!r.count(n))
