@@ -20,6 +20,10 @@ Farther environment models and static objects are instead appended to
 The vector is not split into “all objects” and “all models”. After the
 water traversal ends, the frame explicitly restores depth writes on,
 clockwise culling and the WORLD pixel shader at **0xba432–0xba462**.
+The explicit device states there are **ZWRITEENABLE, id14, value1** at
+0xba445 and **CULLMODE, id22, value2 (clockwise)** at0xba45a, followed
+by WORLD pixel-shader bind0x47d10. This is a state restoration without
+clearing the depth contents left by terrain/near scenery/water.
 It then walks that sorted vector forward, dispatching each model at
 **0xba4fe** or object at **0xba54a**. Creature draws begin afterward,
 at the already specified0xba5d0 route. No depth clear separates water,
@@ -49,12 +53,25 @@ These producers are **0xad9d1–0xada04**, **0xac4e0–0xac50c** and
 0.18R or0.27(F+22.4) operation. Models and objects intentionally have
 different L producers.
 
+The rechecked binary float words are:
+
+| Constant RVA | Word | Exact float value |
+|---|---|---|
+|0x2fcdbc|0x3e4ccccd|0.20000000298023224|
+|0x2fcdc0|0x3e99999a|0.30000001192092896|
+|0x2fd31c|0x3f666666|0.8999999761581421|
+|0x302a94|0x41b33333|22.399999618530273|
+
 After their existing type/resource and visibility admission, compare stored
 float squared distance D² with **float32(B timesB)**. **D²≤B² draws
 immediately**; **D²>B² defers**. Boundaries are at
 **0xb2754–0xb276a** for models and **0xb303e–0xb3051** for objects.
 The upper-range/resource/frustum admission remains the existing source
 route; this rule does not authorize drawing every record outside L.
+The native comparisons are the direct stored-float **COMISS followed by
+JBE** at0xb2767/0xb276a and0xb304e/0xb3051. For finite generated values,
+equality belongs to the immediate branch. No epsilon, sqrt comparison,
+integer distance quantization or secondary threshold occurs at this split.
 
 For the distance key, use full XYZ fixed differences from camera fixed
 XYZ **Game+0x140/+0x148/+0x150**, then each completed difference's
@@ -100,6 +117,17 @@ model pointer first, then object pointer, but that does not group separate
 records by kind. Preserve source append order before sorting. The late
 loop reads the owning-zone field only for a nonzero model pointer.
 
+This is **one frame-wide sort after collection**, not a separate sort per
+zone or a merge of independently sorted model/object vectors. At
+**0xb329a–0xb32d4** the enclosing cache-coordinate scan finishes its
+remaining coordinates; **0xb32fc–0xb332c** then passes the shared vector's
+full begin/end into0xabac0, which derives element count and initial sort
+budget from the byte span divided by16. Consequently a farther
+object can precede a nearer model, and finite ties in a small combined
+vector retain that combined input order across families/zones. The record
+kind does not define a water-side partition beyond the distance decision
+in §2.
+
 Sort **0xabac0→0xaa490** compares **only D²**, largest first. There is
 no pointer, model/object-kind, zone or type secondary key. Its control
 structure and whole-entry movements are the same independently specified
@@ -135,3 +163,29 @@ XYZ, model scale/header Z when relevant, R,F,D²,L,B and final sorted
 ordinal, with a label indicating **near-before-water** or
 **deferred-after-water**. A screenshot alone cannot establish tie order
 or whether a missing submerged far object failed the retained depth test.
+
+### 4.1 Bounded threshold reference and remaining admission scope
+
+For an arithmetic-only input **R=640**, the environment-model path yields
+**L=128**, **B=115.19999694824219**, **B²=13271.0390625** with the native
+float stages. For records that already passed their independent admission:
+
+| Stored D² | Native route |
+|---|---|
+|13271.0380859375, preceding float|Immediate, before water|
+|13271.0390625, exact threshold|Immediate, before water|
+|13271.0400390625, following float|Shared deferred vector, after water|
+
+These are scalar references derived from the binary words, **not runtime
+captures, native defaults or claims that all such records pass frustum/
+resource admission**. They distinguish the strict deferred comparison and
+the separately rounded0.2/0.9 stages from a single0.18 multiply.
+
+This focused recheck closes ordering, near/far split and finite-key tie
+mechanics. It does **not** newly derive every type-specific sprite lookup,
+the full outer cache-window bounds or the fixed arithmetic of the prior
+range/frustum admission. Those inputs remain their separate native route;
+do not substitute an invented universal D²<L² rejection, remeasure an
+object at the model's raised center, or use a guessed zone-order secondary
+sort key to fill that boundary. The oracle fields in §4 are sufficient
+to label these stages separately if a wider admission audit is needed.

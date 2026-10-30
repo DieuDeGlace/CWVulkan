@@ -4332,7 +4332,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             soldItems.erase(soldItems.begin() + (long long)k);
                     } else
                         boughtFromVendor[vendorTrade.shop.id].push_back(offer); // keeps it from coming back today
-                    audio.playInterface(gameshop::SOUND_BOUGHT);
+                    int64_t purchasePosition[3];
+                    playerUnits(purchasePosition);
+                    audio.playAt(gameshop::SOUND_BOUGHT, purchasePosition, 1, 1);
                     logLine("Vendor: bought for " + std::to_string(cost) + " gold");
                     continue;
                 }
@@ -4345,8 +4347,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     const Gear::Item it = k < (int)listed.size() ? gear.item(listed[(size_t)k]) : bag[(size_t)k - listed.size()].item;
                     const gameshop::Item raw = rawOf(it);
                     playerGold += gameshop::sellPrice(raw);
+                    int64_t salePosition[3];
+                    playerUnits(salePosition);
+                    audio.playAt(gameshop::SOUND_SOLD, salePosition, gameshop::SOLD_VOLUME, 1);
                     gameshop::rememberSold(soldItems, raw);
-                    audio.playInterface(gameshop::SOUND_SOLD); // (the game plays it at 0.75)
                     if (k < (int)listed.size()) {
                         gear.remove(listed[(size_t)k]);
                         applyGear();

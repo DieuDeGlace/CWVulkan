@@ -44,5 +44,5 @@ void main() {
         angle -= 2 * PI * ceil((angle - PI) / (2 * PI)); // into (-pi, pi]
         c *= 1 + .3 * sin(angle);
     }
-    outColor = vec4(submergedSceneColour(c), 1);
+    outColor = vec4(submergedSceneColour(c), pc.params.w);
 }

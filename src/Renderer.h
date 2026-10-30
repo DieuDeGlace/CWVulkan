@@ -5,6 +5,7 @@
 // in one of two looks ([Render] Style): Cube World Alpha's (the default) or the Steam
 // release's.
 #include "AlphaLook.h"
+#include "AlphaScenery.h"
 #include "WaterLook.h"
 #include "AlphaMoon.h"
 #include "Clouds.h"
@@ -96,6 +97,7 @@ struct DrawItem {
     DrawKind kind = DrawKind::Model;
     lightbeam::Placement beam; // only DrawKind::LightBeam consumes this
     std::optional<steamscenery::Bounds> nativeScenery;
+    std::optional<alphascenery::Placement> alphaScenery;
     float opacity = 1; // independent from the baked sunlight/material factor
     // A point light the object gives off in the Alpha look (lamps, torches, fires): its colour
     // at night, its reach in blocks (0 = none) and where it is.
@@ -344,6 +346,7 @@ class Renderer {
     VkPipeline beamPipeline = VK_NULL_HANDLE;
     VkPipeline sceneryDepthPipeline = VK_NULL_HANDLE, sceneryMirroredDepthPipeline = VK_NULL_HANDLE,
                sceneryFadePipeline = VK_NULL_HANDLE, sceneryMirroredFadePipeline = VK_NULL_HANDLE;
+    VkPipeline alphaSceneryPipeline = VK_NULL_HANDLE, alphaMirroredSceneryPipeline = VK_NULL_HANDLE;
     VkPipeline alphaScenePipeline = VK_NULL_HANDLE, alphaMirroredPipeline = VK_NULL_HANDLE,
                alphaWaterPipeline = VK_NULL_HANDLE, alphaSkyPipeline = VK_NULL_HANDLE,
                alphaSpritePipeline = VK_NULL_HANDLE, alphaCloudPipeline = VK_NULL_HANDLE;

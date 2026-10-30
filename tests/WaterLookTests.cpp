@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include <glm/gtc/matrix_transform.hpp>
 #include "stb_image.h"
 #include <algorithm>
 #include <array>
@@ -224,5 +225,86 @@ int waterShaderTests() {
     glfwDestroyWindow(window);
     glfwTerminate();
     std::printf("Shared water GPU images: %s (%s)\n", failures ? "FAILED" : "PASS", root.string().c_str());
+    return failures;
+}
+
+// Native Alpha keeps the water depth when deferred scenery is drawn. The same
+// far geometry must be visible without water; a missing/cull-only pass cannot pass.
+int alphaSceneryShaderTests() {
+    if (!glfwInit())
+        return 1;
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    auto *window = glfwCreateWindow(256, 192, "Alpha scenery staging", nullptr, nullptr);
+    if (!window) {
+        glfwTerminate();
+        return 1;
+    }
+    Renderer renderer;
+    RenderSettings settings;
+    settings.style = RenderStyle::Alpha;
+    settings.water.style = waterlook::Style::Native;
+    settings.vsync = settings.shadows = settings.taa = settings.smaa = false;
+    settings.resolution = settings.nearResolution = 64;
+    settings.fogDistance = settings.sceneryDistance = 256;
+    std::string error;
+    if (!renderer.init(window, settings, error)) {
+        std::printf("Alpha staging init: %s\n", error.c_str());
+        renderer.shutdown();
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return 1;
+    }
+    Mesh scenery, surface;
+    quad(scenery, {{{-8, -2, 0}, {8, -2, 0}, {-8, 2, 0}, {8, 2, 0}}}, {230, 10, 10}, 4, GLOW);
+    quad(surface, {{{-16, 0, 0}, {16, 0, 0}, {-16, 60, 0}, {16, 60, 0}}}, {40, 100, 180}, 4, WATER_SURFACE);
+    DrawItem model, water;
+    model.mesh = renderer.upload(scenery);
+    model.kind = DrawKind::Scenery;
+    water.mesh = renderer.upload(surface);
+    water.kind = DrawKind::Terrain;
+    Camera camera;
+    camera.eye = {0, -8, 8};
+    camera.target = {0, 28, 0};
+    Lighting lighting;
+    lighting.hour = 12;
+    lighting.timeMs = 43200000;
+    const auto root = std::filesystem::current_path() / "build" / "alpha-scenery-images";
+    std::filesystem::create_directories(root);
+    for (int frame = 0; frame < 32; ++frame)
+        renderer.frame(camera, lighting, {}, frame * .1, {}, {});
+    auto capture = [&](const char *name, float y, bool drawModel, bool drawWater) {
+        model.model = glm::translate(glm::mat4(1), glm::vec3(0, y, -2));
+        model.alphaScenery = alphascenery::Placement{alphascenery::Kind::Model, {0, (int64_t)(y * 65536), -2 * 65536}};
+        const auto path = root / (std::string(name) + ".png");
+        for (int frame = 0; frame < 3; ++frame) {
+            glfwPollEvents();
+            if (frame == 2)
+                renderer.capture(path.string());
+            renderer.frame(camera, lighting, {}, 4, drawModel ? std::vector<DrawItem>{model} : std::vector<DrawItem>{},
+                           drawWater ? std::vector<DrawItem>{water} : std::vector<DrawItem>{});
+        }
+        Picture picture;
+        WATER_CHECK(picture.load(path));
+        return picture;
+    };
+    auto empty = capture("water-only", 36, false, true);
+    auto near = capture("near-before-water", 36, true, true);
+    auto far = capture("far-after-water", 40, true, true);
+    auto dry = capture("far-without-water", 40, true, false);
+    auto sky = capture("sky-only", 40, false, false);
+    int nearRed = 0, farRed = 0, dryRed = 0;
+    if (!empty.pixels.empty() && !near.pixels.empty() && !far.pixels.empty() && !dry.pixels.empty() && !sky.pixels.empty())
+        for (int y = 0; y < 192; ++y)
+            for (int x = 0; x < 256; ++x) {
+                nearRed += near.channel(x, y, 0) > empty.channel(x, y, 0) + 3;
+                farRed += far.channel(x, y, 0) > empty.channel(x, y, 0) + 3;
+                dryRed += dry.channel(x, y, 0) > sky.channel(x, y, 0) + 10;
+            }
+    std::printf("Alpha staging GPU: near red%d far red%d dry red%d\n", nearRed, farRed, dryRed);
+    WATER_CHECK(nearRed > 30 && farRed == 0 && dryRed > 30);
+    renderer.shutdown();
+    glfwDestroyWindow(window);
+    glfwTerminate();
     return failures;
 }

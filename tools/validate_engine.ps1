@@ -37,6 +37,10 @@ try {
         & $testProgram sharedwater *> $waterLog
         if ($LASTEXITCODE -ne 0) { throw "Shared water image tests failed; read $waterLog" }
         Write-Output "Shared water image checks passed: $waterLog"
+        $alphaOrderLog = Join-Path $LogDirectory 'alpha-scenery-images.log'
+        & $testProgram alphasceneryshader *> $alphaOrderLog
+        if ($LASTEXITCODE -ne 0) { throw "Alpha scenery image tests failed; read $alphaOrderLog" }
+        Write-Output "Alpha scenery image checks passed: $alphaOrderLog"
     }
 } finally {
     Pop-Location

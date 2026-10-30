@@ -229,6 +229,7 @@ add_library(engine STATIC
     src/Clouds.cpp
     src/SteamSky.cpp
     src/AlphaLight.cpp
+    src/AlphaScenery.cpp
     src/Renderer.cpp
     src/RendererPost.cpp
     src/RendererWater.cpp
@@ -265,6 +266,7 @@ enable_testing()
 add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/FeatTextTests.cpp tests/WaterLookTests.cpp tests/WindContinueTests.cpp tests/EnemyRespawnTests.cpp tests/PlayerHitTests.cpp)
 target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
+target_sources(EngineTests PRIVATE tests/AlphaSceneryTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)
 target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp tests/SteamSceneRangeTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)

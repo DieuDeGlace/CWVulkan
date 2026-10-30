@@ -214,8 +214,16 @@ individual feature documents.
   Vulkan fixtures cover transparent shallow terrain, reflected geometry, blue haze,
   teal foreground tones, unchanged HUD colors and resized render targets in both
   lighting modes. Wider scene comparisons remain open below.
+- [x] Alpha static-scenery distance staging: separate model/object range inputs,
+  fixed XYZ keys, exact near equality, one mixed descending far queue after native
+  water and before creatures, retained depth, and pixel-opacity blending. CPU
+  boundary/sort checks and actual Vulkan near/far/dry controls pass. Shared water
+  retains the fades but draws opaque scenery before its refraction snapshot.
+  Full prior admission/cache traversal and fixed gameplay-camera parity remain open.
+- [x] Shop purchase/sale sounds use the player's physical fixed position; sales
+  retain their specified 0.75 volume. Sound IDs and timing follow the independent
+  shop and sound specifications.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
-  Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs
   are now available. Their remaining consumers and native visual comparisons still

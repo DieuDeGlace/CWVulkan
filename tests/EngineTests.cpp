@@ -148,6 +148,8 @@ int netTests();            // tests/NetTests.cpp: the game-compatible network la
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
 int waterLookTests();
+int alphaSceneryTests();
+int alphaSceneryShaderTests();
 int waterShaderTests();
 int featTextTests();
 int lootWindowTests();     // tests/LootWindowTests.cpp: the identify window, upgrade widget, chat line
@@ -9082,6 +9084,10 @@ int main(int argc, char **argv) {
         return steamMeshCostTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "sharedwater")
         return waterShaderTests();
+    if (argc == 2 && std::string(argv[1]) == "alphascenery")
+        return alphaSceneryTests();
+    if (argc == 2 && std::string(argv[1]) == "alphasceneryshader")
+        return alphaSceneryShaderTests();
     if (argc == 2 && std::string(argv[1]) == "waterlook")
         return waterLookTests();
     if (argc == 2 && std::string(argv[1]) == "feattext")
@@ -10342,6 +10348,7 @@ int main(int argc, char **argv) {
     failures += ownerSetupTests();     // tests/OwnerSetupTests.cpp
     failures += poseHudTests();        // tests/PoseHudTests.cpp
     failures += waterLookTests();
+    failures += alphaSceneryTests();
     failures += featTextTests();
     failures += lootWindowTests();     // tests/LootWindowTests.cpp
     failures += enemyRespawnTests();   // tests/EnemyRespawnTests.cpp

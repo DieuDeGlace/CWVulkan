@@ -555,7 +555,14 @@ void World::update(glm::vec3 focus) {
                 position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
                 // Native CPU culling keeps game Z; GPU placement alone has Z_OFFSET.
                 d.nativeScenery = steamscenery::bounds(position, models[m].size, s.scale, (uint32_t)modelFlags);
+                d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Model, d.nativeScenery->center};
                 d.nativeZone = z.nativeBounds;
+            }
+            if (s.object.type >= 0 && s.objectKey.type >= 0 && extracted) {
+                auto position = s.objectKey.position;
+                position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
+                position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
+                d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Object, position};
             }
             d.standingLight = (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT) ? 1.0f : s.light;
             if (renderStyle() == RenderStyle::Steam && s.modelType >= 0 && (modelFlags & vegetationwind::modelflag::OWN_LIGHT))

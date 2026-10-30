@@ -29,7 +29,11 @@ behavior for parity comparisons. Changing this setting requires a restart.
   art, fonts and the map overlay retain their own colors. The default underwater
   visibility limit is 80 blocks, configurable from 8 to 256.
 - Opaque actors are drawn before the shared water so refraction can include them.
-  Native Alpha ordering remains available under the Native water option.
+  Native Alpha ordering remains available under the Native water option. Its
+  separately specified static-scenery split now keeps near records before water
+  and sorts one mixed far model/object queue after water, before creatures. Both
+  paths preserve the scenery fade; shared refraction needs its opaque background
+  prepared first.
 - Snapshots are copied outside dynamic rendering with explicit image barriers.
   Color/depth targets are recreated with the window; frame uniforms follow their
   own completion fences. No live render attachment is sampled by the water pass.
@@ -75,7 +79,9 @@ Verification:
 
 Still needed:
 
-- Alpha far-static-model draw ordering around water; its distance threshold remains an open spec question.
+- The independently specified Alpha static-model/object split, mixed far queue and
+  fades are implemented with CPU threshold and GPU retained-depth regressions.
+  Complete prior admission/cache traversal and native fixed-camera state still need work.
 - Complete Steam vertex occlusion/point-light parity; this pass uses CubeVulkan's existing shared light/shadow implementation.
 - Wider reference comparisons at waterfalls, wet-ground films, dusk/night and underwater, including non-opaque model materials.
 

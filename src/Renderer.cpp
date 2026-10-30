@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include "Config.h"
+#include "NativeKeyOrder.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -558,6 +559,9 @@ bool Renderer::createPipelines(std::string &error) {
         {skyV, skyF, false, false, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &skyPipeline},
         {alphaV, alphaF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaScenePipeline},
         {alphaV, alphaF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaMirroredPipeline,
+         VK_FRONT_FACE_CLOCKWISE},
+        {alphaV, alphaF, true, true, true, true, false, VK_COMPARE_OP_LESS, &alphaSceneryPipeline},
+        {alphaV, alphaF, true, true, true, true, false, VK_COMPARE_OP_LESS, &alphaMirroredSceneryPipeline,
          VK_FRONT_FACE_CLOCKWISE},
         // Alpha water: blended, no culling, depth writes on (docs/specs/alpha-rendering.md 12).
         {alphaV, alphaWaterF, true, true, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &alphaWaterPipeline},
@@ -1548,12 +1552,12 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         return set;
     };
     // shading: false for the shadow maps, which need no light.
-    auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true) {
+    auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true, std::optional<float> opacity = {}) {
         const GpuMesh &m = meshes[item.mesh];
         VkDeviceSize zero = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
-        PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, item.opacity), glm::vec4(1, 0, 0, 0),
+        PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, opacity.value_or(item.opacity)), glm::vec4(1, 0, 0, 0),
                          glm::uvec4(0)};
         if (!alphaLook && !menuSky && shading) {
             pc.params.x = (float)(item.flags | STEAM_WORLD);
@@ -1783,6 +1787,16 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     };
     const VkPipeline worldPipeline = alphaLook ? alphaScenePipeline : scenePipeline;
     const VkPipeline mirroredPipeline = alphaLook ? alphaMirroredPipeline : mirroredScenePipeline;
+    struct DeferredAlpha {
+        const DrawItem *item;
+        alphascenery::Fade fade;
+    };
+    std::vector<DeferredAlpha> alphaFar;
+    // Camera state currently supplies a render-space float eye. Keep the fixed
+    // distance arithmetic separate so a native fixed camera can feed it later.
+    alphascenery::Point alphaEye;
+    for (int axis = 0; axis < 3; ++axis)
+        alphaEye[axis] = (int64_t)((double)nativeEye[axis] * 65536);
     auto drawScene = [&](bool afterWater) {
         VkPipeline boundScene = worldPipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, boundScene);
@@ -1794,12 +1808,23 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             if ((!alphaLook && item.nativeScenery) || item.kind == DrawKind::LightBeam || late != afterWater ||
                 (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
-            const VkPipeline desired = item.mirrored() ? mirroredPipeline : worldPipeline;
+            std::optional<float> opacity;
+            const bool staticAlpha = alphaLook && item.alphaScenery.has_value();
+            if (staticAlpha) {
+                const auto fade = alphascenery::sample(*item.alphaScenery, alphaEye, sceneDistance, fogF);
+                if (!sharedWater && fade.afterWater()) {
+                    alphaFar.push_back({&item, fade});
+                    continue;
+                }
+                opacity = fade.opacity();
+            }
+            const VkPipeline desired = staticAlpha ? (item.mirrored() ? alphaMirroredSceneryPipeline : alphaSceneryPipeline)
+                                                   : (item.mirrored() ? mirroredPipeline : worldPipeline);
             if (desired != boundScene) {
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, desired);
                 boundScene = desired;
             }
-            bindAndDraw(item, 0);
+            bindAndDraw(item, 0, true, opacity);
         }
     };
     drawScene(false);
@@ -1896,9 +1921,21 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     for (auto &item : water)
         if (visible(item))
             bindAndDraw(item, 0);
-    if (alphaLook)
+    if (alphaLook) {
+        // One mixed model/object queue, captured before water. The native
+        // key-only sort reverses squared distance without a family tie-break.
+        keyorder::sort(alphaFar, [](const DeferredAlpha &draw) { return -draw.fade.squared; });
+        VkPipeline bound = VK_NULL_HANDLE;
+        for (const auto &draw : alphaFar) {
+            const auto desired = draw.item->mirrored() ? alphaMirroredSceneryPipeline : alphaSceneryPipeline;
+            if (desired != bound) {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, desired);
+                bound = desired;
+            }
+            bindAndDraw(*draw.item, 0, true, draw.fade.opacity());
+        }
         drawScene(true);
-    else
+    } else
         drawSceneryQueue(steamscenery::Queue::OrdinaryFaded, true);
     // Steam's clouds after the world (§B.7): the opaque ones, then the faded ones laid down at no
     // opacity (only their depth counts) and drawn again over that with their opacity, so each
@@ -2101,7 +2138,7 @@ void Renderer::shutdown() {
         vkDestroySemaphore(device, fr.acquired, nullptr);
     }
     for (auto p : {scenePipeline, mirroredScenePipeline, menuPipeline, menuBackgroundPipeline, waterPipeline, waterDepthPipeline, shadowPipeline, skyPipeline,
-                   alphaScenePipeline, alphaMirroredPipeline, alphaWaterPipeline, alphaSkyPipeline, alphaSpritePipeline,
+                   alphaScenePipeline, alphaMirroredPipeline, alphaSceneryPipeline, alphaMirroredSceneryPipeline, alphaWaterPipeline, alphaSkyPipeline, alphaSpritePipeline,
                    alphaCloudPipeline, steamCloudPipeline, steamStarPipeline, beamPipeline, omegaWaterPipeline, omegaAlphaWaterPipeline, sceneryDepthPipeline,
                    sceneryMirroredDepthPipeline, sceneryFadePipeline, sceneryMirroredFadePipeline})
         vkDestroyPipeline(device, p, nullptr);
