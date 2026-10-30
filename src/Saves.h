@@ -81,6 +81,8 @@ struct SaveGame {
         int category = 0, id = 0, material = 0, rarity = 0, count = 0;
         unsigned modifier = 0;
         int region[2] = {0, 0};
+        int formula = 0;
+        std::optional<std::array<uint8_t, 0xa0>> storedRecord;
     };
     std::vector<Bagged> bag;
     struct Found {
@@ -93,6 +95,8 @@ struct SaveGame {
         // the game's save format holds them, the old text saves do not.
         std::array<uint8_t, 0x80> cubes{};
         uint8_t cubeCount = 0;
+        int formula = 0;
+        std::optional<std::array<uint8_t, 0xa0>> storedRecord;
     };
     std::vector<Found> found;
     // Quests taken from NPCs: who asked (the creature id), what to defeat (the

@@ -10,11 +10,13 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 class Gear {
   public:
+    using Record = std::array<uint8_t, 0xa0>;
     struct Stats {
         float maxHp = 0, attack = 0, armor = 0, critical = 0;
         Stats operator+(const Stats &o) const { return {maxHp + o.maxHp, attack + o.attack, armor + o.armor, critical + o.critical}; }
@@ -37,7 +39,12 @@ class Gear {
         // them: four bytes each (x, y, z, material) from +0x1d, their number at +0x9d.
         std::array<uint8_t, CUBE_BYTES> cubes{};
         uint8_t cubeCount = 0;
+        // Retain fields/padding the gameplay view does not interpret. Conversion
+        // writes current metadata and attributes over this original record.
+        std::optional<Record> storedRecord;
     };
+    static Item fromRecord(const Record &);
+    static Record toRecord(const Item &);
     // Copies an item's cubes into a 0xa0-byte item record, or takes them from one.
     static void cubesInto(const Item &item, uint8_t *record);
     static void cubesFrom(const uint8_t *record, Item &item);

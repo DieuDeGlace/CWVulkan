@@ -280,6 +280,33 @@ void Gear::updateWorn(Slot s, const Item &item) {
         all[(size_t)wornIndex[s]] = item;
 }
 
+Gear::Item Gear::fromRecord(const Record &record) {
+    Item item;
+    item.storedRecord = record;
+    item.category = record[0];
+    std::memcpy(&item.id, record.data() + 4, 4);
+    std::memcpy(&item.modifier, record.data() + 8, 4);
+    std::memcpy(item.region, record.data() + 0xc, 8);
+    item.rarity = record[0x14];
+    std::memcpy(&item.formula, record.data() + 0x18, 4);
+    item.material = record[0x1c];
+    cubesFrom(record.data(), item);
+    return item;
+}
+
+Gear::Record Gear::toRecord(const Item &item) {
+    Record record = item.storedRecord.value_or(Record{});
+    record[0] = (uint8_t)item.category;
+    std::memcpy(record.data() + 4, &item.id, 4);
+    std::memcpy(record.data() + 8, &item.modifier, 4);
+    std::memcpy(record.data() + 0xc, item.region, 8);
+    record[0x14] = (uint8_t)item.rarity;
+    std::memcpy(record.data() + 0x18, &item.formula, 4);
+    record[0x1c] = (uint8_t)item.material;
+    cubesInto(item, record.data());
+    return record;
+}
+
 void Gear::cubesInto(const Item &item, uint8_t *record) {
     std::memcpy(record + CUBES_AT, item.cubes.data(), CUBE_BYTES);
     record[CUBE_COUNT_AT] = item.cubeCount;

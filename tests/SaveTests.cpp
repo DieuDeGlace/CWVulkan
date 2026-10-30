@@ -5,6 +5,7 @@
 // save is opened.
 #include "NativeSaves.h"
 #include "NativeProgress.h"
+#include "Gear.h"
 
 #include <cstdio>
 #include <cstring>
@@ -100,6 +101,23 @@ WorldState testWorld() {
 }
 
 void inventorySlotLoading() {
+    Gear::Record record;
+    for (size_t i = 0; i < record.size(); ++i)
+        record[i] = (uint8_t)(i * 37 + 11);
+    record[0] = 15;
+    record[0x14] = 201; // retain the byte; display-color clamping is a separate operation
+    record[0x9d] = 3;
+    auto editable = Gear::fromRecord(record);
+    SAVE_CHECK(Gear::toRecord(editable) == record);
+    editable.rarity = 4;
+    editable.region[0] = -7;
+    editable.cubes[3] ^= 0x55;
+    auto expected = record;
+    expected[0x14] = 4;
+    const int32_t changedRegion = -7;
+    std::memcpy(expected.data() + 0xc, &changedRegion, 4);
+    expected[Gear::CUBES_AT + 3] ^= 0x55;
+    SAVE_CHECK(Gear::toRecord(editable) == expected);
     for (size_t tabCount : {0u, 2u, 8u}) {
         Character original = testCharacter();
         original.inventory.assign(tabCount, {});
@@ -130,6 +148,25 @@ void inventorySlotLoading() {
     std::string notes;
     nativeprogress::fromProgress(petView, nullptr, 0, {}, pets, notes);
     SAVE_CHECK(pets.inventory[4].size() == 1 && pets.inventory[4][0].item[0x20] == 'N');
+    Character distinct;
+    auto first = makeItem(20, 1), second = first;
+    first[0x9d] = second[0x9d] = 1;
+    first[0x20] = 'A';
+    second[0x20] = 'B';
+    distinct.inventory[4] = {{1, first}, {1, second}};
+    auto remaining = nativeprogress::toProgress(distinct, {}, {}, {});
+    remaining.bag.erase(remaining.bag.begin()); // remove A; the remaining live item is B
+    nativeprogress::fromProgress(remaining, nullptr, 0, {}, distinct, notes);
+    SAVE_CHECK(distinct.inventory[4].size() == 1 && distinct.inventory[4][0].item[0x20] == 'B');
+    Character weapons;
+    auto common = makeItem(3, 17, 2), rare = common;
+    common[item::RARITY] = 1;
+    rare[item::RARITY] = 3;
+    weapons.inventory[0] = {{1, common}, {1, rare}};
+    auto carried = nativeprogress::toProgress(weapons, {}, {}, {});
+    carried.found.erase(carried.found.begin());
+    nativeprogress::fromProgress(carried, nullptr, 0, {}, weapons, notes);
+    SAVE_CHECK(weapons.inventory[0].size() == 1 && weapons.inventory[0][0].item[item::RARITY] == 3);
 }
 
 void characterRoundTrip() {

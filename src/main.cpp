@@ -1271,9 +1271,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         for (int k = 0; k < (int)Gear::SLOTS; k++) {
             const Gear::Item &it = k == slot && in ? *in : gear.equipped((Gear::Slot)k);
             if (it.category && !(k == slot && !in)) {
-                worn[(size_t)k] = nativeplayer::item(it.category, it.id, it.material, it.rarity, it.modifier, it.region[0],
-                                                     it.region[1], it.formula);
-                Gear::cubesInto(it, worn[(size_t)k].data()); // (a weapon's upgrade cubes)
+                worn[(size_t)k] = Gear::toRecord(it);
             }
         }
         worldgen::CreatureRecord r = nativeplayer::record(who, worn);
@@ -1303,10 +1301,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         return true;
     };
     for (auto &f : saveGame.found) {
-        Gear::Item it;
+        Gear::Item it = f.storedRecord ? Gear::fromRecord(*f.storedRecord) : Gear::Item{};
         it.category = f.category, it.id = f.id, it.material = f.material, it.rarity = f.rarity;
         it.modifier = f.modifier, it.level = f.level, it.sprite = f.sprite == "-" ? "" : f.sprite;
         it.region[0] = f.region[0], it.region[1] = f.region[1];
+        it.formula = f.formula;
         it.cubes = f.cubes, it.cubeCount = f.cubeCount;
         if (haveGear && f.slot >= 0 && f.slot < Gear::SLOTS && foundStats(it, (Gear::Slot)f.slot))
             gear.add(it, (Gear::Slot)f.slot);
@@ -1740,8 +1739,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         logLine("Bag: " + std::to_string(bag.size()) + " kinds carried from the recorded character");
     for (const SaveGame::Bagged &b : saveGame.bag) {
         Carried c;
+        if (b.storedRecord)
+            c.item = Gear::fromRecord(*b.storedRecord);
         c.item.category = b.category, c.item.id = b.id, c.item.material = b.material, c.item.rarity = b.rarity;
         c.item.modifier = b.modifier, c.item.region[0] = b.region[0], c.item.region[1] = b.region[1];
+        c.item.formula = b.formula;
         c.count = b.count;
         bag.push_back(c);
     }
@@ -2131,13 +2133,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         if (!l.hasItem)
             return;
-        if (l.toBag) { // stacked with the same item (the item comparison==: its kind, rarity, modifier and region)
+        if (l.toBag) {
             Carried *same = nullptr;
-            for (auto &c : bag)
-                if (c.item.category == l.item.category && c.item.id == l.item.id && c.item.material == l.item.material &&
-                    c.item.rarity == l.item.rarity && c.item.modifier == l.item.modifier && c.item.region[0] == l.item.region[0] &&
-                    c.item.region[1] == l.item.region[1])
-                    same = &c;
+            if (worldgen::Inventory::stackable((uint8_t)l.item.category)) {
+                const auto incoming = Gear::toRecord(l.item);
+                for (auto &c : bag) {
+                    const auto carried = Gear::toRecord(c.item);
+                    if (nativeinteract::sameItem(carried.data(), incoming.data())) {
+                        same = &c;
+                        break;
+                    }
+                }
+            }
             if (same)
                 same->count++;
             else
@@ -2161,24 +2168,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 (mode == progression::Mode::Pyro ? ", level " + std::to_string(l.item.level) : "") + ")");
     };
     // The game-layout item of an inventory item (for prices, the shop and the events).
-    auto rawOf = [&](const Gear::Item &it) {
-        const nativeplayer::Item made = nativeplayer::item(it.category, it.id, it.material, it.rarity, it.modifier, it.region[0], it.region[1]);
-        gameshop::Item raw{};
-        std::memcpy(raw.data(), made.data(), raw.size());
-        Gear::cubesInto(it, raw.data());
-        return raw;
-    };
+    auto rawOf = [](const Gear::Item &it) { return Gear::toRecord(it); };
     // An item received (bought, a reward): as a picked-up item goes, gear or the bag.
     auto receive = [&](const gameshop::Item &raw) {
         const uint8_t *n = raw.data();
-        Gear::Item it;
-        int32_t id;
-        std::memcpy(&id, n + 4, 4);
-        it.category = n[0], it.id = id, it.material = n[0x1c], it.rarity = std::clamp((int)(int8_t)n[0x14], 0, 4);
-        std::memcpy(it.region, n + 0xc, 8);
-        std::memcpy(&it.formula, n + 0x18, 4);
-        std::memcpy(&it.modifier, n + 8, 4);
-        Gear::cubesFrom(n, it);
+        Gear::Item it = Gear::fromRecord(raw);
         it.level = 1;
         if (auto *m = catalog.model(it.category, it.id, it.material); m && !m->sprites.empty())
             it.sprite = *m->sprites.begin();
@@ -2427,9 +2421,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // counter, money, coins into the gold counter, the used cell of treasure, the receipt dialog
     // and holding it up. Returns how many of it go on into the bag or gear (collect).
     auto receivePickup = [&](const Loot &l) -> int {
-        nativeplayer::Item adapted = nativeplayer::item(l.item.category, l.item.id, l.item.material, l.item.rarity, l.item.modifier,
-                                                              l.item.region[0], l.item.region[1], l.item.formula);
-        Gear::cubesInto(l.item, adapted.data());
+        nativeplayer::Item adapted = Gear::toRecord(l.item);
         nativeplayer::Item noticeItem = adapted;
         noticeItem[0] = (uint8_t)l.noticeType;
         const int64_t position[3] = {(int64_t)std::llround((double)l.at.x * 65536) + extractedWorld.originDotsX(),
@@ -2780,6 +2772,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             SaveGame::Bagged b;
             b.category = c.item.category, b.id = c.item.id, b.material = c.item.material, b.rarity = c.item.rarity;
             b.modifier = c.item.modifier, b.count = c.count, b.region[0] = c.item.region[0], b.region[1] = c.item.region[1];
+            b.formula = c.item.formula;
+            b.storedRecord = Gear::toRecord(c.item);
             saveGame.bag.push_back(b);
         }
         saveGame.found.clear();
@@ -2790,6 +2784,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 saveGame.found.push_back({it.category, it.id, it.material, it.rarity, it.level, (int)gear.slotOf(i),
                                           it.modifier, it.sprite, it.adds.maxHp, it.adds.attack, it.adds.armor, it.adds.critical});
                 saveGame.found.back().region[0] = it.region[0], saveGame.found.back().region[1] = it.region[1];
+                saveGame.found.back().cubes = it.cubes, saveGame.found.back().cubeCount = it.cubeCount;
+                saveGame.found.back().formula = it.formula;
+                saveGame.found.back().storedRecord = Gear::toRecord(it);
             }
         }
         saveGame.savedAt = (long long)std::time(nullptr);
@@ -3772,12 +3769,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 int32_t region[2] = {0, 0};
                 if (const uint8_t *who = spawned.playerRecord())
                     std::memcpy(region, who + worldgen::creature::REGION, 8);
-                auto rawOfGear = [](const Gear::Item &item) {
-                    auto raw = nativeplayer::item(item.category, item.id, item.material, item.rarity, item.modifier,
-                                                  item.region[0], item.region[1], item.formula);
-                    Gear::cubesInto(item, raw.data());
-                    return raw;
-                };
+                auto rawOfGear = [](const Gear::Item &item) { return Gear::toRecord(item); };
                 auto rawOfThing = [](const gamecraft::Thing &item) { return gamecraft::toRecord(item); };
                 auto matches = [&](const Gear::Item &item, const gamecraft::Thing &wanted) {
                     const auto raw = rawOfGear(item), key = rawOfThing(wanted);

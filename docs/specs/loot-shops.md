@@ -160,13 +160,20 @@ same generated item recurs (same modifier and region).
 
 ### 4.2 Selling
 
-When the player drops the item on the mouse cursor (C) onto the shop window:
+The older “item on the mouse cursor” label for this branch was misleading.
+On left/right **down**, when no live inventory slot resolves,0x94260
+can resolve a nonempty **equipped item under the pointer**, C. With
+the shop visible, that equipped-item branch sells C. It does not read
+or populate the retained cursor stack at creature+0xa08/+0xa0c.
+The resolver order and exact source addresses are independently specified
+in **steam-inventory-slot-lifecycle §6.6**; canonical tab-slot sales are
+a separate source branch.
 
 1. Gold += sell price(C).
 2. Sound 0x3d at volume 0.75 (0x42e710).
 3. Append (count 1, a copy of C) to the controller's buy-back list (+0x21b0). If the list now
    has more than 10 entries, remove its **first** (oldest) entry (0xa0720).
-4. Refill the shop (§1). Clear the cursor item (its type and subtype bytes set to 0).
+4. Refill the shop (§1). Clear that equipped item's type and subtype.
 
 ### 4.3 Buying back (mode 1)
 

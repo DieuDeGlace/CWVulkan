@@ -201,6 +201,13 @@ individual feature documents.
   for identification. The save reader fixes above do not replace the current flat
   gameplay views/reconstruction. Identification still needs its verified owner
   template layout, release gates, live selection binding and ordinary 3D item icons.
+- [x] Complete item records survive gameplay/save views: received items, bag entries,
+  carried/equipped gear and crafting comparisons use a shared conversion that
+  retains uninterpreted bytes while writing current metadata/attributes. Removing
+  one of two similar pets or weapons preserves the actual remaining name/rarity;
+  formulas and original rarity bytes survive conversion. Bag pickups merge only
+  native stackable types with complete semantic equality. Full-byte round-trip,
+  metadata-edit and distinct-item save regressions pass, as does the CPU/owner suite.
 - [x] Living-creature light source branches: carried/toggled lamps, effect/race/state
   lights, casting and four equipment spirit-glow anchors. The renderer reads live
   player/NPC records and buffs in world traversal order, including actors without

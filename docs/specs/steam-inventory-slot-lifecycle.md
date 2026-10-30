@@ -313,3 +313,144 @@ canonical tab/index and slot bytes, input phase/button/modifiers, and
 native write call stack/RVAs. A previously copied nonempty cursor is not
 an origin: trace its source. This audit performs no game launch and
 does not substitute a guessed modern drag interface for that evidence.
+
+### 6.5 Follow-up writer/alias audit: still no verified grab origin
+
+The native-only follow-up rechecked direct writes, address-taking and
+inventory-pointer aliases against the same Steam binary. It still finds
+**no verified ordinary input route that fills an empty retained cursor
+stack**. The positive cursor writes remain precisely those in §6.1:
+construction/default reset input, copies of an already present cursor
+record, and §6.3's depletion. This is a bounded finding, not a proof
+against every possible indirect writer or a new grant/drag action.
+
+In particular, the general tab insertion0x4e810 never assigns inventory
+quantity+0x18 or item+0x1c. It reuses/merges/appends within its chosen tab,
+or updates its two special counters at inventory+0xbc/+0xc0. Its default
+tab argument−1 invokes the category selector; it does not mean “cursor”.
+Likewise tab accessor0x83b70 addresses a24-byte tab header in the tab
+vector, not this retained stack. The generation wrapper0x52c40's
+inventory argument to0x511e0 leads to ordinary0x4e810 insertion, not a
+hidden cursor grab. No modifier test in these helpers supplies a split
+operation on the retained stack.
+
+Inventory move0x83540 explicitly copies cursor quantity at0x83588 and
+item through0x9cd0 at0x8358b **after moving the tab vector**. It does not
+clear the source cursor quantity/item as part of that move. The two
+identified reset/read callers still provide their fresh empty record;
+copying a deliberately nonempty input would transfer that already existing
+state, without identifying where it originated. The separately recognized
+clone0x9ea10 and character-state copy0xa27b0 also source the current
+player's cursor; their writes at0x9ee0a/0xa28ec do not extract a tab slot.
+
+One narrower reset distinction is verified:0x64a90 destroys/empties the
+tab vector and makes its end equal begin at0x64b93, but does **not** reset
+the retained cursor quantity/item. Its base-state reset0x64c00 touches
+the earlier state/equipment area, not this cursor. This fact is specific
+to that routine; it does not override the empty cursor supplied by the
+class-kit or saved-character inventory replacement in §6.1.
+
+### 6.6 Three different meanings of selection and “cursor item”
+
+The old wording in **loot-shops §4.2**, “item on the mouse cursor”, must
+not be read as creature+0xa08/+0xa0c. The positive native resolver for
+that branch is **0x94260**, called at **0x95c1d**. It requires ordinary
+inventory G+0x330 visible, hit-tests the equipment widget entries in
+G+0x3c8 with0x333e70, and returns a pointer to the first hit equipped
+160-byte item in this order:
+
+| Equipment widget entry | Item address relative to local creature |
+|---|---|
+|0|+0x638|
+|1|+0x6d8|
+|2|+0x778|
+|3|+0x818|
+|4|+0x318|
+|5|+0x598|
+|6|+0x3b8|
+|7|+0x4f8|
+|8|+0x458|
+|9|+0x8b8|
+
+This record has no adjacent tab-slot quantity and is not copied into the
+retained cursor by this resolver. A miss returns null. Numeric addresses
+above establish the source identity without guessing equipment names.
+
+The ordinary inventory-slot resolver **0x94600** instead requires the
+inventory visible and pointer within its frame through0x32b0c0. It reads
+hover tab/slot+0x270/+0x274, checks current canonical tab and slot bounds
+and requires current quantity!=0. It returns that live signed32 pair or
+(−1,−1); it does not copy an item or quantity. For button0/1 down,
+0x94900 first asks this resolver at0x95013. If a valid inventory slot
+exists it takes the slot's direct use/sell/identification route. Only
+without that slot does the equipment-under-pointer resolver above run;
+if it returns no nonempty item, the handler may resolve a shop offer.
+Earlier map/other input branches and their native early returns still
+apply; this precedence describes the reached inventory action branch.
+
+The equipment branch with neither shop nor customization shown inserts
+one equipped item into canonical tabs through0x4e810, then clears the
+equipped item's type/subtype and refreshes the inventory. With a shop
+shown it sells **that equipped item**: credit sell price, append a
+quantity1 buyback entry, retain at most ten entries by removing oldest,
+rebuild shop, and clear the equipped type/subtype. Source0x95c1a onward;
+sell-price call0x95c73, buyback append0x95cf7, old-entry removal0x95d0d,
+shop rebuild0x95d15. No player tab quantity is decremented merely for
+selling this equipped source; no retained cursor quantity/item is written.
+The separate valid-tab-slot sale does decrement its own live slot by1.
+It must not be implemented by first assigning the retained cursor stack.
+
+Lastly, **0x280e30** is a widget selection-frame operation. With its
+copy-hover boolean true and hover slot>=0, it copies hover tab/slot to
+selected tab/slot+0x278/+0x27c and requests sound0x58, then adjusts the
+selection frame. With false it only refreshes that frame. It neither
+removes a canonical item nor fills the retained cursor.0x94900 calls it
+at0x96260 for the visible crafting collection G+0x340 on left down;
+that crafting choice is not a cursor grab. The distinct live index
+binding used by identification remains steam-identification-ui §6.
+
+### 6.7 Input phases and actual one-item depletion
+
+Physical messages reach Game down0x94900/up0x965e0 through0x133c70:
+left WM0x201/0x202 maps to button0, right0x204/0x205 to1, middle
+0x207/0x208 to2. Controller A/X synthesis calls those same Game handlers
+with0/1, subject to the separately specified routing/edge/200-ms rules;
+it has no additional inventory-stack transfer callback.
+
+At down,0x94900 calls interface0x101020 at0x94953 **before its inventory
+business actions**. The interface invokes GUI left-down0x340ec0,
+right-down0x3415f0 or middle-down0x341300. Left-down sets GUI held bit1
+at engine+0x1a8 before hit/capture/widget callbacks. Thus an equipment or
+tab action is a down action, not a generic mouse-up drop. At release,
+interface0x101120 is called at0x96767 after the earlier frontend actions
+but before identification and later release actions. Its left-up0x3410e0
+clears held bit1 before those GUI up callbacks; the other button helpers
+are0x341780/0x3414a0. This routing does not itself move an item between
+tab storage and the retained cursor.
+
+The two verified one-item drop sources remain different:
+
+- **Middle down**, in0x94900 at0x94ea6 onward, resolves the current live
+  inventory slot with0x94600, copies one item's payload into the queued
+  drop-intent record, then decrements **that canonical slot**. Quantity
+  below1 becomes0 and only its item type/subtype are cleared. Types22,
+  23,24 are excluded. When player state byte+0x68 is0x56, a full-equal
+  item at player+0x1d8 is also excluded. No retained cursor is populated.
+- **Left held rising during input update0x8ae50**, under §6.3's inventory
+  visibility/no-GUI-hit gates, copies the already retained cursor item to
+  the queue and decrements **cursor quantity**, not a canonical slot.
+  Exact quantity write is0x8b0d3; below1 clearing is0x8b0e2–0x8b0f0.
+  There is no−1/infinite-quantity exception in either direct decrement.
+
+The latter is a held-state edge observed by the admitted input update,
+not a second unconditional WM-left-down consumer. A down and up both
+completed before that update leave the held bit clear and do not trigger
+this retained-stack branch. Release has no verified put-back/slot-swap
+operation. A refresh after other direct actions can still sort/compact
+canonical tabs as §4 describes; that is separate from cursor movement.
+
+These added source/phase distinctions close the misleading equipment/
+hover/crafting interpretations. The positive empty→nonempty retained
+cursor producer remains unverified. The bounded first-write oracle
+described in §6.4 is still the specific missing evidence, and no original
+game execution was performed to obtain it.

@@ -324,13 +324,40 @@ class ItemPool {
     std::multimap<Identity, Item> pool;
 };
 
-Item fromGear(const Gear::Item &it) { return gameItem(it.category, it.id, it.material, it.rarity, it.modifier, it.region, it.formula); }
+Item fromGear(const Gear::Item &it) {
+    return Gear::toRecord(it);
+}
 // The record kept for a piece of gear (the saved one when there is one), with the upgrade cubes
 // it has now.
 Item keptGear(ItemPool &pool, const Gear::Item &it) {
-    Item kept = pool.take(fromGear(it));
-    Gear::cubesInto(it, kept.data());
-    return kept;
+    const Item fallback = pool.take(fromGear(it));
+    Gear::Item current = it;
+    if (!current.storedRecord)
+        current.storedRecord = fallback;
+    return Gear::toRecord(current);
+}
+
+Item keptBag(ItemPool &pool, const SaveGame::Bagged &bag) {
+    const auto fallback = pool.take(gameItem(bag.category, bag.id, bag.material, bag.rarity, bag.modifier, bag.region, bag.formula));
+    auto item = Gear::fromRecord(bag.storedRecord.value_or(fallback));
+    item.category = bag.category, item.id = bag.id, item.material = bag.material, item.rarity = bag.rarity;
+    item.modifier = bag.modifier, item.region[0] = bag.region[0], item.region[1] = bag.region[1];
+    if (bag.storedRecord || bag.formula != 0)
+        item.formula = bag.formula;
+    return Gear::toRecord(item);
+}
+
+Item keptFound(ItemPool &pool, const SaveGame::Found &found) {
+    const auto fallback =
+        pool.take(gameItem(found.category, found.id, found.material, found.rarity, found.modifier, found.region, found.formula));
+    auto item = Gear::fromRecord(found.storedRecord.value_or(fallback));
+    item.category = found.category, item.id = found.id, item.material = found.material, item.rarity = found.rarity;
+    item.modifier = found.modifier, item.region[0] = found.region[0], item.region[1] = found.region[1];
+    if (found.storedRecord || found.formula != 0)
+        item.formula = found.formula;
+    if (found.storedRecord || found.cubeCount != 0)
+        item.cubes = found.cubes, item.cubeCount = found.cubeCount;
+    return Gear::toRecord(item);
 }
 
 // The notes: what CubeVulkan keeps of a character beyond the game's format.
@@ -375,6 +402,8 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
         f.sprite = itemSprite ? itemSprite(it) : "";
         std::memcpy(f.cubes.data(), &it[Gear::CUBES_AT], f.cubes.size());
         f.cubeCount = it[Gear::CUBE_COUNT_AT];
+        f.formula = i32At(it, field::FORMULA);
+        f.storedRecord = it;
         return f;
     };
     for (size_t slot = 0; slot < c.equipment.size(); slot++) {
@@ -400,6 +429,8 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
             b.category = it[field::TYPE], b.id = i32At(it, field::SUBTYPE), b.material = it[field::MATERIAL];
             b.rarity = it[field::RARITY], b.modifier = (uint32_t)i32At(it, field::MODIFIER), b.count = stack.count;
             b.region[0] = i32At(it, field::REGION), b.region[1] = i32At(it, field::REGION + 4);
+            b.formula = i32At(it, field::FORMULA);
+            b.storedRecord = it;
             s.bag.push_back(b);
         }
     s.usedCells.assign(c.usedCells.begin(), c.usedCells.end());
@@ -454,18 +485,20 @@ void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame
                 return f.category == w.category && f.id == w.id && f.material == w.material && f.modifier == w.modifier;
             });
             if (same != rest.end()) {
-                region[0] = same->region[0], region[1] = same->region[1];
+                auto current = *same;
+                current.rarity = w.rarity;
+                equipment[slot] = keptFound(pool, current);
                 rest.erase(same);
-            }
-            equipment[slot] = pool.take(gameItem(w.category, w.id, w.material, w.rarity, w.modifier, region));
+            } else
+                equipment[slot] = pool.take(gameItem(w.category, w.id, w.material, w.rarity, w.modifier, region));
         }
         for (const SaveGame::Found &f : rest)
-            inventory[0].push_back({1, pool.take(gameItem(f.category, f.id, f.material, f.rarity, f.modifier, f.region))});
+            inventory[0].push_back({1, keptFound(pool, f)});
     }
     for (const SaveGame::Bagged &b : s.bag)
         if (b.category)
             inventory[(size_t)tabOf(b.category)].push_back(
-                {b.count, pool.take(gameItem(b.category, b.id, b.material, b.rarity, b.modifier, b.region))});
+                {b.count, keptBag(pool, b)});
     c.equipment = equipment;
     c.inventory = std::move(inventory);
     c.usedCells = std::set<nativesaves::Cell>(s.usedCells.begin(), s.usedCells.end());
