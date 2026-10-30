@@ -340,3 +340,7 @@ target_sources(EngineTests PRIVATE tests/DialogueChoicesTests.cpp)
 target_sources(engine PRIVATE src/HudDialogue.cpp)
 
 target_sources(engine PRIVATE src/DialoguePanel.cpp)
+
+target_sources(engine PRIVATE src/SteamTransientLights.cpp)
+
+target_sources(EngineTests PRIVATE tests/SteamTransientLightsTests.cpp)

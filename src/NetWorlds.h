@@ -99,6 +99,7 @@ class MirrorSide : public cwnet::MirrorWorld {
     void flash(int64_t id) override { world.flash(id); }
     void addEffect(const cwnet::EffectRecord &effect) override { world.addEffect(effect); }
     void showDamageNumber(const cwnet::DamageRecord &number) override {
+        world.notifyHitVisual(number);
         if (damageShown)
             damageShown(number);
     }

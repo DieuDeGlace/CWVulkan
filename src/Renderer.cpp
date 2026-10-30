@@ -1366,6 +1366,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         }
         if (worldProbe.effectLights)
             steampoints::collectEffects(worldProbe.effectLights(), points, lights);
+        if (worldProbe.transientLights)
+            steampoints::collectTransient(worldProbe.transientLights(), points, lights);
         const auto tables = steampoints::distribute(std::move(lights), eye, loaded);
         for (const auto &[key, table] : tables) {
             const auto count = (uint32_t)std::min<size_t>(table.size(), 10);

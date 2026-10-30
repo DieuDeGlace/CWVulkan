@@ -97,6 +97,9 @@ class SpawnedCreatures {
     std::set<std::pair<int, int>> takeReplacedGround();
     // A monster's hit on CubeVulkan's own player (when the player is not the native one).
     void setPlayerNumber(std::function<void(const std::array<uint8_t, 0x48> &number)> f) { playerNumber = std::move(f); }
+    // Observe visual-number insertion without applying damage or changing network lists.
+    void setHitVisualObserver(std::function<void(const cwnet::DamageRecord &)> f) { hitVisualObserver = std::move(f); }
+    void notifyHitVisual(const cwnet::DamageRecord &number) { if (hitVisualObserver) hitVisualObserver(number); }
     // The zones whose state a client still needs (zone+0xf8): set for every zone in memory on
     // connecting and for each zone that comes into memory; cleared when the host answers.
     void zoneAnswered(const cwnet::ZoneKey &zone) { stateNeeded.erase({zone.x, zone.y}); }
@@ -454,6 +457,7 @@ class SpawnedCreatures {
     std::set<std::pair<int, int>> groundChanged, objectsChanged; // world+0x190, +0x1a0: zones changed this step
     std::set<std::pair<int, int>> replacedGround;                // zones whose ground items a host replaced
     std::function<void(const std::array<uint8_t, 0x48> &)> playerNumber;
+    std::function<void(const cwnet::DamageRecord &)> hitVisualObserver;
     Creature *find(int64_t id); // any creature by id, the local player included
     // The hit routine's world over this world's creatures (`byId` is filled and must outlive it).
     nativehit::World hitWorld(ExtractedWorld &ew, std::map<int64_t, nativeai::Creature *> &byId);

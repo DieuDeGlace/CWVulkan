@@ -145,6 +145,7 @@ struct WorldProbe {
     std::function<std::vector<steampoints::ZoneKey>()> loadedLightZones;
     steampoints::UsedCellQuery usedCell; // local player's personal discovery state
     std::function<std::vector<steampoints::EffectSource>()> effectLights;
+    std::function<std::vector<steampoints::TransientSource>()> transientLights;
     std::function<steampoints::GroundSources(steampoints::ZoneKey)> groundLights;
 };
 

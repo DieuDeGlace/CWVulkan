@@ -37,6 +37,12 @@ struct EffectSource {
     Point position{};
     float strength = 0; // native effect +0x54, not its damage or visual size
 };
+struct TransientSource {
+    Point position{};
+    glm::vec3 colour{0};
+    float radius = 0;
+    int32_t elapsedMs = 0, lifetimeMs = 0;
+};
 struct Light {
     Point position{};
     float radius = 0;
@@ -58,6 +64,7 @@ void collect(const ZoneSources &, const Frame &, std::vector<Light> &out);
 void collectGround(const GroundSources &, float zoneDistanceSquared, const Frame &, std::vector<Light> &out);
 float squaredDistance(const Point &, const Point &camera);
 void collectEffects(const std::vector<EffectSource> &, const Frame &, std::vector<Light> &out);
+void collectTransient(const std::vector<TransientSource> &, const Frame &, std::vector<Light> &out);
 float distanceKey(const Point &, const Point &camera);
 // Full sprite center transformed by the final draw matrix; gameOrigin reverses
 // the renderer's translation after the native float-to-fixed conversion.

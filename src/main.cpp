@@ -12,6 +12,7 @@
 #include "Speech.h"
 #include "DialogueChoices.h"
 #include "DialoguePanel.h"
+#include "SteamTransientLights.h"
 #include "Multiplayer.h"
 #include "Creatures.h"
 #include "NativeLoot.h"
@@ -1604,6 +1605,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     lore::Book loreBook = lore::rebuild(usedCells);
     spawned.setUsedCells(&usedCells);
     world.setUsedCellProvider([&usedCells](int32_t x, int32_t y) { return usedCells.count({x, y}) != 0; });
+    steampoints::TransientLights transientLights;
+    std::vector<cwnet::DamageRecord> hitVisuals;
+    spawned.setHitVisualObserver([&hitVisuals](const cwnet::DamageRecord &number) { hitVisuals.push_back(number); });
+    world.setTransientLightProvider([&transientLights] { return transientLights.values(); });
     world.setEffectLightProvider([&spawned] { return spawned.effectLights(); });
     world.setGroundLightProvider([&](steampoints::ZoneKey key) {
         return spawnedReady ? spawned.groundLights(extractedWorld, key.first, key.second) : steampoints::GroundSources{};
@@ -5227,6 +5232,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 logLine("Test coins: five laid by the host");
             }
+            for (const auto &number : std::exchange(hitVisuals, {}))
+                transientLights.hit(number, [&spawned](int64_t id) { return spawned.record(id); });
             // The hits this player made (the host applies them), shown as the game shows numbers.
             for (const cwnet::DamageRecord &number : spawned.events().damageNumbers) {
                 int64_t attacker, target, at[3];
@@ -5714,6 +5721,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     drawPart(models[i], actorPose[i]);
         }
 
+        transientLights.advance(frameMs); // births age before their first scene collection
+
         // Death fragments (one mesh, rebuilt each frame).
         if (fragmentMeshId)
             renderer.release(fragmentMeshId), fragmentMeshId = 0;
@@ -6043,11 +6052,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         bar.fraction = l.hp / l.maxHp;
                         hs.lifeBars.push_back(bar);
                     }
-                    // (Interface's update: no crosshair while talking or in a menu; the zoom one while
-                    // leaning to aim, none in an eagle's flight)
-                    const bool leaning = (spawned.playerToggles() & 0x400) != 0;
-                    hs.crosshair = !talk && !generalDialogue.visible() && !inventoryOpen && !mapOpen && !leaning && ability != 156;
-                    hs.zoomCrosshair = !talk && !generalDialogue.visible() && !inventoryOpen && leaning;
+
                 }
             }
 
@@ -6102,6 +6107,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (talk && glm::length(talkerAt(*talk) - player.position) > 10)
                     talk.reset(); // walked away
                 answers.updateVisibility(talk.has_value());
+                if (nativePlayer) {
+                    const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
+                    const bool leaning = (spawned.playerToggles() & 0x400) != 0;
+                    hs.crosshair = !generalDialogue.visible() && !ordinaryUi && !leaning && ability != 156;
+                    hs.zoomCrosshair = !generalDialogue.visible() && !ordinaryUi && leaning;
+                }
                 Hud::State::Bubble bubble;
                 if (talk && project(talkerAt(*talk) + glm::vec3(0, 0, talk->fromObject ? 1.5f : 2.7f), bubble.at)) {
                     bubble.text = talk->lines[talk->line];

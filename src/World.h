@@ -33,6 +33,8 @@ class World {
     void setUsedCellProvider(steampoints::UsedCellQuery provider) { usedCellProvider = std::move(provider); }
     using EffectLightProvider = std::function<std::vector<steampoints::EffectSource>()>;
     void setEffectLightProvider(EffectLightProvider provider) { effectLightProvider = std::move(provider); }
+    using TransientLightProvider = std::function<std::vector<steampoints::TransientSource>()>;
+    void setTransientLightProvider(TransientLightProvider provider) { transientLightProvider = std::move(provider); }
     using GroundLightProvider = std::function<steampoints::GroundSources(steampoints::ZoneKey)>;
     void setGroundLightProvider(GroundLightProvider provider) { groundLightProvider = std::move(provider); }
     // How many zones are drawn each way around the focus (the view distance changed).
@@ -110,6 +112,7 @@ class World {
     ObjectProvider objectProvider;
     steampoints::UsedCellQuery usedCellProvider;
     EffectLightProvider effectLightProvider;
+    TransientLightProvider transientLightProvider;
     GroundLightProvider groundLightProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0, lava = 0;

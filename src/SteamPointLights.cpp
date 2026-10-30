@@ -190,6 +190,14 @@ void collectEffects(const std::vector<EffectSource> &effects, const Frame &frame
     }
 }
 
+void collectTransient(const std::vector<TransientSource> &sources, const Frame &frame, std::vector<Light> &out) {
+    for (const auto &source : sources)
+        if (frame.visible && frame.visible(source.position, source.radius, frame.terrainRange)) {
+            const float fade = std::max(0.f, 1.f - (float)source.elapsedMs / (float)source.lifetimeMs);
+            out.push_back({source.position, source.radius, source.colour * fade});
+        }
+}
+
 Tables distribute(std::vector<Light> lights, const Point &camera, const std::vector<ZoneKey> &loadedZones) {
     Tables tables;
     for (auto key : loadedZones)

@@ -4,6 +4,7 @@
 // built on them. Everything here works on game-layout records: a creature
 // (nativepose::CREATURE_SIZE bytes) and its items (0xa0 bytes each; the eleven equipment
 // slots from +0x278). The game routine each function follows is cited by its RVA.
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -76,6 +77,8 @@ void removeCallbacks(int handle);
 // Which weapons attack and spell power add up: those the current ability strikes with
 // (0x4fd40), or both hands whatever the ability (0x52ce0, the character sheet's).
 enum class Weapons { InUse, Both };
+// Ordered selection shared by stats and visual spirit effects; unused entries are null.
+std::array<const uint8_t *, 2> selectedWeapons(const uint8_t *creature, Weapons which = Weapons::InUse);
 
 float attackPower(const uint8_t *creature, const Buff *buffs, size_t buffCount,
                   Weapons weapons = Weapons::InUse);                                 // 0x4fa70

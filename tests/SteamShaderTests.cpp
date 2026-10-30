@@ -1,3 +1,4 @@
+#include "SteamTransientLights.h"
 // Explicit GPU integration check. No game assets or Steam process are needed.
 // Reference colors are independently derived in steam-world-shader-output.md.
 #include <set>
@@ -230,6 +231,16 @@ int steamShaderTests() {
     checkPoints("projectile-unlit-kind", {item}, {7,52,5});
     liveEffects.clear();
     checkPoints("projectile-removed", {item}, {7,52,5});
+    steampoints::TransientLights flashes;
+    for (int i = 0; i < 10; ++i)
+        flashes.append({{0,0,65536}, {1.5f,.75f,.15f}, 20, 0, 400});
+    probe.transientLights = [&] { return flashes.values(); };
+    renderer.setWorldProbe(probe);
+    checkPoints("transient-born", {item}, {82,214,60});
+    flashes.advance(400);
+    checkPoints("transient-zero-fade", {item}, {7,52,5});
+    flashes.advance(1);
+    checkPoints("transient-expired", {item}, {7,52,5});
     auto bounds = std::make_shared<scenevisibility::Bounds>();
     bounds->minimum = {-4*65536,-4*65536,-4*65536};
     bounds->maximum = {4*65536,4*65536,4*65536};

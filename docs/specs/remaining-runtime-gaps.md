@@ -1535,6 +1535,11 @@ offer does not perform its selected action.
 
 ### 5.7 Speech, emotes, and general-dialogue page timing
 
+The independent rendering companion is [Steam NPC speech bubbles and emote
+rendering](steam-npc-speech-rendering.md): owner-template placement, fixed-point
+smoothing/projection, exact emote model transforms/animations/material/depth,
+and the full answer/general-widget crosshair visibility predicate.
+
 Sources: **0x28fd60** (speech widget), **0x290430** (page duration),
 **0x2904b0 / 0x28ffe0** (typewriter display), **0x98180** (repeat Use on a speaker),
 and **0xb40d0** (page and emote update). The frame calls 0xb40d0 **before** the

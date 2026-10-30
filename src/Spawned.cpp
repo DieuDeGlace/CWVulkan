@@ -653,6 +653,7 @@ void SpawnedCreatures::keepRecords(const std::vector<std::array<uint8_t, 0x30>> 
     worldEvents.sounds.insert(worldEvents.sounds.end(), soundList.begin(), soundList.end());
     worldEvents.particles.insert(worldEvents.particles.end(), particleList.begin(), particleList.end());
     worldEvents.damageNumbers.insert(worldEvents.damageNumbers.end(), numberList.begin(), numberList.end());
+    for (const auto &number : numberList) notifyHitVisual(number);
     worldEvents.buffs.insert(worldEvents.buffs.end(), buffList.begin(), buffList.end());
 }
 
@@ -2202,6 +2203,7 @@ void SpawnedCreatures::applyGuestEvents(ExtractedWorld &ew, const cwnet::GuestEv
     nativehit::World hw = hitWorld(ew, byId);
     for (const cwnet::DamageRecord &number : caused.damageNumbers) {
         worldEvents.damageNumbers.push_back(number);
+        notifyHitVisual(number);
         nativehit::apply(hw, number);
         int64_t target;
         float damage;

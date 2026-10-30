@@ -126,6 +126,46 @@ Sources: race test **0xa95c9**, position/color/radius initialization
 calls, rather than one light per fragment or sampled particle. The light
 creation adds no RNG draw, and does not require a nonzero fragment count.
 
+### 3.1 Meaning and production of creature byte+0x1500
+
+This byte is the actor render/pose state's **has-been-prepared marker**,
+not a simulation visibility flag, current-frame frustum result, alive bit
+or network-provided property. The render-state subobject begins at
+**creature+0xc38**; the same byte is therefore its **+0x8c8**.
+
+Creature constructor **0x4ce80 at0x4d14e** calls render-state constructor
+**0x17010** on that subobject. The latter explicitly initializes this byte
+to **zero at0x17119**. Body/attachment preparation **0x17ab0** sets it to
+**one at0x17f2c**, before choosing the ordinary head/hair/limb/equipment
+sprites. It also records the supplied camera-origin X/Y at adjacent
+subobject+0x8d0/+0x8d8. This is the marker already described in
+`creature-pose.md` §3; it is not contingent on a particular part producing
+nonempty GPU geometry.
+
+The normal world actor renderer **0xd3170** calls that preparation at
+**0xd67b2**, after its living-actor and shared sphere/frustum/range
+admission. It then explicitly writes creature+0x1500=1 again at
+**0xd67b7**. This happens before the later emote/overhead-model branch.
+The common preparation is also used by the separate model-preview path
+**0xdb630 at0xdb7c0** and scene preview **0xe2e00 at0xe4bfb**; those calls
+can set the same marker without passing the normal world actor gate.
+
+There is **no per-frame clear** in these paths, no clear when a later
+frustum test fails, and no clear in the death-effects consumer. The traced
+zero writer is construction; the normal and preview preparation writers
+set one. For a replacement engine the corresponding state is therefore
+**this creature's body/attachment pose cache has been prepared at least
+once during this creature instance's lifetime**, retaining that fact after
+it leaves the view. Do not recompute this marker as current visibility,
+successful GPU rasterization, or current positive HP. A newly constructed
+creature that dies before any such preparation still has zero; a
+previously prepared creature can retain one while currently offscreen.
+
+The death-effects pass still independently applies its **current-at-that-
+call 100-block sphere/frustum test** from §3, using the renderer state then
+available. The persistent marker alone does not authorize a death light
+or fragments for a presently rejected candidate.
+
 ## 4. Age, removal and first-frame ordering
 
 All identified births in §§2–3 occur **before** the frame calls lifetime

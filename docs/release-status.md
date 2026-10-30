@@ -10,10 +10,12 @@ checkpoint describe the intended setup and remaining limits.
 - Live lighting now reads personal used-cell state, kind3/4 projectiles and
   glowing ground items from gameplay. It preserves native ownership, timer,
   quantity, coordinate conversion and fade rules. Model and terrain light ranges
-  are separate. CPU regressions and 22 Vulkan cases cover personal state updates,
-  projectile filtering/removal and owned/delayed/picked-up items. Creature and
-  frame-transient source families, adaptive camera/range state and broader
-  native visual comparisons remain open.
+  are separate. Hit flashes now use consumed local/received hit records, current
+  spirit weapons and native fixed positions, first-frame aging and expiration.
+  CPU regressions and 25 Vulkan cases cover these sources, including zero-fade
+  slots, personal state updates, projectile filtering/removal and owned/delayed/
+  picked-up items. Creature lights, the race0x90 death-effects flash, adaptive
+  camera/range state and broader native visual comparisons remain open.
 
 - Isolated reference capture now runs automatically after game-session
   initialization and refreshes cached light snapshots. The real-install run

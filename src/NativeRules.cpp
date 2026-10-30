@@ -751,6 +751,11 @@ void removeCallbacks(int handle) {
 
 // --- §4 Offence --------------------------------------------------------------------------
 
+std::array<const uint8_t *, 2> selectedWeapons(const uint8_t *c, Weapons which) {
+    const auto selected = weaponList(c, which);
+    return {selected.count ? selected.items[0] : nullptr, selected.count > 1 ? selected.items[1] : nullptr};
+}
+
 float attackPower(const uint8_t *c, const Buff *buffs, size_t count, Weapons weapons) {
     float s = weaponSum(c, weapons);
     s = (read<float>(c, STEALTH) * 0.2f + 1.0f) * s;

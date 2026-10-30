@@ -115,7 +115,7 @@ individual feature documents.
   batches, so a global64-light cap cannot discard another zone's lights. Sprite
   bindings use full CUB dimensions, posed matrices and native coordinate rounding;
   loaded neighboring zones participate before they have meshes. Source-reader,
-  CPU boundary and 22 synthetic GPU checks pass, including offset70 and more than
+  CPU boundary and 25 synthetic GPU checks pass, including offset70 and more than
   64 candidates. The isolated recapture refreshed1,590 zones with both auxiliary
   light lists and coherent cache metadata. The engine reader and neighboring-zone
   light solve match all 8 model and 9 static lights in 15 nonempty zones.
@@ -154,13 +154,17 @@ individual feature documents.
   source. Generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Remaining native creature and frame-transient lights,
+- [ ] Remaining native creature lights and the race0x90 death-effects flash,
   water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   These need reference comparisons or an independent behavioral specification.
-  Transient births/aging now have an [independent producer specification](specs/steam-transient-light-producers.md);
-  they are not yet integrated.
+  Hit flashes now consume local and received visual records, select current spirit
+  weapons, retain the fixed hit position and use native first-frame aging/strict
+  expiration. They share the scene sort/zone slots. CPU and Vulkan regressions
+  cover the store, consumer bridge and zero-fade slots. The death-effects producer
+  and its persistent pose-cache marker are [specified independently](specs/steam-transient-light-producers.md)
+  but still need runtime integration.
 
 The independently authored [runtime-gap specification](specs/remaining-runtime-gaps.md)
 resolves several questions in older specs. Remaining checkboxes are intentional.
