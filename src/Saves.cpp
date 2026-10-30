@@ -137,6 +137,7 @@ bool SaveGame::parseFields(const std::string &text) {
     worn.clear();
     found.clear();
     level = xp = gold = 0;
+    specialization = -1;
     hour = -1, day = 0;
     created = Created{};
     quests.clear();
@@ -192,6 +193,8 @@ bool SaveGame::parseFields(const std::string &text) {
             if (!(s >> level) || level < 0) return false;
         } else if (key == "xp") {
             if (!(s >> xp) || xp < 0) return false;
+        } else if (key == "specialization") {
+            if (!(s >> specialization) || specialization < 0 || specialization > 255) return false;
         } else if (key == "gold") {
             if (!(s >> gold) || gold < 0) return false;
         } else if (key == "time") {
@@ -308,6 +311,7 @@ std::string SaveGame::text() const {
     if (level > 0)
         out << "level " << level << "\nxp " << xp << '\n';
     out << "gold " << gold << '\n';
+    if (specialization >= 0) out << "specialization " << specialization << '\n';
     if (hour >= 0)
         out << "time " << day << ' ' << hour << '\n';
     // marked <x> <y> "<place>" "<item>"

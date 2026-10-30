@@ -66,6 +66,7 @@ struct SaveGame {
     float hpFraction = 1;
     bool hasGear = false;
     std::vector<Worn> worn; // one per Gear slot, in the game's slot order
+    int specialization = -1; // optional current byte; old recordings remain unchanged
     int level = 0, xp = 0, gold = 0; // level 0: not saved yet (use the recorded level)
     float hour = -1; // time of day in the world (-1: not saved)
     int day = 0;

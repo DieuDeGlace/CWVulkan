@@ -136,6 +136,7 @@ int steamVoxelTests();
 int steamTerrainTests();
 int steamShaderTests();
 int steamPointLightsTests();
+int dialogueChoicesTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
@@ -9022,6 +9023,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "dialoguechoices")
+        return dialogueChoicesTests();
     if (argc == 4 && std::string(argv[1]) == "steamlights")
         return steamLightOracleTests(pathOfUtf8(argv[2]), pathOfUtf8(argv[3]));
     if (argc == 2 && std::string(argv[1]) == "steampoints")
@@ -10300,6 +10303,7 @@ int main(int argc, char **argv) {
     failures += steamVoxelTests();
     failures += steamTerrainTests();
     failures += steamPointLightsTests();
+    failures += dialogueChoicesTests();
     failures += objectClockTests();  // tests/ObjectVisualTests.cpp
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;

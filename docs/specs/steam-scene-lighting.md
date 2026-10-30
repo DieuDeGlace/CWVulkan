@@ -963,6 +963,11 @@ the same position, and RGB multiplied by **max(0,1−float(elapsed)/float(lifeti
 There is no additional color-distance fade. The duration fields are converted
 to float separately before division; no zero-lifetime replacement was found.
 
+The persistent caller list's actual hit/death producers, exact record fields,
+scene handoff, first-frame aging and strict-expiration order are specified in
+`steam-transient-light-producers.md`. Rendering a particle does not implicitly
+add an entry to this separate light list.
+
 ### 3.7 Living-creature lanterns and the first fixed-color sources
 
 Finally walk **world+0x40**, preserving linked-list order. For every creature

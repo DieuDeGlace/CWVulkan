@@ -1435,6 +1435,12 @@ bubble's screen visibility, and answers are not selected automatically when the
 preceding speech finishes. The usual movement-dismiss path in 0xa5a50 empties
 the answer list only if its panel is currently visible.
 
+The exact held-control/analog predicate, chat and full-map gates, and the
+before-recomputation visibility timing are in `steam-dialogue-panel-routing.md`
+§1. Its §§2–4 distinguish ordinary UI input routing from a movement freeze and
+specify the separate screen-space general DialogWidget used for specialization
+feedback.
+
 The root uses the copied **blackwidget** shape, initially hidden, under the game
 UI root. Font is **resource1.dat, 12**, outline **3**. Layout values below are GUI coordinate
 units, before the GUI engine's overall scale. On interface placement, the panel is
@@ -1469,6 +1475,10 @@ panel root's subtree hit test succeeds and its local mouse y is in the half-open
 interval from the row's drawing top to that top plus its **measured** row height.
 There is no additional test against that row's individual text width. A hovered
 row's words become **RGBA (0, 1, 1, 1)**; other words retain their stored colors.
+The native scoped dictionary colors, context-variable overrides and exact
+punctuation/apostrophe/glue token production are specified separately in
+`steam-dialogue-word-tokens.md`; flattened final text cannot recover all of
+those stored-word boundaries.
 Overlapping measured intervals can let a later row replace the hovered index.
 For each row, drawing registers a navigation point through 0xf97e0 at local
 **x = truncate(panel width/2)** and **y = truncate((row drawing top + next drawing

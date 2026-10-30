@@ -10,7 +10,7 @@ checkpoint describe the intended setup and remaining limits.
 - Live lighting now reads personal used-cell state, kind3/4 projectiles and
   glowing ground items from gameplay. It preserves native ownership, timer,
   quantity, coordinate conversion and fade rules. Model and terrain light ranges
-  are separate. CPU regressions and 21 Vulkan cases cover personal state updates,
+  are separate. CPU regressions and 22 Vulkan cases cover personal state updates,
   projectile filtering/removal and owned/delayed/picked-up items. Creature and
   frame-transient source families, adaptive camera/range state and broader
   native visual comparisons remain open.
@@ -52,8 +52,12 @@ checkpoint describe the intended setup and remaining limits.
   gameplay XInput mapping/sticks/camera, page-scoped dialogue marks and daily world/
   character reset behavior now follow the independent runtime-gap specification.
   The complete EngineTests run passed, including the new focused regressions and
-  owner-data comparisons. GUI controller navigation, dialogue answer activation
-  and the other roadmap gaps remain open. The subsequent equipped-pet update pass
+  owner-data comparisons. String-script answer activation, inn payments, persisted
+  specialization changes and the general feedback panel are now integrated, with
+  native word colors, row picking, navigation points and distinct UI action gates.
+  Focused tests include the owner's fonts/templates at unit and 1.5 GUI scale.
+  Broader GUI controller coverage, NPC bubble/emote playback and the other roadmap
+  gaps remain open. The subsequent equipped-pet update pass
   also builds and passes the full suite, with focused creation, naming, health,
   inheritance, authority, travel and detachment regressions.
 - Follow-up timing: music receives double-precision elapsed frame time through the
@@ -105,7 +109,7 @@ checkpoint. Captures are private and excluded from the source archive.
 - Frontend: exact panel opacity and logo shading require further independent evidence.
 - Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
   integrated pet combat/appearance comparisons, controller GUI/aim tracking,
-  conversation choices/emotes/numeric item actions,
+  NPC bubble/emote playback and numeric item actions,
   and network feat production. See the [audited roadmap](roadmap.md). Recorded
   comparisons do not prove complete gameplay parity.
 - Human/system checks: two Steam accounts and an original-game peer, a real first-run

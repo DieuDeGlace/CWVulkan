@@ -245,7 +245,7 @@ int steamShaderTests() {
     ground.player = 7;
     ground.items.assign(10, book);
     probe.groundLights = [&](steampoints::ZoneKey key) {
-        if (key != steampoints::ZoneKey(0,0)) ++failures;
+        if (key != sources->key) ++failures;
         return ground;
     };
     renderer.setWorldProbe(probe);
@@ -256,6 +256,17 @@ int steamShaderTests() {
     checkPoints("ground-delayed", {item}, {7,52,5});
     ground.items.clear();
     checkPoints("ground-picked-up", {item}, {7,52,5});
+    // World bounds rebase XY while retaining native Z; item records stay absolute.
+    probe.origin = {6400, -12800, -32};
+    sources->key = {100,-200};
+    probe.loadedLightZones = [&] { return std::vector<steampoints::ZoneKey>{sources->key}; };
+    bounds->center[2] = -32 * 65536;
+    bounds->minimum[2] -= 32 * 65536;
+    bounds->maximum[2] -= 32 * 65536;
+    book.position = {6400LL * 65536, -12800LL * 65536, -34 * 65536};
+    ground.items.assign(10, book);
+    renderer.setWorldProbe(probe);
+    checkPoints("ground-rebased-origin", {item}, {82,214,60});
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

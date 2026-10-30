@@ -105,7 +105,17 @@ bool Speech::load(const fs::path &dictionary, std::string &error) {
     }
     std::ostringstream all;
     all << in.rdbuf();
-    std::string xml = all.str();
+    const std::string raw = all.str();
+    std::string xml;
+    xml.reserve(raw.size());
+    // Native XML text processing normalizes literal CRLF/CR before grammar
+    // parsing; preserve real empty emitted fragments in the word append helper.
+    for (size_t at = 0; at < raw.size(); ++at) {
+        if (raw[at] == '\r') {
+            xml += '\n';
+            if (at + 1 < raw.size() && raw[at + 1] == '\n') ++at;
+        } else xml += raw[at];
+    }
     for (const char *kind : {"speech", "macro", "name"}) {
         std::string open = std::string("<") + kind + " ", close = std::string("</") + kind + ">";
         for (size_t p = 0; (p = xml.find(open, p)) != std::string::npos;) {
@@ -128,11 +138,30 @@ bool Speech::load(const fs::path &dictionary, std::string &error) {
     return true;
 }
 
+namespace {
+dialoguewords::Style scopeStyle(const std::string &text, dialoguewords::Style inherited) {
+    std::set<std::string> tags;
+    for (size_t at = 0; at < text.size(); ++at) {
+        if (text[at] == '{' || text[at] == '[' || text[at] == '(') {
+            at = closing(text, at);
+        } else if (text[at] == '$') {
+            const size_t begin = ++at;
+            while (at < text.size() && (std::isalnum((unsigned char)text[at]) || text[at] == '_')) ++at;
+            tags.insert(text.substr(begin, at - begin));
+            if (at) --at;
+        }
+    }
+    return dialoguewords::tagged(inherited, tags);
+}
+}
+
 std::string Speech::expand(const std::string &text, size_t &at, char until, const Context &context,
-                           std::mt19937 &random, int depth, bool pages) const {
+                           std::mt19937 &random, int depth, bool pages, dialoguewords::Builder *words,
+                           dialoguewords::Style style) const {
     std::string out;
     if (depth > 24)
         return out; // a rule that refers to itself
+    if (words) style = scopeStyle(text, style);
     while (at < text.size() && text[at] != until) {
         char c = text[at];
         if (c == '{') {
@@ -157,7 +186,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 chosen = free[std::uniform_int_distribution<size_t>(0, free.size() - 1)(random)];
             if (chosen) {
                 size_t inner = 0;
-                out += expand(*chosen, inner, '\0', context, random, depth + 1, pages);
+                out += expand(*chosen, inner, '\0', context, random, depth + 1, pages, words, style);
             }
             at = end + 1;
         } else if (c == '[') {
@@ -165,7 +194,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
             if (std::uniform_int_distribution<int>(0, 1)(random)) {
                 std::string inner = text.substr(at + 1, end - at - 1);
                 size_t i = 0;
-                out += expand(inner, i, '\0', context, random, depth + 1, pages);
+                out += expand(inner, i, '\0', context, random, depth + 1, pages, words, style);
             }
             at = end + 1;
         } else if (c == '*' || c == '@' || c == '$' || c == '#') {
@@ -178,9 +207,12 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 auto it = lines.find(id);
                 if (it != lines.end()) {
                     size_t inner = 0;
-                    out += expand(it->second, inner, '\0', context, random, depth + 1, pages);
-                } else
-                    out += name(id);
+                    out += expand(it->second, inner, '\0', context, random, depth + 1, pages, words, style);
+                } else {
+                    const auto value = name(id);
+                    out += value;
+                    if (words) words->fragment(dialoguewords::wide(value), style);
+                }
             } else if (c == '@') {
                 std::string args;
                 bool possessive = false;
@@ -195,11 +227,18 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 if (value.empty())
                     context.missing = true;
                 out += value;
-                if (possessive && !value.empty())
-                    out += value.back() == 's' ? "'" : "'s";
+                auto valueStyle = style;
+                if (words && context.colour)
+                    if (const auto colour = context.colour(id, args)) valueStyle.colour = *colour;
+                if (words) words->fragment(dialoguewords::wide(value), valueStyle);
+                // Native '=s' is literal glue, without English possessive rules.
+                if (possessive) {
+                    out += "s";
+                    if (words) words->literal(L"=s", style);
+                }
             }
             // $colour and #condition tags print nothing.
-        } else if (pages && c != '\n') {
+        } else if ((pages || words) && c != '\n') {
             const size_t from = at;
             while (at < text.size() && text[at] != until && text[at] != '\n' &&
                    std::string("{[*@$#").find(text[at]) == std::string::npos)
@@ -207,12 +246,16 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
             const std::string part = text.substr(from, at - from);
             const size_t first = part.find_first_not_of(" \t\r"), last = part.find_last_not_of(" \t\r");
             const std::string node = first == std::string::npos ? "" : part.substr(first, last - first + 1);
-            if (node == "%")
+            if (node == "%") {
                 out += '\x1e'; // Internal separator, consumed by sayPages, never displayed.
-            else if (node == "%%")
+                if (words) words->nextPage();
+            } else if (node == "%%") {
                 out += " % ";
-            else
+                if (words) words->literal(L"%", style);
+            } else {
                 out += part;
+                if (words) words->literal(dialoguewords::wide(part), style);
+            }
         } else {
             out += c;
             at++;
@@ -243,6 +286,27 @@ std::vector<std::string> Speech::sayPages(const std::string &id, const Context &
         if (end == std::string::npos)
             break;
         from = end + 1;
+    }
+    return result;
+}
+
+std::vector<Speech::StyledPage> Speech::sayStyledPages(const std::string &id, const Context &context,
+                                                      std::mt19937 &random, std::vector<dialoguewords::Word> initial) const {
+    const auto found = lines.find(id);
+    if (found == lines.end()) return {};
+    dialoguewords::Builder words;
+    words.pages[0] = std::move(initial);
+    size_t at = 0;
+    const auto expanded = expand(found->second, at, '\0', context, random, 0, true, &words);
+    std::vector<StyledPage> result;
+    size_t from = 0, page = 0;
+    for (;;) {
+        const size_t end = expanded.find('\x1e', from);
+        result.push_back({tidy(expanded.substr(from, end == std::string::npos ? end : end - from)),
+                          page < words.pages.size() ? std::move(words.pages[page]) : std::vector<dialoguewords::Word>{}});
+        if (end == std::string::npos) break;
+        from = end + 1;
+        ++page;
     }
     return result;
 }

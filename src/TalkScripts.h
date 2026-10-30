@@ -84,6 +84,7 @@ struct TalkNames {
 struct TalkPlay {
     std::vector<std::string> lines;   // what the person says, one line per press
     std::vector<std::string> choices; // the answers offered to the player ("?" tokens), as said
+    std::vector<std::vector<dialoguewords::Word>> choiceWords; // native colors and word boundaries
     std::vector<std::string> choiceIds; // ... and their speech ids ("rest_inn?")
     struct Marked {
         int x = 0, y = 0;   // 1024-block cell
@@ -92,6 +93,7 @@ struct TalkPlay {
     };
     struct Page {
         std::string text, choiceId;
+        std::vector<dialoguewords::Word> words;
         std::vector<std::string> emotes;
         std::vector<Marked> marks;
     };
@@ -103,4 +105,5 @@ struct TalkPlay {
     // cannot name yet ("their_ruler_was_famous: @ruler").
     std::vector<std::string> unrendered;
 };
-TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937 &random, const TalkNames *names = nullptr);
+TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937 &random, const TalkNames *names = nullptr,
+                    std::vector<TalkPlay::Page> initial = {});

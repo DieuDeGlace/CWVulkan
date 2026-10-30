@@ -10,6 +10,8 @@
 #include "Body.h"
 #include "DeathEffects.h"
 #include "Speech.h"
+#include "DialogueChoices.h"
+#include "DialoguePanel.h"
 #include "Multiplayer.h"
 #include "Creatures.h"
 #include "NativeLoot.h"
@@ -1160,6 +1162,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     progression::Mode mode = readMode();
     const int recordedLevel = std::max(1, character.level);
     int playerLevel = saveGame.level > 0 ? saveGame.level : recordedLevel;
+    auto setSpecializationMetadata = [&](int specialization) {
+        character.specialization = specialization;
+        saveGame.specialization = specialization;
+        for (auto &entry : characters)
+            if (&entry == chosen) { entry.specialization = specialization; break; }
+    };
+    if (saveGame.specialization >= 0) setSpecializationMetadata(saveGame.specialization);
     int playerXp = saveGame.xp, playerGold = saveGame.gold;
     logLine(std::string("Progression: ") + progression::modeName(mode) + (pyroInstalled ? " (PyroProgression is installed in the game)" : "") +
             ", level " + std::to_string(playerLevel));
@@ -2196,6 +2205,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         bool lastPageDone = false;
     };
     std::optional<Talk> talk;
+    dialoguechoice::Panel answers;
+    dialoguepanel::General generalDialogue;
     size_t talkedTo = SIZE_MAX; // --talk: who was talked to
     std::mt19937 chatter(std::random_device{}());
     auto personOf = [&](const Speaker &s) {
@@ -2449,6 +2460,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         const int64_t who = speakerId(k);
         if (!who)
             return;
+        answers.clear(); // a newly addressed conversation replaces its offered answers
         Talk t;
         t.npc = k;
         auto say = [&](const char *id, const Speech::Context &context) {
@@ -2502,15 +2514,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             t.pageMarks = play.lineMarks;
             for (const std::string &what : play.unrendered)
                 logLine("Conversation: " + script.speaker + " cannot say this in full yet: " + what);
-            // Choice activation is separate from displaying the offered answers.
-            for (const std::string &answer : play.choices)
-                t.lines.push_back("> " + answer);
-            if (!play.choiceIds.empty())
-                logLine("Conversation: " + script.speaker + " offers answers CubeVulkan cannot choose yet");
-            if (!t.lines.empty()) {
-                talk = t;
-                pageShown();
-                return; // the game ends them without a goodbye
+            std::vector<dialoguechoice::Row> rows;
+            for (size_t index = 0; index < play.choiceIds.size(); ++index)
+                rows.push_back({play.choiceIds[index], play.choiceWords[index]});
+            answers.offer(who, std::move(rows));
+            if (!t.lines.empty() || !answers.empty()) {
+                if (!t.lines.empty()) { talk = std::move(t); pageShown(); }
+                else talk.reset();
+                return; // answers are independent of the speaker bubble
             }
         } else if (inventedQuests && c && !mine && c->id % 3 == 0 && std::count_if(quests.begin(), quests.end(), [](auto &q) { return q.state < 2; }) < 3) {
             // A request: the nearest kind of monster in reach, and how many to defeat.
@@ -2755,7 +2766,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     logLine("Moves: attack " + std::to_string(moves.attack[0]) + "/" + std::to_string(moves.attack[1]) + ", special " +
             std::to_string(moves.special) + ", skill " + std::to_string(moves.skill) + ", P " + std::to_string(moves.tap) +
             ", R " + std::to_string(moves.ultimate) + ", dodge " + std::to_string(moves.dodge) + " (0 = not recorded)");
-    const int ATTACK_A = moves.attack[0], ATTACK_B = moves.attack[1];
+    int ATTACK_A = moves.attack[0], ATTACK_B = moves.attack[1];
     auto isAttack = [&](int id) { return id && (id == ATTACK_A || id == ATTACK_B); };
     auto dealsDamage = [&](int id) { return isAttack(id) || (id && id == moves.special && !moves.releaseSpecial) ||
                                                  (id && id == moves.releaseSpecial); };
@@ -2770,7 +2781,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     float playerMp = 0, playerStamina = 1;
     // Blocking (Combat.h): block power (-1..1) is spent by hits taken while guarding.
     float playerBlock = 1;
-    const int playerCls = chosen ? chosen->classType : 4, playerSpec = chosen ? chosen->specialization : 0;
+    const int playerCls = chosen ? chosen->classType : 4;
+    int playerSpec = saveGame.specialization >= 0 ? saveGame.specialization : (chosen ? chosen->specialization : 0);
     auto held = [&](Gear::Slot s) {
         const Gear::Item &it = gear.equipped(s);
         return haveGear ? combat::HeldItem{it.category, it.id, it.rarity, it.modifier} : combat::HeldItem{};
@@ -2965,7 +2977,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
         // The screens over the game take their keys first (the interface keys F1 to F6 always,
         // everything while one is open). Start Menu and Exit Game end the session.
-        const bool panelsBeforeInput = inventoryOpen || mapOpen || (menusReady && menus.open());
+        const bool panelsBeforeInput = inventoryOpen || mapOpen || answers.visible() || (menusReady && menus.open());
         const bool capturingBeforeInput = menusReady && menus.capturingControl();
         input.gamepadModal = panelsBeforeInput || chat.typing();
         input.gamepadMapMode = mapOpen;
@@ -3107,8 +3119,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // immediately. Menus/inventory release the pointer for interaction.
         // (in the game's menus the game draws its own pointer, cursor.plx)
         int cursorMode = menusOpen ? GLFW_CURSOR_NORMAL
-                         : mouseLook && !inventoryOpen && !mapOpen ? GLFW_CURSOR_DISABLED
-                         : hud.hasPointer() && (inventoryOpen || mapOpen) ? GLFW_CURSOR_HIDDEN
+                         : mouseLook && !inventoryOpen && !mapOpen && !answers.visible() ? GLFW_CURSOR_DISABLED
+                         : hud.hasPointer() && (inventoryOpen || mapOpen || answers.visible()) ? GLFW_CURSOR_HIDDEN
                                                                           : GLFW_CURSOR_NORMAL;
         if (glfwGetInputMode(window, GLFW_CURSOR) != cursorMode) {
             glfwSetInputMode(window, GLFW_CURSOR, cursorMode);
@@ -3116,6 +3128,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         double mx, my;
         pointerPosition(&mx, &my);
+        const bool answerDragLook = answers.visible() && !input.lastUsedPad &&
+            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
+            !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
+            !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
         if (mapOpen && !inventoryOpen && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             // the pointer movement: dragging with the right button moves the map, 2^zoom blocks a
             // pixel, along the camera's turn.
@@ -3127,7 +3143,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 mapMoved = true;
             }
         } else if (!inventoryOpen && !mapOpen && !menusOpen && glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
-                   (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)) {
+                   (answers.visible() ? answerDragLook :
+                       (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
             // The look input, scaled by the camera speed option and turned over by invert-Y.
             constexpr float RADIANS_A_PIXEL = .005f;
             const float speed = RADIANS_A_PIXEL * gameOptions.lookSpeed(), vertical = gameOptions.invertY ? -1.0f : 1.0f;
@@ -3234,6 +3251,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             controlInput.dodge = free && gameInput.held(DODGE);
             controlInput.classSkill = free && gameInput.held(CLASS_SKILL);
             controlInput.blocked = inventoryOpen || mapOpen || menusOpen; // a window has the keys
+            controlInput.ordinaryUi = panelsBeforeInput || menusOpen;
+            controlInput.typing = chat.typing();
             controlInput.walk = free && gameInput.held(WALK);
             controlInput.lamp = free && gameInput.held(LAMP);
             controlInput.pet = free && gameInput.held(CALL_PET);
@@ -4363,8 +4382,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // tap, since holding it turns the camera), dodge (middle mouse), class skill
         // (Shift), P and the ultimate (R).
         sinceAttack += dt;
-        if (inventoryOpen) attackQueued = false;
-        if (gameInput.pressed(gameoptions::ATTACK) && ATTACK_A)
+        if (inventoryOpen || answers.visible()) attackQueued = false;
+        if (!answers.visible() && gameInput.pressed(gameoptions::ATTACK) && ATTACK_A)
             attackQueued = true; // Keep the native swing intact; queue its successor.
         else if (gameInput.pressed(gameoptions::DODGE) && ability != moves.dodge && !mapOpen)
             startMove(moves.dodge);
@@ -4694,8 +4713,33 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (key == GLFW_KEY_P && !GameInput::keyIsBound(gameControls, key)) // (CubeVulkan's tap skill key)
                     startMove(moves.tap);
         }
+        // Native choice activation runs after normal GUI release dispatch and
+        // uses the last draw's hovered row, including releases outside the panel.
+        if (std::find(input.released.begin(), input.released.end(), GLFW_MOUSE_BUTTON_LEFT) != input.released.end()) {
+            const bool speakerExists = spawnedReady && spawned.record(answers.speaker()) != nullptr;
+            const auto action = answers.release(speakerExists, playerGold, hour * 3600000.f, (uint8_t)playerSpec);
+            if (action.kind == dialoguechoice::Action::Rest) {
+                playerGold -= action.coins;
+                auto request = nativeinteract::fresh(5);
+                std::memcpy(request.data() + nativeinteract::TARGET, &action.speaker, sizeof action.speaker);
+                spawned.queueInteraction(spawned.playerId(), request);
+            } else if (action.kind == dialoguechoice::Action::ChangeSpecialization) {
+                playerSpec = action.specialization;
+                setSpecializationMetadata(playerSpec);
+                moves = classMoves(playerCls, playerSpec);
+                ATTACK_A = moves.attack[0]; ATTACK_B = moves.attack[1];
+                if (haveGear) applyGear();
+                else if (nativePlayer) spawned.setPlayerGear(nativeRecord(-1, nullptr));
+                TalkScript confirmation;
+                confirmation.tokens = {"define_specialization", std::to_string(playerCls), std::to_string(playerSpec),
+                                       "your_specialization_is_now"};
+                std::mt19937 feedbackRandom((uint32_t)action.speaker);
+                auto feedback = playScript(confirmation, speech, feedbackRandom, &talkNames, generalDialogue.pages());
+                generalDialogue.applyCompilation(std::move(feedback.pages));
+            }
+        }
         movesPressed.clear();
-        bool holdingAttack = !inventoryOpen && gameInput.held(gameoptions::ATTACK);
+        bool holdingAttack = !inventoryOpen && !answers.visible() && gameInput.held(gameoptions::ATTACK);
         if (!ability && ATTACK_A && (attackQueued || holdingAttack)) {
             startMove(sinceAttack < 1.2 && lastAttack == ATTACK_A ? ATTACK_B : ATTACK_A);
             lastAttack = ability;
@@ -5764,6 +5808,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             hs.showXp = mode == progression::Mode::Pyro;
             hs.xp = playerXp;
             hs.xpMax = progression::xpToNext(playerLevel);
+            if (generalDialogue.visible() && generalDialogue.elapsed() == 0 && generalDialogue.page() < generalDialogue.pages().size())
+                for (const auto &mark : generalDialogue.pages()[generalDialogue.page()].marks) markPlace(mark);
+            if (const auto sound = generalDialogue.update((float)std::min(frameMs, 1000.0),
+                    gameInput.held(gameoptions::ATTACK), gameInput.held(gameoptions::USE)))
+                audio.playInterface(*sound);
+            if (!(mapOpen && input.lastUsedPad)) {
+                const auto stick = gameInput.gamepad().movement;
+                const bool keyboardMove = gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||
+                                          gameInput.held(gameoptions::LEFT) || gameInput.held(gameoptions::RIGHT);
+                if ((!chat.typing() && keyboardMove) || stick.x * stick.x + stick.y * stick.y > .1f * .1f)
+                    answers.dismissForMovement();
+            }
             hs.gold = playerGold;
             { // The info texts and the location banner (Interface's update; the game's frame update's location texts).
                 auto floorDiv = [](int64_t a, int64_t b) { return a >= 0 ? a / b : -((-a + b - 1) / b); };
@@ -5990,8 +6046,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     // (Interface's update: no crosshair while talking or in a menu; the zoom one while
                     // leaning to aim, none in an eagle's flight)
                     const bool leaning = (spawned.playerToggles() & 0x400) != 0;
-                    hs.crosshair = !talk && !inventoryOpen && !mapOpen && !leaning && ability != 156;
-                    hs.zoomCrosshair = !talk && !inventoryOpen && leaning;
+                    hs.crosshair = !talk && !generalDialogue.visible() && !inventoryOpen && !mapOpen && !leaning && ability != 156;
+                    hs.zoomCrosshair = !talk && !generalDialogue.visible() && !inventoryOpen && leaning;
                 }
             }
 
@@ -6045,6 +6101,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 if (talk && glm::length(talkerAt(*talk) - player.position) > 10)
                     talk.reset(); // walked away
+                answers.updateVisibility(talk.has_value());
                 Hud::State::Bubble bubble;
                 if (talk && project(talkerAt(*talk) + glm::vec3(0, 0, talk->fromObject ? 1.5f : 2.7f), bubble.at)) {
                     bubble.text = talk->lines[talk->line];
@@ -6159,7 +6216,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // Interface's its pointer node: the game's pointer in its menus; on the open map, the flat
             // distance from the player to the map's cursor (the distance text, a metre
             // being two blocks).
-            hs.pointer = hud.hasPointer() && (inventoryOpen || mapOpen);
+            hs.pointer = hud.hasPointer() && (inventoryOpen || mapOpen || answers.visible());
             // the flight point preview for the selected flight point: its name, the
             // distance, and the flight time (once known) or what it costs.
             if (mapOpen && flightSelected) {
@@ -6198,8 +6255,39 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     hs.pointerText = flatDistance((int)(glm::length(here - glm::dvec2(mapCursor)) * 0.5));
                 }
             }
-            hud.draw(hs, hudVertices);
+            std::vector<glm::vec2> answerPoints;
             input.gamepadNavigationPoints.clear();
+            hud.draw(hs, hudVertices, [&](std::vector<OverlayVertex> &out) {
+                if (menusReady && !menus.interfaceShown()) return;
+                const auto pixels = renderer.screenSize();
+                double mouseX, mouseY;
+                pointerPosition(&mouseX, &mouseY);
+                hud.drawDialogueChoices(answers, {(float)pixels.width, (float)pixels.height},
+                                        {(float)mouseX, (float)mouseY}, out, &answerPoints);
+                if (generalDialogue.visible()) {
+                    const auto drawn = hud.drawGeneralDialogue(generalDialogue, {(float)pixels.width, (float)pixels.height},
+                                                               (int32_t)(int64_t)(time * 1000), out);
+                    std::optional<float> speakerWidth;
+                    if (const auto *speaker = spawned.record(generalDialogue.speaker())) {
+                        float width;
+                        std::memcpy(&width, speaker + 0x84, sizeof width);
+                        speakerWidth = width;
+                    }
+                    if (const auto pitch = generalDialogue.voice(drawn, speakerWidth, clientRand)) {
+                        int64_t at[3];
+                        playerUnits(at);
+                        audio.playAt(0x35, at, 1, *pitch);
+                    }
+                }
+            });
+            if (!answerPoints.empty()) {
+                int width, height;
+                glfwGetWindowSize(window, &width, &height);
+                const auto pixels = renderer.screenSize();
+                for (auto point : answerPoints)
+                    input.gamepadNavigationPoints.push_back({(int32_t)(point.x * width / std::max(1u, pixels.width)),
+                                                            (int32_t)(point.y * height / std::max(1u, pixels.height))});
+            }
             if (hs.inventory && (menusReady ? menus.interfaceShown() : true)) {
                 int width, height;
                 glfwGetWindowSize(window, &width, &height);

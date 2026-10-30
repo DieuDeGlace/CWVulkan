@@ -363,6 +363,7 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
     s.level = std::max(1, c.level);
     s.xp = c.experience;
     s.gold = c.gold;
+    s.specialization = c.specialization;
     s.hasGear = true;
     auto found = [&](const Item &it, int slot) {
         SaveGame::Found f;
@@ -427,6 +428,7 @@ void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame
     c.level = std::max(1, s.level);
     c.experience = s.xp;
     c.gold = s.gold;
+    if (s.specialization >= 0) c.specialization = (uint8_t)s.specialization;
     std::vector<std::vector<nativesaves::Stack>> inventory(nativesaves::INVENTORY_TABS);
     std::array<Item, nativesaves::EQUIPMENT_SLOTS> equipment{};
     if (gear) {

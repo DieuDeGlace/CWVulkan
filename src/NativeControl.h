@@ -47,6 +47,7 @@ struct Input {
     bool blocked = false;         // a modal window or another object has the keys (spec 3.4, 4.1)
     bool panelShown = false;      // a panel that stops only the movement keys (spec 3.4)
     bool typing = false;          // the chat line takes the keys
+    bool ordinaryUi = false;      // gates late attacks/class/dodge, not movement or ultimate (dialogue spec 12)
     // From the frame's targeting (spec 4.5): the aim point (aimPoint) and the creature the
     // strong attack charges at.
     bool hasAim = false;

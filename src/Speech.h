@@ -9,6 +9,8 @@
 //   @fn(args)       a value from the caller: @mob(), @mob_name, @zone(named), @item()...
 //   $tag            the colour a part is shown in ($creature, $item, $zone, $name, $stress)
 // <name id> entries give names, with "{ #plural Wizards | Wizard }" for plurals.
+#include "DialogueWords.h"
+#include <optional>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -25,6 +27,7 @@ class Speech {
         std::function<std::string(const std::string &fn, const std::string &args)> value;
         // Set when a line asked for a value the caller did not have (the line is incomplete).
         mutable bool missing = false;
+        std::function<std::optional<glm::vec4>(const std::string &fn, const std::string &args)> colour;
     };
     bool load(const std::filesystem::path &dictionary, std::string &error);
     bool has(const std::string &id) const { return lines.count(id) > 0; }
@@ -32,6 +35,12 @@ class Speech {
     std::string say(const std::string &id, const Context &context, std::mt19937 &random) const;
     // Expanded dialogue pages. Whole-text % nodes break pages; %% is a literal percent.
     std::vector<std::string> sayPages(const std::string &id, const Context &context, std::mt19937 &random) const;
+    struct StyledPage {
+        std::string text;
+        std::vector<dialoguewords::Word> words;
+    };
+    std::vector<StyledPage> sayStyledPages(const std::string &id, const Context &, std::mt19937 &,
+                                          std::vector<dialoguewords::Word> initial = {}) const;
     // A <name id> ("Wizard"), or its plural.
     std::string name(const std::string &id, bool plural = false) const;
     // A place: the <name> template for its kind ("Plains": "{@ #named} Plains") with
@@ -51,5 +60,6 @@ class Speech {
     std::map<std::string, std::string> lines; // speech and macro bodies
     std::map<std::string, std::pair<std::string, std::string>> names; // id -> body, tags
     std::string expand(const std::string &text, size_t &at, char until, const Context &context,
-                       std::mt19937 &random, int depth, bool pages = false) const;
+                       std::mt19937 &random, int depth, bool pages = false,
+                       dialoguewords::Builder *words = nullptr, dialoguewords::Style style = {}) const;
 };

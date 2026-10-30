@@ -57,7 +57,14 @@ individual feature documents.
   B-after-menu jump latch. FrontendTests cover thresholds and the context gates.
 - [x] Dialogue page grouping and per-page mission marks. DialoguePageTests cover
   deferred breaks, dictionary breaks, percentages, choice separation and emotes.
-  Emote rendering and interactive answer selection remain below.
+  NPC bubble/emote playback remains below.
+- [x] String-script answer selection, native inn/specialization actions and saved
+  specialization changes. Labels retain dictionary word colors and native glue;
+  owner widget/font tests cover row picking, sizing and controller points. The
+  general feedback panel follows native reveal, release, voice and indicator rules.
+  Answer-visible action gates preserve movement, jump and earlier ultimate input;
+  focused DialogueChoicesTests cover the distinction. Broader live visual comparisons
+  and NPC bubble/emote playback remain open.
 - [x] Authoritative day rollover, loaded-zone refresh and daily character data
   reset. Ground/block lists remain loaded; elapsed respawn timers survive resets.
   Synthetic and generated-world tests cover the clock boundary and timer behavior;
@@ -108,7 +115,7 @@ individual feature documents.
   batches, so a global64-light cap cannot discard another zone's lights. Sprite
   bindings use full CUB dimensions, posed matrices and native coordinate rounding;
   loaded neighboring zones participate before they have meshes. Source-reader,
-  CPU boundary and 21 synthetic GPU checks pass, including offset70 and more than
+  CPU boundary and 22 synthetic GPU checks pass, including offset70 and more than
   64 candidates. The isolated recapture refreshed1,590 zones with both auxiliary
   light lists and coherent cache metadata. The engine reader and neighboring-zone
   light solve match all 8 model and 9 static lights in 15 nonempty zones.
@@ -134,15 +141,17 @@ individual feature documents.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are
-  implemented from the independent spec. Identification/answer points, interactive-map
+  implemented from the independent spec, including answer rows. Identification points, interactive-map
   shoulder routing and hardware comparisons remain. Region-distance ties beyond
   32 choices still need an exact specification.
-- [ ] Interactive conversation choices, emote rendering, numeric-script item actions
-  and complete recipe sources. String scripts do not have give/take tokens;
-  only numeric item-receipt feedback has a verified producer so far. Answer actions
-  and speech/emote timing are now specified independently, pending implementation.
+- [ ] NPC bubble/emote playback, numeric-script item actions and complete recipe
+  sources. String-script answers and general feedback are integrated above; string
+  scripts have no give/take tokens. Only numeric item-receipt feedback has a verified
+  producer so far. Native NPC speech/emote timing is independently specified and
+  still needs integration.
 - [ ] Network feat production/payload meaning. Its display consumer is traced;
-  generating awards remains unspecified. Guest mission marks are client-local,
+  the [producer audit](specs/steam-feat-production-audit.md) found no verified award
+  source. Generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
 - [ ] Remaining native creature and frame-transient lights,
@@ -150,6 +159,8 @@ individual feature documents.
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   These need reference comparisons or an independent behavioral specification.
+  Transient births/aging now have an [independent producer specification](specs/steam-transient-light-producers.md);
+  they are not yet integrated.
 
 The independently authored [runtime-gap specification](specs/remaining-runtime-gaps.md)
 resolves several questions in older specs. Remaining checkboxes are intentional.

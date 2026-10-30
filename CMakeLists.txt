@@ -332,3 +332,11 @@ target_sources(EngineTests PRIVATE tests/SteamPointLightsTests.cpp)
 target_sources(engine PRIVATE src/ExtractedLights.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamLightOracleTests.cpp)
+
+target_sources(engine PRIVATE src/DialogueWords.cpp src/DialogueChoices.cpp)
+
+target_sources(EngineTests PRIVATE tests/DialogueChoicesTests.cpp)
+
+target_sources(engine PRIVATE src/HudDialogue.cpp)
+
+target_sources(engine PRIVATE src/DialoguePanel.cpp)

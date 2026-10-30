@@ -855,7 +855,8 @@ float Hud::mapLabelWidth(const State::MapMarker &marker) const {
     return box.maximum.x - box.minimum.x;
 }
 
-void Hud::draw(const State &state, std::vector<OverlayVertex> &out) const {
+void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
+               const std::function<void(std::vector<OverlayVertex> &)> &overlays) const {
     out.clear();
     if (!ready)
         return;
@@ -1058,6 +1059,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out) const {
         drawInventory(*state.inventory, out);
     if (state.windows)
         drawScreen(*state.windows, out);
+    if (overlays) overlays(out);
     drawMapPreview(state, out);
     drawPointer(state, out);
 }

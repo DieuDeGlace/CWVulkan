@@ -33,7 +33,7 @@ void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) con
     plasmaText(out, style, m);
 }
 
-glm::vec2 Hud::templateSize(const std::string &name) {
+glm::vec2 Hud::templateSize(const std::string &name) const {
     if (!guiLoaded)
         return glm::vec2(0);
     if (!frontScene) {
@@ -46,7 +46,11 @@ glm::vec2 Hud::templateSize(const std::string &name) {
         frontScene->setScale(guiScale);
         return glm::vec2(0);
     }
-    const glm::vec2 size = probe->widget ? frontScene->viewSize(*probe) : glm::vec2(0);
+    glm::vec2 size = probe->widget ? frontScene->viewSize(*probe) : glm::vec2(0);
+    if (!probe->widget) {
+        glm::vec2 minimum, maximum;
+        if (frontScene->screenBounds(*probe, minimum, maximum)) size = maximum - minimum;
+    }
     auto &children = frontScene->root().children;
     children.erase(std::remove_if(children.begin(), children.end(), [&](const auto &c) { return c.get() == probe; }), children.end());
     frontScene->setScale(guiScale);
@@ -81,8 +85,9 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
                 frontScene = std::make_unique<plasma::Scene>(gui);
             }
             frontScene->setScale(guiScale);
-            auto &list = frontNodes[item.name];
-            size_t &k = used[item.name];
+            const std::string &owner = item.instance.empty() ? item.name : item.instance;
+            auto &list = frontNodes[owner];
+            size_t &k = used[owner];
             if (k >= list.size()) {
                 plasma::SceneNode *made = frontScene->instance(item.name, &frontScene->root());
                 if (!made)

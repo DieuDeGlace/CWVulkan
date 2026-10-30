@@ -152,12 +152,15 @@ void setNameTags(std::set<std::string> &tags, const Speech &speech, const std::s
 }
 } // namespace
 
-TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937 &random, const TalkNames *names) {
+TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937 &random, const TalkNames *names,
+                    std::vector<TalkPlay::Page> initial) {
     TalkPlay play;
+    play.pages = std::move(initial);
     // What the defines bound so far, and the grammar tags they give.
     std::string zoneKind, zone, item, itemKey, mobName = script.speaker, creature, land, number, specialization;
     std::string mob2Name, creature2, number2, properName; // a second person or creature, number and a name (the lore tales)
     std::set<std::string> tags;
+    std::map<std::string, glm::vec4> variableColours;
     std::set<std::string> lineTags; // "#inn" and the like: for the next line only
     const auto &t = script.tokens;
     auto annotation = [&](size_t &i, const char *key) { // "key=value" right after a command
@@ -171,7 +174,7 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
         if (std::find(play.unrendered.begin(), play.unrendered.end(), what) == play.unrendered.end())
             play.unrendered.push_back(what);
     };
-    auto say = [&](const std::string &id) {
+    auto say = [&](const std::string &id, std::vector<dialoguewords::Word> initial = {}) {
         Speech::Context context;
         context.tags = tags;
         context.tags.insert(lineTags.begin(), lineTags.end());
@@ -195,7 +198,11 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
                 missing.insert("@" + fn);
             return value;
         };
-        const auto said = speech.sayPages(id, context, random);
+        context.colour = [&](const std::string &fn, const std::string &) -> std::optional<glm::vec4> {
+            const auto found = variableColours.find(fn);
+            return found == variableColours.end() ? std::nullopt : std::optional<glm::vec4>(found->second);
+        };
+        const auto said = speech.sayStyledPages(id, context, random, std::move(initial));
         for (const std::string &fn : missing) // (realms' and rulers' names are not made yet)
             unrendered(id + ": " + fn);
         return said;
@@ -203,25 +210,21 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
     bool pendingBreak = false;
     auto appendSpeech = [&](const std::string &id) {
         const bool choice = id.back() == '?';
-        size_t words = 0;
-        if (!play.pages.empty()) {
-            std::istringstream in(play.pages.back().text);
-            for (std::string word; in >> word;)
-                ++words;
-        }
+        const size_t words = play.pages.empty() ? 0 : play.pages.back().words.size();
         if (choice || pendingBreak || play.pages.empty() || words > 10)
             play.pages.emplace_back();
         pendingBreak = false;
         if (choice)
             play.pages.back().choiceId = id;
-        const auto parts = say(id);
+        const auto parts = say(id, std::move(play.pages.back().words));
         for (size_t i = 0; i < parts.size(); ++i) {
             if (i)
                 play.pages.emplace_back();
             auto &text = play.pages.back().text;
-            if (!text.empty() && !parts[i].empty())
+            if (!text.empty() && !parts[i].text.empty())
                 text += ' ';
-            text += parts[i];
+            text += parts[i].text;
+            play.pages.back().words = parts[i].words;
         }
     };
     for (size_t i = 0; i < t.size(); i++) {
@@ -273,6 +276,8 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
         } else if (token == "define_item" && i + 5 < t.size()) {
             // category, id, modifier, material, rarity
             const int numbers[5] = {numberAt(i + 1), numberAt(i + 2), numberAt(i + 3), numberAt(i + 4), numberAt(i + 5)};
+            const auto colour = dialoguewords::itemColour(numbers[0], numbers[1], numbers[4]);
+            variableColours["item"] = variableColours["itemrarity"] = variableColours["completeitem"] = colour;
             i += 5;
             item = annotation(i, "item");
             itemKey = annotation(i, "key");
@@ -306,6 +311,7 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
                 unrendered("define_model " + std::to_string(kind) + " (a special model)");
         } else if (token == "define_land" && i + 2 < t.size()) {
             const int biome = numberAt(i + 1), seed = numberAt(i + 2);
+            variableColours["land"] = dialoguewords::landColour(biome);
             i += 2;
             const std::string kind = landKind(biome), proper = names && names->land ? names->land(biome, seed) : "";
             land = kind.empty() || proper.empty() ? "" : speech.place(kind, proper);
@@ -332,10 +338,10 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
         } else if (token == "define_specialization" && i + 2 < t.size()) {
             const std::string id = specializationId(numberAt(i + 1), numberAt(i + 2));
             i += 2;
-            std::vector<std::string> said;
+            std::vector<Speech::StyledPage> said;
             if (!id.empty() && speech.has(id))
                 said = say(id);
-            specialization = said.empty() ? "" : said[0];
+            specialization = said.empty() ? "" : said[0].text;
         } else if (token == "define_realm" && i + 2 < t.size()) {
             i += 2; // (realm names are not made yet: the lines that use one say so)
         } else if (token == "define_ruler" && i + 1 < t.size()) {
@@ -361,6 +367,7 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
             play.lineMarks.push_back(page.marks);
         } else {
             play.choices.push_back(page.text);
+            play.choiceWords.push_back(page.words);
             play.choiceIds.push_back(page.choiceId);
         }
     return play;

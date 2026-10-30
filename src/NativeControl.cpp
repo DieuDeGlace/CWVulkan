@@ -473,7 +473,7 @@ void control(const Input &in, State &st, uint8_t *player, double dt, const World
     if (gliding(c))
         step = (float)(dt * GLIDE_STEP_PER_MS);
     const YawBasis yaw = yawBasis((float)in.cameraYaw);
-    const bool dodgeWanted = !in.typing && in.dodge && (c.u(MOVE_FLAGS) & ON_GROUND) && c.f(DODGE_TIMER) == 0.0f &&
+    const bool dodgeWanted = !in.ordinaryUi && !in.typing && in.dodge && (c.u(MOVE_FLAGS) & ON_GROUND) && c.f(DODGE_TIMER) == 0.0f &&
                              c.f(STAMINA) >= DODGE_STAMINA;
 
     moveKeys(in, c, yaw, step);
@@ -728,6 +728,9 @@ void dodgeKeyMove(nativeai::Creature &player) {
 } // namespace
 
 void attack(const Input &in, State &st, nativeai::Creature &player) {
+    // The ordinary-UI gate precedes all late handlers and their previous-key stores.
+    if (in.ordinaryUi)
+        return;
     const Rec c{player.record};
     const nativerules::HasBuff hasBuff = buffTest(player);
     const Moves moves = weaponMoves(player);

@@ -22,6 +22,9 @@
 #include <tuple>
 #include <vector>
 
+namespace dialoguechoice { class Panel; }
+namespace dialoguepanel { class General; struct Layout; }
+
 class Hud {
   public:
     struct ScreenItem; // (below: the items of the screens drawScreen draws)
@@ -250,7 +253,8 @@ class Hud {
     bool load(const std::filesystem::path &gameDir, std::string &error);
     // Builds (or rebuilds after a resize) the atlas for a window of this size.
     void layout(Renderer &renderer, VkExtent2D screen);
-    void draw(const State &state, std::vector<OverlayVertex> &out) const;
+    void draw(const State &state, std::vector<OverlayVertex> &out,
+              const std::function<void(std::vector<OverlayVertex> &)> &overlays = {}) const;
     // Display name for a creature from its head or body sprite ("radish-creature-head"
     // -> the dictionary's "RadishCreature" -> "Radishling"), or "" if unknown.
     std::string nameForSprite(const std::string &sprite) const;
@@ -327,11 +331,18 @@ class Hud {
         int align = 0;            // 0 left, 1 centred, 2 right, 5 centred both ways
         std::string name;         // the template, or the icon's key
         enum Navigation { NoPoint, ShapeCentre, ChildCentres } navigation = NoPoint;
+        std::string instance;     // optional persistent template owner (separate panels)
     };
     using Screen = std::vector<ScreenItem>;
+    void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
+                             std::vector<OverlayVertex> &, std::vector<glm::vec2> *navigation = nullptr) const;
+    bool dialogueChoicesHit(glm::vec2 point) const;
+    bool generalDialogueHit(glm::vec2 point) const;
+    dialoguepanel::Layout drawGeneralDialogue(const dialoguepanel::General &, glm::vec2 screen, int32_t guiTime,
+                                               std::vector<OverlayVertex> &) const;
     void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation = nullptr) const;
     // A gui.plx template's size (its frame, interface units); zero when there is none.
-    glm::vec2 templateSize(const std::string &name);
+    glm::vec2 templateSize(const std::string &name) const;
     bool hasInterface() const { return guiLoaded; }
     glm::ivec2 iconSize(const std::string &key) const {
         auto it = icons.find(key);
@@ -353,6 +364,8 @@ class Hud {
         glm::vec2 offset{0}, extent{0};
     };
     std::map<std::tuple<int, std::array<int, 8>, bool, wchar_t>, TextGlyph> textGlyphs;
+    float dialogueWordWidth(const std::wstring &word) const;
+    float dialogueGlyphAdvance(wchar_t glyph) const;
     int fontIndex(const std::string &name) const { return name == "resource2.dat" ? 1 : 0; }
     // What a frame changes of the nodes: a child's deformation replaced by `fills` (by child
     // name: the bars' x scale), and the string of every text shape under a node of a name
