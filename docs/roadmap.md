@@ -207,10 +207,13 @@ individual feature documents.
   including readiness loss/recovery and new cached bounds with old geometry. A hidden
   no-save settled-world capture with native radius15 passed; sampled peak private
   memory was1,687MiB. This is bounded evidence, not a whole-game/performance guarantee.
-- [ ] Shared Omega-inspired water and underwater appearance, independent of the
+- [x] Shared Omega-inspired water and underwater appearance, independent of the
   Alpha/Steam lighting selection. Use the owner's surface/reflection and submerged
   haze references, retaining a native appearance option for parity checks. This is
-  a visual rendering change; world geometry and generation stay unchanged.
+  a visual rendering change; world geometry and generation stay unchanged. Actual
+  Vulkan fixtures cover transparent shallow terrain, reflected geometry, blue haze,
+  teal foreground tones, unchanged HUD colors and resized render targets in both
+  lighting modes. Wider scene comparisons remain open below.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
   Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.

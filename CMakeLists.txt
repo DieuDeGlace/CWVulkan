@@ -70,7 +70,7 @@ set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADER_OUT ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${SHADER_OUT})
 set(SHADER_HEADERS)
-foreach(shader scene.vert scene.frag shadow.vert water.frag sky.vert sky.frag overlay.vert overlay.frag
+foreach(shader scene.vert scene.frag shadow.vert water.frag omega_water.frag sky.vert sky.frag overlay.vert overlay.frag
         post.vert copy.frag taa.frag smaa_edge.vert smaa_edge.frag smaa_weight.vert smaa_weight.frag
         smaa_blend.vert smaa_blend.frag alpha_scene.vert alpha_scene.frag alpha_water.frag alpha_sky.frag
         alpha_sprite.vert alpha_sprite.frag alpha_cloud.frag steam_cloud.frag steam_star.frag map.vert map.frag
@@ -231,6 +231,8 @@ add_library(engine STATIC
     src/AlphaLight.cpp
     src/Renderer.cpp
     src/RendererPost.cpp
+    src/RendererWater.cpp
+    src/WaterLook.cpp
     src/RendererMap.cpp
     src/Audio.cpp
     src/SoundRules.cpp
@@ -260,7 +262,7 @@ target_include_directories(HelloMod PRIVATE include)
 set_target_properties(HelloMod PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples)
 
 enable_testing()
-add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/FeatTextTests.cpp tests/WindContinueTests.cpp tests/EnemyRespawnTests.cpp tests/PlayerHitTests.cpp)
+add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/FeatTextTests.cpp tests/WaterLookTests.cpp tests/WindContinueTests.cpp tests/EnemyRespawnTests.cpp tests/PlayerHitTests.cpp)
 target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)

@@ -5,6 +5,7 @@
 // in one of two looks ([Render] Style): Cube World Alpha's (the default) or the Steam
 // release's.
 #include "AlphaLook.h"
+#include "WaterLook.h"
 #include "AlphaMoon.h"
 #include "Clouds.h"
 #include "DayNight.h"
@@ -35,6 +36,7 @@ struct RenderSettings {
     // [Render] Style=alpha|steam: Cube World Alpha's lighting, sky and fog, or the Steam
     // release's. Fixed for the session (meshes bake their light for it).
     RenderStyle style = RenderStyle::Alpha;
+    waterlook::Settings water; // surface/submerged appearance, independent of lighting
     // [Render] Moon, MoonBrightness, MoonShadowStrength, NightAmbient: CubeVulkan's moon in
     // the Alpha look (src/AlphaMoon.h). The Steam look keeps its own MoonLight moon ([Moon]).
     alpha::MoonSettings moon;
@@ -309,6 +311,24 @@ class Renderer {
     void recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 jitter, const glm::mat4 &clipToPrevious,
                     bool reproject);
     void drawOverlay(VkCommandBuffer cmd);
+    // Shared water samples an immutable copy of the opaque scene, never a live attachment.
+    Image waterColour, waterDepth;
+    VkDescriptorSetLayout waterSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout waterLayout = VK_NULL_HANDLE;
+    VkDescriptorPool waterPool = VK_NULL_HANDLE;
+    VkPipeline omegaWaterPipeline = VK_NULL_HANDLE, omegaAlphaWaterPipeline = VK_NULL_HANDLE;
+    struct WaterFrame {
+        Buffer uniforms;
+        VkDescriptorSet set = VK_NULL_HANDLE;
+    } waterFrames[FRAMES];
+    bool waterSnapshotReady = false;
+    bool createWaterResources(uint32_t scenePushBytes, std::string &error);
+    bool createWaterTargets();
+    void destroyWaterTargets();
+    void destroyWaterResources();
+    void updateWaterUniforms(float nearPlane, float farPlane, float sunlight, bool submerged,
+                            glm::vec3 fog, float fogRange, double time);
+    void snapshotWaterBackground(VkCommandBuffer cmd);
     Image shadowFar, shadowNear;
     VkSampler shadowSampler = VK_NULL_HANDLE;
 

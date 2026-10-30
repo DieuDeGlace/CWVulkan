@@ -9,12 +9,51 @@ These are visual targets for original CubeVulkan shaders, not a port of Omega co
 
 The owner's local `water lillies.PNG` and `underwater shader.PNG` are the references.
 They remain outside the repository and distribution packages. The older Alpha-water
-pictures do not supersede this choice. This shared style still needs implementation
-and comparison in both lighting modes; the native water work below is its baseline.
+pictures do not supersede this choice.
+
+## Shared style implementation — 2026-10-30
+
+`[Water] Style=Omega` is the default independently of the Alpha/Steam lighting
+selection. `Style=Native` retains the two original water shaders and their draw
+behavior for parity comparisons. Changing this setting requires a restart.
+
+- The shared surface reads immutable color/depth snapshots of the opaque world.
+  Shallow terrain remains visible through depth-dependent blue absorption and
+  scattering. A small normal ripple and broad sunlight highlights leave the voxel
+  surface geometry intact.
+- Screen-space reflection rays sample visible banks, models and actors, with a sky
+  fallback outside the available scene. Reflection steps are configurable from 8
+  to 48 (default 24); reflections can be disabled without changing the world.
+- Submerged views use the same cobalt haze and teal scene treatment in either
+  lighting mode. The shared color treatment acts on world fragments; interface
+  art, fonts and the map overlay retain their own colors. The default underwater
+  visibility limit is 80 blocks, configurable from 8 to 256.
+- Opaque actors are drawn before the shared water so refraction can include them.
+  Native Alpha ordering remains available under the Native water option.
+- Snapshots are copied outside dynamic rendering with explicit image barriers.
+  Color/depth targets are recreated with the window; frame uniforms follow their
+  own completion fences. No live render attachment is sampled by the water pass.
+
+The implementation is original CubeVulkan code guided by the two owner-supplied
+images. No Omega source, textures or shader binaries are included. The photos stay
+outside source packages. Meshes, object placement, generation and random streams
+are unchanged.
+
+Verification includes actual Vulkan image checks with Alpha, Steam legacy vertices
+and Steam native packed vertices: changed submerged terrain remains visible through
+the surface; adding a red bank changes its reflected image; disabling reflections
+changes the result; green foreground terrain receives a teal cast; distant water
+stays blue; a white HUD fixture stays white; and a resize recreates usable targets.
+`tools/validate_engine.ps1` runs these alongside the native shader regressions.
+
+This is a reference-guided implementation, not a certified pixel match. Reflections
+cannot show off-screen geometry, and intersecting non-opaque models still need wider
+comparisons. Waterfalls, wet-ground films, dusk/night and underwater scene coverage
+remain on the rendering checklist.
 
 ---
 
-# Water implementation progress — 2026-10-28
+# Native-option water baseline — 2026-10-28
 
 Implementation uses the existing behavioural specification, `specs/water-rendering.md`, and CubeVulkan sources. No decompile, native shader blob, or third-party reconstruction was opened during this pass. The specification's section E describes the earlier implementation; the changes below supersede those particular findings.
 

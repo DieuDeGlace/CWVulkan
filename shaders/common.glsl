@@ -94,3 +94,12 @@ vec3 sway(vec3 world, vec3 local, uint flags) {
     float bend = pc.params.z > 0 ? clamp(local.z / pc.params.z, 0, 1) : 1;
     return world + vec3(offset * bend * bend * reach, 0);
 }
+
+// Shared underwater art direction, applied to world fragments before the HUD.
+// A blue contribution from brightness keeps green banks and plants teal too;
+// multiplying their near-zero blue channel alone cannot produce that cast.
+vec3 submergedSceneColour(vec3 colour) {
+    if (f.alphaView.w < .5) return colour;
+    float brightness = dot(max(colour, vec3(0)), vec3(.299, .587, .114));
+    return vec3(colour.r * .55, colour.g * .88, max(colour.b, brightness * .95));
+}

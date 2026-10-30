@@ -71,6 +71,13 @@ Edit `CubeVulkan.ini` beside the executable (the template is in `config/`).
   data is baked for the selected style. Parity test captures may explicitly select
   Steam even when your configured default is Alpha. Neither style is fully validated
   as a 1:1 visual match yet.
+- `[Water] Style=Omega` selects the shared clear surface, reflections and blue/teal
+  underwater treatment in either lighting style. `Native` retains each style's
+  original water implementation. Restart after changing the water style.
+  `Reflections=0` disables surface reflections, `ReflectionSteps` controls their
+  quality (8–48, default 24), and `UnderwaterVisibility` sets the distance in blocks
+  (8–256, default 80). Reflections use visible geometry and a sky fallback; see
+  [water progress](docs/water-progress.md) for limits and verification.
 - Shadows, TAA/SMAA, moonlight and default-on water lilies are optional CubeVulkan
   additions. `[Shadows] Enabled=0`, `[Render] Moon=0`, and `[WaterLilies] Enabled=0`
   disable the corresponding additions. Lilies decorate rendering without changing

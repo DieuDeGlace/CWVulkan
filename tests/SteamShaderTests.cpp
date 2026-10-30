@@ -30,6 +30,7 @@ int steamShaderTests() {
     Renderer renderer;
     RenderSettings settings;
     settings.style = RenderStyle::Steam;
+    settings.water.style = waterlook::Style::Native;
     settings.vsync = settings.shadows = settings.taa = settings.smaa = false;
     settings.resolution = settings.nearResolution = 64;
     settings.fogDistance = settings.sceneryDistance = 1000000;

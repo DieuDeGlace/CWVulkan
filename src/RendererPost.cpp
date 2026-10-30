@@ -1,6 +1,7 @@
 // Anti-aliasing after the scene: TAA (the user's Steam TemporalAA mod, ported)
 // then SMAA Ultra (as the user's CWSMTAA), then the interface on top.
 #include "Renderer.h"
+#include "VulkanSync.h"
 #include <algorithm>
 #include <cstring>
 
@@ -17,27 +18,8 @@
 #include "../third_party/smaa/SearchTex.h"
 
 namespace {
-VkImageMemoryBarrier2 barrier(VkImage image, VkImageAspectFlags aspect, VkImageLayout from, VkImageLayout to,
-                              VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage,
-                              VkAccessFlags2 dstAccess) {
-    VkImageMemoryBarrier2 b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-    b.srcStageMask = srcStage;
-    b.srcAccessMask = srcAccess;
-    b.dstStageMask = dstStage;
-    b.dstAccessMask = dstAccess;
-    b.oldLayout = from;
-    b.newLayout = to;
-    b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    b.image = image;
-    b.subresourceRange = {aspect, 0, 1, 0, 1};
-    return b;
-}
-void apply(VkCommandBuffer cmd, const VkImageMemoryBarrier2 *b, uint32_t n) {
-    VkDependencyInfo d{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-    d.imageMemoryBarrierCount = n;
-    d.pImageMemoryBarriers = b;
-    vkCmdPipelineBarrier2(cmd, &d);
-}
+using vksync::barrier;
+using vksync::apply;
 // Colour image written by a pass, then read by the next.
 VkImageMemoryBarrier2 toWrite(VkImage image) {
     return barrier(image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -209,9 +191,9 @@ bool Renderer::createPostResources(std::string &error) {
 bool Renderer::createPostTargets() {
     uint32_t w = extent.width, h = extent.height;
     const VkImageUsageFlags color = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    sceneColor = createImage(w, h, swapFormat, color, VK_IMAGE_ASPECT_COLOR_BIT);
+    sceneColor = createImage(w, h, swapFormat, color | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
     for (int i = 0; i < 2; i++) {
-        depthImages[i] = createImage(w, h, DEPTH_FORMAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        depthImages[i] = createImage(w, h, DEPTH_FORMAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                                      VK_IMAGE_ASPECT_DEPTH_BIT);
         history[i] = createImage(w, h, swapFormat, color, VK_IMAGE_ASPECT_COLOR_BIT);
     }
@@ -249,10 +231,11 @@ bool Renderer::createPostTargets() {
     write(weightSet, {{smaaEdges.view, linearSampler}, {areaTex.view, linearSampler}, {searchTex.view, pointSampler}});
     postFresh = true;
     historyValid = false;
-    return true;
+    return createWaterTargets();
 }
 
 void Renderer::destroyPostTargets() {
+    destroyWaterTargets();
     for (Image *i : {&sceneColor, &depthImages[0], &depthImages[1], &history[0], &history[1], &smaaEdges, &smaaWeights})
         destroyImage(*i);
 }

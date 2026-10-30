@@ -14,6 +14,7 @@
 #include "scene_frag.h"
 #include "shadow_vert.h"
 #include "water_frag.h"
+#include "omega_water_frag.h"
 #include "sky_vert.h"
 #include "sky_frag.h"
 #include "overlay_vert.h"
@@ -141,6 +142,7 @@ void RenderSettings::read(const Config &c) {
     std::string look = c.text("Render", "Style", "alpha");
     std::transform(look.begin(), look.end(), look.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
     style = look == "steam" ? RenderStyle::Steam : RenderStyle::Alpha;
+    water.read(c);
     moon.enabled = c.flag("Render", "Moon", moon.enabled);
     moon.brightness = (float)c.number("Render", "MoonBrightness", moon.brightness * 100, 0, 200) / 100;
     moon.shadowStrength = (float)c.number("Render", "MoonShadowStrength", moon.shadowStrength * 100, 0, 100) / 100;
@@ -473,6 +475,7 @@ bool Renderer::createPipelines(std::string &error) {
                    sceneF = module(spv_scene_frag, sizeof(spv_scene_frag)),
                    shadowV = module(spv_shadow_vert, sizeof(spv_shadow_vert)),
                    waterF = module(spv_water_frag, sizeof(spv_water_frag)),
+                   omegaWaterF = module(spv_omega_water_frag, sizeof(spv_omega_water_frag)),
                    skyV = module(spv_sky_vert, sizeof(spv_sky_vert)),
                    skyF = module(spv_sky_frag, sizeof(spv_sky_frag)),
                    alphaV = module(spv_alpha_scene_vert, sizeof(spv_alpha_scene_vert)),
@@ -527,6 +530,7 @@ bool Renderer::createPipelines(std::string &error) {
         VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         const VkPipelineVertexInputStateCreateInfo *input = nullptr; // other than the voxel vertex
         VkColorComponentFlags colourMask = 0xf;
+        VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     };
     Desc descs[] = {
         {beamV, beamF, true, false, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &beamPipeline,
@@ -544,6 +548,10 @@ bool Renderer::createPipelines(std::string &error) {
         {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS, &menuPipeline},
         {sceneV, sceneF, true, false, true, false, false, VK_COMPARE_OP_ALWAYS, &menuBackgroundPipeline},
         {sceneV, waterF, true, true, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterPipeline},
+        {sceneV, omegaWaterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &omegaWaterPipeline,
+         VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0xf, waterLayout},
+        {alphaV, omegaWaterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &omegaAlphaWaterPipeline,
+         VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0xf, waterLayout},
         {sceneV, waterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterDepthPipeline,
          VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0},
         {shadowV, VK_NULL_HANDLE, true, true, false, false, true, VK_COMPARE_OP_LESS, &shadowPipeline},
@@ -610,13 +618,13 @@ bool Renderer::createPipelines(std::string &error) {
         info.pDepthStencilState = &depthState;
         info.pColorBlendState = &blend;
         info.pDynamicState = &dynamic;
-        info.layout = layout;
+        info.layout = d.pipelineLayout ? d.pipelineLayout : layout;
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, d.out) != VK_SUCCESS) {
             error = "Pipeline creation failed";
             return false;
         }
     }
-    for (auto m : {sceneV, sceneF, shadowV, waterF, skyV, skyF, alphaV, alphaF, alphaWaterF, alphaSkyF, spriteV, spriteF,
+    for (auto m : {sceneV, sceneF, shadowV, waterF, omegaWaterF, skyV, skyF, alphaV, alphaF, alphaWaterF, alphaSkyF, spriteV, spriteF,
                    alphaCloudF, steamCloudF, steamStarF, beamV, beamF})
         vkDestroyShaderModule(device, m, nullptr);
     return true;
@@ -906,7 +914,7 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
         pointWrite.pBufferInfo = &points;
         vkUpdateDescriptorSets(device, 1, &pointWrite, 0, nullptr);
     }
-    if (!createPipelines(error) || !createOverlayPipeline(error) || !createMapPipeline(error) || !createPostResources(error))
+    if (!createWaterResources(sizeof(PushConstants), error) || !createPipelines(error) || !createOverlayPipeline(error) || !createMapPipeline(error) || !createPostResources(error))
         return false;
     if (!createPostTargets()) {
         error = "Cannot allocate the scene and anti-aliasing targets";
@@ -1137,6 +1145,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // The original menu's captured scene keeps the look it was captured with.
     const bool menuSky = lighting.menuSky[5].w > 0;
     const bool alphaLook = settings.style == RenderStyle::Alpha && !menuSky;
+    const bool sharedWater = settings.water.style == waterlook::Style::Omega && !menuSky;
     const double dayMs = alphaLook ? std::fmod(std::max(0.0, (double)lighting.hour), 24.0) * 3600000.0
                                   : (double)lighting.timeMs;
     const float S = alpha::sunlight(dayMs);
@@ -1238,6 +1247,12 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         underwater = worldProbe.water && worldProbe.water(camera.eye);
         alpha::ZoneFactors zone = worldProbe.zone ? worldProbe.zone(camera.eye) : alpha::ZoneFactors{};
         alpha::Palette palette = alpha::palette(alpha::paletteDaylight(dayMs), zone, underwater);
+        if (sharedWater && underwater) {
+            const auto submerged = waterlook::submerged(S);
+            palette.sky1 = submerged.horizon;
+            palette.sky2 = submerged.zenith;
+            palette.fog = submerged.fog;
+        }
         u.alphaSky1 = glm::vec4(palette.sky1, 1);
         u.alphaSky2 = glm::vec4(palette.sky2, 1);
         u.alphaFog = glm::vec4(palette.fog, 1);
@@ -1245,7 +1260,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.alphaBack = glm::vec4(palette.back, 1);
         u.alphaAmbient = glm::vec4(palette.ambient, 1);
         u.alphaMaterial = alpha::material(S, underwater);
-        u.alphaSun = glm::vec4(D, 1 / fogF);
+        if (sharedWater && underwater)
+            u.alphaMaterial = glm::vec4(waterlook::submerged(S).material, u.alphaMaterial.a);
+        u.alphaSun = glm::vec4(D, 1 / (sharedWater && underwater ? std::min(fogF, settings.water.underwaterVisibility) : fogF));
         mapFog = palette.fog;
         u.sunColour = alpha::sunSpriteColour(S);
         // CubeVulkan's moon (src/AlphaMoon.h): opposite the sun, at night.
@@ -1278,11 +1295,20 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             steamLights.reset();
         steamLights.update(steamlighting::targets(lighting.timeMs, environment), steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
         // §B.3, eased as §B.4.
-        const steamsky::Palette target = steamsky::palette(alpha::paletteDaylight(dayMs), here.region, underwater);
+        steamsky::Palette target = steamsky::palette(alpha::paletteDaylight(dayMs), here.region, underwater);
+        if (sharedWater && underwater) {
+            const auto submerged = waterlook::submerged(S);
+            target.sky1 = waterlook::steamShaderColour(submerged.horizon);
+            target.sky2 = waterlook::steamShaderColour(submerged.zenith);
+            target.fog = waterlook::steamShaderColour(submerged.fog);
+            target.sun = glm::vec3(0);
+        }
         if (elapsedMs < 0)
             steamPalette.reset();
         steamPalette.update(target, std::max(elapsedMs, 0.0));
-        const steamsky::Palette &palette = steamPalette.value();
+        // The shared submerged look has the same palette in either lighting
+        // mode; keep native sky easing for the native water option and dry views.
+        const steamsky::Palette &palette = sharedWater && underwater ? target : steamPalette.value();
         // §B.5: the sun's glow (from straight below while under water).
         const glm::vec3 sun = underwater ? glm::vec3(0, 0, -1) : steamsky::sunDirection(dayMs);
         u.steamSky[0] = glm::vec4(palette.sky1, 1);
@@ -1290,6 +1316,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.steamSky[2] = glm::vec4(palette.fog, 1);
         u.steamSky[3] = glm::vec4(palette.sun, 1);
         u.steamSky[4] = steamsky::sunPosition(sun, view, proj, aspect, gradientShift);
+        if (sharedWater && underwater) u.steamSky[4].w = 0;
         u.steamSky[5] = glm::vec4(gradientShift, 0, underwater ? 1 : 0, 1);
         mapFog = palette.fog;
         steamStarValue = steamsky::starValue(dayMs, here.region.forest);
@@ -1358,8 +1385,11 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.ambient = glm::vec4(glm::vec3(native.ambient), settings.cameraFade ? 1.f : 0.f);
         u.steamSun = glm::vec4(glm::normalize(steamlighting::sunDirection(lighting.timeMs)), native.ambient.a);
         u.steamMaterial = steamlighting::material(underwater);
+        if (sharedWater && underwater)
+            u.steamMaterial = glm::vec4(waterlook::submerged(S).material, u.steamMaterial.a);
     }
-    u.fog = glm::vec4(mapFog, sceneDistance);
+    u.alphaView.w = sharedWater && underwater ? 1.f : 0.f; // shared world-fragment tint, never interface pixels
+    u.fog = glm::vec4(mapFog, sharedWater && underwater ? std::min(sceneDistance, settings.water.underwaterVisibility) : sceneDistance);
     u.sky = glm::vec4(0, 0, 0, lighting.daylight);
     float invSpan = 1 / (2 * LIGHT_DEPTH);
     // 0.008 blocks of depth bias, as in SteamShadows.
@@ -1465,6 +1495,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     }
     std::memcpy(fr.nativePoints.mapped, nativeGpuPoints.data(), nativeGpuPoints.size() * sizeof(NativeGpuPoint));
     std::memcpy(fr.uniforms.mapped, &u, sizeof(u));
+    if (sharedWater)
+        updateWaterUniforms(steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane, S, underwater,
+                            alphaLook ? mapFog : waterlook::steamDisplayColour(mapFog), u.fog.w, time);
 
     VkCommandBuffer cmd = fr.cmd;
     vkResetCommandBuffer(cmd, 0);
@@ -1755,7 +1788,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, boundScene);
         for (auto &item : opaque) {
             // Alpha's creatures follow the depth-writing water (water-rendering.md A.6).
-            const bool late = alphaLook && item.kind == DrawKind::Model;
+            // Shared refraction needs actors in the opaque scene snapshot. The
+            // native Alpha path retains its separate post-water actor pass.
+            const bool late = alphaLook && !sharedWater && item.kind == DrawKind::Model;
             if ((!alphaLook && item.nativeScenery) || item.kind == DrawKind::LightBeam || late != afterWater ||
                 (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
@@ -1836,13 +1871,28 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (moonVisible > 0)
             sprites(2, 6, 1, moonVisible);
     }
-    // Steam water writes nearest depth without colour before the blended pass (spec B.2).
-    if (!alphaLook) {
+    const bool waterVisible = std::any_of(water.begin(), water.end(), visible);
+    if (sharedWater && waterVisible) {
+        vkCmdEndRendering(cmd);
+        snapshotWaterBackground(cmd);
+        color.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        vkCmdBeginRendering(cmd, &ri);
+        vkCmdSetViewport(cmd, 0, 1, &vp);
+        vkCmdSetScissor(cmd, 0, 1, &sc);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterLayout, 1, 1,
+                                &waterFrames[frameIndex].set, 0, nullptr);
+    }
+    // Native Steam water keeps its no-color nearest-depth pass. Shared water
+    // composites the already rendered scene and writes only its nearest surface.
+    if (!sharedWater && !alphaLook) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterDepthPipeline);
         for (auto &item : water)
             if (visible(item)) bindAndDraw(item, 0);
     }
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaLook ? alphaWaterPipeline : waterPipeline);
+    const auto surfacePipeline = sharedWater ? (alphaLook ? omegaAlphaWaterPipeline : omegaWaterPipeline)
+                                              : (alphaLook ? alphaWaterPipeline : waterPipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, surfacePipeline);
     for (auto &item : water)
         if (visible(item))
             bindAndDraw(item, 0);
@@ -2052,7 +2102,7 @@ void Renderer::shutdown() {
     }
     for (auto p : {scenePipeline, mirroredScenePipeline, menuPipeline, menuBackgroundPipeline, waterPipeline, waterDepthPipeline, shadowPipeline, skyPipeline,
                    alphaScenePipeline, alphaMirroredPipeline, alphaWaterPipeline, alphaSkyPipeline, alphaSpritePipeline,
-                   alphaCloudPipeline, steamCloudPipeline, steamStarPipeline, beamPipeline, sceneryDepthPipeline,
+                   alphaCloudPipeline, steamCloudPipeline, steamStarPipeline, beamPipeline, omegaWaterPipeline, omegaAlphaWaterPipeline, sceneryDepthPipeline,
                    sceneryMirroredDepthPipeline, sceneryFadePipeline, sceneryMirroredFadePipeline})
         vkDestroyPipeline(device, p, nullptr);
     destroyBuffer(starBuffer);
@@ -2073,6 +2123,7 @@ void Renderer::shutdown() {
     vkDestroyDescriptorSetLayout(device, overlaySetLayout, nullptr);
     vkDestroySampler(device, overlaySampler, nullptr);
     destroySwapchain();
+    destroyWaterResources();
     destroyPostResources();
     if (timing)
         vkDestroyQueryPool(device, timing, nullptr);
