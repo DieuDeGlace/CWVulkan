@@ -134,6 +134,7 @@ int sceneVisibilityTests();
 int steamLightingTests();
 int steamVoxelTests();
 int steamTerrainTests();
+int steamShaderTests();
 int objectClockTests();   // tests/ObjectVisualTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -9003,6 +9004,8 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "steamshader")
+        return steamShaderTests();
     if (argc == 2 && std::string(argv[1]) == "steamterrain")
         return steamTerrainTests();
     if (argc == 2 && std::string(argv[1]) == "steamvoxel")

@@ -80,6 +80,7 @@ struct OverlayVertex {
 // they are in.
 enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain };
 constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
+constexpr uint32_t STEAM_WORLD = 1u << 9; // ordinary world/water pass; excludes sky and menu art
 
 struct DrawItem {
     uint32_t mesh = 0;

@@ -7,6 +7,7 @@ layout(location = 0) in vec3 vWorld;
 layout(location = 1) in vec3 vNormal;
 layout(location = 2) in vec4 vColor;
 layout(location = 3) flat in uint vFlags;
+layout(location = 4) in vec3 vIndirect;
 layout(location = 0) out vec4 outColor;
 void main() {
     vec2 screen = steamScreen();
@@ -15,7 +16,9 @@ void main() {
     float distance2 = dot(toEye, toEye);
     vec3 normal = vec3(0, 0, 1);
     Shade light = shade(vWorld, normal, true);
-    float blue = clamp(vColor.b * light.light.b, 0, 1);
+    bool nativeVertex = (vFlags & (STEAM_VERTEX | STEAM_WORLD)) == (STEAM_VERTEX | STEAM_WORLD);
+    float blue = nativeVertex ? mix(vIndirect.b, vColor.b, sunShare(vWorld, normal))
+                              : clamp(vColor.b * light.light.b, 0, 1);
     vec3 body = mix(f.steamSky[0].rgb, f.steamSky[1].rgb, .8 * steamSmooth(Y + 1));
     vec3 reflected = reflect(-f.lightDir.xyz, normal);
     float sheen = max(dot(normalize(reflected), normalize(toEye)), 0);

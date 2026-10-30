@@ -47,6 +47,7 @@ struct FrameUniforms {
         alphaView, sunColour, alphaMoonFront, alphaMoonBack, alphaNight;
     glm::mat4 skyProj, view;
     glm::vec4 pointLights[MAX_POINT_LIGHTS], pointColours[MAX_POINT_LIGHTS];
+    glm::vec4 steamSun, steamMaterial; // direction/ambient alpha, frame material RGBA
 };
 struct PushConstants {
     glm::mat4 model;
@@ -1085,7 +1086,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     const float farPlane = std::max(settings.fogDistance * ALPHA_CLOUD_REACH,
                                     settings.fogDistance + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) +
                            FAR_MARGIN;
-    glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .1f, farPlane);
+    const bool steamWorld = settings.style == RenderStyle::Steam;
+    glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect,
+                                          steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane);
     proj[1][1] *= -1;
     // TAA: eight-frame Halton sub-pixel jitter (the Steam mod's), content moved by
     // `jitter` pixels; the resolve samples back at the same offset.
@@ -1250,6 +1253,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     float farRadius = settings.radius, nearRadius = settings.nearRadius;
     u.lightFar = lightMatrix(shadowDir, focus, farRadius, settings.resolution);
     u.lightNear = lightMatrix(shadowDir, focus, nearRadius, settings.nearResolution);
+    u.view = view;
     u.eye = glm::vec4(camera.eye, (float)std::fmod(time, 100000.0));
     u.lightDir = glm::vec4(shadowDir, shadowsOn ? shadowStrength : 0.f);
     u.front = glm::vec4(lighting.front, settings.sunWarmth);
@@ -1259,9 +1263,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         const auto &native = steamLights.value();
         u.front = glm::vec4(glm::vec3(native.front) + lighting.moonFront, settings.sunWarmth);
         u.back = glm::vec4(glm::vec3(native.back) + lighting.moonBack, settings.fadeStart);
-        // Uniform ambient.w is still camera-fade; native ambient alpha is separate
-        // state until the native shader composition stage is connected.
         u.ambient = glm::vec4(glm::vec3(native.ambient), settings.cameraFade ? 1.f : 0.f);
+        u.steamSun = glm::vec4(glm::normalize(steamlighting::sunDirection(lighting.timeMs)), native.ambient.a);
+        u.steamMaterial = steamlighting::material(underwater);
     }
     u.fog = glm::vec4(mapFog, settings.fogDistance);
     u.sky = glm::vec4(0, 0, 0, lighting.daylight);
@@ -1333,8 +1337,12 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
         PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, item.opacity), glm::vec4(1, 0, 0, 0),
                          glm::uvec4(0)};
-        if (!alphaLook && shading && item.kind == DrawKind::Scenery && item.standingLight >= 0)
-            pc.look.x = item.standingLight; // baked sunlight factor, separate from pixel opacity
+        if (!alphaLook && !menuSky && shading) {
+            pc.params.x = (float)(item.flags | STEAM_WORLD);
+            pc.look.y = item.flash;
+            if (item.kind == DrawKind::Scenery && item.standingLight >= 0)
+                pc.look.x = item.standingLight; // baked sunlight, separate from pixel opacity
+        }
         if (alphaLook && shading) {
             // Creatures and items take the light of the block just above where they are (11.2).
             // Zone models take the light where they stand too (vegetation-wind.md §4.5), which

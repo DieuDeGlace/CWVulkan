@@ -96,8 +96,15 @@ individual feature documents.
   the optimized sea quad and post-solve air-byte tests have fixture regressions.
   The full suite and Vulkan smoke pass; the 300-zone terrain-only light oracle
   matches all 482,880 eligible columns and 1,541,581 compared blocks.
+  Ordinary Steam geometry now lights/saturates/clamps per vertex before raster
+  interpolation, with separate ambient alpha, native sun direction and material
+  sunlight factors. The world pixel path retains saturation for Glow, reconstructs
+  fog/sky from raw palettes and interpolated clip/view coordinates, and grades
+  only after the native two-stage fog blend. Synthetic Vulkan checks match the
+  three derived RGB references and full-fog endpoints; day/night and Alpha
+  smoke captures pass. GPU world clip planes now match the native CPU gate.
   Native adaptive range/camera state, fresh cached-box comparisons, auxiliary
-  point-light registration, remaining shader/color details, undefined
+  point-light registration, remaining special shader controls, undefined
   consumed lamp turns and broader dungeon/theme oracles still prevent a complete
   parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
@@ -116,7 +123,8 @@ individual feature documents.
   generating awards remains unspecified. Guest mission marks are client-local,
   with host interaction notices; no invented quest-award packet is needed.
 - [ ] Remaining sound-event wiring and exact feat/chat presentation.
-- [ ] Native world/water shader composition and point lights, Alpha far-static-model ordering,
+- [ ] Native point-light registration, remaining water/model/overlay shader controls,
+  Alpha far-static-model ordering,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   These need reference comparisons or an independent behavioral specification.
 

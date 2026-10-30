@@ -111,6 +111,9 @@ rather than game code. See [the clean-room process](docs/CLEANROOM.md).
 when available. Missing local oracles are skipped, so a passing run on a new machine
 does not verify all game comparisons. GPU smoke captures and recorded data checks
 are evidence for the tested cases, not complete gameplay or pixel parity.
+On Windows with a Vulkan driver, `build\EngineTests.exe steamshader` additionally
+checks lit/Glow/White color references and full-fog interpolation with synthetic
+geometry. It needs no game assets and is separate from the default CPU suite.
 
 The [current checklist](docs/roadmap.md) tracks remaining work. In particular:
 
