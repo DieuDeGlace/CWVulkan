@@ -3,6 +3,7 @@
 #include "GameCraft.h"
 
 #include "NativeRules.h"
+#include "NativeInteract.h"
 #include "worldgen/Noise.h"
 #include "worldgen/Planner.h"
 
@@ -191,6 +192,37 @@ int armourMaterial(int playerClass) {
 }
 
 } // namespace
+
+Thing fromRecord(const ItemRecord &record) {
+    Thing item;
+    item.category = record[0];
+    std::memcpy(&item.id, record.data() + 4, 4);
+    std::memcpy(&item.modifier, record.data() + 8, 4);
+    std::memcpy(item.region, record.data() + 0xc, 8);
+    item.rarity = record[0x14];
+    std::memcpy(&item.formula, record.data() + 0x18, 4);
+    item.material = record[0x1c];
+    std::memcpy(item.attributes.data(), record.data() + ATTRIBUTES, item.attributes.size());
+    item.attributeCount = record[ATTRIBUTE_COUNT];
+    return item;
+}
+ItemRecord toRecord(const Thing &item) {
+    ItemRecord record{};
+    record[0] = (uint8_t)item.category;
+    std::memcpy(record.data() + 4, &item.id, 4);
+    std::memcpy(record.data() + 8, &item.modifier, 4);
+    std::memcpy(record.data() + 0xc, item.region, 8);
+    record[0x14] = (uint8_t)item.rarity;
+    std::memcpy(record.data() + 0x18, &item.formula, 4);
+    record[0x1c] = (uint8_t)item.material;
+    std::memcpy(record.data() + ATTRIBUTES, item.attributes.data(), item.attributes.size());
+    record[ATTRIBUTE_COUNT] = item.attributeCount;
+    return record;
+}
+bool Thing::operator==(const Thing &other) const {
+    const auto left = toRecord(*this), right = toRecord(other);
+    return nativeinteract::sameItem(left.data(), right.data());
+}
 
 Formula recipeOf(const Thing &q) {
     Formula f;

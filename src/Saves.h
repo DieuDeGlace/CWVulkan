@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <array>
@@ -66,6 +67,9 @@ struct SaveGame {
     float hpFraction = 1;
     bool hasGear = false;
     std::vector<Worn> worn; // one per Gear slot, in the game's slot order
+    // Raw known recipes belong to characters.db, not the supplemental text notes.
+    // Unset legacy progress retains the existing native list; an empty list is explicit.
+    std::optional<std::vector<std::array<uint8_t, 0xa0>>> recipes;
     int specialization = -1; // optional current byte; old recordings remain unchanged
     int level = 0, xp = 0, gold = 0; // level 0: not saved yet (use the recorded level)
     float hour = -1; // time of day in the world (-1: not saved)

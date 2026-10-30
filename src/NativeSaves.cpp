@@ -1,5 +1,6 @@
 // The game's own save files, written from docs/specs/native-saves.md.
 #include "NativeSaves.h"
+#include "NativeInteract.h"
 
 #include <sqlite3.h>
 #include <zlib.h>
@@ -441,18 +442,10 @@ std::vector<uint8_t> writeCharacter(const Character &c) {
     return std::move(w.out);
 }
 
-namespace {
-// Two items are the same item for the recipe check: every field but the attributes' contents.
-bool sameItem(const Item &a, const Item &b) {
-    return std::memcmp(a.data(), b.data(), 1) == 0 && std::memcmp(&a[item::SUBTYPE], &b[item::SUBTYPE], 0x1d - 4) == 0 &&
-           a[item::ATTRIBUTE_COUNT] == b[item::ATTRIBUTE_COUNT];
-}
-} // namespace
-
 void ensureLoadRecipe(Character &c) {
     const Item wanted = makeItem(1, 7);
     for (const Item &r : c.recipes)
-        if (sameItem(r, wanted))
+        if (nativeinteract::sameItem(r.data(), wanted.data()))
             return;
     c.recipes.push_back(wanted);
 }

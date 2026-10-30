@@ -62,6 +62,10 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- saved/default recipe lifecycle and full crafting-result item retention, from
+  `steam-dialogue-item-actions.md` §4 and `zone-object-interaction.md` §0.7.
+  Synthetic bridge/default/equality cases and the full owner-data suite verify
+  preserved records; no new recipe grant or numeric award producer is inferred.
 - per-speaker NPC speech/emote lifecycle, literal emote-word pages, cached projection,
   owner-template placement, world emote transforms/depth/culling and general lore/
   receipt routing, from `steam-npc-speech-rendering.md` and

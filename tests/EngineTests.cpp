@@ -1321,6 +1321,24 @@ static int listProps(float x, float y) {
 // lists and their rank gear, the craft button's timing, the extra yield and the upgrade cubes.
 static void craftingRules() {
     using namespace gamecraft;
+    // A saved recipe result retains its full formula and every attribute byte.
+    auto savedRecipe = nativesaves::makeItem(3, 0, 1);
+    const int32_t formulaWord = 0x12345678;
+    std::memcpy(savedRecipe.data() + 0x18, &formulaWord, 4);
+    savedRecipe[0x9d] = 2;
+    for (size_t i = 0; i < 128; ++i) savedRecipe[0x1d + i] = (uint8_t)(i * 7 + 3);
+    const auto complete = fromRecord(savedRecipe);
+    const auto completeResult = recipeOf(complete).result;
+    CHECK(toRecord(completeResult) == savedRecipe && completeResult.formula == formulaWord);
+    auto inactive = complete;
+    inactive.attributes[127] ^= 0xff;
+    CHECK(inactive == complete); // inactive data survives the result but is not an identity key
+    inactive.attributes[0] ^= 1;
+    CHECK(!(inactive == complete));
+    auto differentFormula = complete;
+    differentFormula.formula ^= 0x100;
+    CHECK(!(differentFormula == complete));
+    CHECK(toRecord(recipeOf(fromRecord(nativesaves::makeItem(29, 4))).result) == ItemRecord{});
     Thing sword;
     sword.category = 3, sword.id = 0, sword.material = 1, sword.rarity = 2; // a rarity-2 iron sword
     Formula f = recipeOf(sword);

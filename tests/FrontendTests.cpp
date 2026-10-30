@@ -181,6 +181,21 @@ void startingKit() {
     nativesaves::Character none;
     addDefaultRecipes(none, 1);
     FRONT_CHECK(none.recipes.size() == 7 && none.recipes[0][0x14] == 1);
+    nativesaves::Character loaded;
+    loaded.classType = 1;
+    auto modified = nativesaves::makeItem(1, 1);
+    modified[8] = 42;
+    modified[0x9d] = 1;
+    modified[0x1d] = 7;
+    loaded.recipes = {modified};
+    addDefaultRecipes(loaded, 0);
+    FRONT_CHECK(loaded.recipes.size() == 21 && loaded.recipes.front() == modified && loaded.recipes[1] == nativesaves::makeItem(1,1));
+    loaded.recipes[1][1] = 0x55;
+    loaded.recipes[1][0x16] = 0x66;
+    loaded.recipes[1][0x90] = 0x77;
+    const auto retained = loaded.recipes;
+    addDefaultRecipes(loaded, 0);
+    FRONT_CHECK(loaded.recipes == retained);
 }
 
 void optionsFiles() {
@@ -295,11 +310,16 @@ void progress() {
     c.classType = 1;
     giveStartingKit(c, 7, {1, 1});
     c.name = "Test";
+    auto hiddenRecipe = nativesaves::makeItem(49, 73, 12);
+    hiddenRecipe[1] = 0x73; // padding is also retained in the saved raw list
+    hiddenRecipe[0x90] = 0xf2;
+    c.recipes.push_back(hiddenRecipe);
     c.level = 3, c.experience = 40, c.gold = 12;
     c.usedCells = {{5, 6}}, c.flightPoints = {{100, 200}}, c.finishedMissions = {{1, 1}};
     c.stars[nativesaves::starGroup(-5, 9)].push_back({4, -5, 9, 30});
     const SaveGame s = nativeprogress::toProgress(c, "", frame, nullptr);
     FRONT_CHECK(s.level == 3 && s.xp == 40 && s.gold == 12 && s.hasPosition && near(s.position.x, 10.5));
+    FRONT_CHECK(s.recipes && *s.recipes == c.recipes);
     FRONT_CHECK(s.worn.size() == 11 && s.worn[7].category == 3 && s.worn[7].id == 17);
     FRONT_CHECK(s.bag.size() == 1 && s.bag[0].count == 5 && s.found.size() == 2 + 3); // worn gear and the carried weapons
     FRONT_CHECK(s.usedCells.size() == 1 && s.treasures.size() == 1 && s.flightPoints.size() == 1);
@@ -307,8 +327,15 @@ void progress() {
     std::string notes;
     SaveGame moved = s;
     moved.quests.push_back({42, 1, 5, 2, "Wolf", "zone"});
+    moved.recipes->push_back(nativesaves::makeItem(1, 12));
     nativeprogress::fromProgress(moved, nullptr, 99.0f, frame, again, notes);
     FRONT_CHECK(again.position == c.position && again.level == 3 && again.gold == 12 && again.health == 99.0f);
+    FRONT_CHECK(again.recipes == *moved.recipes && again.recipes[again.recipes.size() - 2] == hiddenRecipe);
+    auto legacyCopy = again;
+    SaveGame legacy;
+    std::string legacyNotes;
+    nativeprogress::fromProgress(legacy, nullptr, 99.0f, frame, legacyCopy, legacyNotes);
+    FRONT_CHECK(legacyCopy.recipes == again.recipes); // old notes without recipe data must not clear them
     FRONT_CHECK(again.equipment[7] == c.equipment[7] && again.equipment[2] == c.equipment[2]); // the saved records, attributes and all
     FRONT_CHECK(again.inventory[0].size() == 3 && again.inventory[2].size() == 1 && again.inventory[2][0].count == 5);
     FRONT_CHECK(again.stars == c.stars && again.usedCells == c.usedCells && again.finishedMissions == c.finishedMissions);

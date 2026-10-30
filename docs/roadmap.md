@@ -152,10 +152,15 @@ individual feature documents.
   item descriptions and hold-up admission use the verified receipt rules. Full
   CPU/owner-data tests and 33 actual Vulkan image cases pass; a hidden no-save live
   frame confirms the speech template and colored prefixes. These are bounded checks.
-- [ ] Complete saved/default recipe-source integration and remaining page-item action
-  inputs. The independent dialogue/item source audit is now complete. String scripts
-  have no give/take commands; numeric8/9/10 have no verified award producer. Their
-  decoder capability does not justify creating synthetic gameplay grants.
+- [x] Saved/default recipe sources: raw known records pass through native progress,
+  including unlisted recipes. Startup appends only missing full-identity defaults;
+  load repair ignores padding and inactive attribute bytes. Crafting results retain
+  formula and all128 attribute bytes, while equality tests only active attributes.
+  Inventory ingredient matching uses that same full identity. The CPU/owner-data
+  suite passes with saved-list, default-merge, padding and result-retention regressions.
+  Regional rank menus still use the verified solved-place predicate, without adding
+  generated gear or crafting-book receipts to the saved recipe list. No new award
+  producer was invented; numeric stream boundaries remain documented below.
 - [ ] Network feat production/payload meaning. Its display consumer is traced;
   the [producer audit](specs/steam-feat-production-audit.md) found no verified award
   source. Generating awards remains unspecified. Guest mission marks are client-local,
@@ -203,6 +208,12 @@ The installable development package is a candidate for those checks. It is not a
 finished 1:1 build. A final GitHub release should follow completion of these gates.
 
 ## Content and source boundaries
+
+The independent dialogue/item source audit identified no producer of numeric
+8/9/10 grant/take streams and no book-to-known-recipe insertion. String scripts
+have no give/take commands. The existing accepted-input helpers do not justify
+inventing gameplay awards. Any newly observed producer needs a separate spec
+and native evidence before integration.
 
 Owners supply their own installed game, assets and local exports, and Steam checks
 remain active. Prefer existing models, fonts, GUI shapes, sounds and runtime data

@@ -188,6 +188,12 @@ void readingQuirks() {
     SAVE_CHECK(learner.recipes.size() == 2 && learner.recipes[1][0] == 1 && learner.recipes[1][4] == 7);
     ensureLoadRecipe(learner);
     SAVE_CHECK(learner.recipes.size() == 2);
+    auto paddedRecipe = makeItem(1, 7);
+    paddedRecipe[1] = paddedRecipe[0x15] = paddedRecipe[0x16] = paddedRecipe[0x17] = 0x5a;
+    paddedRecipe[0x90] = 0x71;
+    learner.recipes = {paddedRecipe};
+    ensureLoadRecipe(learner);
+    SAVE_CHECK(learner.recipes == std::vector<Item>{paddedRecipe});
 
     // Version 9: no sets block; the fields after it come straight after the recipes.
     std::vector<uint8_t> v9;

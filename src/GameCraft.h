@@ -26,11 +26,15 @@ struct Thing {
     int category = 0, id = 0, material = 0, rarity = 0;
     uint32_t modifier = 0;
     int region[2] = {0, 0};
-    bool operator==(const Thing &o) const {
-        return category == o.category && id == o.id && material == o.material && rarity == o.rarity && modifier == o.modifier &&
-               region[0] == o.region[0] && region[1] == o.region[1];
-    }
+    int formula = 0;
+    std::array<uint8_t, 128> attributes{};
+    uint8_t attributeCount = 0;
+    bool operator==(const Thing &o) const;
 };
+using ItemRecord = std::array<uint8_t, 0xa0>;
+// Preserve all meaningful item fields, including inactive attribute bytes in recipe results.
+Thing fromRecord(const ItemRecord &);
+ItemRecord toRecord(const Thing &);
 struct Ingredient {
     Thing item;
     int quantity = 0;

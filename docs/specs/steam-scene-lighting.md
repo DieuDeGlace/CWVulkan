@@ -413,6 +413,92 @@ After this update,0xe2e00 derives **+0x49c=min(+0x4a4,float(N×64)×0.2,200)**
 and **+0x4a0=min(+0x4a4,float(N×64)×0.5,256)**. The two ranges are not
 synonyms; §3 names the precise one consumed by each source.
 
+### 2.6.1 Native face categories and exact pre-merge cost
+
+The weighted count's categories are fully identified in **0xe9530**.
+Their group index-buffer/triangle-count fields are:
+
+| Native terrain category | Buffer / count | Contribution per emitted quad |
+|---|---|---|
+| Ordinary nonzero effective types except water2 and lava17; includes wet3, types10/11, poison19 and light20 | +0x10 / +0x44 |2 triangles, cost2 |
+| Water2 ordinary faces and wet3's additional top film | +0x18 / +0x48 |2 triangles, cost4 |
+| Lava17(0x11) ordinary opaque faces | +0x28 / +0x50 |2 triangles, cost2 |
+
+These are effective accessor classifications, not collision-solidity
+classes. The ordinary six face tests expose a face against effective
+air0, or additionally against water2 when the current type is not2;
+water's reciprocal ordinary face therefore exists only against air.
+For wet3 with air immediately above, both its solid top and the separate
+water film contribute: **2+4=6 weighted cost**. Water immediately above
+exposes the ordinary solid top without adding that wet film. See
+steam-voxel-vertex-inputs §§8.1–8.3 for full face/film color and normal
+contracts; lava remains a separate index category even though it is opaque.
+
+Each accepted ordinary face appends **four new8-byte vertices and six
+32-bit indices** through **0xe2d00 /0xcd7d0**. The RGB-dependent diagonal
+chooses the split, not the triangle count. Native0xe9530 does **not**
+greedily merge adjacent coplanar faces, deduplicate equal vertices, or
+remove an indexed quad because its packed color/light matches a neighbor.
+Counts must reflect these native accepted face events before any
+replacement renderer merging, vertex sharing or index compression.
+
+The explicit coarse-water exception is the previously specified whole-zone
+optimization: when its effective-block/light conditions pass, it emits
+**one64×64 quad at Z1**, four vertices plus six indices through
+**0xcdea0**, into the water list. It suppresses the ordinary type2 face
+processing for **all water blocks at Z0**, not merely those blocks' top
+face tests. That optimized quad contributes **2 water triangles /cost4**.
+Other heights/types still follow their normal face tests. Preserve the
+existing light-solve/effective-accessor stage order for that optimization;
+do not approximate its decision from raw unlit stored terrain.
+
+Every block's faces go to its native250-block Z band. After construction,
+each category count is the number of its **32-bit CPU indices divided
+by3**. Choosing16-bit GPU indices when that shared vertex count is below
+65536 only converts each index width and preserves the count. It is not
+a geometry optimization. The auxiliary terrain categories **+0x4c,
++0x54,+0x58** receive no indices in this producer and remain0; none is
+an extra ordinary face contribution. The final mesh job includes only
+actually created nonempty shared-vertex-buffer groups and accumulates
+**+0x44 +2×+0x48 +0x50**, as already stated above, at zone+0x444.
+Sprite/model/object draw geometry contributes nothing to this terrain
+cost. Cache publication and mesh-stage labels remain §1.
+
+### 2.6.2 Equal-distance ordering can affect the selected threshold
+
+In **0xecda0**, accepted zone pairs are appended in the window scan's
+**ascending X outer /ascending Y inner** order. Each pair contains a
+float32 horizontal distance² key and a signed32 triangle-cost word.
+The cost is carried bit-for-bit with the key; it is neither a float cost
+nor a secondary sort key. Sort **0xcad50** begins with budget equal to
+pair count, comparing the distance key only.
+
+For the finite keys produced from the cached fixed centers, this sort
+has the exact partition/insertion/heap decisions described in
+**steam-controller-handoff §4.1–4.3**, using the pair's float32 key in
+place of the inventory Chebyshev key. In particular **≤32** uses stable
+insertion **0xc86a0**; **>32** partitions through **0xc9550**;
+sample selection **0xc82d0 /0xc8e80** uses the three-sample case through
+41 entries and the nine-sample case from42; budget reduction uses the
+same two integer truncations. Heap fallback **0xc8b50 /0xca8f0**,
+with repair **0xca310**, selects the right child on equal keys and stops
+upward insertion on equality. There is no stable region-coordinate or
+cost tie-break above32. This includes distances that become equal only
+after float32 rounding.
+
+Ordering matters because the first budget-crossing entry chooses the
+**smaller of its key and the immediately preceding key**, with previous
+key initialized0. A crossing at the first member of a tied group can
+therefore select the previous, lower-distance group; crossing later in
+the tied group selects that tied distance instead. For an arithmetic
+illustration, N3 gives budget110592. A prefix cost110572 is20 short.
+For two equal-key records of costs30 and6, putting30 first crosses at
+the group's first entry; putting6 first crosses at its second. With a
+strictly lower preceding key, those select different squared bounds.
+This is an illustrative calculation, not a claimed native capture.
+Thus preserving only sorted distances while arbitrarily permuting their
+costs is insufficient for exact adaptive-range parity.
+
 ### 2.7 Complete front and ambient palette targets
 
 The following is the remaining directional/ambient construction in

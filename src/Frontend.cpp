@@ -3,6 +3,7 @@
 #include "Frontend.h"
 
 #include "GameInput.h"
+#include "NativeInteract.h"
 #include "GameMath.h"
 #include "TalkGen.h"
 #include "worldgen/Spawns.h"
@@ -337,14 +338,10 @@ void giveStartingKit(nativesaves::Character &c, uint32_t account, nativesaves::C
 
 void addDefaultRecipes(nativesaves::Character &c, int argument) {
     auto add = [&](int type, int subtype, int material) {
-        for (const nativesaves::Item &known : c.recipes) {
-            int32_t sub;
-            std::memcpy(&sub, &known[field::SUBTYPE], 4);
-            if (known[field::TYPE] == type && sub == subtype && known[field::MATERIAL] == material)
-                return;
-        }
         nativesaves::Item it = nativesaves::makeItem(type, subtype, material);
         it[field::RARITY] = (uint8_t)argument;
+        for (const auto &known : c.recipes)
+            if (nativeinteract::sameItem(known.data(), it.data())) return;
         c.recipes.push_back(it);
     };
     for (int subtype : {1, 2, 4, 10, 8, 11, 7})

@@ -1418,9 +1418,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     std::map<int64_t, std::vector<gameshop::Item>> &boughtFromVendor = saveGame.purchases;
     gameshop::BuyBack soldItems;
     std::vector<size_t> listed; // gear item index of each list row
-    // Crafting (loot-crafting.md §2, §3): the recipes the character knows (the default ones, as
-    // the game teaches them), the recipe being made and the craft button.
+    // Startup adds missing defaults to the saved list; regional gear stays transient.
+    // Preserve every original raw record, including recipes absent from the crafting tabs.
+    nativesaves::Character recipeSource;
+    recipeSource.classType = (uint8_t)gear.playerClass();
+    if (saveGame.recipes) recipeSource.recipes = *saveGame.recipes;
+    frontend::addDefaultRecipes(recipeSource, 0);
+    saveGame.recipes = std::move(recipeSource.recipes);
     std::vector<gamecraft::Thing> knownFormulas;
+    for (const auto &record : *saveGame.recipes) knownFormulas.push_back(gamecraft::fromRecord(record));
     std::vector<gamecraft::Formula> craftRows; // the formula of each crafting row
     gamecraft::Formula craftingFormula;
     gamecraft::CraftButton craftButton;
@@ -3685,25 +3691,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             inventoryView.crafting.details = {};
             craftRows.clear();
             if (craftingOpen) {
-                if (knownFormulas.empty())
-                    knownFormulas = gamecraft::startingFormulas(gear.playerClass());
                 int32_t region[2] = {0, 0};
                 if (const uint8_t *who = spawned.playerRecord())
                     std::memcpy(region, who + worldgen::creature::REGION, 8);
-                // How many of an item the bag holds (the game compares the whole item; the bag
-                // stacks by kind and rarity).
+                auto rawOfGear = [](const Gear::Item &item) {
+                    auto raw = nativeplayer::item(item.category, item.id, item.material, item.rarity, item.modifier,
+                                                  item.region[0], item.region[1], item.formula);
+                    Gear::cubesInto(item, raw.data());
+                    return raw;
+                };
+                auto rawOfThing = [](const gamecraft::Thing &item) { return gamecraft::toRecord(item); };
+                auto matches = [&](const Gear::Item &item, const gamecraft::Thing &wanted) {
+                    const auto raw = rawOfGear(item), key = rawOfThing(wanted);
+                    return nativeinteract::sameItem(raw.data(), key.data());
+                };
+                // Native ingredient equality includes modifier, region, formula and active cubes.
                 auto held = [&](const gamecraft::Thing &t) {
                     int n = 0;
                     for (const Carried &c : bag)
-                        if (c.item.category == t.category && c.item.id == t.id && c.item.material == t.material && c.item.rarity == t.rarity)
-                            n += c.count;
+                        if (matches(c.item, t)) n += c.count;
                     return n;
-                };
-                auto rawOfThing = [](const gamecraft::Thing &t) {
-                    const nativeplayer::Item made = nativeplayer::item(t.category, t.id, t.material, t.rarity, t.modifier, t.region[0], t.region[1]);
-                    gameshop::Item raw{};
-                    std::memcpy(raw.data(), made.data(), raw.size());
-                    return raw;
                 };
                 // An item's icon: the sprite the game draws for it, rendered once.
                 auto iconOf = [&](const gameshop::Item &raw) {
@@ -3723,6 +3730,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     Gear::Item g;
                     g.category = t.category, g.id = t.id, g.material = t.material, g.rarity = t.rarity, g.modifier = t.modifier;
                     g.region[0] = t.region[0], g.region[1] = t.region[1];
+                    g.formula = t.formula;
+                    const auto raw = gamecraft::toRecord(t);
+                    Gear::cubesFrom(raw.data(), g);
                     return g;
                 };
                 static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
@@ -3814,8 +3824,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         for (const gamecraft::Ingredient &in : craftingFormula.ingredients)
                             for (size_t k = 0; k < bag.size(); k++) {
                                 const Gear::Item &b = bag[k].item;
-                                if (b.category != in.item.category || b.id != in.item.id || b.material != in.item.material || b.rarity != in.item.rarity)
-                                    continue;
+                                if (!matches(b, in.item)) continue;
                                 if (in.quantity < bag[k].count)
                                     bag[k].count -= in.quantity;
                                 else

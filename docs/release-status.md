@@ -15,8 +15,15 @@ checkpoint describe the intended setup and remaining limits.
   The full CPU/owner-data suite, 33 actual Vulkan image checks and a hidden no-save
   live speech capture pass. `tools/validate_engine.ps1` runs the full suite followed
   by actual `steamshader` rendering; `steamvoxel` is a CPU data test. These checks
-  do not establish complete native visual parity. Recipe persistence and the other
-  implementation/system checks below still need work.
+  do not establish complete native visual parity. The other implementation/system
+  checks below still need work.
+- Saved recipe records now reach the crafting UI through the native progress bridge.
+  Missing startup defaults use full item identity; unlisted records remain preserved,
+  and crafted results retain formula and all128 upgrade bytes. Full CPU/owner-data
+  tests pass, including lifecycle/default-merge and attribute/padding regressions.
+  This batch changes no shader path; Vulkan image checks remain the33 passing cases
+  from the preceding dialogue checkpoint. No book receipt or decoder-only opcode
+  was turned into an invented recipe award.
 
 - Live lighting now reads personal used-cell state, kind3/4 projectiles and
   glowing ground items from gameplay. It preserves native ownership, timer,
@@ -131,7 +138,7 @@ checkpoint. Captures are private and excluded from the source archive.
 - Frontend: exact panel opacity and logo shading require further independent evidence.
 - Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
   integrated pet combat/appearance comparisons, controller GUI/aim tracking,
-  saved/default recipe integration and verified page-item inputs,
+  newly observed item-action producers and wider gameplay comparisons,
   and network feat production. See the [audited roadmap](roadmap.md). Recorded
   comparisons do not prove complete gameplay parity.
 - Human/system checks: two Steam accounts and an original-game peer, a real first-run

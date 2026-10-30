@@ -316,6 +316,51 @@ history at personal+0x138, including0x94900 at0x96154; that use is **not**
 a write to the recipe list+0x18. Similarly the later0x147800 history-list
 read through0xa17d0 restores+0x138, not additional learned recipes.
 
+### 4.1.1 Exact equality and recipe-result item preservation
+
+Known test0x5f440 uses **0x4df60**, with these comparisons even when
+the category byte is zero:
+
+| Item offset | Compared content |
+|---|---|
+| +0x00 | Category byte |
+| +0x04 | Entire32-bit subtype word |
+| +0x08 | Entire32-bit modifier/seed word |
+| +0x0c,+0x10 | Both32-bit region coordinate words |
+| +0x18 | **Entire32-bit formula/underlying-category word**, not one byte |
+| +0x1c | Material byte |
+| +0x9d | Attribute-count byte |
+| +0x14 | Rarity byte |
+| +0x1d onward | The **first count entries only**, four bytes each, in order |
+
+For each active attribute entry, all its bytes participate: material at
+**+0x20+4i**, and XYZ at **+0x1d+4i,+0x1e+4i,+0x1f+4i**. Native compares
+the material first, then those three coordinate bytes. Equal counts with
+a reordered attribute sequence are not equal unless every corresponding
+entry matches. When count is0, no attribute payload byte is compared.
+Unused entries beyond the count do not affect equality. Padding
+**+0x01..03,+0x15..17,+0x9e..9f** never participates. Thus this is neither
+memcmp160 nor a category/subtype identity test; in particular formula
+high bytes and active owner upgrade attributes must not be dropped.
+
+Recipe calculator **0x2aec30** first clears its output's meaningful item
+fields/station/ingredients. For ordinary input categories it then copies
+the input item through **0x9cd0**, before generating ingredients/station.
+This copies **all meaningful header fields above, all32 four-byte
+attribute entries (all128 bytes, including inactive entries), and the
+count byte**. It does not normalize modifier/region/formula/attributes
+or discard owner upgrades. The subsequent ordinary ingredient/station
+decisions do not rewrite that copied result item. Equality's ignored
+inactive bytes are therefore still copied into the recipe result.
+
+The explicit exception is input **category29(0x1d)**:0x2aec30 dispatches
+to **0x2af6b0** before the input-copy step, and that helper leaves an
+empty result/station/ingredients as already specified in loot-crafting
+§1. Padding is not copied by0x9cd0 or guaranteed initialized by the
+calculator's semantic clear. Preserve the meaningful item state in
+saved entries and ordinary recipe results without making padding an
+identity condition or substituting a five-operand dictionary item.
+
 ### 4.2 Exact default proposal sequence
 
 Default helper0x9afb0 starts with a zero item. Its argument supplies the
