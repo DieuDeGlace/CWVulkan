@@ -3694,6 +3694,41 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // The native player: the game's controller reads the keys (its game-object fields)
         // and the world's update moves it, at the creatures' step below; here it is where
         // the last step left it.
+        // The rendered/client World completes its substeps before once-per-frame
+        // creature targeting and local input (steam-gameplay-frame-order.md §2).
+        const auto worldFrameNow = std::chrono::steady_clock::now();
+        const uint32_t nowMs = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(worldFrameNow.time_since_epoch()).count();
+        if (spawnedReady) {
+            const double ms = gamemath::frameMilliseconds(frameMs);
+            // The network first: the host's tick (unless this player is a guest elsewhere), what the
+            // client's host sent, and its world updates, before the client world's step.
+            if (session.started()) {
+                if (HostSide *host = session.hostSide())
+                    host->standIn = player.position;
+                session.beginFrame(nowMs);
+                session.consume();
+                SpawnedCreatures &clock = serverMode ? hostWorld : spawned; // (the host's, by packet 8)
+                hour = clock.timeOfDay() / 3600000.0f;
+                day = clock.day();
+            }
+            spawned.update(extractedWorld, player.position);
+            {
+                // The player as the AI sees it (monsters near it notice it, as in the game).
+                static glm::vec3 lastAt = player.position;
+                const glm::vec3 velocity = ms > 0 ? (player.position - lastAt) / (float)(ms / 1000) : glm::vec3(0);
+                lastAt = player.position;
+                spawned.setPlayer(extractedWorld, player.position, heading, velocity, playerHp, playerLevel,
+                                  player.verticalSpeed == 0 && !player.fly);
+                if (haveGear)
+                    spawned.setPlayerClass(gear.playerClass());
+                // Crossing into another region changes what the gear is worth (the game's rules).
+                if (mode != progression::Mode::Pyro && haveGear && !(regionHere() == playerRegion))
+                    applyGear();
+            }
+            spawned.think(extractedWorld, ms, hour);
+            spawned.simulate(extractedWorld, ms);
+            spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
+        }
         const bool nativeMove = nativePlayer && !player.fly;
         glm::vec3 before = player.position;
         if (nativeMove) {
@@ -5877,6 +5912,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!serverMode) // a dedicated server draws nothing, so it streams no meshes
             world.update(player.position);
 
+        if (nativeMove)
+            spawned.control(controlInput, gamemath::frameMilliseconds(frameMs));
+
         { // Gameplay-camera §2: capped wall interval, with independent orbit-distance smoothing.
             const float s = gamemath::blendFactor(gamemath::frameMilliseconds(frameMs), (float)gameOptions.smoothingConstant());
             viewYaw += (player.yaw - viewYaw) * s;
@@ -5918,43 +5956,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             session.visitLocalRegion(regionHere(), playerLevel);
         opaque.clear();
         water.clear();
-        if (!spawnedReady)
-            world.collect(opaque, water);
+        // Mesh streaming/changed blocks and this frame's native object updates are ready.
+        world.collect(opaque, water);
         if (spawnedReady) {
-            const auto now = std::chrono::steady_clock::now();
             const double ms = gamemath::frameMilliseconds(frameMs);
-            // The network first: the host's tick (unless this player is a guest elsewhere), what the
-            // client's host sent, and its world updates, before the client world's step.
-            const uint32_t nowMs = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-            if (session.started()) {
-                if (HostSide *host = session.hostSide())
-                    host->standIn = player.position;
-                session.beginFrame(nowMs);
-                session.consume();
-                SpawnedCreatures &clock = serverMode ? hostWorld : spawned; // (the host's, by packet 8)
-                hour = clock.timeOfDay() / 3600000.0f;
-                day = clock.day();
-            }
-            spawned.update(extractedWorld, player.position);
-            {
-                // The player as the AI sees it (monsters near it notice it, as in the game).
-                static glm::vec3 lastAt = player.position;
-                const glm::vec3 velocity = ms > 0 ? (player.position - lastAt) / (float)(ms / 1000) : glm::vec3(0);
-                lastAt = player.position;
-                spawned.setPlayer(extractedWorld, player.position, heading, velocity, playerHp, playerLevel,
-                                  player.verticalSpeed == 0 && !player.fly);
-                if (haveGear)
-                    spawned.setPlayerClass(gear.playerClass());
-                // Crossing into another region changes what the gear is worth (the game's rules).
-                if (mode != progression::Mode::Pyro && haveGear && !(regionHere() == playerRegion))
-                    applyGear();
-            }
-            spawned.think(extractedWorld, ms, hour);
-            if (nativePlayer && !player.fly)
-                spawned.control(controlInput, ms);
-            spawned.simulate(extractedWorld, ms);
-            world.collect(opaque, water); // draw this step's live object state, not the previous frame's
-            spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
             if (netTrace >= 0 && time >= netTrace && time < netTrace + 1) { // (testing: what is drawn each frame)
                 std::string line = "Net trace: " + std::to_string((int)(time * 1000)) + " ms:";
                 spawned.forEach([&](const uint8_t *r) {

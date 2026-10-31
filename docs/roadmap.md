@@ -400,8 +400,12 @@ individual feature documents.
   Pole, tilted/rolled and double-to-float regressions pass. Legacy gameplay angle
   storage still needs conversion to native double degrees. The newly documented
   [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
-  earlier World stepping and split early/late input phases; that broader live-loop
-  integration remains open.
+  split early/late input phases. The live client now completes World stepping and
+  one full-frame drawn-position pass before creature targeting/local control, and
+  does not simulate a newly selected input ability again in that frame. Control
+  completes before camera smoothing. Early movement/ultimate versus Use/pet/Quick
+  and late attacks still need their distinct cut points; full targeting/GUI
+  admission and camera-state integration remain open.
   Orbit-distance smoothing now uses its separate float 0.004 coefficient in
   both frontend and gameplay; the camera uses capped wall time rather than the
   simulation's 100-ms limit. Explosion notices use physical-player squared

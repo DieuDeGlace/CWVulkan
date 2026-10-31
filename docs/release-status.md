@@ -10,6 +10,17 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The rendered/client World now completes its substeps and one full-frame drawn
+  position update before creature targeting and local input. New input abilities
+  are not immediately simulated again in the same frame; control precedes camera
+  smoothing. World meshes collect once after current object/block updates. All
+  five targets build. A hidden read-only run exercised movement/combat and exited
+  normally; still captures against the previous build retained the same scene,
+  and the fixture save hash stayed unchanged in all three runs. The fixture's
+  blue environment is present in the baseline too; this is not a native visual
+  parity certificate. Earlier/later input cut points and live GUI admission remain
+  open under the expanded independent frame-order specification.
+
 - Movement controls now sample retained displayed angles rather than mouse/pad
   targets. Their unshaken left/up/forward basis and the frontend forward vector
   share native float radians/trig, including pitched/rolled up vectors. Focused

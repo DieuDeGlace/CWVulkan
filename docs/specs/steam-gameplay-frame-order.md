@@ -29,8 +29,8 @@ below. See **GUI pointer/capture routing §8**, **dialogue-panel routing
 |---|---|
 |1|Clear target creature **G+0x1e58=0 at0xa6769**, plus the related use-prompt target fields/sentinels. Clear projected-creature-box byte **+0x1e88=0 at0xa67da**. This is once per Game frame, before its world-step batch.|
 |2|Test wanted/loaded world seed and name, then run the complete client World batch through **0x2da6c0 at0xa7328/0xa734c**: successive16-ms steps and a final float residual. Each step runs its own clock/physics/ability/upkeep work. The batch finishes before the local player-control call below.|
-|3|After world updates and intervening frame consumers, construct/sort the creature candidate vector, then test the separate local-control admission **0xa9ac4–0xa9b1c** and, if admitted, call **0x8ae50 at0xa9b2c**, with the retained capped double interval and candidate vector. This is at most once in this frame, not once per world substep.|
-|4|Within0x8ae50: creature-box/LOS selection; movement and early ability/ultimate work; movement yaw assistance; static-object and ground-item passes/fallbacks; prompt/Use/Ring/Quick Item work; finally the UI-gated late normal/strong/class/standing-dodge region. Exact internal gates are§§3–4 below.|
+|3|After world updates and intervening frame consumers, including drawn-position pass **0x2b68e0 at0xa7e80** (§7), construct/sort the creature candidate vector, then test the separate local-control admission **0xa9ac4–0xa9b1c** and, if admitted, call **0x8ae50 at0xa9b2c**, with the retained capped double interval and candidate vector. This is at most once in this frame, not once per world substep.|
+|4|Within0x8ae50: creature-box/LOS selection; movement and early ability/ultimate work; movement yaw assistance; ability0x9a owner-look; static-object and ground-item passes/fallbacks; prompt/Use/Ring/fallback; pet/call/mount key; Quick Item; finally the UI-gated late normal/strong/class/standing-dodge region. Exact internal gates are§§3–4 and6 below.|
 |5|After0x8ae50 returns or is skipped, later frame UI work reaches the visible **general DialogWidget G+0x418** speaker override. Its target-ID store is **0xa9df6**. This can replace the result of the ordinary selection, without re-running that selection or aim assistance.|
 |6|The right-stick block beginning **0xa9e81** computes optional slowdown from the then-current target/box byte, then changes camera targets or customization angles. Its customization visibility check is **0xa9f26**; cubic right-X/right-Y calls for camera mode are **0xa9f43/0xa9f86**. It runs in the outer frame, separately from0x8ae50's admission/early returns.|
 |7|The shared speaker/general dialogue consumer runs at **0xaa1bc→0xb40d0**. Queued world sound processing later supplies explosion shake before camera update. These do not re-run the earlier target/manual-stick decisions.|
@@ -198,3 +198,142 @@ This supplement establishes the ordinary pipeline and the verified
 gates above. It does not move message-driven item/GUI callbacks into
 0x8ae50, replace detailed ability/usability rules, or claim that arbitrary
 other native callers/modifications share the same admission.
+
+## 6. Exact owner-look, Use, pet and late-action cut points
+
+These are successive regions of the **same reached0x8ae50 call**, not
+independent per-substep callbacks:
+
+|Order|Verified boundary|
+|---|---|
+|1|Movement assistance finishes its yaw-target store at **0x8cb09**.|
+|2|The inline **ability0x9a owner-look block0x8cb1b–0x8cc26** runs next. This is an inline branch, not a separate owner-look helper call.|
+|3|Static-object scanning begins at **0x8cc26**, followed by ground-item scans and target fallbacks.|
+|4|Prompt test **0x8df69**, then its existing Use/Ring/no-prompt fallback branches. The Use previous byte **0x5515a3** is stored at the common continuation **0x8eb40**.|
+|5|Pet/call/mount input **G+0x1a7e, logical action14**, beginning **0x8eb46**; previous byte **0x5515a4** stored at **0x8ecf7**.|
+|6|Independent Quick Item **G+0x1a74, action4**, with candidate-list builder **0x93e60 at0x8ed1f**, selected canonical-slot use **0xb7740 at0x8edaf**, then previous byte **0x5515a5 at0x8ee05**.|
+|7|Only then test ordinary UI through **0x1014f0 at0x8ee23**. Its true branch skips the late attack/class/standing-dodge region.|
+
+The outer general-dialog speaker override is **after the entire0x8ae50
+call**, including its late action region. Do not combine it with the
+earlier ability0x9a owner-look block or move it ahead of late attacks.
+
+### 6.1 Ability0x9a owner-look
+
+Test P's **then-current ability**, after ultimate/assistance. When it
+is0x9a, first clear **mask4 of u16 P+0x128**. Compare float timer+0x6c
+against integer duration0x4f220(P) converted to float; only **timer
+strictly below duration** continues. Resolve ID **P+0x1a0** through0xe720
+at **0x8cb73**. There is no separate resolved-creature HP test here.
+
+When resolved, subtract P's **physical signed64 XYZ+0x10/+0x18/+0x20**
+from that creature's **drawn XYZ+0xb10/+0xb18/+0xb20**, before converting
+each difference to float and multiplying exact1/65536. Store the vector
+at **P+0x174/+0x178/+0x17c**, then set mask4 at **0x8cc1e**. It is not
+normalized and receives no added head/step-height offset in this block.
+
+If duration has been reached or the ID is missing, the mask remains
+cleared; this block does not additionally zero the existing look vector.
+For any other ability it performs none of these writes. It changes
+neither target ID G+0x1e58 nor box byte+0x1e88, and does not re-run the
+already completed movement-yaw assistance. The later general-dialog
+override can independently replace this look vector and mask (§5).
+
+### 6.2 Pet/call/mount key and its precise gate
+
+After the complete Use/Ring/fallback continuation, require the logical
+pet held byte nonzero and its **previous0x5515a4 zero**. Then read the
+player's current ability/time **at this stage**, and require **timer
+strictly greater than duration0x4f220(P)**. Equality does not qualify.
+An earlier Use action may have changed these fields; they are not a
+snapshot from before Use or from the beginning of the frame.
+
+On that admitted edge, choose in order:
+
+1. If current ability is **0x76**, write ability0 (dismount branch).
+2. Otherwise resolve **P.petID+0x9d8**, at0x8eba7. If it exists, its
+   physical-position float squared separation from P is **strictly
+   below36 blocks²**, and special-item predicate **0x5e890(P,3)** succeeds,
+   write ability0x76. The ownership predicate call is **0x8ec4f**.
+   This branch adds no pet-HP filter.
+3. Otherwise take the call branch: write held-up item **type byte P+0x1d8
+   to0x21**, set ability0x9b and timer+0x6c=0, play sound0x7c at the
+   **stored camera eye G+0x1dc0** through0xa0420 at **0x8ecb9**, then
+   append a freshly initialized **kind10 interaction** at **0x8ecea**.
+   Payload/host consumption remain zone-object-interaction §8. This
+   branch does not rebuild all other bytes of the held-up item record.
+
+The pet separation test's native **0x8ebd6–0x8ec2e** subtracts signed64
+pet-minus-player fixed coordinates first, converts each difference to
+float, multiplies exact1/65536, squares those normalized components, then
+adds X²+Y² followed by Z², with separate float rounding. It compares that
+sum strictly against float36; it does not compute a square root.
+
+The dismount and nearby-pet mount branches do **not** reset the ability
+timer; the explicit zero belongs to the call branch. Later camera mount
+validation has its separate living/missing-mount behavior (camera §5.1)
+and must not be moved into this key handler as an invented extra gate.
+
+Store the current pet held byte to0x5515a4 whenever this stage is reached,
+including an unqualified edge/duration test. Holding the key does not
+retry when the ability later becomes finished. The earlier focus/chat/
+ability returns in§4 skip this store; the **later** ordinary-UI predicate
+does not. Quick Item then uses its own independent edge and current
+candidate list, with the exact wrap/use/hide rules in slot-lifecycle §9.5
+and Ring rendering §7.2. Its previous byte likewise updates on the reached
+stage even with an empty candidate list. A shown Ring's bypass of ordinary
+no-prompt ground/vehicle fallback is not a return skipping pet/Quick Item.
+
+Finite gate references, evaluated at the named stage rather than as
+claims about all subsequent frame effects:
+
+* Ability0x9a, timer equal to duration, resolved owner: clear mask4;
+  do not perform the owner-look vector write.
+* A pet rising edge with timer equal to duration: no mount/dismount/call,
+  but store previous pet=1. Continuing to hold through a later finished
+  frame does not become a fresh edge.
+* Finished non-riding ability, resolved pet physical fixed delta
+  **(393216,0,0)**, i.e.(6,0,0) blocks, special-item predicate true:
+  squared distance36 fails the strict test, so take the call branch.
+  Delta(327680,0,0), i.e.(5,0,0) blocks, passes the distance test instead.
+* Finished ability0x76 with a pet edge: ability0, retaining its timer.
+* Ordinary UI true alone, without the earlier exit conditions: pet and
+  Quick Item still have their opportunity before late attacks are skipped.
+
+## 7. Drawn-position pass is after World stepping and before local input
+
+The verified ordinary direct caller is **0xa5a50 at0xa7e80→0x2b68e0**.
+It occurs **after** both world-step sites0xa7328/0xa734c have completed,
+and **before** candidate construction/sorting and0x8ae50 at0xa9b2c.
+It is outside the wanted/loaded-world match branch and the local-control
+caller gate. It remains reached when that world-step batch is skipped,
+when front panels prevent0x8ae50, and for a zero-ms Game frame.
+
+At **0xa7e6f**, convert the retained capped **double frame milliseconds
+to float32**; **0xa7e79** places that float in the argument register for
+0xa7e80. The interval is the **whole frame**, not the final simulation
+residual or a16-ms step. There is **one call**, not interpolation after
+each world substep. In a33-ms frame, world intervals are16,16,1, followed
+by one drawn-position pass with float33. In16.25 then16.75-ms frames the
+two passes receive float16.25 and float16.75 respectively.
+
+This pass walks the World creature list and updates drawn position
+**+0xb10/+0xb18/+0xb20** and orientation **+0xb34/+0xb38/+0xb3c**, among
+its other pose/state operations. The later candidate/owner-look/assist
+stages therefore see this frame's already updated drawn state. They
+still see the earlier stored camera state until0xadcd0 (§3). There is
+no second0x2b68e0 after pet/Use/late action selection in this ordinary
+frame; do not re-run it to adjust a newly selected mount/ability.
+
+The other verified direct caller is the separate **host tick0xf5520 at
+0xf693e**, also after its complete World batch. Native0xf6932–0xf693e
+converts the saved **full capped integer host interval** to float for
+that call, rather than passing its final step remainder. The host does
+not run0x8ae50. These are two different World objects/call schedules,
+not two smoothing calls to the rendered World in one Game frame.
+
+This section establishes call placement/admission and argument precision.
+It does not specify a replacement uniform interpolation formula for the
+complete0x2b68e0 body: the network blend-state description is netcode-roles
+§5, and further ability-specific drawn-position/pose overrides inside
+that native body are not newly resolved by this bounded ordering trace.
