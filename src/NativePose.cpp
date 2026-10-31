@@ -1,4 +1,5 @@
 // The creature pose (0x17ab0), written from docs/specs/creature-pose.md, creature-pose-tables.md
+#include "GameAngles.h"
 // and creature-pose-items.md. One call eases a creature's pose toward what it is doing,
 // rebuilds the part matrices kept in its animation state, moves the weapon trails and lists
 // what to draw. The steps run in the spec's order (creature-pose.md section 10).
@@ -248,16 +249,11 @@ void Mat::centre(const Model &model) {
 
 // Eases an angle a toward b by s (0x17840); nearly opposite angles jump to b.
 float easeAngle(float a, float b, float s) {
-    const float ra = (float)((double)(a / 180.0f) * PI), rb = (float)((double)(b / 180.0f) * PI);
-    const float ca = nativecrt::cosf(ra), sa = nativecrt::sinf(ra);
-    const float cb = nativecrt::cosf(rb), sb = nativecrt::sinf(rb);
-    if (!((double)cb * (double)ca + (double)sb * (double)sa >= -0.8999999761581421))
-        return b;
-    float d = (float)((double)sb * (double)ca - (double)cb * (double)sa);
-    d = maxK(-1.0f, minK(1.0f, d));
-    return (float)((double)nativecrt::asinf(d) * (((double)s * 180.0) / PI)) + a;
+    return gameangles::turn(a, b, s);
 }
-float easeTo(float value, float target, float s) { return (target - value) * s + value; }
+float easeTo(float value, float target, float s) {
+    return (target - value) * s + value;
+}
 Vec3 easeTo(Vec3 v, Vec3 target, float s) {
     return {easeTo(v.x, target.x, s), easeTo(v.y, target.y, s), easeTo(v.z, target.z, s)};
 }

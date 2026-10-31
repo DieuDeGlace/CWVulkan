@@ -1,4 +1,5 @@
 // The ability step (0x2c5250), written from docs/specs/creature-abilities.md (part 1: the
+#include "GameAngles.h"
 // switch, the common tail and the melee moves) and creature-abilities-ranged.md (part 2:
 // every other branch). Section numbers in the comments refer to those two documents; the
 // effect objects the branches create are laid out as effect-objects.md §3 describes.
@@ -144,15 +145,7 @@ Vec3 rotated(const Basis &b, const Vec3 &o) {
 
 // The turn 0x17840 (creature-physics.md §7.3): angle `to` re-expressed nearest `from`, scaled.
 float turn(float from, float to, float factor) {
-    const float alpha = (float)((double)(from / 180.0f) * PI), beta = (float)((double)(to / 180.0f) * PI);
-    const double ca = nativecrt::cosf(alpha), sa = nativecrt::sinf(alpha);
-    const double cb = nativecrt::cosf(beta), sb = nativecrt::sinf(beta);
-    if (cb * ca + sb * sa < -0.9)
-        return to;
-    float d = (float)(sb * ca - cb * sa);
-    d = std::min(d, 1.0f);
-    d = std::max(d, -1.0f);
-    return (float)((double)nativecrt::asinf(d) * (((double)factor * 180.0) / PI)) + from;
+    return gameangles::turn(from, to, factor);
 }
 
 // The saturating curve of a skill level (stat-rules.md §10.1).

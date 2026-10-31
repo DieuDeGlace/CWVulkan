@@ -1,4 +1,5 @@
 // A creature's physics step, written from docs/specs/creature-physics.md. The steps run in
+#include "GameAngles.h"
 // the spec's order; each function says which section it follows. All arithmetic is single
 // precision, one rounded operation at a time, in the order the spec gives, unless a comment
 // says "in double": the results must match the game's bit for bit.
@@ -202,15 +203,7 @@ float randUnit(int r, float scale) { return (float)r * scale / RAND_MAX_F; }
 // Re-expresses angle b (degrees) as the angle nearest a, moving by `factor` of the way
 // (0x17840, section 7.3).
 float turn(float a, float b, float factor) {
-    const float alpha = (float)((double)(a / 180.0f) * PI);
-    const float beta = (float)((double)(b / 180.0f) * PI);
-    const double ca = nativecrt::cosf(alpha), sa = nativecrt::sinf(alpha);
-    const double cb = nativecrt::cosf(beta), sb = nativecrt::sinf(beta);
-    if (cb * ca + sb * sa < -0.9)
-        return b;
-    float d = (float)(sb * ca - cb * sa);
-    d = std::max(std::min(d, 1.0f), -1.0f);
-    return (float)((double)nativecrt::asinf(d) * ((double)factor * 180.0 / PI)) + a;
+    return gameangles::turn(a, b, factor);
 }
 
 // The heading (degrees) of a horizontal unit direction (x, y): forward is (-sin, cos).

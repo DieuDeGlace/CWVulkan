@@ -119,7 +119,8 @@ gate. The stored interpolation timer+0xb58 chooses the snap/interpolation
 branch, not whether the entry is visited. This pass updates drawn fixed
 XYZ+0xb10/+0xb18/+0xb20, drawn angles+0xb34/+0xb38/+0xb3c and drawn look
 components+0xb4c/+0xb50/+0xb54, among its existing branch-specific state.
-Full interpolation formulas are outside this ordering supplement.
+Full interpolation formulas and raw-state side effects are now given in
+[the drawn-interpolation supplement](steam-creature-drawn-interpolation.md).
 
 Its **next-link load is0x2b6bb8**, after the current entry's helper calls
 and after preparing the drawn-look differences, but **before** the final
@@ -135,6 +136,9 @@ and dead records. Call0x2a12b0 at0x2b6c5e, then run the existing
 ability/link/attachment pose operations for that entry. Their internal
 actor/HP/ability conditions are not a new outer filter on this traversal.
 The next link is fetched at **0x2b760a**, after all of that entry's work.
+The complete finite ordinary relationship/caller placement formulas,
+gates and field resets are in
+[the linked-placement supplement](steam-creature-linked-placement.md).
 
 Thus these are **all A visits, then all B visits**, not A+B fused per
 creature. Pass B's ID resolutions/pose reads observe state left by the

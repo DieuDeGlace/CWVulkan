@@ -13,9 +13,12 @@
 #include "NativePet.h"
 #include "World.h"
 #include "GameMath.h"
+#include "DrawnState.h"
+#include "LinkedPlacement.h"
 #include "NativeBuffs.h"
 
 #include <cmath>
+#include <cstdio>
 #include <bit>
 #include <cstring>
 #include <fstream>
@@ -39,19 +42,14 @@ constexpr size_t DRAWN_ORIENTATION = 0xb34;         // f32 x3
 constexpr size_t PREVIOUS_AIM = 0xb40;              // f32 x3
 constexpr size_t AIM = 0xb4c;                       // f32 x3
 constexpr int SPIRIT_CUBE_MODEL = 0xa46;            // cube.cub, one white voxel (creature-pose-items.md §9.1)
-constexpr size_t SMOOTHING = 0xb58;                 // f32: ms of easing left
-constexpr float SMOOTHING_MS = 60.0f;
-// How fast the drawn place eases (the frame blend's rates; netcode-compatibility.md open
-// question 13 asks which constant goes where and what counts the 60 ms down: here the
-// position eases at 0.02, the orientation at 0.03, and the frame's milliseconds count it down).
-constexpr float POSITION_EASE = 0.02f, ORIENTATION_EASE = 0.03f;
+constexpr size_t SMOOTHING = 0xb58;                 // f32: positive selects interpolation
+constexpr float RECEIVED_SMOOTHING_CONTROL = 60.0f;
 constexpr int32_t RACE_WITHOUT_DEATH = 0x11d; // a death the frame routine does not collect
 constexpr size_t ABILITY_TIME = 0x6c;         // f32: ms into the current ability
-// How far a mirror draws a creature's ability on past its host's last update (CubeVulkan's own:
-// a few host ticks; the game draws the times as they arrive, about every 32 ms).
-constexpr float ABILITY_LEAD_MS = 200.0f;
 
-template <class T> void put(worldgen::CreatureRecord &r, size_t at, T v) { std::memcpy(&r[at], &v, sizeof v); }
+template <class T> void put(worldgen::CreatureRecord &r, size_t at, T v) {
+    std::memcpy(&r[at], &v, sizeof v);
+}
 template <class T> T get(const worldgen::CreatureRecord &r, size_t at) {
     T v;
     std::memcpy(&v, &r[at], sizeof v);
@@ -533,16 +531,19 @@ bool SpawnedCreatures::bossAfterPlayer() const {
 }
 
 std::vector<nativeai::Creature *> SpawnedCreatures::worldList() {
-    std::vector<nativeai::Creature *> list;
-    if (hasPlayer) {
-        player.side.record = player.record.data();
-        list.push_back(&player.side);
-    }
+    std::vector<Creature *> ordered;
+    if (hasPlayer)
+        ordered.push_back(&player);
     for (auto &[zone, creatures] : zones)
-        for (Creature &cr : creatures) {
-            cr.side.record = cr.record.data();
-            list.push_back(&cr.side);
-        }
+        for (Creature &creature : creatures)
+            ordered.push_back(&creature);
+    std::sort(ordered.begin(), ordered.end(), [](const Creature *a, const Creature *b) { return a->registration < b->registration; });
+    std::vector<nativeai::Creature *> list;
+    list.reserve(ordered.size());
+    for (Creature *creature : ordered) {
+        creature->side.record = creature->record.data();
+        list.push_back(&creature->side);
+    }
     return list;
 }
 
@@ -879,23 +880,19 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     w.client = client;
     std::vector<nativeai::Creature *> sides;
     std::map<int64_t, nativeai::Creature *> byId;
-    if (hasPlayer) {
-        player.side.record = player.record.data();
-        byId[localId] = &player.side;
-    }
-    const bool playerMoves = hasPlayer && nativePlayer; // the world's update moves the player too, first
-    if (playerMoves) {
+    const auto registered = worldList();
+    const bool playerMoves = hasPlayer && nativePlayer;
+    if (playerMoves)
         w.local = player.record.data();
-        w.creatures.push_back(player.record.data());
-        sides.push_back(&player.side);
+    for (nativeai::Creature *creature : registered) {
+        int64_t id;
+        std::memcpy(&id, creature->record + worldgen::creature::ID, sizeof id);
+        byId[id] = creature;
+        if (!playerMoves && creature == &player.side)
+            continue; // Only the explicit legacy player bridge bypasses native physics.
+        w.creatures.push_back(creature->record);
+        sides.push_back(creature);
     }
-    for (auto &[zone, list] : zones)
-        for (Creature &cr : list) {
-            w.creatures.push_back(cr.record.data());
-            cr.side.record = cr.record.data();
-            sides.push_back(&cr.side);
-            byId[get<int64_t>(cr.record, worldgen::creature::ID)] = &cr.side;
-        }
     // Their upkeep (0x2de4c0), as the server's world runs it. The light (0xda830) is not
     // ported: sneaking creatures see the dark as at no light.
     nativeupkeep::World u;
@@ -954,13 +951,11 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
         const worldgen::Place p = worldgen::placeAt(x, y);
         return worldgen::warmth(worldgen::neighbourhood(x, y), p.kind, p.weight);
     };
-    // Their abilities (0x2c5250): the world's list with the player first, as the AI's.
+    // Their abilities (0x2c5250) see the same registered World list.
     nativeability::World a;
     a.client = client;
     a.local = u.local;
-    if (hasPlayer)
-        a.creatures.push_back(&player.side);
-    a.creatures.insert(a.creatures.end(), sides.begin() + (playerMoves ? 1 : 0), sides.end());
+    a.creatures = registered;
     a.byId = u.byId;
     a.blockAt = u.blockAt;
     a.block = [&](int x, int y, int z) {
@@ -1174,15 +1169,18 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
         nativepet::step(pets);
         worldEvents.buffs.insert(worldEvents.buffs.end(), pets.buffNotes.begin(), pets.buffNotes.end());
         pets.buffNotes.clear();
+        // A separate World pass clears this bit on all current entries, including
+        // dead creatures and prelude births. Later body-pass births miss this pass.
+        for (uint8_t *record : w.creatures) {
+            uint16_t flags;
+            std::memcpy(&flags, record + 0x128, sizeof flags);
+            flags &= uint16_t(~0x10u);
+            std::memcpy(record + 0x128, &flags, sizeof flags);
+        }
         for (size_t i = 0; i < w.creatures.size(); i++) {
             uint8_t *c = w.creatures[i];
             float health;
-            int64_t at[2];
             std::memcpy(&health, c + 0x180, 4);
-            std::memcpy(at, c + worldgen::creature::POSITION, sizeof at);
-            // Creatures whose ground is not in memory wait, as the game's do outside its loaded zones.
-            if (!w.loaded((int)(at[0] >> 16), (int)(at[1] >> 16)))
-                continue;
             if (health > 0.0f) {
                 nativeupdate::update(w, c, dt);
                 nativeability::ability(a, sides[i], dt);
@@ -2053,13 +2051,8 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             const bool bursting = !isPlayer && toBurst.erase(id) > 0;
             if (!bursting && !(get<float>(r, worldgen::creature::HEALTH) > 0.0f))
                 return;
-            // Where it is drawn (+0xb10) and which way it faces (+0xb34..+0xb3c): its place, as
-            // the game keeps them while nothing else moves it; a creature a host's update moved
-            // eases there (smooth).
-            if (!(get<float>(r, SMOOTHING) > 0.0f)) {
-                std::memcpy(&r[DRAWN_POSITION], &r[worldgen::creature::POSITION], 24);
-                std::memcpy(&r[DRAWN_ORIENTATION], &r[ORIENTATION], 12);
-            }
+            // Drawn position/orientation were prepared before input for the whole World.
+            // Visibility and mesh drawing do not rerun that interpolation phase.
 
             nativepose::Call call;
             call.dt = (float)dtMs;
@@ -2143,12 +2136,8 @@ uint8_t *SpawnedCreatures::networkCreature(int64_t id, bool &made) {
     made = false;
     if (hasPlayer && id == localId)
         return nullptr; // (the local player's record never comes from the network)
-    if (Creature *cr = find(id)) {
-        // The update applies to what the host sent, not to the swing drawn on since.
-        if (client)
-            put<float>(cr->record, ABILITY_TIME, cr->sentAbilityTime);
-        return cr->record.data();
-    }
+    if (Creature *cr = find(id))
+        return cr->record.data(); // Packet deltas preserve every omitted field.
     // 0x4ce80 with the id, then into the world (0x29d0d0).
     std::vector<Creature> &list = zones[NETWORK_ZONE];
     list.push_back({worldgen::newCreature(id), {}});
@@ -2173,19 +2162,6 @@ void SpawnedCreatures::receivedUpdate(int64_t id, bool fresh) {
         cr->side.buffs.clear();
         cr->sparks = {};
     }
-    // The ability time shown: the host's when the swing is new (another ability, or the same one
-    // started again: the host's time went back), otherwise never behind what is shown already.
-    const float sent = get<float>(r, ABILITY_TIME);
-    const uint8_t ability = r[worldgen::creature::ABILITY];
-    const bool restarted = sent < cr->sentAbilityTime;
-    cr->sentAbilityTime = sent;
-    if (fresh || !client || ability != cr->shownAbility || restarted)
-        cr->shownAbilityTime = sent;
-    else
-        cr->shownAbilityTime = std::max(cr->shownAbilityTime, sent);
-    cr->shownAbility = ability;
-    if (client)
-        put<float>(r, ABILITY_TIME, cr->shownAbilityTime);
     if (fresh || !(get<float>(r, worldgen::creature::HEALTH) > 0.0f)) {
         // Drawn where it is, with nothing to ease from.
         put<float>(r, SMOOTHING, 0.0f);
@@ -2197,41 +2173,32 @@ void SpawnedCreatures::receivedUpdate(int64_t id, bool fresh) {
         return;
     }
     // Eases from where it is drawn now.
-    put<float>(r, SMOOTHING, SMOOTHING_MS);
+    put<float>(r, SMOOTHING, RECEIVED_SMOOTHING_CONTROL);
     std::memcpy(&r[PREVIOUS_DRAWN_POSITION], &r[DRAWN_POSITION], 24);
     std::memcpy(&r[PREVIOUS_DRAWN_ORIENTATION], &r[DRAWN_ORIENTATION], 12);
     std::memcpy(&r[PREVIOUS_AIM], &r[AIM], 12);
 }
 
 void SpawnedCreatures::smooth(float dtMs) {
-    const float kPosition = gamemath::blendFactor(dtMs, POSITION_EASE);
-    const float kOrientation = gamemath::blendFactor(dtMs, ORIENTATION_EASE);
-    for (auto &[zone, list] : zones)
-        for (Creature &cr : list) {
-            worldgen::CreatureRecord &r = cr.record;
-            // A mirror's creature goes on with its ability between its host's updates, so its
-            // swing is drawn as it plays rather than in the updates' steps. It runs at most a
-            // little way past the host's last time and then waits for the host to catch up
-            // (it never steps back).
-            if (client && zone == NETWORK_ZONE && r[worldgen::creature::ABILITY] != 0 &&
-                get<float>(r, worldgen::creature::HEALTH) > 0.0f) {
-                cr.shownAbilityTime = std::max(cr.shownAbilityTime, std::min(cr.shownAbilityTime + dtMs, cr.sentAbilityTime + ABILITY_LEAD_MS));
-                put<float>(r, ABILITY_TIME, cr.shownAbilityTime);
-            }
-            const float left = get<float>(r, SMOOTHING);
-            if (!(left > 0.0f))
-                continue;
-            for (size_t k = 0; k < 3; k++) {
-                const int64_t at = get<int64_t>(r, worldgen::creature::POSITION + 8 * k);
-                const int64_t drawn = get<int64_t>(r, DRAWN_POSITION + 8 * k);
-                put<int64_t>(r, DRAWN_POSITION + 8 * k, drawn + (int64_t)std::llround((double)(at - drawn) * kPosition));
-                // Angles in degrees, the short way round.
-                const float to = get<float>(r, ORIENTATION + 4 * k), from = get<float>(r, DRAWN_ORIENTATION + 4 * k);
-                const float turn = std::remainder(to - from, 360.0f);
-                put<float>(r, DRAWN_ORIENTATION + 4 * k, from + turn * kOrientation);
-            }
-            put<float>(r, SMOOTHING, left - dtMs);
-        }
+    // All interpolation visits finish before any linked-pose pass begins.
+    for (nativeai::Creature *creature : worldList())
+        drawnstate::update(creature->record, dtMs);
+    linkedplacement::World links;
+    links.byId = [&](int64_t id) -> uint8_t * {
+        auto *creature = find(id);
+        return creature ? creature->record.data() : nullptr;
+    };
+    links.duration = [&](const uint8_t *record) {
+        int64_t id;
+        std::memcpy(&id, record + worldgen::creature::ID, sizeof id);
+        const auto *creature = find(id);
+        const nativerules::HasBuff has = [&](int type) { return creature && nativebuffs::find(creature->side, uint8_t(type)); };
+        return nativerules::abilityDuration(record, has);
+    };
+    links.focusFailure = [](int64_t id) { std::fprintf(stderr, "FOCUS %lld\n", static_cast<long long>(id)); };
+    // Start a fresh World traversal after every interpolation visit has finished.
+    for (nativeai::Creature *creature : worldList())
+        linkedplacement::update(links, creature->record, dtMs);
 }
 
 void SpawnedCreatures::keepOnly(const std::set<int64_t> *keep) {

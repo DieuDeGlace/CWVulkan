@@ -927,10 +927,13 @@ struct Upkeep {
 
 } // namespace
 
-float ridingOffsetZ(int32_t race) {
+std::array<float, 3> ridingOffset(int32_t race) {
     float x, y, z;
     mountOffset(race, x, y, z);
-    return z;
+    return {x, y, z};
+}
+float ridingOffsetZ(int32_t race) {
+    return ridingOffset(race)[2];
 }
 
 void upkeep(World &world, nativeai::Creature *creature, float dt) {

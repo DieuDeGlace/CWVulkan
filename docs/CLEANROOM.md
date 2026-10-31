@@ -72,6 +72,14 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Ordered World interpolation and linked placement follow the separate native-only
+  pass contracts. The implementation preserves fixed arithmetic, raw/drawn field
+  differences, row-specific side effects and live relationship reads. Shared
+  angle math uses the independently derived threshold regression. Packet timing
+  follows the specified receiver instead of the former engine prediction clock.
+  Synthetic references, actual-facade ordering and CPU/network tests cover these
+  bounded changes; full producer/lifecycle and native-peer validation remain.
+
 - Fixed gameplay camera positioning follows the independent camera §§5–6 and
   terrain-ray contract: typed physical/posture/mount snapshots, low64 arithmetic,
   ordered probes, distinct smoothing, eight guards and sequential shortening.

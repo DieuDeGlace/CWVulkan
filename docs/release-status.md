@@ -10,6 +10,30 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- World body updates now use retained creature registration order. A separate
+  full-list pass clears state0x10 before body callbacks, including dead entries and
+  called zero-time steps. Physics/ability/interaction retain one HP admission, then
+  upkeep runs without the former outer loaded-terrain skip. Synchronous births
+  extend the indexed body traversal after the completed clear pass.
+  Once-per-frame drawn state now has two full registered passes before local input:
+  native quantized XYZ plus the second Z correction, angle/look smoothing and raw
+  timer/step side effects; then ordered carried/seat/spin/look/focus/pet placement.
+  Linked poses retain distinct raw/drawn fields, independent fixed conversions,
+  live relationship gates and the specified sole smoothing-control reset.
+  Mesh drawing no longer recopies raw state after input. Shared native angle math
+  corrects the widened-float threshold in control, abilities and physics too.
+  Packet receivers preserve omitted fields and accept wire timestamps directly;
+  the invented200-ms prediction cap and countdown are removed. Derived math/row/
+  gate tests and actual-facade pass-order tests pass. Native packet/interpolation
+  regressions replace the former engine-extension prediction expectations. All
+  five targets build; the full CPU suite has only the two known modded region
+  oracle assertions, and both camera styles plus20 GUI Vulkan cases pass. Read-only
+  combat/movement and dialogue runs exit normally with the fixture save unchanged.
+  The inherited blue scene and missing owner hair model are still unaccepted.
+  Complete
+  time/resident preludes, AI collection order, reset/roster-rebuild lifetimes and
+  original-game/network comparisons remain open.
+
 - Native gameplay camera positioning now retains fixed eye/look-at state. Its
   candidate uses physical coordinates, separate step/posture truncation, living
   mount offsets and boat height. Native same-cell/corner probes, distinct ordinary

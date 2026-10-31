@@ -254,6 +254,10 @@ A ZoneExtractor hook that logs every packet, as received, on the machine it runs
     1 MB). Oracle: the largest *L* seen in the recordings (a town after many drops).
 12. **Two joins in one tick** get the same id (the id is only taken when the creature appears).
     Whether that ever shows in practice. Oracle: two guests clicking join at the same moment.
-13. **Smoothing details**: the easing factor 0xa7a0 with the constants at 0x42e6e8 (0.02, 0.03)
-    and what counts +0xb58 down. Oracle: recorded drawn positions of a remote creature between
-    updates (`watch.request` on +0xb10 in the client world).
+13. **Drawn-frame smoothing is now specified** by
+    [interpolation](steam-creature-drawn-interpolation.md) and
+    [linked placement](steam-creature-linked-placement.md). Pass A uses0.02 for
+    position/angles, applies a second Z correction, and never decrements b58.
+    Common look has its separate kind-dependent rate. The final ridden-pet branch
+    is the sole b58 writer in that frame routine. Writers/lifetimes outside the
+    audited packet and frame paths, and original remote-frame comparisons, remain open.

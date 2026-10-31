@@ -46,11 +46,14 @@ The tick runs in the game's order (netcode-roles.md §2):
 The client world (netcode-roles.md §5, §8) spawns nothing, runs no AI and performs no
 interactions; its player's interactions go to the host one at a time.
 
-* **Creatures** are made, changed and removed by packets 3 and 6. Each received record eases
-  into place over 60 ms.
-* **Swings keep moving between packets.** Every frame the creature is posed with its ability
-  time running on. That time is only ever corrected forward when an update arrives; it restarts
-  when a new swing begins, and it runs at most 200 ms past the host's last time.
+* **Creatures** are made, changed and removed by packets3 and6. Existing live updates arm
+  native smoothing control60; fresh/dead records snap. The positive value is not a frame
+  countdown. The full-frame [native interpolation](specs/steam-creature-drawn-interpolation.md)
+  then precedes the separate [linked-pose pass](specs/steam-creature-linked-placement.md).
+* **Ability times** follow fields actually present in packet deltas. A received timestamp
+  overwrites its field, while an omitted timestamp remains unchanged. The positive-control
+  drawn pass adds its specified32-times-blend increment; there is no separate200-ms
+  prediction clock or forward-only timestamp clamp.
 * **World updates** (packet 7) are applied in the game frame's order: blocks, answered zones,
   ground items, static objects, buffs, aggro, kill credits, the shown lists, feats, damage
   numbers, then effects.

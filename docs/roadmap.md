@@ -154,8 +154,13 @@ individual feature documents.
   removal/recreation appends at the tail. Full native list-mutation producer coverage
   and remaining World consumers' visit ordering still need validation/integration.
   The independent [World visitation](specs/steam-world-creature-visitation.md)
-  supplement now traces separate global-clear/main live-list traversals and two
-  distinct drawn-state passes; its remaining live integration is still open.
+  contract now drives registered body ordering and separate global state clearing,
+  including zero-time/dead entries and synchronous body-pass births. Native
+  [interpolation](specs/steam-creature-drawn-interpolation.md) and
+  [linked placement](specs/steam-creature-linked-placement.md) run as two complete
+  drawn passes before input, without late visible-draw snaps. Row, threshold,
+  packet and actual-facade ordering regressions pass. Full time/resident preludes,
+  AI collection order, reset/roster-rebuild lifetimes and native comparisons remain.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are

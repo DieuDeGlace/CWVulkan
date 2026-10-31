@@ -457,14 +457,8 @@ class SpawnedCreatures {
     };
     struct Creature {
         worldgen::CreatureRecord record;
-        nativeai::Creature side; // what the game keeps beside the record: buffs, group, ...
+        nativeai::Creature side;   // what the game keeps beside the record: buffs, group, ...
         nativepose::Sparks sparks; // pose state 0x61's sparks, kept between pose calls
-        // A mirror's creature between its host's updates (CubeVulkan's, for drawing): the ability
-        // (+0x68) and ability time (+0x6c) the host last sent, and the time the mirror shows, which
-        // runs on with the frames and is only ever corrected forward (or restarted with a new
-        // swing), so a swing never steps back when an update arrives.
-        float sentAbilityTime = 0, shownAbilityTime = 0;
-        uint8_t shownAbility = 0;
         uint64_t registration = 0; // world membership, retained across storage moves
     };
     uint64_t nextRegistration = 1;
@@ -580,7 +574,7 @@ class SpawnedCreatures {
     // what it laid.
     nativedrop::World dropWorld(ExtractedWorld &ew);
     void keepDrops(ExtractedWorld &ew, const nativedrop::World &dw, int64_t from, int32_t level, bool reward);
-    std::vector<nativeai::Creature *> worldList(); // the player first, then every creature
+    std::vector<nativeai::Creature *> worldList(); // retained World registration order
     std::map<int64_t, uint8_t> lastAbility;        // for abilities(): each one's at the last call
     int worldModel(World &world, int id, const float *tint, bool recoloured, const hair::Style *look = nullptr);
 };

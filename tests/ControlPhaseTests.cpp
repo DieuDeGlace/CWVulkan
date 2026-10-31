@@ -235,6 +235,82 @@ int controlPhaseTests() {
         creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 100, 1, true);
         check(order() == std::vector<int64_t>{-7, 42, 1}, "recreated local player also rejoins at the tail");
     }
+    { // The zero residual still runs the global clear, without an outer loaded-zone gate.
+        SpawnedCreatures creatures;
+        ExtractedWorld unloaded;
+        creatures.setRemoteClient(true);
+        creatures.setNativePlayer(true);
+        creatures.setPlayer(unloaded, {0, 0, 130}, 0, {0, 0, 0}, 0, 1, true);
+        bool made = false;
+        auto *remote = creatures.networkCreature(42, made);
+        const float dead = 0;
+        const uint16_t flags = 0x10;
+        std::memcpy(remote + 0x180, &dead, sizeof dead);
+        std::memcpy(remote + 0x128, &flags, sizeof flags);
+        auto *local = creatures.localPlayer()->record;
+        std::memcpy(local + 0x180, &dead, sizeof dead);
+        std::memcpy(local + 0x128, &flags, sizeof flags);
+        creatures.simulate(unloaded, 0);
+        uint16_t localFlags, remoteFlags;
+        std::memcpy(&localFlags, local + 0x128, sizeof localFlags);
+        std::memcpy(&remoteFlags, remote + 0x128, sizeof remoteFlags);
+        check(!(localFlags & 0x10) && !(remoteFlags & 0x10),
+              "zero-time World pass clears shared state on dead local/remote records without loaded terrain");
+    }
+    { // World interpolation admits local and dead remote records before visible drawing.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 100, 1, true);
+        bool made;
+        auto *remote = creatures.networkCreature(42, made);
+        auto *local = creatures.localPlayer()->record;
+        for (auto *record : {local, remote}) {
+            const std::array<int64_t, 3> raw{65536, 65536, 65536}, drawn{};
+            const float positive = 1, zero = 0;
+            std::memcpy(record + 0x10, raw.data(), sizeof raw);
+            std::memcpy(record + 0xb10, drawn.data(), sizeof drawn);
+            std::memcpy(record + 0xb58, &positive, sizeof positive);
+            std::memcpy(record + 0x180, &zero, sizeof zero);
+            std::memcpy(record + 0x6c, &zero, sizeof zero);
+        }
+        creatures.smooth(16);
+        for (auto *record : {local, remote}) {
+            int64_t x, z;
+            float timer, control;
+            std::memcpy(&x, record + 0xb10, sizeof x);
+            std::memcpy(&z, record + 0xb20, sizeof z);
+            std::memcpy(&timer, record + 0x6c, sizeof timer);
+            std::memcpy(&control, record + 0xb58, sizeof control);
+            check(x == 17143 && z == 29801 && timer == 8.37070083618164f && control == 1,
+                  "actual World facade applies native interpolation to local and dead entries without visibility or countdown gates");
+        }
+    }
+    { // All interpolation visits must finish before the first linked-placement visit.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 100, 1, true);
+        bool made;
+        auto *target = creatures.networkCreature(42, made);
+        auto *carrier = creatures.localPlayer()->record;
+        carrier[0x68] = 0x80;
+        const int64_t owner = 42;
+        const float negativeStep = -1, positive = 1, zero = 0, health = 100;
+        const uint32_t carriable = 0x4000;
+        std::memcpy(carrier + 0x1a0, &owner, sizeof owner);
+        std::memcpy(carrier + 0x990, &negativeStep, sizeof negativeStep);
+        std::memcpy(carrier + 0xb58, &zero, sizeof zero);
+        std::memcpy(carrier + 0x180, &zero, sizeof zero); // no outer carrier HP gate
+        std::memcpy(target + 0x180, &health, sizeof health);
+        std::memcpy(target + 0x80, &carriable, sizeof carriable);
+        std::memcpy(target + 0xb58, &positive, sizeof positive);
+        std::memcpy(target + 0x990, &zero, sizeof zero);
+        creatures.smooth(16);
+        float step;
+        std::memcpy(&step, target + 0x990, sizeof step);
+        check(step == -1, "later target interpolation cannot clamp the negative step copied by the already completed linked-pose pass");
+    }
     std::printf("Control phases: %s\n", failures ? "FAILED" : "passed");
     return failures;
 }

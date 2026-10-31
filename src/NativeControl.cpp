@@ -1,4 +1,5 @@
 // The local player's controls (docs/specs/player-control.md). Section numbers in the
+#include "GameAngles.h"
 // comments ("spec 3.6") are the spec's; RVAs are the game's routines, cited as references.
 //
 // The movement routine is checked bit for bit against the game's recorded calls
@@ -157,15 +158,7 @@ bool lowerJump(Rec c, float duration) {
 // 0x17840 (creature-physics.md 7.3): the angle `from` turned toward `to` by the shorter way,
 // by `share` of the gap; nearly opposite angles jump straight to `to`.
 float turnToward(float from, float to, float share) {
-    const float a = (float)((double)(from / 180.0f) * PI), b = (float)((double)(to / 180.0f) * PI);
-    const double cosA = nativecrt::cosf(a), sinA = nativecrt::sinf(a);
-    const double cosB = nativecrt::cosf(b), sinB = nativecrt::sinf(b);
-    if (cosB * cosA + sinB * sinA < -0.9)
-        return to;
-    float d = (float)(sinB * cosA - cosB * sinA);
-    d = d < 1.0f ? d : 1.0f;
-    d = d > -1.0f ? d : -1.0f;
-    return (float)((double)nativecrt::asinf(d) * ((double)share * 180.0 / PI)) + from;
+    return gameangles::turn(from, to, share);
 }
 
 // 0x13050 on the identity (creature-physics.md 7.2): the rows of the camera's yaw turn.

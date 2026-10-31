@@ -64,6 +64,7 @@ struct World {
 };
 
 // Race-table riding offset used by upkeep and the gameplay camera.
+std::array<float, 3> ridingOffset(int32_t race);
 float ridingOffsetZ(int32_t race);
 
 // One upkeep step of `creature`, `dt` milliseconds long.

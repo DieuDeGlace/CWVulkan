@@ -995,15 +995,14 @@ void hostAndClientGames() {
     NET_CHECK(!hostWorld.hasCreature(2) && !mirror.others.count(2));
 }
 
-// A mirror's creature between its host's updates (SpawnedCreatures in mirror mode): its swing
-// goes on with the frames, never steps back when an update comes, waits for the host when it has
-// run 200 ms ahead, and starts again with a new swing.
-void mirrorSwing() {
+// Packet3 preserves wire timestamps and omitted fields; Pass A supplies only its
+// specified positive-control timer increment, not a separate capped prediction clock.
+void mirrorInterpolation() {
     constexpr int64_t MONSTER = 5000;
     constexpr size_t ABILITY = 0x68, ABILITY_TIME = 0x6c, HEALTH = 0x180;
     SpawnedCreatures world;
     world.setRemoteClient(true);
-    auto update = [&](uint8_t ability, float ms) { // a packet 3 with the ability and its time
+    auto update = [&](uint8_t ability, float ms) {
         bool made = false;
         uint8_t *r = world.networkCreature(MONSTER, made);
         r[ABILITY] = ability;
@@ -1012,26 +1011,35 @@ void mirrorSwing() {
         std::memcpy(r + HEALTH, &health, 4);
         world.receivedUpdate(MONSTER, made);
     };
-    auto shown = [&] {
+    auto timer = [&] {
         float ms;
         std::memcpy(&ms, world.record(MONSTER) + ABILITY_TIME, 4);
         return ms;
     };
     update(58, 100);
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 5; ++i)
         world.smooth(16);
-    NET_CHECK(shown() == 180.0f);       // drawn on between updates
+    NET_CHECK(timer() == 100); // A fresh record snaps; it has no positive-control increment.
     update(58, 132);
-    NET_CHECK(shown() == 180.0f);       // an update behind what is shown does not pull it back
-    update(58, 190);
-    NET_CHECK(shown() == 190.0f);       // one ahead moves it forward
-    for (int i = 0; i < 30; i++)
+    for (int i = 0; i < 5; ++i)
         world.smooth(16);
-    NET_CHECK(shown() == 390.0f);       // at most 200 ms past the host's last time
+    NET_CHECK(timer() == 173.853485107421875f); // Five separately rounded native32C additions.
+    update(58, 140);
+    NET_CHECK(timer() == 140); // A present timestamp overwrites the current field.
+    world.smooth(16);
+    NET_CHECK(timer() == 148.370697021484375f);
+    bool made = false;
+    world.networkCreature(MONSTER, made); // No timer bytes in this partial/mask0 update.
+    world.receivedUpdate(MONSTER, made);
+    NET_CHECK(!made && timer() == 148.370697021484375f);
+    update(58, 190);
+    for (int i = 0; i < 30; ++i)
+        world.smooth(16);
+    NET_CHECK(timer() == 441.12091064453125f); // No invented200-ms extrapolation ceiling.
     update(58, 20);
-    NET_CHECK(shown() == 20.0f);        // the same move started again
+    NET_CHECK(timer() == 20);
     update(60, 5);
-    NET_CHECK(shown() == 5.0f);         // another move
+    NET_CHECK(timer() == 5);
 }
 
 int netTests() {
@@ -1046,7 +1054,7 @@ int netTests() {
     recordings();
     steamIds();
     hostAndClientGames();
-    mirrorSwing();
+    mirrorInterpolation();
     return failures;
 }
 
