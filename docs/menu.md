@@ -84,11 +84,19 @@ The title is the ordinary world (the extracted or generated world, seed 123), wi
   - "LV n Race Class";
   - "Specialization: …" in (0.5, 0.5, 1).
 - The entry under the mouse is selected. It has these buttons:
-  - **Select / Create** (`button2`, 200 × 30), at the bottom right;
+  - **Select / Create** (`button2`, requested 200 × 30), at the bottom right;
   - **the delete toggle** (`smallbutton`, 20 × 20);
   - **Delete Character** (`button`, 300 × 30), shown right of the entry after the toggle, with no
     confirmation, as in the game.
 - Select loads that character and plays. `slot` is written.
+
+These are size requests, subject to the owner's widget minimum and bind constraints. Select/Create
+sits 20 GUI units inside the selected card's right and bottom frame edges, using the current effective
+button dimensions. The delete toggle also uses its effective width; Delete Character sits 20 units
+right of the card. The owner transforms are preserved. Picking uses the copied shapes, inverse
+widget deformation and clipping; registered control descendants stay passive, and later controls
+win overlapping picks. The three actions retain mouse-release activation. Full GUI-engine capture,
+held-button visibility and keyed widget poses still need the wider frontend validation.
 
 **Character creation** resets the player to a level 1 warrior at the start spot. The camera is at distance 8,
 pitch 90, yaw 0.

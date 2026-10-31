@@ -33,7 +33,7 @@ void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) con
     plasmaText(out, style, m);
 }
 
-glm::vec2 Hud::templateSize(const std::string &name) const {
+glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested) const {
     if (!guiLoaded)
         return glm::vec2(0);
     if (!frontScene) {
@@ -46,6 +46,8 @@ glm::vec2 Hud::templateSize(const std::string &name) const {
         frontScene->setScale(guiScale);
         return glm::vec2(0);
     }
+    if (probe->widget && requested.x > 0 && requested.y > 0)
+        frontScene->resizeTo(*probe, requested);
     glm::vec2 size = probe->widget ? frontScene->viewSize(*probe) : glm::vec2(0);
     if (!probe->widget) {
         glm::vec2 minimum, maximum;
@@ -55,6 +57,51 @@ glm::vec2 Hud::templateSize(const std::string &name) const {
     children.erase(std::remove_if(children.begin(), children.end(), [&](const auto &c) { return c.get() == probe; }), children.end());
     frontScene->setScale(guiScale);
     return size;
+}
+
+bool Hud::templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDescendants) const {
+    if (!guiLoaded || item.kind != ScreenItem::Template)
+        return false;
+    if (!frontScene)
+        frontScene = std::make_unique<plasma::Scene>(gui);
+    frontScene->setScale(guiScale);
+    auto &node = frontHitNodes[{item.name, passiveDescendants}];
+    if (!node) {
+        node = frontScene->instance(item.name, &frontScene->root());
+        if (node && passiveDescendants) {
+            // Registered character controls retain the root flags and mark every child
+            // passive before picking (frontend-characters.md §2.3.2).
+            auto markChildren = [](auto &&self, plasma::SceneNode &parent) -> void {
+                for (auto &child : parent.children) {
+                    child->flags |= plx::NODE_PASSIVE;
+                    self(self, *child);
+                }
+            };
+            markChildren(markChildren, *node);
+        }
+    }
+    if (!node)
+        return false;
+    if (node->widget) {
+        if (item.size.x > 0 && item.size.y > 0)
+            frontScene->resizeTo(*node, item.size * guiScale);
+        frontScene->moveTo(*node, item.at * guiScale);
+    } else
+        frontScene->setPosition(*node, item.at * guiScale, glm::vec2(0));
+    if (!item.text.empty())
+        node->setAllText(item.text);
+    auto textHit = [&](const plasma::SceneNode &n, glm::vec2 local) {
+        plasma::TextStyle style;
+        if (!n.doc || !plasma::textStyle(n.doc->shapes[(size_t)n.shape], n.doc->loaderFlags, style))
+            return false;
+        if (n.text)
+            style.string = *n.text;
+        const auto &font = plasmaFonts[fontIndex(style.font)];
+        plasma::TextBox box;
+        return font.loaded() && plasma::textBounds(font, style, frontScene->matrix(n), box) && local.x >= box.minimum.x &&
+               local.y >= box.minimum.y && local.x <= box.maximum.x && local.y <= box.maximum.y;
+    };
+    return frontScene->hitTest(*node, point * guiScale, textHit) != nullptr;
 }
 
 void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation) const {

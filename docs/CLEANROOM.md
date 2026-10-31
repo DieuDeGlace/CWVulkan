@@ -62,6 +62,10 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- character-selection control placement using effective owner widget frames, preserving
+  template transforms and picking through the copied shapes, from `frontend-characters.md`
+  §2.3.1. Size requests are not substituted for measured geometry. Owner-data checks cover
+  GUI scales 1 and 1.5; remaining frontend animation/rendering gaps stay explicit.
 - identification owner-tree layout, independent footer mouse/navigation adapters,
   caption/details/cost typography and release/Goodbye behavior, from
   `steam-identification-ui.md` and `steam-controller-handoff.md`. The implementation

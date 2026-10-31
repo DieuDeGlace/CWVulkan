@@ -361,7 +361,9 @@ class Hud {
                                                std::vector<OverlayVertex> &) const;
     void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation = nullptr) const;
     // A gui.plx template's size (its frame, interface units); zero when there is none.
-    glm::vec2 templateSize(const std::string &name) const;
+    glm::vec2 templateSize(const std::string &name, glm::vec2 requested = glm::vec2(0)) const;
+    // Pick the copied owner shapes, inverse deformation and clipping at the same GUI-unit placement.
+    bool templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDescendants = false) const;
     identifywindow::Layout identificationLayout() const;
     void drawIdentification(const identifywindow::Shown &, std::vector<OverlayVertex> &) const;
     bool hasInterface() const { return guiLoaded; }
@@ -428,6 +430,7 @@ class Hud {
     // and use in a frame, kept for the next frames.
     mutable std::unique_ptr<plasma::Scene> frontScene;
     mutable std::map<std::string, std::vector<plasma::SceneNode *>> frontNodes;
+    mutable std::map<std::pair<std::string, bool>, plasma::SceneNode *> frontHitNodes;
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;

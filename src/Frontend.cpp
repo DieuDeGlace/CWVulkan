@@ -148,6 +148,12 @@ std::vector<MenuLine> systemLines() {
 
 glm::vec2 entryPosition(int i) { return {300.0f, 50.0f + 230.0f * (float)i}; }
 
+CharacterButtons characterButtons(glm::vec2 cardAt, glm::vec2 cardSize, glm::vec2 selectSize, glm::vec2 toggleSize) {
+    const float right = cardSize.x + cardAt.x, bottom = cardSize.y + cardAt.y;
+    return {
+        {(right - selectSize.x) - 20, (bottom - selectSize.y) - 20}, {(right - toggleSize.x) - 20, cardAt.y + 20}, {right + 20, cardAt.y}};
+}
+
 float listHeight(int entries) { return entries > 0 ? 230.0f * (float)entries - 10.0f : 0.0f; }
 
 float centredListTop(int entries, float windowHeight) { return windowHeight * 0.5f - listHeight(entries) * 0.5f; }

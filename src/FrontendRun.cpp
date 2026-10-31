@@ -203,6 +203,7 @@ class Session {
     VkExtent2D size{0, 0};
     float guiScale = 1;
     glm::vec2 window{0}, mouse{0}; // GUI units
+    glm::vec2 cardFrame{0}, selectFrame{0}, deleteToggleFrame{0}, deleteFrame{0};
     bool clicked = false;
     bool pointerDown = false, pointerUp = false;
     bool capturingAtPoll = false;
@@ -312,6 +313,7 @@ class Session {
             s.log(line);
     }
     glm::vec2 entryAt(int i) const { return entryPosition(i) + glm::vec2(0, listTop - entryPosition(0).y); }
+    CharacterButtons buttonsAt(int i) const { return characterButtons(entryAt(i), cardFrame, selectFrame, deleteToggleFrame); }
     glm::vec2 lookPanelAt() const { return {0, window.y - LOOK_PANEL_SIZE.y}; }
     glm::vec2 centred(glm::vec2 widgetSize) const { return (window - widgetSize) * 0.5f; }
     glm::vec2 templateSize(const std::string &n, glm::vec2 fallback) {
@@ -347,6 +349,17 @@ bool Session::start(std::string &error) {
     if (!hud.load(s.assets->gameDir(), error))
         return false;
     hud.setGuiScale(s.options ? std::clamp(s.options->guiScale, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX) : 1.0f);
+    cardFrame = hud.templateSize("blackwidget", ENTRY_SIZE);
+    selectFrame = hud.templateSize("button2", SELECT_SIZE);
+    deleteToggleFrame = hud.templateSize("smallbutton", DELETE_TOGGLE_SIZE);
+    deleteFrame = hud.templateSize("button", DELETE_SIZE);
+    for (const auto size : {cardFrame, selectFrame, deleteToggleFrame, deleteFrame})
+        if (size == glm::vec2(0)) {
+            error = "Character selection requires the owner's blackwidget/button2/smallbutton/button templates.";
+            return false;
+        }
+    log("Characters: requested Select 200x30, owner effective frame " + std::to_string(selectFrame.x) + "x" +
+        std::to_string(selectFrame.y));
     // The title shows the live world at its own time of day (frontend-title.md §1, §3.2).
     hour = std::fmod(std::max(0.0f, s.startHour), 24.0f);
     if (s.controls)
@@ -996,9 +1009,25 @@ void Session::handleClick(bool inGame) {
             return;
         if (cursor < 0 || cursor > (int)listed.size())
             return;
-        const glm::vec2 at = entryAt(cursor);
         const bool isNew = cursor == (int)listed.size();
-        if (inside(mouse, at + ENTRY_SIZE - SELECT_SIZE - glm::vec2(20), SELECT_SIZE)) {
+        const auto buttons = buttonsAt(cursor);
+        auto controlHit = [&](const Hud::ScreenItem &item) { return hud.templateHit(item, mouse, /*passiveDescendants=*/true); };
+        // These sibling controls are picked in reverse draw order, after the cards.
+        if (!isNew && deleteShown && controlHit(widget("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"))) {
+            // Delete Character (frontend-characters.md §6): no confirmation; "slot" stays.
+            if (!req.readOnly)
+                s.store->remove(cursor);
+            log("Characters: deleted character " + std::to_string(cursor));
+            loadList();
+            deleteShown = false;
+            cursor = std::min(cursor, (int)listed.size());
+            return;
+        }
+        if (!isNew && controlHit(widget("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE))) {
+            deleteShown = true;
+            return;
+        }
+        if (controlHit(widget("button2", buttons.select, SELECT_SIZE, isNew ? "Create" : "Select"))) {
             if (isNew)
                 startCreation();
             else if (listed[(size_t)cursor].playable) { // Select (frontend-characters.md §3)
@@ -1008,20 +1037,6 @@ void Session::handleClick(bool inGame) {
                     s.store->setSlot(cursor);
                 decide(Result::Play, cursor);
             }
-            return;
-        }
-        if (!isNew && inside(mouse, at + glm::vec2(ENTRY_SIZE.x - DELETE_TOGGLE_SIZE.x - 20, 20), DELETE_TOGGLE_SIZE)) {
-            deleteShown = true;
-            return;
-        }
-        if (!isNew && deleteShown && inside(mouse, at + glm::vec2(ENTRY_SIZE.x + 20, 0), DELETE_SIZE)) {
-            // Delete Character (frontend-characters.md §6): no confirmation; "slot" stays.
-            if (!req.readOnly)
-                s.store->remove(cursor);
-            log("Characters: deleted character " + std::to_string(cursor));
-            loadList();
-            deleteShown = false;
-            cursor = std::min(cursor, (int)listed.size());
         }
         return;
     }
@@ -1178,7 +1193,7 @@ void Session::characterItems(Hud::Screen &out) {
     listPlaced = true;
     // The entry under the mouse becomes the selected one.
     for (int i = 0; i < entries; i++)
-        if (inside(mouse, entryAt(i), ENTRY_SIZE) && cursor != i) {
+        if (hud.templateHit(widget("blackwidget", entryAt(i), ENTRY_SIZE), mouse) && cursor != i) {
             cursor = i;
             deleteShown = false;
         }
@@ -1200,13 +1215,13 @@ void Session::characterItems(Hud::Screen &out) {
             out.push_back(text("(no recording of this class)", at + glm::vec2(200, 100), 12, 3, WAITING_COLOUR, ALIGN_LEFT));
     }
     if (cursor >= 0 && cursor < entries) {
-        const glm::vec2 at = entryAt(cursor);
         const bool isNew = cursor == (int)listed.size();
-        out.push_back(widget("button2", at + ENTRY_SIZE - SELECT_SIZE - glm::vec2(20), SELECT_SIZE, isNew ? "Create" : "Select"));
+        const auto buttons = buttonsAt(cursor);
+        out.push_back(widget("button2", buttons.select, SELECT_SIZE, isNew ? "Create" : "Select"));
         if (!isNew) {
-            out.push_back(widget("smallbutton", at + glm::vec2(ENTRY_SIZE.x - DELETE_TOGGLE_SIZE.x - 20, 20), DELETE_TOGGLE_SIZE));
+            out.push_back(widget("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE));
             if (deleteShown)
-                out.push_back(widget("button", at + glm::vec2(ENTRY_SIZE.x + 20, 0), DELETE_SIZE, "Delete Character"));
+                out.push_back(widget("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"));
         }
     }
     out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));

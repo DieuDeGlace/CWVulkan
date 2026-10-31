@@ -5,6 +5,7 @@
 #include "Assets.h"
 #include "Extracted.h"
 #include "Frontend.h"
+#include "Hud.h"
 #include "GameInput.h"
 #include "GameOptions.h"
 #include "NativeInteract.h"
@@ -112,6 +113,12 @@ void menus() {
     const auto system = systemLines();
     FRONT_CHECK(system.size() == 4 && hoveredLine(system, {10, 100}, 150) == SYSTEM_EXIT && hoveredLine(system, {10, 75}, 150) == SYSTEM_START_MENU);
     FRONT_CHECK(entryPosition(2) == glm::vec2(300, 510) && listHeight(3) == 680 && centredListTop(3, 1080) == 200);
+    const auto buttons = characterButtons({298, 108}, {600, 220}, {200, 70}, {32, 32});
+    FRONT_CHECK(buttons.select == glm::vec2(678, 238)); // actual70-high owner frame, not the requested30
+    FRONT_CHECK(buttons.select.y + 70 == 108 + 220 - 20);
+    FRONT_CHECK(buttons.deleteToggle == glm::vec2(846, 128) && buttons.deleteCharacter == glm::vec2(918, 108));
+    const auto deformed = characterButtons({300, 100}, {640, 240}, {210, 90}, {40, 28});
+    FRONT_CHECK(deformed.select == glm::vec2(710, 230) && deformed.deleteToggle == glm::vec2(880, 120));
     FRONT_CHECK(std::string(specializationWord(3, 1)) == "Water Mage" && std::string(classWord(4)) == "Rogue");
     FRONT_CHECK(entryLine(7, 2, 1) == "LV 7 Human Warrior" && entryLine(1, 14, 3) == "LV 1  Mage");
 }
@@ -578,6 +585,45 @@ void zoneStatesRoundTrip() {
     worldgen::setWorldSeed(previousSeed);
 }
 
+// Owner data stays local. Exercise minimum-size expansion and the lower half of the real
+// button, which the old hard-coded 30-unit hit rectangle excluded.
+void ownerCharacterButtons() {
+    Assets assets;
+    if (!assets.locate(""))
+        return;
+    Hud hud;
+    std::string why;
+    const bool loaded = hud.load(assets.gameDir(), why);
+    FRONT_CHECK(loaded);
+    if (!loaded)
+        return;
+    glm::vec2 previous(0);
+    for (float scale : {1.0f, 1.5f}) {
+        hud.setGuiScale(scale);
+        const glm::vec2 frame = hud.templateSize("button2", {200, 30});
+        const glm::vec2 card = hud.templateSize("blackwidget", {600, 220});
+        const glm::vec2 toggle = hud.templateSize("smallbutton", {20, 20});
+        const glm::vec2 remove = hud.templateSize("button", {300, 30});
+        std::printf("Character frames: card %.3fx%.3f, toggle %.3fx%.3f, delete %.3fx%.3f\n", card.x, card.y, toggle.x, toggle.y, remove.x,
+                    remove.y);
+        FRONT_CHECK(frame.x >= 200 && frame.y >= 30);
+        if (previous != glm::vec2(0))
+            FRONT_CHECK(frame == previous);
+        previous = frame;
+        Hud::ScreenItem item;
+        item.kind = Hud::ScreenItem::Template;
+        item.name = "button2";
+        item.text = L"Select";
+        item.size = {200, 30};
+        item.at = characterButtons({300, 100}, card, frame, {20, 20}).select;
+        FRONT_CHECK(hud.templateHit(item, item.at + frame * 0.5f, true));
+        FRONT_CHECK(hud.templateHit(item, item.at + glm::vec2(frame.x * 0.5f, frame.y - 5), true));
+        FRONT_CHECK(!hud.templateHit(item, item.at - glm::vec2(100), true));
+        FRONT_CHECK(!hud.templateHit(item, item.at + frame + glm::vec2(100), true));
+        std::printf("Character Select owner frame %.0fx%.0f at GUI scale %.1f checked\n", frame.x, frame.y, scale);
+    }
+}
+
 int frontendTests() {
     failures = 0;
     optionsApplied();
@@ -586,6 +632,7 @@ int frontendTests() {
     titleCamera();
     logo();
     menus();
+    ownerCharacterButtons();
     friendRows();
     creation();
     startingKit();

@@ -180,6 +180,23 @@ frame-space matrix merely because their ordinary owner-template
 results align. Itemframe world origin/size for the3D icon is a distinct
 frame-geometry query, as §4 already specifies.
 
+**Scope of the text submission facts:**0x269210's result-vector pointer
+and string are distinct ABI arguments; its text-origin X is a float
+argument and Y is a separate stack float. The expressions above specify
+those origins **at its scalable-font submission**, not final glyph
+positions in physical pixels.0x34fa60 then applies the existing font
+size/raster-matrix rules, rounded matrix translation, alignment and
+glyph metrics described in plasma-shapes-and-text §§6.1–6.4. A second
+generic frame-origin translation must not be inferred from the words
+“widget-local”. This follow-up has **not independently closed the exact
+GUI engine node-begin/current-matrix producer at virtual slot0x88 or
+re-derived the entire lower font argument-to-raster path** for this
+widget. Accordingly §3.2 does not newly assert that its current C is
+identity, F, or an arbitrarily chosen placement/content matrix, and does
+not supply an unverified simplified final-pixel formula. The directly
+verified mouse and manual-point transforms above do not depend on that
+remaining font-path question.
+
 ## 4. Item icon and item-information inputs
 
 The selected item is **the existing original category15 record**, with

@@ -52,11 +52,11 @@ The layer GUI[3] (G+0x130). The title camera keeps circling (P still rides, `fro
 
 0x107440 removes the old entries and creates one **CharacterPreviewWidget** (constructor
 0x26ea60, draw hook 0x26eba0) per saved character, **plus one more** whose character is none
-(the "New character" entry). Entry *i* (from 0) is sized **600 × 220** and placed at
+(the "New character" entry). Entry *i* (from 0) requests size **600 × 220** and is placed at
 **(300, 50 + 230 i)** in the list's space. The list is rebuilt after every create and delete.
 
-**Fitting the screen** (0x103200, every frame while the layer is shown and the pointer is the
-mouse): with T the list's total height (top of the first entry to bottom of the last) and H the
+**Fitting the screen** (0x103200, while the layer is shown and GUI engine+0x1a8 bit0
+is clear): with T the list's total height (top of the first entry to bottom of the last) and H the
 window height, if T < H − 20 the list is centred vertically (top = H/2 − T/2); otherwise the
 list is moved, eased by the smoothing factor of `creature-upkeep.md` §4.9, so that its top is
 not below 10 and its bottom not above H − 10. A gamepad scrolls it by the stick instead
@@ -92,18 +92,186 @@ Text uses font size 15 then 12, outline 3, outline colour (0, 0, 0, 1).
 
 * The entry under the mouse becomes the **selected index** (G+0x6c0). When it changes, the
   delete button is hidden.
-* With a valid selection three buttons are placed relative to the selected entry (its frame
-  x, y, width w, height h):
-  * **Select / Create** (GUI[7], a "button2", 200 × 30): at (x + w − 200 − 20,
-    y + h − 30 − 20), shown. Its caption is "Select" for a character entry and **"Create"**
+* With a valid selection three buttons are placed relative to the selected entry (its
+  parent-relative frame x, y, width w, height h):
+  * **Select / Create** (GUI[7], a "button2", requested 200 × 30): at
+    ((w + x) − its current parent-relative width − 20,
+    (h + y) − its current parent-relative height − 20), shown. Its caption is "Select" for a character entry and **"Create"**
     for the "New character" entry.
-  * **Delete toggle** (GUI[8], a "smallbutton", 20 × 20): at (x + w − 20 − 20, y + 20), shown
+  * **Delete toggle** (GUI[8], a "smallbutton", requested 20 × 20): at
+    ((w + x) − its current parent-relative width − 20, y + 20), shown
     for character entries only. Clicking it (0x9f600) shows the delete button.
-  * **Delete Character** (GUI[9], a "button", 300 × 30, hidden until the toggle is clicked):
+  * **Delete Character** (GUI[9], a "button", requested 300 × 30, hidden until the toggle is clicked):
     at (x + w + 20, y), i.e. just right of the entry.
   On the "New character" entry the toggle and Delete Character are hidden.
-* Without a valid selection (or with a gamepad) the three are hidden.
+* Without a valid selection, or while GUI engine+0x1a8 bit0 is set, the three are hidden.
 * **Back** (shown on this layer) returns to the title.
+
+### 2.3.1 Verified constructor and frame-placement distinctions
+
+Native-only follow-up; no owner assets, captures, engine or tests were
+inspected. These clarify the coordinate basis and data-owned orientation
+without asserting any particular owner's template matrix values.
+
+**Construction0xf9ac0:** GUI[3] is a newly created unnamed container node
+under the GUI engine's root, initially hidden. The three buttons are its
+children, not children of the selected card. The constructor obtains
+owner gui.plx templates and uses the independent-copy routine0x3308e0:
+
+| GUI entry / Game pointer | Owner template | Size request through0x32c9a0 | Release callback |
+|---|---|---|---|
+|7 / G+0x150|`button2`|200×30, call0xfcb60|0x9f7c0, Select/Create|
+|8 / G+0x158|`smallbutton`|20×20, call0xfcbe5|0x9f600, toggle Delete|
+|9 / G+0x160|`button`|300×30, call0xfcc46|0x9dea0, Delete Character|
+
+The size receiver is each node's **widget+0x70**. All three callbacks
+are registered for **event3, mouse-up**, not event2/down. GUI[7] starts
+with literal `Select`; later0x103200 changes the text to `Create` for
+the final null-character card.0x334c50 updates text shapes in the
+copied subtree; it does not replace its drawing with a new label/button
+style. GUI[8]/GUI[9] initially hide.
+
+Before cloning,0xf9ac0 iterates the **direct children** of each
+`button`, `button2` and `smallbutton` template and calls0xf9770(child,0).
+The helper sets passive node-flag bit0x02 on **its passed node and all
+of that node's descendants**. Therefore these constructor calls mark
+every template descendant, **not the template root itself**; the root
+retains whatever flags it already had. It does not alter rotation,
+deformation, pivot or scale.
+Preserve the copied owner drawing, text styles, node transforms, widget
+bind/frame data and flags. The controller construction/placement code
+does not prescribe an extra fixed Euler angle, reflection, identity
+deformation or scale for GUI[7]. Owner widget initialization/enable/
+disable poses remain separate and can apply their own keyed transforms;
+“no explicit controller rotation” does not mean discarding those poses.
+This audit did not read the owner's button2 asset, so its numerical
+orientation/pivot/bind matrices are intentionally not replaced by guessed
+constants.
+
+**Requested size versus current geometry:**0x32c9a0 forwards to
+0x32c6f0. That setter converts the requested parent-space size vector
+through the inverse parent-relative widget matrix, stores local frame
+size, applies the widget minimum/inner-bind constraints and propagates
+the resulting deformation/resize. The later measured parent-relative
+dimensions come from **0x32da30/0x32ad10**, through0x32d1d0: the
+linear part of parent-relative frame matrix Q applied to current local
+effective size. They are not the requested numbers, an occupied drawing
+AABB, or a second literal200×30 rectangle. BindPos/bindSize, framePos,
+minimum size, the node's live transform and ancestor/widget placement
+therefore matter as specified in plasma-format-and-scene §2.7.
+
+**Per-frame placement0x103200:** card x/y are0x32da70/0x32dab0;
+card and button widths/heights are0x32da30/0x32ad10. With the selected
+index valid and **GUI engine+0x1a8 bit0 clear**, native calls
+**0x32b560 on each button widget**, in order GUI[7] at0x1039ee,
+GUI[8] at0x103a6d, GUI[9] at0x103adb. The exact finite float32
+operation order is:
+
+- Select/Create X: card width plus card X, subtract button width, then
+  subtract20. Y: card height plus card Y, subtract button height, then
+  subtract20.
+- Delete toggle X: card width plus card X, subtract toggle width, then
+  subtract20. Y: card Y plus20.
+- Delete Character X: card width plus card X, then plus20. Y: card Y.
+
+All sizes/positions in these expressions are **parent-relative frame
+queries in the same GUI[3] hierarchy**.0x32b560/0x32b250 targets the
+widget's parent-relative frame origin, through Q, bind and live-node
+matrices. It modifies node translation to attain that frame position;
+it does not merely overwrite framePos, set a raw node translation to
+those numbers, or target the node's pivot at a physical window point.
+In particular this route **does not use0x334700/0x334510**. The global
+window-layout0x101bd0 has no separate direct positioning call for
+GUI[7]/[8]/[9] that replaces these selected-card placements.
+
+GUI[7]/[8] are shown after those placements; GUI[9]'s ordinary placement
+does not itself show it. A changed selected-card index hides GUI[9].
+The final null-character entry hides GUI[8]/[9] and labels GUI[7]
+`Create`. Invalid selection or the engine bit0-set branch hides all
+three. The exact raw engine bit is the admission condition; it is not
+a newly inferred test of the last-used-device indicator G+0x1958.
+
+**Neighboring cards and order:**0x107440 detaches the three existing
+buttons, clears old GUI[3] contents, creates saved-character cards then
+the null/new card, initializes that hierarchy with0x333820, and reparents
+the existing buttons back in order7,8,9. This puts them after the cards
+in the root's child/draw order; it does not recreate them on each hovered
+card. Each card is a copied owner `blackwidget` with CharacterPreviewWidget
+0x26ea60, requested600×220 at0x107560, then parent-relative frame
+position **(300,50+230×index)** through0x32b560 at0x10757e.
+Subsequent list fitting/scrolling moves those card frames; button positions
+use their current queried frames afterward. Preserve owner widget
+initialization, including minimum size and keyed enable/disable pose
+rules, instead of treating the requests as raw mesh bounds.
+
+**Hit regions:** hovered-card selection in0x103200 uses0x333e70 on
+the card's root, i.e. the scene-tree hit test0x333f60 at the cached GUI
+cursor with flags0. Character-preview walking's0x32b0c0 is the separate
+widget hit traversal0x32ae90. Ordinary button event dispatch also
+retains the copied widget/shape hit behavior, inverse deformation and
+clipping; there is no extra manual GUI[7] strict200×30 test analogous
+to identification's footer halves. Do not replace these with caption
+ink bounds or a new constant axis-aligned rectangle. The underlying
+tree-hit rules are remaining-runtime-gaps §§4.14–4.16. Activation remains
+the registered up phase, independently of card hover/placement.
+
+### 2.3.2 Passive descendants and ordinary event picking
+
+This follow-up distinguishes **button event dispatch** from the
+character-card subtree hover query above. Interface down/up adapters
+**0x101020/0x101120** route button0 into GUI engine
+**0x340ec0/0x3410e0**. With no engine capture override at **+0x168**,
+both pick from the **global GUI root +0x140**, using cached cursor
+**+0x180/+0x184** and **0x333f60 options0**. They do not pick each
+button independently and then union its descendant bounds. Later/front
+siblings can win that global pick; card hover remains the separate
+0x333e70 call beginning at the card subtree.
+The engine word+0x1a8 bit0 is set by that left-down dispatcher and
+cleared at left-up entry. The old summary's “with a gamepad” label
+for this bit was incorrect; it is the native left-button-held bit,
+including when controller A synthesizes those same events.
+
+Options0 visits eligible children last-to-first before considering the
+node itself. Passive node bit0x02 prevents **returning that node**; it
+does not by itself prune the traversal. In the prepared button templates,
+however, **every descendant is passive**, recursively, and the clone
+retains those flags. Thus none of their text/decoration/child geometry
+can return a hit which expands the copied root's normal pick area.
+After those unsuccessful child returns the root must satisfy its own
+shape/widget local-hit condition and self filters. The ordinary
+shape containment, inverse deformation, display clipping, widget
+frame/surface clipping and root widget flag0x100 behavior remain
+remaining-runtime-gaps §4.14. Do not derive the root's hit from a union
+of descendant artwork, or replace it with requested200×30 bounds.
+The root was not forcibly marked passive by this constructor, but an
+existing passive root flag is likewise not forcibly cleared.
+
+Once a node is selected, dispatch uses its owning widget pointer at
+node+0x78, not necessarily its own widget pointer+0x70. Left down first
+invokes the enabled owner's native down virtual hook, then the
+registered event2 callback if the selected node is not passive and the
+callback's enabled requirement passes. Left up invokes the enabled
+owner's up virtual hook, then the analogous **event3** callback. These
+character buttons register event3 via0xf8410 with both **recursive
+registration and enabled-required bytes1**;0xf8380 stores that latter
+byte in the callback. Recursive registration can bind nested widgets,
+but neither registration nor those callbacks clears the descendant
+passive flags or supplies a new geometry hit. The direct callback test
+also rejects a passive selected node. Generic event broadcasts through
+0x33c360 prune passive nodes and their subtrees.
+Right/middle up are separate dispatchers0x341780/0x3414a0 with event
+IDs6/9; these constructors do not register the character-button actions
+under those IDs.
+
+The existing capture pointer is an explicit exception to fresh geometry
+picking: when engine+0x168 is non-null, those down/up dispatchers use
+that node instead of their first root pick. This section does not infer
+which owner button flags/virtual hooks establish capture. Capture is
+not evidence that a passive child enlarged the root's default hit area.
+The registered Select/Create/Delete callbacks add no separate
+identification-style shown-at-down snapshot or new button-specific
+pressed-latch test; their up event still follows the engine's owner,
+active/passive and capture rules just described.
 
 ---
 

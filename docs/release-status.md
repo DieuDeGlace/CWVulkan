@@ -7,6 +7,10 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Character Select/Create and delete-control placement now uses the owner's effective widget
+  frames after resizing, rather than treating the requested sizes as final dimensions. This fixes
+  Select extending below its character card. Owner-shape picking replaces the old rectangular
+  checks. Owner-data regressions cover UI scales 1 and 1.5; broader menu visual parity remains open.
 - Native-save gameplay now uses canonical inventory tabs, equipment and counters.
   Screens derive live slot views and the save bridge writes those actual records.
   Direct equipment/use/drop, pickups, quick items, crafting, cube upgrades, shops,

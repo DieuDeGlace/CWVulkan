@@ -27,7 +27,9 @@ individual feature documents.
   `ZoneStates` and SaveTests cover the supported format paths.
 - [x] Eagle title flyover, character select/create/delete, options, binding editor
   and the system menu. `Frontend`, `FrontendRun`, `GameOptions` and FrontendTests
-  cover their implemented rules. Exact final rendering still needs comparison.
+  cover their implemented rules. Select/Create and delete controls use effective owner widget
+  frames for placement and copied-shape picking; scale 1/1.5 regressions cover the larger minimum
+  frame that previously put Select below its card. Exact final rendering still needs comparison.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.
