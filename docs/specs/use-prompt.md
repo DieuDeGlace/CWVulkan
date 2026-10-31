@@ -36,14 +36,18 @@ records), `lore-and-artifacts.md` (static object record, Examine), `map-markers.
 | shop window | controller +0x350 | mode (i32) at +0x2b4 |
 | window C | controller +0x360 | opened by class 0x83 (§3.6.3); identity not traced |
 | customization window | controller +0x368 | |
-| usable-item selector / Ring Menu | controller +0x310 | owner GUI node `selector`; distinct from InventoryWidget, see steam-inventory-slot-lifecycle §7.7 |
+| usable-item selector / Ring Menu | controller +0x310 | owner GUI **node** `selector`; content/use behavior is [slot-lifecycle §9](steam-inventory-slot-lifecycle.md#9-ring-menu-selector-construction-content-and-input), with call/input ordering in [Ring rendering §7](steam-ring-selector-rendering.md#7-frontend-roots-and-same-frame-input-order) |
 | inventory grid | controller +0x330 | ordinary InventoryWidget |
 | speech bubbles | controller +0x400 .. +0x408 | a vector of bubble pointers; bubble +0x210 = speaker creature id |
 | the object at controller +0x10 | | named WorldMap in map-markers. Here it also holds a collection keyed by creature id (§3.3) and a selected id at +0x148; map flight mode is its byte +0x164 |
 
-A **window is visible** when the int at (window +0x178 → +0x68 → +0xe0)[index at +0xac of
-the same +0x68 object] is not 0 (the test 0x9af00 does exactly this). **Opening** a window
-sets that int to 1. **Toggling** a window sets it to 1 if it was 0, otherwise to 0.
+A **Widget window is visible** when its node at widget+0x178 has nonzero
+current Display.visibility. Predicate0x9af00 receives that **node**, reading
+node+0x68's visibility array+0xe0 at signed32 index+0xac. The Ring selector
+G+0x310 is already a node, so its test uses that pointer directly, without
+another+0x178. This own-node visibility test does not mean ordinary inventory
+G+0x330 is open. **Opening** sets the tested visibility to1; **toggling**
+sets it to1 if it was0, otherwise0.
 
 ### 0.2 Creature fields used (in addition to skills-and-interactions §0)
 
@@ -140,7 +144,9 @@ when the zone is not loaded or the index is outside the list.
 * **Pressed** means the key is down this frame and was up in the previous frame. 0x98180 keeps
   its own previous-state byte (global at 0x5515b4) and writes the current state into it on
   every call, whichever way the routine leaves. The fall-through code in 0x8ae50 (§4) keeps a
-  separate one (0x5515a3), written once per frame after it.
+  separate one (0x5515a3), stored at the reached common continuation after
+  the prompt/selector/fallback decision. Early returns before that stage do
+  not update it; the exact gates are Ring rendering §7.2.
 
 ---
 
@@ -149,12 +155,22 @@ when the zone is not loaded or the index is outside the list.
 1. **0xa5a50** (the game update) resets the button and the targeting state (§0.6). It then
    builds the creature candidate list (§2.1). It calls 0x8ae50 unless one of these holds: the
    world is not ready (world +0x210 is 0), the player's ability is 0x9c or 0x9d (flying with a
-   flight master), or the windows at controller +0x118, +0x130 or +0x170 are visible. When
+   flight master), or the frontend containers at controller +0x118 (title),
+   +0x130 (character selection) or +0x170 (character creation) are visible. When
    0x8ae50 is skipped there is no prompt at all.
-2. **0x8ae50** chooses the targets (§2) and then calls **0x98180** (§3).
-3. If 0x98180 returned 0 ("nothing here"), 0x8ae50 handles the inventory's quick use, ground
-   items and the vehicle item (§4). If it returned 1, the targeted ground item is cleared and
-   nothing else uses the key this frame.
+2. **0x8ae50** performs its existing early handling and internal admission
+   checks, chooses targets (§2), then calls **0x98180** (§3). The exact
+   focus/chat/ability early exits and enclosing call gate are
+   [Ring rendering §7.2](steam-ring-selector-rendering.md#72-ordinary-use-outer-call-and-internal-early-exits).
+3. If0x98180 returned0, a shown **Ring selector G+0x310** takes the
+   Use-key branch first (§4.1), suppressing ground-item/vehicle fallback
+   even without a press or with no candidates. Only a hidden selector
+   reaches those later fallback branches (§4.2–§4.3). If the prompt returned1,
+   its own continuation applies (§4.4). The independent Quick Item action4
+   is later and separate from this prompt/Use decision; its rules and the
+   subsequent Ring toggle/close/label/repeat ordering are
+   [slot-lifecycle §9.5](steam-inventory-slot-lifecycle.md#95-use-and-quick-item-are-separate-rising-edge-routes)
+   and [Ring rendering §7.3](steam-ring-selector-rendering.md#73-ordered-frame-stages).
 
 ---
 
@@ -601,12 +617,16 @@ the fresh0x93e60 list of nonzero category1 canonical slots, calls
 0xb7740 on that live slot, then hides the selector if that list was
 nonempty. An empty list leaves it shown. It suppresses the later ground
 pickup/vehicle fallback in this no-prompt branch even without a use
-edge. Selection, close and independent Quick Item action4 details are
-steam-inventory-slot-lifecycle §9.
+edge or with an empty candidate list. This branch is not opened by ordinary
+InventoryWidget G+0x330 visibility. Selection, close and independent Quick
+Item action4 details are [slot-lifecycle §9](steam-inventory-slot-lifecycle.md#9-ring-menu-selector-construction-content-and-input);
+outer admission and same-frame ordering are
+[Ring rendering §7](steam-ring-selector-rendering.md#7-frontend-roots-and-same-frame-input-order).
 
 ### 4.2 Targeted ground item
 
-If a ground item G is targeted, resolve it (0x2b8fd0); if it is gone, stop. The use button
+After prompt0 with the Ring selector hidden, if a ground item G is targeted,
+resolve it (0x2b8fd0); if it is gone, stop. The use button
 icon becomes G's item.
 
 * **Reserved**: G's +0xd8 is not 0 and differs from the player's +0x968. Show the colour
@@ -642,7 +662,8 @@ caps are:
 
 ### 4.3 Nothing targeted: the vehicle item
 
-This applies when no ground item is targeted and the dialog window is not visible. Chardata
+This applies after prompt0 with the Ring selector hidden, when no ground
+item is targeted and the dialog window is not visible. Chardata
 +0x148 holds an item: type byte at +0x148, subtype i32 at +0x14c. It is the equipped vehicle
 or special item.
 
@@ -662,9 +683,13 @@ or special item.
 
 ### 4.4 When the prompt routine returned 1
 
-Unless the selector G+0x310 is visible, the targeted ground item is cleared. A press while
-alive, with the targeted object's zone x ≥ 0 and the dialog window closed, calls 0x2c3150.
-That call's result is unused, so it has no effect.
+When the **Ring selector node G+0x310** is shown, this continuation skips
+both ground-target clearing and the unused lookup below. It tests the
+selector, not InventoryWidget G+0x330. With selector hidden, clear the
+targeted ground item; a press while alive, with the targeted object's
+zone x ≥0 and the dialog window closed, calls0x2c3150. That call's result
+is unused, so it has no effect. The later independent Quick Item action4
+remains separate as described in §1 and slot-lifecycle9.5.
 
 ---
 

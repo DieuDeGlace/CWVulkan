@@ -116,6 +116,10 @@ bool GameInput::physicalBindingDown(GLFWwindow *window, const gameoptions::Contr
            std::any_of(controls.begin(), controls.end(), [&](const auto &binding) { return bindingDown(window, binding); });
 }
 
+bool GameInput::physicalBindingHeld(GLFWwindow *window, const gameoptions::Binding &binding) {
+    return glfwGetWindowAttrib(window, GLFW_FOCUSED) && bindingDown(window, binding);
+}
+
 void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
                        const std::vector<int> &pressedButtons, bool enabled, bool ui, bool mapMode, bool capturingBinding,
                        bool panelEligible, const GamepadButtons *sample) {

@@ -7,12 +7,28 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Ring Menu now uses canonical category1 slots, retained signed selection and native
+  neutral/repeat/animation state. Selected Use precedes independent Quick Item; the later
+  toggle and selection update preserve same-frame ordering and pre-repeat labels.
+  Bombs and portal stones use the existing shared item helper, including borrowed shrine
+  selection without portal depletion. The owner selector artwork, Display-based arrow
+  feedback and selected Quick Item3D SpriteWidget are connected. Ring items use their
+  distinct queued50-degree WORLD path, full-header dimensions, world-clock spin and
+  retained depth before Plasma, without direct-widget black/spirit passes. Combined UI
+  open/close sounds are sampled once after visibility changes. CPU/owner-tree checks,
+  all five targets,40 world and16 GUI Vulkan image cases, shared water and Alpha ordering
+  pass. Original-game/hardware comparisons and other widget callers remain open.
+  Location-banner aging now uses capped UI elapsed time rather than simulation substeps.
+  Read-only native-save Ring captures at GUI scales1/0.4096 render three owner items;
+  the final capture executable matches the validated build and the fixture save is unchanged.
+
 - Native equipment slots now render original item records through the shared3D WORLD
   helper at each SpriteWidget's owner-tree callback. The copied binding, full-header
   sizing, signed GUI spin, dark/main passes and spirit attributes remain intact;
   child labels/frame art follow the item. Hover does not enlarge this caller.
   Record-less legacy sessions retain compatibility images. Inventory grids,
-  quick buttons, crafting and other item-preview callers still need conversion.
+  crafting and other item-preview callers still need conversion; selected Quick Item
+  is covered by the later Ring Menu integration above.
   Headless owner-tree checks cover record preservation, draw order, empty/missing
   resources and visibility. All five targets, the full CPU/owner-data suite,
   40 world and13 GUI Vulkan image checks, shared water and Alpha ordering pass.
@@ -58,8 +74,9 @@ checkpoint describe the intended setup and remaining limits.
   blackwidget/itemframe tree, native text/footer positions, live selection and
   release gates. Transformed edge/navigation tests and the CPU/owner suite pass;
   read-only captures at GUI scales1/1.5 exercise the owner artwork and typography.
-  The remaining shared3D icon callers still use bitmap compatibility previews; Ring Menu and
-  full map-panel/capture behavior remain open, along with extended owner validation.
+  The remaining shared3D icon callers still use bitmap compatibility previews; full
+  map-panel/capture behavior and extended owner validation remain open. Ring Menu
+  and selected Quick Item are covered by the later integration above.
 - Native adaptive scene range is integrated: actual unmerged face costs/readiness,
   option-derived window, native equal-key sort, budget threshold, easing and player
   state feed distinct terrain/model/actor/light ranges. Pending cache metadata is

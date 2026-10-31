@@ -10,7 +10,7 @@
 //   2. The prompt routine (spec 3) goes through the player's own states (let go of a wall,
 //      climb, revive, throw), then the targeted creature, then the targeted object. The first
 //      that applies sets the button's text and takes the key.
-//   3. If none took the key (spec 4): the open inventory, the targeted ground item, or the
+//   3. If none took the key (spec 4): the shown Ring Menu, the targeted ground item, or the
 //      equipped vehicle item.
 //
 // The module decides; it changes only the player's own record and pending interactions
@@ -123,7 +123,7 @@ struct Scene {
     bool useDown = false;        // the use key is held
     bool dodgeHeld = false, walkHeld = false;
     bool dialogOpen = false;     // the dialog window (lore tales, chests, examining)
-    bool inventoryOpen = false;
+    bool selectorShown = false;
     bool ownsGoddessGift = true; // the player owns special item 4 (0x5e890 always says so)
     Item vehicle{};              // the equipped vehicle or special item (type 0: none)
     std::string vehicleName;     // its short name
@@ -172,7 +172,7 @@ enum class Action {
     Customize,      // the customization window
     ExamineLore,    // the lore tale of the object's cell
     GoddessGift,    // dialog: gift_of_the_goddess (unreachable in the game)
-    UseInventoryItem, // the selected inventory item
+    UseSelectedItem, // the Ring Menu's selected category1 item
     PickUpItem,     // an interaction of kind 7 for the ground item
     CannotCarry,    // "You can't carry more of these items."
     BagFull,        // "Your ... bag is full." (by `bag`)
@@ -199,6 +199,9 @@ struct Prompt {
 struct KeyState {
     bool wasDown = false;
 };
+// Ordinary-use ability/editor gates (steam-ring-selector-rendering7.2). World readiness
+// and hidden frontend roots remain caller admission; rejected visits retain key histories.
+bool inputAdmitted(const uint8_t *player, bool focusedEditor, bool chatActive);
 
 // The prompt routine (0x98180, spec 3) and, when it takes nothing, the fall-through
 // (0x8ae50, spec 4).

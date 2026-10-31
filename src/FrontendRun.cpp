@@ -193,8 +193,12 @@ class Session {
     Result::Action gameFrame(double dtMs);
     void gameDraw(std::vector<OverlayVertex> &out);
     bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || helpOpen || friendsOpen; }
+    bool ordinaryUi() const { return systemShown || optionsOpen || controlsOpen || friendsOpen; }
     bool capturingControl() const { return controlsOpen && controls.waiting >= 0; }
-    void dismissMenus() { while (anyOpen()) back(true); }
+    void dismissMenus() {
+        while (anyOpen())
+            back(true);
+    }
     void toggleSystemMenu() { systemShown = !systemShown; }
     void toggleMultiplayerMenu();
     bool interfaceVisible() const { return interfaceShown; }
@@ -313,6 +317,8 @@ class Session {
     void applyOptions();
     void back(bool inGame);
     void playSound(int number) {
+        if (s.externalMenuSounds && (number == SOUND_MENU_OPEN || number == SOUND_MENU_CLOSE))
+            return;
         if (s.audio)
             s.audio->playInterface(number);
     }
@@ -1686,20 +1692,35 @@ bool InGameMenus::start(std::string &error) { return session->startInGame(error)
 void InGameMenus::toggleSystemMenu() {
     const bool wasOpen = session->anyOpen();
     session->toggleSystemMenu();
-    if (!wasOpen && session->anyOpen() && session->services().audio)
+    if (!wasOpen && session->anyOpen() && session->services().audio && !session->services().externalMenuSounds)
         session->services().audio->playInterface(SOUND_MENU_OPEN);
 }
 void InGameMenus::toggleMultiplayerMenu() {
     const bool wasOpen = session->anyOpen();
     session->toggleMultiplayerMenu();
-    if (!wasOpen && session->anyOpen() && session->services().audio)
+    if (!wasOpen && session->anyOpen() && session->services().audio && !session->services().externalMenuSounds)
         session->services().audio->playInterface(SOUND_MENU_OPEN);
 }
-bool InGameMenus::open() const { return session->anyOpen(); }
-bool InGameMenus::capturingControl() const { return session->capturingControl(); }
-void InGameMenus::dismiss() { session->dismissMenus(); }
-Result::Action InGameMenus::frame(double dtMs) { return session->gameFrame(dtMs); }
-void InGameMenus::draw(std::vector<OverlayVertex> &out) { session->gameDraw(out); }
-bool InGameMenus::interfaceShown() const { return session->interfaceVisible(); }
+bool InGameMenus::open() const {
+    return session->anyOpen();
+}
+bool InGameMenus::ordinaryUi() const {
+    return session->ordinaryUi();
+}
+bool InGameMenus::capturingControl() const {
+    return session->capturingControl();
+}
+void InGameMenus::dismiss() {
+    session->dismissMenus();
+}
+Result::Action InGameMenus::frame(double dtMs) {
+    return session->gameFrame(dtMs);
+}
+void InGameMenus::draw(std::vector<OverlayVertex> &out) {
+    session->gameDraw(out);
+}
+bool InGameMenus::interfaceShown() const {
+    return session->interfaceVisible();
+}
 
 } // namespace frontend

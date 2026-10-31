@@ -70,6 +70,25 @@ void equipmentCallbacks() {
     inventory.slots[1] = "missing-owner-resource";
     hud.draw(state, vertices);
     GUI_CHECK(hud.itemDraws().empty());
+    state.inventory = nullptr;
+    state.ring.shown = true;
+    state.ring.radius = 200;
+    state.ring.worldMilliseconds = 1000;
+    state.ring.items = {{"synthetic-equipment", &weapon}, {"missing-owner-resource", &weapon}, {"synthetic-equipment", &weapon}};
+    state.ring.name = "Synthetic";
+    state.quickItem.icon = "synthetic-equipment";
+    state.quickItem.original = weapon;
+    hud.draw(state, vertices);
+    const auto &ringRequests = hud.itemDraws();
+    GUI_CHECK(ringRequests.size() == 3);
+    if (ringRequests.size() == 3) {
+        GUI_CHECK(ringRequests[0].kind == guiitem::Request::Kind::Ring && ringRequests[1].kind == guiitem::Request::Kind::Ring &&
+                  ringRequests[2].kind == guiitem::Request::Kind::Widget);
+        GUI_CHECK(ringRequests[0].beforeVertex == 0 && ringRequests[1].beforeVertex == 0 && ringRequests[2].beforeVertex > 0);
+        GUI_CHECK(std::abs(ringRequests[0].at.euler.z - 36) < .00001f && ringRequests[2].at.euler.z == 90);
+        const auto expected = guiitem::ringPlacement(2, 3, {1, 1, 1}, {1920, 1080}, 200, 0, 1, 1000);
+        GUI_CHECK(ringRequests[1].at.screen == expected.screen); // absent resource leaves a hole rather than reducingN
+    }
     renderer.shutdown();
 }
 } // namespace
@@ -82,6 +101,19 @@ int guiItemTests() {
     GUI_CHECK(sprite.screen == glm::vec2(80.25f, -0.5f) && near(sprite.size, 0.06f) && sprite.euler == glm::vec3(225, 0, 90) &&
               sprite.darkPass && sprite.screenDepth == 0);
     GUI_CHECK(near(spritePlacement({0, 0}, {-100, 40}, -1).size, -0.06f)); // signed width, no absolute/height substitute
+    const auto ringAt = ringPlacement(0, 4, {2, 4, 8}, {1001, 1001}, 200, 0, 1, 2500.75f);
+    GUI_CHECK(std::abs(ringAt.screen.x - 500.5f) < 0.0001f && ringAt.screen.y == 300.5f && ringAt.euler == glm::vec3(225, 0, 90));
+    GUI_CHECK(near(ringAt.size, ((1024.0f / 1001.0f) * .09f) / 8) && !ringAt.darkPass);
+    const auto selectedAt = ringPlacement(1, 4, {2, 4, 8}, {1001, 1001}, 200, -90, 1, 0);
+    GUI_CHECK(selectedAt.screen == ringAt.screen);
+    const auto ringTransform = ringGeometry({2, 4, 8}, {1001, 1001}, ringAt, 960);
+    GUI_CHECK(ringTransform);
+    if (ringTransform) {
+        const auto middle = ringTransform->model * glm::vec4(1, 2, 4, 1);
+        const auto clip = ringTransform->projection * middle;
+        GUI_CHECK(glm::length(middle - glm::vec4(0, 0, 1, 1)) < .000001f);
+        GUI_CHECK(std::abs(clip.y / clip.w - (400.0f / 1001.0f)) < .000001f && clip.z / clip.w > .449f && clip.z / clip.w < .451f);
+    }
     Placement at;
     at.screen = {800, 512};
     at.size = 0.1f;
@@ -174,6 +206,14 @@ int guiItemTests() {
     request.mesh = 0;
     appendDraws(request, {1600, 1024}, state, draws);
     GUI_CHECK(draws.size() == count);
+    request.kind = Request::Kind::Ring;
+    request.mesh = 7;
+    request.cubeMesh = 8;
+    request.at.size = .05f;
+    draws.clear();
+    appendDraws(request, {1600, 1024}, state, draws);
+    GUI_CHECK(draws.size() == 1 && draws[0].material == glm::vec4(1) && draws[0].view == glm::mat4(1) && draws[0].depthOffset == 0);
+    GUI_CHECK(draws.size() == 1 && draws[0].state.direction == overlayState().direction && state.shininess == shininess(request.item));
     const auto light = lightDirection();
     GUI_CHECK(near(glm::length(light), 1) && near(light.y / light.x, 0.4f) && near(light.z, -light.x));
     std::printf("GUI item transforms: %s\n", failures ? "FAILED" : "PASS");

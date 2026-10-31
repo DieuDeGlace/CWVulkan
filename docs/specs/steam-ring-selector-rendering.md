@@ -235,3 +235,317 @@ preview branch or arbitrary other0xee5a0 caller policies. The owner
 selector subtree's pivot, shapes, style and text remain owner data under
 the existing UI specification. No numeric drawing bounds, artwork or
 cross-edition sprite correspondence was inferred or supplied here.
+
+## 7. Frontend roots and same-frame input order
+
+### 7.1 The three roots in the toggle/use gate
+
+Interface setup**0xf9ac0** creates these as separate containers under the
+GUI engine root. The interface object begins at G+0x118, so its first
+pointer is also the first container pointer, not the pointer to the whole
+GUI engine. Native constructor bindings and their later contents give:
+
+|Game field|GUI entry|Container meaning|
+|---|---|---|
+|G+0x118|GUI[0]|title/root-menu layer; root-menu node GUI[1] and RootMenuWidget GUI[2] are constructed beneath it|
+|G+0x130|GUI[3]|character-selection layer, containing the rebuilt character cards and Select/Create/delete controls|
+|G+0x170|GUI[0xb]|character-creation layer, containing the appearance panel, character name and Create Character controls|
+
+The constructor initializes the first shown and the latter two hidden.
+The first is **not the in-game System menu**, Options or Controls. Those
+are separate constructed widgets: System GUI[0x48], Options GUI[0xa7]
+and Controls GUI[0xa8]. World selection/creation are also separate layers,
+GUI[0x10]/GUI[0x1d]. These names/parent bindings follow native0xf9ac0
+and the existing frontend-title2/frontend-characters2,5/frontend-options2,4,5
+specifications; they do not follow a replacement engine's panel names.
+
+The tested predicate**0x9af00** reads the passed node's **own current
+Display.visibility**, nonzero meaning shown. It does not walk ancestor
+visibility or equate every ordinary UI widget to one of these three roots.
+Ring toggle's block additionally requires ChatWidget's active-editor
+byte **G+0x398→+0x1d8 to be0**. That block does not add System/Options/
+Controls/inventory/map visibility as another root test. Its0x5514ff
+previous Ring-action byte updates only inside this admitted block, as
+already specified in slot-lifecycle9.2.
+
+### 7.2 Ordinary-use outer call and internal early exits
+
+The sole direct frame call to**0x8ae50** is **0xa9b2c**. Its immediately
+enclosing native tests at **0xa9ac4–0xa9b1c** require world+0x210 nonzero,
+local player ability byte+0x68 neither **0x9c nor0x9d**, and all three
+roots in7.1 hidden. There is no additional ordinary-UI0x1014f0, map,
+System/Options/Controls or Ring-visibility test at this callsite. The
+world-ready field is retained as its verified nonzero admission; no new
+replacement readiness or player-health predicate is implied by its name.
+
+Calling0x8ae50 does not mean its prompt/use branch is necessarily reached.
+After its early cursor/creature-target and movement handling, before later
+target resolution/prompt, **0x8bdc0–0x8be37** returns early for:
+
+* **GUI focused pointer non-null**, returned by0x342090 from GUI engine
+  +0x170. This is a different object/field from the character-creation
+  container G+0x170. It is a raw retained focus-pointer test, not a new
+  test of the focused Widget's current visibility/type.
+* ChatWidget **active-editor+0x1d8 nonzero**.
+* Native predicate**0x5ee70(player)** true and stamina float+0x9a0
+  **strictly below0.0010000000474974513**, word0x3a83126f at0x42e514.
+  That predicate means ability0x78, ground bit+0x5c bit0 clear,
+  float+0x130≤0 and float+0x12c≤0. It is not every vehicle ability.
+* Ability **0x7d** with float ability-age+0x6c **strictly below2000.0**,
+  constant0x42e5d8.
+
+These early exits precede the Use and Quick Item prior-byte stores too;
+do not advance those branch-local edge histories merely because the outer
+frame call was admitted. Ordinary menu visibility without a retained GUI
+focus pointer is not equivalent to one of these early returns. The
+separate later0x1014f0 test at **0x8ee23** is after Ring Use and Quick Item;
+it must not be moved ahead of those actions.
+
+Prompt routine**0x98180 is called at0x8df69 before selector dispatch**.
+When its result is0, the selector's own shown state is tested at
+**0x8e053–0x8e057**. A shown selector takes the entire selector branch:
+on an admitted Use rising edge it rebuilds candidates, uses the retained
+wrapped index, calls0xb7740 on the live slot and hides only for a nonempty
+list. It then bypasses the ordinary no-prompt ground-pickup/vehicle branch.
+That bypass also applies with **no edge or an empty candidate list**; it
+does not depend on successful consumption. This is a branch-priority rule,
+not an additional global movement/camera/modal block. The prior Use byte
+is stored at the common continuation around0x8eb30. Prompt result1 takes
+its own branch first, not this selector use. The independently later
+Quick Item action4 branch still has its existing separate edge and works
+whether Ring is shown or hidden; slot-lifecycle9.5 remains authoritative.
+
+### 7.3 Ordered frame stages
+
+The following are native ordering facts within one reached Game frame,
+not a proposed reorganization of input handling:
+
+1. Build/sort the creature target candidates, then call **0x8ae50 at
+   0xa9b2c** under7.2's outer gate. Prompt/selector Use precedes independent
+   Quick Item inside that routine; both see the Ring shown state and
+   running index from before this frame's later toggle/selection-repeat
+   work. Mutations and hides from these actions take effect immediately.
+2. Later, enter the chat/front-root-gated panel-toggle block. Ring action16
+   tests its rising edge, toggles the **then-current** selector shown state
+   at **0xab0be–0xab0e7**, and stores its previous byte at0xab0f4. This is
+   after ordinary use, not a pre-use stage.
+3. Handle the separate broad panel/map movement close, then the
+   **selector-specific forward/back/analog-Y close** at
+   **0xab46d–0xab4b8**. The selector test is outside the toggle block:
+   an earlier successful toggle can therefore be closed before any
+   selector content/render work in that frame. Its exact held/threshold
+   conditions remain slot-lifecycle9.2.
+4. Call interface **0x103200 at0xab5ce**. Inside it, full-map G+0x668
+   hides selector through **0x106152**, before that routine's selector
+   left/right color-feedback handling. Consequently a frame which still
+   has full map open supplies no Ring list in the later shown-only stage,
+   even if Ring was toggled earlier. This map close is separate from
+   0x8ae50's outer admission and its earlier actions.
+5. Later rebuild all category1 candidates at **0xac4a5**, after any earlier
+   item-use mutations. If nonempty, resolve the retained running index
+   and update the ordinary Quick Item HUD icon/count/name through
+   **0xac4aa–0xac734**, including while Ring is hidden. This stage precedes
+   Ring's later repeat-driven index change.
+6. Test Ring shown at **0xac756**. Hidden and shown-empty paths perform
+   their existing reset/text behavior. In the shown/nonempty path, append
+   all live item entries, resolve the current index and write Ring
+   count/name/color through **0xac8b9–0xacb8f**. This is still **before**
+   processing this frame's Ring left/right neutral-latch/repeat changes.
+7. Process that repeat branch, then compute/ease displayed angle and
+   radius through **0xacd9f**. Update shown brackets afterward. The scene
+   call receives the resulting live-entry list and updated angle/radius,
+   and renders through sections1–5. It does not regenerate either label
+   after the repeat branch.
+
+These stages settle the same-frame combinations. With an initially hidden
+Ring, an admitted Quick Item press uses its old selected candidate and
+hides Ring if nonempty; a later Ring toggle can then open it. An admitted
+Use press with prompt0 and initially hidden Ring reaches the ordinary
+pickup/vehicle fallback, before a later toggle opens Ring. If Ring was
+already shown and Use consumes/hides a nonempty selection, a simultaneous
+later toggle can reopen it. Each result remains subject to the specific
+gates/early returns above and the later movement/map closes.
+
+Likewise a left/right repeat in the same frame as Use/Quick Item does not
+change which index those earlier actions used. The Quick HUD and Ring
+labels reflect the index **before that later repeat**, while the rendered
+ring can already move toward the updated index's angle. The next reached
+content update observes the retained changed index. This is an observable
+ordering difference; it must not be silently normalized to “selection,
+then action, then all labels.”
+
+## 8. Item text color, count mask and Quick HUD name
+
+### 8.1 Color selection,0x10a600
+
+The caller supplies the **original item** and the local player's current
+signed32 region pair at creature+0x150/+0x154. Apply the following native
+priority; every result has alpha1:
+
+|Item category/subtype|RGBA|
+|---|---|
+|23 or24|(1,0.6,0.25,1)|
+|21|(0.7,1,0.25,1)|
+|0|(1,1,1,1)|
+|22, or category1 subtype13|(0.5,1,1,1)|
+|13|(0.5,0.1,1,1)|
+|2,3,4,5,6,7,8,9,15,26,30|palette below, using regional rarity0x109720|
+|all other categories|palette below, using original unsigned rarity byte item+0x14|
+
+Fixed decimal fractions denote the native stored float32 constants:
+0.6 word0x3f19999a,0.25 word0x3e800000,0.7 word0x3f333333,
+0.5 word0x3f000000 and0.1 word0x3dcccccd. The regional category set
+is mask **0x440083fc** with category<31; it is not every nonempty item.
+In particular **ordinary category1 Ring candidates use their original
+rarity without regional degradation**, except subtype13's fixed cyan.
+Passing a player region to this helper does not make all Ring colors
+region-dependent.
+
+Regional helper**0x109720** normally returns the original unsigned rarity
+byte only when item region+0x0c/+0x10 equals the supplied pair, otherwise
+**signed32−1**. There is one preceding extended-area exception: categories
+**3 through9 or26**, whose unsigned modifier+0x08 is divisible by
+**(unsigned rarity+1) times10**, retain rarity when the maximum absolute
+X/Y region difference is **strictly below2**. Equality of the regions
+still succeeds outside that exceptional case. The native coordinate
+subtractions/absolute-value operations wrap at32 bits, and the maximum/
+below2 comparisons are signed32; no wider distance or overflow clamp is
+introduced by this helper. It does not alter the original item rarity.
+
+Palette helper**0x64680** clamps its signed32 input to **[−1,4]** before
+selecting these literal float32 colors:
+
+|Clamped value|RGBA|Fractional float words|
+|---|---|---|
+|−1|(0.7,0.7,0.7,1)|0x3f333333|
+|0|(1,1,1,1)|none|
+|1|(0,1,0,1)|none|
+|2|(0.3,0.45,1,1)|0x3e99999a,0x3ee66666|
+|3|(0.55,0.2,1,1)|0x3f0ccccd,0x3e4ccccd|
+|4|(1,1,0,1)|none|
+
+Thus an input below−1 is gray, an input above4 is yellow, and an unsigned
+item rarity255 passed by the ordinary branch becomes yellow. The helper's
+syntactic switch-default red path is unreachable for an ordinary signed32
+argument after its clamp; do not expose it as an out-of-range fallback.
+The fixed-category overrides in the first table bypass that palette.
+
+### 8.2 Count and name paths
+
+The ordinary Quick Item HUD's count and `info` text are first cleared
+each reached frame, before candidate build0xac4a5. A selected count is
+written only when **0x5f0e0** accepts its original category. That helper
+tests category<29 with mask **0x10403c02**, exactly
+**{1,10,11,12,13,22,28}**. Category18 is not in that set. The displayed
+count is the selected slot's **signed32 quantity**, as ordinary decimal,
+including1 or negative nonzero values; no multiplication sign, minimum2
+rule or absolute-value conversion is added. A nonaccepted category leaves
+the already-cleared count blank. The shown Ring count applies the same
+predicate; actual Ring candidates are category1 and therefore qualify.
+
+The Quick HUD's `info` producer at **0xac627–0xac6f3** does **not** call
+the full item-name helper0x1628b0. It resolves the dictionary key from
+the original category/subtype using **0x16af30**, then expands that key's
+**`default`** phrase with **0x16be20** and an empty substitution/context
+string. It supplies neither original modifier, rarity, material, attributes
+nor a renamed/full-item record to that name lookup. This bounded producer
+does not itself submit0x10a600 as a Quick HUD text-color override.
+
+The shown Ring `name` producer at **0xaca95** does call **0x1628b0 on
+the full original item**, then applies0x10a600 at0xacb5c/0xacb75. However,
+that full-name helper has an explicit basic-name branch for category1
+(also15 and19): after its item adaptation, it performs the **same
+category/subtype `default` expansion with empty context**. The adaptation
+0x1092b0 only rewrites specified category22 cases and does not rewrite
+category1. Consequently the two native name paths are distinct calls,
+but **for an actual category1 Ring candidate their naming rule is the
+same**; the Ring does not add rarity/material/generated-name decorations
+to these candidates. Other categories can use the full helper's richer
+rules, but are not admitted by Ring's candidate builder. Do not infer a
+new renamed-item string field or a special Ring renaming algorithm.
+
+## 9. Exact combined open/close sound predicate
+
+Game wrapper**0x9ae70** is a tail call to **0x1014f0(G+0x118)**;
+its12 native bytes do not add a sound-specific or edit-focus test.
+0x1014f0 returns true when any of the following is true, in this native
+short-circuit order. “Visible Widget root” means the Widget's node at
+**widget+0x178**, reading that node's **own current Display.visibility**;
+it is not an ancestor/root-visible test.
+
+|Order|Predicate|
+|---|---|
+|1–5|Visible frontend container G+0x118 title, G+0x130 character select, G+0x170 character creation, G+0x198 world select, G+0x200 world creation, respectively|
+|6|Full-map byte **G+0x668 nonzero**, including ordinary map mode|
+|7–10|Visible Widget root for G+0x330 inventory, G+0x340 crafting, G+0x388 multiplayer, G+0x350 shop, respectively|
+|11|Menu-open byte **G+0x420 nonzero**, separately from SystemWidget's root|
+|12–14|Visible Widget root for G+0x370 upgrade, G+0x368 weapon customization, G+0x360 identification, respectively|
+|15|ChatWidget **G+0x398, active-editor byte+0x1d8 nonzero**|
+|16–19|Visible Widget root for G+0x378 answers, G+0x358 System menu, G+0x658 Controls, G+0x650 Options, respectively|
+
+It does **not** separately test the GUI focus pointer, Controls waiting
+index, Ring selector, ordinary NPC speech-bubble vectorG+0x400 or general
+DialogWidgetG+0x418. A focused editor can matter to ordinary use or chat
+admission without being an extra condition of this predicate. Conversely
+System, Options and Controls visibility explicitly count here even though
+they are not the three frontend roots in Ring's toggle/use gate7.1.
+
+The sound sample at **0xad78f–0xad7e6** combines this result with the
+selector nodeG+0x310's own shown state. Compare that single combined
+boolean to previous byte **0x551560**: false→true requests **sound0x56**,
+true→false requests **sound0x57**, unchanged requests neither. The call
+is0xa0420 at the current listenerG+0x1dc0, with volume/pitch1 and the
+existing final byte1. Store the combined current boolean back to0x551560
+later in the same reached stage, before scene submission. No independent
+Ring sound is emitted at its toggle or hide call.
+
+This sampling is **after** the use/toggle/movement/map-close, Quick HUD,
+Ring label, repeat and radius/angle stages in7.3. A temporary open then
+close within the same frame does not itself create two sound edges.
+Another counted UI can hold the combined boolean true when Ring closes,
+suppressing0x57; its own subsequent closing may produce that falling edge.
+Ring opening while another counted UI is already true likewise produces
+no new0x56. Hiding the global drawing root alone is not a substitute for
+clearing the own-visibility/state predicates listed above.
+
+## 10. Left/right feedback changes one live Display multiplier
+
+In interface0x103200, each arrow lookup **0x332190** returns the first
+matching node named **`left`** or **`right`** in the selector's depth-first
+child-list order, considering the passed root before its descendants.
+It does not collect all same-named descendants. The feedback writes at
+**0x1061f7/0x106289** address **that node's Display pointer+0x68**, then
+its attribute **Display+0x180**. This is **Display.fillColor**, not the
+shape pointer at node+0x58 or an array of vertex colors. Native Display
+constructor**0x3736c0** registers the fill RGBA attribute at+0x180;
+loader**0x382130** supplies its owner data. Stroke has a separate attribute.
+
+Setter**0xf88f0** replaces exactly four float words in the attribute's
+**currently selected frame element**: signed32 frame index at attribute
++0x3c,16-byte RGBA elements beginning at the data pointer attribute+0x70.
+It does not replace every stored/keyed frame, edit a named sequence,
+iterate vertices or rewrite any shape data. Nor does it recurse into
+children, change their Displays or write Display.strokeColor. It is an
+immediate assignment to that one live RGBA, even if its value is already
+equal; this helper contains no clone/copy-on-write, changed-flag or mesh
+rebuild call. The Ring arrow callers add no such recursive update.
+
+The assigned value is idle **(1,1,1,1)** or held **(1,0,0.2,1)**, with
+float0.2 word0x3e4ccccd; the action/analog thresholds and shown admission
+remain slot-lifecycle9.4. Because this is a **multiplier**, idle white
+retains the owner's vertex/texture colors and held color modulates them;
+it does not flatten a colored owner mesh to one solid RGBA.
+
+Drawing**0x3913d0** reads the node's current Display.fillColor at
+**Display+0x1f0 plus16 times signed32 index at Display+0x1bc**, the same
+element selected above. It multiplies that RGBA componentwise with the
+current pass tint before submitting the draw-color constant. This own-node
+Display multiplier is used by the shared drawing path for fill and any
+stroke/extrusion geometry submitted through it; the field's name does
+**not** restrict the effect to a fill-only region or rewrite the separate
+stroke-color attribute. It does not multiply a parent Display down into
+independently drawn child nodes. If owner nodes share the same Display
+object, they naturally observe that same changed attribute; that aliasing
+is distinct from a recursive child-color override and is not removed by
+this feedback setter. Numeric owner geometry/colors and sharing are not
+inferred here.

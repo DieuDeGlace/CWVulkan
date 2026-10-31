@@ -54,6 +54,7 @@ class GameInput {
                 const GamepadButtons *sample = nullptr);
     static GamepadButtons pollGamepad(GLFWwindow *window, bool capturingBinding);
     static bool physicalBindingDown(GLFWwindow *window, const gameoptions::Controls &controls);
+    static bool physicalBindingHeld(GLFWwindow *window, const gameoptions::Binding &binding);
     const GamepadFrame &gamepad() const { return padFrame; }
     // Whether the control is down now, and whether it went down this frame.
     bool held(int action) const { return action >= 0 && action < gameoptions::BINDINGS && down[(size_t)action]; }

@@ -547,7 +547,7 @@ its embedded item empty.
 
 For that first quick-button count label, the same frame branch uses
 **0x5f0e0**'s category mask **0x10403c02** below category29 (categories
-1,10,11,12,13,18,28) before submitting the selected stack quantity to its
+1,10,11,12,13,22,28) before submitting the selected stack quantity to its
 separate **count** child. This does not supply another3D scale or opacity.
 The complete producers of the other three quick-button image bindings
 are not established by this bounded caller audit.

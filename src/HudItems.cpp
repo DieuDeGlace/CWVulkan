@@ -2,6 +2,7 @@
 #include "Hud.h"
 #include "ItemIcon.h"
 #include "MapLook.h"
+#include <algorithm>
 
 void Hud::addItemIcon(const std::string &key, const CubModel &cub) {
     if (itemModels.contains(key))
@@ -35,4 +36,28 @@ void Hud::itemIcon(const std::string &key, const nativesaves::Item &item, const 
     if (const auto cube = itemModels.find("cube"); cube != itemModels.end())
         request.cubeMesh = cube->second.mesh;
     itemRequests.push_back(request);
+}
+
+void Hud::ringItems(const State::Ring &ring) const {
+    if (!ring.shown)
+        return;
+    std::vector<guiitem::Request> requests;
+    for (size_t i = 0; i < ring.items.size(); ++i) {
+        const auto &item = ring.items[i];
+        const auto model = itemModels.find(item.icon);
+        if (!item.original || model == itemModels.end() || !model->second.mesh)
+            continue; // missing resources preserve their positions in the original count
+        guiitem::Request request;
+        request.kind = guiitem::Request::Kind::Ring;
+        request.mesh = model->second.mesh;
+        request.allocation = model->second.allocation;
+        request.item = *item.original;
+        request.farPlane = ring.farPlane;
+        request.at = guiitem::ringPlacement(i, ring.items.size(), request.allocation, glm::ivec2(screen), ring.radius, ring.angle, guiScale,
+                                            ring.worldMilliseconds);
+        requests.push_back(request);
+    }
+    // Opaque resource groups precede Plasma; equal resources retain candidate submission order.
+    std::stable_sort(requests.begin(), requests.end(), [](const auto &a, const auto &b) { return a.mesh < b.mesh; });
+    itemRequests.insert(itemRequests.end(), requests.begin(), requests.end());
 }

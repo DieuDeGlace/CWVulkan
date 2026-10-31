@@ -143,9 +143,21 @@ class Hud {
         struct Quick {
             std::string key, info, count;
             std::string icon; // the item shown (an icon key given to addIcon), "" for none
+            std::optional<nativesaves::Item> original;
             glm::vec4 infoColor{1};
         };
         Quick quickItem, quickUse, quickSkill;
+        struct Ring {
+            struct Item {
+                std::string icon;
+                const nativesaves::Item *original = nullptr;
+            };
+            bool shown = false, left = false, right = false;
+            std::vector<Item> items;
+            std::string name, count;
+            glm::vec4 colour{1};
+            float angle = 0, radius = 0, worldMilliseconds = 0, farPlane = 960;
+        } ring;
         // The cast bar (fill and name) and the crosshairs (Interface's update).
         bool cast = false;
         float castFill = 0;
@@ -330,6 +342,7 @@ class Hud {
     mutable int32_t guiClockMs = 0;
     void uploadItemModels(Renderer &);
     void itemIcon(const std::string &, const nativesaves::Item &, const guiitem::Placement &, size_t beforeVertex) const;
+    void ringItems(const State::Ring &) const;
     std::map<std::string, glm::u8vec3> colours;
     float panelDark = .55f, slotDark = .65f;
     bool inventoryReady = false;
@@ -423,11 +436,13 @@ class Hud {
         std::map<std::string, float> fills;
         std::map<std::string, std::wstring> texts;
         std::map<std::string, glm::vec4> colors;
-        std::map<std::string, float> hues;         // nodes (and their children) shown in this hue (degrees), shading kept
-        std::set<std::string> hidden;              // nodes made invisible (their display's visibility 0)
-        std::map<std::string, glm::vec2> shifts;   // nodes moved (their translation plus this)
-        std::map<std::string, std::string> sprites; // a sprite widget's item (an icon key given to addIcon)
-        std::string sequence;                      // the animation playing (playing a node's animation), and how far into it
+        std::map<std::string, glm::vec4> displayFills;  // override only this named node's live Display.fillColor
+        std::map<std::string, float> hues;              // nodes (and their children) shown in this hue (degrees), shading kept
+        std::set<std::string> hidden;                   // nodes made invisible (their display's visibility 0)
+        std::map<std::string, glm::vec2> shifts;        // nodes moved (their translation plus this)
+        std::map<std::string, std::string> sprites;     // a sprite widget's item (an icon key given to addIcon)
+        std::map<std::string, nativesaves::Item> items; // original item values for SpriteWidget callbacks
+        std::string sequence;                           // the animation playing (playing a node's animation), and how far into it
         float sequenceMs = -1;
     };
     // Draws a gui.plx node and its children: placed at `position` + `offset` (screen pixels,

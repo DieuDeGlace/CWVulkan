@@ -19,6 +19,9 @@ struct Geometry {
     float depthOffset = 0;
 };
 std::optional<Geometry> geometry(int category, glm::ivec3 allocation, glm::ivec2 viewport, const Placement &);
+Placement ringPlacement(size_t index, size_t count, glm::ivec3 allocation, glm::ivec2 viewport, float radius, float angle, float guiScale,
+                        float worldMilliseconds);
+std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &, float farPlane);
 float phase(int32_t guiClockMs);
 Placement spritePlacement(glm::vec2 frameOrigin, glm::vec2 frameSize, int32_t guiClockMs);
 float shininess(const nativesaves::Item &);
@@ -36,6 +39,8 @@ struct Request {
     glm::ivec3 allocation{0};
     nativesaves::Item item{};
     Placement at;
+    enum class Kind { Widget, Ring } kind = Kind::Widget;
+    float farPlane = 960; // Ring uses the ordinary screen-overlay lens
 };
 struct Draw {
     uint32_t mesh = 0;

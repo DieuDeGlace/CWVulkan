@@ -191,6 +191,7 @@ add_library(engine STATIC
     src/GameNames.cpp
     src/PlasmaScene.cpp
     src/PlasmaNodeAnimation.cpp
+    src/ItemSelector.cpp
     src/HudPanels.cpp
     src/HudIdentification.cpp
     src/HudItems.cpp
@@ -338,7 +339,7 @@ target_sources(engine PRIVATE src/SteamVoxel.cpp)
 target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
-target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp)
+target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp tests/ItemSelectorTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)
 target_sources(EngineTests PRIVATE tests/SteamPointLightsTests.cpp)

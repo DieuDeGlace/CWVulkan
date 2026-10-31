@@ -1053,12 +1053,14 @@ Interface0x103200 separately colors owner children **`left`** and
 **`right`** for held feedback. Its analog thresholds are **X<−0.2** and
 **X>0.2**, respectively, in addition to the action7/8 bytes. This
 feedback threshold differs from the any-nonzero selector movement test.
-It writes the selected child shape-color entry through0xf88f0: idle
+It writes the first matching child's live Display.fillColor entry through0xf88f0: idle
 **RGBA(1,1,1,1)**; held **RGBA(1,0,0.2,1)**, where0.2 is float word
 **0x3e4ccccd**. Calls0x1061ba/0x1061f7 handle left and
 0x10624c/0x106289 handle right. The child drawing geometry and text
 geometry remain owner GUI data; these are color overrides on that
-subtree, not newly drawn arrow geometry.
+node's Display multiplier, not newly drawn arrow geometry or a recursive
+vertex-color rewrite. Exact frame-slot and drawing effects are
+steam-ring-selector-rendering10.
 
 ### 9.5 Use and Quick Item are separate rising-edge routes
 

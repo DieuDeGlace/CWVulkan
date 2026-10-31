@@ -62,6 +62,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Ring Menu input, canonical candidate identity, selected Use/Quick Item, combined UI
+  sound edges and queued screen-overlay rendering, from `steam-inventory-slot-lifecycle.md`
+  §9 and `steam-ring-selector-rendering.md`. Original item records, owner selector/fonts
+  and runtime CUB resources remain external. Synthetic state/math, local owner-tree checks
+  and actual Vulkan image cases cover the bounded implementation; original-game/hardware
+  comparisons remain open. Earlier use-prompt inventory terminology was corrected by the
+  separate spec author before the implementation changed that fallback.
 - equipment SpriteWidget item calls from `steam-gui-item-icons.md` §10. Original
   equipment records and owner CUB geometry reach the shared WORLD helper inside
   each copied widget's draw callback; legacy record-less previews remain separate.

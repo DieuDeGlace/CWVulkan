@@ -120,6 +120,7 @@ int raceKeyTests();        // tests/RaceKeyTests.cpp
 int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
 int plasmaNodeAnimationTests();
+int itemSelectorTests();
 int guiItemTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
@@ -9026,9 +9027,9 @@ static void useKeyPrompts() {
         w.scene.groundItems[0].carriedCount = 0, w.scene.groundItems[0].bagHasRoom = false, w.scene.groundItems[0].bag = 2;
         p = w.prompt();
         CHECK(p.text == "Full" && p.action == Action::BagFull && p.bag == 2);
-        w.scene.inventoryOpen = true;
+        w.scene.selectorShown = true;
         p = w.prompt();
-        CHECK(p.text.empty() && p.action == Action::UseInventoryItem);
+        CHECK(p.text.empty() && p.action == Action::UseSelectedItem);
     }
     { // Nothing aimed at: the vehicle item, or "Cancel" while it is in use.
         UseWorld w;
@@ -9068,6 +9069,8 @@ int main(int argc, char **argv) {
         return guiRenderTests();
     if (argc == 2 && std::string(argv[1]) == "nodeanimation")
         return plasmaNodeAnimationTests();
+    if (argc == 2 && std::string(argv[1]) == "itemselector")
+        return itemSelectorTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
         return guiItemTests();
     if (argc == 2 && std::string(argv[1]) == "npcspeech")
@@ -10358,6 +10361,7 @@ int main(int argc, char **argv) {
     failures += saveFormatTests();     // tests/SaveTests.cpp
     failures += guiItemTests();
     failures += plasmaNodeAnimationTests();
+    failures += itemSelectorTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += windContinueTests();   // tests/WindContinueTests.cpp
     failures += netTests();            // tests/NetTests.cpp

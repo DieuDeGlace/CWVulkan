@@ -577,7 +577,10 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
     if (n.display >= 0 && n.display < (int)gui.displays.size()) {
         if (!plasma::displayVisible(gui.displays[(size_t)n.display]))
             return;
-        tint *= plasma::displayColor(gui.displays[(size_t)n.display]);
+        if (const auto colour = frame.displayFills.find(n.name); colour != frame.displayFills.end())
+            tint *= colour->second;
+        else
+            tint *= plasma::displayColor(gui.displays[(size_t)n.display]);
     }
     if (auto it = fills.find(n.name); it != fills.end() && it->second <= 0.0f)
         return; // (an empty fill, or a hidden charge bar)
@@ -616,31 +619,25 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
             }
         }
     }
-    // A sprite widget (the sprite widget's drawing): the item turning in the middle of its content
-    // (the widget's content position + screenSize / 2: the node's matrix, the inverse of the
-    // widget's bind matrix, its frame position; its size the bind size and visible extent).
-    // CubeVulkan draws the item's still icon, fitted to that box.
-    if (auto it = frame.sprites.find(n.name); it != frame.sprites.end() && n.widget >= 0 && n.widget < (int)gui.widgets.size())
-        if (auto icon = icons.find(it->second); icon != icons.end()) {
-            const plx::Object &w = gui.widgets[(size_t)n.widget];
-            auto pair = [&](const char *name) {
-                const plx::Chunk *c = w.property(name);
-                return c ? glm::vec2(c->as<float>(0), c->as<float>(4)) : glm::vec2(0);
-            };
-            glm::mat4 bind(1);
-            if (const plx::Chunk *c = w.property("Widget.bindMatrix"); c && c->bytes.size() >= sizeof bind)
-                std::memcpy(&bind, c->bytes.data(), sizeof bind);
-            const glm::vec2 bindSize = pair("Widget.bindSize"), inner = pair("Widget.innerBindSize");
-            const glm::vec2 extent = glm::max(pair("Widget.frameSize") + inner - bindSize, glm::vec2(0));
-            glm::mat4 content = m * glm::inverse(bind);
-            content = glm::translate(content, glm::vec3(pair("Widget.framePos"), 0));
-            const glm::vec2 size = glm::vec2(content * glm::vec4(bindSize + extent - inner, 0, 0));
-            const glm::vec2 centre = glm::vec2(content * glm::vec4(0, 0, 0, 1)) + size * 0.5f;
+    // The copied sprite child's binding supplies its physical frame. Original items
+    // use the native WORLD helper; legacy/raw bindings retain their compatibility image.
+    if (const auto sprite = frame.sprites.find(n.name);
+        sprite != frame.sprites.end() && n.widget >= 0 && n.widget < (int)gui.widgets.size()) {
+        const auto widget = plasma::reboundWidget(plasma::widgetOf(gui.widgets[(size_t)n.widget]));
+        const auto content = glm::translate(m * widget.inverseBind, glm::vec3(widget.framePos, 0));
+        const glm::vec2 origin(content * glm::vec4(0, 0, 0, 1));
+        const glm::vec2 size(content * glm::vec4(widget.effectiveSize(), 0, 0));
+        if (const auto original = frame.items.find(n.name); original != frame.items.end()) {
+            if (original->second[0] != 0)
+                itemIcon(sprite->second, original->second, guiitem::spritePlacement(origin, size, guiClockMs), out.size());
+        } else if (const auto icon = icons.find(sprite->second); icon != icons.end()) {
+            const glm::vec2 centre = origin + size * 0.5f;
             const float side = std::min(std::abs(size.x), std::abs(size.y));
             if (side > 0)
                 image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(centre.x - side / 2),
                       std::round(centre.y - side / 2), side / (float)icon->second.w);
         }
+    }
     for (int c : n.children)
         if (c >= 0 && c < (int)gui.nodes.size())
             plasmaNode(out, c, m, tint, frame, text, color, hue);
@@ -874,6 +871,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     guiClockMs = state.guiClockMs;
     if (!ready)
         return;
+    ringItems(state.ring);
     if (state.feats)
         drawFeatText(*state.feats, out);
     drawMapMarkers(state, out);
@@ -1024,8 +1022,20 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
             f.colors = {{"name", glm::vec4(1)}, {"info", q.infoColor}};
             if (!q.icon.empty())
                 f.sprites = {{"sprite", q.icon}};
+            if (q.original)
+                f.items = {{"sprite", *q.original}};
             plasmaPlaced(out, "quickbutton", at, offset, f);
         };
+        if (state.ring.shown) {
+            PlasmaFrame ring;
+            ring.texts = {{"name", wide(state.ring.name)}, {"count", wide(state.ring.count)}};
+            ring.colors = {{"name", state.ring.colour}};
+            ring.displayFills = {{"left", state.ring.left ? glm::vec4(1, 0, .2f, 1) : glm::vec4(1)},
+                                 {"right", state.ring.right ? glm::vec4(1, 0, .2f, 1) : glm::vec4(1)}};
+            if (state.ring.items.empty())
+                ring.hidden.insert("brackets");
+            plasmaPlaced(out, "selector", middle, {0, -200}, ring);
+        }
         quick(state.quickItem, {0, screen.y}, {30, -80});
         quick(state.quickUse, bottomMiddle, {-23, -150});
         quick(state.quickSkill, {0, screen.y}, {90, -110});

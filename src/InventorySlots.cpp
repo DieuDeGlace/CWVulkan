@@ -340,6 +340,27 @@ UseResult use(PlayerState &state, Index source, uint8_t *actor, int button, bool
         writeFloat(0x6c, 0);
         return {Action::PetFood};
     }
+    return useItem(state, source, actor);
+}
+
+UseResult useItem(PlayerState &state, Index source, uint8_t *actor) {
+    const auto *stack = state.inventory.slot(source);
+    if (!actor || !stack || stack->count == 0)
+        return {};
+    Item incoming{};
+    copyItem(incoming, stack->item);
+    auto readFloat = [&](size_t at) {
+        float value;
+        std::memcpy(&value, actor + at, 4);
+        return value;
+    };
+    auto writeFloat = [&](size_t at, float value) { std::memcpy(actor + at, &value, 4); };
+    auto active = [&] {
+        Item item;
+        std::memcpy(item.data(), actor + 0x1d8, item.size());
+        copyItem(item, incoming);
+        std::memcpy(actor + 0x1d8, item.data(), item.size());
+    };
     if (!(readFloat(0x130) <= 0))
         return {};
     const auto id = subtype(incoming);

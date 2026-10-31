@@ -62,6 +62,8 @@ struct UseResult {
 // Reached ordinary inventory down, after shop/identification/customization routing.
 // actor is a live, full creature record; refresh/layout and the common HP/UI tail belong to the caller.
 UseResult use(PlayerState &, Index, uint8_t *actor, int button, bool shift, float abilityDuration);
+// Shared item helper reached by selected Quick Item/Ring use, without the inventory-down equip gate.
+UseResult useItem(PlayerState &, Index, uint8_t *actor);
 // Two ordered maximum queries: store the rescaled HP before the second callback/cap.
 float adjustHealth(uint8_t *actor, float oldMaximum, const std::function<float()> &maximum);
 } // namespace inventoryslots

@@ -58,6 +58,7 @@
 #include "Lore.h"
 #include "MapMarks.h"
 #include "UsePrompt.h"
+#include "ItemSelector.h"
 #include "Renderer.h"
 #include "HudCoin.h"
 #include "ChatLine.h"
@@ -207,20 +208,21 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     float upgradeTest = -1;    // --open-upgrade H: the weapon upgrade widget on hand H (0 right, 1 left) after 2 s (testing only).
     bool upgradeDemo = false;  // --upgrade-demo: with --open-upgrade, one cube of each of the first three palette entries set through the widget's click (testing only).
     float closeInventoryAt = -1; // --close-inventory T: the inventory closed T s in (testing only: the weapon's cubes seen in the world).
-    bool undying = false;  // --undying: the player's health is kept full (testing only).
+    bool undying = false;        // --undying: the player's health is kept full (testing only).
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
-    bool testDrop = false; // --test-drop: drops a copy of the right-hand weapon beside the player (testing only).
-    bool autoUse = false;  // --auto-use: presses the use key once, 3 s in (testing only).
-    bool nextWeapon = false; // --next-weapon: start with the next measured right-hand weapon (screenshots).
-    bool openInventory = false; // --inventory: start with the inventory screen open (screenshots).
-    bool noTaa = false, noSmaa = false; // --no-taa, --no-smaa (comparisons)
-    float spin = 0; // --spin R: turn the camera R radians per second (testing reprojection)
-    float benchmark = 0; // --benchmark N: vsync off, run N seconds, log frame rate and GPU times, quit
-    float runSeconds = 0; // --run-seconds N: with --capture, play N seconds before the screenshot.
-    float attackMultiplier = 1; // --attack-multiplier X: testing only, scales the player's damage.
+    bool testDrop = false;       // --test-drop: drops a copy of the right-hand weapon beside the player (testing only).
+    bool autoUse = false;        // --auto-use: presses the use key once, 3 s in (testing only).
+    bool nextWeapon = false;     // --next-weapon: start with the next measured right-hand weapon (screenshots).
+    bool openInventory = false;  // --inventory: start with the inventory screen open (screenshots).
+    bool openSelector = false;   // --ring-menu: read-only selector comparisons
+    bool noTaa = false, noSmaa = false;  // --no-taa, --no-smaa (comparisons)
+    float spin = 0;                      // --spin R: turn the camera R radians per second (testing reprojection)
+    float benchmark = 0;                 // --benchmark N: vsync off, run N seconds, log frame rate and GPU times, quit
+    float runSeconds = 0;                // --run-seconds N: with --capture, play N seconds before the screenshot.
+    float attackMultiplier = 1;          // --attack-multiplier X: testing only, scales the player's damage.
     float poseAbility = 0, poseTime = 0; // --pose-ability ID SECONDS: hold a recorded move (screenshots).
-    std::string wantedCharacter; // --character NAME|FOLDER|CLASS: which recorded character to play
+    std::string wantedCharacter;         // --character NAME|FOLDER|CLASS: which recorded character to play
     bool listOnly = false;       // --list-characters: log the recorded characters and quit
     bool noSave = false;         // --no-save: neither load nor write this run's progress
     std::string saveFolder;      // --save-folder DIR: another Save folder (testing; Save/ beside the exe by default)
@@ -288,6 +290,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             noSmaa = true;
         else if (a == "--inventory")
             openInventory = true;
+        else if (a == "--ring-menu")
+            openSelector = true;
         else if (a == "--next-weapon")
             nextWeapon = true;
         else if (a == "--auto-attack")
@@ -1715,6 +1719,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // shown with it, the view its crosshair is in (last frame's camera), a chest it opened
     // (given once the frame's drops are made) and whether it revives the dead player.
     useprompt::KeyState useKey;
+    itemselector::Selector itemSelector;
+    itemSelector.shown = openSelector;
+    itemselector::SoundEdges interfaceSoundEdges;
+    bool quickItemWasDown = false;
     useprompt::Prompt usePrompt;
     std::string useIcon;
     useprompt::Camera useCamera;
@@ -3100,6 +3108,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The screens over the game (Frontend.h): the system menu and the options, controls and
     // help screens, drawn with the game's own interface while the world runs on behind them.
     frontend::Services inGameServices = front;
+    inGameServices.externalMenuSounds = nativeInventory != nullptr;
     inGameServices.hud = hudReady ? &hud : nullptr;
     inGameServices.spawned = nullptr; // (they leave the player alone)
     // The multiplayer menu (J): the Steam friends, or by address the players on this host.
@@ -3260,6 +3269,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                          input.gamepadPanels.any(), &input.gamepad);
         if (!input.buttons.empty())
             identify.visibleAtDown = identify.open;
+        if (std::any_of(input.buttons.begin(), input.buttons.end(), [](int button) { return button == 0 || button == 1; }))
+            itemSelector.hide();
         if (gameInput.gamepad().dismiss) {
             inventoryOpen = craftingOpen = mapOpen = false;
             bagShown = true;
@@ -3518,8 +3529,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 // The quick item key (Q, the game's default) uses the first food carried, as
                 // the game's uses the food ring's choice (the food slots).
                 static bool quickWas = false;
-                const bool quick = free && (gameInput.held(gameoptions::QUICK_ITEM) || (autoWalk && std::fmod(time, 10.0) > 5 && std::fmod(time, 10.0) < 5.1));
-                if (quick && !quickWas)
+                const bool quick = free && (gameInput.held(gameoptions::QUICK_ITEM) ||
+                                            (autoWalk && std::fmod(time, 10.0) > 5 && std::fmod(time, 10.0) < 5.1));
+                if (!nativeInventory && quick && !quickWas)
                     for (size_t j = 0; j < bag.size(); j++) {
                         Carried &c = bag[j];
                         if (c.item.category != 1 || c.item.id == 9 || c.item.id == 13) // not bombs or portal stones
@@ -4839,7 +4851,31 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // Only the native player has one. The crosshair's view is last frame's camera.
         usePrompt = {};
         useIcon.clear();
-        if (nativeai::Creature *me = spawnedReady && nativeMove ? spawned.localPlayer() : nullptr) {
+        auto selectedItemUse = [&](nativeai::Creature &actor) {
+            if (!nativeInventory)
+                return;
+            const auto choices = itemselector::candidates(nativeInventory->inventory);
+            if (choices.empty())
+                return;
+            const auto index = choices[itemselector::wrappedIndex(itemSelector.index, choices.size())];
+            const auto result = inventoryslots::useItem(*nativeInventory, index, actor.record);
+            if (result.interaction) {
+                auto request = nativeinteract::fresh(nativeinteract::USE_ITEM);
+                std::memcpy(request.data() + nativeinteract::ITEM, result.interaction->data(), nativesaves::ITEM_SIZE);
+                actor.interactions.push_back(request);
+            }
+            if (result.action == inventoryslots::Action::Map)
+                mapSelection.useItem(nativeInventory->inventory.slot(index));
+            itemSelector.hide(); // a nonempty selection closes even if the helper rejects it
+            rebuildInventoryViews();
+        };
+        auto itemInputHeld = [&](int action) {
+            return !capturingBeforeInput &&
+                   (GameInput::physicalBindingHeld(window, gameControls[(size_t)action]) || gameInput.gamepad().held[(size_t)action]);
+        };
+        auto *useActor = spawnedReady && nativeMove ? spawned.localPlayer() : nullptr;
+        const bool admittedUseVisit = useActor && useprompt::inputAdmitted(useActor->record, capturingBeforeInput, chat.typing());
+        if (auto *me = useActor; admittedUseVisit) {
             auto placeOf = [&](const uint8_t *record) {
                 int64_t dots[3];
                 std::memcpy(dots, record + worldgen::creature::POSITION, sizeof dots);
@@ -4864,13 +4900,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             spawned.forEach([&](const uint8_t *r) { scene.creatures.push_back({r, placeOf(r), nativerules::hostile(me->record, r)}); });
             scene.creatureById = [&](int64_t id) -> const uint8_t * { return spawned.record(id); };
             scene.sight = [&](glm::vec3 from, glm::vec3 to, float limit) {
-                return useprompt::clearLine(from, to, limit, [&](int x, int y, int z) { return extractedWorld.solidAt(x + 0.5, y + 0.5, z + 0.5); });
+                return useprompt::clearLine(from, to, limit,
+                                            [&](int x, int y, int z) { return extractedWorld.solidAt(x + 0.5, y + 0.5, z + 0.5); });
             };
-            scene.useDown = gameInput.held(gameoptions::USE) || std::exchange(autoUsePress, false);
+            scene.useDown = itemInputHeld(gameoptions::USE) || std::exchange(autoUsePress, false);
             scene.dodgeHeld = gameInput.held(gameoptions::DODGE);
             scene.walkHeld = gameInput.held(gameoptions::WALK);
             scene.dialogOpen = generalDialogue.visible();
-            scene.inventoryOpen = inventoryOpen;
+            scene.selectorShown = itemSelector.shown;
 
             // The static objects of the zones within 8 blocks of the player (zone +0x60), each
             // as the world keeps it now: a door shut or open, a seat's user, an item given.
@@ -5118,8 +5155,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 case Action::GoddessGift:
                     showDialog({"gift_of_the_goddess"}, chatter() % 10000);
                     break;
-                case Action::UseInventoryItem:
-                    logLine("Use: the inventory's selected item (no selection in CubeVulkan's inventory yet)");
+                case Action::UseSelectedItem:
+                    selectedItemUse(*me);
                     break;
                 case Action::PickUpItem:
                     sceneLoot[(size_t)p.groundItem]->taken = true;
@@ -5139,6 +5176,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
         }
+        if (nativeInventory && admittedUseVisit)
+            if (auto *me = useActor) {
+                const bool held = itemInputHeld(gameoptions::QUICK_ITEM);
+                if (held && !quickItemWasDown)
+                    selectedItemUse(*me);
+                quickItemWasDown = held;
+            }
         if (!inventoryOpen) {
             if (gameInput.pressed(gameoptions::CLASS_SKILL))
                 startMove(moves.skill);
@@ -6389,7 +6433,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 static std::string lastLocation;
                 static float bannerMs = -1;
                 if (bannerMs >= 0)
-                    bannerMs += (float)std::min(dt, 1.0) * 1000.0f;
+                    bannerMs += (float)std::min(frameMs, 1000.0);
                 if (text.empty())
                     lastLocation.clear();
                 else if (text != lastLocation && (bannerMs < 0 || bannerMs > 3200.0f)) {
@@ -6419,12 +6463,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         }
                     return !sprite.empty();
                 };
-                for (const Carried &c : bag) // the food the quick item key uses, with its count
-                    if (c.item.category == 1 && c.item.id != 9 && c.item.id != 13) {
+                for (const Carried &c : bag) // compatibility sessions have no canonical selector storage
+                    if (!nativeInventory && c.item.category == 1 && c.item.id != 9 && c.item.id != 13) {
                         // (the game's frame update: the item's dictionary name, the item naming keys's consumables)
-                        static const char *const foods[15] = {"Cookie", "LifePotion", "CactusPotion", "EssenceOfWisdom", "GinsengSoup",
-                                                              nullptr, nullptr, "SnowBerryMash", "MushroomSpit", "Bomb",
-                                                              "PineappleSlice", "PumpkinMuffin", "GreaterLifePotion", "PortalStone", "Apple"};
+                        static const char *const foods[15] = {
+                            "Cookie",         "LifePotion",    "CactusPotion",      "EssenceOfWisdom", "GinsengSoup",
+                            nullptr,          nullptr,         "SnowBerryMash",     "MushroomSpit",    "Bomb",
+                            "PineappleSlice", "PumpkinMuffin", "GreaterLifePotion", "PortalStone",     "Apple"};
                         const char *key = c.item.id >= 0 && c.item.id < 15 ? foods[c.item.id] : nullptr;
                         const std::string named = key ? speech.name(key) : std::string();
                         hs.quickItem.info = named.empty() ? bagName(c.item, itemName(c.item)) : named;
@@ -6438,6 +6483,55 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         hs.quickItem.icon = sprite;
                         break;
                     }
+                if (nativeInventory) {
+                    const auto choices = itemselector::candidates(nativeInventory->inventory);
+                    // HUD/name selection precedes this frame's left/right repeat changes.
+                    const size_t selected = itemselector::wrappedIndex(itemSelector.index, choices.size());
+                    const auto analog = gamepadStick(input.gamepad.leftX, input.gamepad.leftY);
+                    itemselector::Input selectorInput;
+                    selectorInput.allowToggle = !chat.typing();
+                    selectorInput.toggle = itemInputHeld(gameoptions::RING_MENU);
+                    selectorInput.forward = itemInputHeld(gameoptions::UP);
+                    selectorInput.back = itemInputHeld(gameoptions::DOWN);
+                    selectorInput.left = itemInputHeld(gameoptions::LEFT);
+                    selectorInput.right = itemInputHeld(gameoptions::RIGHT);
+                    selectorInput.stickX = analog.x;
+                    selectorInput.stickY = analog.y;
+                    selectorInput.fullMap = mapOpen;
+                    const auto update = itemSelector.frame(selectorInput, choices.size(), frameMs, hud.interfaceScale());
+                    for (int i = 0; i < update.selectionSounds; ++i)
+                        audio.playInterface(0x58);
+                    hs.ring.shown = itemSelector.shown;
+                    hs.ring.angle = itemSelector.angle;
+                    hs.ring.radius = itemSelector.radius;
+                    hs.ring.worldMilliseconds = spawned.elapsedWorldTime();
+                    hs.ring.farPlane = (float)(gameOptions.zonesDrawn() << 6);
+                    hs.ring.left = selectorInput.left || analog.x < -.2f;
+                    hs.ring.right = selectorInput.right || analog.x > .2f;
+                    if (choices.empty())
+                        hs.ring.name = "You don't have any usable items.";
+                    else if (const auto *stack = nativeInventory->inventory.slot(choices[selected])) {
+                        int32_t subtype;
+                        std::memcpy(&subtype, stack->item.data() + nativesaves::item::SUBTYPE, sizeof subtype);
+                        hs.quickItem.info = speech.name(itemnames::itemKey(1, subtype));
+                        hs.quickItem.count = std::to_string(stack->count);
+                        hs.quickItem.original = stack->item;
+                        hs.quickItem.icon = spawned.itemSprite(stack->item.data());
+                        showIcon(hs.quickItem.icon);
+                        hs.ring.name = itemnames::name(speech, itemNameParts, stack->item.data());
+                        hs.ring.count = std::to_string(stack->count);
+                        hs.ring.colour = itemselector::candidateColour(stack->item);
+                    }
+                    if (hs.ring.shown)
+                        for (const auto &choice : choices) {
+                            const auto *stack = nativeInventory->inventory.slot(choice);
+                            if (!stack)
+                                continue;
+                            const auto sprite = spawned.itemSprite(stack->item.data());
+                            showIcon(sprite);
+                            hs.ring.items.push_back({sprite, &stack->item});
+                        }
+                }
                 if (nativePlayer && spawnedReady) {
                     float cooldown = 0;
                     if (const int skill = spawned.specialSkill(cooldown))
@@ -6550,7 +6644,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         bar.fraction = l.hp / l.maxHp;
                         hs.lifeBars.push_back(bar);
                     }
-
                 }
             }
 
@@ -6610,6 +6703,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
             answers.updateVisibility(talk.has_value() || npcSpeech.addressedTo(spawned.playerId()));
+            if (nativeInventory) {
+                const bool ordinaryUi = inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
+                                        chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
+                if (const int sound = interfaceSoundEdges.sample(ordinaryUi, itemSelector.shown))
+                    audio.playInterface(sound);
+            }
             if (nativePlayer) {
                 const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
                 const bool leaning = (spawned.playerToggles() & 0x400) != 0;

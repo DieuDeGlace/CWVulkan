@@ -146,8 +146,8 @@ individual feature documents.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are
-  implemented from the independent spec, including answer rows. Identification points, interactive-map
-  shoulder routing, aim integration and hardware comparisons remain. Large region
+  implemented from the independent spec, including answer rows and identification footer points.
+  Interactive-map shoulder routing, aim integration and hardware comparisons remain. Large region
   lists now follow the verified key-only insertion/partition/heap order, including
   signed32 distance wrapping. Tests cover the independently derived33-choice tie
   fixture, heap ties and finite-key ordering without inventing a stable tie-break.
@@ -226,10 +226,19 @@ individual feature documents.
   pass. Broader original-game/controller and map-panel event comparisons remain.
 - [ ] Ordinary WORLD-shader 3D GUI item icons: identification and equipment SpriteWidgets
   now use the shared helper, including full item records and per-widget callback ordering.
-  Inventory grids, quick buttons, crafting and other previews retain bitmap compatibility
-  paths. The Ring Menu selector, including its common down-tail
-  close. Full map-panel controls, GUI capture/poses and layout-callback timing still
+  The selected quick-item SpriteWidget also uses the original record. Inventory grids,
+  crafting and other previews retain bitmap compatibility paths.
+  Full map-panel controls, GUI capture/poses and layout-callback timing still
   need implementation/comparison.
+- [x] Ring Menu selector: canonical category1 candidates, retained signed32 selection,
+  neutral/repeat state, native label-before-selection timing, filtered input gates,
+  selected Use/Quick Item and common down-tail close. The owner's selector subtree,
+  per-node arrow feedback, separate queued3D WORLD projection/palette/depth and
+  world-clock spin are integrated. Missing resources keep their original ring positions;
+  no direct-widget shadow or spirit pass is added. Combined UI sound sampling and
+  selected quick-button SpriteWidget use their specified paths. CPU/owner-tree tests,
+  40 world and16 GUI Vulkan image cases, shared water and Alpha ordering pass.
+  Original-game input/visual and hardware controller comparisons remain release gates.
 - [x] Complete-record inventory slot backend and starter-kit consumer: six native
   kit lengths, equal-stack-before-hole insertion, separate counted fields, page
   versus creature removal, direct UI clearing and native key-only refresh followed

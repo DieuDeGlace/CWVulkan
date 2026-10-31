@@ -1,5 +1,6 @@
 #include "GuiItem.h"
 #include "NativePose.h"
+#include "worldgen/Noise.h"
 #include <bit>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -18,6 +19,49 @@ Placement spritePlacement(glm::vec2 origin, glm::vec2 size, int32_t clock) {
 
 float phase(int32_t guiClockMs) {
     return ((float)(guiClockMs % 10000) * 0.0001f) * 360.0f;
+}
+Placement ringPlacement(size_t index, size_t count, glm::ivec3 allocation, glm::ivec2 viewport, float radius, float angle, float scale,
+                        float milliseconds) {
+    Placement at;
+    if (!count || viewport.y <= 0)
+        return at;
+    constexpr double pi = 3.14159265358979323846;
+    const double rotation = (double)angle * pi / 180.0;
+    const float radians = (float)(((double)index * (2 * pi)) / (double)count + rotation - pi / 2);
+    at.screen = {std::cos(radians) * radius + (float)viewport.x * 0.5f, std::sin(radians) * radius + (float)viewport.y * 0.5f};
+    at.euler = {225, 0, phase(worldgen::trunc32(milliseconds))};
+    const int maximum = std::max({allocation.x, allocation.y, allocation.z});
+    if (maximum > 0)
+        at.size = (((1024.0f / (float)viewport.y) * scale) * 0.09f) / (float)maximum;
+    at.screenDepth = -0.5f;
+    return at;
+}
+
+std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &at, float farPlane) {
+    if (viewport.x <= 0 || viewport.y <= 0 || allocation.x <= 0 || allocation.y <= 0 || allocation.z <= 0 || farPlane <= 0.05f)
+        return std::nullopt;
+    Geometry out;
+    out.model = glm::translate(glm::mat4(1), {0, 0, 1});
+    for (int axis = 0; axis < 3; ++axis) {
+        glm::vec3 direction(0);
+        direction[axis] = 1;
+        out.model = glm::rotate(out.model, at.euler[axis] * 0.01745329238474369f, direction);
+    }
+    out.model = glm::scale(out.model, glm::vec3(at.size));
+    out.model = glm::translate(out.model, glm::vec3(allocation) * -0.5f);
+    const float width = (float)viewport.x, height = (float)viewport.y;
+    const float h = 1.0f / std::tan(0.8726646900177002f * 0.5f);
+    glm::mat4 lens(0);
+    lens[0][0] = h / (-width / height);
+    lens[1][1] = h;
+    lens[2][2] = farPlane / (farPlane - 0.05f);
+    lens[3][2] = (-0.05f * farPlane) / (farPlane - 0.05f);
+    lens[2][3] = 1;
+    float x = (at.screen.x - width * 0.5f) / width;
+    x += x;
+    const float y = ((at.screen.y - height * 0.5f) / height) * -2.0f;
+    out.projection = glm::translate(glm::mat4(1), {x, y, -0.5f}) * lens;
+    return out;
 }
 std::optional<Geometry> geometry(int category, glm::ivec3 allocation, glm::ivec2 viewport, const Placement &at) {
     if (viewport.x <= 0 || viewport.y <= 0 || allocation.x <= 0 || allocation.y <= 0 || allocation.z <= 0)
@@ -102,6 +146,20 @@ ShaderState overlayState() {
 void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &out) {
     if (!request.mesh)
         return; // unavailable owner sprite
+    if (request.kind == Request::Kind::Ring) {
+        const auto transform = ringGeometry(request.allocation, viewport, request.at, request.farPlane);
+        if (!transform)
+            return;
+        retained = overlayState();
+        retained.shininess = shininess(request.item);
+        Draw draw;
+        draw.mesh = request.mesh;
+        draw.model = transform->model;
+        draw.projection = transform->projection;
+        draw.state = retained;
+        out.push_back(draw); // queued Ring items have no black duplicate or spirit-cube pass
+        return;
+    }
     const auto transform = geometry(request.item[nativesaves::item::TYPE], request.allocation, viewport, request.at);
     if (!transform)
         return;

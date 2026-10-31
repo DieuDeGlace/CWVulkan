@@ -318,8 +318,9 @@ struct Services {
     SpawnedCreatures *spawned = nullptr;  // the game's creatures with the native player, if any
     SteamSession *steam = nullptr;
     Audio *audio = nullptr;
-    FriendsMenu *friends = nullptr;       // the multiplayer menu's friends (null: no multiplayer menu)
-    std::filesystem::path root;           // CubeVulkan's folder (options.cfg, controls.cfg, Save/)
+    bool externalMenuSounds = false; // gameplay samples the combined ordinary-UI/selector edge
+    FriendsMenu *friends = nullptr;  // the multiplayer menu's friends (null: no multiplayer menu)
+    std::filesystem::path root;      // CubeVulkan's folder (options.cfg, controls.cfg, Save/)
     nativesaves::CharacterStore *store = nullptr;
     const std::vector<CharacterEntry> *recorded = nullptr;
     const nativeprogress::SpriteTable *sprites = nullptr;
@@ -383,6 +384,7 @@ class InGameMenus {
     void toggleMultiplayerMenu();
     // Whether a screen is open, which then has the keys and the pointer.
     bool open() const;
+    bool ordinaryUi() const;
     bool capturingControl() const;
     void dismiss();
     // One frame: the interface keys always; the keys and clicks of this frame while a screen is

@@ -342,8 +342,8 @@ bool promptRoutine(const Scene &s, const Targets &t, Prompt &p) {
 
 // When the prompt routine takes nothing (0x8ae50, spec 4).
 void fallThrough(const Scene &s, const Targets &t, Prompt &p) {
-    if (s.inventoryOpen) {
-        p.action = Action::UseInventoryItem;
+    if (s.selectorShown) {
+        p.action = Action::UseSelectedItem;
         return;
     }
     if (t.groundItem >= 0 && t.groundItem < (int)s.groundItems.size()) {
@@ -601,6 +601,18 @@ std::optional<std::array<int32_t, 2>> markedZone(const uint8_t *target) {
     if (x == NO_ZONE)
         return std::nullopt;
     return std::array<int32_t, 2>{x, y};
+}
+
+bool inputAdmitted(const uint8_t *player, bool focusedEditor, bool chatActive) {
+    if (!player || focusedEditor || chatActive)
+        return false;
+    const int ability = abilityOf(player);
+    if (ability == 0x9c || ability == 0x9d || (ability == 0x7d && read<float>(player, ABILITY_MS) < 2000))
+        return false;
+    const bool exhaustedGlider = ability == GLIDING && !(read<uint32_t>(player, MOVE_FLAGS) & 1) &&
+                                 read<float>(player, 0x130) <= 0 && read<float>(player, DODGE_MS) <= 0 &&
+                                 read<float>(player, STAMINA) < 0.001f;
+    return !exhaustedGlider;
 }
 
 Prompt decide(const Scene &s, const Targets &t, KeyState &key) {

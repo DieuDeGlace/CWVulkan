@@ -135,6 +135,14 @@ int guiRenderTests() {
     settings.style = RenderStyle::Alpha;
     renderer.settings = settings;
     check("alpha-world-native-ui", background, {icon}, {}, {64, 64}, {128, 128, 128});
+    auto ring = icon;
+    ring.kind = guiitem::Request::Kind::Ring;
+    ring.at.darkPass = true; // This independent queued path ignores a direct widget's shadow policy.
+    ring.cubeMesh = brighter;
+    ring.item = spirit.item;
+    check("ring-before-plasma", foreground, {ring}, {}, {64, 64}, {0, 255, 0});
+    check("ring-main-no-dark-copy", background, {ring}, {}, {64, 64}, {128, 128, 128});
+    check("ring-retained-scene-depth", background, {ring}, {preceding}, {64, 64}, {0, 0, 255});
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

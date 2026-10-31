@@ -117,6 +117,30 @@ pitch 90, yaw 0.
 - **The name field** (`edit`) takes 2 to 15 UTF-16 units. **Create Character** appears with a valid name. It
   writes the character with `num`/`slot`, shows the help sheet, and then the game starts.
 
+## Ring Menu and selected Quick Item
+
+In a native-save session, Ring Menu (Tab by default, or the right-stick button) opens
+the owner's `selector` subtree. It lists every nonzero category1 stack in canonical
+tab/slot order, including bombs and portal stones. Left/right controls and the left
+stick change the retained selection after a neutral input. Forward/back movement
+closes the selector. The ordinary gameplay camera remains active.
+
+Quick Item (Q) uses that selection while the selector is shown or hidden. Use (E)
+uses it when the selector is shown and no earlier use prompt takes the key.
+Both rebuild candidates after preceding item mutations. The portal-stone path
+opens the shrine chooser without consuming the item. The quick-button image uses
+its original item record through SpriteWidget's3D callback.
+
+Ring models use a separate queued WORLD path before Plasma, with the native50°
+overlay projection, retained depth, full allocation centering, resource grouping,
+world-clock spin and no added shadow duplicate or spirit-cube pass. Direct widget
+icons retain their distinct45° projection and GUI clock. Owner fonts, models and
+selector artwork remain external game data.
+
+The independent contracts are [selector input](specs/steam-inventory-slot-lifecycle.md#9-ring-menu-selector-construction-content-and-input)
+and [queued rendering](specs/steam-ring-selector-rendering.md). A read-only capture
+can be requested with `--play --character slot-0 --no-save --ring-menu --capture ring.png --run-seconds 4`.
+
 ## Options, controls, help and the system menu
 
 - **Options.** The options screen (450 × 560) has the spec's 15 rows, values and arrows. Apply and OK write
@@ -155,8 +179,8 @@ pitch 90, yaw 0.
   walk, the attacks, the class and ultimate skills, the quick item, use, the lamp, calling the pet, the world
   map, the inventory, the crafting menu, the system menu and zoom in and out. The gamepad adds the spec's fixed
   mappings: d-pad up Zoom In, d-pad down Zoom Out, Back the Crafting Menu and the Inventory, Start the System
-  Menu (the rest of the pad is the spec's open question 5). The Ring Menu and Multiplayer Menu bindings are
-  read but CubeVulkan has no such screens yet. CubeVulkan's own testing keys moved off the game's: F11 flies,
+  Menu. Right-stick press opens Ring Menu, and the Multiplayer Menu binding opens the connected-friends screen.
+  Remaining controller comparisons are tracked in the roadmap. CubeVulkan's own testing keys moved off the game's: F11 flies,
   Page Up and Page Down change the hour, P is the tap skill, 1 swaps the weapon; any of them gives way to a
   binding on the same key.
 
