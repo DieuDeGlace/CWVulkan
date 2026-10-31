@@ -150,13 +150,18 @@ units; do not subtract them as unscaled physical pixels at arbitrary GUI
 scale. This is literal template placement, rather than a newly measured
 half-width/height centering rule.
 
-The scene renderer writes these cached view/projection outputs later in
-the frame: **0xa5a50** calls bubble update at **0xaa1bc**, then scene render
-**0xe2e00** at **0xad9d4**, passing G+0x1f24/G+0x1f64 as outputs. The bubble
-update consequently consumes the matrices already cached at that point,
-normally from the preceding completed scene render. Do not silently
-replace that ordering with a fresh same-frame camera projection when
-claiming exact native scheduling.
+**Producer attribution corrected:**0xa5a50 calls bubble update at
+**0xaa1bc**, then camera **0xadcd0 at0xaaf02**, then scene render
+**0xe2e00 at0xad9d4**. The camera produces G+0x1f24/G+0x1f64; scene render
+receives them as **inputs**, copying them into renderer+0x39c/+0x3dc.
+The bubble therefore consumes the stored **shaken view/projection** at
+its earlier phase, normally from the preceding camera update, rather than
+fresh same-frame camera outputs. The former wording assigning their
+production to scene-render outputs was inaccurate. Exact call/field
+evidence and renderer CPU clip use are in
+[gameplay camera §7.2.2](steam-gameplay-camera.md). Do not silently replace
+this ordering with a fresh same-frame projection when claiming native
+scheduling.
 
 ## 4. Bubble visibility during emotes
 

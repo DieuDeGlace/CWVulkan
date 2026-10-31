@@ -1100,13 +1100,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
 
     // --- Uniforms ---
     float aspect = extent.height ? (float)extent.width / extent.height : camera.aspect;
-    glm::mat4 view = glm::lookAtRH(camera.eye, camera.target, glm::vec3(0, 0, 1));
-    const float farPlane = std::max(settings.fogDistance * ALPHA_CLOUD_REACH,
-                                    settings.fogDistance + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) +
-                           FAR_MARGIN;
+    const glm::mat4 shake = glm::translate(glm::mat4(1), glm::vec3(-camera.viewShake.x, camera.viewShake.y, 0));
+    glm::mat4 view = shake * glm::lookAtRH(camera.eye, camera.target, glm::vec3(0, 0, 1));
+    const float farPlane =
+        std::max(settings.fogDistance * ALPHA_CLOUD_REACH, settings.fogDistance + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) +
+        FAR_MARGIN;
     const bool steamWorld = settings.style == RenderStyle::Steam;
-    glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect,
-                                          steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane);
+    glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane);
     proj[1][1] *= -1;
     // TAA: eight-frame Halton sub-pixel jitter (the Steam mod's), content moved by
     // `jitter` pixels; the resolve samples back at the same offset.
@@ -1144,21 +1144,22 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     glm::vec3 nativeEye = camera.eye, nativeTarget = camera.target;
     nativeEye.z += (float)worldProbe.origin.z;
     nativeTarget.z += (float)worldProbe.origin.z;
-    const auto nativePlanes = scenevisibility::planes(
-        glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) *
-        glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
-    lastSceneSphere = SphereState{{(int64_t)(worldProbe.origin.x * 65536),
-                                   (int64_t)(worldProbe.origin.y * 65536), 0}, nativeEye, nativePlanes};
-    auto speechView = glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0,0,1));
+    const auto nativePlanes = scenevisibility::planes(glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) * shake *
+                                                      glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
+    lastSceneSphere =
+        SphereState{{(int64_t)(worldProbe.origin.x * 65536), (int64_t)(worldProbe.origin.y * 65536), 0}, nativeEye, nativePlanes};
+    auto speechView = glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1));
     for (int column = 0; column < 4; ++column) {
         speechView[column][0] = -speechView[column][0];
         speechView[column][2] = -speechView[column][2];
     }
-    lastSpeechProjection = scenevisibility::Projection{
-        {-(int64_t)(worldProbe.origin.x * 65536), -(int64_t)(worldProbe.origin.y * 65536), 0},
-        speechView, glm::perspectiveLH_ZO(glm::radians(settings.fov), -aspect, .05f, 1920.f)};
+    speechView = glm::translate(glm::mat4(1), glm::vec3(camera.viewShake, 0)) * speechView;
+    lastSpeechProjection =
+        scenevisibility::Projection{{-(int64_t)(worldProbe.origin.x * 65536), -(int64_t)(worldProbe.origin.y * 65536), 0},
+                                    speechView,
+                                    glm::perspectiveLH_ZO(glm::radians(settings.fov), -aspect, .05f, 1920.f)};
     float sceneDistance = settings.fogDistance, modelDistance = settings.sceneryDistance;
-    float actorDistance = steampoints::abilityRange(sceneDistance,settings.nativeZoneRadius);
+    float actorDistance = steampoints::abilityRange(sceneDistance, settings.nativeZoneRadius);
     nativeRangeActive = false;
     if (steamWorld && !menuSky && worldProbe.sceneZone) {
         scenerange::Frame rangeFrame;

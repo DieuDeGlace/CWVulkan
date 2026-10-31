@@ -1,5 +1,6 @@
 // The game's settings files, written from docs/specs/frontend-options.md §1 and §4.1.
 #include "GameOptions.h"
+#include "CameraMotion.h"
 
 #include <algorithm>
 #include <cmath>
@@ -10,7 +11,9 @@ namespace fs = std::filesystem;
 
 namespace gameoptions {
 
-double Options::smoothingConstant() const { return std::pow(0.005, cameraSmoothness * 0.01); }
+double Options::smoothingConstant() const {
+    return cameramotion::angleRate(cameraSmoothness);
+}
 
 std::string Options::fpsLimitText() const {
     return minTimeStep == 0 ? std::string("none") : std::to_string(1000 / minTimeStep) + " fps";

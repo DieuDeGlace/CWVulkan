@@ -482,10 +482,9 @@ class SpawnedCreatures {
     hair::Style playerHairStyle;
     std::map<std::tuple<int, int, int, int, bool, std::array<uint32_t, 3>>, int> tinted; // model, RGB, recoloring, optional gradient
     uint32_t drawn = 0;
-    double carriedMs = 0;                                 // the part of a millisecond not yet simulated
-    uint32_t randState = 0x12345678;                      // rand() for the creatures' update
-    std::map<int64_t, nativeai::Entry> ai;                // the AI's record of each creature
-    zonestates::ZoneStates zoneStates; // the zones in memory: their objects, ground items and block changes
+    uint32_t randState = 0x12345678;       // rand() for the creatures' update
+    std::map<int64_t, nativeai::Entry> ai; // the AI's record of each creature
+    zonestates::ZoneStates zoneStates;     // the zones in memory: their objects, ground items and block changes
     const std::set<nativesaves::Cell> *usedCells = nullptr;
     nativesaves::WorldState *storedZones = nullptr;
     std::vector<std::pair<int, int>> unloadedZones;

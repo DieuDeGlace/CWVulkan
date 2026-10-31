@@ -21,11 +21,11 @@ constexpr float HEARING_RANGE_SQ = 4096.0f;  // blocks²: farther sounds are dro
 constexpr float MAX_PITCH = 2.0f;            // the sound voices' largest frequency ratio
 constexpr float OPTION_SCALE = 0.01f;        // the integer volume options are percent
 constexpr float MUSIC_STOP_VOLUME = 0.01f;   // the music thread stops the music below this
-constexpr float DUCKED_MUSIC_VOLUME = 0.015f; // the music while an instrument plays
-constexpr float DUCK_MS = 6000.0f;           // how long one instrument note ducks the music
-constexpr float SUCCESS_MS = 60000.0f;       // how long the success track is wanted
-constexpr double EXPLOSION_SHAKE_DISTANCE = 2500.0; // blocks at which an explosion stops shaking
-constexpr float RAND_SCALE = 32767.0f;       // the C runtime's rand() maximum
+constexpr float DUCKED_MUSIC_VOLUME = 0.015f;          // the music while an instrument plays
+constexpr float DUCK_MS = 6000.0f;                     // how long one instrument note ducks the music
+constexpr float SUCCESS_MS = 60000.0f;                 // how long the success track is wanted
+constexpr float EXPLOSION_SHAKE_DISTANCE_SQ = 2500.0f; // blocks squared; zero shake at 50 blocks
+constexpr float RAND_SCALE = 32767.0f;                 // the C runtime's rand() maximum
 
 // Sound numbers the engine names (§2, §4, §5). The file names belong to the install.
 namespace soundid {
@@ -68,8 +68,10 @@ float cappedPitch(float pitch);
 float finalVolume(int soundOption, float volume, float attenuation);
 // Whether a sound number is an instrument's note, which ducks the music (§3.5).
 bool isInstrument(int number);
-// The camera shake an explosion D blocks from the player raises (§2.1): 1 − D / 2500, not below 0.
-float explosionShake(double distanceBlocks);
+// Native fixed differences narrow to float before conversion to blocks.
+float distanceSquared(const int64_t a[3], const int64_t b[3]);
+// Gameplay-camera §4: 1 - distanceSquared / 2500, not below zero.
+float explosionShake(float distanceSquaredBlocks);
 bool isExplosion(int number);
 
 // --- The world's sound requests (§2.1; creature-hit.md §0.3) ---------------------------------

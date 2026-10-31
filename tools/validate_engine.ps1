@@ -33,6 +33,12 @@ try {
         $passed = @(Select-String -LiteralPath $gpuLog -Pattern '^Steam shader .* PASS$')
         if (!$passed.Count) { throw "No Vulkan image results were produced; read $gpuLog" }
         Write-Output "Vulkan image checks passed: $($passed.Count); $gpuLog"
+        $cameraLog = Join-Path $LogDirectory 'camera-images.log'
+        & $testProgram camerarender *> $cameraLog
+        if ($LASTEXITCODE -ne 0) { throw "Camera image tests failed; read $cameraLog" }
+        $cameraPassed = @(Select-String -LiteralPath $cameraLog -Pattern '^Camera renderer .* PASS ')
+        if ($cameraPassed.Count -ne 2) { throw "Expected both camera styles; read $cameraLog" }
+        Write-Output "Camera projection image checks passed: $($cameraPassed.Count); $cameraLog"
         $guiLog = Join-Path $LogDirectory 'gui-item-images.log'
         & $testProgram guirender *> $guiLog
         if ($LASTEXITCODE -ne 0) { throw "GUI item image tests failed; read $guiLog" }

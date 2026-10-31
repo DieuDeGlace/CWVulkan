@@ -3,6 +3,7 @@
 #include "GameMath.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -32,12 +33,26 @@ float finalVolume(int soundOption, float volume, float attenuation) {
     return (float)soundOption * volume * attenuation * OPTION_SCALE;
 }
 
-bool isInstrument(int number) { return number >= soundid::INSTRUMENT_FIRST && number <= soundid::INSTRUMENT_LAST; }
+bool isInstrument(int number) {
+    return number >= soundid::INSTRUMENT_FIRST && number <= soundid::INSTRUMENT_LAST;
+}
 
-bool isExplosion(int number) { return number == soundid::EXPLOSION || number == soundid::EXPLOSION_2; }
+bool isExplosion(int number) {
+    return number == soundid::EXPLOSION || number == soundid::EXPLOSION_2;
+}
 
-float explosionShake(double distanceBlocks) {
-    return (float)std::max(0.0, 1.0 - distanceBlocks / EXPLOSION_SHAKE_DISTANCE);
+float distanceSquared(const int64_t a[3], const int64_t b[3]) {
+    float squared = 0.0f;
+    for (int axis = 0; axis < 3; ++axis) {
+        const int64_t fixed = std::bit_cast<int64_t>(uint64_t(a[axis]) - uint64_t(b[axis]));
+        const float blocks = float(fixed) * (1.0f / 65536.0f);
+        squared += blocks * blocks;
+    }
+    return squared;
+}
+
+float explosionShake(float distanceSquaredBlocks) {
+    return std::max(0.0f, 1.0f - distanceSquaredBlocks / EXPLOSION_SHAKE_DISTANCE_SQ);
 }
 
 // --- Requests -----------------------------------------------------------------------------------

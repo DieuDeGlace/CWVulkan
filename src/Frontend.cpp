@@ -6,6 +6,7 @@
 #include "InventorySlots.h"
 #include "NativeInteract.h"
 #include "GameMath.h"
+#include "CameraMotion.h"
 #include "TalkGen.h"
 #include "worldgen/Spawns.h"
 
@@ -40,12 +41,12 @@ void OrbitCamera::titleTargets(double dtMs) {
 }
 
 void OrbitCamera::smooth(double dtMs, int cameraSmoothness) {
-    const float rate = (float)std::pow(0.005, cameraSmoothness * 0.01);
-    const double s = gamemath::blendFactor(dtMs, rate);
+    const float rate = cameramotion::angleRate(cameraSmoothness);
+    const double s = gamemath::blendFactor(gamemath::frameMilliseconds(dtMs), rate);
     pitch += (targetPitch - pitch) * s;
     roll += (targetRoll - roll) * s;
     yaw += (targetYaw - yaw) * s;
-    distance += (targetDistance - distance) * (float)s;
+    distance = cameramotion::distance(distance, targetDistance, dtMs);
 }
 
 glm::dvec3 OrbitCamera::forward() const {

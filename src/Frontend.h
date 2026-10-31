@@ -88,7 +88,7 @@ struct OrbitCamera {
     // While riding: the yaw target turns 3 degrees a second (never wrapped), the pitch target is
     // 110 and the distance target 12.
     void titleTargets(double dtMs);
-    // Each current value moves toward its target by smooth(dt, 0.005 ^ (smoothness / 100)).
+    // Angles use the smoothness option; distance has its own native rate 0.004.
     void smooth(double dtMs, int cameraSmoothness);
     // The forward vector f of the current angles.
     glm::dvec3 forward() const;

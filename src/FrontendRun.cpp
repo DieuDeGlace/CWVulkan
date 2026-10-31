@@ -810,7 +810,9 @@ void Session::readInput(bool poll, double frameMs) {
     if (poll)
         glfwPollEvents();
     const auto now = std::chrono::steady_clock::now();
-    dtMs = poll ? std::min(1000.0, std::chrono::duration<double, std::milli>(now - last).count()) : frameMs;
+    dtMs = poll ? gamemath::frameMilliseconds(
+                      gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()))
+                : frameMs;
     if (poll)
         hud.advanceGui(dtMs);
     last = now;

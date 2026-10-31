@@ -1230,6 +1230,16 @@ global **0x551cb0** to obtain a signed64 elapsed interval, then store the
 The supplied game-frame double milliseconds is computed as
 **(double(elapsedNanoseconds)/1000000000.0)×1000.0** in that order.
 
+**Caller identity/fraction clarification:** native0x134536–0x134558 performs
+the double conversion/divide/multiply and then **directly calls0xa5a50**.
+There is no intervening0xf5520 call, whole-millisecond truncation,
+fractional-ms carry balance or zero-interval branch. Global0x551cb0 stores
+the full previous nanosecond timestamp, not a fractional remainder. The
+separate0xf5520 host tick is called by host thread0x83e60 with timeGetTime
+integer differences and updates a different World object. This corrects
+the older ordinary-frame attribution in creature-physics §1; detailed
+native call/step examples are gameplay camera §7.2.3.
+
 At game-frame entry0xa5a50, **0xa5afc–0xa5b0a** caps this double interval to
 **1000.0 ms**. The native code adds no lower clamp. For the ordinary finite
 nonnegative performance-clock intervals this is min(elapsedMS,1000). The

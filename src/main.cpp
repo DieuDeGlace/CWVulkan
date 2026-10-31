@@ -7,6 +7,7 @@
 #include "Progression.h"
 #include "PyroCreatures.h"
 #include "GameMath.h"
+#include "CameraMotion.h"
 #include "Body.h"
 #include "DeathEffects.h"
 #include "Speech.h"
@@ -651,7 +652,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     bool spawnedReady = false;
     bool nativePlayer = false;         // [Player] Native: the game's controller and update move the player
     nativecontrol::Input controlInput; // this frame's keys for it
-    auto spawnedClock = std::chrono::steady_clock::now();
     // OverworldEvents' travel locations change what the generator makes, so they are set
     // before anything is generated. They go by the game's single-player world, which Game
     // (0x7ea80) names "world" with seed 0x7b, as the extractions are of it.
@@ -3339,7 +3339,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             lastSave = std::chrono::steady_clock::now();
         }
         auto now = std::chrono::steady_clock::now();
-        const double frameMs = std::chrono::duration<double, std::milli>(now - previous).count();
+        const double frameMs =
+            gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - previous).count());
         double dt = std::min(.1, frameMs / 1000.0);
         double time = std::chrono::duration<double>(now - start).count();
         previous = now;
@@ -5871,11 +5872,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!serverMode) // a dedicated server draws nothing, so it streams no meshes
             world.update(player.position);
 
-        { // The camera's smoothing (0.005 ^ (cameraSmoothness / 100), frontend-title.md §3.3).
-            const float s = gamemath::blendFactor(dt * 1000.0, (float)gameOptions.smoothingConstant());
+        { // Gameplay-camera §2: capped wall interval, with independent orbit-distance smoothing.
+            const float s = gamemath::blendFactor(gamemath::frameMilliseconds(frameMs), (float)gameOptions.smoothingConstant());
             viewYaw += (player.yaw - viewYaw) * s;
             viewPitch += (player.pitch - viewPitch) * s;
-            viewZoom += (player.zoom - viewZoom) * s;
+            viewZoom = cameramotion::distance(viewZoom, player.zoom, frameMs);
         }
         glm::vec3 target = player.position + glm::vec3(0, 0, 1.6f);
         glm::vec3 eye = target + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
@@ -5897,15 +5898,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             int64_t ear[3];
             toUnits(eye, ear);
             audio.setListener(ear);
-            // An explosion's shake (§2.1) jolts the eye. HOOK: the spec gives how much shake an
-            // explosion raises, not how the camera applies it or lets it die down; these two
-            // constants stand in until it does.
-            if (const float shake = audio.cameraShake(); shake > 0) {
-                constexpr float SHAKE_BLOCKS = 0.25f, SHAKE_FADE_PER_SECOND = 2.0f;
-                const glm::vec3 jolt((float)std::sin(time * 97.0), (float)std::cos(time * 89.0), (float)std::sin(time * 73.0));
-                eye += jolt * (shake * SHAKE_BLOCKS);
-                audio.setCameraShake(std::max(0.0f, shake - (float)dt * SHAKE_FADE_PER_SECOND));
-            }
         }
         if (glm::length(target - eye) > 1e-4f) { // the view the use key's crosshair is in (next frame)
             const VkExtent2D screen = renderer.screenSize();
@@ -5925,8 +5917,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             world.collect(opaque, water);
         if (spawnedReady) {
             const auto now = std::chrono::steady_clock::now();
-            const double ms = std::min(100.0, std::chrono::duration<double, std::milli>(now - spawnedClock).count());
-            spawnedClock = now;
+            const double ms = gamemath::frameMilliseconds(frameMs);
             // The network first: the host's tick (unless this player is a guest elsewhere), what the
             // client's host sent, and its world updates, before the client world's step.
             const uint32_t nowMs = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -6562,6 +6553,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 nativeCustomization.edit.open = false;
         }
         Camera camera{eye, target};
+        // Sound notices have now raised shake; decay in this same frame, then affect only
+        // the render view. The stored eye and the targeting basis remain unshaken (§4/7.2).
+        audio.setCameraShake(cameramotion::decayShake(audio.cameraShake(), frameMs));
+        camera.viewShake = cameramotion::viewShake(spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), audio.cameraShake());
         camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
         // The map (the game's frame update, the map rendering): its position, its overlay between the
         // corner and the middle, its regions.

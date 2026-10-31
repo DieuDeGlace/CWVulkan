@@ -7,6 +7,46 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+The newest checkpoints appear first. The latest validation result below qualifies
+older successful runs; none of these bounded changes establishes complete parity.
+
+- Camera/audio timing now follows the independent ordinary-frame/host distinction.
+  Frontend and gameplay orbit distance use rate 0.004 independently of angle
+  smoothness; camera easing retains the capped double wall interval. Ordinary
+  world simulation splits that interval into float 16-ms steps and a narrowed tail,
+  including the zero tail, with no carried whole-ms balance. The live loop no
+  longer supplies a separate 100-ms clock. Shake reads the client world's float
+  elapsed simulation clock after those substeps. Explosion notices use physical
+  player squared distance, strict maximum accumulation and same-frame rate 0.005
+  decay, even when playback is muted/inaudible. Native cosine shake translates
+  only the render/clip/speech view, leaving stored eye and targeting unshaken.
+  A regression reproduced the fractional-time error before its correction.
+  Independent float references, actual device-free Audio consumption, fractional/
+  long-frame/lifetime tests and two Vulkan projection cases pass. All five targets
+  build; 40 world/20 GUI/6 map Vulkan cases, shared water and Alpha scenery pass too.
+  The full CPU/owner run completes with exactly two known generator-reference
+  failures: an owner modded launch overwrote the region-pair oracle. An isolated
+  original-game capture is still required; engine generation and assertions have
+  not been changed to match that modded data. Double-degree camera state, fixed
+  anchors/obstruction and earlier input/targeting phase integration remain open.
+
+- The shared GUI foundation has independently specified pointer routing, capture/
+  focus/auxiliary lifetimes, button state/groups, cached owners and frame placement.
+  Numeric, reentrant routing and owner-tree regressions pass. This dispatcher is
+  not yet connected to the complete live GUI. Retained cursor images now borrow
+  the canonical transient stack at the admitted panel's callback tail; no new
+  drag/grab/save producer is inferred. Controls local defaults/edits remain
+  separate from active loaded bindings and survive reopening. Full capture and
+  Controls thumb-drag integration remain release work.
+
+- Map history, wheel/shoulder controls, hovered/forced land state and border depth
+  now have bounded CPU/owner and six Vulkan checks, including inherited world
+  occlusion. Procedural artifact resources have a shared full-key cache and atomic
+  extractor request/status protocol. 332 owner native-lookup samples, captured
+  with the owner's mods active, match generated RGB/semantic metadata; they are
+  not an exhaustive or vanilla-world parity claim. Local captures and all
+  original assets remain excluded from source/runtime packages.
+
 - Current map matrices now precede GUI drawing, and marker collection/projection
   runs inside the admitted Overlay callback after earlier game-UI widgets.
   F4 suppresses the 3D map too; half radius uses retained Control message state,

@@ -118,9 +118,16 @@ request in list order, calls 0xa0420 with its position (+0x00), number (+0x18), 
 and pitch (+0x1c) (0xa5a50 at 0xaa570). This confirms the field order the other specs
 assumed: +0x1c is the pitch and +0x20 the volume. The owner (+0x28) is not used here.
 
-After playing number 0x54 (`Explosion.wav`) or 0x55, the camera shake (game +0x1e00) is raised
-to max(0, 1 − D / 2500) when that is larger, where D is the distance in blocks from the player
-to the sound (0x437ffc = 2500.0). Within the 64-block hearing range this is always about 1.
+**Corrected/superseded arithmetic:** after attempting number0x54 (`Explosion.wav`) or0x55,
+camera shake (game+0x1e00) is raised only for a strictly larger candidate
+**max(0,1−d²/2500)**. Here d² is float **squared** distance in blocks from the sound to the
+player's physical fixed position, not linear distance or distance from the listener eye.
+The former D/2500 and “always about1” wording was incorrect. The shake candidate reaches0
+at50 blocks; sound attenuation independently uses64 blocks from the eye. Playback failure,
+volume and audibility return do not gate the shake update. Camera decay then occurs in the
+same frame with its independent0.005 coefficient before view translation. Exact fixed/float
+conversion, operation order, finite references and cosine phases are authoritative in
+[gameplay camera §§2/4/7.2](steam-gameplay-camera.md), native0xaa594–0xaa5f3/0xadcd0.
 
 ---
 
@@ -349,7 +356,7 @@ All are appended to world +0xa0 and played by §2.1.
 | 0x4ac9d0 | 2.0 | maximum frequency ratio |
 | 0x42e51c | 0.01 | volume option scale; music stop threshold |
 | 0x437f78 | 0.015 | ducked music volume |
-| 0x437ffc | 2500.0 | explosion shake distance |
+| 0x437ffc | 2500.0 | explosion shake squared-distance denominator;50-block radius |
 | 0x42e598 | 10.0 | beach height |
 | 0x4ac964 | 0.5 | place weight threshold; wind volume base and scale |
 | 0x438014 / 0x438024 | 21,600,000 / 75,600,000 | night bounds |

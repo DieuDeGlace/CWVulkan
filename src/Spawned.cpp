@@ -850,14 +850,10 @@ std::vector<std::pair<int, glm::vec3>> SpawnedCreatures::list(const ExtractedWor
 
 void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     lastWorld = &ew;
-    // The game's frame (0x1400f5520): whole milliseconds, at most 1000, stepped by 16 ms
-    // with the rest last (0x2da6c0 each step).
-    carriedMs += dtMs;
-    int ms = (int)carriedMs;
-    carriedMs -= ms;
-    ms = std::min(ms, 1000);
-    if (ms <= 0)
-        return;
+    // Gameplay-camera §7.2.3: ordinary frames retain double milliseconds. The host
+    // supplies integer timeGetTime differences to its separate world through this same
+    // splitter. Both consume the final float residual, including zero, without carry.
+    const double ms = gamemath::frameMilliseconds(dtMs);
     nativeupdate::World w;
     w.client = client;
     std::vector<nativeai::Creature *> sides;
@@ -1256,7 +1252,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
         iw.changedZones.clear(), iw.buffNotes.clear();
         iw.sleepNotices.clear(), iw.pickUps.clear(), iw.changedGroundZones.clear();
     };
-    int left = ms;
+    double left = ms;
     while (left > 16) {
         step(16.0f);
         left -= 16;

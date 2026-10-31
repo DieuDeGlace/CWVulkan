@@ -158,6 +158,13 @@ the Steam look). Nothing about them is title-specific.
 
 ### 3.3 The camera (0xadcd0, every frame)
 
+**Exact-contract supersession:** [steam-gameplay-camera.md](steam-gameplay-camera.md)
+is authoritative for ordinary camera input, precision, independent smoothing, obstruction
+and shake matrices, including while the title is shown. This section retains the title's
+specific target override and a summary; its older shared distance/angle coefficient and
+combined mouse/stick timing shorthand are corrected below. Sound-driven shake also uses
+that camera's squared-distance producer, independent decay and verified cosine phases.
+
 The gameplay camera is an orbit camera with three target angles and current angles (G+0x1d98,
 +0x1da0, +0x1da8 targets: pitch, roll, yaw; G+0x1d80, +0x1d88, +0x1d90 current), a target
 distance G+0x1db8 and a current distance G+0x1db4, all in degrees and blocks.
@@ -168,14 +175,21 @@ distance G+0x1db8 and a current distance G+0x1db4, all in degrees and blocks.
 * pitch target = 110;
 * distance target = 12.
 
-Roll is not touched (it stays 0). Mouse or stick look input, scaled by the camera-speed option,
-is also added to the targets every frame unless the world map is open (0xa5a50, after the
-camera block); on the title this input is normally zero (open question 3).
+Roll is not touched (it stays0). Mouse displacement callbacks and the frame right-stick
+pass use the distinct gameplay camera §3 admission/order rules. The mouse path uses
+cameraSpeed; the right-stick rate does not. They are not one shared input added after
+the camera update; manual frame stick changes precede smoothing, and mouse callbacks
+are separate events.
 
 **Smoothing.** With *k* = 0.005 raised to (cameraSmoothness × 0.01) (option, default 80;
 `frontend-options.md`), each current angle moves toward its target by the factor
 s = smooth(*dt*, *k*) (0xa7a0, specified in `creature-upkeep.md` §4.9): current = current +
-(target − current) × s, in double. The current distance does the same in single precision.
+(target − current) × s, in double. **Current distance instead uses its own fixed rate0.004**
+and separate float subtraction/multiplication/addition. **Shake decays toward0 at rate0.005**,
+also separately in float. Both use the capped double frame interval through0xa7a0 and are
+independent of cameraSmoothness. This corrects the older statement that current distance
+uses the angle option's coefficient; gameplay camera §§2/4 supplies exact operation order
+and finite references.
 
 **Look-at point.** For ability 0x9d the look-at point (G+0x1dd8..+0x1de8) is P's position with
 z raised by one block (65536 units), taken directly with no smoothing. (Other abilities use

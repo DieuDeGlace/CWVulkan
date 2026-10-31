@@ -394,6 +394,19 @@ individual feature documents.
   are now available. Their remaining consumers and native visual comparisons still
   need implementation/validation. Scene range and Steam sky easing now use the
   verified float-rounded scene interval, distinct from the double camera interval.
+  Orbit-distance smoothing now uses its separate float 0.004 coefficient in
+  both frontend and gameplay; the camera uses capped wall time rather than the
+  simulation's 100-ms limit. Explosion notices use physical-player squared
+  distance, strict maximum accumulation and same-frame 0.005 decay. Cosine shake
+  translates the render view, CPU clip view and speech projection while eye/aim
+  remain unshaken. Focused float references and two Vulkan projection cases cover
+  these bounded consumers. Full double-degree state, fixed look-at/eye updates,
+  terrain obstruction and input/targeting order remain open. Shake reads the
+  client world's float simulation clock after its substeps. Ordinary world frames
+  now consume the retained capped double interval, 16-ms steps and a narrowed
+  float residual without whole-ms carry; the final zero step is not skipped.
+  The host's integer tick remains a separate caller. Fractional/long-frame and
+  clock-lifetime regressions cover this distinction.
   Stock water opacity initializes to 1 and retains 1 through range reset; the native
   audit found no zero/fade-reset writer. The previous zero initializer was corrected.
   Flagged-block color and the remaining shader controls still need their consumers.

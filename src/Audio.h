@@ -46,7 +46,7 @@ class Audio {
     // An interface sound: at the listener, full volume, normal pitch (0xa03f0).
     void playInterface(int number);
     // The world's sound requests of a frame, in order (§2.1). An explosion shakes the camera
-    // by its distance from the player (world units).
+    // from squared distance to the physical player, regardless of audibility.
     void playRequests(const std::vector<soundrules::RequestRecord> &requests, const int64_t player[3]);
     // The camera shake explosions raised (game +0x1e00); the camera lets it die down.
     float cameraShake() const;

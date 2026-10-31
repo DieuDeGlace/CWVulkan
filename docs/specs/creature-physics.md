@@ -49,11 +49,29 @@ health 0x5fac0 and maximum combo 0x5f9e0 (`creature-hit.md` §5).
 
 ## 1. Where it runs and how time is split
 
-The frame routine 0x1400f5520 takes the frame's elapsed whole milliseconds m, caps it at 1000,
-and runs the world tick 0x2da6c0 several times: when m > 16 it runs k = ((m − 17) >> 4) + 1
-ticks (unsigned shift) with dt = 16.0 each, then one more tick with dt = float(m − 16k); when
-m ≤ 16 a single tick with dt = float(m). The world tick first clears bit 0x10 of +0x128 for
-every creature in world+0x40, then walks that list in order and, for each creature whose health
+**Scope correction:**0xf5520 is the **host tick**, not the ordinary window/Game frame.
+The host thread0x83e60 supplies integer milliseconds from timeGetTime differences and
+updates the host's separate embedded world (host+0x08). This is not a stage which
+truncates the ordinary client's high-resolution frame interval before0xa5a50.
+
+The host tick caps its elapsed whole milliseconds m at1000 and runs world tick0x2da6c0
+several times: when m >16 it runs k=((m−17)>>4)+1 ticks (unsigned shift) with dt16.0,
+then one more tick with dt=float(m−16k); when m≤16 a single tick with dt=float(m).
+That integer-input rule applies to the host world only (`netcode-transport.md` §2).
+
+The ordinary **client/Game frame** is **0x134420→0xa5a50**, retaining a double
+millisecond interval, capped at1000. When wanted and loaded world seed/name match,
+it consumes successive float16 steps while the double remainder is strictly>16,
+then one float-narrowed remainder step, including one zero step for a zero frame interval.
+It does **not** round the whole frame to integer milliseconds, carry a fractional
+millisecond balance or skip a frame merely because trunc32(dt) is0. Exact producers,
+scope and16.25/16.75-ms references are in
+[gameplay camera §7.2.3](steam-gameplay-camera.md); its §7.2.1 gives the common
+World+0x440 float-add producer. Host and client worlds are separate objects even
+for a player connected to their own host (`netcode-roles.md` §1).
+
+During its creature-update portion, the common world tick clears bit0x10 of+0x128
+for every creature in world+0x40, then walks that list in order and, for each creature whose health
 +0x180 > 0, calls 0x2bb8e0(world, C, dt), then the ability update 0x2c5250 and the interaction
 handler 0x2c3710; every creature (alive or not) then gets the upkeep 0x2de4c0.
 

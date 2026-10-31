@@ -18,20 +18,8 @@ using namespace soundrules;
 namespace {
 // The output's lowest frequency ratio (the game's voices are made with the default minimum).
 constexpr float MIN_PITCH = 1.0f / 1024.0f;
-constexpr double UNITS_PER_BLOCK = 65536.0;
 // Where the extraction tool writes the sound list, under the install.
 const char *const SOUND_LIST = "Extract/sounds.txt";
-
-// The squared distance in blocks between two world positions, each axis converted to a float
-// as the game does.
-float distance2(const int64_t a[3], const int64_t b[3]) {
-    float d2 = 0;
-    for (int i = 0; i < 3; i++) {
-        const float d = (float)((double)(a[i] - b[i]) / UNITS_PER_BLOCK);
-        d2 += d * d;
-    }
-    return d2;
-}
 
 std::string hex(int n) {
     char text[16];
@@ -150,7 +138,7 @@ void Audio::update() {
 void Audio::setListener(const int64_t eye[3]) { std::copy(eye, eye + 3, s->listener); }
 
 void Audio::playAt(int number, const int64_t position[3], float volume, float pitch) {
-    const float d2 = distance2(position, s->listener);
+    const float d2 = distanceSquared(position, s->listener);
     const Heard heard = attenuate(d2);
     if (s->log) {
         std::string line = "Sound " + hex(number) + " at " + std::to_string((int)std::sqrt(d2)) + " blocks";
@@ -173,7 +161,7 @@ void Audio::playRequests(const std::vector<RequestRecord> &requests, const int64
         const Request r = readRequest(record);
         playAt(r.number, r.position, r.volume, r.pitch);
         if (isExplosion(r.number))
-            s->shake = std::max(s->shake, explosionShake(std::sqrt((double)distance2(r.position, player))));
+            s->shake = std::max(s->shake, explosionShake(distanceSquared(r.position, player)));
     }
 }
 

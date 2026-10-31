@@ -64,6 +64,10 @@ uses the angle option's coefficient is inaccurate. The native independent
 distance rate is **0.004 at0x437f70**, called at **0xade0c**. Angle option
 conversion/powf/call is **0xadd54–0xaddae**. Camera speed and invertY do not
 alter this smoothing coefficient; those are mouse-input properties.
+Shake uses the separate **float0.005 at0x42e518**, called at **0xade40**,
+with its newly decayed magnitude stored at0xade75. These three distinct
+angle/distance/shake operations supersede the older title camera's
+single-coefficient summary; this gameplay contract also governs its title use.
 
 ## 3. Manual input, assistance, zoom and reset producers
 
@@ -194,6 +198,58 @@ The camera then performs its §2 decay in the **same frame** before using
 the magnitude in its render-view matrix. Generic sounds or arbitrary
 particle families do not create camera shake through this producer.
 Native source **0xaa594–0xaa5f3**, distance-square helper0x2b650.
+
+### 4.1 Precision, old sound correction and finite arithmetic references
+
+This section **supersedes sound.md §2.1's former distance/2500 statement
+and “always about1” conclusion**. The native denominator2500 is **blocks
+squared**, giving a50-block shake radius. This is distinct from sound
+attenuation's64-block radius around the camera eye. Sound playback's
+early return does not bypass this player's-distance shake test.
+
+Exact arithmetic is verified at0x83c00→0x6d6b0→0x2b650 and0xaa5d5–0xaa5f3:
+first subtract the player's physical signed64 fixed coordinates from the
+sound's fixed coordinates. Convert **each difference** to float32, then
+multiply by exact float **1/65536, word0x37800000 at0x42e510**. Do not
+convert the two absolute positions to float before subtracting. Square
+each float component, add **X²+Y² first, then Z²**, with float rounding
+after every product/add. Divide that sum by float2500, then subtract the
+rounded quotient from float1, then take max with float0. The division is
+an actual float divide, not multiplication by a rounded reciprocal.
+
+The following are **derived float32 arithmetic references, not game
+captures**. Start stored shake0 and process exactly one eligible sound.
+The first six rows put the sound along+X at the given block difference
+from the physical player; multiply each listed difference by65536 for
+its fixed-coordinate difference. The final row has fixed difference
+**(196608,262144,786432)**, spanning all three axes. Hex words give exact
+float representations. The final column additionally applies the same
+frame's16.0-ms shake decay, before view construction.
+
+| Sound minus player, blocks | Rounded d² | Candidate before decay, float word | After16-ms decay, float word |
+|---|---|---|---|
+| (0,0,0) | 0 | 1;0x3f800000 | 0.9240515232086182;0x3f6c8ea4 |
+| (10,0,0) | 100 | 0.9599999785423279;0x3f75c28f | 0.8870894312858582;0x3f63184b |
+| (25,0,0) | 625 | 0.75;0x3f400000 | 0.6930386424064636;0x3f316afb |
+| (49,0,0) | 2401 | 0.03960001468658447;0x3d2233a0 | 0.036592453718185425;0x3d15e1f8 |
+| (50,0,0) | 2500 | 0;0x00000000 | 0;0x00000000 |
+| (51,0,0) | 2601 | 0;0x00000000 | 0;0x00000000 |
+| (3,4,12) | 169 | 0.9323999881744385;0x3f6eb1c4 | 0.8615856170654297;0x3f5c90e0 |
+
+At51 blocks the rounded quotient is1.0404000282287598 and the pre-max
+subtraction is−0.040400028228759766. At50 blocks it is exactly0.
+Neither event forcibly clears a previously positive stored shake: the
+producer raises state only for a strictly larger candidate, after which
+ordinary same-frame decay still applies. Multiple sounds choose the
+greatest candidate/current magnitude rather than summing.
+
+For the16-ms column,0xa7a0 has count1600 and returns shake coefficient
+**0.07594848424196243, word0x3d9b8ae1**. Apply float subtraction0−candidate,
+float coefficient multiplication, then float addition to candidate.
+For an independent distance-rate reference at the same double interval,
+rate0.004 returns **0.061394426971673965, word0x3d7b78b9**. Starting current
+distance8 and requested12 gives **8.245577812194824, word0x4103ede3**
+before terrain obstruction. These results do not depend on cameraSmoothness.
 
 ## 5. Physical look-at candidate, posture and anchor smoothing
 
@@ -411,6 +467,154 @@ Thus the shaken render-view is **T(sx,sy,0) Rx(−pitch) Ry(−roll)
 Rz(−yaw) T(relative negative eye)**. Shake does not change stored fixed
 eye/look-at, angle state, or the unshaken forward/basis. Do not apply the
 look-at origin shift again through a full-world eye translation.
+
+**Verified phase/amplitude boundary:** native0xaee90–0xaeecc first forms
+float **halfAmplitude=shake×0.5**, after§2's same-frame decay, and reads
+World+0x440 once as float clock milliseconds. It evaluates Y's cosine
+first with float **0.04, exact word0x3d23d70a at0x42e6f0**, then X's with
+float **0.03, word0x3cf5c28f at0x42e6ec**. Each clock product rounds to
+float before cosf; each cosf result is multiplied by that same cached
+float halfAmplitude. The final translation remains X=0.03/Y=0.04 despite
+the opposite evaluation order. These are radians supplied directly to
+cosf, with no degrees conversion,2π multiplier, random phase, sin term,
+modulo clock or independent phase accumulator.
+
+For finite nonnegative shake q, each view-space component has envelope
+**−q/2..+q/2**; this is translation, not an angle amplitude or pixel-space
+offset. At clock0 both cosines are1, so the first table row after16-ms
+decay gives **sx=sy=0.4620257616043091**. At exact zero shake both offsets
+are0. These phase, axis, half-amplitude and view-only placement facts are
+verified native inputs, not remaining placeholder parameters. The stored
+fixed eye/look-at and unshaken targeting matrices are still unaffected.
+
+#### 7.2.1 Exact World+0x440 clock producer and lifetime
+
+This is **float32 elapsed simulation milliseconds**, distinct from the
+day/time-of-day fields World+0x08/+0x0c, a GUI clock or a performance-counter
+timestamp. **World constructor0x29a130 at0x29a2e4 initializes it to+0**.
+Ordinary world initialization/reseed0x2b5f20 does not reset it; its saved
+state load0x2b98b0→0x148e90 updates the earlier state fields, not+0x440.
+The midnight/sleep day-advance path in0x2e2e80 likewise leaves this clock
+running rather than wrapping/resetting it with time-of-day. These are the
+verified ordinary construction/reset paths, not an exhaustive claim about
+arbitrary external bulk state replacement or modified builds.
+
+**World step0x2da6c0 calls helper0x2e2e80 at0x2da728** with its float
+step interval. After the helper's rest/heal inspection and before its
+time-of-day arithmetic, **0x2e2f80–0x2e2f8b** load that float step, add the
+old stored float clock with **one ADDSS**, and store the float result back.
+There is no double accumulator, elapsed-to-seconds conversion or sleep
+multiplier in this addition. Sleep can accelerate time-of-day separately;
+that does not multiply+0x440's increment.
+
+The ordinary **0xa5a50** caller reaches world stepping only when wanted
+seed **G+0x206c equals World+0x220** and wanted name **G+0x2070 equals
+World+0x200**. Otherwise it skips these world steps and this clock does
+not advance through this producer, while later camera easing can continue.
+The step gate itself has no system-menu, full-map, ordinary-panel or
+foreground-window test. The float interval supplied to each call is:
+
+* Begin with this frame's capped **double** wall interval from§2, at most1000 ms.
+* While the remaining **double** interval is **strictly greater than16**,
+  call0x2da6c0 with float16, then subtract double16 from the remainder.
+* Make one final call with the remaining double interval **narrowed to
+  float32**, even when the frame interval is0. The final remainder can
+  equal16. Native call sites are **0xa7328** and **0xa734c**; residual
+  narrowing is **0xa7344**.
+
+This splitter starts anew each frame; its final substep consumes the
+remainder rather than carrying a fixed-step remainder into the next frame.
+
+For example32 ms means16+16,33 means16+16+1, and the1000-ms cap means
+62 successive16-ms additions plus one8-ms addition. Each clock addition
+rounds to float separately. It is incorrect to add the full frame interval
+once, or retain a double total and narrow only for the cosine consumer.
+As a derived float32 reference, starting clock **268435456 ms** and a32-ms
+frame, the two16 additions both round back to268435456; one32 addition
+would instead give268435488. This is an arithmetic reference, not a capture.
+
+All of these world substeps precede the current frame's camera0xadcd0,
+so shake phase reads the clock after their additions. Background/focus
+behavior remains **steam-scene-lighting §5.2**: the normal nonforeground
+loop sleeps16 ms and still calls0x134420, with no focus pause/clock reset.
+If its valid-Game/renderer outer guard prevents a frame call, there is no
+world-step addition then. When calls resume, the measured interval is
+subject to the same1000-ms cap and substeps, rather than restoring every
+millisecond of an arbitrarily long stopped interval. No separate minimized
+or menu clock-reset policy is introduced here.
+
+#### 7.2.2 Shaken view consumed by renderer CPU clipping and speech
+
+The ordinary render call **0xad9d4→0xe2e00** supplies matrix **inputs**:
+G+0x1ee4, G+0x1f24 and G+0x1f64. Native argument setup **0xad8f2–0xad900**
+and **0xad99d–0xad9a7** identifies those pointers. Renderer entry copies
+their64-byte contents to **renderer+0x35c**, **+0x39c**, **+0x3dc**,
+respectively; first stores are **0xe2f4b/0xe2f81/0xe2fb7**.
+It then calls the CPU clip-plane builder **0xdf8f0 at0xe308a**. Consequently
+its view+0x39c is the **shaken, render-origin-relative Game+0x1f24**,
+and the CPU matrix is projection+0x3dc times this shaken view, as
+steam-scene-lighting §1.3 specifies. Do not substitute unshaken+0x1ee4
+or feed a view built from a different fixed origin to this test.
+
+NPC speech projection also reads **Game+0x1f24** and+0x1f64, but the
+ordering is distinct: the retained-bubble update call **0xaa1bc** occurs
+before this frame's camera call **0xaaf02**, and before scene submission
+**0xad9d4**. It normally projects with the **preceding camera update's
+shaken view/projection**, then this frame's camera builds the new inputs
+which the renderer copies. The scene renderer does not produce these
+Game matrix fields as output. This corrects that attribution in
+steam-npc-speech-rendering §3 while preserving its verified earlier-bubble
+projection phase. A fresh same-frame projection would change scheduling.
+First/pre-camera matrix initialization and other temporary map/GUI views
+are not newly established by this narrow source-to-consumer trace.
+
+#### 7.2.3 Ordinary frame versus host tick: whole-ms interpretation superseded
+
+The earlier interpretation that **0xf5520 is an upstream window/Game
+frame which carries fractional milliseconds, truncates before0xa5a50,
+or skips a zero-whole-ms frame is inaccurate**. Native caller/argument
+loads distinguish three separate routes:
+
+| Route | Interval and destination |
+|---|---|
+| Main window loop0x1355a0→0x134420→0xa5a50 | High-resolution elapsed nanoseconds converted to double ms, directly passed at0x134558.0xa5a50 caps the retained double and splits it under§7.2.1 for Game's World pointer+0x08. |
+| Host thread0x83e60→0xf5520 | timeGetTime DWORD difference passed in EDX at0x83eb9–0x83ec6, already integer ms. The host object is Game+0x6e8; its distinct embedded World begins at host+0x08. The host is not a wrapper around the ordinary Game frame. |
+| Later integer-argument consumers within0xa5a50 |0xaaed0 truncates a **separate integer argument** for0xb37f0/0xb36a0/0xb6240/0xb03d0 and later0xaf110. This does not replace the retained double used by world stepping or camera.0xaaefc copies that double to XMM1 for camera call0xaaf02. |
+
+The ordinary wrapper's **0x134536–0x134558** sequence converts the elapsed
+integer nanoseconds to double, divides by1000000000, multiplies by1000,
+then calls0xa5a50 without an intervening truncation or zero check.
+Its previous-timestamp field0x551cb0 is replaced with the full current
+timestamp before the call, not an accumulated fractional-ms balance.
+The normal main-loop join **0x137b8e** calls this wrapper; no carried
+whole-ms splitter before that call was found in the audited route.
+The valid Game/device guard and wanted/loaded-world gate remain the
+independent admission conditions already specified, not elapsed==0 gates.
+
+Host construction **0xf17a0** creates its own World through0x29a130 at
+host+0x08. The host's integer-step description in creature-physics §1
+was valid for that host tick but mislabeled as the ordinary frame.
+The camera phase clock is **Game's World+0x440**, not the host World's
+clock. See netcode-roles §1 and netcode-transport §2 for the distinct roles.
+
+Derived finite reference, starting the ordinary client's float clock0
+and keeping its world-step gate admitted:
+
+| Consecutive raw double frame ms | Native float world steps in that frame | Clock after frame |
+|---|---|---|
+|16.25 |16,0.25 |16.25 |
+|16.75 |16,0.75 |33 |
+|0 |0, one reached final call |33 |
+|0.25 |0.25 |33.25 |
+
+In particular the first frame is **16.25**, not16 with0.25 banked until
+the next frame. For a separate long-frame reference starting clock0,
+**1500.75 ms caps to1000**, producing62×16 then8, clock1000. A following
+0.25-ms frame produces one0.25 step, clock1000.25; no discarded500.75-ms
+debt or fractional tail is carried. These are arithmetic references,
+not native runtime captures. The no-carry/final-zero-call contract of
+§7.2.1 is confirmed for this ordinary client route; host integer timing
+and other helpers' integer arguments must not be substituted for it.
 
 ### 7.3 FOV and native clip convention
 

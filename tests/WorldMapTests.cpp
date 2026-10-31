@@ -303,11 +303,20 @@ void shrineWorldClock() {
     SpawnedCreatures creatures;
     creatures.setClock(5, 123456);
     creatures.simulate(blocks, 16.25);
-    MAP_CHECK(creatures.elapsedWorldTime() == 16);
+    MAP_CHECK(creatures.elapsedWorldTime() == 16.25f);
     creatures.simulate(blocks, 16.75);
     MAP_CHECK(creatures.elapsedWorldTime() == 33 && creatures.timeOfDay() == 123456);
+    creatures.simulate(blocks, 0.125);
+    MAP_CHECK(creatures.elapsedWorldTime() == 33.125f); // no carried whole-ms remainder
     creatures.simulate(blocks, 2000);
-    MAP_CHECK(creatures.elapsedWorldTime() == 1033); // normal world-frame1000-ms cap, not GUI time
+    MAP_CHECK(creatures.elapsedWorldTime() == 1033.125f); // normal world-frame1000-ms cap, not GUI time
+    creatures.worldReset();
+    creatures.setClock(6, 0);
+    MAP_CHECK(creatures.elapsedWorldTime() == 1033.125f); // reset/calendar changes retain elapsed world time
+    SpawnedCreatures interrupted;
+    interrupted.simulate(blocks, 1500.75);
+    interrupted.simulate(blocks, 0.25);
+    MAP_CHECK(interrupted.elapsedWorldTime() == 1000.25f); // discarded long-frame tail creates no debt
 }
 
 void hoveredLandBorder() {

@@ -73,6 +73,7 @@ struct RenderSettings {
 struct Camera {
     glm::vec3 eye{0}, target{0, 1, 0};
     float aspect = 16.f / 9;
+    glm::vec2 viewShake{0};                   // Native view-space translation (left/up); never changes eye or aim.
     std::optional<float> displayedYawDegrees; // Steam beam orientation, before eye collision adjustments
 };
 
