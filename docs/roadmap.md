@@ -153,6 +153,9 @@ individual feature documents.
   and storage moves, including the local player at its actual registration point;
   removal/recreation appends at the tail. Full native list-mutation producer coverage
   and remaining World consumers' visit ordering still need validation/integration.
+  The independent [World visitation](specs/steam-world-creature-visitation.md)
+  supplement now traces separate global-clear/main live-list traversals and two
+  distinct drawn-state passes; its remaining live integration is still open.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are
@@ -436,8 +439,15 @@ individual feature documents.
   distance, strict maximum accumulation and same-frame 0.005 decay. Cosine shake
   translates the render view, CPU clip view and speech projection while eye/aim
   remain unshaken. Focused float references and two Vulkan projection cases cover
-  these bounded consumers. Full double-degree state, fixed look-at/eye updates,
-  eight-corner camera obstruction and remaining input/GUI integration stay open. Shake reads the
+  these bounded consumers. Physical fixed anchors, posture/mount/step probes,
+  native XY/Z/ability smoothing and the50-block snap now drive gameplay camera
+  position. Eight type-only eye guards and sequential corner rays shorten current
+  distance without replacing requested zoom; final solid fallback uses raw P.
+  Zero-limit rays retain the initial zone lookup and skip block reads. World/clip/
+  speech views use a native inverse rotation, including zero distance and poles.
+  Derived numeric/probe tests, both-style Vulkan camera cases and the full image
+  regression set pass. Full double-degree angle state/producers, native startup/
+  reset transfer, render-origin/FOV fidelity and input/GUI integration remain open. Shake reads the
   client world's float simulation clock after its substeps. Ordinary world frames
   now consume the retained capped double interval, 16-ms steps and a narrowed
   float residual without whole-ms carry; the final zero step is not skipped.

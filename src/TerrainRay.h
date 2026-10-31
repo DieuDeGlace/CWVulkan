@@ -16,7 +16,7 @@ struct World {
 enum class Material { TypeOnly, HonorFlag40 };
 // Native0xfd80 conversion, including narrowing before the negative exactness test.
 int32_t blockCoordinate(int64_t fixed);
-// Finite positive-limit contract. Direction is used as stored, without normalization.
+// Finite nonnegative limit. Direction is used as stored, without normalization.
 float trace(const World &world, const std::array<int64_t, 3> &origin, const std::array<float, 3> &direction, float maximum,
             Material material);
 // Fixed-coordinate visibility wrapper: double range rejection, float direction,

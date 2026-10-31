@@ -72,6 +72,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Fixed gameplay camera positioning follows the independent camera §§5–6 and
+  terrain-ray contract: typed physical/posture/mount snapshots, low64 arithmetic,
+  ordered probes, distinct smoothing, eight guards and sequential shortening.
+  The renderer consumes an independently constructed inverse rotation for
+  coincident/pole views. Derived CPU references and actual Vulkan images verify
+  these bounded consumers; full angle/reset/render-origin integration remains.
+
 - Shared GUI routing follows `steam-gui-pointer-capture-routing.md`: cached and
   previous pointers, held bits, capture-or-root selection, independent virtual/
   registered gates, focus/auxiliary bookkeeping, nested release moves and ordered

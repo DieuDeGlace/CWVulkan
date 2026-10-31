@@ -27,6 +27,12 @@ inline int64_t subtractFixed(int64_t a, int64_t b) {
     std::memcpy(&result, &bits, sizeof result);
     return result;
 }
+inline int64_t multiplyFixed(int64_t a, int64_t b) {
+    const uint64_t bits = uint64_t(a) * uint64_t(b);
+    int64_t result;
+    std::memcpy(&result, &bits, sizeof result);
+    return result;
+}
 inline float fixedBlocksBetween(int64_t a, int64_t b) {
     return float(subtractFixed(a, b)) * (1.0f / 65536.0f);
 }

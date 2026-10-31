@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Native gameplay camera positioning now retains fixed eye/look-at state. Its
+  candidate uses physical coordinates, separate step/posture truncation, living
+  mount offsets and boat height. Native same-cell/corner probes, distinct ordinary
+  XY/Z smoothing, ability-specific anchors and the fifty-block safety snap replace
+  the fixed head offset. Eight visibility guards and sequential shortening rays
+  replace the stepped wall check; shortened current distance persists separately
+  from requested zoom. Camera rays use type-only obstruction, including exact
+  zero-maximum zone lookup without a block read. Audio and next-frame targeting
+  retain the fixed eye/anchor directly. Native inverse rotation drives world,
+  clip and speech views even at coincident eye/anchor or a vertical camera pole.
+  Posture/probe/rate/rounding/guard regressions pass. Both Vulkan styles pass
+  coincident/pole/projection/culling tests, and all40 world/20 GUI/6 map image cases,
+  shared water and Alpha scenery pass. All five targets build; the full CPU run
+  has only the same two modded generator-reference assertions. Read-only combat
+  and dialogue runs exit normally with the fixture save unchanged. The blue
+  fixture appearance and missing owner hair model remain unresolved/unaccepted.
+  Full double-degree angle storage/producers, native startup/reset transfer,
+  FOV/render-origin matrix fidelity and live GUI admission remain open.
+
 - Target-candidate visibility now queries the completed renderer epoch, including
   the outer height-aware sphere and separate step-adjusted inner width/range.
   Candidate float keys use the independently specified insertion/partition/heap
@@ -49,10 +68,9 @@ older successful runs; none of these bounded changes establishes complete parity
   coordinate addition; ground LOS retains its raw tuple. Target/control/ray tests
   cover separate phases, depth/rank ties, high-coordinate low bits, strict range,
   flags, zero crossings, missing zones and nearby fallback without extra LOS.
-  Full camera anchors/obstruction, legacy radian storage, live GUI focus and
-  original-game comparisons remain open. The shared
-  camera visibility predicate is specified/tested, but its eight-corner camera
-  caller has not replaced the legacy positioning bridge yet. All five targets
+  Legacy radian storage, startup/reset/FOV integration, live GUI focus and
+  original-game comparisons remain open. Camera positioning and its eight-corner
+  terrain caller now use the independent fixed contract described above. All five targets
   build; focused tests and the full CPU suite add no new failures. The latter
   retains exactly the two modded generator-oracle assertions described below.
   Read-only movement/attack/dodge and conversation runs both exit normally with
@@ -114,8 +132,8 @@ older successful runs; none of these bounded changes establishes complete parity
   The full CPU/owner run completes with exactly two known generator-reference
   failures: an owner modded launch overwrote the region-pair oracle. An isolated
   original-game capture is still required; engine generation and assertions have
-  not been changed to match that modded data. Double-degree camera state, fixed
-  anchors/obstruction and earlier input/targeting phase integration remain open.
+  not been changed to match that modded data. Double-degree angle state, full
+  startup/reset/render-origin/FOV transfer and remaining GUI integration stay open.
 
 - The shared GUI foundation has independently specified pointer routing, capture/
   focus/auxiliary lifetimes, button state/groups, cached owners and frame placement.

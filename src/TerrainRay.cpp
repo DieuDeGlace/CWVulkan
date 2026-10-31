@@ -32,6 +32,8 @@ float trace(const World &world, const std::array<int64_t, 3> &origin, const std:
     std::array<int32_t, 3> cell{blockCoordinate(origin[0]), blockCoordinate(origin[1]), blockCoordinate(origin[2])};
     int32_t zoneX = zoneCoordinate(cell[0]), zoneY = zoneCoordinate(cell[1]);
     bool available = world.hasZone(zoneX, zoneY);
+    if (maximum == 0.0f)
+        return 0.0f; // Initial zone lookup precedes this exit; even -0 returns +0.
     float traveled = 0;
     int crossings = 0;
     for (;;) {

@@ -1101,7 +1101,19 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // --- Uniforms ---
     float aspect = extent.height ? (float)extent.width / extent.height : camera.aspect;
     const glm::mat4 shake = glm::translate(glm::mat4(1), glm::vec3(-camera.viewShake.x, camera.viewShake.y, 0));
-    glm::mat4 view = shake * glm::lookAtRH(camera.eye, camera.target, glm::vec3(0, 0, 1));
+    const auto viewAt = [&](glm::vec3 eye, glm::vec3 target) {
+        if (!camera.nativeViewRotation)
+            return glm::lookAtRH(eye, target, glm::vec3(0, 0, 1));
+        glm::mat4 rotation(*camera.nativeViewRotation);
+        // Native projection points X left and Z forward; Vulkan's RH scene
+        // projection uses right/back instead, with the same up vector.
+        for (int column = 0; column < 4; ++column) {
+            rotation[column][0] = -rotation[column][0];
+            rotation[column][2] = -rotation[column][2];
+        }
+        return glm::translate(rotation, -eye);
+    };
+    glm::mat4 view = shake * viewAt(camera.eye, camera.target);
     const float farPlane =
         std::max(settings.fogDistance * ALPHA_CLOUD_REACH, settings.fogDistance + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) +
         FAR_MARGIN;
@@ -1145,10 +1157,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     nativeEye.z += (float)worldProbe.origin.z;
     nativeTarget.z += (float)worldProbe.origin.z;
     const auto nativePlanes = scenevisibility::planes(glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) * shake *
-                                                      glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1)));
+                                                      viewAt(nativeEye, nativeTarget));
     lastSceneSphere =
         SphereState{{(int64_t)(worldProbe.origin.x * 65536), (int64_t)(worldProbe.origin.y * 65536), 0}, nativeEye, nativePlanes};
-    auto speechView = glm::lookAtRH(nativeEye, nativeTarget, glm::vec3(0, 0, 1));
+    auto speechView = viewAt(nativeEye, nativeTarget);
     for (int column = 0; column < 4; ++column) {
         speechView[column][0] = -speechView[column][0];
         speechView[column][2] = -speechView[column][2];
@@ -1188,9 +1200,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     const glm::dvec3 eyeGame = glm::dvec3(camera.eye) + worldProbe.origin;
     // §7.2 (alpha-rendering.md), both looks: the sky gradient follows the camera's tilt (its
     // angle from straight up).
-    const glm::vec3 forward = glm::normalize(camera.target - camera.eye);
-    const float gradientShift =
-        alpha::fogGradientTranslation(glm::degrees(std::acos(std::clamp(forward.z, -1.f, 1.f))));
+    const glm::vec3 forward = camera.nativeViewRotation ? glm::vec3((*camera.nativeViewRotation)[0][2], (*camera.nativeViewRotation)[1][2],
+                                                                    (*camera.nativeViewRotation)[2][2])
+                                                        : glm::normalize(camera.target - camera.eye);
+    const float gradientShift = alpha::fogGradientTranslation(glm::degrees(std::acos(std::clamp(forward.z, -1.f, 1.f))));
     u.alphaView = glm::vec4(gradientShift, 2.f / std::max(1u, extent.width), 2.f / std::max(1u, extent.height), 0);
     // §7.1: the fog distance follows the nearest unloaded ground, smoothed over time.
     {

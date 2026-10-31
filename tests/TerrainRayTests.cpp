@@ -2,6 +2,7 @@
 #include "TerrainRay.h"
 #include <array>
 #include <cstdio>
+#include <cmath>
 #include <vector>
 
 int terrainRayTests() {
@@ -112,6 +113,22 @@ int terrainRayTests() {
     check(visible(world, {655, 32768, 32768}, {66191, 32768, 32768}, 200, Material::TypeOnly) &&
               !visible(world, {656, 32768, 32768}, {66192, 32768, 32768}, 200, Material::TypeOnly),
           "full ray result is compared against rounded length minus epsilon");
+    for (bool loaded : {false, true})
+        for (float maximum : {0.0f, -0.0f}) {
+            reads = 0;
+            zones.clear();
+            world.hasZone = [&](int32_t x, int32_t y) {
+                zones.push_back({x, y});
+                return loaded;
+            };
+            world.block = [&](int32_t, int32_t, int32_t) {
+                ++reads;
+                return Cell{1, 0x40};
+            };
+            const float result = trace(world, {-1, 64 * 65536 + 5, -65537}, {1, 0, 0}, maximum, Material::TypeOnly);
+            check(result == 0 && !std::signbit(result) && reads == 0 && zones == std::vector<std::array<int32_t, 2>>{{-1, 1}},
+                  "zero maximum resolves the initial zone then returns positive zero without a block read");
+        }
     std::printf("Terrain ray: %s\n", failures ? "FAILED" : "passed");
     return failures;
 }

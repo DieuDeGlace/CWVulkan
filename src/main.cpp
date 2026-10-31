@@ -8,6 +8,8 @@
 #include "PyroCreatures.h"
 #include "GameMath.h"
 #include "CameraMotion.h"
+#include "CameraPosition.h"
+#include "NativeUpkeep.h"
 #include "TerrainRay.h"
 #include "Body.h"
 #include "DeathEffects.h"
@@ -3200,6 +3202,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
     float viewYaw = player.yaw, viewPitch = player.pitch, viewZoom = player.zoom;
+    terrainray::World nativeTerrain;
+    nativeTerrain.hasZone = [&](int32_t x, int32_t y) { return extractedWorld.gameZoneLoaded(x, y); };
+    nativeTerrain.block = [&](int32_t x, int32_t y, int32_t z) {
+        const auto block = extractedWorld.gameBlock(x, y, z);
+        return terrainray::Cell{block[4], block[5]};
+    };
+    cameraposition::State cameraPosition;
     auto retainUseCamera = [&](glm::vec3 eye, glm::vec3 target) {
         constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
         const auto basis =
@@ -3222,6 +3231,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
                                                         std::sin(viewPitch)),
                     initialFocus);
+    cameraPosition.eye = *useCamera.fixedEye;
+    cameraPosition.lookAt = *useCamera.fixedRayOrigin;
+    cameraPosition.distance = viewZoom;
 
     auto submitChat = [&](const std::u16string &line) {
         const auto command = chatcommand::parse(line);
@@ -3847,18 +3859,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     return useprompt::clearLine(from, to, limit,
                                                 [&](int x, int y, int z) { return extractedWorld.solidAt(x + 0.5, y + 0.5, z + 0.5); });
                 };
-                terrainray::World rayWorld;
-                rayWorld.hasZone = [&](int32_t x, int32_t y) { return extractedWorld.gameZoneLoaded(x, y); };
-                rayWorld.block = [&](int32_t x, int32_t y, int32_t z) {
-                    const auto block = extractedWorld.gameBlock(x, y, z);
-                    return terrainray::Cell{block[4], block[5]};
+                nativeUseScene.fixedSight = [nativeTerrain](const auto &from, const auto &to, float limit) {
+                    return terrainray::visible(nativeTerrain, from, to, limit, terrainray::Material::TypeOnly);
                 };
-                nativeUseScene.fixedSight = [rayWorld](const auto &from, const auto &to, float limit) {
-                    return terrainray::visible(rayWorld, from, to, limit, terrainray::Material::TypeOnly);
-                };
-                const float reach =
-                    terrainray::trace(rayWorld, *useCamera.fixedRayOrigin, {useCamera.forward.x, useCamera.forward.y, useCamera.forward.z},
-                                      60.0f, terrainray::Material::HonorFlag40);
+                const float reach = terrainray::trace(nativeTerrain, *useCamera.fixedRayOrigin,
+                                                      {useCamera.forward.x, useCamera.forward.y, useCamera.forward.z}, 60.0f,
+                                                      terrainray::Material::HonorFlag40);
                 nativeCreatureTargets = useprompt::chooseCreatures(nativeUseScene);
                 frameTargetCreature = nativeCreatureTargets.creature;
                 frameProjectedCreatureBox = nativeCreatureTargets.overCreature;
@@ -6028,28 +6034,75 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             viewPitch += (player.pitch - viewPitch) * s;
             viewZoom = cameramotion::distance(viewZoom, player.zoom, frameMs);
         }
-        glm::vec3 target = player.position + glm::vec3(0, 0, 1.6f);
-        glm::vec3 eye = target + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
-                                                      std::sin(viewPitch));
-        if (useExtracted) {
-            // Pull the camera in front of walls and roofs between it and the player.
-            glm::vec3 toEye = eye - target;
-            float length = glm::length(toEye);
-            for (float t = .3f; t < length; t += .2f) {
-                glm::vec3 p = target + toEye * (t / length);
-                if (extractedWorld.solidAt(p.x, p.y, p.z)) {
-                    eye = target + toEye * (std::max(.3f, t - .3f) / length);
-                    break;
+        glm::vec3 target, eye;
+        std::optional<glm::mat3> cameraRotation;
+        auto *cameraPlayer = nativePlayer ? spawned.localPlayer() : nullptr;
+        if (useExtracted && cameraPlayer && cameraPlayer->record) {
+            auto *record = cameraPlayer->record;
+            cameraposition::Subject subject;
+            std::memcpy(subject.physical.data(), record + worldgen::creature::POSITION, sizeof subject.physical);
+            std::memcpy(subject.size.data(), record + 0x84, sizeof subject.size);
+            std::memcpy(subject.velocity.data(), record + 0x34, sizeof subject.velocity);
+            std::memcpy(&subject.stepOffset, record + 0x990, sizeof subject.stepOffset);
+            subject.ability = record[worldgen::creature::ABILITY];
+            if (subject.ability == 0x76) {
+                int64_t mountId;
+                std::memcpy(&mountId, record + 0x9d8, sizeof mountId);
+                const auto *mount = mountId == spawned.playerId() ? spawned.playerRecord() : spawned.record(mountId);
+                if (mount) {
+                    cameraposition::Mount seat;
+                    float health;
+                    int32_t race;
+                    std::memcpy(&seat.height, mount + 0x8c, sizeof seat.height);
+                    std::memcpy(&health, mount + worldgen::creature::HEALTH, sizeof health);
+                    std::memcpy(&race, mount + worldgen::creature::RACE, sizeof race);
+                    seat.alive = health > 0;
+                    seat.offsetZ = nativeupkeep::ridingOffsetZ(race);
+                    subject.mount = seat;
                 }
             }
-        } else
-            eye.z = std::max(eye.z, groundAt(eye.x, eye.y) + .8f);
+            constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
+            const double pitch = double(viewPitch) * DEGREES_PER_RADIAN + 90.0;
+            const double yaw = double(viewYaw) * DEGREES_PER_RADIAN - 90.0;
+            const auto forward = cameramotion::basis(pitch, 0, yaw)[2];
+            cameraPosition.distance = viewZoom;
+            cameraposition::update(cameraPosition, subject, {forward.x, forward.y, forward.z}, frameMs, nativeTerrain);
+            record[worldgen::creature::ABILITY] = subject.ability;
+            viewZoom = cameraPosition.distance;
+            target = extractedWorld.toLocal(cameraPosition.lookAt.data());
+            eye = extractedWorld.toLocal(cameraPosition.eye.data());
+            cameraRotation = cameramotion::viewRotation(pitch, 0, yaw);
+        } else {
+            target = player.position + glm::vec3(0, 0, 1.6f);
+            eye = target + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
+                                                std::sin(viewPitch));
+            if (useExtracted) {
+                // Pull the camera in front of walls and roofs between it and the player.
+                glm::vec3 toEye = eye - target;
+                float length = glm::length(toEye);
+                for (float t = .3f; t < length; t += .2f) {
+                    glm::vec3 p = target + toEye * (t / length);
+                    if (extractedWorld.solidAt(p.x, p.y, p.z)) {
+                        eye = target + toEye * (std::max(.3f, t - .3f) / length);
+                        break;
+                    }
+                }
+            } else
+                eye.z = std::max(eye.z, groundAt(eye.x, eye.y) + .8f);
+        }
         { // Sounds are heard from the camera's eye (sound.md §2).
             int64_t ear[3];
-            toUnits(eye, ear);
+            if (cameraRotation)
+                std::memcpy(ear, cameraPosition.eye.data(), sizeof ear);
+            else
+                toUnits(eye, ear);
             audio.setListener(ear);
         }
         retainUseCamera(eye, target);
+        if (cameraRotation) {
+            useCamera.fixedEye = cameraPosition.eye;
+            useCamera.fixedRayOrigin = cameraPosition.lookAt;
+        }
         Lighting lighting = lightingAt(hour, dayNight, regionLook(columnAt(player.position.x, player.position.y)));
         if (mode == progression::Mode::Pyro && !session.started())
             session.visitLocalRegion(regionHere(), playerLevel);
@@ -6664,6 +6717,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 nativeCustomization.edit.open = false;
         }
         Camera camera{eye, target};
+        camera.nativeViewRotation = cameraRotation;
         // Sound notices have now raised shake; decay in this same frame, then affect only
         // the render view. The stored eye and the targeting basis remain unshaken (§4/7.2).
         audio.setCameraShake(cameramotion::decayShake(audio.cameraShake(), frameMs));

@@ -927,6 +927,12 @@ struct Upkeep {
 
 } // namespace
 
+float ridingOffsetZ(int32_t race) {
+    float x, y, z;
+    mountOffset(race, x, y, z);
+    return z;
+}
+
 void upkeep(World &world, nativeai::Creature *creature, float dt) {
     Upkeep u{world, *creature, creature->record, dt, !world.client, world.local == creature->record};
     u.run();

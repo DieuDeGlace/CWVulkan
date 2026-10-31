@@ -1,5 +1,6 @@
 // Actual Vulkan projection check for gameplay-camera §7.2. No owner assets required.
 #include "Renderer.h"
+#include "CameraMotion.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include "stb_image.h"
@@ -89,6 +90,12 @@ int cameraRenderTests() {
         const auto before = centroid("-baseline", true);
         culling = culling && renderer.steamSphereVisible(ahead, .5f, 160) && !renderer.steamSphereVisible(behind, .5f, 160) &&
                   !renderer.steamSphereVisible(ahead, .5f, 2);
+        camera.nativeViewRotation = cameramotion::viewRotation(90, 0, 180);
+        camera.target = camera.eye; // Native obstruction can collapse eye/anchor.
+        const auto coincident = centroid("-native-coincident", false);
+        bool orientation = coincident.x > 0 && std::abs(coincident.x - before.x) <= 1 && std::abs(coincident.y - before.y) <= 1;
+        camera.nativeViewRotation.reset();
+        camera.target = {0, 0, 0};
         camera.viewShake = {.5f, .25f}; // Native left/up view-space units.
         const auto after = centroid("-shake", false);
         // Pinhole projection, independently of the renderer's view-matrix implementation.
@@ -105,8 +112,15 @@ int cameraRenderTests() {
         culling = culling && renderer.steamSphereVisible(ahead, .5f, 160) && !renderer.steamSphereVisible(behind, .5f, 160);
         renderer.frame(camera, lighting, {0, 0, 0}, 0, {}, {});
         culling = culling && !renderer.steamSphereVisible(ahead, .5f, 160) && renderer.steamSphereVisible(behind, .5f, 160);
+        camera.eye = camera.target = {0, 0, 0};
+        camera.nativeViewRotation = cameramotion::viewRotation(0, 0, 0);
+        renderer.frame(camera, lighting, {0, 0, 0}, 0, {}, {});
+        orientation = orientation && renderer.steamSphereVisible({0, 0, 4 * 65536}, .5f, 160) &&
+                      !renderer.steamSphereVisible({0, 0, -4 * 65536}, .5f, 160);
         renderer.shutdown();
         culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
+        std::cout << "Camera orientation " << name << (orientation ? " PASS" : " FAIL") << " coincident target/pole\n";
+        failures += !orientation;
         std::cout << "Camera culling " << name << (culling ? " PASS" : " FAIL") << " retained renderer epoch/range/lifetime\n";
         failures += !culling;
     }

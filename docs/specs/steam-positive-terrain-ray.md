@@ -201,3 +201,34 @@ by0x8b26d. It does not newly specify negative-limit modes, complement
 mode callers, nonfinite inputs or invalid float-to-integer conversions.
 It does not add a ray normalization, range skin, alternative collision
 shape or post-hit correction absent from this caller.
+
+## 8. Zero-maximum entry used by later camera shortening calls
+
+Stable narrow extension for the camera's reached maximum0 case, for
+both **0x2a0d40** and **0x2d1d20**. This does not extend the negative
+mode or nonfinite-input audit.
+
+Both functions initialize traveled to float0, run **0xfd80** on the
+original fixed origin, compute the initial signed32 zone key, and
+perform the **initial loaded-zone lookup before checking the maximum**.
+For0x2a0d40 those calls are0x2a0d8b and0x2a0e00; for0x2d1d20 they are
+0x2d1d6f and0x2d1de4. They resolve a found node's zone pointer+0x18
+or retain null for the missing entry.
+
+The ensuing compare against zero jumps directly to the common min
+return: **0x2a0e1b–0x2a0e1f → 0x2a1206**, or
+**0x2d1dff–0x2d1e03 → 0x2d2216**. A maximum equal to zero therefore
+performs **no effective-block0xeb90 read**, no axis candidate evaluation,
+no crossing-budget increment, no cell-index change, no crossed-zone
+lookup and no traveled increment. It does not run one boundary advance
+before noticing the exhausted range. The min at0x2a120e or0x2d221e
+returns the initial traveled zero; either signed-zero maximum yields
+positive float0.
+
+Thus, after an earlier camera shortening ray sets current distance0,
+each remaining corner call still converts its own origin and looks up
+its initial zone, but returns0 without inspecting that cell's material
+or flags. The outer camera continues its specified eight-call sequence
+and retains distance0. Its separate final-eye effective-block fallback
+after the ray batch remains [camera §6.2](steam-gameplay-camera.md#62-guard-rays-shortened-distance-and-final-solid-fallback);
+the zero ray's lack of a block read does not remove that later check.

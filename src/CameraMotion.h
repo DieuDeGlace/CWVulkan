@@ -30,6 +30,21 @@ inline glm::mat3 basis(double pitchDegrees, double rollDegrees, double yawDegree
             {(cy * sr) * sp - sy * cp, (sy * sr) * sp + cy * cp, cr * sp},
             {(cy * sr) * cp + sy * sp, (sy * sr) * cp - cy * sp, cr * cp}};
 }
+// Unshaken native world-to-view rotation. Negate the stored double angles
+// before narrowing, and append inverse rotations X, Y, Z in that order.
+inline glm::mat3 viewRotation(double pitchDegrees, double rollDegrees, double yawDegrees) {
+    constexpr float RADIANS_PER_DEGREE = 0.01745329238474369f;
+    const float p = float(-pitchDegrees) * RADIANS_PER_DEGREE;
+    const float r = float(-rollDegrees) * RADIANS_PER_DEGREE;
+    const float y = float(-yawDegrees) * RADIANS_PER_DEGREE;
+    const float cp = nativecrt::cosf(p), sp = nativecrt::sinf(p);
+    const float cr = nativecrt::cosf(r), sr = nativecrt::sinf(r);
+    const float cy = nativecrt::cosf(y), sy = nativecrt::sinf(y);
+    const glm::mat3 x{{1, 0, 0}, {0, cp, sp}, {0, -sp, cp}};
+    const glm::mat3 tilt{{cr, 0, -sr}, {0, 1, 0}, {sr, 0, cr}};
+    const glm::mat3 z{{cy, sy, 0}, {-sy, cy, 0}, {0, 0, 1}};
+    return (x * tilt) * z;
+}
 // Native view basis: positive X points left, positive Y points up.
 inline glm::vec2 viewShake(float worldClockMs, float magnitude) {
     const float half = magnitude * 0.5f;

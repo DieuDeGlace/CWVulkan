@@ -63,6 +63,9 @@ struct World {
     std::vector<Hit> hits;
 };
 
+// Race-table riding offset used by upkeep and the gameplay camera.
+float ridingOffsetZ(int32_t race);
+
 // One upkeep step of `creature`, `dt` milliseconds long.
 void upkeep(World &world, nativeai::Creature *creature, float dt);
 
