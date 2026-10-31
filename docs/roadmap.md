@@ -169,6 +169,8 @@ individual feature documents.
   reconciliation includes local/network/dead/new entries; copied field widths and
   coordinate conversions have dedicated boundary checks. Full time/resident preludes,
   zone-pointer/RNG integration, broader mutation producers and native comparisons remain.
+  The specified resident kind9 request/producer and independent live/output lifetimes
+  now have native numeric and lifecycle checks; its broader rendering remains open.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are

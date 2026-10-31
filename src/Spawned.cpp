@@ -17,6 +17,7 @@
 #include "LinkedPlacement.h"
 #include "NativeBuffs.h"
 #include "ResidentPass.h"
+#include "ResidentEffects.h"
 
 #include <cmath>
 #include <cstdio>
@@ -249,8 +250,13 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         if (residentCentres.empty() || !near(key.first, key.second, NEAR_ZONES) || !ew.gameZoneLoaded(key.first, key.second))
             continue;
         auto &list = zones[key];
+        residentfx::Request request;
         auto rand = [&, &worldRand = zoneRand.at(key)] { return (int)(worldRand() & 0x7fff); };
         for (const auto &[id, sp] : zone->spawns.points) {
+            if (participants.contains(sp.id)) {
+                request.existing(sp.mode);
+                continue;
+            }
             if (!worldgen::residentReady(sp, key.first, key.second, resident))
                 continue;
             made.insert(sp.id);
@@ -267,6 +273,12 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             cr.side.inventory = worldgen::inventoryRecords(m.extras.inventory);
             list.push_back(std::move(cr));
             participants.added(sp.id);
+            request.created(sp.mode);
+        }
+        if (request.requested()) {
+            const auto candidate = residentfx::candidate(key.first, key.second, dayCount,
+                                                         [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y, 0); });
+            residentfx::append(candidate, effects, worldEvents.effects);
         }
     }
     if (roadTravel)

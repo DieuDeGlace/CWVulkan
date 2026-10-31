@@ -17,12 +17,11 @@ namespace worldgen {
 // A source of rand() values: the zone's stream, or a test's script. A light reference to any
 // callable returning int; it must outlive the call it is passed to.
 class Draw {
-public:
-    template <class F>
-    Draw(F &f) : context_(&f), call_([](void *c) { return (*static_cast<F *>(c))(); }) {}
+  public:
+    template <class F> Draw(F &f) : context_(&f), call_([](void *c) { return (*static_cast<F *>(c))(); }) {}
     int operator()() const { return call_(context_); }
 
-private:
+  private:
     void *context_;
     int (*call_)(void *);
 };
@@ -36,16 +35,13 @@ struct Appearance {
     static constexpr size_t FLAGS = 0x8;
     static constexpr size_t SCALE = 0xc; // x, y, z sizes (+0xc, +0x10, +0x14)
     static constexpr size_t HEIGHT = 0x14;
-    static constexpr size_t HEAD = 0x18, HAIR = 0x1a, HANDS = 0x1c, FEET = 0x1e, CHEST = 0x20, TAIL = 0x22, SHOULDERS = 0x24,
-                            WINGS = 0x26;
+    static constexpr size_t HEAD = 0x18, HAIR = 0x1a, HANDS = 0x1c, FEET = 0x1e, CHEST = 0x20, TAIL = 0x22, SHOULDERS = 0x24, WINGS = 0x26;
 
     // The part scales (+0x28 ..) and the placing offsets of chest, head, hands, feet and tail
     // (three floats each, +0x68 ..), as creature-pose.md §2 names them.
-    static constexpr size_t HEAD_SCALE = 0x28, CHEST_SCALE = 0x2c, HAND_SCALE = 0x30, FOOT_SCALE = 0x34,
-                            ARM_SCALE = 0x38, WEAPON_SCALE = 0x3c, TAIL_SCALE = 0x40, SHOULDER_SCALE = 0x44,
-                            WING_SCALE = 0x48;
-    static constexpr size_t CHEST_PLACE = 0x68, HEAD_PLACE = 0x74, HAND_PLACE = 0x80, FOOT_PLACE = 0x8c,
-                            TAIL_PLACE = 0x98;
+    static constexpr size_t HEAD_SCALE = 0x28, CHEST_SCALE = 0x2c, HAND_SCALE = 0x30, FOOT_SCALE = 0x34, ARM_SCALE = 0x38,
+                            WEAPON_SCALE = 0x3c, TAIL_SCALE = 0x40, SHOULDER_SCALE = 0x44, WING_SCALE = 0x48;
+    static constexpr size_t CHEST_PLACE = 0x68, HEAD_PLACE = 0x74, HAND_PLACE = 0x80, FOOT_PLACE = 0x8c, TAIL_PLACE = 0x98;
 
     std::array<uint8_t, SIZE> bytes{};
 
@@ -92,18 +88,18 @@ struct Appearance {
 
 // Appearance flags generation sets or reads.
 namespace looksflag {
-constexpr uint32_t TAKE_DOWN_WEAPONS = 0x8;     // gear: both hands hold weapon 0x16
-constexpr uint32_t ONE_WEAPON = 0x10;           // gear: weapon 0x17 in the right hand
-constexpr uint32_t PLAIN_CHEST = 0x20;          // gear: chest piece id 1, no armour
-constexpr uint32_t STRONG = 0x200;              // grows 1.5 times; leaders and bosses
-constexpr uint32_t RESIDENT = 0x2000;           // belongs to its place (a mission's people)
+constexpr uint32_t TAKE_DOWN_WEAPONS = 0x8; // gear: both hands hold weapon 0x16
+constexpr uint32_t ONE_WEAPON = 0x10;       // gear: weapon 0x17 in the right hand
+constexpr uint32_t PLAIN_CHEST = 0x20;      // gear: chest piece id 1, no armour
+constexpr uint32_t STRONG = 0x200;          // grows 1.5 times; leaders and bosses
+constexpr uint32_t RESIDENT = 0x2000;       // belongs to its place (a mission's people)
 constexpr uint32_t QUEST_GIVER = 0x1000;
-constexpr uint32_t WILD = 0x8000;               // added to some races in wild groups
-constexpr uint32_t BIG = 0x20000;               // grows 1.5 times
-constexpr uint32_t GIANT = 0x40000;             // grows 7 times
-constexpr uint32_t SPECIAL_TOWN = 0x400000;     // townsfolk of the region's special town
+constexpr uint32_t WILD = 0x8000;           // added to some races in wild groups
+constexpr uint32_t BIG = 0x20000;           // grows 1.5 times
+constexpr uint32_t GIANT = 0x40000;         // grows 7 times
+constexpr uint32_t SPECIAL_TOWN = 0x400000; // townsfolk of the region's special town
 constexpr uint32_t FOREIGN_STYLE = 0x100000;
-constexpr uint32_t DEMON_MARKED = 0x4000000;    // a demon portal's region
+constexpr uint32_t DEMON_MARKED = 0x4000000; // a demon portal's region
 } // namespace looksflag
 
 // The equipment slots, in the game's order (cube::Equipment).
@@ -137,36 +133,36 @@ struct Gear {
     uint8_t spec = 0; // specialisation
     std::array<Item, SLOTS> equipment{};
     std::vector<int32_t> abilities;  // +0x8c0
-    int32_t abilityPick = 0;          // +0x8d8
+    int32_t abilityPick = 0;         // +0x8d8
     std::vector<int32_t> abilities2; // +0x8e0
     Inventory inventory;             // +0x7f0
 };
 
 // A spawn point (cube::SpawnPoint, 0x950 bytes; §0.3), with its constructor's defaults (0x118a60).
 struct SpawnPoint {
-    int64_t x = 0, y = 0, z = 0; // +0x00: 1/65536 blocks, z at the feet
-    float yaw = 0;               // +0x18, degrees
-    int32_t hostility = 1;       // +0x1c: 1 hostile, 3 friendly person, 4 neutral, 6, 7 animal, 8 pet-like
-    int32_t race = 4;            // +0x20
-    int32_t level = 0;           // +0x24
-    int32_t people = 0;          // +0x28: the nation it belongs to (a realm kind 12-22, or a group code)
-    int32_t tag = -1;            // +0x2c: copied to the creature's +0x974; generation never sets it
-    uint32_t style = 0;          // +0x30: the realm of its place
-    int64_t id = 0;              // +0x38
-    int64_t owner = 0;           // +0x40: the point it belongs to (a rider, a boss, a master)
-    uint8_t stage = 0;           // +0x4c: copied to the creature's stage byte
+    int64_t x = 0, y = 0, z = 0;                       // +0x00: 1/65536 blocks, z at the feet
+    float yaw = 0;                                     // +0x18, degrees
+    int32_t hostility = 1;                             // +0x1c: 1 hostile, 3 friendly person, 4 neutral, 6, 7 animal, 8 pet-like
+    int32_t race = 4;                                  // +0x20
+    int32_t level = 0;                                 // +0x24
+    int32_t people = 0;                                // +0x28: the nation it belongs to (a realm kind 12-22, or a group code)
+    int32_t tag = -1;                                  // +0x2c: copied to the creature's +0x974; generation never sets it
+    uint32_t style = 0;                                // +0x30: the realm of its place
+    int64_t id = 0;                                    // +0x38
+    int64_t owner = 0;                                 // +0x40: the point it belongs to (a rider, a boss, a master)
+    uint8_t stage = 0;                                 // +0x4c: copied to the creature's stage byte
     Appearance appearance = Appearance::constructed(); // +0x50
-    char name[16] = {};          // +0x100
-    Gear gear;                   // +0x34, +0x35 (class), +0x110 (equipment), +0x7f0, +0x8c0..+0x8e0
-    uint32_t roam = 0;           // +0x8b8: how it wanders
-    uint8_t mode = 0;            // +0x8bc: 0x8a for a spider that drops from above
-    Int2 home{0x7fffffff, 0x7fffffff}; // +0x8f8: the place cell of an encounter's people
-    std::vector<Int2> area;      // +0x900: 16-block cells it keeps to
-    std::set<int64_t> group;     // +0x910: ids it keeps with
-    int32_t requiredDefeated = 0; // +0x920
-    std::vector<Int2> clearedCells; // +0x928: never filled by generation
-    std::set<int64_t> prerequisites; // +0x938: ids that must all be dead
-    int32_t requiredStage = 0;   // +0x948
+    char name[16] = {};                                // +0x100
+    Gear gear;                                         // +0x34, +0x35 (class), +0x110 (equipment), +0x7f0, +0x8c0..+0x8e0
+    uint32_t roam = 0;                                 // +0x8b8: how it wanders
+    int32_t mode = 0;                                  // +0x8bc: full word; only the low byte becomes creature ability
+    Int2 home{0x7fffffff, 0x7fffffff};                 // +0x8f8: the place cell of an encounter's people
+    std::vector<Int2> area;                            // +0x900: 16-block cells it keeps to
+    std::set<int64_t> group;                           // +0x910: ids it keeps with
+    int32_t requiredDefeated = 0;                      // +0x920
+    std::vector<Int2> clearedCells;                    // +0x928: never filled by generation
+    std::set<int64_t> prerequisites;                   // +0x938: ids that must all be dead
+    int32_t requiredStage = 0;                         // +0x948
 
     uint32_t flags() const { return appearance.flags(); }
     void addFlags(uint32_t f) { appearance.addFlags(f); }

@@ -10,6 +10,21 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The specified resident kind9 producer now tracks existing full-word mode0x8a
+  separately from newly copied low-byte modes. Per-zone requests create day-derived
+  fixed candidates, apply inclusive200-block XY suppression against current live
+  kind9 effects, and append independent live/outgoing records. The ordinary effect
+  step advances only the live copy later in that World step. Tests cover native
+  numeric references, wrapped centers, request ordering, expired-effect suppression,
+  exact fields and copy lifetime. The semantic initializer preserves native-unwritten
+  damage/padding in supplied defined storage; engine-owned fresh records use zeroed
+  storage without claiming those bytes have a native zero value. No new art or
+  replacement kind9 renderer is introduced. Zone processing order, CRT state and
+  broader render consumers remain separate limits.
+  All five targets build; focused kind9 and full CPU/owner-data checks pass apart
+  from the two known modded generator-reference assertions. A no-save gameplay run
+  exits0 with the fixture save unchanged. No native visual-acceptance claim is made.
+
 - Resident collection now follows registered kind0 membership, including dead players,
   and snapshots both region-permission sets before zone work. Live positions are read
   through stable actor resolution during admission; streaming stand-ins cannot supply

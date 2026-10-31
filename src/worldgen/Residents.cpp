@@ -149,7 +149,7 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
     put(record, RACE, p.race);
     record[PEOPLE] = (uint8_t)p.people;
     put(record, TAG, p.tag);
-    put(record, STYLE, uint64_t(uint32_t(p.style)));
+    put(record, STYLE, uint64_t(p.style));
     put(record, LEVEL, p.level);
     wearGear(record, p.gear);
     record[STAGE] = p.stage;
@@ -169,9 +169,9 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
     put(record, REGION + 4, region.y);
     if (maxHealth)
         put(record, HEALTH, maxHealth(record));
-    record[ABILITY] = p.mode;
+    record[ABILITY] = uint8_t(p.mode);
     // 4. A spider that drops from above starts higher.
-    if (p.mode == SPIDER_DROPS) {
+    if (record[ABILITY] == SPIDER_DROPS) {
         int64_t z;
         std::memcpy(&z, record + POSITION + 16, 8);
         put(record, POSITION + 16, gamemath::addFixed(z, dotsOf(worldRand() % 50 + 80)));

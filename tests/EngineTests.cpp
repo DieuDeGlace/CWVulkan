@@ -125,6 +125,7 @@ int plasmaLayoutTests();
 int cameraMotionTests();
 int controlPhaseTests();
 int residentPassTests();
+int residentEffectsTests();
 int targetStageTests();
 int terrainRayTests();
 int cameraPositionTests();
@@ -9152,6 +9153,8 @@ int main(int argc, char **argv) {
         return terrainRayTests();
     if (argc == 2 && std::string(argv[1]) == "targetstages")
         return targetStageTests();
+    if (argc == 2 && std::string(argv[1]) == "residenteffects")
+        return residentEffectsTests();
     if (argc == 2 && std::string(argv[1]) == "residentpass")
         return residentPassTests();
     if (argc == 2 && std::string(argv[1]) == "controlphases")
@@ -10488,6 +10491,7 @@ int main(int argc, char **argv) {
     failures += plasmaInputTests();
     failures += plasmaLayoutTests();
     failures += cameraMotionTests();
+    failures += residentEffectsTests();
     failures += residentPassTests();
     failures += controlPhaseTests();
     failures += targetStageTests();

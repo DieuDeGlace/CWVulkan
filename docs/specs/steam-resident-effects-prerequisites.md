@@ -19,10 +19,10 @@ element count at +0x930**, not a flat list of cell pairs. The constructor
 destructor **0x118d30** clears this tree through **0x53d90**. In a value node,
 signed-32 **cell X/Y are at +0x1c/+0x20**. The consumer starts at the header's
 leftmost node, then visits native in-order successors. It performs no separate
-coordinate sort. The insertion producer/comparator for a nonempty instance of
-this currently unused spawn field is not newly established; an oracle must
-retain its actual tree iteration order rather than reconstruct an order by
-guessing.
+coordinate sort. A later bounded audit found the dormant encounter24 insertion
+producer and verified signed X/Y lexicographic comparator; see
+[steam-zone-prerequisite-indices.md §4](steam-zone-prerequisite-indices.md#4-matching-spawn0x928-producer-and-comparator).
+An oracle should retain native tree iteration order.
 
 The gate is reached only after the common nonnull-live-ID/dead-ID/range checks
 and the required-defeated count test. It precedes required-stage and
@@ -91,9 +91,10 @@ Examples, assuming the earlier common gates pass:
   invalid index: it does not block the first-cell admission.
 
 This branch does not change an object, spawn record, World collection, random
-state or sound/output list. The generator audit still has no identified
-producer that fills this tree. Its **consumer is now specified**; the missing
-producer remains an explicit limit, not a reason to invent generated cells.
+state or sound/output list. The matching dormant encounter24 producer is now
+specified in [steam-zone-prerequisite-indices.md](steam-zone-prerequisite-indices.md).
+The ordinary encounter selector does not emit24; do not invent cell
+prerequisites for otherwise empty ordinary generated points.
 
 ## 3. Per-zone kind9 request: exact mode0x8a bookkeeping
 
@@ -250,4 +251,5 @@ already specified in [effect-objects.md §§1.1–1.5](effect-objects.md), and h
 outgoing-container lifetime is in [steam-world-daily-reset.md](steam-world-daily-reset.md).
 Updating the live copy does not update the outgoing creation copy's age or
 position. This supplement does not add a replacement kind9 mesh/asset or
-invent an untraced cell-prerequisite producer.
+invent an additional cell-prerequisite producer beyond the separately verified
+dormant encounter24 path.

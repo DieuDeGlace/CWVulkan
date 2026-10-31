@@ -119,7 +119,8 @@ registered **class byte +0x14c == 0xa1** and stage byte **+0x19c** against the
 requested stage, **without an HP test**. “Living” in the old description was too
 restrictive. The nonempty +0x928-cell consumer is now completed in
 [steam-resident-effects-prerequisites.md §§1–2](steam-resident-effects-prerequisites.md),
-including its retained-byte quirk. A filling producer remains unidentified.
+including its retained-byte quirk. Its matching dormant encounter24 producer
+and Zone+0x4a8 lifetime are in [steam-zone-prerequisite-indices.md](steam-zone-prerequisite-indices.md).
 
 ## 4. New resident writes and registration
 
@@ -217,8 +218,10 @@ This checkpoint closes collection order, common admission, fresh-resident
 transfer/postprocessing, CRT-state use, and the final flag pass. The remaining
 per-zone **kind9 effect** producer and **nonempty S+0x928 consumer** are now
 specified independently in [steam-resident-effects-prerequisites.md](steam-resident-effects-prerequisites.md),
-including the cell traversal's retained-byte quirk. A filling producer for
-that cell tree and broader arena/cleanup helpers retain explicit limits. No
+including the cell traversal's retained-byte quirk. A subsequent audit
+identified the dormant encounter24 cell/index producer in
+[steam-zone-prerequisite-indices.md](steam-zone-prerequisite-indices.md).
+Broader arena/cleanup helpers retain explicit limits. No
 claim is made here that every child helper in the entire World step is
 random-free, or that incoming CRT state can be reconstructed from a spawn
 record alone.

@@ -135,7 +135,7 @@ use are listed; every other byte is zero.
 | +0x900 | list of (i32, i32) | empty | **area**: 16-block cells it keeps to |
 | +0x910 | set of i64 | empty | **group**: ids it keeps with |
 | +0x920 | i32 | 0 | **requiredDefeated** |
-| +0x928 | ordered cell-tree header; count +0x930 | empty | indexed-object state prerequisite; native retained-byte quirk in [resident supplement](steam-resident-effects-prerequisites.md) (no filling generation producer identified) |
+| +0x928 | ordered cell-tree header; count +0x930 | empty | indexed-object state prerequisite; [consumer quirk](steam-resident-effects-prerequisites.md) and [dormant encounter24 producer](steam-zone-prerequisite-indices.md) |
 | +0x938 | set of i64 | empty | **prerequisites**: ids that must all be dead |
 | +0x948 | i32 | 0 | **requiredStage** |
 
@@ -623,8 +623,8 @@ and random-stream details are in [steam-authoritative-residents.md](steam-author
      that zone); the sum must be ≥ the field.
    * **cells** (+0x928): the nonempty native tree gate is specified in
      [steam-resident-effects-prerequisites.md §§1–2](steam-resident-effects-prerequisites.md).
-     It has a retained-byte quirk and is not an all-cells-cleared test. No filling
-     generation producer has been identified.
+     It has a retained-byte quirk and is not an all-cells-cleared test. The paired
+     cell/index producer is dormant encounter24; see [its supplement](steam-zone-prerequisite-indices.md).
    * **requiredStage** (+0x948) ≠ 0: some registered creature of class 0xa1 (an arena master),
      without an HP test, must
      have stage byte (+0x19c) equal to it.
@@ -866,7 +866,9 @@ implementation from this spec must do at least as well.
    [steam-resident-effects-prerequisites.md §§1–2](steam-resident-effects-prerequisites.md).
    The former all-cells/objects-gone interpretation was incorrect: a retained-byte
    quirk makes the first cell decisive, and only indexed nonzero-state objects match.
-   A filling producer remains unidentified in generation.
+   The filling producer is now identified in dormant encounter24, along with
+   Zone+0x4a8 ownership/lifetime; see [steam-zone-prerequisite-indices.md](steam-zone-prerequisite-indices.md).
+   The ordinary selector does not emit24; no multiple-cell producer is established.
 4. **Shoppers past the counter list** (zone file §4.2) read past the end of zone+0x500, which
    is heap memory: genr_seed_123 zone (−18, −18) has one counter and two shoppers, and the
    second stands at about (−1.2·10^14, −4.3·10^9, −49152) blocks. No value can be specified;

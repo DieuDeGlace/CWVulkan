@@ -78,11 +78,13 @@ bool residentReady(const SpawnPoint &p, int32_t zx, int32_t zy, const ResidentWo
 // in unsigned Zone-pointer order (steam-authoritative-residents.md §2).
 std::vector<Int2> residentZones(const std::vector<ResidentWorld::Player> &players);
 
+// Copied position truncates toward zero before the region lookup.
+Int2 residentRegion(const SpawnPoint &p);
+
 // A creature made from a spawn point (§7.1 steps 3-5), from the constructor's defaults with the
 // point's id. `worldRand` is the world's rand() (spiders that drop from above start 80-129 blocks
 // higher); `spared`: the creature's region is one where a player lifted the demon portal;
 // `maxHealth` gives 0x5fac0 for the record (NativeRules).
-Int2 residentRegion(const SpawnPoint &p); // copied position, truncation toward zero before region lookup
 MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, const std::function<float(const uint8_t *record)> &maxHealth);
 
 // Makes creature `record` the pet of `owner` (0x2b67b0, §7.4): its race's looks and gear drawn

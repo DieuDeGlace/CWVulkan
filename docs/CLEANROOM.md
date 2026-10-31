@@ -72,6 +72,12 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- The resident kind9 request/producer follows the separate resident-effects contract,
+  including distinct full-word/low-byte gates, day-derived fixed math and independent
+  live/output lifetimes. Tests preserve unspecified bytes instead of assuming a
+  native damage value. Existing no-contact effect updating is reused, with no new
+  artwork or guessed rendering consumer.
+
 - Resident collection/admission and final flag reconciliation use the independent
   authoritative-residents contract. Typed collections preserve membership and region
   snapshots while resolving current positions across engine storage moves. Resident
