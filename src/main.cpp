@@ -58,6 +58,7 @@
 #include "Lore.h"
 #include "MapMarks.h"
 #include "MapPreview.h"
+#include "MapControls.h"
 #include "ProceduralItems.h"
 #include "UsePrompt.h"
 #include "ItemSelector.h"
@@ -904,6 +905,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         logLine(std::string("Save: ") + (had ? "loaded character " + std::to_string(saves.slot()) : "new character") + " of " +
                 utf8(saves.folder() / "characters.db"));
     }
+    spawned.restoreMapHistory(saveGame.regionHistory.value_or(std::vector<maphistory::Region>{}));
     Player player;
     if (!std::isnan(startX)) {
         player.position.x = startX;
@@ -1381,13 +1383,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     mapmarks::Selection mapSelection;
     bool &mapOpen = mapSelection.open;
     bool mapMoved = false;
-    int mapZoom = 0;
+    int mapZoom = mapcontrol::INITIAL_LAYER;
     glm::dvec3 mapPosition(0), targetMapPosition(0);
     bool mapPlaced = false;
     // The map's cursor (WorldMap's the cursor position): where the pointer meets the open map's
     // models, in game blocks; unknown when it meets none or the map is closed. (Found as the
     // map is drawn: a frame late for what uses it, as in the game.)
-    glm::dvec3 mapCursor(0);
+    glm::dvec3 mapCursor(double(INT_MAX), double(INT_MAX), -1);
+    std::optional<worldgen::Int2> mapHoveredLand, forcedMapLand;
     bool mapCursorKnown = false;
     std::string mapPointerText;
     // Flight (WorldMap's the flight master mode, the selected flight point): the map opened by a flight
@@ -2954,6 +2957,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 saveGame.found.back().storedRecord = Gear::toRecord(it);
             }
         }
+        saveGame.regionHistory = spawned.mapHistory().snapshot();
         saveGame.savedAt = (long long)std::time(nullptr);
         // A guest's own world is left alone: only its character is written (netcode-roles.md §7).
         if (!saves.save(saveGame, haveGear ? &gear : nullptr, std::max(0.0f, playerHp), saveFrame, !session.guestElsewhere())) {
@@ -3151,6 +3155,29 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     inGameRequest.readOnly = !savesWritable;
     frontend::InGameMenus menus(inGameServices, inGameRequest);
     bool menusReady = false;
+    std::optional<maphistory::Region> historyCaptionRegion;
+    std::string historyCaption = "land";
+    auto bindMapHistory = [&] {
+        const auto &view = spawned.mapHistory().view();
+        if (view.caption && historyCaptionRegion != view.caption) {
+            historyCaptionRegion = view.caption;
+            historyCaption = landNameOf({(*view.caption)[0], (*view.caption)[1]});
+        }
+        hud.bindMapHistory(view, historyCaption, !menusReady || menus.interfaceShown());
+    };
+    auto stepMapHistory = [&](bool older) {
+        auto &history = spawned.mapHistory();
+        const auto region = older ? history.older() : history.newer();
+        if (region) {
+            const auto point = worldgen::regionCentre((*region)[0], (*region)[1]);
+            const int64_t fixedZ = (int64_t)(worldgen::groundHeight(point.x, point.y, 0) * 65536.f);
+            targetMapPosition = {double(point.x), double(point.y), double(fixedZ) / 65536.0};
+            mapMoved = true;
+            mapZoom = std::max(mapZoom, 4);
+        }
+        bindMapHistory();
+    };
+
     if (!serverMode) {
         std::string why;
         menusReady = menus.start(why);
@@ -3368,6 +3395,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             input.released = std::move(gameUps);
         }
         bool menusOpen = menusReady && menus.open();
+        if (input.gamepadPointer.olderRegion)
+            stepMapHistory(true);
+        if (input.gamepadPointer.newerRegion)
+            stepMapHistory(false);
         std::vector<int> pressed = input.pressed;
         input.pressed.clear();
         // Preserve callback order: a character before Enter belongs to that send;
@@ -3542,15 +3573,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                     !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
                                     !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
         if (mapOpen && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-            // the pointer movement: dragging with the right button moves the map, 2^zoom blocks a
-            // pixel, along the camera's turn.
-            const glm::dvec2 right(-std::sin(player.yaw), std::cos(player.yaw)), up(-std::cos(player.yaw), -std::sin(player.yaw));
-            const double unit = std::pow(2.0, mapZoom);
-            const glm::dvec2 drag = right * (mx - lastX) * unit + up * -(my - lastY) * unit;
-            if (drag != glm::dvec2(0)) {
-                targetMapPosition.x += drag.x, targetMapPosition.y += drag.y;
-                mapMoved = true;
-            }
+            const glm::vec2 delta = glm::vec2(float(input.pointerX), float(input.pointerY)) - previousGuiPointer;
+            targetMapPosition = mapcontrol::blocks(mapcontrol::mousePan(mapcontrol::fromBlocks(targetMapPosition), delta, mapZoom,
+                                                                        float(double(viewYaw) * 57.29577951308232)));
+            mapMoved = true;
         } else if (!inventoryOpen && !mapOpen && !menusOpen && glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
                    (answers.visible()               ? answerDragLook
                     : nativeCustomization.edit.open ? customizationDragLook
@@ -3574,16 +3600,29 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
             player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
         }
-        if (!inventoryOpen && gameInput.held(gameoptions::WALK)) // the walk key and the wheel: the camera's distance
-            player.zoom = std::clamp(player.zoom * std::pow(.88f, (float)input.scroll), 3.f, 90.f);
-        else if (!inventoryOpen && input.scroll != 0) { // the mouse wheel handling: the map's zoom, about the cursor
-            const int oldZoom = mapZoom;
-            mapZoom = std::clamp(mapZoom - (int)input.scroll, 0, worldmap::MAX_ZOOM);
-            if (mapZoom != oldZoom && mapCursorKnown) {
-                const glm::dvec2 offset = (glm::dvec2(mapCursor) - glm::dvec2(targetMapPosition)) * (mapZoom < oldZoom ? 0.5 : -1.0);
-                targetMapPosition.x += offset.x, targetMapPosition.y += offset.y;
-                targetMapPosition.z = groundOf(targetMapPosition.x, targetMapPosition.y);
-                mapPosition = targetMapPosition;
+        std::vector<int> wheelInventoryTargets;
+        wheelInventoryTargets.reserve(input.wheelEvents.size());
+        for (const auto &event : input.wheelEvents) {
+            const glm::vec2 point(previousGuiPointer.x * renderExtent.width / std::max(1, pointerWindowWidth),
+                                  previousGuiPointer.y * renderExtent.height / std::max(1, pointerWindowHeight));
+            const int target = inventoryui::wheelTarget([&](int which) { return hud.inventoryPanelEligible(point, inventoryView, which); });
+            wheelInventoryTargets.push_back(target);
+            if (target >= 0)
+                continue;
+            const int delta = -event.rowStep;
+            if (menusReady && menus.wheel(delta, point))
+                continue;
+            if (gameInput.held(gameoptions::WALK)) {
+                player.zoom = std::clamp(player.zoom - float(2 * delta), 0.f, 50.f);
+                continue;
+            }
+            const int previous = mapZoom;
+            mapZoom = mapcontrol::wheelLayer(previous, delta);
+            if (mapZoom != previous && mapcontrol::fromBlocks(mapCursor)[0] != mapcontrol::NO_CURSOR_X) {
+                auto target = mapcontrol::wheelCenter(mapcontrol::fromBlocks(targetMapPosition), mapcontrol::fromBlocks(mapCursor),
+                                                      mapZoom < previous);
+                target = mapcontrol::terrainHeight(target, [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y, 0); });
+                mapPosition = targetMapPosition = mapcontrol::blocks(target);
                 mapMoved = true;
             }
         }
@@ -3592,6 +3631,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         {
             static double lastButtonDown = -1;
             for (int button : input.buttons) {
+                if (button == GLFW_MOUSE_BUTTON_LEFT && !menusOpen) {
+                    const int action = hud.mapHistoryAction(previousGuiPointer);
+                    if (action)
+                        stepMapHistory(action < 0);
+                }
+                // Native post-GUI hits see visibility changed by the just-run callback.
+                if (mapOpen && (hud.mapHistoryArrowHit(true, previousGuiPointer) || hud.mapHistoryArrowHit(false, previousGuiPointer)))
+                    continue;
                 mapSelection.down();
                 if (button == GLFW_MOUSE_BUTTON_MIDDLE && mapOpen && mapCursorKnown && mapCursor.z >= 0) {
                     const std::array<int32_t, 3> spot = {(int32_t)mapCursor.x, (int32_t)mapCursor.y,
@@ -3632,15 +3679,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
         }
+        mapZoom = mapcontrol::mappedZoom(mapZoom, gameInput.pressed(gameoptions::ZOOM_IN), gameInput.pressed(gameoptions::ZOOM_OUT));
         player.yaw += spin * (float)dt;
         input.scroll = 0;
-        { // The Zoom In and Zoom Out controls (unbound by default; the d-pad on a gamepad).
-            constexpr float ZOOM_PER_SECOND = 2.0f; // (CubeVulkan's: how fast the bindings zoom is not given)
-            if (gameInput.held(gameoptions::ZOOM_IN))
-                player.zoom = std::clamp(player.zoom / std::pow(ZOOM_PER_SECOND, (float)dt), 3.f, 90.f);
-            if (gameInput.held(gameoptions::ZOOM_OUT))
-                player.zoom = std::clamp(player.zoom * std::pow(ZOOM_PER_SECOND, (float)dt), 3.f, 90.f);
-        }
 
         // The native player: the game's controller reads the keys (its game-object fields)
         // and the world's update moves it, at the creatures' step below; here it is where
@@ -3648,7 +3689,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         const bool nativeMove = nativePlayer && !player.fly;
         glm::vec3 before = player.position;
         if (nativeMove) {
-            const bool free = playerStunned <= 0 && !inventoryOpen && !menusOpen;
+            const bool free = playerStunned <= 0 && !inventoryOpen && !mapOpen && !menusOpen;
             using namespace gameoptions;
             controlInput = {};
             controlInput.forward = free && gameInput.held(UP);
@@ -4626,10 +4667,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (offset != before)
                     audio.playInterface(soundrules::soundid::MENU_TAB);
             };
+            size_t wheelIndex = 0;
             for (const auto &event : input.wheelEvents) {
-                const glm::vec2 point((float)event.x * fw / std::max(ww, 1), (float)event.y * fh / std::max(wh, 1));
-                const int target =
-                    inventoryui::wheelTarget([&](int which) { return hud.inventoryPanelEligible(point, inventoryView, which); });
+                // Preserve the window-dispatch result; later bindings must not retarget a consumed wheel event.
+                const int target = wheelInventoryTargets[wheelIndex++];
                 if (target == 0)
                     scrollPanel(0, inventoryView.scroll, event.rowStep);
                 else if (target == 1)
@@ -6530,16 +6571,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             const glm::dvec3 playerBlocks((double)player.position.x + (double)(extractedWorld.originDotsX() >> 16),
                                           (double)player.position.y + (double)(extractedWorld.originDotsY() >> 16),
                                           (double)player.position.z - ExtractedWorld::Z_OFFSET);
+            auto physicalMapPlayer = mapcontrol::fromBlocks(playerBlocks);
+            if (const auto *record = spawned.playerRecord())
+                std::memcpy(physicalMapPlayer.data(), record + worldgen::creature::POSITION, sizeof physicalMapPlayer);
             if (!mapOpen)
                 mapMoved = false;
             if (!mapMoved) {
-                targetMapPosition = playerBlocks;
+                targetMapPosition = mapcontrol::blocks(physicalMapPlayer);
                 mapPosition = targetMapPosition;
             } else
-                targetMapPosition.z =
-                    worldgen::groundHeight((int32_t)std::floor(targetMapPosition.x), (int32_t)std::floor(targetMapPosition.y));
+                targetMapPosition = mapcontrol::blocks(mapcontrol::terrainHeight(
+                    mapcontrol::fromBlocks(targetMapPosition), [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y, 0); }));
+            mapPosition = mapcontrol::blocks(
+                mapcontrol::ease(mapcontrol::fromBlocks(mapPosition), mapcontrol::fromBlocks(targetMapPosition), frameMs));
             const double stepMs = dt * 1000.0;
-            mapPosition += (targetMapPosition - mapPosition) * (double)gamemath::blendFactor(stepMs, 0.01f);
             const VkExtent2D size = renderer.screenSize();
             const float w = (float)std::max(1u, size.width), h = (float)std::max(1u, size.height);
             const glm::vec2 cornerPosition(1.0f - h * 0.3f / w * minimapScale, 1.0f - minimapScale * 0.2f);
@@ -6548,6 +6593,51 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             const float f = gamemath::blendFactor(stepMs, 0.01f);
             mapViewCentre += ((mapOpen ? glm::vec2(0.5f, 0.6f) : cornerPosition) - mapViewCentre) * f;
             mapLabelScale += ((mapOpen ? 1.8f : minimapScale) - mapLabelScale) * f;
+            const auto movementStick = gameInput.gamepad().movement;
+            if (mapOpen && input.lastUsedPad) {
+                input.pointerX = float(w * mapViewCentre.x);
+                input.pointerY = float((1.f - mapViewCentre.y) * h);
+                input.pointerSampled = true;
+                targetMapPosition =
+                    mapcontrol::blocks(mapcontrol::padPan(mapcontrol::fromBlocks(targetMapPosition), {movementStick.x, movementStick.y},
+                                                          mapZoom, float(double(viewYaw) * 57.29577951308232), frameMs));
+                mapMoved = true;
+            } else if (mapcontrol::movementCloses(mapOpen, input.lastUsedPad,
+                                                  gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||
+                                                      gameInput.held(gameoptions::LEFT) || gameInput.held(gameoptions::RIGHT),
+                                                  chat.typing(), {movementStick.x, movementStick.y})) {
+                mapOpen = false;
+                inventoryOpen = false;
+                vendorTrade.open = false;
+                craftingOpen = false; // The formula details follow this grid's visibility.
+                if (menusReady)
+                    menus.hideSystemForMovement();
+                nativeCustomization.edit.open = false;
+                identify.open = false;
+                upgrade.open = false;
+                if (menusReady)
+                    menus.hideMultiplayerForMovement();
+                answers.dismissForMovement();
+            }
+            if (hudReady) {
+                if (size.width != hudSize.width || size.height != hudSize.height) {
+                    hudSize = size;
+                    hud.layout(renderer, size);
+                }
+                spawned.mapHistory().show(mapOpen);
+                bindMapHistory();
+                double pointerX, pointerY;
+                pointerPosition(&pointerX, &pointerY);
+                if (pointerTestX >= 0)
+                    pointerX = pointerTestX, pointerY = pointerTestY;
+                const auto selected = spawned.mapHistory().selected();
+                const bool overHistory =
+                    selected && maphistory::hovered(mapOpen, float(pointerX), float(pointerY), h, hud.interfaceScale());
+                forcedMapLand = overHistory ? std::optional<worldgen::Int2>{{(*selected)[0], (*selected)[1]}} : std::nullopt;
+                hud.mapHistoryPointer({float(pointerX), float(pointerY)}, overHistory);
+                if (overHistory)
+                    mapPointerText.clear();
+            }
             // GUI keycode0x11 is a retained Control message bit, independent of map mode.
             const bool halfRadius = input.controlDown;
             const int radius = halfRadius ? worldmap::RADIUS / 2 : worldmap::RADIUS;
@@ -6656,7 +6746,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         view.marks.push_back(k);
                     }
                 }
-                worldMap.collect(view, opaque);
                 mapCursorKnown = false;
                 mapCursor = {double(INT_MAX), double(INT_MAX), -1};
                 if (!halfRadius) { // Control suppresses terrain picking; dragging and minimap mode do not.
@@ -6674,6 +6763,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                 std::to_string((int64_t)playerBlocks.y) + ")");
                     }
                 }
+                if (mapCursorKnown)
+                    mapHoveredLand = worldgen::regionAt((int32_t)mapCursor.x, (int32_t)mapCursor.y);
+                view.hoveredLand = mapHoveredLand;
+                view.forcedLand = forcedMapLand;
+                view.elapsedWorldMs = spawned.elapsedWorldTime();
+                mapHoveredLand = worldMap.collect(view, opaque);
                 // The map overlay's markers (MapMarks.h): places, missions, lands, flight points and
                 // stars, drawn far to near; then the marker under the pointer.
                 collectMapMarkers = [&, view = std::move(view)] {
@@ -6815,6 +6910,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             };
             Hud::State hs;
             hs.interfaceVisible = !menusReady || menus.interfaceShown();
+            spawned.mapHistory().show(mapOpen);
+            bindMapHistory();
             hs.feats = &featLabels;
             hs.hp = playerHp;
             hs.maxHp = playerMaxHp;
@@ -6854,19 +6951,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             speechEnvironment.sound = [&](int sound, const npcspeech::Point &at) { audio.playAt(sound, at.data(), 1, 1); };
             npcSpeech.update(frameMs, speechEnvironment);
             if (const auto page = generalDialogue.activation()) {
-                for (const auto &cell : page->loreCells) creditLore(cell, false);
-                for (const auto &mark : page->marks) markPlace(mark);
+                for (const auto &cell : page->loreCells)
+                    creditLore(cell, false);
+                for (const auto &mark : page->marks)
+                    markPlace(mark);
             }
-            if (const auto sound = generalDialogue.update(frameMs,
-                    gameInput.held(gameoptions::ATTACK), gameInput.held(gameoptions::USE)))
+            if (const auto sound = generalDialogue.update(frameMs, gameInput.held(gameoptions::ATTACK), gameInput.held(gameoptions::USE)))
                 audio.playInterface(*sound);
-            if (!(mapOpen && input.lastUsedPad)) {
-                const auto stick = gameInput.gamepad().movement;
-                const bool keyboardMove = gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||
-                                          gameInput.held(gameoptions::LEFT) || gameInput.held(gameoptions::RIGHT);
-                if ((!chat.typing() && keyboardMove) || stick.x * stick.x + stick.y * stick.y > .1f * .1f)
-                    answers.dismissForMovement();
-            }
             hs.gold = playerGold;
             { // The info texts and the location banner (Interface's update; the game's frame update's location texts).
                 auto floorDiv = [](int64_t a, int64_t b) { return a >= 0 ? a / b : -((-a + b - 1) / b); };
@@ -6897,7 +6988,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 const int32_t shownX = mapOpen && mapCursorKnown ? (int32_t)mapCursor.x : bx, shownY = mapOpen && mapCursorKnown ? (int32_t)mapCursor.y : by;
                 hs.infoSmall = "COORDS " + coordinate(shownX - 512) + " | " + coordinate(shownY - 512) + clock + "  TEMP " +
                                std::to_string(-20 - (int)(field.colours.warmth * -60.0f)) + " \xb0" + "C  HUM " +
-                               std::to_string((int)(field.colours.dryness * 100.0f)) + "%  ZOOM 1:32";
+                               std::to_string((int)(field.colours.dryness * 100.0f)) +
+                               "%  ZOOM 1:" + std::to_string((int32_t)(std::pow(2.f, float(mapZoom)) * 4.f));
                 // The land: its biome's name with the region's generated one (the cell hash of the region).
                 std::string text = landNameOf(worldgen::regionAt(bx, by));
                 hs.infoLarge = text;
@@ -7352,6 +7444,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // The actual overlay draw owns these cached targets. A hidden interface keeps
             // the preceding draw's result; release never repicks from new coordinates.
             auto acceptMapHover = [&](const mapmarks::Hover &hovered) {
+                mapHoveredLand.reset();
                 mapSelection.overlayDrawn(hovered);
                 flightSelected = false;
                 if (hovered.flight && !hovered.flightToPlayer) {
@@ -7363,6 +7456,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (hovered.best >= 0) {
                     mapCursor = glm::dvec3(hovered.cursor);
                     mapCursorKnown = true;
+                    mapHoveredLand = worldgen::regionAt(hovered.cursor.x, hovered.cursor.y);
                 }
             };
             if (nativeInventory) {
@@ -7449,6 +7543,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
             std::vector<glm::vec2> answerPoints;
+            const bool historyHighlighted =
+                spawned.mapHistory().selected().has_value() &&
+                maphistory::hovered(mapOpen, hs.pointerAt.x, hs.pointerAt.y, float(screen.height), hud.interfaceScale());
+            hud.mapHistoryPointer(hs.pointerAt, historyHighlighted);
+            if (historyHighlighted) {
+                mapPointerText.clear();
+                hs.pointerText.clear();
+            }
             input.gamepadNavigationPoints.clear();
             if (nativeInventory) {
                 hs.mapInformation = previewSources.flight[0] != itempreview::FrameSources::NO_COORDINATE ||

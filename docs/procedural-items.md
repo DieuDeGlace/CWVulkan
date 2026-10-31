@@ -89,3 +89,15 @@ independent generator directly with every stored RGB byte and semantic metadata.
 Set `CW_REQUIRE_PROCEDURAL_ORACLES=1` to fail when no native captures exist.
 Synthetic cache fixtures are kept under the build directory, separate from the
 owner-capture corpus. Neither corpus belongs in a release.
+
+## Local native comparison coverage
+
+The owner extractor completed a 332-key reference capture on the supported Steam
+build (PE timestamp `5d93ab0d`) with the owner's mods active. Every resource was
+reported as a completed native lookup. Independent generation matched every RGB byte and
+semantic metadata field in all 332 records. The sample covers IDs 0 through 6 at
+modifiers 0..31, additional vessel/crown modifiers 32..63, both default-family
+IDs -1 and 7, and four high-bit modifier words across all nine tested IDs.
+This is bounded sample coverage, not an exhaustive claim over every possible key
+or a reconstruction of internal CRT trigonometry. The captured files and their
+private manifest are not distributed.

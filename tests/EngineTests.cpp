@@ -127,6 +127,10 @@ int voxelCustomizationTests();
 int itemPreviewTests();
 int mapPreviewTests();
 int proceduralItemTests();
+int mapHistoryTests();
+int mapControlsTests();
+int mapRenderTests();
+int panelScrollTests();
 int hairStyleTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
@@ -9137,6 +9141,14 @@ int main(int argc, char **argv) {
         return mapPreviewTests();
     if (argc == 2 && std::string(argv[1]) == "proceduralitems")
         return proceduralItemTests();
+    if (argc == 2 && std::string(argv[1]) == "maphistory")
+        return mapHistoryTests();
+    if (argc == 2 && std::string(argv[1]) == "mapcontrols")
+        return mapControlsTests();
+    if (argc == 2 && std::string(argv[1]) == "maprender")
+        return mapRenderTests();
+    if (argc == 2 && std::string(argv[1]) == "panelscroll")
+        return panelScrollTests();
     if (argc == 2 && std::string(argv[1]) == "voxeledit")
         return voxelEditTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
@@ -10433,6 +10445,9 @@ int main(int argc, char **argv) {
     failures += itemPreviewTests();
     failures += mapPreviewTests();
     failures += proceduralItemTests();
+    failures += mapHistoryTests();
+    failures += mapControlsTests();
+    failures += panelScrollTests();
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
     failures += itemSelectorTests();

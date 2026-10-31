@@ -2,6 +2,7 @@
 // window's weights (2.4), the corner colour (2.5), the mesh's faces (2.2, 2.3), the light per
 // face (3.4), the pixel steps (3.3) and the camera (4.2, 4.3).
 #include "MapLook.h"
+#include "WorldMap.h"
 #include "MapMarks.h"
 #include "NativeAbility.h"
 #include "NativePose.h"
@@ -309,6 +310,24 @@ void shrineWorldClock() {
     MAP_CHECK(creatures.elapsedWorldTime() == 1033); // normal world-frame1000-ms cap, not GUI time
 }
 
+void hoveredLandBorder() {
+    MAP_CHECK(worldmap::borderOpacity(0) == .8f);
+    MAP_CHECK(worldmap::borderOpacity(523.5987548828125f) == 0);
+    const std::array<int32_t, 3> point{20, -10, 8};
+    const std::array<int64_t, 3> center{10 * 65536 + 32768, -12 * 65536, 6 * 65536};
+    const glm::vec3 allocation{3, 5, 7};
+    const auto transform = worldmap::borderPlacement(point, center, 4, 2, allocation);
+    const auto placedCenter = glm::vec3(transform * glm::vec4(allocation * .5f, 1));
+    MAP_CHECK(near(placedCenter, glm::vec3(2.375f, .5f, .5f), 1e-6f));
+    MAP_CHECK(near(glm::vec3(transform[0]), glm::vec3(1, 0, 0), 1e-6f));
+    const auto wider = worldmap::borderPlacement(point, center, 4, 1, allocation);
+    MAP_CHECK(near(glm::vec3(wider * glm::vec4(allocation * .5f, 1)), placedCenter, 1e-6f));
+    MAP_CHECK(near(glm::vec3(wider[0]), glm::vec3(2, 0, 0), 1e-6f));
+    const auto generated = worldgen::mapRegion(0, 0, 6);
+    const auto built = worldmap::build(0, 0, 6);
+    MAP_CHECK(built.borders == generated.borders);
+}
+
 } // namespace
 
 int worldMapLookTests() {
@@ -322,6 +341,7 @@ int worldMapLookTests() {
     shrineSelection();
     shrineAbilityBoundary();
     shrineWorldClock();
+    hoveredLandBorder();
     std::printf("world map look: %s\n", failures ? "FAILED" : "ok");
     return failures;
 }

@@ -215,6 +215,7 @@ bool Hud::load(const fs::path &gameDir, std::string &error) {
         }
     }
     buildPanels();
+    buildMapHistory();
     return true;
 }
 
@@ -1132,6 +1133,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     if (state.windows)
         drawScreen(*state.windows, out);
     drawMapMarkers(state, out); // The game-UI subtree precedes the separate MapOverlay root.
+    drawMapHistory(out);
     if (state.mapInformation)
         drawNativeMapPreview(state, out);
     else if (state.mapPreview.empty()) {

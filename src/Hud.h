@@ -7,6 +7,7 @@
 // scaled with the window height.
 #include "MapMarks.h"
 #include "MapPreview.h"
+#include "MapHistory.h"
 #include "SteamVoxel.h"
 #include "InventoryUi.h"
 #include "ItemPreview.h"
@@ -288,6 +289,11 @@ class Hud {
     int inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const;
     bool hasPanels() const { return scene && panels.bag.node; }
     bool hasPointer() const { return cursorNode != nullptr; } // (cursor.plx was read)
+    void bindMapHistory(const maphistory::History::View &, const std::string &caption, bool interfaceVisible);
+    void mapHistoryPointer(glm::vec2 pointer, bool highlighted);
+    bool mapHistoryArrowHit(bool older, glm::vec2 pointer) const;
+    int mapHistoryAction(glm::vec2 pointer) const; // -1 older, +1 newer, 0 no enabled owner arrow.
+    const plasma::SceneNode *mapHistoryRoot() const { return historyPanel.root; }
     // The interface's scale (guiScale), and how wide a map marker's label is in pixels: at the
     // font size the marker's scale gives (12 a unit, times the interface's scale).
     float interfaceScale() const { return guiScale; }
@@ -496,11 +502,19 @@ class Hud {
     // the interface's code-made texts: a text the game makes in code (a stroked shape and a filled one
     // over it, white with a black stroke, in resource1.dat), placed by setPosition.
     plasma::TextStyle labelStyle(int size, int stroke, int flags, bool scalable) const;
-    void plasmaLabel(std::vector<OverlayVertex> &out, const std::wstring &text, glm::vec2 position, glm::vec2 offset, int size,
-                     int stroke, int flags = 0) const;
-    bool plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::vec2 position, glm::vec2 offset,
-                      const PlasmaFrame &frame, glm::vec2 *centre = nullptr, float deform = 1.0f) const;
+    void plasmaLabel(std::vector<OverlayVertex> &out, const std::wstring &text, glm::vec2 position, glm::vec2 offset, int size, int stroke,
+                     int flags = 0) const;
+    bool plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::vec2 position, glm::vec2 offset, const PlasmaFrame &frame,
+                      glm::vec2 *centre = nullptr, float deform = 1.0f) const;
     void drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) const;
+    void buildMapHistory();
+    void drawMapHistory(std::vector<OverlayVertex> &out) const;
+    struct HistoryPanel {
+        plasma::SceneNode *root = nullptr, *left = nullptr, *right = nullptr;
+        std::wstring caption = L"land";
+        glm::vec4 textColor{1};
+        bool ancestorVisible = true;
+    } historyPanel;
     // Returns where the text's last line sits (its pen's y, in the matrix's units).
     float plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &m, glm::vec2 *pen = nullptr) const;
     // The game's panels as the interface's loading builds them (HudPanels.cpp), from gui.plx with the

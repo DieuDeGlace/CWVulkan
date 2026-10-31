@@ -259,6 +259,11 @@ classification, CullMode2 rejects the **front** class; the earlier wording
 “back-face culling” in this subsection was an incorrect enum label, not a
 different descriptor or an instruction to substitute CullMode3. Replacement
 API winding must still account for the native projection convention.
+The bounded [screen-orientation contract](steam-retained-item-and-map-pass-family.md)
+§4.1 spells this out: in native X-right/Y-down render-target coordinates,
+state0 retains counterclockwise displayed triangles, whose signed
+algebraic area is negative. This is a final projected-screen test, not
+an instruction to reuse a local index-order label across APIs.
 
 Therefore, on the normal main-target route, the item draw loads the depth
 contents left by earlier scene/overlay draws. Rendering Plasma backgrounds
@@ -470,6 +475,10 @@ the same Euler/time formula, literal size**0.05**, screen-depth**0**,
 dark**1**, then restores Plasma. Its player record/admission and lack of a
 cursor quantity label remain steam-inventory-slot-lifecycle §6.2. Reaching
 this common tail is not a producer that moves a cell into the cursor.
+The native-only [retained-item and pass-family supplement](steam-retained-item-and-map-pass-family.md)
+confirms its exact record/lifetime, null-binding/invalid-tab admission,
+after-children layer and explicit state0 selection, including the still
+unverified positive cursor producer.
 
 ## 10. SpriteWidget: equipment and quick-button item images
 

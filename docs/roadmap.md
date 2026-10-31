@@ -261,9 +261,10 @@ individual feature documents.
   specified shape families provide a fallback. Full allocations and native mode 1
   inputs are retained, with a separate Alpha appearance conversion. Codec,
   malformed-input, cache, generator and world-loader checks pass, as do the full
-  CPU/owner and 40 world/20 GUI Vulkan suites. Native RGB/metadata comparisons and
-  broader original-game visual coverage remain required; the current native
-  capture is waiting at the mod-loader dialog because control tools cannot start.
+  CPU/owner and 40 world/20 GUI Vulkan suites. A completed 332-key native owner
+  capture (with the owner's mods active) matches every generated RGB byte and semantic metadata field, including
+  high-bit modifiers and multiple branches of all families. Exhaustive key coverage
+  and broader original-game visual comparisons remain separate validation work.
   Ordinary information text now has its specified category rows, effects, float
   rounding and inline deltas. Equipped comparison uses original address identity,
   native candidate/Shift order, smaller fonts and fresh late resizes. Fractional
@@ -289,7 +290,7 @@ individual feature documents.
   controls half radius, while pointer text samples earlier retained cursor data
   using its specified float32 norm. Screen-centre pixel truncation and owner
   callback-order tests pass with the full validation suite. Earlier camera/input
-  phases, hovered-land highlighting, full map-panel controls, GUI capture/poses
+  phases, remaining map-panel controls, GUI capture/poses
   and layout-callback timing still
   need implementation/comparison.
 - [x] Ring Menu selector: canonical category1 candidates, retained signed32 selection,
@@ -355,6 +356,24 @@ individual feature documents.
 - [x] Shop purchase/sale sounds use the player's physical fixed position; sales
   retain their specified 0.75 volume. Sound IDs and timing follow the independent
   shop and sound specifications.
+- [x] Native map region history and bounded controls: ordered personal save data,
+  per-world-step current-region sampling, separate borrowed-entry lifetime, owner
+  arrows and bottom-left outlined label, callback-before-hit behavior and retained
+  map-only shoulder edges. Nine mapped zoom layers, the separate wheel ceiling,
+  fixed recenter/pan/easing and the independent information ZOOM value are integrated.
+  Hovered/forced land state retains its 3D/Overlay phases; generated border points
+  use the owner's cube model, full-header centering, native float pulse and normal
+  depth-only/blended passes. The ordinary map retains normal-family winding and
+  inherits world depth rather than clearing it. CPU/owner and six synthetic Vulkan
+  map image cases cover these changes, including reversed winding and near-world
+  occlusion. Controls/Multiplayer physical-wheel fallback now uses the
+  cached GUI pointer after the three inventory grids, native one-row clamps,
+  owner scroll-thumb rebinding and separate fit/refresh branches. It does not
+  extend controller wheel eligibility. The movement-close batch hides its stated
+  panel roots and clears only shown answer pages, preserving unrelated data and
+  Options/Controls. Focused arithmetic checks cover those bounded rules. Broader
+  early input/camera/GUI phase fidelity and native interaction/visual comparisons
+  remain release gates.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
   exact logo lighting, panel opacity and the remaining object/effect visuals.
   Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs

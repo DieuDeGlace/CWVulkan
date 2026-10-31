@@ -436,6 +436,7 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
     s.discoveredPlaces.assign(c.discoveredZones.begin(), c.discoveredZones.end());
     s.discoveredAreas.assign(c.discoveredLands.begin(), c.discoveredLands.end());
     s.flightPoints = c.flightPoints;
+    s.regionHistory = c.regionHistory;
     s.finishedMissions = c.finishedMissions;
     s.solvedMissions = c.setC8;
     s.missionTimers = c.missionTimers;
@@ -507,6 +508,8 @@ void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame
     c.discoveredZones = std::set<nativesaves::Cell>(s.discoveredPlaces.begin(), s.discoveredPlaces.end());
     c.discoveredLands = std::set<nativesaves::Cell>(s.discoveredAreas.begin(), s.discoveredAreas.end());
     c.flightPoints = s.flightPoints;
+    if (s.regionHistory)
+        c.regionHistory = *s.regionHistory;
     c.finishedMissions = s.finishedMissions;
     c.setC8 = s.solvedMissions;
     c.missionTimers = s.missionTimers;

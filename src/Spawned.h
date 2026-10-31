@@ -16,6 +16,7 @@
 #include "GroundItems.h"
 #include "EnemyRespawn.h"
 #include "HairStyle.h"
+#include "MapHistory.h"
 #include <list>
 #include <functional>
 #include "worldgen/Residents.h"
@@ -55,6 +56,9 @@ class SpawnedCreatures {
     int64_t playerId() const { return localId; }
     void setPlayerHairStyle(hair::Style style) { playerHairStyle = hair::normalised(style); }
     void setPlayerId(int64_t id);
+    void restoreMapHistory(const std::vector<maphistory::Region> &saved) { regionHistory = maphistory::History(saved); }
+    maphistory::History &mapHistory() { return regionHistory; }
+    const maphistory::History &mapHistory() const { return regionHistory; }
     // A creature the network brings (a guest's player in a host world, any creature in a mirror):
     // the one with this id, or a new one made with the constructor's defaults (`made` set). Such
     // creatures belong to no zone and stay until removed. Null for the local player's id.
@@ -499,8 +503,9 @@ class SpawnedCreatures {
     std::map<int64_t, RoadTrip> trips; // by the first id of the pack's group
     void startTrips(std::vector<Creature> &list);
     void advanceTrips(ExtractedWorld &ew, double dtMs);
-    Creature player;                                      // the player's record for the AI
+    Creature player; // the player's record for the AI
     bool hasPlayer = false;
+    maphistory::History regionHistory;
     bool nativePlayer = false;
     size_t movesStarted = 0, strikesLanded = 0, playerPartsDrawn = 0, shouts = 0, summoned = 0;
     // Moves the creatures the interactions made during a frame (shadow clones, water

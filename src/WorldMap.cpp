@@ -4,12 +4,14 @@
 
 #include "MapMarks.h"
 #include "World.h"
+#include "MapControls.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 
 namespace worldmap {
 
@@ -53,12 +55,13 @@ DrawItem mapItem(uint32_t mesh, const MapCamera &camera, const glm::mat4 &world,
 int scaleOf(int level) { return worldgen::mapUnit(level); }
 
 Built build(int rx, int ry, int level) {
-    const worldgen::MapRegion region = worldgen::mapRegion(rx, ry, level);
+    auto region = worldgen::mapRegion(rx, ry, level);
     Built b;
     b.x = rx, b.y = ry, b.level = level;
     b.baseHeight = region.base();
     b.sizeZ = region.sizeZ;
-    b.markers = region.markers;
+    b.markers = std::move(region.markers);
+    b.borders = std::move(region.borders);
     if (region.sizeZ <= 0 || region.rgb.empty())
         return b;
     const VoxelModel model{region.side, region.side, region.sizeZ, region.rgb.data()};
@@ -143,6 +146,7 @@ void Map::update(Renderer &renderer, glm::dvec3 center, int level) {
         r.mesh = r.empty ? 0 : renderer.upload(b.mesh);
         r.solid = std::move(b.solid);
         r.markers = std::move(b.markers);
+        r.borders = std::move(b.borders);
         r.builtMs = now;
         r.drawnFrame = frame;
     }
@@ -201,18 +205,23 @@ template <class Visit> void Map::forEachRegion(const View &view, Visit &&visit) 
 
 // --- The draw ---------------------------------------------------------------------------------
 
-void Map::collect(const View &view, std::vector<DrawItem> &out) {
+std::optional<worldgen::Int2> Map::collect(const View &view, std::vector<DrawItem> &out) {
     if (view.screen.y < 0.0001f)
-        return;
+        return view.hoveredLand;
     frame++;
     const MapCamera camera = cameraOf(view);
     const double now = nowMs();
     std::vector<DrawItem> fading;
+    auto selected = view.hoveredLand;
     forEachRegion(view, [&](int rx, int ry, const Key &key) {
         auto it = regions.find(key);
-        if (it == regions.end() || it->second.empty)
+        if (it == regions.end())
             return;
+        if (view.forcedLand && view.forcedLand->x != std::numeric_limits<int32_t>::max())
+            selected = view.forcedLand;
         Region &r = it->second;
+        if (r.empty)
+            return;
         r.drawnFrame = frame;
         const glm::mat4 world = glm::translate(glm::mat4(1), glm::vec3(regionOffset(view, rx, ry, r.baseHeight)));
         const float fade = regionFade(now - r.builtMs);
@@ -221,9 +230,32 @@ void Map::collect(const View &view, std::vector<DrawItem> &out) {
         // A region still fading in goes with the blended draws, after the whole ones.
         (fade < 1 ? fading : out).push_back(mapItem(r.mesh, camera, world, fade, REGION_DEPTH_OFFSET));
     });
+    out.insert(out.end(), fading.begin(), fading.end());
+    if (selected && selected->x != std::numeric_limits<int32_t>::max())
+        drawBorders(view, camera, *selected, out);
     drawMarks(view, camera, out);
     drawRoute(view, camera, out);
-    out.insert(out.end(), fading.begin(), fading.end());
+    return selected;
+}
+
+void Map::drawBorders(const View &view, const MapCamera &camera, worldgen::Int2 selected, std::vector<DrawItem> &out) const {
+    const float opacity = borderOpacity(view.elapsedWorldMs);
+    if (!cube.mesh || !(opacity > 0))
+        return;
+    const auto center = mapcontrol::fromBlocks(view.center);
+    const int unit = scaleOf(view.level);
+    forEachRegion(view, [&](int, int, const Key &key) {
+        const auto tile = regions.find(key);
+        if (tile == regions.end())
+            return;
+        const auto border = tile->second.borders.find({selected.x, selected.y});
+        if (border == tile->second.borders.end())
+            return;
+        for (const auto &point : border->second) {
+            const auto placed = borderPlacement(point, center, unit, view.viewScale, cube.size);
+            out.push_back(mapItem(cube.mesh, camera, placed, opacity, 1.6f));
+        }
+    });
 }
 
 void Map::drawMarks(const View &view, const MapCamera &camera, std::vector<DrawItem> &out) const {

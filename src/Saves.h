@@ -130,6 +130,8 @@ struct SaveGame {
     std::vector<std::array<int32_t, 3>> treasures;
     // The flight points the player bought (the character's known flight points), in blocks.
     std::vector<std::array<int32_t, 2>> flightPoints;
+    // Native map history, most recent first. Unset legacy progress preserves the saved list.
+    std::optional<std::vector<std::array<int32_t, 2>>> regionHistory;
     // The places whose mission this character finished (the character's data +0xd8) and solved
     // (+0xc8), by place cell (Missions.h).
     std::set<std::array<int32_t, 2>> finishedMissions, solvedMissions;

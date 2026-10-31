@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <bit>
 
 namespace worldmap {
 
@@ -222,6 +223,27 @@ glm::vec4 clipOf(const MapCamera &camera, glm::vec3 p, float depthOffset) {
     const glm::vec4 &lens = camera.lens;
     return glm::vec4(lens.x * p.x + lens.z * p.z, lens.y * p.y + lens.w * p.z,
                      (DEPTH_SCALE + DEPTH_SHIFT) * p.z + DEPTH_BIAS - depthOffset, p.z);
+}
+
+float borderOpacity(float worldMilliseconds) {
+    const float phase = worldMilliseconds * 0.006000000052154064f;
+    const float raised = std::cos(phase) + 1.f;
+    return raised * .4f;
+}
+
+glm::mat4 borderPlacement(const std::array<int32_t, 3> &point, const std::array<int64_t, 3> &center, int unit, float viewScale,
+                          glm::vec3 allocation) {
+    const float reciprocal = float(1.0 / double(unit));
+    glm::vec3 position;
+    for (size_t axis = 0; axis < point.size(); ++axis) {
+        const uint64_t difference = uint64_t(int64_t(point[axis]) * 65536) - uint64_t(center[axis]);
+        const float delta = float(std::bit_cast<int64_t>(difference));
+        const float blocks = delta * (1.f / 65536.f);
+        position[(int)axis] = blocks * reciprocal;
+    }
+    auto model = glm::translate(glm::mat4(1), position);
+    model = glm::scale(model, glm::vec3(2.f / viewScale));
+    return glm::translate(model, allocation * -.5f);
 }
 
 float regionFade(double msSinceBuilt) {

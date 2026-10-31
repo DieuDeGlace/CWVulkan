@@ -170,6 +170,10 @@ add_library(engine STATIC
     src/Lore.cpp
     src/MapMarks.cpp
     src/MapPreview.cpp
+    src/MapHistory.cpp
+    src/MapControls.cpp
+    src/PanelScroll.cpp
+    src/HudMap.cpp
     src/UsePrompt.cpp
     src/NativeItems.cpp
     src/ProceduralItemData.cpp
@@ -355,6 +359,10 @@ target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp tests/ItemSelectorTests.cpp)
 target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp tests/VoxelCustomizationTests.cpp tests/ItemPreviewTests.cpp tests/MapPreviewTests.cpp)
 target_sources(EngineTests PRIVATE tests/ProceduralItemTests.cpp)
+target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
+target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
+target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
+target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

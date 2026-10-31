@@ -9,6 +9,7 @@
 #include "CubModel.h"
 #include "HairStyle.h"
 #include "MapLook.h"
+#include <optional>
 #include "Mesher.h"
 #include "Renderer.h"
 #include "worldgen/MapModel.h"
@@ -26,7 +27,7 @@
 namespace worldmap {
 
 constexpr int LEVELS = 9;      // the zoom levels
-constexpr int MAX_ZOOM = 6;    // the mouse wheel's (the largest zoom)
+constexpr int MAX_ZOOM = 8;    // Nine native layers; the wheel independently clamps to6.
 constexpr int REGION = 16;     // map units a region
 constexpr int BORDER = 3;      // the border built around a region
 constexpr int RADIUS = 8;      // regions each way of the centre (§4.6)
@@ -43,6 +44,7 @@ struct Built {
     std::vector<uint8_t> solid;
     int sizeZ = 0;
     std::vector<worldgen::MapRegion::Marker> markers;
+    worldgen::MapBorders borders;
 };
 Built build(int rx, int ry, int level);
 
@@ -78,11 +80,13 @@ class Map {
             bool pulses = false;
         };
         std::vector<Mark> marks;
-        double worldClockMs = 0; // the pulse's clock
+        double worldClockMs = 0;  // the pulse's clock
+        float elapsedWorldMs = 0; // Native World+0x440, distinct from GUI/calendar clocks.
+        std::optional<worldgen::Int2> hoveredLand, forcedLand;
     };
     // The map's draw items for this frame (flag WORLD_MAP): whole models first, then the
     // regions still fading in.
-    void collect(const View &view, std::vector<DrawItem> &out);
+    std::optional<worldgen::Int2> collect(const View &view, std::vector<DrawItem> &out);
     // The route's dot (cube.cub).
     void setCube(Renderer &renderer, const CubModel &cube);
     // A marker's models, for View::Mark: a creature's head (or chest) and its hair in the
@@ -113,6 +117,7 @@ class Map {
         bool empty = true;
         std::vector<uint8_t> solid;
         std::vector<worldgen::MapRegion::Marker> markers;
+        worldgen::MapBorders borders;
         double builtMs = 0;      // when it arrived, for the fade-in
         uint64_t drawnFrame = 0; // the map frame it was last drawn in, for the sweep
     };
@@ -138,6 +143,7 @@ class Map {
     // The regions in the drawing order (§4.3): rx outer, ry inner, around the centre.
     template <class Visit> void forEachRegion(const View &view, Visit &&visit) const;
     void drawMarks(const View &view, const MapCamera &camera, std::vector<DrawItem> &out) const;
+    void drawBorders(const View &view, const MapCamera &camera, worldgen::Int2 selected, std::vector<DrawItem> &out) const;
     void drawRoute(const View &view, const MapCamera &camera, std::vector<DrawItem> &out) const;
     void sweep(Renderer &renderer, double nowMs);
 

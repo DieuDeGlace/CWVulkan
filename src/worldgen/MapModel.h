@@ -24,6 +24,7 @@
 #include <vector>
 
 namespace worldgen {
+using MapBorders = std::map<std::pair<int32_t, int32_t>, std::vector<std::array<int32_t, 3>>>;
 
 constexpr int MAP_REGION_UNITS = 16; // map units along a region's side (0x5469a0)
 constexpr int MAP_BORDER = 3;        // units of border built around it (0x5469a8)
@@ -82,7 +83,7 @@ struct MapRegion {
 
     // The region borders crossing the model (§3.1, map +0x78): for each world region (8192-block
     // region key), the columns (x, y, top) where a neighbouring column belongs to another one.
-    std::map<std::pair<int32_t, int32_t>, std::vector<std::array<int32_t, 3>>> borders;
+    MapBorders borders;
 };
 
 // Map region (rx, ry) at zoom level `level`.

@@ -29,6 +29,8 @@ int regionBiome(int32_t rx, int32_t ry);
 Int2 regionOf(int32_t x, int32_t y);
 // The region a point belongs to (0x2ada20): near a landmark, the landmark's own region.
 Int2 regionAt(int32_t x, int32_t y);
+// Physical fixed coordinates, with the effective block's landmark flag (native0x2ad8f0).
+Int2 regionAtFixed(int64_t x, int64_t y, bool landmarkBlock);
 // The biome of regionAt.
 inline int biomeAt(int32_t x, int32_t y) {
     const Int2 r = regionAt(x, y);

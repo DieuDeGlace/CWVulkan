@@ -68,7 +68,34 @@ constexpr int SWEEP_STEP = 6;     // Zones between stops.
 constexpr int SETTLE_RADIUS = 3;  // Zones around a stop that must be saved before moving on.
 constexpr ULONGLONG STOP_TIMEOUT_MS = 20000;
 
-static uintptr_t base() { return (uintptr_t)GetModuleHandleW(nullptr); }
+static uintptr_t base() {
+    return (uintptr_t)GetModuleHandleW(nullptr);
+}
+static bool hotkeyDown(int key) {
+    DWORD process = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &process);
+    return process == GetCurrentProcessId() && (GetAsyncKeyState(key) & 0x8000) != 0;
+}
+static std::vector<std::string> otherModFiles(DWORD &scanError) {
+    scanError = ERROR_SUCCESS;
+    std::vector<std::string> result;
+    WIN32_FIND_DATAA entry{};
+    const HANDLE search = FindFirstFileA("Mods\\*.dll", &entry);
+    if (search == INVALID_HANDLE_VALUE) {
+        scanError = GetLastError();
+        return result;
+    }
+    do {
+        if (!(entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _stricmp(entry.cFileName, "ZoneExtractor.dll"))
+            result.emplace_back(entry.cFileName);
+    } while (FindNextFileA(search, &entry));
+    const DWORD lastError = GetLastError();
+    FindClose(search);
+    if (lastError != ERROR_NO_MORE_FILES)
+        scanError = lastError;
+    std::sort(result.begin(), result.end());
+    return result;
+}
 static bool supported() {
     auto b = (unsigned char *)base();
     auto nt = (IMAGE_NT_HEADERS64 *)(b + ((IMAGE_DOS_HEADER *)b)->e_lfanew);
@@ -4134,9 +4161,16 @@ static void dump(cube::Game *g) {
     auto ground = (float (*)(cube::World *, int, int, int))(b + GROUND_HEIGHT_RVA);
     auto regionAt = (void (*)(cube::World *, IntVector2 *, int, int))(b + REGION_AT_RVA);
     CreateDirectoryA("Extract", nullptr);
-    FILE *f = _fsopen("Extract\\gen-oracle.txt", "w", _SH_DENYNO);
+    DWORD modScanError = ERROR_SUCCESS;
+    const auto mods = otherModFiles(modScanError);
+    const char *destination = mods.empty() && !modScanError ? "Extract\\gen-oracle.txt" : "Extract\\gen-oracle-modded.txt";
+    FILE *f = _fsopen(destination, "w", _SH_DENYNO);
     if (!f)
         return;
+    fprintf(f, "# source_timestamp %08x other_mod_files %zu other_mod_scan_error %lu\n", SUPPORTED_TIMESTAMP, mods.size(),
+            (unsigned long)modScanError);
+    for (const auto &name : mods)
+        fprintf(f, "# other_mod_file %s\n", name.c_str());
     fprintf(f, "# x y | regionX regionY | kind big variant radius cx cy dist2 weight | lake base roads w13 w125 w8 river "
                "lava swamp high a44 b59 veg | height0 height4\n");
     // Points: a grid around the player, around the world's origin, and scattered far out.
@@ -4185,7 +4219,7 @@ static void dump(cube::Game *g) {
                 rv, lv, sw, hi, va, vb, vg, ground(w, x, y, 0), ground(w, x, y, 4));
     }
     fclose(f);
-    extract::log("Generator oracle: " + std::to_string(points.size()) + " points written to Extract\\gen-oracle.txt");
+    extract::log("Generator oracle: " + std::to_string(points.size()) + " points written to " + std::string(destination));
 
     // Blocks: the zone generator's column inputs (0x2ff6f0) and the block properties the
     // game makes from them (0x2d8e00) at the surface and below, with the snow and river
@@ -6542,7 +6576,7 @@ static void tick(cube::Game *g) {
     soundlist::run(g);
     {
         static bool f5 = false, f4 = false;
-        bool down5 = GetAsyncKeyState(VK_F5) & 0x8000, down4 = GetAsyncKeyState(VK_F4) & 0x8000;
+        bool down5 = extract::hotkeyDown(VK_F5), down4 = extract::hotkeyDown(VK_F4);
         if (down5 && !f5) {
             character::snapshot(g->world, g->world->local_creature);
             // Refresh older exports too: current auxiliary lists and mesh-time
@@ -6557,33 +6591,33 @@ static void tick(cube::Game *g) {
         if (character::recording)
             character::record(g->world, g->world->local_creature);
         static bool f2 = false;
-        bool down2 = GetAsyncKeyState(VK_F2) & 0x8000;
+        bool down2 = extract::hotkeyDown(VK_F2);
         if (down2 && !f2)
             combat::toggle(g->world);
         f2 = down2;
         combat::tick(g);
         static bool zero = false;
-        bool downZero = GetAsyncKeyState('0') & 0x8000;
+        bool downZero = extract::hotkeyDown('0');
         if (downZero && !zero)
             aitrace::toggle();
         zero = downZero;
         static bool equals = false;
-        bool downEquals = GetAsyncKeyState(VK_OEM_PLUS) & 0x8000;
+        bool downEquals = extract::hotkeyDown(VK_OEM_PLUS);
         if (downEquals && !equals && aitrace::active)
             aitrace::startApproach(g->world);
         equals = downEquals;
         static bool minus = false;
-        bool downMinus = GetAsyncKeyState(VK_OEM_MINUS) & 0x8000;
+        bool downMinus = extract::hotkeyDown(VK_OEM_MINUS);
         if (downMinus && !minus)
             aitrace::visitTownsperson(g);
         minus = downMinus;
         static bool kKey = false;
-        bool downK = GetAsyncKeyState('K') & 0x8000;
+        bool downK = extract::hotkeyDown('K');
         if (downK && !kKey)
             talkscripts::exportAll(g, false);
         kKey = downK;
         static bool oKey = false;
-        bool downO = GetAsyncKeyState('O') & 0x8000;
+        bool downO = extract::hotkeyDown('O');
         if (downO && !oKey) {
             genoracle::dump(g);
             blockprobe::dump();
@@ -6599,7 +6633,7 @@ static void tick(cube::Game *g) {
         deathprobe::tick(g);
         gear::dumpFunctions();
         static bool f8 = false;
-        bool down8 = GetAsyncKeyState(VK_F8) & 0x8000;
+        bool down8 = extract::hotkeyDown(VK_F8);
         if (down8 && !f8) {
             if (gear::active)
                 gear::finish(g->world, "stopped");
@@ -6611,24 +6645,24 @@ static void tick(cube::Game *g) {
         f8 = down8;
         gear::tick(g->world);
         static bool f7 = false;
-        bool down7 = GetAsyncKeyState(VK_F7) & 0x8000;
+        bool down7 = extract::hotkeyDown(VK_F7);
         if (down7 && !f7)
             switchSpecialization(g->world->local_creature);
         f7 = down7;
         static bool ins = false;
-        bool downIns = GetAsyncKeyState('X') & 0x8000;
+        bool downIns = extract::hotkeyDown('X');
         if (downIns && !ins)
             fillMana(g->world->local_creature);
         ins = downIns;
         static bool noon = false; // N: midday, for recordings that need daylight
-        bool downN = GetAsyncKeyState('N') & 0x8000;
+        bool downN = extract::hotkeyDown('N');
         if (downN && !noon) {
             g->world->state.time = g->host.world.state.time = 12 * 60 * 60 * 1000.f; // the local server keeps the clock
             log("Time set to 12:00");
         }
         noon = downN;
         static bool hunt = false; // H: 100 blocks on along the camera, onto the ground, to find monsters
-        bool downH = GetAsyncKeyState('H') & 0x8000;
+        bool downH = extract::hotkeyDown('H');
         if (downH && !hunt) {
             auto &p = g->world->local_creature->entity_data.position;
             double yaw = (g->camera_angle.z - 90) * 3.14159265358979 / 180;
@@ -6650,7 +6684,7 @@ static void tick(cube::Game *g) {
         // it the game's own way (HP alone does not change how it dies or what it drops).
         static bool weaken = false;
         static ULONGLONG weakUntil = 0;
-        bool downV = GetAsyncKeyState('V') & 0x8000;
+        bool downV = extract::hotkeyDown('V');
         if (downV && !weaken)
             weakUntil = GetTickCount64() + 6000;
         if (GetTickCount64() < weakUntil && combat::targetId) {
@@ -6668,7 +6702,7 @@ static void tick(cube::Game *g) {
         // 8: guard (test harness, writes HP): the player stays at full health, so
         // measurements are not cut short by monsters. Restore the save afterwards.
         static bool guardKey = false, guarding = false;
-        bool down8key = GetAsyncKeyState('8') & 0x8000;
+        bool down8key = extract::hotkeyDown('8');
         if (down8key && !guardKey) {
             guarding = !guarding;
             log(guarding ? "Guard on (full health)" : "Guard off");
@@ -6687,7 +6721,7 @@ static void tick(cube::Game *g) {
         static bool pushKey = false;
         static ULONGLONG pushUntil = 0;
         static int pushDx = 0, pushDy = 0;
-        bool down7key = GetAsyncKeyState('7') & 0x8000;
+        bool down7key = extract::hotkeyDown('7');
         cube::World *cw = g->world;
         auto blockSolid = [&](int64_t bx, int64_t by, int64_t bz) -> bool { // block-space z
             int zx = (int)std::floor(bx / 64.0), zy = (int)std::floor(by / 64.0);
@@ -6734,7 +6768,7 @@ static void tick(cube::Game *g) {
                 v.y = 4.f * pushDy;
         }
         static bool collide = false, logging = false;
-        bool down9 = GetAsyncKeyState('9') & 0x8000;
+        bool down9 = extract::hotkeyDown('9');
         if (down9 && !collide) {
             logging = !logging;
             if (logging && !collisionLog) {
@@ -6752,7 +6786,7 @@ static void tick(cube::Game *g) {
         // column topped with water (in the loaded zones), so one drop logs a long fall and
         // then swimming.
         static bool dropKey = false;
-        bool downG = GetAsyncKeyState('G') & 0x8000;
+        bool downG = extract::hotkeyDown('G');
         if (downG && !dropKey) {
             cube::World *w = g->world;
             auto &e = w->local_creature->entity_data;
@@ -6888,7 +6922,7 @@ static void tick(cube::Game *g) {
             }
         }
         static bool slay = false; // Z: fight mode's target to 0 HP (the game then kills it and drops loot its own way)
-        bool downZ = GetAsyncKeyState('Z') & 0x8000;
+        bool downZ = extract::hotkeyDown('Z');
         if (downZ && !slay && combat::targetId) {
             for (cube::World *world : {g->world, &g->host.world})
                 for (cube::Creature *c : world->creatures)
@@ -6898,7 +6932,7 @@ static void tick(cube::Game *g) {
         }
         slay = downZ;
         static bool weakest = false; // F: next to the weakest monster the game simulates (fight mode's target)
-        bool downF = GetAsyncKeyState('F') & 0x8000;
+        bool downF = extract::hotkeyDown('F');
         if (downF && !weakest) {
             auto maxHp = (float (*)(cube::Creature *))(base() + MAX_HP_RVA);
             cube::Creature *best = nullptr;
@@ -6919,7 +6953,7 @@ static void tick(cube::Game *g) {
         }
         weakest = downF;
         static bool arm = false; // U: the player takes fight mode's target's weapons (recording only)
-        bool downU = GetAsyncKeyState('U') & 0x8000;
+        bool downU = extract::hotkeyDown('U');
         if (downU && !arm && combat::targetId) {
             cube::Creature *player = g->world->local_creature;
             for (cube::Creature *c : g->world->creatures)
@@ -6932,7 +6966,7 @@ static void tick(cube::Game *g) {
         }
         arm = downU;
         static bool levelKey = false; // L: the player's level from [Record] Level (recording only)
-        bool downL = GetAsyncKeyState('L') & 0x8000;
+        bool downL = extract::hotkeyDown('L');
         if (downL && !levelKey) {
             cube::Creature *player = g->world->local_creature;
             std::string before = statsText(player);
@@ -6941,13 +6975,13 @@ static void tick(cube::Game *g) {
         }
         levelKey = downL;
         static bool turn = false; // J: the camera (and H's direction) a quarter turn
-        bool downJ = GetAsyncKeyState('J') & 0x8000;
+        bool downJ = extract::hotkeyDown('J');
         if (downJ && !turn)
             g->camera_angle.z = g->target_camera_angle.z = g->camera_angle.z + 90;
         turn = downJ;
         uicapture::install();
         static bool f10 = false;
-        bool down10 = GetAsyncKeyState(VK_F10) & 0x8000;
+        bool down10 = extract::hotkeyDown(VK_F10);
         if (down10 && !f10) {
             uicapture::folder = "Extract\\ui", uicapture::spacing = 300, uicapture::pending = 6;
             log("Interface capture: saving 6 frames");
@@ -6962,7 +6996,7 @@ static void tick(cube::Game *g) {
         static ULONGLONG stopStart = 0;
         static std::vector<std::pair<int, int>> creatureStops;
         static int64_t tourX = 0, tourY = 0; // blocks: the centre of the tour
-        bool down3 = GetAsyncKeyState(VK_F3) & 0x8000;
+        bool down3 = extract::hotkeyDown(VK_F3);
         cube::Creature *player = g->world->local_creature;
         if (down3 && !f3) {
             if (!character::creatureMode) {
@@ -7099,7 +7133,7 @@ static void tick(cube::Game *g) {
     }
 
     static bool f11 = false, f9 = false;
-    bool down11 = GetAsyncKeyState(VK_F11) & 0x8000, down9 = GetAsyncKeyState(VK_F9) & 0x8000;
+    bool down11 = extract::hotkeyDown(VK_F11), down9 = extract::hotkeyDown(VK_F9);
     if (down11 && !f11) {
         sweeping = !sweeping;
         if (sweeping) {
@@ -7121,7 +7155,7 @@ static void tick(cube::Game *g) {
     f11 = down11;
     f9 = down9;
     static bool f6 = false;
-    bool down6 = GetAsyncKeyState(VK_F6) & 0x8000;
+    bool down6 = extract::hotkeyDown(VK_F6);
     if (down6 && !f6 && !sweeping) {
         touring = !touring;
         if (touring) {

@@ -100,7 +100,14 @@ Launch the game and choose Yes for the extractor-only mod session. The queued
 it writes terrain reference values and refreshes loaded zone/light snapshots,
 even when those zones were already exported. The title flyover is sufficient;
 loading a character and timed key presses are unnecessary. F5 and O remain
-available for manual refreshes. Allow the writer a few seconds to finish, close
+available for manual refreshes while Cube World is the foreground application.
+Queued file requests still run on game ticks in the background. When another DLL
+is present in `Mods`, generator dumps go to `Extract/gen-oracle-modded.txt` instead
+of overwriting `gen-oracle.txt`; an incomplete DLL scan uses that separate file too.
+The header records the build, detected mod filenames and scan error. File presence
+is a conservative provenance check, not proof that each
+mod loaded. Use the isolated session for a vanilla world reference.
+Allow the writer a few seconds to finish, close
 the game, then use `--setup-restore --game "<Cube World folder>"` to restore Save,
 Mods and ReShade. A pending journal is also detected after an interruption.
 

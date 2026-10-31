@@ -1,13 +1,14 @@
 // The world map's pass (docs/specs/worldmap-rendering.md §3): the map's models drawn after the
-// world over a cleared depth, through shaders/map.vert and map.frag, which carry the map's own
-// light rig and colour steps whatever the world's look. Opaque items come first in the list
-// and blended ones (regions fading in) after, as WorldMap::collect orders them.
+// world with its existing depth, through shaders/map.vert and map.frag, which carry the map's own
+// light rig and colour steps whatever the world's look. Resource-grouped opaque draws precede
+// the faded vector's depth-only and blended-color passes (steam-world-pass-controls section2).
 #include "Renderer.h"
 
 #include "map_frag.h"
 #include "map_vert.h"
 
 #include <cstddef>
+#include <algorithm>
 
 namespace {
 
@@ -61,15 +62,16 @@ bool Renderer::createMapPipeline(std::string &error) {
     dynamic.pDynamicStates = dynamics;
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    // The map's blocks are closed and the lens mirrors x, so nothing is culled.
+    // Same native solid orientation as the WORLD-shader GUI model pass.
     VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     raster.polygonMode = VK_POLYGON_MODE_FILL;
-    raster.cullMode = VK_CULL_MODE_NONE;
+    raster.cullMode = VK_CULL_MODE_BACK_BIT;
+    raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster.lineWidth = 1;
     VkPipelineDepthStencilStateCreateInfo depthState{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     depthState.depthTestEnable = VK_TRUE;
     depthState.depthWriteEnable = VK_TRUE;
-    depthState.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
     // Opacity blends: 1 for every whole model, less while a region fades in.
     VkPipelineColorBlendAttachmentState attachment{};
     attachment.colorWriteMask = 0xf;
@@ -102,7 +104,14 @@ bool Renderer::createMapPipeline(std::string &error) {
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = mapLayout;
-    const bool made = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &mapPipeline) == VK_SUCCESS;
+    auto make = [&](VkPipeline &pipeline, bool blending, VkColorComponentFlags mask, bool depthOnly) {
+        attachment.blendEnable = blending;
+        attachment.colorWriteMask = mask;
+        info.stageCount = depthOnly ? 1 : 2;
+        return vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) == VK_SUCCESS;
+    };
+    const bool made =
+        make(mapPipeline, false, 0xf, false) && make(mapDepthPipeline, false, 0, true) && make(mapFadePipeline, true, 0xf, false);
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, fs, nullptr);
     if (!made)
@@ -111,43 +120,49 @@ bool Renderer::createMapPipeline(std::string &error) {
 }
 
 void Renderer::destroyMapPipeline() {
-    if (mapPipeline)
-        vkDestroyPipeline(device, mapPipeline, nullptr);
+    for (auto pipeline : {mapPipeline, mapDepthPipeline, mapFadePipeline})
+        if (pipeline)
+            vkDestroyPipeline(device, pipeline, nullptr);
     if (mapLayout)
         vkDestroyPipelineLayout(device, mapLayout, nullptr);
     mapPipeline = VK_NULL_HANDLE;
+    mapDepthPipeline = mapFadePipeline = VK_NULL_HANDLE;
     mapLayout = VK_NULL_HANDLE;
 }
 
 unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter) {
-    unsigned draws = 0;
-    bool started = false;
-    for (const DrawItem &item : items) {
-        if (!(item.flags & WORLD_MAP) || !meshes[item.mesh].indexCount)
+    std::vector<const DrawItem *> opaque, faded;
+    for (const auto &item : items) {
+        if (!(item.flags & WORLD_MAP) || !meshes[item.mesh].indexCount || !(item.map.opacity > 0))
             continue;
-        if (!started) {
-            // The map has a depth of its own: nothing of the world covers it.
-            VkClearAttachment clear{};
-            clear.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-            clear.clearValue.depthStencil = {1, 0};
-            VkClearRect rect{{{0, 0}, extent}, 0, 1};
-            vkCmdClearAttachments(cmd, 1, &clear, 1, &rect);
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mapPipeline);
-            started = true;
-        }
-        const DrawItem::MapDraw &m = item.map;
-        // The TAA jitter goes into the lens's shift (the shader flips y for Vulkan), so the
-        // resolve samples the map back unshifted, as it does the world.
-        const glm::vec4 lens = m.lens + glm::vec4(0, 0, jitter.x, -jitter.y);
-        const MapPush push{item.model, lens, glm::vec4(m.yaw, m.pitch, m.opacity, m.depthOffset),
-                           glm::vec4(m.colour, m.white), glm::vec4(fogColour, 0)};
-        vkCmdPushConstants(cmd, mapLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-        const GpuMesh &mesh = meshes[item.mesh];
-        VkDeviceSize zero = 0;
-        vkCmdBindVertexBuffers(cmd, 0, 1, &mesh.buffer.buffer, &zero);
-        vkCmdBindIndexBuffer(cmd, mesh.buffer.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);
-        draws++;
+        (item.map.opacity >= 1 ? opaque : faded).push_back(&item);
     }
+    if (opaque.empty() && faded.empty())
+        return 0;
+    std::stable_sort(opaque.begin(), opaque.end(), [](const auto *a, const auto *b) { return a->mesh < b->mesh; });
+    // The map wrapper inherits the frame's depth; its native +0x80 call sets fog, not depth.
+    unsigned draws = 0;
+    auto submit = [&](VkPipeline pipeline, const std::vector<const DrawItem *> &queue) {
+        if (queue.empty())
+            return;
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        for (const auto *entry : queue) {
+            const auto &item = *entry;
+            const auto &m = item.map;
+            const glm::vec4 lens = m.lens + glm::vec4(0, 0, jitter.x, -jitter.y);
+            const MapPush push{item.model, lens, glm::vec4(m.yaw, m.pitch, m.opacity, m.depthOffset), glm::vec4(m.colour, m.white),
+                               glm::vec4(fogColour, 0)};
+            vkCmdPushConstants(cmd, mapLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+            const GpuMesh &mesh = meshes[item.mesh];
+            VkDeviceSize zero = 0;
+            vkCmdBindVertexBuffers(cmd, 0, 1, &mesh.buffer.buffer, &zero);
+            vkCmdBindIndexBuffer(cmd, mesh.buffer.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);
+            ++draws;
+        }
+    };
+    submit(mapPipeline, opaque);
+    submit(mapDepthPipeline, faded);
+    submit(mapFadePipeline, faded);
     return draws;
 }

@@ -74,17 +74,36 @@ and does not bind world points for each model.
 Faded-vector records are120 bytes, with sprite pointer+0, matrix+8,
 material+0x48, Opacity+0x58, Glow+0x5c, Shininess+0x60, White+0x64,
 DepthOffset+0x68 and screen center+0x6c/+0x70. Their final colored draws
-also submit all these values. The first two traversal passes select
-states3/4 and draw depth-only using the matching cull orientation; then
-colored states6/7 use alpha blending. These depth-only iterations update
+also submit all these values. For nonempty corresponding vectors the
+general consumer runs normal depth-only state3, opposite depth-only4,
+normal blended color6, then opposite blended color7. Empty vectors do
+not force those state binds. These depth-only iterations update
 model/projection/DepthOffset but need not write every color constant,
 because their color write mask is0. The later color iterations do.
+
+All normal/opposite states0/1/3/4/6/7 retain enabled **LESS_EQUAL depth
+testing and depth writes**, including faded color. Both raster families
+use **CullMode2=FRONT**; normal has FrontCounterClockwise0, opposite1.
+Normal therefore retains **counterclockwise displayed screen triangles
+with X right/Y down**, whose signed algebraic area in those coordinates
+is negative. See the exact sign/examples in pass-family §4.1. “Normal”
+does not mean a native CullMode3/back-cull descriptor.
 
 Thus WORLD **material alpha** is the lighting-factor input from the vertex
 contract, **Opacity** is the separate final pixel alpha, and **Glow/White**
 are their independently specified shader operations. Do not merge them
 into a single per-model opacity or infer Glow from a CPU vertex flag.
 This also applies to generic creature overhead models and screen overlays.
+Exact normal/opposite collection membership, explicit producer choice,
+conditional state0/1/3/4/6/7 selection and the ordinary map's normal-only
+population are [retained-item and pass-family §§3–5](steam-retained-item-and-map-pass-family.md).
+The second world context+0x1d0 must not be confused with an individual
+context's opposite-winding collections.
+The ordinary map context+0x268 contains only normal submissions, so it
+uses state0 and conditional3/6, not1/4/7. Map wrapper0xe64b0 and these
+queue consumers add no private depth clear; its virtual+0x80 at0xe66ac
+is the fog setter. Frame clear/inherited main-target depth and GUI
+offscreen-layer boundaries remain GUI item icons §8.
 
 ## 3. Water controls and retained values
 

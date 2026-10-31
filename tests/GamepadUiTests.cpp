@@ -234,6 +234,34 @@ int gamepadUiTests() {
         std::vector<int> original((size_t)count);
         std::iota(original.begin(), original.end(), 0);
         check(ids == original, "key ordering preserves the complete entry multiset");
+        }
+    {
+        Input mapEdges;
+        GamepadButtons shoulders;
+        shoulders.connected = true;
+        shoulders.leftShoulder = true;
+        auto frame = mapEdges.update(shoulders, false, false, {}, {});
+        check(!frame.olderRegion && !frame.newerRegion, "gameplay does not consume map shoulder edges");
+        frame = mapEdges.update(shoulders, true, true, {}, {});
+        check(frame.olderRegion && !frame.newerRegion && frame.padAfterCallbacks,
+              "a shoulder held on entering the map emits its retained fresh edge");
+        check(!mapEdges.update(shoulders, true, true, {}, {}).olderRegion, "map shoulders have no held repeat");
+        shoulders.leftShoulder = false;
+        mapEdges.update(shoulders, true, false, {}, {});
+        shoulders.leftShoulder = true;
+        check(!mapEdges.update(shoulders, true, true, {}, {}).olderRegion,
+              "a release outside the map does not reset its retained edge state");
+        shoulders.connected = false;
+        shoulders.leftShoulder = false;
+        mapEdges.update(shoulders, true, true, {}, {});
+        shoulders.connected = true;
+        shoulders.leftShoulder = true;
+        check(!mapEdges.update(shoulders, true, true, {}, {}).olderRegion, "a failed poll cannot reset the previous successful map edge");
+        shoulders.leftShoulder = false;
+        mapEdges.update(shoulders, true, true, {}, {});
+        shoulders.leftShoulder = shoulders.rightShoulder = true;
+        frame = mapEdges.update(shoulders, true, true, {}, {});
+        check(frame.olderRegion && frame.newerRegion, "simultaneous shoulders preserve both ordered history actions");
     }
     std::puts("gamepad UI: button gates, ranking, cursor, repeat, tab rows and native region/key ordering checked");
     return failures;

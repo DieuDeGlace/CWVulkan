@@ -71,7 +71,7 @@ Character testCharacter() {
     c.regionValues = {{{3, 3}, 77}};
     c.stars[starGroup(5000, 9000)].push_back({0, 5000, 9000, 120});
     c.stars[starGroup(-5000, 100)].push_back({1, -5000, 100, 90});
-    c.regions118 = {{2, 3}};
+    c.regionHistory = {{2, 3}};
     c.purchases[123456789012345ll] = {makeItem(1, 4)};
     return c;
 }
@@ -249,7 +249,7 @@ void readingQuirks() {
     Character listCut;
     readCharacter(std::vector<uint8_t>(blob.begin(), blob.end() - 0xa0 / 2), listCut);
     SAVE_CHECK(listCut.purchases.size() == 1 && listCut.purchases.begin()->second.empty());
-    SAVE_CHECK(listCut.regions118 == c.regions118);
+    SAVE_CHECK(listCut.regionHistory == c.regionHistory);
     // An empty blob: a default character.
     Character none;
     readCharacter({}, none);

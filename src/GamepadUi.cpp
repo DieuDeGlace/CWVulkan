@@ -65,6 +65,15 @@ Frame Input::update(const GamepadButtons &pad, bool ui, bool mapMode, Cursor at,
             previous[i] = now[i];
     }
     frame.held = held;
+    if (mapMode) {
+        // steam-controller-handoff section2: only successful map polls update these edges.
+        frame.olderRegion = pad.leftShoulder && !previousMapLeft;
+        frame.newerRegion = pad.rightShoulder && !previousMapRight;
+        previousMapLeft = pad.leftShoulder;
+        previousMapRight = pad.rightShoulder;
+        if (frame.olderRegion || frame.newerRegion)
+            frame.padAfterCallbacks = true;
+    }
     if (!ui || mapMode)
         return frame;
     const bool rightX = std::abs((int)pad.rightX) > 17378, rightY = std::abs((int)pad.rightY) > 17378;

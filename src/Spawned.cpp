@@ -1169,6 +1169,16 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
             nativeupkeep::upkeep(u, sides[i], dt); // (poison's ticks land inside it, through u.hit)
             u.hits.clear();
         }
+        if (hasPlayer) {
+            const int64_t x = get<int64_t>(player.record, worldgen::creature::POSITION);
+            const int64_t y = get<int64_t>(player.record, worldgen::creature::POSITION + 8);
+            const int64_t z = get<int64_t>(player.record, worldgen::creature::POSITION + 16);
+            const auto block = ew.gameBlock(x >> 16, y >> 16, (int)(z >> 16));
+            const auto region = worldgen::regionAtFixed(x, y, (block[5] & 0x20) != 0);
+            put<int32_t>(player.record, worldgen::creature::REGION, region.x);
+            put<int32_t>(player.record, worldgen::creature::REGION + 4, region.y);
+            regionHistory.observe({region.x, region.y}, get<uint8_t>(player.record, worldgen::creature::ABILITY));
+        }
         // What the physics and the effect objects made.
         for (const nativeeffects::Effect &e : w.sentEffects)
             worldEvents.effects.push_back(e);

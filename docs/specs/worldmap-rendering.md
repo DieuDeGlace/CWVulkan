@@ -154,7 +154,11 @@ already in the bytes and stacks with this.
 ## 3. The shaders and their constants
 
 The map uses the world's model shaders: vertex shader blob 0x4387b0 and pixel shader blob
-0x43a010 (mode 0 of 0xc3dc0; the blended modes 3, 4, 6, 7 use the same pair). The vertex
+0x43a010. Its ordinary native queue populates only the normal winding family:
+state0 opaque, then state3 depth-only and state6 blended color when its faded vector
+is nonempty. General states1/4/7 use the same pair for the opposite family, but the
+ordinary map does not populate that family. States3/4 are depth-only, not blended
+color passes. The vertex
 shader reads ten constant blocks and the pixel shader six, bound by 0xc68c0:
 
 | VS block | Contents | PS block | Contents |
@@ -171,6 +175,16 @@ shader reads ten constant blocks and the pixel shader six, bound by 0xc68c0:
 | b9 | glow | | |
 
 ### 3.1 What the map pass sets (0xe64b0)
+
+**Depth/culling clarification:**0xe64b0 and its queued consumers add no
+map-private depth clear; this ordinary pass uses the inherited target/depth.
+State0/3/6 retain enabled LESS_EQUAL depth testing
+and depth writes, including the faded color pass. Their native normal raster
+is CullMode2=FRONT, FrontCounterClockwise0: it rejects clockwise and retains
+counterclockwise displayed triangles in X-right/Y-down render-target coordinates.
+The renderer virtual+0x80 call at0xe66ac is the fog setter0xc59e0→0xc6bb0,
+not a clear. See [pass-family §§4–5](steam-retained-item-and-map-pass-family.md)
+for exact descriptor membership, area-sign convention and inherited-depth boundary.
 
 In this order, after 0x2f44a0 has queued the map content:
 
@@ -392,7 +406,11 @@ In 0x2f44a0, in this order (`map-markers.md` §2.1 gives the overall order):
 4. **Hovered land border** (when +0x118 is set): for each region in view, for each border point
    of the hovered land (`worldmap-model.md` §3.1), model 0xa46 at that block position, scaled by
    2 / viewScale, centred on its own size (× −0.5), white, opacity (cos(world clock × 0.006) +
-   1) × 0.5 (a pulse, so drawn blended), depth offset 1.6 (0x4328c0).
+   1) × **0.4** (float word0x3ecccccd at0x42e52c; the earlier0.5 was incorrect),
+   depth offset1.6 (0x4328c0). Material is white RGBA, but shader White is0.
+   The ready region does not need to finish terrain fade, nor does its fade
+   multiply this pulse. See [the exact border consumer supplement](steam-map-border-and-information-hud.md)
+   for forced/hover phase, full-header centering, precision and queue/pass order.
 5. **Creature and player markers, tombstone**: `map-markers.md` §2.2 … §2.5. The player is not
    an arrow: it is its own head (or chest) and hair model, turned by its facing, centred on its
    position, with 26 black copies offset by one voxel as an outline. Terrain has no outline.
@@ -489,16 +507,17 @@ capture, not engine code):
 3. **Minimap offset 0.3.** The 0.3 in fx = 1 − 0.3 (H/W) s comes from a register loaded with
    0x42e704 (0.3) on the main path through 0xa5a50; another path loads it from the stack.
    Oracle: the screen centre argument in the constant dump, or a screenshot.
-4. **Queue matrix.** 0xee2f0 multiplies each instance by its queue's current matrix (queue
-   +0x50 … +0x8c); for the map queue it is taken to be identity, so the world matrix is the
-   translation of §4.3. Oracle: the world matrix in the frame capture.
+4. **Queue matrix — resolved for the ordinary native path.** Scene reset0xe30d6→0xeef30
+   writes identity to the map context+0x50..+0x8f. Its map producers do not replace it;
+   0xee2f0 reads/precomposes it. See [pass-family §5](steam-retained-item-and-map-pass-family.md).
 5. **Back-buffer format and gamma.** The shaders write their result with no gamma step. Whether
    the swap chain is an sRGB format (which would add one) was not traced. Oracle: frame capture
    (resource formats), or compare a screenshot's flat top colour against §3.
-6. **Depth.** The map is drawn with a −0.1 device depth shift plus the per-instance depth
-   offset, into the depth state of mode 0. Whether the depth buffer is cleared before the map,
-   and so whether near world geometry can cover the minimap, was not traced. Oracle: frame
-   capture, or a screenshot with the camera against a wall.
+6. **Depth — map wrapper resolved.** The map keeps its documented projection shift and
+   per-instance depth offsets.0xe64b0 and its queue consumers add no private depth clear;
+   its virtual+0x80 is the fog setter, not a clear. State0/3/6 retain enabled LESS_EQUAL
+   testing/writes. See [pass-family §§4–5](steam-retained-item-and-map-pass-family.md)
+   and GUI item icons §8 for frame clear/inherited target boundaries.
 7. **Full-map background.** Whether the world keeps being drawn behind the full map, and any
    dimming, belong to the frame render and interface, not traced here. Oracle: screenshot.
 8. **Castle cells** (§6 step 3): the gate (bit 0x20 of the block's byte +5), the meaning of the

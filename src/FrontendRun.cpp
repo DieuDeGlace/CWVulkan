@@ -12,6 +12,7 @@
 #include "GameInput.h"
 #include "GameMath.h"
 #include "MapLook.h"
+#include "PanelScroll.h"
 #include "NativePlayer.h"
 #include "NativeRules.h"
 #include "Spawned.h"
@@ -195,6 +196,9 @@ class Session {
     bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || helpOpen || friendsOpen; }
     bool ordinaryUi() const { return systemShown || optionsOpen || controlsOpen || friendsOpen; }
     bool capturingControl() const { return controlsOpen && controls.waiting >= 0; }
+    bool wheel(int nativeDelta, glm::vec2 cachedPointer);
+    void hideSystemForMovement() { systemShown = false; }
+    void hideMultiplayerForMovement() { friendsOpen = false; }
     void dismissMenus() {
         while (anyOpen())
             back(true);
@@ -359,6 +363,13 @@ class Session {
     // The multiplayer menu: open, and its rows as taken when it opened.
     bool friendsOpen = false;
     std::vector<FriendRow> friendRows;
+    int32_t firstFriend = 0;
+    std::optional<panelscroll::Thumb> controlsThumb, friendsThumb;
+    glm::vec2 controlsThumbFrame{-1}, friendsThumbFrame{-1};
+    void refreshControlsThumb();
+    void refreshFriendsThumb();
+    void scrollControls(int nativeDelta);
+    void scrollFriends(int nativeDelta);
     void refreshFriendStates();
     int hoveredFriend(glm::vec2 m) const; // the row under the pointer (panel units), -1 if none
     glm::vec2 friendButtonAt(int row, bool right) const;
@@ -799,6 +810,7 @@ void Session::back(bool inGame) {
 // The frame's time and pointer. The title polls the window itself; in play the game has polled
 // it and gives the frame's time.
 void Session::readInput(bool poll, double frameMs) {
+    const glm::vec2 cachedWheelPointer = mouse * guiScale;
     if (poll)
         glfwPollEvents();
     const auto now = std::chrono::steady_clock::now();
@@ -871,6 +883,9 @@ void Session::readInput(bool poll, double frameMs) {
     if (pad.navigationSound)
         playSound(SOUND_MENU_SELECT);
     clicked = pointerDown || pointerUp;
+    if (front())
+        for (const auto &event : s.input->wheelEvents)
+            wheel(-event.rowStep, cachedWheelPointer);
 }
 
 // --- Keys --------------------------------------------------------------------------------------
@@ -1001,6 +1016,8 @@ void Session::handleClick(bool inGame) {
         const glm::vec2 at = centred(CONTROLS_SIZE), m = mouse - at;
         const int rows = ControlsScreen::visibleRows();
         for (int v = 0; v < rows && controls.first + v < gameoptions::BINDINGS; v++) {
+            if (controls.first + v < 0)
+                continue;
             const float y = ControlsScreen::rowY(v);
             if (pointerUp && !finishingCapture && m.y >= y - 20 && m.y < y + 10 && m.x >= 0 && m.x < CONTROLS_SIZE.x - 40) {
                 controls.waiting = controls.first + v;
@@ -1009,9 +1026,9 @@ void Session::handleClick(bool inGame) {
         }
         const glm::vec2 up = at + glm::vec2(CONTROLS_SIZE.x - 35, 10), down = at + glm::vec2(CONTROLS_SIZE.x - 35, CONTROLS_SIZE.y - 105);
         if (pointerDown && inside(mouse, up, {25, 25}))
-            controls.first = std::max(0, controls.first - 1);
+            scrollControls(1);
         if (pointerDown && inside(mouse, down, {25, 25}))
-            controls.first = std::min(gameoptions::BINDINGS - rows, controls.first + 1);
+            scrollControls(-1);
         const float by = CONTROLS_SIZE.y - 35;
         const char *const labels[3] = {"Defaults", "OK", "Cancel"};
         for (int b = 0; b < 3; b++)
@@ -1442,15 +1459,63 @@ void Session::optionsItems(Hud::Screen &out) {
     }
 }
 
+void Session::refreshControlsThumb() {
+    controlsThumbFrame = hud.templateSize("blackwidget", CONTROLS_SIZE);
+    const float width = hud.templateSize("scrollbutton").x;
+    if (width > 0)
+        controlsThumb = panelscroll::controlsThumb(controls.first, controlsThumbFrame.x, controlsThumbFrame.y, width);
+}
+void Session::refreshFriendsThumb() {
+    friendsThumbFrame = hud.templateSize("blackwidget", FRIENDS_SIZE);
+    const float width = hud.templateSize("scrollbutton").x;
+    if (width > 0)
+        friendsThumb = panelscroll::friendsThumb(firstFriend, friendsThumbFrame.x, friendsThumbFrame.y, width, friendRows.size());
+}
+void Session::scrollControls(int nativeDelta) {
+    const auto frame = hud.templateSize("blackwidget", CONTROLS_SIZE);
+    const auto changed = panelscroll::controls(controls.first, nativeDelta, frame.y);
+    controls.first = changed.first;
+    if (changed.refreshThumb)
+        refreshControlsThumb();
+}
+void Session::scrollFriends(int nativeDelta) {
+    const auto frame = hud.templateSize("blackwidget", FRIENDS_SIZE);
+    const auto changed = panelscroll::friends(firstFriend, nativeDelta, frame.y, friendRows.size());
+    firstFriend = changed.first;
+    if (changed.refreshThumb)
+        refreshFriendsThumb();
+}
+bool Session::wheel(int nativeDelta, glm::vec2 cachedPointer) {
+    const glm::vec2 point = cachedPointer / guiScale;
+    if (controlsOpen && hud.templateHit(widget("blackwidget", centred(CONTROLS_SIZE), CONTROLS_SIZE), point)) {
+        scrollControls(nativeDelta);
+        return true;
+    }
+    if (friendsOpen && hud.templateHit(widget("blackwidget", centred(FRIENDS_SIZE), FRIENDS_SIZE), point)) {
+        scrollFriends(nativeDelta);
+        return true;
+    }
+    return false;
+}
+
 void Session::controlsItems(Hud::Screen &out) {
     if (s.input->lastUsedPad)
         controls.waiting = -1;
     const glm::vec2 at = centred(CONTROLS_SIZE), m = mouse - at;
+    if (controlsThumbFrame != hud.templateSize("blackwidget", CONTROLS_SIZE))
+        refreshControlsThumb();
     out.push_back(widget("blackwidget", at, CONTROLS_SIZE));
+    if (controlsThumb) {
+        const auto &thumb = *controlsThumb;
+        out.push_back(widget("scrollbutton", at + glm::vec2(thumb.x, thumb.y), {thumb.width, thumb.height}));
+        out.back().replaceWidget = true;
+    }
     const float valueX = (CONTROLS_SIZE.x - 250) * 0.5f + 240;
     const int rows = ControlsScreen::visibleRows();
     for (int v = 0; v < rows && controls.first + v < gameoptions::BINDINGS; v++) {
         const int i = controls.first + v;
+        if (i < 0)
+            continue;
         const float y = ControlsScreen::rowY(v);
         const gameoptions::Binding &b = controls.values[(size_t)i];
         glm::vec4 colour = WHITE;
@@ -1508,6 +1573,7 @@ void Session::toggleMultiplayerMenu() {
     }
     // Opening rebuilds the list (§3.1); it is not rebuilt while the menu stays open.
     friendRows = s.friends->list ? s.friends->list() : std::vector<FriendRow>{};
+    refreshFriendsThumb();
     friendsOpen = true;
 }
 
@@ -1529,12 +1595,12 @@ int Session::hoveredFriend(glm::vec2 m) const {
     const float top = FRIENDS_FIRST_ROW_Y - FRIEND_ROW_HEIGHT * 0.5f - 4;
     if (m.x < 0 || m.x >= FRIENDS_SIZE.x || m.y < top)
         return -1;
-    const int row = (int)std::floor((m.y - top) / FRIEND_ROW_HEIGHT);
-    return row < (int)friendRows.size() && friendRows[(size_t)row].eligible ? row : -1;
+    const int row = firstFriend + (int)std::floor((m.y - top) / FRIEND_ROW_HEIGHT);
+    return row >= 0 && row < (int)friendRows.size() && friendRows[(size_t)row].eligible ? row : -1;
 }
 
 glm::vec2 Session::friendButtonAt(int row, bool right) const {
-    const float y = FRIENDS_FIRST_ROW_Y + FRIEND_ROW_HEIGHT * (float)row - FRIEND_BUTTON_SIZE.y * 0.5f - 4;
+    const float y = FRIENDS_FIRST_ROW_Y + FRIEND_ROW_HEIGHT * float(row - firstFriend) - FRIEND_BUTTON_SIZE.y * 0.5f - 4;
     return {FRIENDS_SIZE.x - (right ? 1.0f : 2.0f) * (FRIEND_BUTTON_SIZE.x + 10), y};
 }
 
@@ -1542,14 +1608,21 @@ void Session::friendsItems(Hud::Screen &out) {
     refreshFriendStates();
     const glm::vec2 at = centred(FRIENDS_SIZE), m = mouse - at;
     out.push_back(widget("blackwidget", at, FRIENDS_SIZE));
+    if (friendsThumbFrame != hud.templateSize("blackwidget", FRIENDS_SIZE))
+        refreshFriendsThumb();
+    if (friendsThumb) {
+        const auto &thumb = *friendsThumb;
+        out.push_back(widget("scrollbutton", at + glm::vec2(thumb.x, thumb.y), {thumb.width, thumb.height}));
+        out.back().replaceWidget = true;
+    }
     out.push_back(text("Friends", at + glm::vec2(FRIENDS_SIZE.x * 0.5f, FRIENDS_TITLE_Y), 15, 3, WHITE, ALIGN_CENTRE));
     if (friendRows.empty() && s.friends)
-        out.push_back(text(s.friends->emptyText, at + glm::vec2(FRIENDS_SIZE.x * 0.5f, FRIENDS_FIRST_ROW_Y + 10), 12, 3, WHITE,
-                           ALIGN_CENTRE));
+        out.push_back(
+            text(s.friends->emptyText, at + glm::vec2(FRIENDS_SIZE.x * 0.5f, FRIENDS_FIRST_ROW_Y + 10), 12, 3, WHITE, ALIGN_CENTRE));
     const int hovered = hoveredFriend(m);
-    for (int i = 0; i < (int)friendRows.size(); i++) {
+    for (int i = std::max(0, firstFriend); i < (int)friendRows.size(); i++) {
         const FriendRow &row = friendRows[(size_t)i];
-        const float y = FRIENDS_FIRST_ROW_Y + FRIEND_ROW_HEIGHT * (float)i;
+        const float y = FRIENDS_FIRST_ROW_Y + FRIEND_ROW_HEIGHT * float(i - firstFriend);
         if (y > FRIENDS_SIZE.y - FRIEND_ROW_HEIGHT)
             break; // (rows past the panel are not drawn)
         // Row colours by state (the game's are cosmetic constants, §3.2).
@@ -1802,6 +1875,16 @@ bool InGameMenus::ordinaryUi() const {
 bool InGameMenus::capturingControl() const {
     return session->capturingControl();
 }
+bool InGameMenus::wheel(int nativeDelta, glm::vec2 cachedPointer) {
+    return session->wheel(nativeDelta, cachedPointer);
+}
+void InGameMenus::hideSystemForMovement() {
+    session->hideSystemForMovement();
+}
+void InGameMenus::hideMultiplayerForMovement() {
+    session->hideMultiplayerForMovement();
+}
+
 void InGameMenus::dismiss() {
     session->dismissMenus();
 }

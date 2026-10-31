@@ -376,11 +376,13 @@ void progress() {
     hiddenRecipe[0x90] = 0xf2;
     c.recipes.push_back(hiddenRecipe);
     c.level = 3, c.experience = 40, c.gold = 12;
+    c.regionHistory = {{9, -3}, {-7, 5}, {9, -3}}; // Preserve save order and duplicate records.
     c.usedCells = {{5, 6}}, c.flightPoints = {{100, 200}}, c.finishedMissions = {{1, 1}};
     c.stars[nativesaves::starGroup(-5, 9)].push_back({4, -5, 9, 30});
     const SaveGame s = nativeprogress::toProgress(c, "", frame, nullptr);
     FRONT_CHECK(s.level == 3 && s.xp == 40 && s.gold == 12 && s.hasPosition && near(s.position.x, 10.5));
     FRONT_CHECK(s.recipes && *s.recipes == c.recipes);
+    FRONT_CHECK(s.regionHistory && *s.regionHistory == c.regionHistory);
     FRONT_CHECK(s.worn.size() == 11 && s.worn[7].category == 3 && s.worn[7].id == 17);
     FRONT_CHECK(s.bag.size() == 1 && s.bag[0].count == 5 && s.found.size() == 2 + 3); // worn gear and the carried weapons
     FRONT_CHECK(s.usedCells.size() == 1 && s.treasures.size() == 1 && s.flightPoints.size() == 1);
@@ -389,14 +391,21 @@ void progress() {
     SaveGame moved = s;
     moved.quests.push_back({42, 1, 5, 2, "Wolf", "zone"});
     moved.recipes->push_back(nativesaves::makeItem(1, 12));
+    moved.regionHistory = std::vector<nativesaves::Cell>{{-11, 4}, {9, -3}};
     nativeprogress::fromProgress(moved, nullptr, 99.0f, frame, again, notes);
     FRONT_CHECK(again.position == c.position && again.level == 3 && again.gold == 12 && again.health == 99.0f);
+    FRONT_CHECK(again.regionHistory == *moved.regionHistory);
     FRONT_CHECK(again.recipes == *moved.recipes && again.recipes[again.recipes.size() - 2] == hiddenRecipe);
     auto legacyCopy = again;
     SaveGame legacy;
     std::string legacyNotes;
     nativeprogress::fromProgress(legacy, nullptr, 99.0f, frame, legacyCopy, legacyNotes);
     FRONT_CHECK(legacyCopy.recipes == again.recipes); // old notes without recipe data must not clear them
+    FRONT_CHECK(legacyCopy.regionHistory == again.regionHistory);
+    SaveGame cleared = moved;
+    cleared.regionHistory = std::vector<nativesaves::Cell>{};
+    nativeprogress::fromProgress(cleared, nullptr, 99.0f, frame, legacyCopy, legacyNotes);
+    FRONT_CHECK(legacyCopy.regionHistory.empty());
     FRONT_CHECK(again.equipment[7] == c.equipment[7] && again.equipment[2] == c.equipment[2]); // the saved records, attributes and all
     FRONT_CHECK(again.inventory[0].size() == 3 && again.inventory[2].size() == 1 && again.inventory[2][0].count == 5);
     FRONT_CHECK(again.stars == c.stars && again.usedCells == c.usedCells && again.finishedMissions == c.finishedMissions);

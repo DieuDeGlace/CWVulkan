@@ -120,7 +120,7 @@ struct Character {
     std::vector<Buff> buffs;                 // +0x980
     std::map<Cell, int32_t> regionValues;    // player data +0xf8
     std::map<Cell, std::vector<Star>> stars; // player data +0x108, grouped by (x / 4096, y / 4096)
-    std::vector<Cell> regions118;            // player data +0x118
+    std::vector<Cell> regionHistory;         // player data +0x118
     std::map<int64_t, std::vector<Item>> purchases; // player data +0x138: what was bought, by shop
 };
 

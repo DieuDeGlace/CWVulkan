@@ -126,6 +126,16 @@ Neighbourhood neighbourhood(int32_t x, int32_t y) {
     return n;
 }
 
+Int2 regionAtFixed(int64_t x, int64_t y, bool landmarkBlock) {
+    // Physical XY truncates toward zero before narrowing; cell division then floors.
+    const int32_t bx = (int32_t)(uint32_t)(x / 65536), by = (int32_t)(uint32_t)(y / 65536);
+    if (!landmarkBlock)
+        return regionAt(bx, by);
+    const int32_t cx = floorDiv(bx, 10), cy = floorDiv(by, 10);
+    const Int2 point = cellPoint(cx, cy, bigCell(cx, cy));
+    return regionAt(point.x, point.y);
+}
+
 float nearestOf(const Neighbourhood &n, const int *biomesIn, int count) {
     float best = -1.0f;
     for (int a = 0; a < 3; a++)

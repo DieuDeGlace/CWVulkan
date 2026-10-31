@@ -38,9 +38,20 @@ void Panel::offer(int64_t speaker, std::vector<Row> rows) {
     who = speaker;
     choices = std::move(rows);
 }
-void Panel::clear() { choices.clear(); hover = -1; shown = false; }
-void Panel::updateVisibility(bool hasAddressedBubble) { shown = !choices.empty() && !hasAddressedBubble; }
-void Panel::dismissForMovement() { if (shown) clear(); }
+void Panel::clear() {
+    choices.clear();
+    hover = -1;
+    shown = false;
+}
+void Panel::updateVisibility(bool hasAddressedBubble) {
+    shown = !choices.empty() && !hasAddressedBubble;
+}
+void Panel::dismissForMovement() {
+    if (shown) {
+        choices.clear();
+        shown = false;
+    }
+}
 
 Layout Panel::layout(glm::vec2 window, const Measure &measure) {
     Layout out;

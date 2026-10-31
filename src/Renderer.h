@@ -420,6 +420,7 @@ class Renderer {
     // push constants that carry the map's camera and the instance.
     VkPipelineLayout mapLayout = VK_NULL_HANDLE;
     VkPipeline mapPipeline = VK_NULL_HANDLE;
+    VkPipeline mapDepthPipeline = VK_NULL_HANDLE, mapFadePipeline = VK_NULL_HANDLE;
     bool createMapPipeline(std::string &error);
     void destroyMapPipeline();
     // `jitter`: the TAA jitter as a clip-space shift per unit of w. Returns the draws made.

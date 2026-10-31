@@ -411,6 +411,9 @@ class InGameMenus {
     bool open() const;
     bool ordinaryUi() const;
     bool capturingControl() const;
+    bool wheel(int nativeDelta, glm::vec2 cachedPointer);
+    void hideSystemForMovement();
+    void hideMultiplayerForMovement(); // Options/Controls retain their own state.
     void dismiss();
     // One frame: the interface keys always; the keys and clicks of this frame while a screen is
     // open (those are taken from the input). Stay, Title (Start Menu) or Quit (Exit Game).

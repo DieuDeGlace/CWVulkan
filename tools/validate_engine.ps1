@@ -39,6 +39,12 @@ try {
         $guiPassed = @(Select-String -LiteralPath $guiLog -Pattern '^GUI WORLD .* PASS$')
         if (!$guiPassed.Count) { throw "No GUI item image results were produced; read $guiLog" }
         Write-Output "GUI item image checks passed: $($guiPassed.Count); $guiLog"
+        $mapLog = Join-Path $LogDirectory 'map-images.log'
+        & $testProgram maprender *> $mapLog
+        if ($LASTEXITCODE -ne 0) { throw "Map image tests failed; read $mapLog" }
+        $mapPassed = @(Select-String -LiteralPath $mapLog -Pattern '^Map renderer .* PASS$')
+        if (!$mapPassed.Count) { throw "No map image results were produced; read $mapLog" }
+        Write-Output "Map image checks passed: $($mapPassed.Count); $mapLog"
         $waterLog = Join-Path $LogDirectory 'shared-water-images.log'
         & $testProgram sharedwater *> $waterLog
         if ($LASTEXITCODE -ne 0) { throw "Shared water image tests failed; read $waterLog" }

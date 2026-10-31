@@ -17,7 +17,10 @@ struct Frame {
     bool padBeforeCallbacks = false, padAfterCallbacks = false;
     Point cursor;
     int scrollPanel = -1, scrollRows = 0, regionDirection = 0;
-    struct Tab { int panel, direction; }; // 0 inventory, 1 crafting, 2 shop
+    bool olderRegion = false, newerRegion = false; // Map history: process older before newer.
+    struct Tab {
+        int panel, direction;
+    }; // 0 inventory, 1 crafting, 2 shop
     std::vector<Tab> tabs; // All previous-tab actions precede all next-tab actions.
 };
 class Input {
@@ -29,6 +32,7 @@ class Input {
     int32_t uiMs = 0, navigationMs = 0;
     bool firstNavigation = true;
     bool previousRightX = false, previousRightY = false, previousLeftTrigger = false, previousRightTrigger = false;
+    bool previousMapLeft = false, previousMapRight = false;
     int32_t scrollMs = 0;
 };
 } // namespace gamepadui

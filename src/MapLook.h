@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <array>
 
 namespace worldmap {
 
@@ -160,5 +161,9 @@ glm::vec4 clipOf(const MapCamera &camera, glm::vec3 viewPoint, float depthOffset
 
 // How far a region built `msSinceBuilt` ago has faded in (§4.3).
 float regionFade(double msSinceBuilt);
+// Native hover border: float world clock, full header center and staged fixed-delta conversion.
+float borderOpacity(float worldMilliseconds);
+glm::mat4 borderPlacement(const std::array<int32_t, 3> &point, const std::array<int64_t, 3> &center, int unit, float viewScale,
+                          glm::vec3 allocation);
 
 } // namespace worldmap

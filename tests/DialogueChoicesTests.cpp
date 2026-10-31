@@ -59,8 +59,16 @@ int dialogueChoicesTests() {
     check(!panel.visible() && !panel.empty(), "an addressed bubble hides answers without movement dismissal");
     check(panel.release(true, 100, 0, 0).kind == Action::None && !panel.empty(), "hidden answers ignore mouse release");
     panel.updateVisibility(false);
+    const auto movementLayout = panel.layout({800, 600}, [](const std::wstring &) { return 10.f; });
+    check(!movementLayout.rows.empty(), "movement fixture has a visible answer row");
+    panel.updateHover(movementLayout, true, movementLayout.rows.empty() ? 0 : movementLayout.rows[0].top + 1);
+    const int retainedHover = panel.hovered();
+    check(retainedHover == 0, "movement fixture starts with a selected answer");
+    const int64_t retainedSpeaker = panel.speaker();
     panel.dismissForMovement();
-    check(panel.empty(), "movement dismisses visible answers");
+    check(panel.empty() && !panel.visible(), "movement dismisses visible answers");
+    check(panel.hovered() == retainedHover && panel.speaker() == retainedSpeaker,
+          "movement clears pages without resetting the speaker or hover cache");
 
     panel = Panel{}; // the geometry case starts with the native constructor width 300
     panel.offer(7, {{"a", {{L"long"}, {L"long"}}}, {"b", {{L"x"}}}});

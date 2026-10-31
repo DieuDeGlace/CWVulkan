@@ -358,7 +358,7 @@ void readCharacter(const std::vector<uint8_t> &blob, Character &c) {
                 c.stars[starGroup(s.x, s.y)].push_back(s);
             }
     }
-    readCells(r, c.regions118);
+    readCells(r, c.regionHistory);
     { // what was bought, by shop
         int32_t shops;
         if (r.count(shops))
@@ -432,7 +432,7 @@ std::vector<uint8_t> writeCharacter(const Character &c) {
             w.value(s.unknown);
             w.value(s.x), w.value(s.y), w.value(s.z);
         }
-    writeCells(w, c.regions118);
+    writeCells(w, c.regionHistory);
     w.count(c.purchases.size());
     for (const auto &[shop, bought] : c.purchases) {
         w.value(shop);

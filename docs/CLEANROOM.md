@@ -72,14 +72,34 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Map history, fixed map controls and region borders follow
+  `steam-map-region-history.md` and `steam-map-border-and-information-hud.md`.
+  Personal ordered history and borrowed-entry lifetime are separate from discovery
+  sets; native resources provide arrow and border geometry. Fixed-coordinate pan,
+  wheel recenter, quantized easing and the distinct zoom limits use the independent
+  arithmetic contract. Border descriptors retain generated points, native float
+  clock/opacity and separate depth/color passes. The independent retained-item/
+  pass-family supplement confirms normal-only map queues and inherited world
+  depth. Actual Vulkan checks distinguish both winding directions and reproduce
+  the former private-clear occlusion bug before verifying its correction.
+  Hidden-root dispatch and standalone
+  hit queries remain distinct. Physical-wheel Controls/Multiplayer fallbacks use
+  `steam-physical-wheel-panel-fallbacks.md` for priority, signed/unsigned row
+  arithmetic and separate thumb refreshes; they add no controller-wheel eligibility.
+  The movement-close batch follows region-history §7.4.1, preserving Options,
+  Controls, panel data and unrelated answer fields. Wider input/GUI phase gaps are
+  recorded in the roadmap.
 - Procedural artifact resources follow `steam-procedural-item-resources.md`:
   independent generators implement the seven named families and default sphere,
   preserving full ID/modifier keys, allocation dimensions and native color mode.
   The extractor copies completed native resources on the game thread to a separate
   owner-data format; captured RGB and game data stay outside publication. GUI and
   dropped-item consumers prefer those owner records. Synthetic codec, cache,
-  geometry and rendering checks pass; exact native volume comparisons remain a
-  separate gate and must not be inferred from generated fixtures.
+  geometry and rendering checks pass. A separate 332-key owner capture, taken with
+  the owner's mods active, matches independent generation across all RGB bytes and
+  semantic metadata. The private
+  captures are excluded from publication; synthetic fixtures do not supply that
+  native reference evidence.
 - Map draw phases follow `steam-map-rendering-phases.md`: current 3D map work
   precedes GUI, and flat markers collect at the admitted Overlay callback rather
   than using the preceding camera's screen positions. F4 suppresses 3D and GUI
