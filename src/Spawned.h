@@ -182,6 +182,15 @@ class SpawnedCreatures {
     static constexpr float NATIVE_FEET = 1.0f;
     // The controller's frame for the player (dt in ms, once a frame as the game calls it).
     void control(const nativecontrol::Input &in, double dtMs);
+    // Separate native input stages; only finish a pass whose prepare returned true.
+    bool prepareControl(const nativecontrol::Input &in, double dtMs);
+    void controlOwnerLook();
+    void controlPet(const nativecontrol::Input &in);
+    void finishControl(const nativecontrol::Input &in);
+    void setControlHooks(std::function<bool(int)> ownsSpecialItem, std::function<void(int)> playSound) {
+        controlOwnsSpecialItem = std::move(ownsSpecialItem);
+        controlPlaySound = std::move(playSound);
+    }
     // The native player's place (local blocks), facing (radians, as setPlayer takes it),
     // velocity (+0x34, blocks a second) and whether it stands on the ground. False before it exists.
     bool playerState(const ExtractedWorld &ew, glm::vec3 &local, float &headingRad, glm::vec3 &velocity, bool &onGround) const;
@@ -514,7 +523,11 @@ class SpawnedCreatures {
     bool placed = false; // the native player has been put where the save had it
     bool hasGlider = false, hasBoat = false;
     worldgen::CreatureRecord gearRecord; // what setPlayerGear gave, applied as the player is made
-    nativecontrol::State controlState; // the controller's statics
+    nativecontrol::World controlWorld();
+    void noteControlMove();
+    std::function<bool(int)> controlOwnsSpecialItem;
+    std::function<void(int)> controlPlaySound;
+    nativecontrol::State controlState;                    // the controller's statics
     double aiCarried = 0;                                 // ms since the AI's last tick
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
     uint32_t aiRand = 1;                                  // its rand(): the C runtime's, per thread, from 1

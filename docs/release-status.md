@@ -10,6 +10,22 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Local control now has explicit early movement/ultimate, owner-look, pet and late
+  attack stages. The canonical live path runs Use before pet, Quick Item before
+  late attacks, and samples ordinary UI again at that late gate. Chat skips the
+  remaining early actions and edge stores. Movement/lamp/pet/ultimate use retained
+  logical inputs rather than a broad panel-visibility mask; Ring and pad/full-map
+  still have their separate movement gate. Full focused-Widget plumbing is not
+  inferred from visible panels and remains part of shared GUI integration.
+  The facade now supplies region-owned special-item checks and direct sound hooks,
+  resolves the local player in control lookup, and forwards ultimate buff notices
+  to outgoing World events. Device-free staged/actual-facade tests pass, including
+  post-Use pet timing, strict mount boundaries, owner look and buff/callback output.
+  All five targets build; a read-only movement/attack/dodge run exits normally with
+  the fixture unchanged. The full CPU run still has only the two reference failures
+  below. Creature/aim stage sharing, early assistance and later manual-stick
+  ordering remain open; these changes do not complete controller/GUI parity.
+
 - The rendered/client World now completes its substeps and one full-frame drawn
   position update before creature targeting and local input. New input abilities
   are not immediately simulated again in the same frame; control precedes camera

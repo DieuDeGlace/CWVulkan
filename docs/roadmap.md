@@ -403,9 +403,12 @@ individual feature documents.
   split early/late input phases. The live client now completes World stepping and
   one full-frame drawn-position pass before creature targeting/local control, and
   does not simulate a newly selected input ability again in that frame. Control
-  completes before camera smoothing. Early movement/ultimate versus Use/pet/Quick
-  and late attacks still need their distinct cut points; full targeting/GUI
-  admission and camera-state integration remain open.
+  completes before camera smoothing. The canonical path now interleaves early
+  movement/ultimate and owner-look with Use, then pet, Quick Item and late attacks.
+  Stage tokens preserve skipped edge histories, and the late ordinary-UI gate is
+  sampled fresh. Ownership/sound hooks, local lookup and ultimate buff forwarding
+  have actual-facade regressions. Shared focused-Widget admission, creature/aim
+  selection, assistance/manual-stick order and camera-state integration remain open.
   Orbit-distance smoothing now uses its separate float 0.004 coefficient in
   both frontend and gameplay; the camera uses capped wall time rather than the
   simulation's 100-ms limit. Explosion notices use physical-player squared

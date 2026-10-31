@@ -3237,6 +3237,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         return inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
                nativeCustomization.edit.open || chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
     };
+    spawned.setControlHooks(
+        [&](int id) {
+            if (id == 4)
+                return true;
+            const auto here = regionHere();
+            return std::any_of(bag.begin(), bag.end(), [&](const Carried &entry) {
+                return entry.item.category == 24 && entry.item.id == id && entry.item.region[0] == here.x && entry.item.region[1] == here.y;
+            });
+        },
+        [&](int number) { audio.playInterface(number); });
     auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview, const nativesaves::Item *comparison = nullptr,
                                const nativesaves::Record *groundOrigin = nullptr) {
         preview.info.clear();
@@ -3730,27 +3740,30 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
         }
         const bool nativeMove = nativePlayer && !player.fly;
+        bool nativeControlPrepared = false;
         glm::vec3 before = player.position;
         if (nativeMove) {
             const bool free = playerStunned <= 0 && !inventoryOpen && !mapOpen && !menusOpen;
             using namespace gameoptions;
             controlInput = {};
-            controlInput.forward = free && gameInput.held(UP);
-            controlInput.back = free && gameInput.held(DOWN);
-            controlInput.left = free && gameInput.held(LEFT);
-            controlInput.right = free && gameInput.held(RIGHT);
-            controlInput.stickX = free ? gameInput.gamepad().movement.x : 0;
-            controlInput.stickY = free ? gameInput.gamepad().movement.y : 0;
-            controlInput.jump = free && gameInput.held(JUMP);
-            controlInput.dodge = free && gameInput.held(DODGE);
-            controlInput.classSkill = free && gameInput.held(CLASS_SKILL);
-            controlInput.blocked = inventoryOpen || mapOpen || menusOpen; // a window has the keys
+            controlInput.forward = gameInput.held(UP);
+            controlInput.back = gameInput.held(DOWN);
+            controlInput.left = gameInput.held(LEFT);
+            controlInput.right = gameInput.held(RIGHT);
+            controlInput.stickX = gameInput.gamepad().movement.x;
+            controlInput.stickY = gameInput.gamepad().movement.y;
+            controlInput.jump = gameInput.held(JUMP);
+            controlInput.dodge = gameInput.held(DODGE);
+            controlInput.classSkill = gameInput.held(CLASS_SKILL);
+            // Retained Widget focus still needs the shared dispatcher binding. A shown
+            // inventory/System/Options panel is not itself a focused Widget.
+            controlInput.panelShown = itemSelector.shown || (mapOpen && input.lastUsedPad);
             controlInput.ordinaryUi = panelsBeforeInput || menusOpen;
             controlInput.typing = chat.typing();
-            controlInput.walk = free && gameInput.held(WALK);
-            controlInput.lamp = free && gameInput.held(LAMP);
-            controlInput.pet = free && gameInput.held(CALL_PET);
-            controlInput.ultimate = free && gameInput.held(ULTIMATE_SKILL);
+            controlInput.walk = gameInput.held(WALK);
+            controlInput.lamp = gameInput.held(LAMP);
+            controlInput.pet = gameInput.held(CALL_PET);
+            controlInput.ultimate = gameInput.held(ULTIMATE_SKILL);
             { // the special items carried for this region (the special item check, 0x5e890)
                 const worldgen::Int2 here = regionHere();
                 bool glider = false, boat = false;
@@ -3789,8 +3802,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     }
                 quickWas = quick;
             }
-            controlInput.attack = free && (gameInput.held(gameoptions::ATTACK) || gameInput.pressed(gameoptions::ATTACK));
-            controlInput.strongAttack = free && mouseLook && (gameInput.held(gameoptions::SPECIAL_ATTACK) || gameInput.pressed(gameoptions::SPECIAL_ATTACK));
+            controlInput.attack = gameInput.held(gameoptions::ATTACK) || gameInput.pressed(gameoptions::ATTACK);
+            controlInput.strongAttack = gameInput.held(gameoptions::SPECIAL_ATTACK) || gameInput.pressed(gameoptions::SPECIAL_ATTACK);
             controlInput.attack = controlInput.attack || (autoAttack && std::fmod(time, 1.2) < 0.15);
             {
                 // Where the player looks, as the game's input finds it: along the camera's
@@ -3864,6 +3877,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             for (int axis = 0; axis < 3; ++axis)
                 for (int component = 0; component < 3; ++component)
                     controlInput.camera[axis][component] = cameraBasis[axis][component];
+            nativeControlPrepared = spawned.prepareControl(controlInput, gamemath::frameMilliseconds(frameMs));
+            if (nativeControlPrepared)
+                spawned.controlOwnerLook(); // assistance belongs before this stage when integrated
             glm::vec3 at, velocity;
             float facing;
             bool onGround;
@@ -5140,12 +5156,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             itemSelector.hide(); // a nonempty selection closes even if the helper rejects it
             rebuildInventoryViews();
         };
-        auto itemInputHeld = [&](int action) {
-            return !capturingBeforeInput &&
-                   (GameInput::physicalBindingHeld(window, gameControls[(size_t)action]) || gameInput.gamepad().held[(size_t)action]);
-        };
+        auto itemInputHeld = [&](int action) { return gameInput.held(action); };
         auto *useActor = spawnedReady && nativeMove ? spawned.localPlayer() : nullptr;
-        const bool admittedUseVisit = useActor && useprompt::inputAdmitted(useActor->record, capturingBeforeInput, chat.typing());
+        const bool admittedUseVisit = useActor && nativeControlPrepared;
         if (auto *me = useActor; admittedUseVisit) {
             auto placeOf = [&](const uint8_t *record) {
                 int64_t dots[3];
@@ -5460,6 +5473,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
         }
+        if (admittedUseVisit)
+            spawned.controlPet(controlInput);
         if (nativeInventory && admittedUseVisit)
             if (auto *me = useActor) {
                 const bool held = itemInputHeld(gameoptions::QUICK_ITEM);
@@ -5467,6 +5482,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     selectedItemUse(*me);
                 quickItemWasDown = held;
             }
+        if (admittedUseVisit) {
+            controlInput.ordinaryUi = nativeOrdinaryUi(); // live, after Use/pet/Quick Item
+            spawned.finishControl(controlInput);
+        }
         if (!inventoryOpen) {
             if (gameInput.pressed(gameoptions::CLASS_SKILL))
                 startMove(moves.skill);
@@ -5911,9 +5930,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             world.refreshZone(ax - extractedWorld.originZoneX(), ay - extractedWorld.originZoneY());
         if (!serverMode) // a dedicated server draws nothing, so it streams no meshes
             world.update(player.position);
-
-        if (nativeMove)
-            spawned.control(controlInput, gamemath::frameMilliseconds(frameMs));
 
         { // Gameplay-camera §2: capped wall interval, with independent orbit-distance smoothing.
             const float s = gamemath::blendFactor(gamemath::frameMilliseconds(frameMs), (float)gameOptions.smoothingConstant());

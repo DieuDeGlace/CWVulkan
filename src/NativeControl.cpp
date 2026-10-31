@@ -815,12 +815,12 @@ void aimAndLook(const Input &in, nativeai::Creature &player, double dt, const na
 
 } // namespace
 
-void frame(const Input &in, State &st, nativeai::Creature &player, double dt, World &world) {
+bool beginFrame(const Input &in, State &st, nativeai::Creature &player, double dt, World &world) {
     const Rec c{player.record};
     const nativerules::HasBuff hasBuff = world.hasBuff ? world.hasBuff : buffTest(player);
     // The controller's update does not call this during the eagle's flight.
     if (c.b(ABILITY) == EAGLE_A || c.b(ABILITY) == EAGLE_B)
-        return;
+        return false;
 
     // Spec 2. (Dropping the item held on the mouse cursor, step 1, is the inventory's.)
     if (c.b(ABILITY) == CLIMBING && !(c.u(MOVE_FLAGS) & ON_CLIMBABLE_WALL) && (c.u(MOVE_FLAGS) & (ON_GROUND | IN_WATER)))
@@ -835,9 +835,9 @@ void frame(const Input &in, State &st, nativeai::Creature &player, double dt, Wo
     }
 
     // Spec 4.1.
-    if (in.blocked || (gliding(c) && c.f(STAMINA) < GLIDE_STAMINA_FLOOR) ||
+    if (in.blocked || in.typing || (gliding(c) && c.f(STAMINA) < GLIDE_STAMINA_FLOOR) ||
         (c.b(ABILITY) == INPUT_LOCK && c.f(ABILITY_TIME) < INPUT_LOCK_MS))
-        return;
+        return false;
 
     // Spec 4.2: running is the default; the glider "runs" while lifting.
     const bool run = (c.b(ABILITY) == GLIDING && !(c.u(MOVE_FLAGS) & ON_GROUND)) ? (c.f(STAMINA) > 0.0f && in.jump)
@@ -859,6 +859,12 @@ void frame(const Input &in, State &st, nativeai::Creature &player, double dt, Wo
     aimAndLook(in, player, dt, hasBuff);
     specialSkillKey(in, st, player, world);
 
+    return true;
+}
+
+void ownerLook(nativeai::Creature &player, const World &world) {
+    const Rec c{player.record};
+    const nativerules::HasBuff hasBuff = world.hasBuff ? world.hasBuff : buffTest(player);
     // Spec 4.7: looking at the owner.
     if (c.b(ABILITY) == LOOK_AT_OWNER) {
         c.h(STATE_FLAGS) &= (uint16_t)~LOOKING_AT_OWNER;
@@ -870,12 +876,19 @@ void frame(const Input &in, State &st, nativeai::Creature &player, double dt, Wo
             c.h(STATE_FLAGS) |= LOOKING_AT_OWNER;
         }
     }
+}
 
-    // Spec 4.8: the use key is useprompt's and the quick item the caller's.
+void pet(const Input &in, State &st, nativeai::Creature &player, World &world) {
+    const nativerules::HasBuff hasBuff = world.hasBuff ? world.hasBuff : buffTest(player);
     petKey(in, st, player, world, hasBuff);
+}
 
-    if (!in.typing)
-        attack(in, st, player);
+void frame(const Input &in, State &st, nativeai::Creature &player, double dt, World &world) {
+    if (!beginFrame(in, st, player, dt, world))
+        return;
+    ownerLook(player, world);
+    pet(in, st, player, world);
+    attack(in, st, player);
 }
 
 // --- The special skill (skills-and-interactions.md 1) ----------------------------------------
@@ -978,8 +991,8 @@ void selfBuff(nativeai::Creature &creature, int ability, std::vector<nativebuffs
 
 void specialSkillKey(const Input &in, State &st, nativeai::Creature &player, World &world) {
     Rec c{player.record};
-    // While a window or the chat line has the keys, or during the eagle's flight (0x9c,
-    // 0x9d), the game does not get this far: the key is not read and its last state is kept.
+    // Retained Widget focus, active chat and eagle flight skip this handler; a
+    // merely shown panel is not focus. Skipped handlers retain their previous byte.
     if (in.blocked || in.typing || c.b(ABILITY) == 0x9c || c.b(ABILITY) == 0x9d)
         return;
     const bool pressed = in.ultimate && !st.lastUltimate;

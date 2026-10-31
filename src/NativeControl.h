@@ -44,8 +44,8 @@ struct Input {
     float stickX = 0, stickY = 0; // the gamepad's left stick (right and forward positive)
     double cameraYaw = 0;         // degrees; the ground's forward is -row 1 of its turn
     float camera[3][3] = {};      // the camera's rows: A (left), B, C (the view direction)
-    bool blocked = false;         // a modal window or another object has the keys (spec 3.4, 4.1)
-    bool panelShown = false;      // a panel that stops only the movement keys (spec 3.4)
+    bool blocked = false;         // retained focused Widget (engine+0x170), not panel visibility
+    bool panelShown = false;      // shown Ring, or full map with pad last-device (movement only)
     bool typing = false;          // the chat line takes the keys
     bool ordinaryUi = false;      // gates late attacks/class/dodge, not movement or ultimate (dialogue spec 12)
     // From the frame's targeting (spec 4.5): the aim point (aimPoint) and the creature the
@@ -80,7 +80,13 @@ struct World {
 // The movement routine (spec 3) on the local player's record; dt in ms.
 void control(const Input &in, State &state, uint8_t *player, double dt, const World &world);
 
-// The frame around it (spec 2 and 4). dt in ms.
+// Native frame cut points (steam-gameplay-frame-order.md §§4/6). A false begin
+// skips all later stages and their edge stores. Caller inserts assistance before
+// ownerLook, object/Use work before pet, and Quick Item before attack.
+bool beginFrame(const Input &in, State &state, nativeai::Creature &player, double dt, World &world);
+void ownerLook(nativeai::Creature &player, const World &world);
+void pet(const Input &in, State &state, nativeai::Creature &player, World &world);
+// Compatibility frame for callers without interleaved direct-use work. dt in ms.
 void frame(const Input &in, State &state, nativeai::Creature &player, double dt, World &world);
 
 // The attack keys, the class key and the dodge key's moves (spec 4.9 to 4.12), as the

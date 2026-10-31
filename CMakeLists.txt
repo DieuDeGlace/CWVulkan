@@ -366,7 +366,7 @@ target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
-target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp)
+target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

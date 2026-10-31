@@ -123,6 +123,7 @@ int plasmaNodeAnimationTests();
 int plasmaInputTests();
 int plasmaLayoutTests();
 int cameraMotionTests();
+int controlPhaseTests();
 int cameraRenderTests();
 int itemSelectorTests();
 int guiItemTests();
@@ -9135,6 +9136,8 @@ int main(int argc, char **argv) {
         return plasmaNodeAnimationTests();
     if (argc == 2 && std::string(argv[1]) == "guiinput")
         return plasmaInputTests();
+    if (argc == 2 && std::string(argv[1]) == "controlphases")
+        return controlPhaseTests();
     if (argc == 2 && std::string(argv[1]) == "worldmap")
         return worldMapLookTests();
     if (argc == 2 && std::string(argv[1]) == "camerarender")
@@ -10467,6 +10470,7 @@ int main(int argc, char **argv) {
     failures += plasmaInputTests();
     failures += plasmaLayoutTests();
     failures += cameraMotionTests();
+    failures += controlPhaseTests();
     failures += itemSelectorTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += windContinueTests();   // tests/WindContinueTests.cpp

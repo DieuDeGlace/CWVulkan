@@ -1458,33 +1458,73 @@ void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, floa
     put<uint32_t>(r, 0x5c, (get<uint32_t>(r, 0x5c) & ~1u) | (onGround ? 1u : 0u));
 }
 
-void SpawnedCreatures::control(const nativecontrol::Input &in, double dtMs) {
-    if (!nativePlayer || !hasPlayer)
-        return;
-    { // an ability that needs a special item ends without it (the world's per-frame check)
-        worldgen::CreatureRecord &r = player.record;
-        if ((r[0x68] == 0x78 && (get<uint32_t>(r, 0x5c) & 1) && !hasGlider) || (r[0x68] == 0x79 && !hasBoat))
-            r[0x68] = 0;
-    }
-    player.side.record = player.record.data();
-    nativecontrol::World w;
-    w.byId = [this](int64_t id) -> const uint8_t * {
-        for (auto &[zone, list] : zones)
-            for (const Creature &cr : list)
-                if (get<int64_t>(cr.record, worldgen::creature::ID) == id)
-                    return cr.record.data();
-        return nullptr;
+nativecontrol::World SpawnedCreatures::controlWorld() {
+    nativecontrol::World world;
+    world.byId = [this](int64_t id) -> const uint8_t * {
+        const Creature *creature = find(id);
+        return creature ? creature->record.data() : nullptr;
     };
-    w.hasBuff = [this](int t) {
-        for (const auto &e : player.side.buffs)
-            if (e[0] == (uint8_t)t)
+    world.hasBuff = [this](int type) {
+        for (const auto &entry : player.side.buffs)
+            if (entry[0] == (uint8_t)type)
                 return true;
         return false;
     };
-    nativecontrol::frame(in, controlState, player.side, dtMs, w);
+    world.ownsSpecialItem = controlOwnsSpecialItem;
+    world.playSound = controlPlaySound;
+    return world;
+}
+
+void SpawnedCreatures::noteControlMove() {
     if (player.record[0x68] != lastPlayerMove && player.record[0x68])
         movesStarted++;
     lastPlayerMove = player.record[0x68];
+}
+
+bool SpawnedCreatures::prepareControl(const nativecontrol::Input &in, double dtMs) {
+    if (!nativePlayer || !hasPlayer)
+        return false;
+    // An ability needing a special item ends without it, as in the existing bridge.
+    worldgen::CreatureRecord &record = player.record;
+    if ((record[0x68] == 0x78 && (get<uint32_t>(record, 0x5c) & 1) && !hasGlider) || (record[0x68] == 0x79 && !hasBoat))
+        record[0x68] = 0;
+    player.side.record = record.data();
+    auto world = controlWorld();
+    const bool admitted = nativecontrol::beginFrame(in, controlState, player.side, dtMs, world);
+    worldEvents.buffs.insert(worldEvents.buffs.end(), world.buffNotes.begin(), world.buffNotes.end());
+    noteControlMove();
+    return admitted;
+}
+
+void SpawnedCreatures::controlOwnerLook() {
+    if (!nativePlayer || !hasPlayer)
+        return;
+    auto world = controlWorld();
+    nativecontrol::ownerLook(player.side, world);
+    noteControlMove();
+}
+
+void SpawnedCreatures::controlPet(const nativecontrol::Input &in) {
+    if (!nativePlayer || !hasPlayer)
+        return;
+    auto world = controlWorld();
+    nativecontrol::pet(in, controlState, player.side, world);
+    noteControlMove();
+}
+
+void SpawnedCreatures::finishControl(const nativecontrol::Input &in) {
+    if (!nativePlayer || !hasPlayer)
+        return;
+    nativecontrol::attack(in, controlState, player.side);
+    noteControlMove();
+}
+
+void SpawnedCreatures::control(const nativecontrol::Input &in, double dtMs) {
+    if (!prepareControl(in, dtMs))
+        return;
+    controlOwnerLook();
+    controlPet(in);
+    finishControl(in);
 }
 
 float SpawnedCreatures::playerMana() const { return hasPlayer ? get<float>(player.record, 0x188) : 0.0f; }
