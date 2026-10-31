@@ -1,6 +1,7 @@
 #include "ResidentPass.h"
 #include "GameMath.h"
 #include <cmath>
+#include <algorithm>
 #include <cstring>
 
 namespace residentpass {
@@ -14,6 +15,13 @@ Region regionOf(const uint8_t *record) {
     return read<Region>(record, 0x150);
 }
 } // namespace
+void orderZones(std::vector<Zone> &zones) {
+    std::erase_if(zones, [](const Zone &zone) { return zone.identity == 0; });
+    std::sort(zones.begin(), zones.end(), [](const Zone &a, const Zone &b) { return a.identity < b.identity; });
+    zones.erase(std::unique(zones.begin(), zones.end(), [](const Zone &a, const Zone &b) { return a.identity == b.identity; }),
+                zones.end());
+}
+
 void Collection::collect(const uint8_t *record) {
     const int64_t id = read<int64_t>(record, 8);
     ids_.insert(id); // Every nonnull registered actor suppresses duplicates, even dead actors.

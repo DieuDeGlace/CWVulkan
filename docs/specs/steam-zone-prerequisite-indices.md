@@ -43,9 +43,11 @@ examined generation path. A nonempty capture would require preservation of
 its actual provenance rather than guessing membership from object types.
 
 The old role table's combined “24,26 unreachable” entry was overbroad:
-0x119a00 explicitly returns26 for planner role18. Normal generation of that
-role is not newly audited here. The absence of result24 is the relevant
-reachability fact for **0x123210** and this index list.
+0x119a00 explicitly returns26 for planner role18. The original constructor's
+failure to produce18, the limit concerning later role-map writers, and the
+complete bounded26 helper are now in [steam-encounter26.md](steam-encounter26.md).
+The absence of result24 is the relevant reachability fact for **0x123210**
+and this index list.
 
 ## 3. Exact producer selection and append order
 

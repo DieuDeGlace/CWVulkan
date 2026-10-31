@@ -273,8 +273,12 @@ void generatedEnemy() {
         uint8_t *shopper = recoveredSave.networkCreature(7003, madeShopper);
         shopper[worldgen::creature::HOSTILITY] = 3;
         setHealth(shopper, 100);
+        const auto zoneToken = blocks.gameZoneToken(zx, zy);
+        CHECK_RESPAWN(zoneToken.has_value());
         recoveredSave.setClock(1, 100);
         recoveredSave.update(blocks, home);
+        const auto refreshedToken = blocks.gameZoneToken(zx, zy);
+        CHECK_RESPAWN(refreshedToken && zoneToken && refreshedToken->order == zoneToken->order);
         CHECK_RESPAWN(recoveredSave.record(7003));
         CHECK_RESPAWN(*recoveredSave.groundItems(blocks, zx, zy) == ground.records);
         CHECK_RESPAWN(recoveredSave.zoneObjects(zx, zy) && *recoveredSave.zoneObjects(zx, zy) != objects.records);

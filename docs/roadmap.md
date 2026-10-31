@@ -167,8 +167,10 @@ individual feature documents.
   Resident collection now snapshots kind0 permissions before refresh, reads current
   player positions, and suppresses IDs from all registered actors. Its final flag
   reconciliation includes local/network/dead/new entries; copied field widths and
-  coordinate conversions have dedicated boundary checks. Full time/resident preludes,
-  zone-pointer/RNG integration, broader mutation producers and native comparisons remain.
+  coordinate conversions have dedicated boundary checks. Runtime zone-pointer order keeps each zone's refresh/admission/effect phases
+  together, with retained identities across metadata refresh. Full time/resident
+  preludes, incoming CRT-state integration, broader mutation producers and native
+  comparisons remain.
   The specified resident kind9 request/producer and independent live/output lifetimes
   now have native numeric and lifecycle checks; its broader rendering remains open.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor

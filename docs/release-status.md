@@ -10,6 +10,22 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Resident zone selection now uses the native fixed/narrowed inclusive bounds,
+  snapshots loaded runtime Zone identities, retains their storage through the pass,
+  and visits unique nonnull identities in unsigned address order. Each selected zone
+  completes archive restoration, daily refresh, resident admission and kind9 request
+  production before the next zone refreshes. Metadata is initialized independently
+  of whether an actor vector already exists for the zone. Unit checks distinguish
+  unsigned pointer order from coordinate/encounter order and deduplicate aliases;
+  owner-data checks retain the same loaded identity through daily metadata refresh.
+  This matches the ordering rule for the engine's runtime allocations. Exact external
+  replay still needs the reference zone sequence and incoming CRT state; the legacy
+  altitude RNG remains an explicit gap. All five targets and the new checks pass;
+  full CPU/owner-data validation retains the two known modded region-reference failures.
+  A no-save gameplay run exits0 with the fixture save unchanged. The inherited blue
+  scene and missing owner hair model remain unaccepted; native visual comparison
+  and clean generator references are still required.
+
 - The specified resident kind9 producer now tracks existing full-word mode0x8a
   separately from newly copied low-byte modes. Per-zone requests create day-derived
   fixed candidates, apply inclusive200-block XY suppression against current live

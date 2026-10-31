@@ -5,11 +5,19 @@
 #include <cstdint>
 #include <functional>
 #include <set>
+#include <memory>
 #include <vector>
 #include <utility>
 
 namespace residentpass {
 using Region = std::array<int32_t, 2>;
+struct Zone {
+    uint64_t identity;
+    std::array<int32_t, 2> key;
+    std::shared_ptr<const void> keepAlive;
+};
+void orderZones(std::vector<Zone> &zones); // Nonnull, unique, unsigned Zone-address order.
+
 class Collection {
   public:
     // Engine storage may move a record while constructing residents. Resolve the

@@ -72,6 +72,12 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Resident zones follow the independent unsigned pointer-order contract through
+  retained engine Zone tokens. Per-zone restoration/refresh/admission/effect phases
+  now remain together. Tests use synthetic unsigned identities and owner-data token
+  lifetime checks; this is not a claim to reproduce a reference allocator's addresses
+  or an unrecorded incoming CRT state.
+
 - The resident kind9 request/producer follows the separate resident-effects contract,
   including distinct full-word/low-byte gates, day-derived fixed math and independent
   live/output lifetimes. Tests preserve unspecified bytes instead of assuming a

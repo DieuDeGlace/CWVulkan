@@ -181,7 +181,7 @@ lists the fields the talk reads):
 | +0x20 | artifact map: place cell → item (lore-and-artifacts §5.1) |
 | +0x30 | help-target list; +0x48 artifact-place list (conversation-script §1.5) |
 | +0x60 | **level map**: place cell → level |
-| +0x70 | a pairing map used only by the role-18 pass (always empty, §2.3 step 19) |
+| +0x70 | pairing map of the role18 constructor pass (left empty by the original constructor; §2.2 step14 and [bounded follow-up](steam-encounter26.md)) |
 | +0x80, +0x84 | **special town** cell, or (0x7fffffff, 0x7fffffff) |
 | +0x88 | **marked** byte (1 when a demon portal exists) |
 | +0x8c | **item bits** (u32): 1 role 12, 2 role 10, 4 role 11, 8 role 21 |
@@ -242,11 +242,13 @@ lists the fields the talk reads):
     place in order: remove, role 16, level (X(c) & 3) + 1, c += 1.
 13. **Role 15.** Every remaining pool place of kind ≠ 5, in order: role 15, level c mod 4 (the
     raw counter, as a signed remainder; c is always positive here), c += 1.
-14. **Role 18 (never happens).** For every place of the original pool (a copy taken after the
+14. **Role 18 (constructor pass does not assign it).** For every place of the original pool (a copy taken after the
     pool was built) whose encounter 0x119a00 is 24, the game would pair it with the nearest
     place of role 15 or none within a squared cell distance of 16 among kinds 10, 13, 20, 25,
     28, 29, 31, 32, and make that place role 18. 0x119a00 never returns 24
-    (conversation-script §5.5), so nothing happens; implementations may skip it.
+    (conversation-script §5.5), so this constructor pass does nothing. This does not
+    establish the absence of all later role-map mutations. The executable encounter26
+    helper and this precise reachability limit are in [steam-encounter26.md](steam-encounter26.md).
 15. **Lists.** item bits = 0; walk the role map in order: role 10 → bits |= 2, push 16; role 11
     → bits |= 4; role 12 → bits |= 1, push 15; role 21 → bits |= 8, push 14. Then the help-target
     and artifact-place lists (conversation-script §1.5).

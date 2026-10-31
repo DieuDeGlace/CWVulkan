@@ -118,7 +118,12 @@ class ExtractedWorld {
     // default for a missing zone (grey stone, type 1) and `loaded` false.
     using GameBlock = std::array<uint8_t, 6>;
     GameBlock gameBlock(int64_t x, int64_t y, int z, bool *loaded = nullptr);
-    bool gameZoneLoaded(int32_t x, int32_t y) const; // lookup only; no block read, load or LRU mutation
+    struct ZoneToken {
+        uint64_t order; // Unsigned address of this runtime's loaded Zone object.
+        std::shared_ptr<const void> keepAlive;
+    };
+    std::optional<ZoneToken> gameZoneToken(int32_t x, int32_t y) const; // Lookup only; retain the selected zone during a pass.
+    bool gameZoneLoaded(int32_t x, int32_t y) const;                    // lookup only; no block read, load or LRU mutation
     // The zones within `radius` of absolute zone (ax, ay) are kept in memory, as the game
     // keeps the zones around its player: those missing are read (or made) on a thread of
     // their own, and none of them is let go to make room for others (the creatures there

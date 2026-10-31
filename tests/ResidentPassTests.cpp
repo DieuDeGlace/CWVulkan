@@ -36,6 +36,14 @@ int residentPassTests() {
         }
     };
     {
+        std::vector<residentpass::Zone> zones{
+            {uint64_t(1) << 63, {-7, -8}, {}}, {3, {100, 100}, {}}, {1, {50, 50}, {}}, {3, {100, 100}, {}}, {0, {0, 0}, {}}};
+        residentpass::orderZones(zones);
+        check(zones.size() == 3 && zones[0].identity == 1 && zones[1].identity == 3 && zones[2].identity == (uint64_t(1) << 63),
+              "zone traversal deduplicates nonnull identities in unsigned pointer order");
+        check(zones[0].key == std::array<int32_t, 2>{50, 50}, "processing order does not sort by coordinates or first encounter");
+    }
+    {
         auto monster = actor(9, 1, 0x8800, {99, 99});
         auto guest = actor(42, 0, 0x8800, {3, -4});
         auto local = actor(1, 0);

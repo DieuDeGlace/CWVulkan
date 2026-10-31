@@ -94,7 +94,7 @@ the group race); no other encounter draws it.
 | 31 | boss with guards: boss (R(H(P) + 0x1d7d7d) & 1) + 0xb2; guard 0xe6; people 5 |
 | 32 | leader = beasts; boss with guards as leader: guard 0xe3, people 4 |
 | 24 | dispatcher case 0x123210; ordinary 0x119a00 selector never returns24; dormant cell/index producer in [steam-zone-prerequisite-indices.md](steam-zone-prerequisite-indices.md) |
-| 26 | dispatcher 0x1224c0; selector returns26 for planner role18 (conversation-script §5.5); normal generation of role18 is not newly established by the selected-index audit |
+| 26 | 0x1224c0: prototype ground items and guards; [complete bounded helper/constructor reachability](steam-encounter26.md). Selector returns26 for role18; original planner constructor does not produce18, while later role-map mutations remain outside that bounded audit |
 
 ### 3.1 Quest camp (0x11f280)
 

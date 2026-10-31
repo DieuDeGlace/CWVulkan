@@ -141,9 +141,6 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
         at.push_back({position[0], position[1], position[2]});
     }
-    std::vector<std::pair<int, int>> residentCentres;
-    for (const auto &p : at)
-        residentCentres.push_back({floorDiv(gamemath::floorFixedBlock(p.x), 64), floorDiv(gamemath::floorFixedBlock(p.y), 64)});
     // Before a player arrives, the engine can stream terrain around its stand-in.
     // That position is not a native player and cannot admit or refresh residents.
     auto streaming = at;
@@ -191,44 +188,49 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
                     zoneLists(ew, zx, zy);
         return;
     }
-    // A zone that comes near brings its residents (zone+0x460), its mission creatures
-    // (+0x498) and the creatures it counts the deaths of (+0x480).
+    // Native collection finishes before any selected zone refreshes. Keep the
+    // runtime Zone objects alive and order their unsigned identities, not XY keys.
+    std::vector<residentpass::Zone> selected;
+    for (const auto key : worldgen::residentZones(at))
+        if (auto zone = ew.gameZoneToken(key.x, key.y))
+            selected.push_back({zone->order, {key.x, key.y}, std::move(zone->keepAlive)});
+    residentpass::orderZones(selected);
     std::vector<std::pair<int, int>> fresh;
-    for (const auto &[cx, cy] : residentCentres)
-        for (int zx = cx - NEAR_ZONES; zx <= cx + NEAR_ZONES; zx++)
-            for (int zy = cy - NEAR_ZONES; zy <= cy + NEAR_ZONES; zy++) {
-                if (zones.count({zx, zy}) || !ew.gameZoneLoaded(zx, zy))
-                    continue;
-                zones[{zx, zy}];
-                const std::shared_ptr<const worldgen::ZoneContents> zone = zoneResidents[{zx, zy}] = worldgen::zone(zx, zy);
-                // Old saves have no respawn timestamps. In a respawning world, an enemy
-                // killed before this instance starts is available again when its zone loads.
-                if (respawnSettings.mode != enemyrespawn::Mode::Permanent)
-                    for (const auto &[id, point] : zone->spawns.points)
-                        if (enemyrespawn::isEnemy(point.hostility) && !enemyDeaths.contains(id) && !protectedDead.count(id))
-                            worldDead.erase(id);
-                zoneRand.emplace(std::make_pair(zx, zy), std::mt19937((uint32_t)(zx * 73856093) ^ (uint32_t)(zy * 19349663)));
-                zoneTracked[{zx, zy}] = zone->spawns.tracked;
-                if (!zone->spawns.mission.empty())
-                    zoneMissions[{zx, zy}] = zone->spawns.mission;
-                fresh.push_back({zx, zy});
-            }
-    // A visited zone refreshes its daily spawn points and base objects before its
-    // residents are scanned. Refreshing alone does not remove live shoppers.
-    // See remaining-runtime-gaps.md §6; a midnight reset is a separate operation.
-    for (auto &[key, zone] : zoneResidents)
-        if (!residentCentres.empty() && near(key.first, key.second, NEAR_ZONES) && ew.gameZoneLoaded(key.first, key.second) &&
-            zone->spawns.day != dayCount) {
+    const worldgen::ResidentWorld resident = residentWorld(participants);
+    const auto maxHealth = [](const uint8_t *record) { return nativerules::maxHealth(record); };
+    for (const auto &visit : selected) {
+        const std::pair<int, int> key{visit.key[0], visit.key[1]};
+        auto [entry, created] = zoneResidents.try_emplace(key);
+        auto &zone = entry->second;
+        if (created) {
+            zones.try_emplace(key);
+            zone = worldgen::zone(key.first, key.second);
+            // Recover old deaths under the configured engine policy, without
+            // overriding current timers or deaths protected by taming.
+            if (respawnSettings.mode != enemyrespawn::Mode::Permanent)
+                for (const auto &[id, point] : zone->spawns.points)
+                    if (enemyrespawn::isEnemy(point.hostility) && !enemyDeaths.contains(id) && !protectedDead.count(id))
+                        worldDead.erase(id);
+            const uint32_t seed = uint32_t(key.first) * 73856093u ^ uint32_t(key.second) * 19349663u;
+            zoneRand.emplace(key, std::mt19937(seed)); // Legacy altitude stream; native CRT integration remains separate.
+            zoneTracked[key] = zone->spawns.tracked;
+            if (!zone->spawns.mission.empty())
+                zoneMissions[key] = zone->spawns.mission;
+            fresh.push_back(key);
+        }
+        // Archive restoration precedes the daily refresh of the same live object
+        // vector. It must not be deferred until after today's base objects return.
+        auto *lists = zoneLists(ew, key.first, key.second);
+        if (zone->spawns.day != dayCount) {
             auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
             worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
             zone = refreshed;
             for (const auto &[id, point] : refreshed->spawns.points)
                 if (enemyDeaths.contains(id) && !enemyrespawn::isEnemy(point.hostility)) {
-                    // Daily points can reuse an id for a friendly resident.
                     enemyDeaths.forget(id);
                     worldDead.erase(id);
                 }
-            if (auto *lists = zoneStates.find({key.first, key.second})) {
+            if (lists) {
                 std::vector<nativesaves::Record> objects;
                 for (const auto &source : refreshed->objects) {
                     worldgen::ZoneObject object;
@@ -242,13 +244,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
                 }
             }
         }
-    // the world's resident update (0x2e17d0): the residents not in the world yet, not dead for good,
-    // within 256 blocks of a player, whose conditions are met, are made.
-    const worldgen::ResidentWorld resident = residentWorld(participants);
-    const auto maxHealth = [](const uint8_t *record) { return nativerules::maxHealth(record); };
-    for (auto &[key, zone] : zoneResidents) {
-        if (residentCentres.empty() || !near(key.first, key.second, NEAR_ZONES) || !ew.gameZoneLoaded(key.first, key.second))
-            continue;
+        // Complete this zone's admission and effect request before the next refresh.
         auto &list = zones[key];
         residentfx::Request request;
         auto rand = [&, &worldRand = zoneRand.at(key)] { return (int)(worldRand() & 0x7fff); };

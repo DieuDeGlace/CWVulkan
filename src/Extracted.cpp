@@ -306,6 +306,14 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
     return nullptr;
 }
 
+std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
+    std::lock_guard lock(cacheMutex);
+    for (const auto &[key, zone] : cache)
+        if (key == Key{x, y} && zone)
+            return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone.get())), zone};
+    return std::nullopt;
+}
+
 bool ExtractedWorld::gameZoneLoaded(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
     return std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == Key{x, y} && entry.second; });
