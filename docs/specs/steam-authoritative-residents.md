@@ -180,7 +180,7 @@ or reroll for an already registered nonnull creature. Suppression by the
 common gates occurs before this draw.
 
 The immediately preceding daily refresh is an actual possible seed producer.
-If zone+0x4f8 already equals World day+8, **0x31c540 returns without reseeding**.
+If zone+0x4f8 already equals the day stored at **World+0x08**, **0x31c540 returns without reseeding**.
 Otherwise its seed call at **0x31c72f** sets the same CRT stream to
 **R(H(zoneX,zoneY)+0x4373e1)+day**, with 32-bit wrapping arithmetic. Its subsequent
 shopping/camp and reached helper draws run before resident creation. Refresh
@@ -193,7 +193,9 @@ reached a draw. It is deterministic given those inputs; the older “not
 reproducible” phrase was imprecise. The first seed of the executing thread and
 all other possible CRT consumers outside this pass/refresh are **not newly
 audited here**. Do not replace that missing incoming state with a guessed
-per-ID seed or default seed.
+per-ID seed or default seed. Constructor/worker separation and the remaining
+numeric fresh-thread-state boundary are now specified in
+[steam-host-crt-stream.md](steam-host-crt-stream.md).
 
 ## 6. Final flag pass and cleanup scope
 

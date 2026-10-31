@@ -624,6 +624,67 @@ static void extractedPlacements() {
     fs::remove(root);
 }
 
+static void extractedBlockCacheLifetime() {
+    const auto root = fs::temp_directory_path() /
+                      ("CubeVulkan-block-cache-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    for (int seed : {1, 2}) {
+        const auto dir = root / ("seed_" + std::to_string(seed));
+        fs::create_directories(dir);
+        std::ofstream(dir / "manifest.txt") << "seed=" << seed << "\nhomeX=0\nhomeY=0\nhomeZ=0\n";
+        writeZoneFixture(dir / "z_0_0.cwz", 0, 0, seed == 1 ? -2 : 8);
+        writeZoneFixture(dir / "z_1_0.cwz", 1, 0, seed == 1 ? -2 : 8);
+    }
+    std::string error;
+    float height = 0;
+    bool loaded = false;
+    std::optional<ExtractedWorld> reader;
+    reader.emplace();
+    CHECK(reader->open(root / "seed_1", error));
+    CHECK(reader->surface(64, 0, height));
+    CHECK(reader->gameBlock(64, 0, -2, &loaded)[0] == 50 && loaded);
+    auto retained = reader->gameZoneToken(1, 0);
+    CHECK(retained.has_value());
+    std::weak_ptr<const void> oldZone = retained->keepAlive;
+
+    // Opening eagerly loads the home zone. Its neighbor must remain unloaded even while
+    // another consumer pins that neighbor from the previous world.
+    CHECK(reader->open(root / "seed_2", error));
+    reader->gameBlock(64, 0, 8, &loaded);
+    CHECK(!loaded && !reader->gameZoneLoaded(1, 0));
+    CHECK(reader->surface(64, 0, height) && height == 137);
+    CHECK(reader->gameBlock(64, 0, 8, &loaded)[0] == 50 && loaded);
+    retained.reset();
+    CHECK(oldZone.expired()); // A thread-local lookup must not own an unloaded zone.
+
+    retained = reader->gameZoneToken(1, 0);
+    CHECK(retained.has_value());
+    auto *address = &*reader;
+    reader.emplace(); // Same storage, different reader lifetime; keep the previous zone pinned.
+    CHECK(&*reader == address && reader->open(root / "seed_1", error));
+    reader->gameBlock(64, 0, 8, &loaded);
+    CHECK(!loaded && !reader->gameZoneLoaded(1, 0));
+    retained.reset();
+
+    // LRU eviction also invalidates a warm lookup, including an independently pinned zone.
+    for (int x = 1; x <= 96; ++x)
+        writeZoneFixture(root / "seed_2" / ("z_" + std::to_string(x) + "_0.cwz"), x, 0, 8);
+    CHECK(reader->open(root / "seed_2", error));
+    CHECK(reader->surface(0, 0, height));
+    CHECK(reader->gameBlock(0, 0, 8, &loaded)[0] == 50 && loaded);
+    retained = reader->gameZoneToken(0, 0);
+    CHECK(retained.has_value());
+    oldZone = retained->keepAlive;
+    for (int x = 1; x <= 96; ++x)
+        CHECK(reader->surface(x * 64, 0, height));
+    CHECK(!reader->gameZoneLoaded(0, 0));
+    reader->gameBlock(0, 0, 8, &loaded);
+    CHECK(!loaded);
+    retained.reset();
+    CHECK(oldZone.expired());
+    reader.reset();
+    fs::remove_all(root);
+}
+
 static void extractedWorldReloadAndValidation() {
     auto root = fs::temp_directory_path() /
                 ("CubeVulkan-world-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -9251,6 +9312,10 @@ int main(int argc, char **argv) {
         if (a.locate(""))
             worldgen::loadCreatureTables(spawnsDir(a.gameDir()));
     }
+    if (argc == 2 && std::string(argv[1]) == "worldcache") {
+        extractedBlockCacheLifetime();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "ownersetup") // only the first-run setup tests (also in the default run)
         return ownerSetupTests() ? 1 : 0;
     if (argc >= 3 && std::string(argv[1]) == "netdecode") // <file>...: packet recordings (Extract/net/*.bin) encode back byte for byte
@@ -10425,6 +10490,7 @@ int main(int argc, char **argv) {
     allRegionsOccur();
     steamAssets();
     waterSurfaceGeometry();
+    extractedBlockCacheLifetime();
     extractedPlacements();
     extractedWorldReloadAndValidation();
     recordingFormats();

@@ -13,6 +13,11 @@
 namespace fs = std::filesystem;
 
 namespace {
+uint64_t nextZoneCacheRevision() {
+    static std::atomic<uint64_t> revision{0};
+    return revision.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 // cube::Block::Type values that are not drawn as solid blocks.
 constexpr uint8_t AIR_TYPE = 0, WATER_TYPE = 2, WET_TYPE = 3;
 constexpr uint8_t LEAVES_TYPE = 8, SNOW_LEAVES_TYPE = 11, LAVA_TYPE = 17, POISON_TYPE = 19;
@@ -56,17 +61,11 @@ fs::path ExtractedWorld::find(const fs::path &gameDir) {
 }
 
 void ExtractedWorld::openGenerated(int homeX, int homeY, const fs::path &spriteDir) {
+    clearCache();
     zones.clear();
     environment.clear();
     buildingParts.clear();
     measuredScale.clear();
-    {
-        std::lock_guard lock(cacheMutex);
-        cache.clear();
-        absent.clear();
-        estimatedScale.clear();
-        voxelWidths.clear();
-    }
     folder.clear();
     if (!spriteDir.empty())
         loadSpriteTables(spriteDir);
@@ -143,6 +142,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
 }
 
 bool ExtractedWorld::open(const fs::path &dir, std::string &error) {
+    clearCache();
     error.clear();
     generatedMode = false;
     zones.clear();
@@ -151,13 +151,6 @@ bool ExtractedWorld::open(const fs::path &dir, std::string &error) {
     measuredScale.clear();
     originX = originY = seedValue = 0;
     homeLocal = glm::vec3(0);
-    {
-        std::lock_guard lock(cacheMutex);
-        cache.clear();
-        absent.clear();
-        estimatedScale.clear();
-        voxelWidths.clear();
-    }
     folder = dir;
     std::error_code ec;
     for (auto &e : fs::directory_iterator(dir, ec)) {
@@ -241,6 +234,13 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     if (!zone) return nullptr;
     applyBlockChanges(ax, ay, *zone);
     std::lock_guard lock(cacheMutex);
+    // A foreground query and prefetch can finish the same read concurrently. Preserve
+    // the resident zone's identity instead of inserting another copy of the same key.
+    for (auto it = cache.begin(); it != cache.end(); ++it)
+        if (it->first == key) {
+            cache.splice(cache.begin(), cache, it);
+            return cache.front().second;
+        }
     cache.emplace_front(key, zone);
     // The least recently used zone goes, unless it is one kept around the player.
     for (auto it = cache.end(); cache.size() > 96 && it != cache.begin();) {
@@ -248,6 +248,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
         if (!kept(it->first))
             it = cache.erase(it);
     }
+    cacheRevision = nextZoneCacheRevision();
     return zone;
 }
 
@@ -257,6 +258,21 @@ bool ExtractedWorld::kept(const Key &key) const {
             if (std::abs(key.first - centre.first) <= around.radius && std::abs(key.second - centre.second) <= around.radius)
                 return true;
     return false;
+}
+
+ExtractedWorld::ExtractedWorld() : cacheRevision(nextZoneCacheRevision()) {
+}
+
+void ExtractedWorld::clearCache() {
+    if (keeper.joinable())
+        keeper.join();
+    std::lock_guard lock(cacheMutex);
+    cache.clear();
+    keptBy.clear();
+    absent.clear();
+    estimatedScale.clear();
+    voxelWidths.clear();
+    cacheRevision = nextZoneCacheRevision();
 }
 
 ExtractedWorld::~ExtractedWorld() {
@@ -326,15 +342,15 @@ ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z,
     thread_local struct {
         const ExtractedWorld *world = nullptr;
         int ax = 0, ay = 0;
-        uint32_t revision = 0;
-        std::shared_ptr<Zone> zone;
+        uint64_t revision = 0;
+        std::weak_ptr<Zone> zone;
     } memo[4];
     thread_local int next = 0;
     std::shared_ptr<Zone> zone;
-    const uint32_t revision = blocksRevision.load();
+    const uint64_t revision = cacheRevision.load();
     for (auto &m : memo)
-        if (m.world == this && m.ax == ax && m.ay == ay && m.revision == revision && m.zone)
-            zone = m.zone;
+        if (m.world == this && m.ax == ax && m.ay == ay && m.revision == revision)
+            zone = m.zone.lock();
     if (!zone) {
         zone = cached(ax, ay);
         if (zone) {
@@ -428,8 +444,8 @@ void ExtractedWorld::undoBlockChanges(int ax, int ay) {
         for (auto &[key, zone] : cache)
             if (key.first == ax && key.second == ay)
                 zone = fresh;
+        cacheRevision = nextZoneCacheRevision();
     }
-    blocksRevision++;
 }
 
 void ExtractedWorld::setBlockChanges(int ax, int ay, const std::vector<nativesaves::BlockChange> &changes) {
@@ -454,8 +470,8 @@ void ExtractedWorld::setBlockChanges(int ax, int ay, const std::vector<nativesav
         for (auto &[key, zone] : cache)
             if (key.first == ax && key.second == ay)
                 zone = fresh;
+        cacheRevision = nextZoneCacheRevision();
     }
-    blocksRevision++;
 }
 
 std::vector<std::pair<int, int>> ExtractedWorld::takeChangedZones() {

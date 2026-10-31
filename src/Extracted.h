@@ -30,6 +30,7 @@
 
 class ExtractedWorld {
   public:
+    ExtractedWorld();
     ~ExtractedWorld();
     static constexpr int Z_OFFSET = 128;
     static constexpr int SEA = Z_OFFSET + 1; // Water fills game z <= 0.
@@ -213,8 +214,10 @@ class ExtractedWorld {
     // The block changes by absolute zone, put on every copy of the zone read or made.
     mutable std::mutex changesMutex;
     std::map<Key, std::vector<nativesaves::BlockChange>> blockChanges; // guarded by changesMutex
-    std::set<Key> changedZones;                                          // guarded by changesMutex
-    std::atomic<uint32_t> blocksRevision{0}; // bumped when a zone's blocks change (gameBlock's memo)
+    std::set<Key> changedZones;                                        // guarded by changesMutex
+    // Unique across reader lifetimes; changed on cache membership and block replacement.
+    std::atomic<uint64_t> cacheRevision{0};
+    void clearCache(); // joins this reader's prefetch before resetting the source
     void applyBlockChanges(int ax, int ay, Zone &zone) const;
     std::shared_ptr<Zone> cached(int ax, int ay); // as load, but only from the cache
     static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error);

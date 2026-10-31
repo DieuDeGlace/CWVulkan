@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Loaded-only terrain block lookups now distinguish reader lifetimes and invalidate
+  their memo when zones are loaded, evicted or replaced. Weak references avoid
+  retaining unloaded terrain. Source resets join the reader's prefetch worker before
+  clearing its cache, and concurrent loads preserve one resident identity per key.
+  Synthetic checks cover reopening while an old neighbor is pinned, same-storage
+  reader reconstruction, LRU eviction and release of the old terrain. The fixture
+  deliberately uses a non-home neighbor because opening eagerly loads the home zone.
+  All five targets and the focused checks pass. Full CPU/owner-data validation has
+  only the two known modded region-reference failures. A no-save movement run exits0
+  with the character save unchanged; its blue scene remains unaccepted. Separate
+  stationary captures show the house/terrain under Steam Native/Omega water and
+  Alpha Native water, without establishing pixel parity or a rendering fix.
+
+- The [host CRT audit](specs/steam-host-crt-stream.md) now separates constructing,
+  zone-generation and simulation threads, and records the known refresh/pet seed
+  producers and continuation rules. The fresh simulation thread's numeric state
+  remains unverified; neither the public world seed nor a per-zone seed is a valid
+  substitute. The legacy resident altitude RNG integration remains open.
+
 - Resident zone selection now uses the native fixed/narrowed inclusive bounds,
   snapshots loaded runtime Zone identities, retains their storage through the pass,
   and visits unique nonnull identities in unsigned address order. Each selected zone

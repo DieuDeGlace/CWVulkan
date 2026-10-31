@@ -1647,7 +1647,7 @@ this particular collection does not itself load a missing zone. Deduplicate zone
 shared by players. For each collected zone, call **0x31c540 before walking that
 zone's current spawn-point map**.
 
-The refresh does nothing when zone+0x4f8 already equals world day +8. Otherwise it
+The refresh does nothing when zone+0x4f8 already equals the day stored at **World+0x08**. Otherwise it
 stores the new day, removes and frees the previous daily refresh spawn points listed
 at zone+0x4e8 from the zone's spawn map +0x460, clears that list, restores the base
 object list, and generates the new daily points/objects under the existing rules of

@@ -167,10 +167,14 @@ individual feature documents.
   Resident collection now snapshots kind0 permissions before refresh, reads current
   player positions, and suppresses IDs from all registered actors. Its final flag
   reconciliation includes local/network/dead/new entries; copied field widths and
-  coordinate conversions have dedicated boundary checks. Runtime zone-pointer order keeps each zone's refresh/admission/effect phases
-  together, with retained identities across metadata refresh. Full time/resident
-  preludes, incoming CRT-state integration, broader mutation producers and native
-  comparisons remain.
+  coordinate conversions have dedicated boundary checks. Runtime zone-pointer
+  order keeps each zone's refresh/admission/effect phases together, with retained
+  identities across metadata refresh. Loaded-only block queries now track cache
+  membership and reader lifetimes without retaining unloaded terrain. Full
+  time/resident preludes, incoming CRT-state integration, broader mutation producers
+  and native comparisons remain. The [host CRT audit](specs/steam-host-crt-stream.md)
+  separates generator and simulation threads; the latter's initial numeric state is
+  still unverified.
   The specified resident kind9 request/producer and independent live/output lifetimes
   now have native numeric and lifecycle checks; its broader rendering remains open.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
