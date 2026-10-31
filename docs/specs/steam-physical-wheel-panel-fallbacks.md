@@ -124,7 +124,7 @@ product and signed integer division toward zero before float conversion.
 Pass X as float32 **current effective panel width−28**, preserve the
 thumb Widget's current effective width, convert the integer Y/height
 to float32, and set that rectangle through **0x32c680 at0x277027**
-with rebound flag1. There is no denominator-zero guard or generic
+with final size-propagation flag1. There is no denominator-zero guard or generic
 small-height/full-fit clamp in this helper.
 
 For Multiplayer **0x27b490**, return if thumb-node pointer
@@ -145,7 +145,7 @@ unsigned64, divide unsigned by **N−sign-extended(q)−1**, and add60 in
 signed conversion plus float2^64 correction when its high bit is set.
 The normal nonnegative case is60 plus the integer track displacement.
 Set X=panelWidth−28, preserve thumb effective width, and pass the new
-Y/height to **0x32c680 at0x27b666**, rebound1. These distinctions record
+Y/height to **0x32c680 at0x27b666**, size-propagation1. These distinctions record
 the actual signedness; they do not introduce a replacement safe clamp.
 
 Data **0x46e620 is28.0f**. The frame setters operate on the thumb Widget
@@ -222,7 +222,7 @@ otherwise normalize+0x2d8. The updater still returns when its thumb
 node+0x2d0 is null, as§4 specifies.
 
 There is an initial refresh before first display: after constructing
-Controls, **Interface0xf9ac0 at0xfca81** requests **500×600**, rebound1,
+Controls, **Interface0xf9ac0 at0xfca81** requests **500×600**, size-propagation1,
 through0x32c9a0. That setter calls0x32c6f0, whose final own virtual+0x50
 dispatch reaches0x276cd0, and therefore the thumb update. The interface
 then hides the Controls root. This is a size/setup event, not an implicit
@@ -425,3 +425,32 @@ OK reads this local array to replace active bindings through0x89b80;
 Cancel/open/ordinary draw/scroll/drag do not replace the local array.
 These facts classify the verified startup and editor routes, not every
 conceivable indirect memory writer or an unexecuted runtime capture.
+
+## 9. Setter flag clarification: no Widget replacement
+
+The earlier shorthand **“rebound1” means size-propagation1 where attached
+to0x32c680/0x32c9a0**. It does not mean reconstructing/rebinding a Widget
+or replacing a ScrollButton with an ordinary Button. Exact setter
+semantics are now explicit in [Plasma §2.7.3](plasma-format-and-scene.md).
+
+For the reached **Controls thumb update0x276f40→0x32c680 at0x277027**,
+the existing thumb node's own Widget pointer is the receiver. The native
+rectangle helper first moves that same Widget with position flag0, then
+sizes it with the caller's trailing size-propagation flag1. The final byte
+does **not** also become the position call's byte. The saved Widget pointer
+is reused for both calls, with no allocation, constructor, clone or
+dynamic-class/handler replacement between them; native instructions
+0x32c680–0x32c6d1 settle the abbreviated decompile's argument ambiguity.
+
+The **Controls layout0x276cd0** positions its existing footer/arrow Widgets
+through0x32b560 with **position flag1**. That flag retains the live
+transformation's changed indication after moving; it is not the size
+setter's descendant-propagation flag. The constructor's500×600 request
+uses0x32c9a0 and therefore its flag1 has the **size** meaning.
+
+Size flag0 still updates the requested frame size and executes the
+receiver's own virtual+0x50 layout hook. Size flag1 additionally permits
+delivery of resize placement to different own Widgets reached at the
+propagation frontier. These callbacks may perform their native layouts,
+including0x276cd0 and its thumb update, but the setters do not discard
+the dynamic class, owned sequence strings or registered input callbacks.

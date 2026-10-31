@@ -444,6 +444,53 @@ of the chunk).
 
 A node without a transformation uses the identity.
 
+**Transformation changed-byte lifetime, independently verified:** this is the shared
+Keyable-base **byte+0x49 of the Transformation object**, reached through node+0x60.
+It is not Widget+0x15c and not a byte stored on the node.
+
+| Operation | Verified changed-byte result |
+|---|---|
+| Raw Transformation construction0x372bd0, through base0x368d90 | 0; base construction clears bytes+0x48/+0x49 together. The Transformation constructor fills its default live attributes and identity local/inverse matrices without a final0x3733f0 call. Attribute registration0x368fa0 does not set the byte. |
+| Transformation matrix recompute0x3733f0 | Always1 after rebuilding the local matrix and inverse, even when their values equal the previous ones. This is Transformation vtable0x47c0f0 slot+0x08. |
+| Tagged Transformation load0x385f50 | Constructs a fresh object, reads attributes, then invokes that recompute at chunk completion; it returns with changed1. |
+| Deep Transformation clone0x373310 | Creates a fresh Transformation through0x33db70→0x372bd0, copies the attribute data, then invokes the recompute; it returns with changed1, regardless of whether the source byte was0 or1. It does not copy the source object's changed byte. |
+
+A node instance sharing a Transformation continues to share that same object/byte;
+the deep-clone result above is not a new-byte rule for a shallow node instance (§2.5).
+Animation advance0x369190, when its playing attributes actually report changes,
+invokes the same recompute through slot+0x08 and thereby sets1. Its no-change path
+clears playing+0x48, **not** changed+0x49. Resetting updated-this-pass+0x4a is likewise
+distinct from clearing changed.
+
+For **set-position0x32b250**, once a coordinate difference is found it saves the exact
+old changed byte before the move, updates translation/recomputes the matrices, then:
+
+| Saved byte | Position flag0 | Nonzero position flag |
+|---|---|---|
+| 0 | Restore0 | Keep recomputed1 |
+| 1 | **Restore1** | Keep recomputed1 |
+
+Native0x32b2df saves the byte;0x32b518–0x32b528 conditionally restores that saved value.
+Flag0 is a restore, not an unconditional clear. If the requested position already
+equals the query, the setter returns without recomputation or byte replacement.
+The restore does not undo translation or either recomputed matrix.
+
+Consequently the **position subcall of rectangle0x32c680**, which passes flag0,
+also preserves an already1 byte as1. There is no second rectangle-wide save/clear:
+the subsequent size subcall/layout runs normally and any later native operation
+can change state under its own rules. This distinguishes preserving prior change
+notification from suppressing all change for a complete rectangle operation.
+
+**Notification propagation and clearing** follow§2.6.6, not a guessed matrix-cache
+policy. Within the admitted0x335920 traversal, a nonzero Transformation+0x49 marks
+the using **node+0x84** changed; changed children mark their parent node changed.
+These are upward node notifications, not recursive writes setting every descendant
+Transformation+0x49. The subsequent0x334e30 pass visits only nodes with flag0x04 clear
+and node+0x84 nonzero, clears their attached shape/Transformation/Display+0x49 and
+own Widget+0x15c, then descends. A node failing those gates is not visited/cleared by
+that pass. The clear is therefore not an unconditional per-frame reset of all
+Transformation objects; the existing update/admission and clear order is retained.
+
 #### 2.2.2 World matrix
 
 `world(node) = world(parent) · local(node)`, with the world of a parentless node equal to
@@ -796,15 +843,70 @@ are frontend-characters2.3.3.
   from the current one, convert both the requested point and the origin through the
   inverse of `Q · B · invLocal(node)` and add the difference to the live translation of the
   node's transformation, then recompute it. The node's transformation therefore carries the
-  move; the widget's own fields do not change.
+  move; the widget's own fields do not change. Its trailing byte is a **changed-flag
+  retention** choice: save the transformation's prior changed byte+0x49 before moving;
+  after translation/recomputation, flag0 restores that prior byte, while nonzero leaves
+  the recomputation's changed1. Both choices perform the same reached geometry change.
+  An exactly unchanged requested position returns without that work.
 * **Set size** (0x32c6f0, two-float form 0x32c9a0): remember the old `Ds`; set
   `fs` = inverse linear part of `Q` applied to the requested size; compute the new `Ds`;
   let the size delta be the linear part of `Q` applied to (new `Ds` − old `Ds`). If the
-  node is not flagged 0x4 and the delta is non-zero, mark the widget dirty and propagate the
-  delta through the node's descendants (0x32c560): descendants without a widget, or with
-  this widget, pass it on to their children; the first descendant widget on each branch
-  receives it through its placement routine (2.7.5) when propagation is enabled. Finally
-  the widget's resize hook runs (slot 0x50).
+  node is not flagged 0x4 and its own Widget is this receiver or null, a nonzero delta
+  marks the receiver dirty and traverses the descendants (0x32c560): descendants without
+  a Widget, or with this receiver, pass it on to their children; at a different own Widget
+  stop that branch and, **only when the trailing propagation byte is nonzero**, invoke
+  that Widget's placement virtual+0x48 with position delta0 and the size delta (2.7.5).
+  Node flag0x04 excludes a traversed subtree. If the starting root instead already has a
+  different own Widget, the same nonzero propagation byte permits direct delivery to
+  its placement virtual+0x48, including when the computed size delta is zero. Finally
+  the receiver's own resize hook runs (slot0x50) **regardless of that byte, delta or
+  root flag**, including an unchanged-size request. Flag0 still sets the receiver's
+  frame size and performs that final own hook; it is not a no-layout/no-change request.
+
+These setters operate on the **same existing Widget**. Neither trailing byte constructs,
+clones, replaces or changes its dynamic class, own-node association or registered handlers.
+The size byte controls boundary propagation; the position byte controls the transformation
+changed indication. Calling both “rebound1” obscures that difference.
+
+**Combined rectangle helper0x32c680** takes the existing Widget plus X/Y/width/height
+and a final byte. Native instructions0x32c6a0–0x32c6d1 establish two ordered calls on
+that same Widget: set position0x32b250 with **flag0**, then set size0x32c6f0 with the
+**caller's final byte**. It is not a replacement/reconstruction or bind-transfer helper.
+The scalar wrapper0x32c9a0 merely packages width/height and forwards its byte to set-size;
+0x32b560 similarly packages X/Y for set-position. No shared meaning of the two bytes
+should be inferred from their equal numeric value.
+
+**Dirty-byte identity:** resize0x32c6f0's admitted nonzero-delta dirty write
+is **one byte1 at the receiving Widget+0x15c**. Its descendant walker0x32c560
+also writes **the initiating Widget+0x15c**, not every encountered descendant's
+field, while traversing a nonzero delta through nodes without a different own
+Widget. This is exactly the same Widget field that focus-loss0x340ec0 sets
+to1 on the old focused Widget before requesting registered event19.
+It is separate from the node transformation's changed byte+0x49 discussed above.
+
+The common descendant placement routine0x32bd70 has **no direct+0x15c write**.
+Its stretch branch calls the descendant's own set-size0x32c6f0 and can thereby
+mark that receiver under the same size-delta rules; alignment moves use
+set-position and its transformation changed indication instead. Do not turn
+every descendant visit or alignment-only placement into an asserted native
+Widget dirty-byte write.
+
+The **base constructor0x328ff0 initializes Widget+0x15c to0**. The **base
+copy constructor0x329210 also initializes it to0**, even when the source
+Widget's byte is1: that dirty byte is not copied with the bind/frame/settings
+fields. These are constructor writes, not a claim that later derived
+initialization/layout leaves the byte unchanged.
+
+**Attaching a newly constructed derived Widget is a separate operation.**
+The ordinary base constructor0x328ff0, when given a nonnull node, calls
+**0x334410(node,newWidget)** after setting up the new object. If that node
+already has an own Widget, this attachment transfers the documented binding
+through0x329c70, deletes the previous wrapper through0x33e0c0 and installs
+the new own Widget through0x32d190. The root-only transfer values and limits
+remain as specified in§2.5. This constructor/attachment path is absent from
+rectangle0x32c680 and the size/position setters; their trailing byte1 does
+not request it. No change to the existing constructor-transfer contract is
+implied by the setter flag clarification.
 
 #### 2.7.4 Deformation (CPU form 0x32a310; GPU form uses the same quantities in 0x3913d0)
 
@@ -828,7 +930,9 @@ as shader constants.
 #### 2.7.5 Placement on parent resize (0x32bd70, widget class slot 0x48)
 
 Called with an offset `o` and a size delta `d` (in the parent's space). Nothing happens for
-a widget whose node has no parent. Let `pos` be the current position (2.7.2):
+a widget whose node has no parent. **The two alignment stages do not share one initial
+position snapshot.** In the following summary `pos` means the position freshly read for
+that particular stage (2.7.2):
 
 1. Horizontal alignment 1 (right) and widget flag 0x4 clear: set position
    (`pos.x + o.x + d.x`, `pos.y`). Alignment 2 (centre): set position
@@ -838,7 +942,55 @@ a widget whose node has no parent. Let `pos` be the current position (2.7.2):
 3. Stretch: if widget flag 0x4 or 0x8 is set, take the current size (linear part of `Q`
    applied to `fs`), add `d.x` when 0x4 is set and `d.y` when 0x8 is set, and set size
    (2.7.3, with propagation).
-4. Update attached scroll sliders (2.7.7) and re-clamp the scroll (0x3298b0).
+4. Update attached scroll sliders (2.7.7), first+0x168 then+0x170 when nonnull.
+   Re-clamp through0x3298b0 only if at least one of those pointers is nonnull.
+
+**Exact reads and flags, verified against native instructions:** a reached horizontal
+right/centre branch calls0x32c340 **twice**, saving Y from the first result and taking X
+from the second. Its set-position0x32b250 call, with **flag1**, completes at0x32be42.
+Only afterward does it test the vertical alignment. A reached vertical bottom/centre
+branch again calls0x32c340 **twice**, saving Y from its first result and taking X from
+its second. These vertical reads occur at0x32be66/0x32be77 or0x32be99/0x32beaa,
+and its flag1 set-position follows at0x32bed8. In particular the vertical stage's
+preserved X is read **after** the horizontal move; it is not the pre-horizontal X.
+
+All component arithmetic here is float32 SSE multiplication/addition, without FMA.
+For right alignment, add offset X to the freshly read X, then add delta X. For bottom,
+add offset Y to freshly read Y, then delta Y. For centre alignment, multiply the relevant
+delta by0.5, then add the freshly read coordinate; centre **does not add the offset**.
+Stretch mask0x04 suppresses only right alignment1, and mask0x08 only bottom alignment1.
+Neither mask suppresses centre alignment2: a centred/stretching axis can both move by
+half the delta and receive the size increase. Other alignment values cause no axis move.
+
+After both alignment stages, call **0x32c0c0 once for a fresh Q** at0x32bee4 and read
+the **raw stored frame width/height+0x90/+0x94**. This is not an effective-size query
+through0x32d1d0 and does not first promote raw size to the minimum frame size.
+The size vector's X evaluates **raw height×Q word+0x10, plus raw width×Q word+0x00**;
+Y evaluates **raw width×Q word+0x04, plus raw height×Q word+0x14**. These are byte
+offsets within the column-major float matrix. Preserve that product/add order.
+The Q/raw-size work is reached even when neither stretch bit is set; in that case
+there is no size-set call. When either bit is set, add its delta component only on
+that bit's axis, then call **0x32c6f0 once, flag1**, at0x32bf65 with both components.
+The current raw size and Q are read after the preceding position setters, not cached
+before horizontal placement. There is no general zero-delta return: a stretch bit
+still reaches set-size and its final own virtual+0x50 even for a zero delta.
+
+**Dirty fields:**0x32bd70 itself never directly writes Widget+0x15c, either on entry
+or after placement. Its flag1 position calls use the transformation changed byte+0x49;
+its stretch size call can mark Widget+0x15c under§2.7.3's effective-delta rules.
+The later slider/clamp calls retain their own behavior. Do not add a blanket Widget
+dirty write merely because this placement virtual was called.
+
+Two finite arithmetic examples, derived from this contract rather than runtime captures:
+
+* With a parent, identity query geometry, position(100,200), alignment(right,bottom),
+  no stretch/sliders, offset(3,4) and delta(20,40), horizontal requests(123,200), then
+  vertical requests **(123,244)**. Reusing the original X would incorrectly request100.
+  These alignment-only calls do not directly set Widget+0x15c.
+* With identity Q, raw frame size(10,20), minimum frame size(30,40), horizontal stretch
+  and delta(5,0), the size request is **(15,20)**, not(35,40). Minimum constraints are
+  subsequently handled by set-size; effective dimensions can remain(30,40). This does
+  not suppress the reached size setter or its own resize hook.
 
 Top-level widgets (no widget ancestor) are driven by the window: when the window size
 changes, slot 0x40 (0x32bfd0) calls the placement with `o = (0, 0)` and

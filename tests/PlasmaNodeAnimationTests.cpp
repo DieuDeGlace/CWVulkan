@@ -55,6 +55,11 @@ int plasmaNodeAnimationTests() {
     doc.nodes[1].shape = doc.nodes[1].transformation = 0;
     doc.shapes[0].properties[0].children.push_back(sequence("button:release", 3, 0));
     doc.shapes[0].properties[0].children.push_back(sequence("button:leave", 2, 0));
+    doc.shapes[0].properties[0].children.push_back(sequence("widget:disable", 3, 100));
+    doc.shapes[0].properties[0].children.push_back(sequence("widget:enable", 2, 0));
+    auto checkedChannel = attribute("SmoothMeshShape.outlineColors", glm::vec4(.3f), glm::vec4(.5f), glm::vec4(.9f));
+    checkedChannel.children.push_back(sequence("button:release:checked", 2, 0));
+    doc.shapes[0].properties.push_back(checkedChannel);
     doc.widgets.push_back({"Button", {{"Button.type", bytes(int32_t(0)), {}}}});
     doc.nodes[1].widget = 0;
     plasma::Scene scene(doc);
@@ -105,6 +110,48 @@ int plasmaNodeAnimationTests() {
     first->advanceSequences(100);
     check(near(colour(*first), .8f), "visible subtree resumes its clock");
     check(!first->playSequence("missing"), "absent sequence does not start");
+    auto *disabledButton = scene.instance(1, &scene.root());
+    disabledButton->widget->enabled = false;
+    disabledButton->initializeWidgets();
+    check(near(colour(*disabledButton), .8f) && !disabledButton->animations[0].value.active.empty(),
+          "disabled initializer seeks its owner pose without stopping");
+    disabledButton->setWidgetEnabled(false);
+    check(!disabledButton->widget->enabled && disabledButton->animations[0].value.active.empty(),
+          "explicit enabled setter stops its evaluated pose");
+    disabledButton->poseSequence("idle");
+    disabledButton->setWidgetEnabled(false);
+    check(near(colour(*disabledButton), .8f), "same-value disabled setter still evaluates the disabled pose");
+    disabledButton->widget->buttonHeld = disabledButton->widget->checked = true;
+    disabledButton->widget->dirty = true;
+    auto names = std::make_shared<plasma::ButtonNames>(plasma::defaultButtonNames());
+    (*names)[size_t(plasma::ButtonPose::Press)] = "original-current-press";
+    disabledButton->widget->buttonNames = names;
+    disabledButton->widget->buttonGroup = {first};
+    auto *buttonCopy = scene.instance(*disabledButton, &scene.root());
+    check(!buttonCopy->widget->enabled && !buttonCopy->widget->buttonHeld && !buttonCopy->widget->checked && !buttonCopy->widget->dirty,
+          "Button copy retains base enabled state but clears held/check runtime bytes");
+    check(buttonCopy->widget->buttonGroup.empty() &&
+              buttonCopy->widget->buttonSequence(plasma::ButtonPose::Press) == "original-current-press",
+          "Button copy clears borrowed group membership and retains current sequence names");
+    disabledButton->widget->buttonNames.reset();
+    check(buttonCopy->widget->buttonSequence(plasma::ButtonPose::Press) == "original-current-press",
+          "later source name replacement does not rewrite the clone's value");
+    buttonCopy->setWidgetEnabled(true);
+    check(buttonCopy->widget->enabled && near(colour(*buttonCopy), 0), "enabled setter evaluates the owner's enable pose");
+    auto *typedButton = scene.instance(1, &scene.root());
+    typedButton->widget->buttonType = 1;
+    typedButton->initializeWidgets();
+    check(near(plx::live(typedButton->shapeObject()->property("SmoothMeshShape.outlineColors"), glm::vec4(-1)).r, .5f),
+          "nonzero Button type evaluates its separate checked release channel");
+    auto plainChild = std::make_unique<plasma::SceneNode>();
+    plainChild->parent = typedButton;
+    auto *inherited = plainChild.get();
+    typedButton->children.push_back(std::move(plainChild));
+    auto *ownChild = scene.instance(1, typedButton);
+    typedButton->visible = false;
+    typedButton->initializeWidgets();
+    check(typedButton->widgetOwner == typedButton && inherited->widgetOwner == typedButton && ownChild->widgetOwner == ownChild,
+          "hidden-parent initialization caches own/inherited widget identity");
     std::printf("Plasma node animations: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

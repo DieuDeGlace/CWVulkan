@@ -153,7 +153,12 @@ individual feature documents.
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are
   implemented from the independent spec, including answer rows and identification footer points.
-  Interactive-map shoulder routing, aim integration and hardware comparisons remain. Large region
+  The shared pointer core now preserves cached coordinates, capture, independent
+  virtual/registered gates, nested release and global visitor order. Native Widget
+  ownership/enabled state, Button copy/group/press semantics and resize propagation
+  have synthetic regressions; scrollbar sizing retains its loaded dynamic class.
+  Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
+  hooks, native frame order, aim integration and hardware comparisons remain. Large region
   lists now follow the verified key-only insertion/partition/heap order, including
   signed32 distance wrapping. Tests cover the independently derived33-choice tie
   fixture, heap ties and finite-key ordering without inventing a stable tie-break.

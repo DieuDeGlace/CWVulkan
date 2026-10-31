@@ -244,6 +244,18 @@ glm::vec2 Widget::innerSize() const {
     return glm::max(frameSize + innerBindSize - bindSize, glm::max(glm::vec2(0), minimumSize + innerBindSize - bindSize));
 }
 
+const ButtonNames &defaultButtonNames() {
+    static const ButtonNames names{"button:press",         "button:release",         "button:enter",         "button:leave",
+                                   "button:press:checked", "button:release:checked", "button:enter:checked", "button:leave:checked"};
+    return names;
+}
+bool Widget::hasButtonState() const {
+    return kind == "Button" || kind == "ScrollButton" || kind == "ScrollSlider" || kind == "PopUpButton";
+}
+const std::string &Widget::buttonSequence(ButtonPose pose) const {
+    return (buttonNames ? *buttonNames : defaultButtonNames())[size_t(pose)];
+}
+
 Widget reboundWidget(const Widget &source) {
     Widget widget;
     widget.bind = source.bind;
@@ -259,6 +271,9 @@ Widget reboundWidget(const Widget &source) {
 Widget widgetOf(const plx::Object &o) {
     Widget w;
     w.kind = o.kind;
+    for (const auto &property : o.properties)
+        if (property.name == "Widget.name" || property.name == "Widget.wname")
+            w.name = property.wideText();
     w.innerBindPos = leaf(o, "Widget.innerBindPos", w.innerBindPos);
     w.innerBindSize = leaf(o, "Widget.innerBindSize", w.innerBindSize);
     w.bindPos = leaf(o, "Widget.bindPos", w.bindPos);
@@ -403,6 +418,12 @@ SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
     n->visible = from.visible, n->clips = from.clips, n->fill = from.fill, n->displayFlags = from.displayFlags;
     n->blurRadius = from.blurRadius;
     n->widget = from.widget;
+    if (n->widget)
+        n->widget->dirty = false;
+    if (n->widget && n->widget->hasButtonState()) {
+        n->widget->buttonHeld = n->widget->checked = false;
+        n->widget->buttonGroup.clear();
+    }
     n->text = from.text, n->textColor = from.textColor;
     n->onDraw = from.onDraw;
     n->animatedShape = from.animatedShape;
@@ -609,7 +630,7 @@ void Scene::moveTo(SceneNode &n, glm::vec2 position) {
 
 // Set size (spec 2.7.3): the frame size, and the change of the inner rectangle handed on to the
 // widgets below.
-void Scene::resizeTo(SceneNode &n, glm::vec2 size) {
+void Scene::resizeTo(SceneNode &n, glm::vec2 size, bool propagate) {
     if (!n.widget)
         return;
     Widget &w = *n.widget;
@@ -621,44 +642,51 @@ void Scene::resizeTo(SceneNode &n, glm::vec2 size) {
     const glm::vec2 delta = toView * (w.innerSize() - before);
     if (!disabled(n) && delta != glm::vec2(0)) {
         w.dirty = true;
-        propagateResize(n, glm::vec2(0), delta);
+        propagateResize(n, glm::vec2(0), delta, propagate);
     }
     if (onResized)
         onResized(n);
 }
 
 // Hands a size change down to the first widget on each branch below a node.
-void Scene::propagateResize(SceneNode &node, glm::vec2 offset, glm::vec2 delta) {
-    for (auto &c : node.children) {
-        if (c->widget)
-            place(*c, offset, delta);
-        else
-            propagateResize(*c, offset, delta);
+void Scene::propagateResize(SceneNode &node, glm::vec2 offset, glm::vec2 delta, bool propagate) {
+    if (disabled(node))
+        return;
+    for (auto &child : node.children) {
+        if (disabled(*child))
+            continue;
+        if (child->widget) {
+            if (propagate)
+                placeWidget(*child, offset, delta);
+        } else {
+            propagateResize(*child, offset, delta, propagate);
+        }
     }
 }
 
 // Placement on the parent's resize (spec 2.7.5).
-void Scene::place(SceneNode &n, glm::vec2 offset, glm::vec2 delta) {
+void Scene::placeWidget(SceneNode &n, glm::vec2 offset, glm::vec2 delta) {
     if (!n.parent || !n.widget)
         return;
-    const Widget w = *n.widget;
+    const Widget &widget = *n.widget;
     glm::vec2 at = viewPosition(n);
-    if (w.horizontalAlignment == ALIGN_RIGHT && !(w.flags & WIDGET_STRETCH_X))
+    if (widget.horizontalAlignment == ALIGN_RIGHT && !(widget.flags & WIDGET_STRETCH_X))
         moveTo(n, glm::vec2(at.x + offset.x + delta.x, at.y));
-    else if (w.horizontalAlignment == ALIGN_CENTER)
+    else if (widget.horizontalAlignment == ALIGN_CENTER)
         moveTo(n, glm::vec2(at.x + 0.5f * delta.x, at.y));
-    // spec: open question - the spec writes the vertical move with the position read before the
-    // horizontal one, which would undo it; the position is read again here.
+    // Native vertical placement queries the position after the horizontal setter completes.
     at = viewPosition(n);
-    if (w.verticalAlignment == ALIGN_BOTTOM && !(w.flags & WIDGET_STRETCH_Y))
+    if (widget.verticalAlignment == ALIGN_BOTTOM && !(widget.flags & WIDGET_STRETCH_Y))
         moveTo(n, glm::vec2(at.x, at.y + offset.y + delta.y));
-    else if (w.verticalAlignment == ALIGN_MIDDLE)
+    else if (widget.verticalAlignment == ALIGN_MIDDLE)
         moveTo(n, glm::vec2(at.x, at.y + 0.5f * delta.y));
-    if (w.flags & (WIDGET_STRETCH_X | WIDGET_STRETCH_Y)) {
-        glm::vec2 size = linear(placementMatrix(n), w.frameSize);
-        if (w.flags & WIDGET_STRETCH_X)
+    const glm::mat4 q = placementMatrix(n);
+    const glm::vec2 raw = widget.frameSize; // Raw frame after both moves, not minimum-constrained dimensions.
+    glm::vec2 size{raw.y * q[1][0] + raw.x * q[0][0], raw.x * q[0][1] + raw.y * q[1][1]};
+    if (widget.flags & (WIDGET_STRETCH_X | WIDGET_STRETCH_Y)) {
+        if (widget.flags & WIDGET_STRETCH_X)
             size.x += delta.x;
-        if (w.flags & WIDGET_STRETCH_Y)
+        if (widget.flags & WIDGET_STRETCH_Y)
             size.y += delta.y;
         resizeTo(n, size);
     }

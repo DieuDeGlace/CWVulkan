@@ -175,21 +175,83 @@ void SceneNode::poseSequence(const std::string &name) {
     setSequenceTime(sequenceDuration(name));
     stopSequences();
 }
+void SceneNode::rebuildButtonGroup() {
+    if (!widget || !widget->hasButtonState())
+        return;
+    widget->buttonGroup.clear();
+    auto ancestor = [](SceneNode *node) {
+        for (; node && !node->widget; node = node->parent) {
+        }
+        return node;
+    };
+    auto *container = ancestor(parent);
+    const bool extraLevel = (flags & 0x10) != 0;
+    if (extraLevel && container)
+        container = ancestor(container->parent);
+    if (!container)
+        return;
+    auto frontier = [](auto &&self, SceneNode &node, const auto &accept) -> void {
+        if (node.flags & plx::NODE_DISABLED)
+            return;
+        for (auto &child : node.children) {
+            if (child->flags & plx::NODE_DISABLED)
+                continue;
+            if (child->widget)
+                accept(*child);
+            else
+                self(self, *child, accept);
+        }
+    };
+    auto append = [&](SceneNode &member) {
+        if (&member != this && member.widget && member.widget->hasButtonState() && member.widget->buttonType == 2)
+            widget->buttonGroup.push_back(&member);
+    };
+    frontier(frontier, *container, [&](SceneNode &candidate) {
+        if (extraLevel)
+            frontier(frontier, candidate, append);
+        append(candidate);
+    });
+}
+
+void SceneNode::setWidgetEnabled(bool enabled) {
+    if (!widget)
+        return;
+    widget->enabled = enabled;
+    poseSequence(enabled ? "widget:enable" : "widget:disable");
+}
+
 void SceneNode::initializeWidgets() {
     if (flags & plx::NODE_DISABLED)
         return;
     if (widget) {
         widget->minimumSize = widget->bindSize - widget->innerBindSize;
-        // File-loaded ordinary Buttons start enabled/unchecked. Preserve their own
-        // release/idle channels; visibility assignments do not repeat initialization.
-        if (widget->kind == "Button" && widget->buttonType == 0) {
-            poseSequence("button:release");
-            poseSequence("button:release");
-            poseSequence("button:leave");
+        if (!widget->enabled) {
+            // The base initializer seeks the disabled pose but does not stop it.
+            playSequence("widget:disable");
+            setSequenceTime(sequenceDuration("widget:disable"));
+        }
+        if (widget->kind == "Button") {
+            rebuildButtonGroup();
+            if (widget->enabled) {
+                if (widget->buttonType != 0) {
+                    poseSequence(widget->buttonSequence(ButtonPose::PressChecked));
+                    poseSequence(widget->buttonSequence(ButtonPose::ReleaseChecked));
+                } else {
+                    poseSequence(widget->buttonSequence(ButtonPose::Release));
+                }
+                poseSequence(widget->buttonSequence(ButtonPose::Release));
+                poseSequence(widget->buttonSequence(ButtonPose::Leave));
+                if (widget->checked) {
+                    poseSequence(widget->buttonSequence(ButtonPose::Press));
+                    poseSequence(widget->buttonSequence(ButtonPose::ReleaseChecked));
+                    poseSequence(widget->buttonSequence(ButtonPose::LeaveChecked));
+                }
+            }
         }
         if (!widget->caption.empty())
             setText("caption", widget->caption);
     }
+    widgetOwner = widget ? this : parent ? parent->widgetOwner : nullptr;
     for (auto &child : children)
         child->initializeWidgets();
 }

@@ -120,6 +120,8 @@ int raceKeyTests();        // tests/RaceKeyTests.cpp
 int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
 int plasmaNodeAnimationTests();
+int plasmaInputTests();
+int plasmaLayoutTests();
 int itemSelectorTests();
 int guiItemTests();
 int voxelEditTests();
@@ -9129,6 +9131,10 @@ int main(int argc, char **argv) {
         return guiRenderTests();
     if (argc == 2 && std::string(argv[1]) == "nodeanimation")
         return plasmaNodeAnimationTests();
+    if (argc == 2 && std::string(argv[1]) == "guiinput")
+        return plasmaInputTests();
+    if (argc == 2 && std::string(argv[1]) == "guilayout")
+        return plasmaLayoutTests();
     if (argc == 2 && std::string(argv[1]) == "itemselector")
         return itemSelectorTests();
     if (argc == 2 && std::string(argv[1]) == "hairstyle")
@@ -10450,6 +10456,8 @@ int main(int argc, char **argv) {
     failures += panelScrollTests();
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
+    failures += plasmaInputTests();
+    failures += plasmaLayoutTests();
     failures += itemSelectorTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += windContinueTests();   // tests/WindContinueTests.cpp

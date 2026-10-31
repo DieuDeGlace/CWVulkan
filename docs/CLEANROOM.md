@@ -72,6 +72,15 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Shared GUI routing follows `steam-gui-pointer-capture-routing.md`: cached and
+  previous pointers, held bits, capture-or-root selection, independent virtual/
+  registered gates, focus/auxiliary bookkeeping, nested release moves and ordered
+  global visitors. Synthetic traces cover owner changes and reentrant movement.
+  Widget initialization/copy, dirty-byte identity, Button groups and owned sequence
+  starts follow the independently traced scene lifecycle. Layout preserves Widget
+  identity and resize-flag propagation, with separate own hooks and disabled-subtree
+  admission. The dispatcher is a tested core; full live binding, other dynamic-class
+  hooks and native frame/capture comparisons remain integration work.
 - Map history, fixed map controls and region borders follow
   `steam-map-region-history.md` and `steam-map-border-and-information-hud.md`.
   Personal ordered history and borrowed-entry lifetime are separate from discovery

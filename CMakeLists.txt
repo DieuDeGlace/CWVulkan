@@ -197,6 +197,7 @@ add_library(engine STATIC
     src/PlasmaText.cpp
     src/GameNames.cpp
     src/PlasmaScene.cpp
+    src/PlasmaInput.cpp
     src/PlasmaNodeAnimation.cpp
     src/ItemSelector.cpp
     src/HudPanels.cpp
@@ -363,6 +364,8 @@ target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
+target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp)
+target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

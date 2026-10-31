@@ -430,7 +430,7 @@ class Hud {
         std::optional<bool> buttonHover;
         int animationStepMs = 0;
         bool initializeHidden = false;
-        bool replaceWidget = false; // custom widget keeps the copied artwork's current binding
+        bool replaceWidget = false; // explicit custom-widget construction; never a native resize/rectangle flag
     };
     using Screen = std::vector<ScreenItem>;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,

@@ -1503,7 +1503,6 @@ void Session::controlsItems(Hud::Screen &out) {
     if (controlsThumb) {
         const auto &thumb = *controlsThumb;
         out.push_back(widget("scrollbutton", at + glm::vec2(thumb.x, thumb.y), {thumb.width, thumb.height}));
-        out.back().replaceWidget = true;
     }
     const float valueX = (CONTROLS_SIZE.x - 250) * 0.5f + 240;
     const int rows = ControlsScreen::visibleRows();
@@ -1608,7 +1607,6 @@ void Session::friendsItems(Hud::Screen &out) {
     if (friendsThumb) {
         const auto &thumb = *friendsThumb;
         out.push_back(widget("scrollbutton", at + glm::vec2(thumb.x, thumb.y), {thumb.width, thumb.height}));
-        out.back().replaceWidget = true;
     }
     out.push_back(text("Friends", at + glm::vec2(FRIENDS_SIZE.x * 0.5f, FRIENDS_TITLE_Y), 15, 3, WHITE, ALIGN_CENTRE));
     if (friendRows.empty() && s.friends)

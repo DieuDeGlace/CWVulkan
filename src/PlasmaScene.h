@@ -10,6 +10,7 @@
 // move, resize, colour and hide every instance on its own (the game gives instances their own
 // objects when it does that).
 #include "Plx.h"
+#include <array>
 #include "PlasmaShape.h"
 
 #include <glm/glm.hpp>
@@ -103,22 +104,35 @@ bool sampleSequence(const plx::Chunk &attribute, const std::string &name, float 
 enum : int { ALIGN_LEFT = 0, ALIGN_RIGHT = 1, ALIGN_CENTER = 2, ALIGN_TOP = 0, ALIGN_BOTTOM = 1, ALIGN_MIDDLE = 2 };
 // Widget.flags (spec 2.7.6).
 enum : int {
-    WIDGET_STRETCH_X = 0x4,   // stretches with its parent horizontally (and is not right-aligned)
-    WIDGET_STRETCH_Y = 0x8,   // stretches with its parent vertically (and is not bottom-aligned)
+    WIDGET_STRETCH_X = 0x4, // stretches with its parent horizontally (and is not right-aligned)
+    WIDGET_STRETCH_Y = 0x8, // stretches with its parent vertically (and is not bottom-aligned)
     WIDGET_OWN_SURFACE = 0x40,
     WIDGET_WHOLE_HIT = 0x100,
     WIDGET_DRAW_FIRST = 0x200
 };
 
+struct SceneNode;
+enum class ButtonPose { Press, Release, Enter, Leave, PressChecked, ReleaseChecked, EnterChecked, LeaveChecked };
+using ButtonNames = std::array<std::string, 8>;
+const ButtonNames &defaultButtonNames();
+
 struct Widget {
-    std::string kind; // "Widget", "Button", ...
+    std::string kind;  // "Widget", "Button", ...
+    std::wstring name; // Widget.name/wname, distinct from the node/display name
     glm::vec2 innerBindPos{0}, innerBindSize{1}, bindPos{0}, bindSize{1}, framePos{0}, frameSize{1};
-    glm::vec2 minimumSize{0}; // bindSize - innerBindSize once the widget is set up
+    glm::vec2 minimumSize{0};          // bindSize - innerBindSize once the widget is set up
     glm::mat4 bind{1}, inverseBind{1}; // node space to widget space and back
     int horizontalAlignment = ALIGN_LEFT, verticalAlignment = ALIGN_TOP, flags = 0;
     int buttonType = 0, direction = 0;
     std::wstring caption;
     bool dirty = false;
+    bool enabled = true;
+    bool buttonHeld = false, checked = false;       // fresh Button copies clear these runtime bytes
+    int32_t buttonDelay = 0, buttonInterval = 0;    // written on press; no inferred repeat consumer
+    std::vector<SceneNode *> buttonGroup;           // borrowed initialization frontier, not a per-press search
+    std::shared_ptr<const ButtonNames> buttonNames; // null uses constructor defaults; immutable values can be shared by copies
+    bool hasButtonState() const;
+    const std::string &buttonSequence(ButtonPose) const;
 
     // The frame's size as drawn: never below the design size around the inner rectangle.
     glm::vec2 effectiveSize() const;
@@ -156,6 +170,7 @@ struct SceneNode {
     std::optional<std::wstring> text;
     std::optional<glm::vec4> textColor;
     SceneNode *parent = nullptr;
+    SceneNode *widgetOwner = nullptr;                 // assigned by initialization; distinct from the nearest widget ancestor
     std::vector<std::unique_ptr<SceneNode>> children; // drawn in order, later ones on top
     // Drawn after the node's shape (a widget's own drawing).
     std::function<void(SceneNode &)> onDraw;
@@ -171,6 +186,8 @@ struct SceneNode {
     void stopSequences();
     void poseSequence(const std::string &); // play, seek to the subtree duration, stop
     void initializeWidgets();
+    void rebuildButtonGroup();
+    void setWidgetEnabled(bool enabled); // native enabled setter, including repeated-value pose updates
 
     // The first node of a name, this node first and then each child's subtree in order.
     SceneNode *find(const std::string &n);
@@ -235,7 +252,9 @@ class Scene {
     glm::vec2 viewPosition(const SceneNode &n) const;      // the frame's top left in its parent widget's
     glm::vec2 viewSize(const SceneNode &n) const;          // the frame's size there
     void moveTo(SceneNode &n, glm::vec2 position);         // sets viewPosition (moving the node)
-    void resizeTo(SceneNode &n, glm::vec2 size);           // sets viewSize (and places child widgets)
+    void resizeTo(SceneNode &n, glm::vec2 size, bool propagate = true);
+    void placeWidget(SceneNode &n, glm::vec2 offset,
+                     glm::vec2 delta); // native parent/window placement hook // sets viewSize (and places child widgets)
     // Called after a widget's size changes, by node.
     std::function<void(SceneNode &)> onResized;
 
@@ -261,8 +280,7 @@ class Scene {
     mutable std::map<std::pair<const plx::Document *, int>, ShapeDrawing> drawings;
     const ShapeDrawing *drawing(const SceneNode &n) const;
     glm::mat4 frameToScreen(const SceneNode &n) const;
-    void propagateResize(SceneNode &node, glm::vec2 offset, glm::vec2 delta);
-    void place(SceneNode &n, glm::vec2 offset, glm::vec2 delta);
+    void propagateResize(SceneNode &node, glm::vec2 offset, glm::vec2 delta, bool propagate);
 };
 
 } // namespace plasma
