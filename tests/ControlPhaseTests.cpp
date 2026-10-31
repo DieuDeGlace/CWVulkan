@@ -354,6 +354,9 @@ int controlPhaseTests() {
         uint16_t after;
         std::memcpy(&after, local + 0x128, sizeof after);
         check(!(after & 0x10), "zero-time host tick runs the global World clear rather than skipping every stage");
+        size_t registered = 0;
+        creatures.forEachWorldCreature([&](const uint8_t *) { ++registered; });
+        check(registered == 1, "resident collection does not create actors for an unloaded terrain world");
     }
     { // Host interpolation receives the full batch interval once, not each physics slice.
         SpawnedCreatures creatures;

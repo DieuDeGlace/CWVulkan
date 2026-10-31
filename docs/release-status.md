@@ -10,6 +10,18 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Authoritative resident creation, visited daily refresh and admission now require
+  that terrain zone to be loaded. The collector no longer creates creatures for an
+  absent terrain world or refreshes retained resident metadata through an unloaded
+  zone. This uses the existing independent remaining-runtime-gaps §6.1 contract;
+  complete zone visit ordering, RNG producers and prelude integration remain open.
+  The unload/reload respawn fixture explicitly loads terrain and retains its single
+  comparison zone as a separate view while the host's resident zone unloads. Its
+  respawn assertions remain intact. All five targets build; full CPU/owner-data
+  checks have only the two known modded generator-reference assertions.
+  A no-save movement/combat run exits0 with the fixture save unchanged. The blue
+  scene and missing owner hair model remain unaccepted; this is not visual parity.
+
 - Host batches now consume an admitted zero-time residual and run both drawn-state
   passes once with the full capped interval, followed by zone output collection.
   AI collection uses retained World registration order instead of placing the local

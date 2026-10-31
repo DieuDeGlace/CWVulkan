@@ -133,6 +133,13 @@ void generatedEnemy() {
     SpawnedCreatures host;
     host.setEnemyRespawn({Mode::Timed, 300});
     const glm::vec3 home = blocks.home();
+    // Native resident scanning only visits loaded terrain. Preload this fixture's
+    // neighborhood explicitly instead of relying on spawning through absent zones.
+    for (int dx = -4; dx <= 4; ++dx)
+        for (int dy = -4; dy <= 4; ++dy) {
+            float height;
+            blocks.surface(home.x + dx * 64, home.y + dy * 64, height);
+        }
     host.update(blocks, home);
     int64_t id = 0;
     host.forEach([&](const uint8_t *record) {
@@ -151,6 +158,13 @@ void generatedEnemy() {
     CHECK_RESPAWN(id != 0);
     if (!id)
         return;
+    // Keep the comparison terrain available, like a separate client view, while
+    // moving the host far away to test its own resident-zone unload and reload.
+    int64_t targetPosition[2];
+    std::memcpy(targetPosition, host.record(id) + worldgen::creature::POSITION, sizeof targetPosition);
+    const std::pair<int, int> targetZone{(int)std::floor(double(targetPosition[0]) / 65536 / 64),
+                                         (int)std::floor(double(targetPosition[1]) / 65536 / 64)};
+    blocks.keepAround(nullptr, {targetZone}, 0);
     host.takeDeaths(blocks);
     setHealth(host.record(id), 0);
     CHECK_RESPAWN(!host.takeDeaths(blocks).empty());

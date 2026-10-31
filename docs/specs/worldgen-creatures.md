@@ -609,7 +609,9 @@ mean.
 
 Unless world+0x358 is set: for every player (a creature of hostility 0), every zone whose
 cell lies within ±256 blocks (0x1000000 dots, zones = floor(blocks / 64)) of the player is
-listed once. For each listed zone, in list order:
+listed once. The set is ordered by unsigned Zone-pointer value; process it in
+that order, not coordinate or first-insertion order. Exact collection, admission,
+and random-stream details are in [steam-authoritative-residents.md](steam-authoritative-residents.md).
 
 1. Run the daily refresh (zone file §4).
 2. For each spawn point in id order: skip if a creature with its id lives (world+0x450) or its
@@ -621,7 +623,8 @@ listed once. For each listed zone, in list order:
      that zone); the sum must be ≥ the field.
    * **cells** (+0x928): each listed cell's zone must … (generation never fills it; see open
      questions).
-   * **requiredStage** (+0x948) ≠ 0: some living creature of class 0xa1 (an arena master) must
+   * **requiredStage** (+0x948) ≠ 0: some registered creature of class 0xa1 (an arena master),
+     without an HP test, must
      have stage byte (+0x19c) equal to it.
    * **prerequisites** (+0x938): every id must be in the dead set.
 3. The creature (0x15f8 bytes, 0x4ce80 with the id; its defaults in §7.3) takes from the spawn point: home
@@ -634,15 +637,19 @@ listed once. For each listed zone, in list order:
    (+0xbd0); pick (+0xbe8); second abilities (+0xbf0); owner (+0x1a0) = +0x40; home place
    (+0x1b0, +0x1b4) = +0x8f8, +0x8fc; region (+0x150) = regionAt of its position; +0x180 =
    0x5fac0(creature); mode (+0x68) = +0x8bc; group (+0xc08) = +0x910.
-4. Mode 0x8a: z += (rand % 50 + 80) blocks (the world thread's rand, not reproducible).
+4. Mode 0x8a: raw z += (rand % 50 + 80) blocks, using the executing thread's persistent
+   CRT stream after any daily refresh draws; home z is retained. This pass does not seed
+   or restore the stream. Incoming state is required for exact reproduction (resident
+   supplement §5).
 5. If appearance flag 0x4000000 is set: when the creature's region is one where a player has
    lifted the demon portal (player +0x128 bit 0x800 marks that player's region), the flag is
    cleared; otherwise hostility = 1, the size (+0x84, +0x88, +0x8c) × 1.1, and flag 0x8000 is
    cleared.
 6. Add the creature.
 
-(Player bit 0x8000 likewise frees the petrified, flag 0x400000, in that player's region; that
-is a world-update rule outside this part.)
+(Player bit 0x8000 likewise frees the petrified, flag 0x400000, in that player's region;
+this is the final World-list pass inside 0x2e17d0, including new residents, without an HP
+test. See the resident supplement §6.)
 
 ### 7.2 Arena stages (in 0x2e3510)
 

@@ -1635,6 +1635,10 @@ spawn pass), **0x31c540** (zone refresh), **0x2d2eb0** (live reset), and **0x2c3
 
 ### 6.1 Refresh is visited by the authoritative near-player spawn pass
 
+The precise kind-zero collection, unsigned Zone-pointer processing order,
+nonnull-live/dead admission, and resident CRT-state contract are now in
+[steam-authoritative-residents.md](steam-authoritative-residents.md).
+
 During an authoritative world step, **0x2e17d0** builds a set of already loaded zones
 around every creature whose hostility byte +0x60 is **0** (players). For each player,
 the zone-coordinate bounds cover player X/Y minus/plus **256 blocks**, inclusive,

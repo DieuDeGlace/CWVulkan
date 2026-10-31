@@ -192,7 +192,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     for (const auto &[cx, cy] : centres)
         for (int zx = cx - NEAR_ZONES; zx <= cx + NEAR_ZONES; zx++)
             for (int zy = cy - NEAR_ZONES; zy <= cy + NEAR_ZONES; zy++) {
-                if (zones.count({zx, zy}))
+                if (zones.count({zx, zy}) || !ew.gameZoneLoaded(zx, zy))
                     continue;
                 zones[{zx, zy}];
                 const std::shared_ptr<const worldgen::ZoneContents> zone = zoneResidents[{zx, zy}] = worldgen::zone(zx, zy);
@@ -212,7 +212,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     // residents are scanned. Refreshing alone does not remove live shoppers.
     // See remaining-runtime-gaps.md §6; a midnight reset is a separate operation.
     for (auto &[key, zone] : zoneResidents)
-        if (near(key.first, key.second, NEAR_ZONES) && zone->spawns.day != dayCount) {
+        if (near(key.first, key.second, NEAR_ZONES) && ew.gameZoneLoaded(key.first, key.second) && zone->spawns.day != dayCount) {
             auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
             worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
             zone = refreshed;
@@ -249,6 +249,8 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     const worldgen::ResidentWorld resident = residentWorld(at);
     const auto maxHealth = [](const uint8_t *record) { return nativerules::maxHealth(record); };
     for (auto &[key, zone] : zoneResidents) {
+        if (!near(key.first, key.second, NEAR_ZONES) || !ew.gameZoneLoaded(key.first, key.second))
+            continue;
         auto &list = zones[key];
         auto rand = [&, &worldRand = zoneRand.at(key)] { return (int)(worldRand() & 0x7fff); };
         for (const auto &[id, sp] : zone->spawns.points) {
