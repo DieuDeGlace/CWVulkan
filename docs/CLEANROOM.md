@@ -72,6 +72,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Resident collection/admission and final flag reconciliation use the independent
+  authoritative-residents contract. Typed collections preserve membership and region
+  snapshots while resolving current positions across engine storage moves. Resident
+  field widths and coordinate conversions follow the same contract and shared numeric
+  rules. Asset-free checks plus owner-data duplicate/respawn fixtures exercise these
+  bounded consumers; RNG lifetime and complete zone/prelude behavior remain open.
+
 - Host/reset scheduling follows the independent daily-reset supplement and the AI
   contract's World-order scans. Actor views are rebuilt after deletion before effects;
   retained players, live zones and outgoing events keep their specified lifetimes.

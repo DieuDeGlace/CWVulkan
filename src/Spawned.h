@@ -35,6 +35,10 @@
 
 class World;
 
+namespace residentpass {
+class Collection;
+}
+
 class SpawnedCreatures {
   public:
     // Reads the game's model list (id -> sprite, size). False without it.
@@ -561,10 +565,10 @@ class SpawnedCreatures {
     // creatures take cell spots from (0x31c0e0), and what its chests hold (zone+0x450).
     std::map<std::pair<int, int>, worldgen::SpotMap> zoneSpots;
     std::map<std::pair<int, int>, std::map<int, std::array<uint8_t, worldgen::creature::ITEM_SIZE>>> zoneChests;
-    worldgen::ResidentWorld residentWorld(const std::vector<worldgen::ResidentWorld::Player> &players) const; // what the resident pass asks (0x2e17d0)
-    void arenaStage(worldgen::CreatureRecord &master); // 0x2e3510's arena master
-    std::set<int64_t> seenAlive;     // creatures seen alive (only their deaths are reported)
-    std::set<int64_t> toBurst;       // ... and whose body has yet to burst
+    worldgen::ResidentWorld residentWorld(const residentpass::Collection &participants) const; // what the resident pass asks (0x2e17d0)
+    void arenaStage(worldgen::CreatureRecord &master);                                         // 0x2e3510's arena master
+    std::set<int64_t> seenAlive; // creatures seen alive (only their deaths are reported)
+    std::set<int64_t> toBurst;   // ... and whose body has yet to burst
     std::vector<Part> bursts;
     int64_t nextMade = 1ll << 62; // ids of the creatures made in play, apart from the spawn points' (0x119530)
     std::vector<Dropped> drops;

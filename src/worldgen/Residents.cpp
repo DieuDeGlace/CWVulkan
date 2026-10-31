@@ -5,9 +5,11 @@
 #include "worldgen/Gear.h"
 #include "worldgen/Looks.h"
 #include "worldgen/StructureTables.h"
+#include "GameMath.h"
 
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <cstring>
 #include <map>
 
@@ -28,11 +30,11 @@ constexpr uint8_t SPIDER_DROPS = 0x8a; // the mode of a spider that drops from a
 
 // 0xf3e20: within 256 blocks of the player on each axis and in all.
 bool withinReach(const SpawnPoint &p, const ResidentWorld::Player &q) {
-    const int64_t dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z;
-    if (std::llabs(dx) > REACH || std::llabs(dy) > REACH)
+    const int64_t dx = gamemath::subtractFixed(p.x, q.x), dy = gamemath::subtractFixed(p.y, q.y), dz = gamemath::subtractFixed(p.z, q.z);
+    const double fx = double(dx) * (1.0 / 65536.0), fy = double(dy) * (1.0 / 65536.0), fz = double(dz) * (1.0 / 65536.0);
+    if (std::abs(fx) > 256.0 || std::abs(fy) > 256.0)
         return false;
-    const double fx = (double)dx * (1.0 / 65536.0), fy = (double)dy * (1.0 / 65536.0), fz = (double)dz * (1.0 / 65536.0);
-    return fx * fx + fy * fy + fz * fz <= 256.0 * 256.0;
+    return (fy * fy + fx * fx) + fz * fz <= 256.0 * 256.0;
 }
 
 } // namespace
@@ -69,8 +71,10 @@ CreatureRecord newCreature(int64_t id) {
 std::vector<Int2> residentZones(const std::vector<ResidentWorld::Player> &players) {
     std::vector<Int2> out;
     for (const auto &q : players) {
-        const int32_t x0 = (int32_t)((q.x - REACH) >> 22), x1 = (int32_t)((q.x + REACH) >> 22); // 64 blocks of dots
-        const int32_t y0 = (int32_t)((q.y - REACH) >> 22), y1 = (int32_t)((q.y + REACH) >> 22);
+        const int32_t x0 = floorDivBy(gamemath::floorFixedBlock(gamemath::subtractFixed(q.x, REACH)), 64);
+        const int32_t x1 = floorDivBy(gamemath::floorFixedBlock(gamemath::addFixed(q.x, REACH)), 64);
+        const int32_t y0 = floorDivBy(gamemath::floorFixedBlock(gamemath::subtractFixed(q.y, REACH)), 64);
+        const int32_t y1 = floorDivBy(gamemath::floorFixedBlock(gamemath::addFixed(q.y, REACH)), 64);
         for (int32_t x = x0; x <= x1; x++)
             for (int32_t y = y0; y <= y1; y++)
                 if (std::find(out.begin(), out.end(), Int2{x, y}) == out.end())
@@ -82,7 +86,10 @@ std::vector<Int2> residentZones(const std::vector<ResidentWorld::Player> &player
 bool residentReady(const SpawnPoint &p, int32_t zx, int32_t zy, const ResidentWorld &world) {
     if ((world.alive && world.alive(p.id)) || (world.dead && world.dead(p.id)))
         return false;
-    if (std::none_of(world.players.begin(), world.players.end(), [&](const auto &q) { return withinReach(p, q); }))
+    const bool near = world.nearPlayer
+                          ? world.nearPlayer(p.x, p.y, p.z)
+                          : std::any_of(world.players.begin(), world.players.end(), [&](const auto &q) { return withinReach(p, q); });
+    if (!near)
         return false;
     if (p.requiredDefeated != 0) {
         int64_t sum = 0;
@@ -121,6 +128,10 @@ void wearGear(uint8_t *record, const Gear &gear) {
     put(record, ABILITY_PICK, gear.abilityPick);
 }
 
+Int2 residentRegion(const SpawnPoint &p) {
+    return regionAt(blocksTowardZero(p.x), blocksTowardZero(p.y));
+}
+
 MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, const std::function<float(const uint8_t *record)> &maxHealth) {
     using namespace creature;
     MadeCreature made{newCreature(p.id), {p.gear.inventory, p.gear.abilities, p.gear.abilities2, p.group}};
@@ -131,14 +142,14 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
         put(record, at + 8, p.y);
         put(record, at + 16, p.z);
     }
-    put(record, HOME_CELL, floorDiv(blocksOf(p.x), 4)); // (16-block cells)
-    put(record, HOME_CELL + 4, floorDiv(blocksOf(p.y), 4));
+    put(record, HOME_CELL, floorDivBy(gamemath::floorFixedBlock(p.x), 16));
+    put(record, HOME_CELL + 4, floorDivBy(gamemath::floorFixedBlock(p.y), 16));
     put(record, YAW, p.yaw);
     record[HOSTILITY] = (uint8_t)p.hostility;
     put(record, RACE, p.race);
     record[PEOPLE] = (uint8_t)p.people;
     put(record, TAG, p.tag);
-    put(record, STYLE, (uint64_t)p.style);
+    put(record, STYLE, uint64_t(uint32_t(p.style)));
     put(record, LEVEL, p.level);
     wearGear(record, p.gear);
     record[STAGE] = p.stage;
@@ -153,7 +164,7 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
     put(record, OWNER, p.owner);
     put(record, HOME_PLACE, p.home.x);
     put(record, HOME_PLACE + 4, p.home.y);
-    const Int2 region = regionAt(blocksOf(p.x), blocksOf(p.y));
+    const Int2 region = residentRegion(p);
     put(record, REGION, region.x);
     put(record, REGION + 4, region.y);
     if (maxHealth)
@@ -163,7 +174,7 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
     if (p.mode == SPIDER_DROPS) {
         int64_t z;
         std::memcpy(&z, record + POSITION + 16, 8);
-        put(record, POSITION + 16, z + dotsOf(worldRand() % 50 + 80));
+        put(record, POSITION + 16, gamemath::addFixed(z, dotsOf(worldRand() % 50 + 80)));
     }
     // 5. The demon portal's mark.
     uint32_t flags;

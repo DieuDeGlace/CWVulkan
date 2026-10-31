@@ -140,6 +140,22 @@ void generatedEnemy() {
             float height;
             blocks.surface(home.x + dx * 64, home.y + dy * 64, height);
         }
+    auto placePlayer = [&](SpawnedCreatures &world, glm::vec3 local) {
+        bool made;
+        uint8_t *record = world.networkCreature(1, made);
+        record[worldgen::creature::HOSTILITY] = 0;
+        setHealth(record, 0); // Registered dead players still admit native residents.
+        const int64_t position[3]{int64_t(std::llround(double(local.x) * 65536)) + blocks.originDotsX(),
+                                  int64_t(std::llround(double(local.y) * 65536)) + blocks.originDotsY(),
+                                  int64_t(std::llround((double(local.z) - ExtractedWorld::Z_OFFSET) * 65536))};
+        std::memcpy(record + worldgen::creature::POSITION, position, sizeof position);
+    };
+    SpawnedCreatures empty;
+    empty.update(blocks, home);
+    size_t withoutPlayers = 0;
+    empty.forEachWorldCreature([&](const uint8_t *) { ++withoutPlayers; });
+    CHECK_RESPAWN(withoutPlayers == 0); // Loaded terrain and a streaming stand-in do not supply a player.
+    placePlayer(host, home);
     host.update(blocks, home);
     int64_t id = 0;
     host.forEach([&](const uint8_t *record) {
@@ -203,8 +219,10 @@ void generatedEnemy() {
     host.worldReset();
     host.update(blocks, home);
     CHECK_RESPAWN(host.isWorldDead(id) && !host.record(id));
+    placePlayer(host, home + glm::vec3(64 * 20, 0, 0));
     host.update(blocks, home + glm::vec3(64 * 20, 0, 0));
     CHECK_RESPAWN(!host.isWorldDead(id));
+    placePlayer(host, home);
     host.update(blocks, home);
     CHECK_RESPAWN(host.record(id) && health(host.record(id)) > 0);
     // A permanent old death is respected in native mode, recovered in respawn
@@ -212,14 +230,32 @@ void generatedEnemy() {
     SpawnedCreatures permanentSave;
     permanentSave.setEnemyRespawn({Mode::Permanent, 300});
     permanentSave.setWorldDead({id, -123456789});
+    placePlayer(permanentSave, home);
     permanentSave.update(blocks, home);
     CHECK_RESPAWN(!permanentSave.record(id) && permanentSave.isWorldDead(id));
     SpawnedCreatures recoveredSave;
     recoveredSave.setEnemyRespawn({Mode::Timed, 300});
     recoveredSave.setWorldDead({id, -123456789});
+    placePlayer(recoveredSave, home);
     recoveredSave.update(blocks, home);
     CHECK_RESPAWN(recoveredSave.record(id) && health(recoveredSave.record(id)) > 0 && !recoveredSave.isWorldDead(id));
     CHECK_RESPAWN(recoveredSave.persistentDeadSet().count(-123456789));
+    // A nonnull registered actor, even dead and never recorded in the generated-ID
+    // bookkeeping, suppresses another resident with that stored ID.
+    SpawnedCreatures existing;
+    placePlayer(existing, home);
+    bool fresh;
+    uint8_t *sameId = existing.networkCreature(id, fresh);
+    sameId[worldgen::creature::HOSTILITY] = 1;
+    setHealth(sameId, 0);
+    existing.update(blocks, home);
+    size_t copies = 0;
+    existing.forEachWorldCreature([&](const uint8_t *record) {
+        int64_t candidate;
+        std::memcpy(&candidate, record + worldgen::creature::ID, sizeof candidate);
+        copies += candidate == id;
+    });
+    CHECK_RESPAWN(copies == 1 && existing.record(id) == sameId);
 
     // Refreshing an already loaded zone restores its static objects without
     // clearing ground items or directly removing its live friendly residents.

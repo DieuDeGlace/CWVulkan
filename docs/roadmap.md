@@ -164,7 +164,11 @@ individual feature documents.
   [daily-reset contract](specs/steam-world-daily-reset.md) drives reset-before-effects,
   repeated notice handling and fresh actor views after deletion. Focused tests cover
   retained guests, compacted storage, outgoing events and configured respawn policy.
-  Full time/resident preludes, broader mutation producers and native comparisons remain.
+  Resident collection now snapshots kind0 permissions before refresh, reads current
+  player positions, and suppresses IDs from all registered actors. Its final flag
+  reconciliation includes local/network/dead/new entries; copied field widths and
+  coordinate conversions have dedicated boundary checks. Full time/resident preludes,
+  zone-pointer/RNG integration, broader mutation producers and native comparisons remain.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are

@@ -16,6 +16,7 @@
 #include "DrawnState.h"
 #include "LinkedPlacement.h"
 #include "NativeBuffs.h"
+#include "ResidentPass.h"
 
 #include <cmath>
 #include <cstdio>
@@ -128,27 +129,30 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     if (!worldgen::creatureTablesLoaded())
         return;
     lastWorld = &ew;
-    // The players this world keeps its zones around: the local player and every player the
-    // network brought (a host world's guests). Before there is any, where the local player is
-    // about to be.
-    std::vector<const worldgen::CreatureRecord *> players;
-    if (hasPlayer)
-        players.push_back(&player.record);
-    if (const auto network = zones.find(NETWORK_ZONE); network != zones.end())
-        for (const Creature &cr : network->second)
-            if (cr.record[worldgen::creature::HOSTILITY] == 0)
-                players.push_back(&cr.record);
+    residentpass::Collection participants([&](int64_t id) -> const uint8_t * {
+        const Creature *actor = find(id);
+        return actor ? actor->record.data() : nullptr;
+    });
+    forEachWorldCreature([&](const uint8_t *record) { participants.collect(record); });
     std::vector<worldgen::ResidentWorld::Player> at;
-    for (const worldgen::CreatureRecord *r : players)
-        at.push_back({get<int64_t>(*r, worldgen::creature::POSITION), get<int64_t>(*r, worldgen::creature::POSITION + 8),
-                      get<int64_t>(*r, worldgen::creature::POSITION + 16)});
-    if (at.empty())
-        at.push_back({(int64_t)std::floor((double)playerLocal.x * 65536.0) + ew.originDotsX(),
-                      (int64_t)std::floor((double)playerLocal.y * 65536.0) + ew.originDotsY(),
-                      (int64_t)std::floor(((double)playerLocal.z - ExtractedWorld::Z_OFFSET) * 65536.0)});
-    std::vector<std::pair<int, int>> centres;
+    for (const uint8_t *record : participants.players()) {
+        int64_t position[3];
+        std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
+        at.push_back({position[0], position[1], position[2]});
+    }
+    std::vector<std::pair<int, int>> residentCentres;
     for (const auto &p : at)
-        centres.push_back({floorDiv((int)(p.x >> 16), 64), floorDiv((int)(p.y >> 16), 64)});
+        residentCentres.push_back({floorDiv(gamemath::floorFixedBlock(p.x), 64), floorDiv(gamemath::floorFixedBlock(p.y), 64)});
+    // Before a player arrives, the engine can stream terrain around its stand-in.
+    // That position is not a native player and cannot admit or refresh residents.
+    auto streaming = at;
+    if (streaming.empty())
+        streaming.push_back({(int64_t)std::floor((double)playerLocal.x * 65536.0) + ew.originDotsX(),
+                             (int64_t)std::floor((double)playerLocal.y * 65536.0) + ew.originDotsY(),
+                             (int64_t)std::floor(((double)playerLocal.z - ExtractedWorld::Z_OFFSET) * 65536.0)});
+    std::vector<std::pair<int, int>> centres;
+    for (const auto &p : streaming)
+        centres.push_back({floorDiv(gamemath::floorFixedBlock(p.x), 64), floorDiv(gamemath::floorFixedBlock(p.y), 64)});
     auto near = [&](int zx, int zy, int reach) {
         for (const auto &[cx, cy] : centres)
             if (std::abs(zx - cx) <= reach && std::abs(zy - cy) <= reach)
@@ -189,7 +193,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     // A zone that comes near brings its residents (zone+0x460), its mission creatures
     // (+0x498) and the creatures it counts the deaths of (+0x480).
     std::vector<std::pair<int, int>> fresh;
-    for (const auto &[cx, cy] : centres)
+    for (const auto &[cx, cy] : residentCentres)
         for (int zx = cx - NEAR_ZONES; zx <= cx + NEAR_ZONES; zx++)
             for (int zy = cy - NEAR_ZONES; zy <= cy + NEAR_ZONES; zy++) {
                 if (zones.count({zx, zy}) || !ew.gameZoneLoaded(zx, zy))
@@ -212,7 +216,8 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     // residents are scanned. Refreshing alone does not remove live shoppers.
     // See remaining-runtime-gaps.md §6; a midnight reset is a separate operation.
     for (auto &[key, zone] : zoneResidents)
-        if (near(key.first, key.second, NEAR_ZONES) && ew.gameZoneLoaded(key.first, key.second) && zone->spawns.day != dayCount) {
+        if (!residentCentres.empty() && near(key.first, key.second, NEAR_ZONES) && ew.gameZoneLoaded(key.first, key.second) &&
+            zone->spawns.day != dayCount) {
             auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
             worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
             zone = refreshed;
@@ -238,27 +243,20 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         }
     // the world's resident update (0x2e17d0): the residents not in the world yet, not dead for good,
     // within 256 blocks of a player, whose conditions are met, are made.
-    // The regions where a player lifted the demon portals' promotion (+0x128 bit 0x800).
-    auto regionOf = [](const worldgen::CreatureRecord &r) {
-        return std::array<int32_t, 2>{get<int32_t>(r, worldgen::creature::REGION), get<int32_t>(r, worldgen::creature::REGION + 4)};
-    };
-    std::set<std::array<int32_t, 2>> spared;
-    for (const worldgen::CreatureRecord *r : players)
-        if (get<uint16_t>(*r, 0x128) & 0x800)
-            spared.insert(regionOf(*r));
-    const worldgen::ResidentWorld resident = residentWorld(at);
+    const worldgen::ResidentWorld resident = residentWorld(participants);
     const auto maxHealth = [](const uint8_t *record) { return nativerules::maxHealth(record); };
     for (auto &[key, zone] : zoneResidents) {
-        if (!near(key.first, key.second, NEAR_ZONES) || !ew.gameZoneLoaded(key.first, key.second))
+        if (residentCentres.empty() || !near(key.first, key.second, NEAR_ZONES) || !ew.gameZoneLoaded(key.first, key.second))
             continue;
         auto &list = zones[key];
         auto rand = [&, &worldRand = zoneRand.at(key)] { return (int)(worldRand() & 0x7fff); };
         for (const auto &[id, sp] : zone->spawns.points) {
             if (!worldgen::residentReady(sp, key.first, key.second, resident))
                 continue;
-            made.insert(id);
-            const worldgen::Int2 region = worldgen::regionAt((int32_t)(sp.x >> 16), (int32_t)(sp.y >> 16));
-            worldgen::MadeCreature m = worldgen::makeResident(sp, worldgen::Draw(rand), spared.count({region.x, region.y}) != 0, maxHealth);
+            made.insert(sp.id);
+            const worldgen::Int2 region = worldgen::residentRegion(sp);
+            worldgen::MadeCreature m =
+                worldgen::makeResident(sp, worldgen::Draw(rand), participants.portalCleared({region.x, region.y}), maxHealth);
             // What 0x2e17d0 copies beside the record: who it keeps with (+0xc08), its special
             // moves (+0xbd0), the races it may call up (+0xbf0) and its inventory (+0x9f0).
             Creature cr{std::move(m.record), {}};
@@ -268,17 +266,17 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             cr.side.summonRaces = m.extras.abilities2;
             cr.side.inventory = worldgen::inventoryRecords(m.extras.inventory);
             list.push_back(std::move(cr));
+            participants.added(sp.id);
         }
     }
     if (roadTravel)
         for (const auto &key : fresh)
             startTrips(zones[key]);
-    // The arena masters' stages (0x2e3510) and the petrified freed where the witch's curse
-    // was lifted (0x2e17d0, +0x128 bit 0x8000 of a player in the region).
-    std::set<std::array<int32_t, 2>> unpetrified;
-    for (const worldgen::CreatureRecord *r : players)
-        if (get<uint16_t>(*r, 0x128) & 0x8000)
-            unpetrified.insert(regionOf(*r));
+    // Final reconciliation includes all current entries, including local/network,
+    // dead and newly registered actors. Region permission was snapshotted before refresh.
+    for (nativeai::Creature *actor : worldList())
+        participants.releasePetrified(actor->record);
+    // Arena progression is a separate World helper.
     for (auto &[k, list] : zones)
         for (Creature &cr : list) {
             if (k == NETWORK_ZONE)
@@ -286,16 +284,13 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             worldgen::CreatureRecord &r = cr.record;
             if (r[worldgen::creature::CLASS] == worldgen::ARENA_MASTER_CLASS && r[worldgen::creature::STAGE] != worldgen::ARENA_FINISHED)
                 arenaStage(r);
-            if ((get<uint32_t>(r, worldgen::creature::FLAGS) & 0x400000) &&
-                unpetrified.count({get<int32_t>(r, worldgen::creature::REGION), get<int32_t>(r, worldgen::creature::REGION + 4)}))
-                put<uint32_t>(r, worldgen::creature::FLAGS, get<uint32_t>(r, worldgen::creature::FLAGS) & ~0x400000u);
         }
 }
 
-worldgen::ResidentWorld SpawnedCreatures::residentWorld(const std::vector<worldgen::ResidentWorld::Player> &players) const {
+worldgen::ResidentWorld SpawnedCreatures::residentWorld(const residentpass::Collection &participants) const {
     worldgen::ResidentWorld w;
-    w.players = players;
-    w.alive = [this](int64_t id) { return made.count(id) != 0; };
+    w.alive = [&participants](int64_t id) { return participants.contains(id); };
+    w.nearPlayer = [&participants](int64_t x, int64_t y, int64_t z) { return participants.withinRange(x, y, z); };
     w.dead = [this](int64_t id) { return worldDead.count(id) != 0; };
     // The dead tracked creatures (zone+0x480) of a zone. The game counts its loaded zones' and the
     // saved counts of zones it had loaded; CubeVulkan, the zones it has made the creatures of
@@ -311,11 +306,12 @@ worldgen::ResidentWorld SpawnedCreatures::residentWorld(const std::vector<worldg
     };
     // An arena master at the stage.
     w.arenaAtStage = [this](int stage) {
-        for (const auto &[k, list] : zones)
-            for (const Creature &cr : list)
-                if (cr.record[worldgen::creature::CLASS] == worldgen::ARENA_MASTER_CLASS && cr.record[worldgen::creature::STAGE] == stage)
-                    return true;
-        return false;
+        bool found = false;
+        forEachWorldCreature([&](const uint8_t *record) {
+            found =
+                found || (record[worldgen::creature::CLASS] == worldgen::ARENA_MASTER_CLASS && record[worldgen::creature::STAGE] == stage);
+        });
+        return found;
     };
     return w;
 }

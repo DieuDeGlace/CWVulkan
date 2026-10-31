@@ -58,10 +58,11 @@ CreatureRecord newCreature(int64_t id);
 
 // What the world answers for the resident pass.
 struct ResidentWorld {
-    std::function<bool(int64_t id)> alive;          // a creature with that id lives (world+0x450)
-    std::function<bool(int64_t id)> dead;           // the id is in the dead set (world+0x20)
-    std::function<int32_t(int32_t zx, int32_t zy)> deadTracked; // a zone's count of dead tracked creatures
-    std::function<bool(int stage)> arenaAtStage;    // a living arena master (class 0xa1) has this stage byte
+    std::function<bool(int64_t id)> alive;                           // a creature with that id lives (world+0x450)
+    std::function<bool(int64_t id)> dead;                            // the id is in the dead set (world+0x20)
+    std::function<int32_t(int32_t zx, int32_t zy)> deadTracked;      // a zone's count of dead tracked creatures
+    std::function<bool(int stage)> arenaAtStage;                     // a registered arena master has this stage, without an HP test
+    std::function<bool(int64_t x, int64_t y, int64_t z)> nearPlayer; // optional live-record range resolver
     struct Player {
         int64_t x, y, z; // 1/65536 blocks
     };
@@ -73,13 +74,15 @@ struct ResidentWorld {
 bool residentReady(const SpawnPoint &p, int32_t zx, int32_t zy, const ResidentWorld &world);
 
 // The zones the pass looks at (§7.1): every zone within 256 blocks of a player, once each, in
-// the order found.
+// first-encounter key order. Consumers still filter loaded zones and process them
+// in unsigned Zone-pointer order (steam-authoritative-residents.md §2).
 std::vector<Int2> residentZones(const std::vector<ResidentWorld::Player> &players);
 
 // A creature made from a spawn point (§7.1 steps 3-5), from the constructor's defaults with the
 // point's id. `worldRand` is the world's rand() (spiders that drop from above start 80-129 blocks
 // higher); `spared`: the creature's region is one where a player lifted the demon portal;
 // `maxHealth` gives 0x5fac0 for the record (NativeRules).
+Int2 residentRegion(const SpawnPoint &p); // copied position, truncation toward zero before region lookup
 MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, const std::function<float(const uint8_t *record)> &maxHealth);
 
 // Makes creature `record` the pet of `owner` (0x2b67b0, §7.4): its race's looks and gear drawn

@@ -117,8 +117,9 @@ The existing spawn prerequisites at S+0x920/+0x928/+0x938/+0x948 remain addition
 gates; see worldgen-creatures §7.1. One correction: the required-stage scan tests
 registered **class byte +0x14c == 0xa1** and stage byte **+0x19c** against the
 requested stage, **without an HP test**. “Living” in the old description was too
-restrictive. The nonempty +0x928-cell branch and broader prerequisite producers
-are not newly completed by this bounded audit.
+restrictive. The nonempty +0x928-cell consumer is now completed in
+[steam-resident-effects-prerequisites.md §§1–2](steam-resident-effects-prerequisites.md),
+including its retained-byte quirk. A filling producer remains unidentified.
 
 ## 4. New resident writes and registration
 
@@ -213,12 +214,11 @@ World reset are separate; see [steam-world-daily-reset.md](steam-world-daily-res
 ## 7. Explicit remaining boundary
 
 This checkpoint closes collection order, common admission, fresh-resident
-transfer/postprocessing, CRT-state use, and the final flag pass. The same native
-routine also has a separate per-zone **kind-9 effect** construction/output
-branch following spawn traversal, including mode-0x8a bookkeeping. Its full
-admission flags, geometry, lifetime and output fields are **not specified by
-this checkpoint**. It must not be invented from the altitude rule. Nonempty
-S+0x928 prerequisites and the broader arena/cleanup helpers retain their
-existing explicit limits. No claim is made here that every child helper in the
-entire World step is random-free, or that the incoming CRT state can be
-reconstructed from a spawn record alone.
+transfer/postprocessing, CRT-state use, and the final flag pass. The remaining
+per-zone **kind9 effect** producer and **nonempty S+0x928 consumer** are now
+specified independently in [steam-resident-effects-prerequisites.md](steam-resident-effects-prerequisites.md),
+including the cell traversal's retained-byte quirk. A filling producer for
+that cell tree and broader arena/cleanup helpers retain explicit limits. No
+claim is made here that every child helper in the entire World step is
+random-free, or that incoming CRT state can be reconstructed from a spawn
+record alone.

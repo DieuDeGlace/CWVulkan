@@ -260,6 +260,7 @@ add_library(engine STATIC
     src/SoundRules.cpp
     src/TerrainRay.cpp
     src/CameraPosition.cpp
+    src/ResidentPass.cpp
     src/DrawnState.cpp
     src/LinkedPlacement.cpp
     src/Mods.cpp
@@ -370,6 +371,7 @@ target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
+target_sources(EngineTests PRIVATE tests/ResidentPassTests.cpp)
 target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp tests/CameraPositionTests.cpp tests/DrawnStateTests.cpp tests/LinkedPlacementTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 

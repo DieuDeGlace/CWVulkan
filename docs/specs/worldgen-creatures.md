@@ -135,7 +135,7 @@ use are listed; every other byte is zero.
 | +0x900 | list of (i32, i32) | empty | **area**: 16-block cells it keeps to |
 | +0x910 | set of i64 | empty | **group**: ids it keeps with |
 | +0x920 | i32 | 0 | **requiredDefeated** |
-| +0x928 | list of cells | empty | cells whose objects must be gone (never filled by generation) |
+| +0x928 | ordered cell-tree header; count +0x930 | empty | indexed-object state prerequisite; native retained-byte quirk in [resident supplement](steam-resident-effects-prerequisites.md) (no filling generation producer identified) |
 | +0x938 | set of i64 | empty | **prerequisites**: ids that must all be dead |
 | +0x948 | i32 | 0 | **requiredStage** |
 
@@ -621,8 +621,10 @@ and random-stream details are in [steam-authoritative-residents.md](steam-author
    * **requiredDefeated** (+0x920) ≠ 0: sum, over zones (zx−8..zx+8, zy−8..zy+8), the zone's
      count of dead tracked creatures (+0x490 of a loaded zone, else the world's saved count for
      that zone); the sum must be ≥ the field.
-   * **cells** (+0x928): each listed cell's zone must … (generation never fills it; see open
-     questions).
+   * **cells** (+0x928): the nonempty native tree gate is specified in
+     [steam-resident-effects-prerequisites.md §§1–2](steam-resident-effects-prerequisites.md).
+     It has a retained-byte quirk and is not an all-cells-cleared test. No filling
+     generation producer has been identified.
    * **requiredStage** (+0x948) ≠ 0: some registered creature of class 0xa1 (an arena master),
      without an HP test, must
      have stage byte (+0x19c) equal to it.
@@ -646,6 +648,10 @@ and random-stream details are in [steam-authoritative-residents.md](steam-author
    cleared; otherwise hostility = 1, the size (+0x84, +0x88, +0x8c) × 1.1, and flag 0x8000 is
    cleared.
 6. Add the creature.
+
+After each zone's complete spawn-map traversal, mode0x8a bookkeeping can request one
+kind9 effect. Its day-derived direction, suppression, exact record and live/outgoing
+append order are specified in [steam-resident-effects-prerequisites.md §§3–6](steam-resident-effects-prerequisites.md).
 
 (Player bit 0x8000 likewise frees the petrified, flag 0x400000, in that player's region;
 this is the final World-list pass inside 0x2e17d0, including new residents, without an HP
@@ -856,8 +862,11 @@ implementation from this spec must do at least as well.
    (0, 0); the oracle zones agree, but the game's value is undefined.
 2. **The herb record's first position** (zone file §2.6) is likewise stack data on the first
    use in a zone.
-3. **+0x928 cells** of a spawn point are never filled by generation; their test in 0x2e17d0
-   (each cell's zone must be loaded and its objects at that cell gone) was not traced in full.
+3. **+0x928 cells:** the consumer in 0x2e17d0 is now traced in
+   [steam-resident-effects-prerequisites.md §§1–2](steam-resident-effects-prerequisites.md).
+   The former all-cells/objects-gone interpretation was incorrect: a retained-byte
+   quirk makes the first cell decisive, and only indexed nonzero-state objects match.
+   A filling producer remains unidentified in generation.
 4. **Shoppers past the counter list** (zone file §4.2) read past the end of zone+0x500, which
    is heap memory: genr_seed_123 zone (−18, −18) has one counter and two shoppers, and the
    second stands at about (−1.2·10^14, −4.3·10^9, −49152) blocks. No value can be specified;

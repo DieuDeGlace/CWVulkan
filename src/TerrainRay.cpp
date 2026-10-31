@@ -20,11 +20,7 @@ int32_t zoneCoordinate(int32_t block) {
 } // namespace
 
 int32_t blockCoordinate(int64_t fixed) {
-    const int64_t quotient = fixed / 65536;
-    int32_t narrowed = signedBits(uint32_t(quotient));
-    if (fixed < 0 && int64_t(narrowed) * 65536 != fixed)
-        narrowed = increment(narrowed, false);
-    return narrowed;
+    return gamemath::floorFixedBlock(fixed);
 }
 
 float trace(const World &world, const std::array<int64_t, 3> &origin, const std::array<float, 3> &direction, float maximum,

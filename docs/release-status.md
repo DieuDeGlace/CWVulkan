@@ -10,6 +10,26 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Resident collection now follows registered kind0 membership, including dead players,
+  and snapshots both region-permission sets before zone work. Live positions are read
+  through stable actor resolution during admission; streaming stand-ins cannot supply
+  a player. Existing nonnull registered IDs suppress duplicates independent of HP or
+  generated-ID bookkeeping, and a birth immediately joins that admission set. The
+  final petrification pass includes local, network, dead and new registered actors.
+  Resident transfer retains native16-block home cells with the specified coordinate
+  narrowing, truncates copied position toward zero for region lookup, zero-extends
+  style32 into64 bits, and preserves low64 altitude addition. The shared fixed-block
+  conversion also drives terrain rays. Asset-free tests cover collection/permissions,
+  moving storage, admission ordering, inclusive range edges, extreme coordinate
+  narrowing, field-copy widths and constructor/postprocessing order. Owner-data
+  checks retain their respawn assertions with explicit registered player fixtures.
+  Zone-pointer processing order, incoming/persistent CRT state and the remaining
+  zone-effect/prerequisite producers are still separate integration gaps.
+  All five targets build, the full CPU/owner-data suite has only the two known
+  modded region-reference assertions, and both camera Vulkan styles pass. A no-save
+  movement/combat run exits0 with the fixture save unchanged. The blue scene and
+  missing owner hair model remain unaccepted; this is not native visual parity.
+
 - Authoritative resident creation, visited daily refresh and admission now require
   that terrain zone to be loaded. The collector no longer creates creatures for an
   absent terrain world or refreshes retained resident metadata through an unloaded

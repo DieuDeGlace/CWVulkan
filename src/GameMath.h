@@ -45,6 +45,17 @@ inline float fixedDistanceSquared(const int64_t a[3], const int64_t b[3]) {
     return result;
 }
 
+// Native fixed-to-block conversion narrows before its negative exactness test.
+inline int32_t floorFixedBlock(int64_t fixed) {
+    uint32_t bits = uint32_t(fixed / 65536);
+    int32_t narrowed;
+    std::memcpy(&narrowed, &bits, sizeof narrowed);
+    if (fixed < 0 && int64_t(narrowed) * 65536 != fixed)
+        --bits;
+    std::memcpy(&narrowed, &bits, sizeof narrowed);
+    return narrowed;
+}
+
 // the frame blend's factor (0xa7a0): how far a value moves toward its target over a frame of
 // `ms` milliseconds at `rate`. The frame is cut into hundredths of a millisecond, each moving
 // the value toward that step's share of the frame by rate * 0.02.
