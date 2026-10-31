@@ -363,6 +363,11 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
     bakeStyle(featStyle, glm::mat4(1));
 }
 
+void Hud::prepareFrame(Renderer &renderer, VkExtent2D screen) {
+    if (atlasDirty)
+        layout(renderer, screen);
+}
+
 void Hud::layout(Renderer &renderer, VkExtent2D screen) {
     uploadItemModels(renderer);
     if (hudFont.empty() || !screen.height || !screen.width)
@@ -469,6 +474,7 @@ void Hud::layout(Renderer &renderer, VkExtent2D screen) {
         return;
     }
     renderer.setOverlayAtlas(W, W, atlas.data());
+    atlasDirty = false;
     ready = true;
 }
 
@@ -1121,6 +1127,7 @@ void Hud::addIcon(const std::string &key, std::vector<uint8_t> rgba, int w, int 
     p.rgba = std::move(rgba);
     p.w = w;
     p.h = h;
+    atlasDirty = true;
 }
 
 glm::vec2 Hud::slotPosition(int slot) const {

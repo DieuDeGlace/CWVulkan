@@ -7,6 +7,14 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Newly loaded inventory models now share one pending atlas rebuild before drawing,
+  instead of rebuilding and uploading the font/icon atlas for every new item.
+  Explicit layout updates also clear the pending work. A late-resource owner-tree
+  regression, all five targets, the full CPU/owner suite,40 world/16 GUI Vulkan
+  cases and water/Alpha checks pass. A hidden read-only recipe capture from the
+  optimized binary renders the result/ingredient normally and leaves the save
+  unchanged. This is a resource scheduling change, with the same item draw rules.
+
 - Formula detail results and ingredients now use original-record WORLD images;
   hovered item information uses a class-adapted copy. Their separate callback,
   pivot/frame geometry, rotation, dark-pass and depth rules follow the independent

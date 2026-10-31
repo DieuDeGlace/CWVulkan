@@ -1745,7 +1745,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             CubModel cub;
             if (cub.load(*path)) {
                 hud.addItemIcon(sprite, cub);
-                hud.layout(renderer, renderer.screenSize());
             }
         }
     };
@@ -6919,8 +6918,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             std::vector<glm::vec2> answerPoints;
             input.gamepadNavigationPoints.clear();
+            hud.prepareFrame(renderer, renderer.screenSize());
             hud.draw(hs, hudVertices, [&](std::vector<OverlayVertex> &out) {
-                if (menusReady && !menus.interfaceShown()) return;
+                if (menusReady && !menus.interfaceShown())
+                    return;
                 const auto pixels = renderer.screenSize();
                 hud.drawChat(chat, (int32_t)(int64_t)(time * 1000), out);
                 double mouseX, mouseY;

@@ -291,13 +291,14 @@ class Hud {
         bool includeZeroQuantity = false;
     };
 
-    // Loads the extracted HUD art, fonts and names. False (with a reason) if the
-    // HUD has not been extracted yet.
     void advanceGui(double milliseconds) { interfaceClock.advance(milliseconds); }
     const plasma::GuiClock &guiTiming() const { return interfaceClock; }
+    // Loads the extracted HUD art, fonts and names. False (with a reason) if the
+    // HUD has not been extracted yet.
     bool load(const std::filesystem::path &gameDir, std::string &error);
     // Builds (or rebuilds after a resize) the atlas for a window of this size.
     void layout(Renderer &renderer, VkExtent2D screen);
+    void prepareFrame(Renderer &renderer, VkExtent2D screen); // flush newly loaded icons once before emitting atlas coordinates
     // Rebuild the atlas only when newly received/editor text needs another owner glyph.
     bool requireText(const std::u16string &);
     void draw(const State &state, std::vector<OverlayVertex> &out,
@@ -337,6 +338,7 @@ class Hud {
     glm::ivec2 white{0}; // a white texel in the atlas
     int atlasSize = 0;   // the atlas's side when the icons outgrew the usual one
     bool ready = false;
+    bool atlasDirty = false;
     // Inventory screen art (Extract/ui/hud: tabs, panel, slot; inventory.txt).
     struct Picture {
         std::vector<uint8_t> rgba;

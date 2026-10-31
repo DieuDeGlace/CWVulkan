@@ -71,6 +71,15 @@ void equipmentCallbacks() {
     hud.draw(state, vertices);
     GUI_CHECK(hud.itemDraws().empty());
     // The grid's canonical positions include holes; navigation includes the unused tail.
+    hud.addItemIcon("synthetic-late", cub);
+    inventory.slotItems[0] = weapon;
+    inventory.slots[0] = "synthetic-late";
+    hud.prepareFrame(renderer, {1920, 1080});
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().size() == 1 && hud.itemDraws()[0].item == weapon);
+    hud.prepareFrame(renderer, {1920, 1080}); // repeated preparation retains the same uploaded resource
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().size() == 1);
     inventory.slotItems = {};
     inventoryslots::Tabs tabs;
     tabs.resize(6);
