@@ -17,6 +17,13 @@ pictures do not supersede this choice.
 selection. `Style=Native` retains the two original water shaders and their draw
 behavior for parity comparisons. Changing this setting requires a restart.
 
+Alpha's partially faded scenery is blended after the sky and before the shared
+color/depth snapshot. Near scenery stays in its earlier pass. This prevents a
+transparent model's depth from blocking an undrawn sky background, while keeping
+the scenery available to refraction. Native water retains its separate after-water
+far queue. The same mixed sort, CPU opacity and depth writes are preserved; Vulkan
+regressions cover partial fades and zero effective alpha without adding a discard.
+
 - The shared surface reads immutable color/depth snapshots of the opaque world.
   Shallow terrain remains visible through depth-dependent blue absorption and
   scattering. A small normal ripple and broad sunlight highlights leave the voxel

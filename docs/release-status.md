@@ -7,6 +7,14 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Alpha shared water now draws its sorted fading-scenery queue after the sky and
+  before the refraction snapshot. Previously, transparent scenery could write
+  depth before its sky background and leave dark silhouettes. Native water keeps
+  its after-water queue, and CPU fade values and depth writes are unchanged.
+  New Vulkan regressions failed before the change and pass afterward: dry partial
+  fades match between water modes, and beyond-endpoint fades retain the sky.
+  Native admission/cache traversal and broader original-game comparisons remain open.
+
 - Character creation now includes optional dual-tone hair controls: second-color
   preview/selection, enable, transition start and blend. The native palette and
   runtime-loaded hair models are reused without a mod DLL. Per-character engine

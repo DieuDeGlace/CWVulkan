@@ -303,6 +303,23 @@ int alphaSceneryShaderTests() {
             }
     std::printf("Alpha staging GPU: near red%d far red%d dry red%d\n", nearRed, farRed, dryRed);
     WATER_CHECK(nearRed > 30 && farRed == 0 && dryRed > 30);
+    auto beyond = capture("beyond-fade-native", 52, true, false);
+    auto sameColor = [&](const Picture &a, const Picture &b) {
+        if (a.pixels.empty() || b.pixels.empty())
+            return false;
+        for (int y = 0; y < 192; ++y)
+            for (int x = 0; x < 256; ++x)
+                for (int channel = 0; channel < 3; ++channel)
+                    if (std::abs(a.channel(x, y, channel) - b.channel(x, y, channel)) > 1)
+                        return false;
+        return true;
+    };
+    WATER_CHECK(sameColor(beyond, sky));
+    renderer.settings.water.style = waterlook::Style::Omega;
+    auto sharedDry = capture("shared-far-without-water", 40, true, false);
+    auto sharedBeyond = capture("beyond-fade-shared", 52, true, false);
+    WATER_CHECK(sameColor(sharedDry, dry));
+    WATER_CHECK(sameColor(sharedBeyond, sky));
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

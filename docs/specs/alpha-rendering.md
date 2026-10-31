@@ -665,6 +665,13 @@ None for the world: the frame renders straight into the back buffer. No gamma ra
 bloom, no colour grading. The only blur and down-sampling shaders belong to the interface
 library (§1.2). Multisampling depends on the `antiAliasing` option.
 
+The focused [far-scenery audit, section9](alpha-far-static-ordering.md)
+establishes the native normalized back-buffer request and its pre-blend
+source-alpha limiting. Its CPU/model/object fades can be negative; their
+ordinary WORLD shader does not itself clamp or discard them. Retain that
+target boundary and the separately specified range/depth behavior when
+using a replacement render target.
+
 ---
 
 ## 14. Steam differences

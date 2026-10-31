@@ -72,6 +72,12 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Alpha static-scenery pass ordering remains based on
+  `alpha-far-static-ordering.md`. Its new normalized-target/fade clarification
+  confirms that CPU opacity must not gain a new endpoint clamp or discard.
+  The shared-water extension now blends its deferred scenery over the sky before
+  its refraction snapshot; the native-water path and retained depth are preserved.
+  Synthetic Vulkan controls reproduce the prior shared-water error and its fix.
 - Native edit projection/ray/voxel traversal and raw WORLD draw support from
   `steam-weapon-customization-edit-view.md`. Full allocation, negative aspect,
   stored lens constants, signed cell/byte semantics and raw shader state are

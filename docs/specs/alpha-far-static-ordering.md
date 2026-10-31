@@ -480,3 +480,147 @@ cache+0x6c, coarse horizontal distance, and per-record sphere point,
 radius, range/result to §4's already named fields. For objects, retain
 the physical-player-derived World-cell bounds separately from the
 camera and the raised admission point separately from raw-key position.
+
+## 9. Fade endpoint, normalized target and blend boundary
+
+This follow-up concerns the original Alpha path, not Steam or an injected
+effect. Addresses remain **Alpha RVAs**, relative to0x400000. It clarifies
+which stage limits an out-of-range fade; it does not add a new admission
+rule to sections5–8.
+
+### 9.1 Native scene color target and source-alpha limiting
+
+Device initialization **0xc8720** zeroes the56-byte presentation record,
+leaving its back-buffer format field at **0, UNKNOWN**, and creates a
+windowed device. That request inherits the desktop format; the executable
+does not establish the actual initial desktop format as a constant. The
+initial zeroing is **0xc875c–0xc8764** and the subsequent record setup /
+device creation is **0xc876c–0xc87d5**.
+
+The native resize/display-mode/device-reset path **0xc8940** instead
+explicitly requests back-buffer format **21 decimal,0x15,
+A8R8G8B8**. The write is **0xc8a16** and Reset receives that presentation
+record at **0xc8a58**. This is an eight-bit normalized fixed-point color
+target, not a floating-point scene accumulation target. Its auto-depth
+request is **75 decimal,0x4b,D24S8**, at **0xc8a3b**. Its multisampling
+selection does not change the color format: the settings value is doubled
+when nonzero, otherwise zero, at **0xc89eb–0xc89fe**; quality is zero at
+**0xc8a0c**. The world frame **0xac260** draws to the current back buffer,
+as already bounded by alpha-rendering section13; presentation follows the
+Game frame through **0xc85f0**. No floating-point intermediate is introduced
+by the far-scenery draw helpers.
+
+World RGB blending is explicitly enabled with **SRC_ALPHA /
+INV_SRC_ALPHA**: render-state27=1,19=5,20=6 at
+**0xaedc0–0xaee12**. These are RGB blend factors; do not infer the separate
+destination-alpha equation from that statement. The far draw uses the
+ordinary WORLD pixel shader, rebound at **0xba462** through **0x47d10**.
+Its native shader blob is at **RVA0x2feb50**, file offset0x2fdb50. Its final
+alpha output operation, at blob RVA **0x2fef8c**, copies pixel constant3's
+X component to output alpha. There is no shader saturation on that copy
+and no alpha-dependent fragment-kill instruction in this shader.
+
+The defined consequence of the **normalized fixed-point D3D9 target** is
+important: its incoming pixel color/alpha is limited to the target's
+normalized0..1 range **before fixed-function blending**. Thus negative
+submitted alpha supplies RGB source-alpha factor0 and inverse-source-alpha
+factor1. This limiting belongs to the target/blend boundary; it is not a
+CPU clamp in the object/model helper or an extra shader instruction. A
+floating-point replacement intermediate must preserve that effective
+source-alpha behavior instead of evaluating negative source weights.
+Likewise the greater-than-one water-alpha expression in alpha-rendering6.3
+does not authorize an RGB source-alpha weight above1 on this target.
+
+No runtime surface descriptor was captured in this follow-up. In
+particular, the inherited initial desktop format must not be falsely
+reported as an observed A8R8G8B8 surface. The explicit normal reset request
+above is independently established by instructions.
+
+### 9.2 There is no final hard rejection at the floating fade endpoint
+
+The sphere helper **0x7f760** is the per-record upper-range gate for these
+two ordinary families, after their existing family/cache/type/resource
+checks. Its range comparison is exactly section5.1: divide each signed64
+squared fixed displacement by65536 individually, sum those three results,
+and compare to truncation-to-signed64 of float32(float32(L×L)×65536).
+Reject **strictly greater**; equality passes. Radius is used for its six
+frustum planes, not added to L. Its range compare is
+**0x7f812–0x7f820**. The sphere is tested **before** the per-record float D²
+used for the immediate/deferred split and fade is computed.
+
+For models this call is **0xb26b4**, with a failure leaving the record at
+**0xb26bb**. The fixed sphere point is the same raised model-center point
+used by the subsequent floating key. Nevertheless the early integer
+quantity and later rounded floating norm are different calculations. The
+early gate does not establish a strict floating sqrtDistance<=L invariant.
+
+For objects the call is **0xb2df0**, with failure leaving the record at
+**0xb2df7**. Here the distinction is larger: the sphere point includes half
+the object's extent Z, whereas the later fade/key point is the **raw
+record position**. A raised point nearer the camera can pass the range
+gate while the raw point has sqrtDistance>L. The radius does not repair
+or alter this distinction. These center constructions remain sections2/7;
+do not replace either with the other's point.
+
+After admission, **D²<=float32(B×B)** is immediate and greater is deferred
+at **0xb2767–0xb276a** / **0xb304e–0xb3051**. There is **no second compare
+of D² to float32(L×L)** in this routing or in the later mixed-vector
+dispatch **0xba4b2–0xba54a**. The dispatch tests the stored family pointer
+and passes its captured D²,L,B to the corresponding helper; it does not
+remeasure distance or discard an entry past the fade endpoint.
+
+For deferred records, helpers **0xbd160** and **0xbe760** use the section2
+float fade without a final max/min. In particular sqrtDistance>L produces
+a **negative float at the draw call**. The actual alpha uploads are
+**0xbe690→0x47fb0** for models and **0xc045d→0x47fb0** for objects.
+Setter0x47fb0 uploads the supplied value directly as constant3, without a
+clamp. The succeeding matrix/material setup and raw indexed draw remain
+reachable. For an admitted/resourced object, for example, the latter draw
+is **0xc049a→0xe6df0**. Raw draw0xe6df0 has resource-readiness checks, not
+a fade-alpha rejection.
+
+The intended RGB limiting is therefore the normalized pipeline boundary
+in9.1, not an invented CPU endpoint gate. Source-alpha0 alone is not a
+fragment discard and does not disable depth writes. The far pass retains
+depth testing against previously drawn geometry and has writes enabled
+at **0xba445**, so removing zero/negative-alpha submissions or introducing
+an alpha discard is not established as an equivalent replacement.
+
+### 9.3 Finite arithmetic references, not native runtime captures
+
+The following examples explain the two distinct ways negative alpha can
+reach those uploads. They do not claim that a particular generated Alpha
+asset appeared at these coordinates.
+
+For a model, take **R=960**, hence **L=192** and float32
+**B=172.79998779296875**. Let the fixed displacement between the camera
+and raised model center be **(11405062,3851706,3663140)**. The three
+individually divided fixed squares sum to **2415919081**; the native
+range threshold is **2415919104**, so this range test passes. The separate
+float conversions, products and (X²+Y²)+Z² sum yield
+**D²=36864.00390625**. The square-root narrowing yields
+**192.00001525878906**, and the submitted fade is
+**−0.0000008344650268554688**. This reference uses the actual float32
+stages in0x2c4a0,0x24860 and0xbd160; it assumes the independent resource,
+cache and frustum predicates also pass.
+
+For the different object-center issue, consider helper inputs **L=100,
+B=90**, camera101 blocks above the raw object position, and object extent
+Z=4 blocks. The raised sphere center is99 blocks away and passes the
+range test. The raw fade point remains101 blocks away, giving a
+float32 submitted alpha **−0.10000002384185791**. Again this is a scoped
+arithmetic reference with the other admission predicates assumed true,
+not an assertion about a particular catalog object's dimensions. On the
+normalized target both examples have effective RGB source-alpha factor0.
+
+### 9.4 Ordering/culling boundary retained
+
+For these ordinary families, range/frustum and lookup checks occur during
+collection, before the B split. Near entries draw before water. Deferred
+entries retain the one mixed vector and descending-D² sort of sections1–3,
+then draw after water, before creatures, with retained depth. The
+deferred dispatch does not rerun the six-plane test, a new camera range
+test or a fade-alpha test. None of these facts substitutes for the broader
+cache traversal/admission in sections6–8. Auxiliary model0x3c and object6
+effects remain separately scoped; this addition does not infer their
+opacity or an unverified Alpha/Steam catalog correspondence.

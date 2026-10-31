@@ -1797,7 +1797,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             const bool staticAlpha = alphaLook && item.alphaScenery.has_value();
             if (staticAlpha) {
                 const auto fade = alphascenery::sample(*item.alphaScenery, alphaEye, sceneDistance, fogF);
-                if (!sharedWater && fade.afterWater()) {
+                if (fade.afterWater()) {
                     alphaFar.push_back({&item, fade});
                     continue;
                 }
@@ -1881,6 +1881,24 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (moonVisible > 0)
             sprites(2, 6, 1, moonVisible);
     }
+    auto drawAlphaFar = [&] {
+        // One mixed model/object queue, captured before water. The native
+        // key-only sort reverses squared distance without a family tie-break.
+        keyorder::sort(alphaFar, [](const DeferredAlpha &draw) { return -draw.fade.squared; });
+        VkPipeline bound = VK_NULL_HANDLE;
+        for (const auto &draw : alphaFar) {
+            const auto desired = draw.item->mirrored() ? alphaMirroredSceneryPipeline : alphaSceneryPipeline;
+            if (desired != bound) {
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, desired);
+                bound = desired;
+            }
+            bindAndDraw(*draw.item, 0, true, draw.fade.opacity());
+        }
+    };
+    // A partial fade needs the sky behind it. Shared refraction also needs the
+    // scenery in its snapshot; retain the same sorted queue and depth writes.
+    if (alphaLook && sharedWater)
+        drawAlphaFar();
     const bool waterVisible = std::any_of(water.begin(), water.end(), visible);
     if (sharedWater && waterVisible) {
         vkCmdEndRendering(cmd);
@@ -1907,18 +1925,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (visible(item))
             bindAndDraw(item, 0);
     if (alphaLook) {
-        // One mixed model/object queue, captured before water. The native
-        // key-only sort reverses squared distance without a family tie-break.
-        keyorder::sort(alphaFar, [](const DeferredAlpha &draw) { return -draw.fade.squared; });
-        VkPipeline bound = VK_NULL_HANDLE;
-        for (const auto &draw : alphaFar) {
-            const auto desired = draw.item->mirrored() ? alphaMirroredSceneryPipeline : alphaSceneryPipeline;
-            if (desired != bound) {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, desired);
-                bound = desired;
-            }
-            bindAndDraw(*draw.item, 0, true, draw.fade.opacity());
-        }
+        if (!sharedWater)
+            drawAlphaFar();
         drawScene(true);
     } else
         drawSceneryQueue(steamscenery::Queue::OrdinaryFaded, true);
