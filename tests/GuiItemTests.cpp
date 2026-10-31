@@ -184,6 +184,57 @@ void equipmentCallbacks() {
             GUI_CHECK(hud.itemDraws()[0].item == weapon && hud.itemDraws()[0].at.screenDepth == -.05f &&
                       hud.itemDraws()[0].at.euler == glm::vec3(225, 0, 90) && hud.itemDraws()[0].beforeVertex < vertices.size());
     }
+    // Each admitted InventoryWidget samples the same embedded stack at its own tail.
+    inventory = Hud::Inventory{};
+    nativesaves::Stack retained{-7, {}}; // Category0 and negative quantity are both admitted.
+    inventory.retainedCursor = &retained;
+    bool originalAddress = true;
+    inventory.retainedSprite = [&](const nativesaves::Item &item) {
+        originalAddress &= &item == &retained.item;
+        return std::string("synthetic-equipment");
+    };
+    inventory.pointer = {-17.75f, 29.125f}; // No pointer-inside or integer snapping gate.
+    inventory.vendor.open = inventory.crafting.open = true;
+    state.guiClockMs = -1;
+    for (const float scale : {1.f, 1.5f}) {
+        hud.setGuiScale(scale);
+        hud.layout(renderer, {1920, 1080});
+        retained.count = 0;
+        hud.draw(state, vertices);
+        const auto flatCount = vertices.size();
+        GUI_CHECK(hud.itemDraws().empty());
+        retained.count = -7;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 3 && vertices.size() == flatCount); // No cursor quantity label.
+        size_t previous = 0;
+        for (const auto &request : hud.itemDraws()) {
+            GUI_CHECK(request.item == retained.item && request.kind == guiitem::Request::Kind::Widget);
+            GUI_CHECK(request.at.screen == inventory.pointer && request.at.size == 0.05f && request.at.screenDepth == 0 &&
+                      request.at.darkPass && request.at.euler == glm::vec3(225, 0, guiitem::phase(-1)));
+            GUI_CHECK(request.beforeVertex >= previous && request.beforeVertex < vertices.size());
+            previous = request.beforeVertex;
+        }
+    }
+    GUI_CHECK(originalAddress);
+    inventory.vendor.open = inventory.crafting.open = false;
+    inventory.canonicalTabs = &tabs;
+    inventory.tab = 9999;
+    retained.item = weapon;
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().size() == 1 && hud.itemDraws()[0].item == weapon); // High tab still reaches the cursor tail.
+    inventory.bagShown = false;
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().empty() && retained.count == -7);
+    inventory.bagShown = true;
+    inventory.retainedSprite = [](const nativesaves::Item &) { return std::string("missing-owner-resource"); };
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().empty() && retained.count == -7 && retained.item == weapon);
+    inventory.retainedCursor = nullptr;
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().empty());
+    hud.setGuiScale(1);
+    hud.layout(renderer, {1920, 1080});
+    state.guiClockMs = 2500;
     state.inventory = nullptr;
     state.ring.shown = true;
     state.ring.radius = 200;
@@ -264,6 +315,9 @@ int guiItemTests() {
     unsignedRarity[nativesaves::item::RARITY] = 0xff;
     GUI_CHECK(textColour(unsignedRarity, {}) == glm::vec4(1, 1, 0, 1));
     GUI_CHECK(near(phase(-1), -0.036f) && phase(10000) == 0 && near(phase(2500), 90));
+    const auto cursor = cursorPlacement({-17.75f, 29.125f}, -1);
+    GUI_CHECK(cursor.screen == glm::vec2(-17.75f, 29.125f) && cursor.euler == glm::vec3(225, 0, phase(-1)) && cursor.darkPass &&
+              std::bit_cast<uint32_t>(cursor.size) == 0x3d4ccccd && cursor.screenDepth == 0);
     const auto sprite = spritePlacement({30.25f, -20.5f}, {100, 40}, 2500);
     GUI_CHECK(sprite.screen == glm::vec2(80.25f, -0.5f) && near(sprite.size, 0.06f) && sprite.euler == glm::vec3(225, 0, 90) &&
               sprite.darkPass && sprite.screenDepth == 0);

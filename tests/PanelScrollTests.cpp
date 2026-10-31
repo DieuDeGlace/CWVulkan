@@ -36,6 +36,18 @@ int panelScrollTests() {
     const auto fullTrack = friendsThumb(5, 420, 600, 8, 14);
     check(fullTrack && fullTrack->y == 60 && fullTrack->height == 390,
           "Multiplayer's thumb-fit branch is separate from row-offset normalization");
+    const auto stationary = controlsDrag(1, 600, 234, 55, 0);
+    check(stationary && stationary->first == 0 && stationary->y == 55,
+          "stationary held drag keeps continuous Y but recomputes the row by truncation");
+    const auto dragLow = controlsDrag(5, 600, 234, 55, -1000);
+    const auto dragHigh = controlsDrag(5, 600, 234, 55, 1000);
+    check(dragLow && dragLow->first == 0 && dragLow->y == 35 && dragHigh && dragHigh->first == 9 && dragHigh->y == 216,
+          "finite drag clamps to independently specified H600 endpoints");
+    const auto noTravel = controlsDrag(9, 600, 415, 55, 0);
+    check(noTravel && noTravel->first == 9 && noTravel->y == 35, "zero travel skips the row ratio and retains a valid stored row");
+    const auto negativeTravel = controlsDrag(1, 1000, 900, 55, 0);
+    check(negativeTravel && negativeTravel->first == -5 && negativeTravel->y == -50,
+          "lower-then-upper drag clamps preserve the native negative-travel asymmetry");
     std::printf("Panel scroll: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

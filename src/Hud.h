@@ -126,7 +126,9 @@ class Hud {
         std::string infoIcon;
         std::optional<nativesaves::Item> infoItem; // class-adapted preview record; the source stays unchanged
         itempreview::Anchor infoAnchor = itempreview::Anchor::Inventory;
-        glm::vec2 pointer{0}; // the mouse (the preview follows it)
+        glm::vec2 pointer{0};                               // the mouse (the preview follows it)
+        const nativesaves::Stack *retainedCursor = nullptr; // borrowed current player stack; no new grab/save producer
+        std::function<std::string(const nativesaves::Item &)> retainedSprite;
         // The character panel (the character panel's drawing).
         struct Sheet {
             bool valid = false, caster = false;
@@ -565,6 +567,7 @@ class Hud {
     int panelPhysicalAt(glm::vec2 mouse, const InvPanel &, const InvList &) const;
     void placePanels(const Inventory &inv) const;
     void drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) const;
+    void drawRetainedItem(const Inventory &, const InvList &, std::vector<OverlayVertex> &) const;
     void drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     // (through `from`, the gui scene when none)
     using WidgetDraw = std::function<void(const plasma::SceneNode &)>;

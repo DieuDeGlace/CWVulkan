@@ -494,6 +494,14 @@ void Hud::drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const
     }
 }
 
+void Hud::drawRetainedItem(const Inventory &inv, const InvList &list, std::vector<OverlayVertex> &out) const {
+    if (!list.items || !inv.retainedCursor || inv.retainedCursor->count == 0 || !inv.retainedSprite)
+        return;
+    const auto &item = inv.retainedCursor->item;
+    const auto sprite = inv.retainedSprite(item);
+    itemIcon(sprite, item, guiitem::cursorPlacement(inv.pointer, guiClockMs), out.size());
+}
+
 void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) const {
     if (!scene || !panels.bag.node)
         return;
@@ -507,15 +515,18 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         if (&node == panels.bag.node && inv.bagShown) {
             drawInvPanel(out, panels.bag, bag, BAG_TITLES[tab], tab <= 1 ? inv.regionName : std::string(), false,
                          inv.vendor.open && tab != 1 && tab != 5, inv.pointer);
+            drawRetainedItem(inv, bag, out);
             return;
         }
         if (&node == panels.vendor.node && inv.vendor.open) {
             drawInvPanel(out, panels.vendor, vendor, "Vendor", {}, true, false, inv.pointer);
+            drawRetainedItem(inv, vendor, out);
             return;
         }
         if (&node == panels.crafting.node && inv.crafting.open) {
             drawInvPanel(out, panels.crafting, crafting, std::string("Crafting: ") + CRAFT_TITLES[std::clamp(inv.crafting.tab, 0, 5)], {},
                          false, false, inv.pointer);
+            drawRetainedItem(inv, crafting, out);
             return;
         }
         if (&node == panels.details && inv.crafting.open) {

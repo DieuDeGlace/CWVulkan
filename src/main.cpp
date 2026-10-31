@@ -1770,6 +1770,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
         }
     };
+    inventoryView.retainedCursor = nativeInventory ? &nativeInventory->inventory.cursor : nullptr;
+    inventoryView.retainedSprite = [&](const nativesaves::Item &item) {
+        const auto sprite = spawned.itemSprite(item.data());
+        loadInventorySprite(sprite);
+        hud.prepareItemResources(renderer);
+        return sprite;
+    };
     auto resetDailyProgress = [&] {
         nativeprogress::resetDay(saveGame);
         if (nativeInventory && rebuildInventoryViews) {

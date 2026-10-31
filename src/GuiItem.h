@@ -24,6 +24,7 @@ Placement ringPlacement(size_t index, size_t count, glm::ivec3 allocation, glm::
 std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &, float farPlane);
 float phase(int32_t guiClockMs);
 Placement spritePlacement(glm::vec2 frameOrigin, glm::vec2 frameSize, int32_t guiClockMs);
+Placement cursorPlacement(glm::vec2 cachedPointer, int32_t guiClockMs);
 struct GridCell {
     glm::vec2 origin{0}, extent{0};
     Placement icon;

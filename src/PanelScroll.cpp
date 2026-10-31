@@ -1,5 +1,6 @@
 #include "PanelScroll.h"
 #include <bit>
+#include <cmath>
 #include <limits>
 
 namespace panelscroll {
@@ -40,6 +41,29 @@ std::optional<int32_t> divide(int32_t numerator, int32_t denominator) {
     return numerator / denominator;
 }
 } // namespace
+
+std::optional<Drag> controlsDrag(int32_t first, float localHeight, float thumbHeight, float thumbY, float pointerDeltaY) {
+    if (!std::isfinite(localHeight) || !std::isfinite(thumbHeight) || !std::isfinite(thumbY) || !std::isfinite(pointerDeltaY))
+        return std::nullopt;
+    const int32_t distance = track(localHeight, 35), rows = distance / 30;
+    const int32_t travel = subtract(distance, truncate(thumbHeight));
+    float y = pointerDeltaY + thumbY;
+    if (y < 35)
+        y = 35;
+    const float upper = float(add(travel, 35));
+    if (y > upper)
+        y = upper;
+    if (travel > 0) {
+        const float offset = y - 35;
+        const float scaled = float(subtract(22, rows)) * offset;
+        first = truncate(scaled / float(travel));
+    }
+    if (first < 0)
+        first = 0;
+    if (first >= subtract(23, rows))
+        first = subtract(22, rows);
+    return Drag{first, y};
+}
 
 Change controls(int32_t first, int wheelDelta, float localHeight) {
     if (!wheelDelta)

@@ -407,8 +407,6 @@ bool Session::start(std::string &error) {
         std::to_string(selectFrame.y));
     // The title shows the live world at its own time of day (frontend-title.md §1, §3.2).
     hour = std::fmod(std::max(0.0f, s.startHour), 24.0f);
-    if (s.controls)
-        controls.values = *s.controls;
     // The logo model, lit once and drawn in screen space.
     if (auto path = s.assets->resolve(fs::path("sprites") / "cubeworld.cub")) {
         CubModel cub;
@@ -446,8 +444,6 @@ bool Session::startInGame(std::string &error) {
     if (!s.hud && !hud.load(s.assets->gameDir(), error))
         return false;
     titleShown = charactersShown = creationShown = false;
-    if (s.controls)
-        controls.values = *s.controls;
     size = s.renderer->screenSize();
     return true;
 }
@@ -1080,10 +1076,9 @@ void Session::handleClick(bool inGame) {
         systemShown = false; // the menu hides itself, then acts
         if (hovered == SYSTEM_OPTIONS)
             openOptions();
-        else if (hovered == SYSTEM_CONTROLS) {
-            controls.values = s.controls ? *s.controls : gameoptions::defaultControls();
-            controlsOpen = true;
-        } else if (hovered == SYSTEM_START_MENU)
+        else if (hovered == SYSTEM_CONTROLS)
+            controlsOpen = !controlsOpen;
+        else if (hovered == SYSTEM_START_MENU)
             decide(Result::Title);
         else if (hovered == SYSTEM_EXIT)
             decide(Result::Quit);

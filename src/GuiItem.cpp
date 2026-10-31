@@ -9,6 +9,10 @@
 #include <cstring>
 
 namespace guiitem {
+Placement cursorPlacement(glm::vec2 pointer, int32_t clock) {
+    return {pointer, {225, 0, phase(clock)}, 0.05f, 0, true};
+}
+
 Placement spritePlacement(glm::vec2 origin, glm::vec2 size, int32_t clock) {
     Placement at;
     at.screen = origin + size * 0.5f;

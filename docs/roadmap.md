@@ -254,7 +254,12 @@ individual feature documents.
   distinct owner callbacks, depth, scales and clocks. Recipe spin advances only on
   resource-admitted draws; ingredients share native hover/navigation geometry.
   Customization now submits its thumbnails, raw base/attributes/candidate and
-  palette through that renderer. Retained-cursor and other callers still need conversion.
+  palette through that renderer. The retained-item cursor now samples the canonical
+  transient stack at each admitted InventoryWidget callback, after children and
+  grid/text work. It retains nonzero negative counts, category0, the cached float
+  pointer, fixed size and signed GUI-clock spin. Missing resources or hidden
+  panels leave the stack intact; no drag/grab/save producer is inferred. Other
+  callers and broader native visual comparisons still need conversion/validation.
   Category 23 procedural artifacts now use a full-key resource cache shared by
   the GUI and world model paths. The extractor can publish completed native
   volumes through an atomic request/status protocol; all eight independently
@@ -369,7 +374,11 @@ individual feature documents.
   occlusion. Controls/Multiplayer physical-wheel fallback now uses the
   cached GUI pointer after the three inventory grids, native one-row clamps,
   owner scroll-thumb rebinding and separate fit/refresh branches. It does not
-  extend controller wheel eligibility. The movement-close batch hides its stated
+  extend controller wheel eligibility. Controls reopening retains its local edits
+  and row rather than reloading active bindings. The editor's initial defaults
+  remain separate from loaded active bindings. Finite thumb-drag arithmetic is
+  covered; its owner hierarchy/frame queries and shared capture routing still
+  need integration. The movement-close batch hides its stated
   panel roots and clears only shown answer pages, preserving unrelated data and
   Options/Controls. Focused arithmetic checks cover those bounded rules. Broader
   early input/camera/GUI phase fidelity and native interaction/visual comparisons

@@ -171,3 +171,257 @@ their directly requested refreshes. It does not replace owner thumb/
 button artwork, the wider Multiplayer presentation, ordinary binding
 capture semantics, or the earlier Inventory/Shop/Crafting wheel rules.
 No additional pad action, key binding or list compaction is inferred.
+
+## 6. Controls opening, Defaults/OK/Cancel and refresh lifetime
+
+### 6.1 First construction versus reopening the same Widget
+
+Controls constructor **0x275a70** initializes the binding array through
+**0x41dd0 at0x275b3d** and writes signed32 first row **+0x2d8=0 at
+0x275b63**.0x41dd0 zeroes23 eight-byte binding records and populates
+the defaults through0x43760. This array **+0x1f0..+0x2a7** is separate
+from the Game's active bindings and from the later row/hover/wait fields.
+The constructor does not read controls.cfg into this local array.
+
+The ordinary System menu's Controls choice **0x292300, index1**, first
+hides System's root, then tail-calls **Interface0x102ed0 at0x29235f**.
+The complete toggle body **0x102ed0–0x102f02** only changes Controls
+root own visibility, **Interface+0x540 = Game+0x658**, from hidden to
+shown or vice versa. It performs **no row-offset reset, active-binding
+copy, data replacement, thumb refresh, or root-size request**.
+Thus reopening this same Widget retains its first row. A fresh Widget
+construction is a separate zero-initialization event.
+
+### 6.2 The three footer buttons
+
+Constructor0x275a70 registers all three for **event3, mouse release**.
+Their effects on the retained row are:
+
+|Action / native callback|Binding/visibility effect|First row and thumb|
+|---|---|---|
+|Defaults,0x276a30|Construct a fresh184-byte default binding block through0x41dd0 and copy it into widget+0x1f0..+0x2a7; keep the panel shown|Retain+0x2d8; no0x276f40 call|
+|OK,0x276c80|Pass local bindings to Game0x89b80, which replaces active bindings and writes controls.cfg through0x438e0; then hide Controls root|Retain+0x2d8; no0x276f40 call|
+|Cancel,0x276a00–0x276a20|Only hide Controls root|Retain+0x2d8 and local binding edits; no0x276f40 call|
+
+The Defaults copy ends before the row field. Cancel does not restore the
+previous local array, and the verified opening route does not overwrite
+it from active Game bindings. Consequently uncommitted local edits can
+still be present on reopening, while Cancel itself did not apply them
+to the Game. Do not add a modern rollback/reload policy to this path.
+The independent binding-wait clear in ordinary input/release handling
+remains its existing contract; it is not a first-row reset.
+
+### 6.3 Thumb updates independent of row-step input
+
+The verified direct caller of **0x276f40** outside up/down is the
+Controls **size/layout hook0x276cd0**, which calls it at **0x276df7**.
+Controls' native vtable0x46e468 assigns that hook to **slot+0x50**.
+The hook arranges the footer controls, updates the thumb using the
+existing first row, then places up/down controls. It does not zero or
+otherwise normalize+0x2d8. The updater still returns when its thumb
+node+0x2d0 is null, as§4 specifies.
+
+There is an initial refresh before first display: after constructing
+Controls, **Interface0xf9ac0 at0xfca81** requests **500×600**, rebound1,
+through0x32c9a0. That setter calls0x32c6f0, whose final own virtual+0x50
+dispatch reaches0x276cd0, and therefore the thumb update. The interface
+then hides the Controls root. This is a size/setup event, not an implicit
+first-open refresh.
+
+Later reached size requests through0x32c6f0 likewise invoke that own
+layout hook, **even if the requested size does not produce a new effective
+size**; the final hook dispatch is outside its size-delta branch. It has
+no root-shown condition. A hidden Widget can therefore have its thumb
+recomputed by actual size/layout work. Mere visibility toggle and the
+examined Defaults/OK/Cancel bodies do not perform that work.
+
+Ordinary draw **0x276200** does not call0x276f40 and does not write back
+its clamped visible first/end indices as a new stored first row. It is
+not a per-frame thumb refresh or automatic row normalization. Binding
+assignment **0x2769a0** changes binding records/hover state, not the row
+offset or thumb. Thumb drag **0x276af0** has its own held-pointer path
+that assigns+0x2d8 and directly repositions the thumb; it does not call
+0x276f40 to recompute thumb height. Its full pointer geometry is outside
+that opening/footer subsection; the verified drag contract is now§7.
+
+## 7. Controls thumb drag0x276af0
+
+### 7.1 Registration, held state and capture routing
+
+Constructor **0x275a70** makes an independent copy of the supplied owner
+thumb node, stores it at **Controls+0x2d0**, and registers callback
+**0x276af0 for event12** through0x2757b0. It matches the own Widget name
+**scrollbutton** in that copied subtree, with recursive Widget targets
+through0x2758b0/0x32ac80 and enabled-required1. The callback's target
+object is the containing ControlsWidget, not the particular hit child.
+The constructor preserves copied Widget dynamic types/settings; it
+does not install a new hardcoded slider class or capture policy.
+
+The callback itself has exactly one initial input gate: **GUI engine
+pointer Controls+8, held-button word+0x1a8 bit0 must be set**. This is
+the GUI's logical left-held state, including any earlier synthesized
+button input; it is not a fresh physical-button query. If clear, return
+without geometry or row changes. It does not test its own capture node,
+a pressed-origin flag, minimum movement, pointer containment, current
+hover index, binding waiting index, panel visibility or elapsed time.
+
+Ordinary dispatch **0x3418d0** first saves old GUI XY into+0x188/+0x18c,
+then stores new float XY at+0x180/+0x184. It routes to **captured node
+engine+0x168 when nonnull**, otherwise hit-tests the GUI root with flags0.
+After owner enter/leave processing, the target's enabled virtual move
+hook+a8 runs **before registered event12**. That virtual hook can have
+its own data-driven behavior; do not move this custom callback ahead of
+it. Registered dispatch requires the hit/captured node's passive bit0x02
+clear and the owner Widget enabled for this enabled-required callback.
+With capture, the dispatcher does not require a new root/ancestor hit.
+
+The verified ordinary **Button** route is: left down0x340ec0 sets the
+held bit, resolves capture-or-hit and invokes the enabled owner's virtual
++0x58; Button **0x36a140** calls **0x33c410** to capture its own root node.
+The setter simply stores that node at engine+0x168. This makes later
+movement continue outside that root's hit region. On left release,
+**0x3410e0 clears held bit0 before the release virtual**; Button
+**0x36a240→0x3493b0** clears capture and invokes0x3418d0 with unchanged
+XY. A reached thumb callback during that release-induced update sees
+held0 and makes no final drag step.
+
+This Button behavior applies to the actual copied Button owner, including
+a captured descendant carrying the registered callback. Native registration
+does not by itself prove an owner's serialized dynamic Widget type from
+the word scrollbutton. Read that type/settings from the owner's scene;
+the native constructor does not override them. Independently of capture,
+a reached matching move callback while left is already held can drag:
+there is no requirement that the press started on this thumb. Conversely
+a capture routing to another owner without this callback does not trigger
+it merely because the cursor crosses the visible thumb.
+
+### 7.2 The three geometry queries have different contracts
+
+Read panel local effective height **H through0x329e00**. This is the
+same local-height input used by the row-step handlers. Separately obtain
+the thumb Widget at **(Controls+0x2d0)->+0x70**:
+
+* Thumb height comes from **0x32ad10→0x32d1d0**, then trunc32 toward
+  zero. This is the existing Q-transformed effective-size vector's Y,
+  not0x329e00 on the thumb, an absolute value, or an occupied-artwork AABB.
+  Preserve the parent-relative/root-cancelled Q contract in
+  plasma-format-and-scene §2.7.2; it does not apply a generic inverse
+  parent-world matrix.
+* Thumb position comes from **0x329f50**, call0x276b6a. This is distinct
+  from0x32c340. Starting at its node's parent, find the nearest ancestor
+  with an own Widget. Compose the thumb's local node matrix with its
+  bind inverse **Widget+0x110**, precomposing intervening ancestors
+  without Widgets, as0x329e40. Project the thumb's stored frame position
+  **+0x88/+0x8c** through that matrix with a homogeneous reciprocal.
+  Separately project the ancestor Widget's frame position through that
+  ancestor's own bind inverse, also with a homogeneous reciprocal, then
+  subtract the two XY results. The ancestor's node/world matrix is not
+  appended here. If no such Widget ancestor exists,0x329f50 instead
+  returns the ordinary world-frame origin0x32cf50. Do not substitute
+  a raw translation channel or generic screen rectangle origin.
+* Pointer displacement comes from **0x32b0d0 on the ControlsWidget**,
+  call0x276b7a. Subtract old from new GUI XY in float32. Invert that
+  panel's full frame matrix **0x32ce40**, and apply its XY linear part
+  to the screen delta as a direction, with Z0. There is **no translation
+  or homogeneous divide on the direction**, time factor, or separately
+  guessed GUI-scale division. The frame matrix includes the actual
+  inherited node transforms, bind inverse and frame-position translation.
+
+Use these actual helpers/bases together. The delta is not the absolute
+pointer Y, and the thumb position/height are not interchangeable local
+or screen queries simply because the stock pose may look axis-aligned.
+
+### 7.3 Float order, clamps, row write and continuous thumb movement
+
+Subtract float32 **150** from H, then float32 **35**, and truncate that
+float result to signed32 D. Let signed q be **D divided by30 toward zero**.
+Let signed travel K be **D minus trunc32(queried thumb height)**, in32-bit
+arithmetic. Candidate Y is float32 **pointer displacement Y plus queried
+thumb position Y**. For finite inputs, clamp candidate first upward to
+float35, then downward to **float32(signed32 K+35)**. The upper endpoint
+is formed by the integer addition before conversion. Call the resulting
+float Y. This order is retained even when K is zero or negative.
+
+Only when **K>0**, replace row+0x2d8 by trunc32 of the float32 result
+obtained in this order: convert signed **22−q** to float; subtract
+float35 from Y; multiply those float values; divide by float32(K).
+Every operation has its float32 result. If K<=0, skip this assignment
+and start the following clamps with the previously stored row.
+
+Then clamp a negative stored row to0; afterward, if row is **at least
+23−q**, store **22−q**. There is no additional final lower clamp after
+that upper write. Do not replace this with a different all-sizes clamp.
+
+After the row work, **0x276c3d** queries0x329f50 again. Preserve that
+current X and move the thumb to **(that X,Y)** through
+**0x32b560 at0x276c57**, final flag1. That is the ordinary frame-placement
+solver0x32b250, not a raw translation-column write. It does not call
+0x276f40, change the thumb's requested size, or snap Y back to the
+integer-row thumb formula. The continuous Y can lie between two
+row-quantized scrollbar positions.
+
+There is no nonzero-delta gate. A stationary held move event still
+performs the queries, ratio/truncation, clamps and placement. As an
+arithmetic example with supplied H600, thumb queried height234, current
+Y55 and delta0: D415, q13, K181, and the ratio9×20/181 truncates to
+row0 even if the old stored row was1; the thumb remains atY55. This
+is an evaluation of the contract, not a runtime capture. Do not add
+a no-coordinate-change early return or nearest-row rounding.
+
+### 7.4 Input/draw timing
+
+The handler is an event12 move callback, **not a draw-time update**.
+For the normal input loop, the verified pointer poll is
+**0x1355a0→0x97880 at0x13683e→0x101160→0x3418d0**. It runs after
+queued window messages, before that iteration's XInput work and ordinary
+frame driver0x134420. WM_MOUSEMOVE does not independently invoke it.
+Unchanged reached XY still dispatches the move callback. Foreground/
+enabled admission and binding-capture waiting can skip that normal poll;
+see steam-character-list-input-and-frame-init §7 for the exact cadence.
+Other reached0x3418d0 dispatches retain their own caller phase.
+
+Consequently the drag's row/placement writes precede the later admitted
+Controls draw, which reads the new row. Drawing does not repair or
+recompute the thumb. A subsequent independent size/layout event can
+recompute it through§6.3, but that is not an automatic part of dragging.
+No list rebuild, binding change, sound, time-based velocity or page-jump
+track click is introduced by this callback.
+
+## 8. Startup controls.cfg versus the local Controls editor array
+
+The verified Game constructor **0x7ea80** has this order:
+
+1. **0x7ed12→0x41dd0** initializes the **active Game bindings at+0x1bdc**
+   with defaults.
+2. **0x7f267→0x42b30**, with that active array address, reads
+   controls.cfg. The reader's recognized binding writes address its
+   supplied array; it is not given a ControlsWidget pointer.
+3. **0x7f4d4→0xf9ac0** constructs the interface, including Controls
+   **0xfca5e→0x275a70**. Its own separate editor array **+0x1f0..+0x2a7**
+   is initialized by0x275b3d→0x41dd0 with defaults, after the active
+   configuration load has already happened.
+4. After interface construction, **0x7f4ef→0x89b80** receives the Game
+   and **the same active Game+0x1bdc array** as source. Its writes go
+   back to Game+0x1bdc..+0x1c93, then it tail-calls the controls.cfg
+   writer **0x438e0 at0x89bfd**. This is an active-array self-apply/save,
+   not a copy into widget+0x1f0.0x438e0 serializes the supplied binding
+   array and does not synchronize an editor Widget.
+
+Thus the identified startup path **does not assign loaded active values
+to the local Controls editor after construction**. Loaded active bindings
+and the initially default local editor are distinct native states. The
+earlier opening/Cancel retention facts are not authorization for an
+implicit active→local synchronization on first open.
+
+The verified local-editor writers in this bounded audit are:
+
+|Writer|Local array effect|
+|---|---|
+|Constructor0x275b3d→0x41dd0/0x43760|Initialize all23 records to defaults/unassigned values|
+|Defaults0x276a30|Replace all184 bytes with a freshly initialized default block|
+|Captured binding0x2769a0|For a waiting index whose unsigned value is<23, clear any matching kind/code pairs across23 rows, then write the captured eight-byte pair into the selected local row; clear hover index+0x2dc|
+
+OK reads this local array to replace active bindings through0x89b80;
+Cancel/open/ordinary draw/scroll/drag do not replace the local array.
+These facts classify the verified startup and editor routes, not every
+conceivable indirect memory writer or an unexecuted runtime capture.

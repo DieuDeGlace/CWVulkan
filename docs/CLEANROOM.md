@@ -89,6 +89,15 @@ Done so far with the full process:
   The movement-close batch follows region-history §7.4.1, preserving Options,
   Controls, panel data and unrelated answer fields. Wider input/GUI phase gaps are
   recorded in the roadmap.
+- The retained item image follows `steam-retained-item-and-map-pass-family.md`:
+  each admitted inventory/shop/crafting callback samples the canonical transient
+  player stack after its children and text. Pointer coordinates, literal size,
+  signed-clock rotation and shared helper state follow the independent contract.
+  No positive cursor-origin action or new save field is manufactured. Controls'
+  local-edit retention and separate startup defaults follow the wheel supplement's
+  independently traced lifecycle. Its finite drag arithmetic is implemented from
+  the supplied query outputs; actual owner geometry/capture routing remains a
+  separate integration boundary, rather than a guessed rectangle.
 - Procedural artifact resources follow `steam-procedural-item-resources.md`:
   independent generators implement the seven named families and default sphere,
   preserving full ID/modifier keys, allocation dimensions and native color mode.
