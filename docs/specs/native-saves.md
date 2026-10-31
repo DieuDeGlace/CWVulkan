@@ -339,13 +339,17 @@ the save keeps its newest changes in memory only (open question 3).
 
 ### 5.6 The world reset (0x2c34c0)
 
-When the world update 0x2da6c0 finds, outside server mode, an entry of kind 0 in the list at
-world +0x160, it removes every non-player creature (0x2d2eb0) and then 0x2c34c0 empties the
-dead-creature set (world +0x20, 0x3d6c0) and the whole zone-state map (world +0x10, 0x8a830),
-removes every item of type 0x16 from the local player's inventory, and empties player data
-+0x88, +0xd8 (finished missions) and +0x138 (items bought from shops). Every zone loaded afterwards therefore
-comes back as generated (monsters alive, chests closed, no dropped items). The dropped-reward set
-(world +0x30) is kept. What adds that entry was not traced (open question 9).
+When world update0x2da6c0 finds a kind0 notice at World+0x160 on the
+**authority (World+0x358 equal0)**, it invokes0x2d2eb0 then0x2c34c0.
+The first removes kind-nonzero actors while retaining all kind0 players;
+the second clears dead IDs+0x20, archived zone states+0x10 and the
+**local player's only** category0x16 inventory/daily personal data
+at+0x88,+0xd8,+0x138. Dropped-reward IDs World+0x30 remain. Clearing
+the archive affects later fresh loads; already loaded zones and their
+live changes are not rebuilt or erased by this pair. The time prelude's
+midnight producer, retained notice across host substeps and exact local/
+guest/output distinctions are now specified in
+[the daily-reset supplement](steam-world-daily-reset.md).
 
 ---
 

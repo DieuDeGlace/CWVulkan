@@ -810,9 +810,7 @@ std::vector<SpawnedCreatures::Death> SpawnedCreatures::takeDeaths(const Extracte
                 continue;
             dead.insert(id);
             worldDead.insert(id); // (the world's: its zone does not make it again)
-            if (!client && enemyrespawn::isEnemy(cr.record[worldgen::creature::HOSTILITY]))
-                if (const auto source = zoneResidents.find(zone); source != zoneResidents.end() && source->second->spawns.points.count(id))
-                    enemyDeaths.killed(id, zone);
+            rememberEnemyDeath(id, zone, cr.record[worldgen::creature::HOSTILITY]);
             toBurst.insert(id);
             out.push_back({id, get<int64_t>(cr.record, 0x9e0),
                            ew.toLocal(reinterpret_cast<const int64_t *>(&cr.record[worldgen::creature::POSITION])),
@@ -870,7 +868,7 @@ std::vector<std::pair<int, glm::vec3>> SpawnedCreatures::list(const ExtractedWor
     return out;
 }
 
-void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
+void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset) {
     lastWorld = &ew;
     // Gameplay-camera §7.2.3: ordinary frames retain double milliseconds. The host
     // supplies integer timeGetTime differences to its separate world through this same
@@ -1148,6 +1146,32 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
         iw.added(made);
     };
     pets.setup = a.adopt;
+    auto rebuildViews = [&] {
+        // Reset deletion and vector compaction end the old actor lifetimes. Never
+        // reuse an old pointer cache merely because the new list has the same size.
+        const auto current = worldList();
+        byId.clear();
+        sideIndex.clear();
+        w.creatures.clear();
+        sides.clear();
+        for (nativeai::Creature *creature : current) {
+            int64_t id;
+            std::memcpy(&id, creature->record + worldgen::creature::ID, sizeof id);
+            byId[id] = creature;
+            if (!playerMoves && creature == &player.side)
+                continue;
+            w.creatures.push_back(creature->record);
+            sides.push_back(creature);
+        }
+        a.creatures = current;
+        hw.creatures = current;
+        fw.creatures = current;
+        iw.creatures = current;
+        u.local = hasPlayer ? player.record.data() : nullptr;
+        a.local = hw.local = fw.local = u.local;
+        w.local = hasPlayer && nativePlayer ? player.record.data() : nullptr;
+        pets.local = hasPlayer ? &player.side : nullptr;
+    };
     auto step = [&](float dt) {
         elapsedWorldMs += dt; // native world time advances before the near-player pass
         u.time = elapsedWorldMs;
@@ -1188,6 +1212,21 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
             }
             nativeupkeep::upkeep(u, sides[i], dt); // (poison's ticks land inside it, through u.hit)
             u.hits.clear();
+        }
+        if (iw.day != dayCount) { // An inn can change time during a body callback.
+            innNights += iw.day - dayCount;
+            dayCount = iw.day;
+            dayMs = iw.timeOfDay;
+        }
+        const auto hasReset = [](const auto &notices) { return std::find(notices.begin(), notices.end(), 0) != notices.end(); };
+        if (!client && (hasReset(worldEvents.sleeps) || hasReset(iw.sleepNotices))) {
+            // Native2db703/2db70b: the notice stays queued for later substeps.
+            // Settle synchronous births so the same reset owns their deletion too.
+            settle(born);
+            worldReset();
+            if (onReset)
+                onReset();
+            rebuildViews();
         }
         if (hasPlayer) {
             const int64_t x = get<int64_t>(player.record, worldgen::creature::POSITION);
@@ -1262,11 +1301,6 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
             }
         keepBlockChanges(a.blockChanges);
         keepBlockChanges(fw.blockChanges);
-        if (iw.day != dayCount) { // a night at the inn: the next day, at 7:00
-            innNights += iw.day - dayCount;
-            dayCount = iw.day;
-            dayMs = iw.timeOfDay;
-        }
         worldEvents.sounds.insert(worldEvents.sounds.end(), iw.sounds.begin(), iw.sounds.end());
         keepSounds(iw.sounds);
         worldEvents.buffs.insert(worldEvents.buffs.end(), iw.buffNotes.begin(), iw.buffNotes.end());
@@ -1946,18 +1980,13 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
     if (clockRate <= 0 && !client)
         dayMs = std::fmod(hour, 24.0f) * 3600000.0f;
     w.day = dayMs;
-    if (hasPlayer) { // the local player comes first in the world's list
-        player.side.record = player.record.data();
-        w.creatures.push_back(&player.side);
-        w.byId[localId] = &player.side;
-        w.local = &player.side;
+    w.local = hasPlayer ? &player.side : nullptr;
+    w.creatures = worldList();
+    for (nativeai::Creature *creature : w.creatures) {
+        int64_t id;
+        std::memcpy(&id, creature->record + worldgen::creature::ID, sizeof id);
+        w.byId[id] = creature;
     }
-    for (auto &[zone, list] : zones)
-        for (Creature &cr : list) {
-            cr.side.record = cr.record.data();
-            w.creatures.push_back(&cr.side);
-            w.byId[get<int64_t>(cr.record, worldgen::creature::ID)] = &cr.side;
-        }
     w.block = [&](int x, int y, int z) { return ew.gameBlock(x, y, z); };
     w.zone = [&](int zx, int zy) {
         bool loaded = false;
@@ -2498,12 +2527,25 @@ void SpawnedCreatures::advanceClock(double dtMs) {
     dayMs = (float)t;
 }
 
+void SpawnedCreatures::rememberEnemyDeath(int64_t id, std::pair<int, int> zone, uint8_t kind) {
+    if (client || !enemyrespawn::isEnemy(kind) || enemyDeaths.contains(id))
+        return;
+    if (const auto source = zoneResidents.find(zone); source != zoneResidents.end() && source->second->spawns.points.count(id))
+        enemyDeaths.killed(id, zone);
+}
+
 void SpawnedCreatures::worldReset() {
     // Every creature that is not a player goes; the zones make them again, the dead included.
     for (auto &[zone, list] : zones)
         for (auto it = list.begin(); it != list.end();)
             if (it->record[worldgen::creature::HOSTILITY] != 0) {
-                ai.erase(get<int64_t>(it->record, worldgen::creature::ID));
+                const int64_t id = get<int64_t>(it->record, worldgen::creature::ID);
+                // The engine's optional respawn policy must also see a death that
+                // occurs just before this reset erases the body. Existing timers keep
+                // their original deadline across repeated notices.
+                if (seenAlive.count(id) && !(get<float>(it->record, worldgen::creature::HEALTH) > 0.0f))
+                    rememberEnemyDeath(id, zone, it->record[worldgen::creature::HOSTILITY]);
+                ai.erase(id);
                 it = list.erase(it);
             } else
                 ++it;

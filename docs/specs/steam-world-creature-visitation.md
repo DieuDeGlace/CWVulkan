@@ -180,6 +180,9 @@ its body update and be removed later in that same substep. The once-per-frame
 drawn passes see the survivors of the entire completed World batch.
 Exact new-day/loaded-zone
 semantics remain remaining-runtime-gaps §6.
+The complete archive/local partner and retained-notice/output timing,
+including repeated late resets within one host batch, are now in
+[the daily-reset supplement](steam-world-daily-reset.md).
 
 No direct World+0x40 unlink/reorder appears in the two0x2b68e0 loop
 skeletons. This supplement does not claim that every nested lifecycle

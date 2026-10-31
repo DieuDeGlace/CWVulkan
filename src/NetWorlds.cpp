@@ -38,31 +38,24 @@ void HostSide::removeCreature(int64_t id) {
 
 void HostSide::advance(uint32_t dtMs) {
     // The native world advances in 16-ms slices, including its spawn and reset passes.
-    // Keep notices for transmission, but consume each notice only once in this host tick.
-    size_t consumedSleeps = 0;
-    for (uint32_t left = dtMs; left;) {
+    // Reset notices remain queued until HostGame distributes the whole batch.
+    const uint32_t frameMs = std::min(dtMs, uint32_t(1000));
+    uint32_t left = frameMs;
+    do {
         const uint32_t step = std::min(left, uint32_t(16));
         left -= step;
         world.advanceClock((double)step);
         world.update(blocks, standIn);
         world.think(blocks, (double)step, world.timeOfDay() / 3600000.0f);
-        world.simulate(blocks, (double)step);
-        world.smooth((float)step);
-        world.zoneChangeLists();
+        world.simulate(blocks, (double)step, reset);
         std::vector<SpawnedCreatures::Death> died = world.takeDeaths(blocks);
         if (deaths && !died.empty())
             deaths(died);
-        const auto &sleeps = world.events().sleeps;
-        const bool resetRequested = std::find(sleeps.begin() + consumedSleeps, sleeps.end(), 0) != sleeps.end();
-        consumedSleeps = sleeps.size();
-        if (resetRequested) {
-            // Midnight resets before spawning and again at the notice pass (§6.2).
-            world.worldReset();
-            if (reset)
-                reset();
-        }
-    }
-    // Nothing hears or draws the host world: what it keeps for that is let go.
+    } while (left);
+    // Native host f693e draws once with the full capped interval, after all substeps.
+    world.smooth((float)frameMs);
+    world.zoneChangeLists();
+    // Host audio and other engine-local consumer queues are not presented here.
     world.takeSounds();
     world.takeDrops();
     world.takeTames();

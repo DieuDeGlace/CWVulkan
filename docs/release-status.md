@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Host batches now consume an admitted zero-time residual and run both drawn-state
+  passes once with the full capped interval, followed by zone output collection.
+  AI collection uses retained World registration order instead of placing the local
+  player first. The independent [daily-reset contract](specs/steam-world-daily-reset.md)
+  puts the authority notice reset after creature bodies and before active effects.
+  Pending births join the reset, and all actor views and ID/pointer caches are rebuilt
+  after deletion. Kind0 guests, loaded-zone state, effects and queued events survive.
+  A queued zero notice remains eligible in every later substep until host distribution
+  clears the outgoing group. Configured respawn deadlines also survive a death caught
+  by the reset before the adapter's next death scan. Focused checks cover tied AI
+  choices, zero/33-ms host intervals, reset/effect order, repeated notices, compacted
+  guest storage, queued kill credits and the mirror's authority boundary. Broader
+  time/resident preludes, lifecycle producers and native-game comparisons remain open.
+  All five targets build; full CPU/owner-data validation retains only the two known
+  modded generator-reference assertions. Both camera Vulkan styles pass. No-save
+  movement/combat and dialogue-request runs stop normally with the save unchanged.
+  The dialogue request produces no speech bubbles, so it is not native conversation
+  acceptance. The inherited blue scene and missing owner hair model remain open.
+
 - World body updates now use retained creature registration order. A separate
   full-list pass clears state0x10 before body callbacks, including dead entries and
   called zero-time steps. Physics/ability/interaction retain one HP admission, then

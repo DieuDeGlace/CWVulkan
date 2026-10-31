@@ -147,7 +147,9 @@ class SpawnedCreatures {
     const uint8_t *localRecord() const { return hasPlayer ? player.record.data() : nullptr; }
     // Runs the game's creature update for `dtMs` milliseconds of play: its physics (0x2bb8e0,
     // NativeUpdate) in the world's steps of at most 16 ms, as the game's world update does.
-    void simulate(ExtractedWorld &ew, double dtMs);
+    // Authority reset notices run after body visits and before effects; optional hook
+    // observes each such reset. Mirrors retain their packet-controlled population.
+    void simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset = {});
     // Runs the game's creature AI (0x13830, NativeAI): every 40 ms, as the game's AI thread
     // does, each creature picks what it does and the way it wants to go (+0x40), which the
     // update then follows. `hour` is the time of day (townsfolk sleep 20:00 to 7:00).
@@ -575,6 +577,7 @@ class SpawnedCreatures {
     nativedrop::World dropWorld(ExtractedWorld &ew);
     void keepDrops(ExtractedWorld &ew, const nativedrop::World &dw, int64_t from, int32_t level, bool reward);
     std::vector<nativeai::Creature *> worldList(); // retained World registration order
-    std::map<int64_t, uint8_t> lastAbility;        // for abilities(): each one's at the last call
+    void rememberEnemyDeath(int64_t id, std::pair<int, int> zone, uint8_t kind);
+    std::map<int64_t, uint8_t> lastAbility; // for abilities(): each one's at the last call
     int worldModel(World &world, int id, const float *tint, bool recoloured, const hair::Style *look = nullptr);
 };

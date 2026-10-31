@@ -27,8 +27,9 @@ class HostSide : public cwnet::HostWorld {
 
     // Where the zones are kept before any player has joined (local blocks).
     glm::vec3 standIn{0};
-    // Told after each tick's world step: what died (for the dead set and the save) and the world
-    // resets (a night slept).
+    // Death-policy notifications after a World step, and each authority notice reset
+    // after body visits but before active effects. A queued notice can reset several
+    // substeps of one host batch.
     std::function<void(const std::vector<SpawnedCreatures::Death> &)> deaths;
     std::function<void()> reset;
     // Optional gameplay policy; observation waits for complete player position,

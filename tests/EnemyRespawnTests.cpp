@@ -165,6 +165,21 @@ void generatedEnemy() {
     CHECK_RESPAWN(host.record(id) && health(host.record(id)) > 0);
     if (!host.record(id))
         return;
+    // A reset can run before the adapter's next death scan. It must capture that
+    // already-dead enemy for the configured policy without restarting an old timer.
+    host.takeDeaths(blocks);
+    setHealth(host.record(id), 0);
+    host.worldReset();
+    CHECK_RESPAWN(host.isWorldDead(id));
+    host.advanceRespawns(299999);
+    host.worldReset();
+    CHECK_RESPAWN(host.isWorldDead(id));
+    host.advanceRespawns(1);
+    CHECK_RESPAWN(!host.isWorldDead(id));
+    host.update(blocks, home);
+    CHECK_RESPAWN(host.record(id) && health(host.record(id)) > 0);
+    if (!host.record(id))
+        return;
     host.setEnemyRespawn({Mode::Instance, 300});
     host.takeDeaths(blocks);
     setHealth(host.record(id), 0);

@@ -1677,8 +1677,14 @@ The bed/inn reset notice is also handled during the authoritative world step by 
 same pair of live-reset/daily-reset calls. The notice pass is **after** the creature
 AI/abilities/interaction/upkeep traversal. In the literal midnight step this means
 the pair runs once from 0x2e2e80, and then again from that step's queued reset notice;
-non-players that were recreated between those calls are removed again. On the next
-world substep the ordinary spawn/pet passes repopulate them. For an inn interaction
+non-players that were recreated between those calls are removed again. The notice
+scan does not consume its entry. In the native host, outgoing lists are cleared
+only after the whole substep batch, drawn-state pass, zone outputs and event
+distribution. Thus later substeps may repopulate nonplayers in their prelude
+and remove them again at their late scan while that same zero notice remains.
+The precise reset/output/zero-residual schedule is now
+[the daily-reset supplement](steam-world-daily-reset.md).
+For an inn interaction
 that increases day during the creature traversal, the zone refresh occurs on the
 following spawn pass, after the notice reset. Thus normal midnight or sleep has broader
 live-entity effects than calling 0x31c540 after manually changing a day integer. The

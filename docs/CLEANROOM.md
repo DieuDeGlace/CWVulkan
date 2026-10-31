@@ -72,6 +72,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Host/reset scheduling follows the independent daily-reset supplement and the AI
+  contract's World-order scans. Actor views are rebuilt after deletion before effects;
+  retained players, live zones and outgoing events keep their specified lifetimes.
+  Synthetic actual-facade checks cover zero/full-interval host updates, persistent
+  notices, compacted actor storage and reset-before-effects. Configured respawning
+  remains an explicit engine policy; these changes do not establish full native parity.
+
 - Ordered World interpolation and linked placement follow the separate native-only
   pass contracts. The implementation preserves fixed arithmetic, raw/drawn field
   differences, row-specific side effects and live relationship reads. Shared

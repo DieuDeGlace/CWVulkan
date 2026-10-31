@@ -159,8 +159,12 @@ individual feature documents.
   [interpolation](specs/steam-creature-drawn-interpolation.md) and
   [linked placement](specs/steam-creature-linked-placement.md) run as two complete
   drawn passes before input, without late visible-draw snaps. Row, threshold,
-  packet and actual-facade ordering regressions pass. Full time/resident preludes,
-  AI collection order, reset/roster-rebuild lifetimes and native comparisons remain.
+  packet and actual-facade ordering regressions pass. AI collection now shares
+  registered order; host interpolation runs once after its complete batch. The
+  [daily-reset contract](specs/steam-world-daily-reset.md) drives reset-before-effects,
+  repeated notice handling and fresh actor views after deletion. Focused tests cover
+  retained guests, compacted storage, outgoing events and configured respawn policy.
+  Full time/resident preludes, broader mutation producers and native comparisons remain.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are

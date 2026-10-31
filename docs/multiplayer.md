@@ -34,12 +34,20 @@ The tick runs in the game's order (netcode-roles.md §2):
    * then the end-of-updates marker (a creature left out is removed);
    * then the clock, the world update and one chat line.
 4. Apply the guests' hits (the hit routine), buffs and effect objects to the world.
-5. Run the world in 16-ms steps.
+5. Run the world in steps of at most 16 ms, including an admitted zero residual.
+   Interpolate and place linked record state once with the full capped tick interval,
+   then collect the changed zones' final output lists.
 6. After a sleep reset, every guest gets full records again.
 7. Hand out this tick's events. Sounds and particles go only to guests within 256 blocks, and
    never a guest's own sounds. Answer zone requests with the block-change log and any changed
    ground items or static objects.
 8. Empty the event lists.
+
+An authority reset notice stays in those lists through the entire batch. Each World
+substep that sees a zero notice resets nonplayers after body updates and before
+active effects. Retained players and queued events survive; a later substep can
+recreate and reset residents again. The next tick starts without the old notice.
+See the [daily-reset contract](specs/steam-world-daily-reset.md) for the native bounds.
 
 ### The client mirror
 

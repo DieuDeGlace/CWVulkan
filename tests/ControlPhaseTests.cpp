@@ -1,6 +1,7 @@
 // Independent steam-gameplay-frame-order.md §§4/6, without game assets.
 #include "NativeControl.h"
 #include "NativeRules.h"
+#include "NetWorlds.h"
 #include "Spawned.h"
 #include "Extracted.h"
 #include <array>
@@ -310,6 +311,142 @@ int controlPhaseTests() {
         float step;
         std::memcpy(&step, target + 0x990, sizeof step);
         check(step == -1, "later target interpolation cannot clamp the negative step copied by the already completed linked-pose pass");
+    }
+    { // Equal-distance attachment uses World registration order, not local-first grouping.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        bool made;
+        auto *first = creatures.networkCreature(42, made);
+        first[0x60] = 1;
+        const std::array<int64_t, 3> origin{};
+        std::memcpy(first + 0x10, origin.data(), sizeof origin);
+        const float dead = 0;
+        std::memcpy(first + 0x180, &dead, sizeof dead);
+        creatures.setPlayer(blocks, {0, 0, 96}, 0, {0, 0, 0}, 0, 1, true);
+        auto *local = creatures.localPlayer()->record;
+        local[0x60] = 1; // A local controlled monster is a second eligible attachment candidate.
+        std::memcpy(local + 0x10, origin.data(), sizeof origin);
+        auto *object = creatures.networkCreature(99, made);
+        object[0x60] = 7;
+        std::memcpy(object + 0x10, origin.data(), sizeof origin);
+        const uint32_t attaches = 0x200;
+        const float health = 100, ready = 100000;
+        std::memcpy(object + 0xbcc, &attaches, sizeof attaches);
+        std::memcpy(object + 0x180, &health, sizeof health);
+        std::memcpy(object + 0x6c, &ready, sizeof ready);
+        creatures.think(blocks, 40, 12);
+        int64_t linked;
+        std::memcpy(&linked, object + 0x1a8, sizeof linked);
+        check(object[0x68] == 0x91 && linked == 42,
+              "AI attachment keeps the first equally near registered monster, including dead candidates");
+    }
+    { // A zero-time host tick still visits the admitted World once.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 0, 1, true);
+        auto *local = creatures.localPlayer()->record;
+        const uint16_t flags = 0x10;
+        std::memcpy(local + 0x128, &flags, sizeof flags);
+        HostSide host(creatures, blocks);
+        host.advance(0);
+        uint16_t after;
+        std::memcpy(&after, local + 0x128, sizeof after);
+        check(!(after & 0x10), "zero-time host tick runs the global World clear rather than skipping every stage");
+    }
+    { // Host interpolation receives the full batch interval once, not each physics slice.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 0, 1, true);
+        auto *local = creatures.localPlayer()->record;
+        const float positive = 1, zero = 0;
+        std::memcpy(local + 0xb58, &positive, sizeof positive);
+        std::memcpy(local + 0x6c, &zero, sizeof zero);
+        HostSide host(creatures, blocks);
+        host.advance(33);
+        float timer;
+        std::memcpy(&timer, local + 0x6c, sizeof timer);
+        check(creatures.elapsedWorldTime() == 33 && timer == 14.238980293273926f,
+              "host consumes16,16,1 before one33-ms interpolation pass with the native timer increment");
+    }
+    { // Reset-before-effects preserves the effect and its retained owner lookup.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 0, 1, true);
+        auto *local = creatures.localPlayer()->record;
+        bool made;
+        auto *npc = creatures.networkCreature(42, made);
+        npc[0x60] = 3;
+        const float dead = 0;
+        std::memcpy(npc + 0x180, &dead, sizeof dead);
+        auto effect = nativeeffects::made();
+        const int64_t owner = 1;
+        const int32_t lifetime = 0;
+        std::memcpy(effect.data(), &owner, sizeof owner);
+        std::memcpy(effect.data() + 0x74, &lifetime, sizeof lifetime);
+        effect[0x68] = 8; // No-contact drift; expiry resets its existing owner's combo.
+        creatures.addEffect(effect);
+        creatures.events().sleeps.push_back(0);
+        cwnet::KillRecord credit{};
+        const int64_t victim = 42;
+        std::memcpy(credit.data(), &owner, sizeof owner);
+        std::memcpy(credit.data() + 8, &victim, sizeof victim);
+        creatures.events().kills.push_back(credit);
+        int resets = 0;
+        creatures.simulate(blocks, 1, [&] {
+            ++resets;
+            check(!creatures.record(42) && creatures.localPlayer(), "late reset removes NPCs while retaining the local player");
+            const int32_t combo = 5;
+            std::memcpy(local + 0x70, &combo, sizeof combo);
+        });
+        int32_t combo;
+        std::memcpy(&combo, local + 0x70, sizeof combo);
+        check(resets == 1 && combo == 0, "active effect survives the reset and expires after the reset callback");
+        check(creatures.events().kills == std::vector<cwnet::KillRecord>{credit} && creatures.events().sleeps == std::vector<int32_t>{0},
+              "reset retains queued kill credits and the triggering notice even after the victim is erased");
+    }
+    { // A persistent notice resets each substep and refreshes compacted actor views.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        bool made;
+        const float dead = 0;
+        auto addNpc = [&] {
+            auto *record = creatures.networkCreature(42, made);
+            record[0x60] = 3;
+            std::memcpy(record + 0x180, &dead, sizeof dead);
+        };
+        addNpc();
+        auto *guest = creatures.networkCreature(43, made);
+        guest[0x60] = 0;
+        std::memcpy(guest + 0x180, &dead, sizeof dead);
+        creatures.events().sleeps = {0, 0};
+        int resets = 0;
+        creatures.simulate(blocks, 33, [&] {
+            ++resets;
+            check(!creatures.record(42) && creatures.record(43), "each reset retains a dead guest and removes that step's nonplayer");
+            addNpc(); // New registration may reuse the erased address or compact the same vector.
+        });
+        check(resets == 3 && creatures.elapsedWorldTime() == 33 && creatures.record(43),
+              "two queued zeros cause one reset per16,16,1 substep without stale actor or ID views");
+        check(creatures.events().sleeps == std::vector<int32_t>({0, 0}),
+              "World stepping leaves notice clearing to the host output boundary");
+    }
+    { // A mirror's population comes from packets even when a reset notice is queued.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setRemoteClient(true);
+        bool made;
+        auto *npc = creatures.networkCreature(42, made);
+        npc[0x60] = 3;
+        const float dead = 0;
+        std::memcpy(npc + 0x180, &dead, sizeof dead);
+        creatures.events().sleeps.push_back(0);
+        int resets = 0;
+        creatures.simulate(blocks, 0, [&] { ++resets; });
+        check(!resets && creatures.record(42), "mirror zero-time World step does not apply the authority notice reset");
     }
     std::printf("Control phases: %s\n", failures ? "FAILED" : "passed");
     return failures;
