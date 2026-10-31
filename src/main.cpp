@@ -4335,14 +4335,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             upgradeModel.load(*path);
                         upgradeModelSprite = sprite;
                     }
-                    // The palette, from the bag as it is now.
-                    std::vector<std::pair<gameshop::Item, int>> carried;
-                    for (const Carried &c : bag)
-                        carried.push_back({rawOf(c.item), c.count});
-                    upgrade.palette = upgradewidget::paletteOf(carried);
-                    upgrade.pointed = upLayout.onView(guiMouse)
-                                          ? upgradewidget::pick(upgradeModel, record.data(), upgradeView, upLayout.viewPixel(guiMouse, upgradeView.pixels))
-                                          : std::nullopt;
+                    if (!nativeInventory) {
+                        std::vector<std::pair<gameshop::Item, int>> carried;
+                        for (const Carried &c : bag)
+                            carried.push_back({rawOf(c.item), c.count});
+                        upgrade.palette = upgradewidget::paletteOf(carried);
+                    }
+                    upgrade.pointed = upLayout.onView(guiMouse) ? upgradewidget::pick(upgradeModel, record.data(), upgradeView,
+                                                                                      upLayout.viewPixel(guiMouse, upgradeView.pixels))
+                                                                : std::nullopt;
                     // A click's result: one cube item taken, the cubes kept with the worn weapon.
                     auto applyClick = [&](const upgradewidget::ClickResult &r) {
                         if (r.takeOne)
@@ -4385,6 +4386,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             unclaimed.push_back(button);
                     }
                     input.buttons = std::move(unclaimed);
+                    if (nativeInventory && upgradeDemo) // the capture fixture starts without a preceding widget draw
+                        upgrade.palette = upgradewidget::paletteOf(nativeInventory->inventory, record);
                     // --upgrade-demo: a cube of each of the first palette entries, set through the
                     // widget's own click where the picture shows the weapon.
                     if (upgradeDemo && upgradeModel.sx) {
@@ -4418,6 +4421,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         hud.layout(renderer, renderer.screenSize());
                         upgradePictureKey = key;
                     }
+                    // Clicks use the preceding draw's palette; only this draw rebuilds its entries.
+                    if (nativeInventory && (!menusReady || menus.interfaceShown()))
+                        upgrade.palette = upgradewidget::paletteOf(nativeInventory->inventory, record);
                     upgradewidget::Shown shown;
                     shown.title = hand == Gear::WeaponLeft ? "Upgrade: Left Weapon" : "Upgrade: Right Weapon";
                     shown.weaponName = itemName(gear.equipped(hand));

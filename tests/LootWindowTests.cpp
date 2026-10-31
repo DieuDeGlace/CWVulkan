@@ -148,6 +148,44 @@ void upgradeWidgetRules() {
     const std::vector<PaletteEntry> palette = paletteOf({{iron, 3}, {herb, 9}, {fire, 1}, {iron, 2}});
     LOOT_CHECK(palette.size() == 2 && palette[0].count == 5 && palette[1].count == 1 && palette[1].item[0x1c] == 0x80);
 
+    // Native palette: one exact base material, then field-only spirit totals in fixed order.
+    inventoryslots::Inventory canonical;
+    canonical.tabs.resize(9);
+    const auto nativeWeapon = nativesaves::makeItem(3, 0, 1);
+    const auto base = nativesaves::makeItem(11, 10, 1);
+    const auto spirit = nativesaves::makeItem(11, 14, 128);
+    auto foreignSpirit = spirit;
+    foreignSpirit[0xc] = 9;
+    foreignSpirit[8] = 7;
+    auto inactiveBase = base;
+    inactiveBase[0x1d] = 91;
+    canonical.tabs[0] = {{5, base}, {-2, inactiveBase}, {6, foreignSpirit}, {2, spirit}};
+    canonical.tabs[8] = {{-3, spirit},
+                         {-4, nativesaves::makeItem(11, 14, 129)},
+                         {100, nativesaves::makeItem(11, 14, 127)},
+                         {100, nativesaves::makeItem(11, 10, 2)}};
+    const auto nativePalette = paletteOf(canonical, nativeWeapon);
+    LOOT_CHECK(nativePalette.size() == 3);
+    if (nativePalette.size() == 3) {
+        LOOT_CHECK(nativePalette[0].count == 3 && nativePalette[0].item == base);
+        LOOT_CHECK(nativePalette[1].count == 5 && nativePalette[1].item == spirit);
+        LOOT_CHECK(nativePalette[2].count == -4 && nativePalette[2].item[0x1c] == 129);
+    }
+    canonical.tabs = {{{INT32_MAX, base}, {2, base}}};
+    const auto wrapped = paletteOf(canonical, nativeWeapon);
+    LOOT_CHECK(wrapped.size() == 1 && wrapped[0].count == INT32_MIN + 1);
+    canonical.tabs = {{{1, spirit}, {-1, foreignSpirit}}};
+    LOOT_CHECK(paletteOf(canonical, nativeWeapon).empty());
+    LOOT_CHECK(paletteOf(canonical, Item{}).empty());
+    // A stale retained selection can still place before its source search finds no match.
+    Widget retained;
+    retained.palette = nativePalette;
+    retained.selected = 1;
+    retained.pointed = Voxel{1, -1, 4};
+    auto retainedWeapon = nativeWeapon;
+    const auto stale = click(retained, retainedWeapon.data(), false);
+    LOOT_CHECK(stale.weaponChanged && stale.takeOne && stale.taken == spirit && retainedWeapon[0x9d] == 1);
+
     Item sword = makeItem(3, 0, 1, 2); // one-handed: 16 cubes
     Widget w;
     w.open = true;

@@ -62,6 +62,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Canonical customization palette production from
+  `steam-weapon-customization-palette.md`: selected-material semantic equality,
+  four field-only spirit totals, signed32 wrapping and retained click input.
+  One engine-owned pass accumulates the five totals without copying game code.
+  Full editor geometry/input remains separate; no artwork or owner asset is added.
 - Recipe result/ingredient and information-preview WORLD calls from
   `steam-gui-item-icons.md` §§11/12/16. Class adaptation affects the information
   icon's copied record, preserving the source. Resource-gated recipe rotation,

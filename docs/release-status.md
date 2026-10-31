@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native customization palettes now read every canonical tab directly: the selected
+  weapon's exact base-material item precedes four spirit-material aggregates.
+  Signed counts wrap and may remain negative; aggregation retains its distinct
+  full-equality and field-only rules. Clicks consume the preceding draw's palette;
+  the later draw rebuilds its entries. Synthetic regressions cover ordering,
+  extra tabs, inactive attributes, heterogeneous spirits, cancellation and overflow.
+  All five targets, the full CPU/owner suite,40 world/16 GUI Vulkan cases and
+  water/Alpha checks pass. The actual VoxelWidget editor, rendering and input still
+  need replacement from the new independent edit-view specification; this is not
+  a claim of complete customization parity.
+
 - Newly loaded inventory models now share one pending atlas rebuild before drawing,
   instead of rebuilding and uploading the font/icon atlas for every new item.
   Explicit layout updates also clear the pending work. A late-resource owner-tree

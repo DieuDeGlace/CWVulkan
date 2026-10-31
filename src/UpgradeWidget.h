@@ -47,13 +47,13 @@ struct PaletteEntry {
     Item item{};
 };
 
-// Whether an item is a material cube.
+// Whether an item is a base material cube (type11/subtype10).
 bool isMaterialCube(const Item &item);
-// The palette (0x292990): the material cubes among `carried` (the inventory's stacks in tab and
-// slot order, with their quantities), one entry for each different item, its quantity the total
-// carried. (The game's order of the materials is open question 5 of the spec; this keeps the
-// inventory's.)
+// Legacy recording-only palette when no canonical inventory is available.
 std::vector<PaletteEntry> paletteOf(const std::vector<std::pair<Item, int>> &carried);
+// Native palette: selected-weapon material followed by the four spirit materials.
+// Aggregation and later consumption deliberately use different equality rules (palette spec §§1-3).
+std::vector<PaletteEntry> paletteOf(const inventoryslots::Inventory &, const Item &weapon);
 
 // The widget's state.
 struct Widget {

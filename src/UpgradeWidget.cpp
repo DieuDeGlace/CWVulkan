@@ -8,6 +8,7 @@
 #include "ScreenItems.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -192,6 +193,29 @@ std::vector<PaletteEntry> paletteOf(const std::vector<std::pair<Item, int>> &car
         else
             same->count += count;
     }
+    return out;
+}
+
+std::vector<PaletteEntry> paletteOf(const inventoryslots::Inventory &inventory, const Item &weapon) {
+    if (weapon[TYPE] == 0)
+        return {};
+    std::array<Item, 5> candidates{};
+    candidates[0] = nativesaves::makeItem(CUBE_TYPE, CUBE_SUBTYPE, weapon[MATERIAL]);
+    for (int i = 1; i < 5; ++i)
+        candidates[(size_t)i] = nativesaves::makeItem(CUBE_TYPE, 14, 127 + i);
+    std::array<uint32_t, 5> totals{};
+    for (const auto &tab : inventory.tabs)
+        for (const auto &slot : tab) {
+            if (nativeinteract::sameItem(candidates[0].data(), slot.item.data()))
+                totals[0] += (uint32_t)slot.count;
+            const uint8_t material = slot.item[MATERIAL];
+            if (slot.item[TYPE] == CUBE_TYPE && subtypeOf(slot.item) == 14 && material >= 128 && material <= 131)
+                totals[(size_t)material - 127] += (uint32_t)slot.count;
+        }
+    std::vector<PaletteEntry> out;
+    for (size_t i = 0; i < candidates.size(); ++i)
+        if (totals[i] != 0)
+            out.push_back({std::bit_cast<int32_t>(totals[i]), candidates[i]});
     return out;
 }
 

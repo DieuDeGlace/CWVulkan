@@ -16,9 +16,10 @@ individual feature documents.
 - [x] Item generation and death drops, ground pick-up and coin hop, shops and
   crafting. `GameShop`, `GameCraft`, `GroundItems` and `NativeDrop` implement the
   written rules. Coins are picked up near the player rather than flying to them.
-- [x] Identify and upgrade windows, including spirit cubes: `IdentifyWindow`,
-  `UpgradeWidget`, the main-loop handlers and `LootWindowTests`. These were stale
-  unchecked items in the previous checklist.
+- [x] Identification and cube-editing backends: `IdentifyWindow`, `UpgradeWidget`,
+  the main-loop handlers and `LootWindowTests` exercise their implemented rules.
+  The VoxelWidget editor's native geometry/input remains open below; the existing
+  compatibility picture is not complete Steam window parity.
 - [x] Generated conversations, regional mission checks, lore/artifact data, map
   markers and interactions. `TalkGen`, `TalkScripts`, `Missions`, `Lore`, `MapMarks`
   and `UsePrompt` are wired into play. Remaining script/network gaps are below.
@@ -224,6 +225,13 @@ individual feature documents.
   arithmetic and mount placement. Shrine text uses the float world-update clock,
   separately from GUI bobbing. State, negative-coordinate, timing and owner-data tests
   pass. Broader original-game/controller and map-panel event comparisons remain.
+- [ ] Native VoxelWidget customization editor: the independent
+  [edit-view specification](specs/steam-weapon-customization-edit-view.md) now
+  describes its owner root, camera, raw model, picking and input. Native palette
+  production is corrected and tested, including negative/wrapped totals and
+  retained draw-to-click state. The editor itself still uses compatibility geometry.
+  AdaptionWidget is a separate native panel; no unverified gold/item upgrade or
+  opening action is inferred from its traced price-only callback.
 - [ ] Ordinary WORLD-shader 3D GUI item icons: identification and equipment SpriteWidgets
   now use the shared helper, including full item records and per-widget callback ordering.
   The selected quick-item SpriteWidget also uses the original record. Inventory, shop

@@ -276,7 +276,7 @@ Each call, in this order:
 
 * **No voxel or no weapon** (the widget's flag +0x2d4 is 0 — read here as "no voxel of the
   weapon is under the pointer" — or the slot is empty): if a cube is carried and the UI's
-  query 0x33f1e0 returns none (presumably: the pointer is over no other widget), the carried
+  query0x33f1e0 returns no captured/picked GUI node, the carried
   cube is removed from the weapon. Then the palette index becomes −1 and nothing is carried.
   Done.
 * **Placing from the palette** (the palette index is valid and the weapon has fewer than 32
@@ -297,6 +297,8 @@ decrement and its distinction from0x648b0/0xa2210 are
 steam-inventory-slot-lifecycle §3.4. Placement precedes that decrement;
 only the first full-equal quantity!=0 slot loses one, and below1 only
 quantity/type/subtype clear.0x292650 itself performs no inventory refresh.
+The exact GUI-node query, reached click order and draw-produced hit/
+placement coordinates are **steam-weapon-customization-edit-view2/5/6**.
 
 ---
 
@@ -343,8 +345,12 @@ Nothing here has a recording. Proposed ZoneExtractor requests (`loot-overview.md
 4. **Releasing the button** sets the speed back to 0.001 but leaves a started item's progress
    running, so it completes. Whether another routine resets the progress on release was not
    checked.
-5. **The palette materials** of the upgrade widget (which materials0x292990 lists,
-   and in which order) remain untraced here. The32-entry widget gate,
+5. **Palette production is resolved** by the independent native follow-up
+   **steam-weapon-customization-palette1–3**: one optional subtype10 item
+   in the weapon's material, then subtype14 materials128–131 only, with
+   different aggregation/equality rules and a verified possible mismatch
+   at consumption. It is not material0–131. The broader main edit-view
+   geometry/control module remains incomplete. The32-entry widget gate,
    16/32-entry placer limits, replacement of an existing material and
    post-attempt cube consumption are verified native behavior, clarified
    in steam-inventory-slot-lifecycle §3.4; no recording was used.

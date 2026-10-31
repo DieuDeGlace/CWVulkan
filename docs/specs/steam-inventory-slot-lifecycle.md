@@ -460,7 +460,7 @@ if it returns no nonempty item, the handler may resolve a shop offer.
 Earlier map/other input branches and their native early returns still
 apply; this precedence describes the reached inventory action branch.
 
-The equipment branch with neither shop nor customization shown inserts
+The equipment branch with neither shop nor G+0x370 upgrade panel shown inserts
 one equipped item into canonical tabs through0x4e810, then clears the
 equipped item's type/subtype and refreshes the inventory. With a shop
 shown it sells **that equipped item**: credit sell price, append a
@@ -541,7 +541,7 @@ the current nonnegative live canonical tab/slot pair resolved at0x95013.
 Inventory selection is by current hover indices, not the crafting
 selection pair or a saved item identity. Earlier event/interface handling
 in §6.7 already ran. Identification shown intercepts the pair; shop
-shown takes its sale branch; customization shown takes its own item
+shown takes its sale branch; G+0x370 upgrade panel shown takes its own item
 binding branch. The following equip/use rules apply after those routes
 have been excluded. The stored source tab does not itself determine an
 equipment destination; the item's category does.

@@ -745,12 +745,18 @@ inventory tabs. The first possible entry is semantic-default category**11**,
 subtype**10**, with material byte+0x1c copied from the selected weapon.
 Its quantity is the signed32 sum of quantities whose original items
 compare equal to that candidate through**0x4df60**; append if the sum is
-nonzero. Then for material byte values**0 through131 inclusive**, sum all
+nonzero. Then for material byte values**128 through131 inclusive**, sum all
 canonical quantities with category11, subtype**14**, matching material byte,
 and append a semantic-default such item when the sum is nonzero. Those
 subtype14 sums do not add full-item equality on the other item fields.
 Order is that optional subtype10 entry followed by ascending material.
 This is a temporary display aggregation, not an inventory grant/removal.
+
+This range corrects the former0-through131 wording: native initialization
+is128 at0x293432 and the bound is132 at0x29361d. Full default-record,
+signed accumulation and field-only aggregation versus full-equality
+consumption facts are **steam-weapon-customization-palette1–3**. The
+broader edit-view module remains incomplete until its separate audit.
 
 The vector uses the inventory-style**quantity-first0xa4** layout. For each
 palette image, copy the original item at stack+4 into a local item with
@@ -836,6 +842,11 @@ subsequent nonnull writer of SpriteWidget's raw resource field+0x1e8:
 the complete0xdf230 fallback contract alone does not prove its reachability
 for a particular shipped equipment/quick-button instance. No game execution, owner assets/captures, SDK or
 replacement implementation were used to fill these boundaries.
+
+Independent follow-up **steam-weapon-customization-edit-view1–8** now
+specifies the separate VoxelWidget raw main image, root/input/pose,
+projection, picking and attribute overlays, plus bounded AdaptionWidget
+facts. It does not close the extra SpriteWidget producer questions above.
 
 ## 16. Shared GUI step, detail hover coordinates and callback placement
 
