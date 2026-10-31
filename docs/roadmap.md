@@ -214,10 +214,17 @@ individual feature documents.
   Native release/Goodbye behavior retains selection and does not identify on down.
   Explicit opening/toggle refreshes preserve actual sort counts and selected region.
   Synthetic affine/edge/gate checks and the full CPU/owner-data suite cover these paths.
+- [x] Shrine-choice map continuation: native item/creature openings, restricted flag-A
+  hover, actual-overlay cached targets, known-cell left-release admission and deferred
+  mode/source cleanup. The borrowed item address is never dereferenced or consumed.
+  Accepted cells start ability0x75; its effect boundary keeps native signed32 coordinate
+  arithmetic and mount placement. Shrine text uses the float world-update clock,
+  separately from GUI bobbing. State, negative-coordinate, timing and owner-data tests
+  pass. Broader original-game/controller and map-panel event comparisons remain.
 - [ ] Ordinary WORLD-shader 3D GUI item icons, replacing the existing cached bitmap
-  compatibility previews. Complete map-item mode/target presentation and the Ring
-  Menu selector, including its common down-tail close. Broader original-game UI and
-  layout-callback timing comparisons remain part of validation.
+  compatibility previews, and the Ring Menu selector, including its common down-tail
+  close. Full map-panel controls, GUI capture/poses and layout-callback timing still
+  need implementation/comparison.
 - [x] Complete-record inventory slot backend and starter-kit consumer: six native
   kit lengths, equal-stack-before-hole insertion, separate counted fields, page
   versus creature removal, direct UI clearing and native key-only refresh followed

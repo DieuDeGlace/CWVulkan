@@ -878,7 +878,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     nativeupkeep::World u;
     u.client = client;
     u.local = hasPlayer ? player.record.data() : nullptr;
-    u.time = (float)aiClock;
+    u.time = elapsedWorldMs;
     u.day = dayMs;
     u.byId = [&](int64_t id) -> nativeai::Creature * {
         auto f = byId.find(id);
@@ -1126,6 +1126,8 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     };
     pets.setup = a.adopt;
     auto step = [&](float dt) {
+        elapsedWorldMs += dt; // native world time advances before the near-player pass
+        u.time = elapsedWorldMs;
         std::vector<nativesaves::Cell> playerZones;
         auto includePlayer = [&](const uint8_t *record) {
             if (record[0x60] == 0) {
@@ -1803,6 +1805,16 @@ bool SpawnedCreatures::startFlight(int32_t x, int32_t y) {
     return true;
 }
 
+bool SpawnedCreatures::startShrineReturn(int32_t cellX, int32_t cellY) {
+    if (!nativePlayer || !hasPlayer)
+        return false;
+    put<int32_t>(player.record, 0x1d0, cellX);
+    put<int32_t>(player.record, 0x1d4, cellY);
+    player.record[0x68] = 0x75;
+    put<float>(player.record, 0x6c, 0.0f);
+    return true;
+}
+
 void SpawnedCreatures::setPlayerGear(const worldgen::CreatureRecord &from, bool clampHealth) {
     gearRecord = from;
     if (!hasPlayer || from.empty())
@@ -1843,7 +1855,7 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
     aiClock += dt;
     nativeai::World w;
     w.client = client;
-    w.time = (float)aiClock;
+    w.time = elapsedWorldMs;
     // A world that keeps its own clock (a host's, or a mirror's set by its host) goes by it;
     // otherwise by the caller's hour.
     if (clockRate <= 0 && !client)

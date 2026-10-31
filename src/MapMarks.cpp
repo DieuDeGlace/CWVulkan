@@ -170,13 +170,13 @@ glm::dvec3 pullToSquare(glm::dvec3 offset, double reach) {
 
 float bob(int clockMs) { return std::cos((float)clockMs * 0.005f) * 5.0f; }
 
-Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale,
-            const std::function<float(const Marker &)> &labelWidth) {
+Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale, const std::function<float(const Marker &)> &labelWidth,
+            bool shrinesOnly) {
     Hover h;
     float nearest = -1.0f;
     for (size_t i = 0; i < markers.size(); i++) {
         const Marker &k = markers[i];
-        if (!k.questSprite.empty())
+        if (!k.questSprite.empty() || (shrinesOnly && !k.shrineTarget))
             continue;
         const glm::vec2 d = pointer - k.at;
         const float distance2 = d.x * d.x + d.y * d.y;
@@ -211,6 +211,42 @@ void enlargeTargets(std::vector<Marker> &markers, const Hover &hovered) {
         k.enlarged = (hovered.flight && *hovered.flight == spot) || (hovered.shrine && *hovered.shrine == spot) ||
                      (hovered.chosen && *hovered.chosen == spot);
     }
+}
+
+void Selection::openShrines() {
+    open = shrinesOnly = true;
+}
+void Selection::useItem(const void *slot) {
+    openShrines();
+    itemSource = reinterpret_cast<uintptr_t>(slot);
+}
+void Selection::afterInterface() {
+    if (!open)
+        shrinesOnly = false;
+    if (!shrinesOnly)
+        itemSource = 0;
+}
+void Selection::move(glm::dvec2 delta, bool ordinaryMouseUi) {
+    if (ordinaryMouseUi && delta != glm::dvec2(0))
+        dragged = true;
+}
+void Selection::overlayDrawn(const Hover &hovered) {
+    target = {NO_TARGET, NO_TARGET};
+    if (open && !dragged && hovered.shrine)
+        target = {hovered.shrine->x, hovered.shrine->y};
+}
+std::optional<Cell> Selection::destination(int releasedButton, const std::function<bool(Cell)> &known) const {
+    if (releasedButton != 0 || !open || dragged || target[0] == NO_TARGET)
+        return std::nullopt;
+    auto cellOf = [](int32_t block) { return block / 16 - (block % 16 < 0); };
+    const Cell cell{cellOf(target[0]), cellOf(target[1])};
+    return known && known(cell) ? std::optional<Cell>(cell) : std::nullopt;
+}
+MarkerText markerText(const Marker &marker, bool shrineMode, Cell target, float worldElapsedMs) {
+    if (!shrineMode || !marker.shrineTarget)
+        return {marker.scale, marker.colour};
+    const bool chosen = marker.block.x == target[0] && marker.block.y == target[1];
+    return {chosen ? 1.2f : 1.0f, {0.75f + 0.25f * std::cos(worldElapsedMs * 0.01f), 0.25f, 1, 1}};
 }
 
 } // namespace mapmarks

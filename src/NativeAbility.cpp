@@ -17,6 +17,7 @@
 #include "NativeRules.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 #include <initializer_list>
@@ -1776,7 +1777,9 @@ void Step::returnHome() {
     if (!local || !passes((float)effectTime()) || !w.cellHeight)
         return;
     const int32_t hx = get<int32_t>(r, HOME_CELL), hy = get<int32_t>(r, HOME_CELL + 4);
-    Pos p = {((int64_t)hx * 16 + 6) * 65536, ((int64_t)hy * 16 + 8) * 65536, 0};
+    // Cell-to-block arithmetic wraps to signed32 before conversion to fixed point.
+    auto coordinate = [](int32_t cell, uint32_t offset) { return (int64_t)std::bit_cast<int32_t>((uint32_t)cell * 16u + offset) * 65536; };
+    Pos p = {coordinate(hx, 6), coordinate(hy, 8), 0};
     p[2] = (int64_t)w.cellHeight(hx, hy) * 65536;
     setPosition(r, p);
     if (Creature *mount = byId(get<int64_t>(r, MOUNT)))

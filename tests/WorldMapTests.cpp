@@ -2,6 +2,12 @@
 // window's weights (2.4), the corner colour (2.5), the mesh's faces (2.2, 2.3), the light per
 // face (3.4), the pixel steps (3.3) and the camera (4.2, 4.3).
 #include "MapLook.h"
+#include "MapMarks.h"
+#include "NativeAbility.h"
+#include "NativePose.h"
+#include "Spawned.h"
+#include <cstring>
+#include <set>
 
 #include <cmath>
 #include <cstdio>
@@ -168,6 +174,134 @@ void camera() {
     MAP_CHECK(worldmap::regionFade(199) == 1.0f);
 }
 
+void shrineSelection() {
+    using namespace mapmarks;
+    Marker shrine, other;
+    shrine.at = {0, 0};
+    shrine.block = {-17, 31, 8};
+    shrine.shrineTarget = true;
+    shrine.scale = 0.4f;
+    other.at = {8, 0};
+    other.block = {99, 99, 9};
+    const std::vector<Marker> markers{shrine, other};
+    const auto ordinary = hover(markers, {8, 0}, 1, {});
+    const auto restricted = hover(markers, {8, 0}, 1, {}, true);
+    MAP_CHECK(ordinary.best == 1 && restricted.best == 0);
+    MAP_CHECK(ordinary.shrine == restricted.shrine); // an earlier best's flag-A write survives
+    Selection selection;
+    int stackCount = 2;
+    selection.useItem(&stackCount);
+    MAP_CHECK(selection.open && selection.shrinesOnly && selection.itemSource == reinterpret_cast<uintptr_t>(&stackCount));
+    selection.overlayDrawn(restricted);
+    const Cell expected{-2, 1};
+    std::set<Cell> known{expected};
+    auto has = [&](Cell cell) { return known.count(cell) != 0; };
+    MAP_CHECK(selection.destination(0, has) == expected);
+    MAP_CHECK(!selection.destination(1, has) && !selection.destination(2, has));
+    known.clear();
+    MAP_CHECK(!selection.destination(0, has));
+    known.insert(expected);
+    // Mode and saved pointer are not acceptance prerequisites on an ordinary full map.
+    selection.shrinesOnly = false;
+    selection.itemSource = 0;
+    MAP_CHECK(selection.destination(0, has) == expected);
+    selection.move({1, 0}, true);
+    MAP_CHECK(selection.dragged && !selection.destination(0, has));
+    selection.down();
+    selection.move({0, 0}, true);
+    selection.move({4, 7}, false);
+    MAP_CHECK(!selection.dragged && selection.destination(0, has) == expected);
+    // No draw call means no target reset; an actual draw with no winning marker resets it.
+    selection.overlayDrawn({});
+    MAP_CHECK(selection.target[0] == Selection::NO_TARGET && !selection.destination(0, has));
+    Hover sentinel;
+    sentinel.shrine = {Selection::NO_TARGET, 7};
+    selection.overlayDrawn(sentinel);
+    MAP_CHECK(!selection.destination(0, [](Cell) { return true; }));
+    selection.useItem(&stackCount);
+    const auto borrowed = selection.itemSource;
+    selection.open = false;
+    MAP_CHECK(selection.itemSource == borrowed && selection.shrinesOnly && stackCount == 2);
+    selection.open = true; // close/reopen before interface cleanup does not discard the source
+    selection.afterInterface();
+    MAP_CHECK(selection.itemSource == borrowed);
+    selection.open = false;
+    selection.afterInterface();
+    MAP_CHECK(!selection.shrinesOnly && selection.itemSource == 0 && stackCount == 2);
+    selection.openShrines();
+    MAP_CHECK(selection.open && selection.shrinesOnly && selection.itemSource == 0);
+    selection.useItem(&stackCount);
+    selection.openShrines();
+    MAP_CHECK(selection.itemSource == borrowed); // a creature-use producer does not assign it
+    const auto unselectedText = markerText(shrine, true, expected, 0);
+    const Cell targetBlock{-17, 31};
+    const auto chosenText = markerText(shrine, true, targetBlock, 0);
+    const auto normalText = markerText(shrine, false, targetBlock, 0);
+    MAP_CHECK(unselectedText.scale == 1 && chosenText.scale == 1.2f && normalText.scale == shrine.scale);
+    MAP_CHECK(chosenText.colour == glm::vec4(1, 0.25f, 1, 1));
+    MAP_CHECK(markerText(other, true, targetBlock, 0).colour == other.colour);
+    MAP_CHECK(near(markerText(shrine, true, targetBlock, 100.0f).colour.r, 0.88507557f, 1e-7f));
+}
+
+template <class T> void write(std::vector<uint8_t> &record, size_t offset, T value) {
+    std::memcpy(record.data() + offset, &value, sizeof(value));
+}
+template <class T> T read(const std::vector<uint8_t> &record, size_t offset) {
+    T value;
+    std::memcpy(&value, record.data() + offset, sizeof(value));
+    return value;
+}
+void shrineAbilityBoundary() {
+    constexpr size_t position = 0x10;
+    std::vector<uint8_t> record(nativepose::CREATURE_SIZE), mountRecord(nativepose::CREATURE_SIZE);
+    nativeai::Creature player, mount;
+    player.record = record.data();
+    mount.record = mountRecord.data();
+    record[0x68] = 0x75;
+    write<int32_t>(record, 0x1d0, -2);
+    write<int32_t>(record, 0x1d4, 3);
+    write<int64_t>(record, 0x9d8, 42);
+    nativeability::World world;
+    world.client = true; // the local pointer, rather than host authority, admits this branch
+    world.local = record.data();
+    int heightQueries = 0;
+    world.cellHeight = [&](int x, int y) {
+        heightQueries++;
+        MAP_CHECK(x == -2 && y == 3);
+        return -3;
+    };
+    world.byId = [&](int64_t id) { return id == 42 ? &mount : nullptr; };
+    write<float>(record, 0x6c, 2999);
+    nativeability::ability(world, &player, 1);
+    MAP_CHECK(heightQueries == 0 && read<int64_t>(record, position) == 0);
+    write<float>(record, 0x6c, 3000);
+    nativeability::ability(world, &player, 1);
+    MAP_CHECK(heightQueries == 1 && read<int64_t>(record, position) == -26ll * 65536);
+    MAP_CHECK(read<int64_t>(record, position + 8) == 56ll * 65536 && read<int64_t>(record, position + 16) == -3ll * 65536);
+    MAP_CHECK(std::memcmp(record.data() + position, mountRecord.data() + position, 24) == 0);
+    write<int32_t>(record, 0x1d0, 0x10000000);
+    write<int32_t>(record, 0x1d4, -0x10000000);
+    world.cellHeight = [](int, int) { return 5; };
+    nativeability::ability(world, &player, 1);
+    MAP_CHECK(read<int64_t>(record, position) == 6ll * 65536 && read<int64_t>(record, position + 8) == 8ll * 65536);
+    world.local = mountRecord.data();
+    write<int64_t>(record, position, 123);
+    nativeability::ability(world, &player, 1);
+    MAP_CHECK(read<int64_t>(record, position) == 123);
+}
+
+void shrineWorldClock() {
+    ExtractedWorld blocks;
+    SpawnedCreatures creatures;
+    creatures.setClock(5, 123456);
+    creatures.simulate(blocks, 16.25);
+    MAP_CHECK(creatures.elapsedWorldTime() == 16);
+    creatures.simulate(blocks, 16.75);
+    MAP_CHECK(creatures.elapsedWorldTime() == 33 && creatures.timeOfDay() == 123456);
+    creatures.simulate(blocks, 2000);
+    MAP_CHECK(creatures.elapsedWorldTime() == 1033); // normal world-frame1000-ms cap, not GUI time
+}
+
 } // namespace
 
 int worldMapLookTests() {
@@ -178,6 +312,9 @@ int worldMapLookTests() {
     faceLights();
     pixelSteps();
     camera();
+    shrineSelection();
+    shrineAbilityBoundary();
+    shrineWorldClock();
     std::printf("world map look: %s\n", failures ? "FAILED" : "ok");
     return failures;
 }

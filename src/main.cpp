@@ -192,6 +192,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     float craftTabTest = -1; // --open-crafting T: the crafting widget open on tab T (testing only).
     float mapTest = -1;      // --open-map Z: the world map open at zoom Z (testing only).
     bool flightsTest = false; // --open-flights Z: as --open-map, as a flight master opens it (testing only).
+    bool shrinesTest = false; // --open-shrines Z: read-only capture of the native restricted map mode.
     bool missionsTest = false; // --known-missions: every place's mission counts as known on the map (testing only).
     float deathTest = -1;      // --death-marker DX: a tombstone DX blocks east of the start, as after a death (testing only).
     double pointerTestX = -1, pointerTestY = -1; // --pointer X Y: the mouse there, for the map's cursor and the pointer (testing only).
@@ -314,7 +315,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             next(clickAfter);
         else if (a == "--open-map")
             next(mapTest);
-        else if (a == "--known-missions")
+        else if (a == "--open-shrines") {
+            next(mapTest);
+            shrinesTest = true;
+        } else if (a == "--known-missions")
             missionsTest = true;
         else if (a == "--death-marker")
             next(deathTest);
@@ -1365,7 +1369,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // position follows the player until the map is dragged (Game's the zoom change); the
     // overlay moves and grows between the corner and the middle (the overlay position, Scale).
     worldmap::Map worldMap;
-    bool mapOpen = false, mapMoved = false;
+    mapmarks::Selection mapSelection;
+    bool &mapOpen = mapSelection.open;
+    bool mapMoved = false;
     int mapZoom = 0;
     glm::dvec3 mapPosition(0), targetMapPosition(0);
     bool mapPlaced = false;
@@ -3357,11 +3363,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         double mx, my;
         pointerPosition(&mx, &my);
+        mapSelection.move({mx - lastX, my - lastY},
+                          !input.lastUsedPad && (inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible()));
         const bool answerDragLook = answers.visible() && !input.lastUsedPad &&
             glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
             !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
             !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
-        if (mapOpen && !inventoryOpen && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        if (mapOpen && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             // the pointer movement: dragging with the right button moves the map, 2^zoom blocks a
             // pixel, along the camera's turn.
             const glm::dvec2 right(-std::sin(player.yaw), std::cos(player.yaw)), up(-std::cos(player.yaw), -std::sin(player.yaw));
@@ -3372,8 +3380,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 mapMoved = true;
             }
         } else if (!inventoryOpen && !mapOpen && !menusOpen && glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
-                   (answers.visible() ? answerDragLook :
-                       (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
+                   (answers.visible() ? answerDragLook
+                                      : (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
             // The look input, scaled by the camera speed option and turned over by invert-Y.
             constexpr float RADIANS_A_PIXEL = .005f;
             const float speed = RADIANS_A_PIXEL * gameOptions.lookSpeed(), vertical = gameOptions.invertY ? -1.0f : 1.0f;
@@ -3412,6 +3420,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         {
             static double lastButtonDown = -1;
             for (int button : input.buttons) {
+                mapSelection.down();
                 if (button == GLFW_MOUSE_BUTTON_MIDDLE && mapOpen && mapCursorKnown && mapCursor.z >= 0) {
                     const std::array<int32_t, 3> spot = {(int32_t)mapCursor.x, (int32_t)mapCursor.y,
                                                          (int32_t)std::max(0.0, groundOf(mapCursor.x, mapCursor.y))};
@@ -4653,8 +4662,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         } else if (outcome.action == Action::PetFood)
                             inventoryOpen = false;
                         else if (outcome.action == Action::Map) {
-                            mapOpen = true;
-                            flightmasterMode = false;
+                            mapSelection.useItem(nativeInventory->inventory.slot(hoveredNative));
                         } else if (!upgrade.open && !vendorTrade.open && inventoryView.hoverSlot >= 0 && hoveredNative.tab < 0) {
                             if (nativeInventory->unequip((int)equipSlotOf(inventoryView.hoverSlot))) {
                                 rebuildInventoryViews();
@@ -4797,6 +4805,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
         }
         for (int button : input.released) {
+            // Identification outcomes fall through to this cached-target acceptance. There is
+            // no additional inventory, mode, source-item, stun or matching-down requirement.
+            if (const auto destination = mapSelection.destination(button, [&](auto cell) { return usedCells.count(cell) != 0; });
+                destination && spawned.startShrineReturn((*destination)[0], (*destination)[1]))
+                mapOpen = false;
             const bool special = GameInput::buttonMatches(gameControls[gameoptions::SPECIAL_ATTACK], button);
             if (special && mouseLook && moves.releaseSpecial && ability == moves.special) {
                 ability = 0;
@@ -5036,8 +5049,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     spawned.activate(p.creature);
                     break;
                 case Action::Shrine:
-                    mapOpen = true;
-                    logLine("Use: a shrine (the map's shrine-choice mode is not ported)");
+                    mapSelection.openShrines();
+                    logLine("Use: shrine selection");
                     break;
                 case Action::Crafting: {
                     const bool wasOpen = inventoryOpen;
@@ -6232,6 +6245,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         const auto featViewport = renderer.screenSize();
         const auto featLabels = featTexts.visit(renderer.speechProjection(), {(float)featViewport.width, (float)featViewport.height},
                                                (int32_t)std::clamp(frameMs, 0.0, 1000.0));
+        // Interface/frame cleanup is independent of drawing and does not consume an item.
+        mapSelection.afterInterface();
+        bool mapCursorFromOverlay = false;
         if (hudReady) {
             VkExtent2D screen = renderer.screenSize();
             if (screen.width != hudSize.width || screen.height != hudSize.height) {
@@ -6684,6 +6700,36 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             hs.mapMarkers.insert(hs.mapMarkers.begin(), mapMarkerViews.begin(), mapMarkerViews.end());
             hs.mapClockMs = (int)(time * 1000.0);
+            hs.mapWorldElapsedMs = spawned.elapsedWorldTime();
+            double mapPointerX, mapPointerY;
+            pointerPosition(&mapPointerX, &mapPointerY);
+            if (pointerTestX >= 0)
+                mapPointerX = pointerTestX, mapPointerY = pointerTestY;
+            hs.pointerAt = {(float)mapPointerX, (float)mapPointerY};
+            // The actual overlay draw owns these cached targets. A hidden interface keeps
+            // the preceding draw's result; release never repicks from new coordinates.
+            if (!menusReady || menus.interfaceShown()) {
+                mapmarks::Hover hovered;
+                if (mapOpen && !mapSelection.dragged)
+                    hovered = mapmarks::hover(
+                        hs.mapMarkers, hs.pointerAt, hud.interfaceScale(),
+                        [&](const mapmarks::Marker &marker) { return hud.mapLabelWidth(marker); }, mapSelection.shrinesOnly);
+                mapSelection.overlayDrawn(hovered);
+                flightSelected = false;
+                if (hovered.flight && !hovered.flightToPlayer) {
+                    flightSelected = true;
+                    selectedFlightPoint = {hovered.flight->x, hovered.flight->y};
+                }
+                hoveredLoreCell = hovered.cell;
+                hoveredArtifact = hovered.item;
+                if (hovered.best >= 0) {
+                    mapCursor = glm::dvec3(hovered.cursor);
+                    mapCursorKnown = mapCursorFromOverlay = true;
+                }
+                mapmarks::enlargeTargets(hs.mapMarkers, hovered);
+            }
+            hs.mapShrineMode = mapSelection.shrinesOnly;
+            hs.mapShrineTarget = mapSelection.target;
             // The lore panel of the lore building under the pointer (the lore spec's 4.5): its realm,
             // how much of the realm's lore is read, and the building's tale.
             if (mapOpen && hoveredLoreCell && lore::isLoreBuilding(*hoveredLoreCell)) {
@@ -6744,11 +6790,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     hs.mapPreview.push_back(Line{"Cost: " + std::to_string(cost) + " gold", 12, 3, glm::vec4(1, 0, 0, 1), 0, true});
             }
             if (hs.pointer) {
-                double px, py;
-                pointerPosition(&px, &py);
-                if (pointerTestX >= 0)
-                    px = pointerTestX, py = pointerTestY;
-                hs.pointerAt = glm::vec2((float)px, (float)py);
                 hs.pointerText.clear();
                 if (mapOpen && mapCursorKnown) {
                     const glm::dvec2 here(player.position.x + (double)(extractedWorld.originDotsX() >> 16),
@@ -6838,6 +6879,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (mapTest >= 0) {
                 mapOpen = true;
                 flightmasterMode = flightsTest;
+                if (shrinesTest)
+                    mapSelection.openShrines();
                 mapZoom = std::clamp((int)mapTest, 0, worldmap::MAX_ZOOM);
                 mapTest = -1;
             }
@@ -6969,8 +7012,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             }
             worldMap.collect(view, opaque);
-            mapCursorKnown = false;
-            if (mapOpen && !halfRadius) { // (no cursor on the minimap, nor at half radius: §4.6)
+            if (!mapCursorFromOverlay)
+                mapCursorKnown = false;
+            if (mapOpen && !halfRadius && !mapCursorFromOverlay) { // (no cursor on the minimap, nor at half radius: §4.6)
                 double px, py;
                 pointerPosition(&px, &py);
                 if (pointerTestX >= 0)
@@ -6987,11 +7031,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // The map overlay's markers (MapMarks.h): places, missions, lands, flight points and
             // stars, drawn far to near; then the marker under the pointer.
             mapMarkerViews.clear();
-            hoveredLoreCell.reset();
-            hoveredArtifact = worldgen::Item{};
             if (!mapOpen)
                 flightmasterMode = false;
-            flightSelected = false;
             {
                 const int unit = worldmap::scaleOf(mapZoom);
                 const int clockMs = (int)(time * 1000.0);
@@ -7102,28 +7143,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         v.scale = starSize.scale * 0.6f;
                         mapMarkerViews.push_back(v);
                     }
-                // The marker under the pointer (not while the map is dragged): its spot is the map's
-                // cursor; a flight point there is the flight chosen, a lore building opens its lore
-                // and a revealed artifact's place shows its artifact.
-                if (mapOpen && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS) {
-                    double px, py;
-                    pointerPosition(&px, &py);
-                    if (pointerTestX >= 0)
-                        px = pointerTestX, py = pointerTestY;
-                    const mapmarks::Hover hovered = mapmarks::hover(mapMarkerViews, glm::vec2((float)px, (float)py), hud.interfaceScale(),
-                                                                    [&](const mapmarks::Marker &k) { return hud.mapLabelWidth(k); });
-                    if (hovered.best >= 0) {
-                        mapCursor = glm::dvec3(hovered.cursor);
-                        mapCursorKnown = true;
-                    }
-                    if (hovered.flight && !hovered.flightToPlayer) {
-                        flightSelected = true;
-                        selectedFlightPoint = {hovered.flight->x, hovered.flight->y};
-                    }
-                    hoveredLoreCell = hovered.cell;
-                    hoveredArtifact = hovered.item;
-                    mapmarks::enlargeTargets(mapMarkerViews, hovered);
-                }
             }
         }
         if (serverMode) {

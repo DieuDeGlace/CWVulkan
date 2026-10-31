@@ -62,6 +62,10 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- shrine-choice map opening, borrowed source lifetime, render-produced target and left-release
+  acceptance, from `steam-item-map-selection.md` and `map-markers.md`. The existing native
+  return ability keeps its effect boundary and signed32 cell arithmetic. World elapsed time,
+  GUI bob time and calendar time remain distinct; no source-item depletion was invented.
 - character-selection control placement using effective owner widget frames, preserving
   template transforms and picking through the copied shapes, from `frontend-characters.md`
   §2.3.1. Size requests are not substituted for measured geometry. Owner-data checks cover

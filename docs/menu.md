@@ -198,3 +198,8 @@ another Save folder and `--settings-folder DIR` at other settings files. `--poin
 (the character list's hover). In play, `--open-system-menu` shows the system menu from the start.
 `EngineTests makesave DIR <recording folder>` writes a test `characters.db` there, made by the writer from a
 recorded character's snapshot.
+
+In play, `--open-map Z` starts the ordinary full map at zoom Z; `--open-shrines Z` starts
+its restricted shrine-choice mode for captures. Use `--capture FILE.png --run-seconds N`
+and an explicit `--save-folder DIR --character slot-0` to load character0 from that test save read-only. Marker selection still
+requires the character's actual known shrine cells; the capture option adds no discoveries.

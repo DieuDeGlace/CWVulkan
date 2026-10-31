@@ -117,6 +117,7 @@ class SpawnedCreatures {
     // a mirror takes its host's (packet 8).
     int32_t day() const { return dayCount; }
     float timeOfDay() const { return dayMs; }
+    float elapsedWorldTime() const { return elapsedWorldMs; }
     void setClock(int32_t day, float timeOfDayMs) { dayCount = day, dayMs = timeOfDayMs; }
     void setClockRate(double gameMsPerMs) { clockRate = gameMsPerMs; }
     void advanceClock(double dtMs);
@@ -183,6 +184,8 @@ class SpawnedCreatures {
     // The take-off on the eagle (the mouse handling on a known flight point): the native
     // player flies from where it stands (+0x1b8) to block (x, y) (+0x1b0) in ability 0x9c.
     bool startFlight(int32_t x, int32_t y);
+    // Accepted known shrine cell: ability0x75, time0 and home-cell fields; travel happens later.
+    bool startShrineReturn(int32_t cellX, int32_t cellY);
     // The native player's health is its record's: the game's hits (0x29eb60) and healing
     // change it. Its maximum by the game's rules (0x5fac0), with its buffs.
     float playerHealth() const;
@@ -506,6 +509,7 @@ class SpawnedCreatures {
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
     uint32_t aiRand = 1;                                  // its rand(): the C runtime's, per thread, from 1
     float dayMs = 0;                                      // the time of day (world+0xc) at the last tick
+    float elapsedWorldMs = 0;                             // float world+0x440, separate from AI/GUI/calendar clocks
     std::function<bool(const nativeupkeep::Hit &, const uint8_t *)> playerHit;
     std::vector<soundrules::RequestRecord> sounds; // the world's sound requests, not yet played
     size_t kills = 0; // creatures killed by others, for the log

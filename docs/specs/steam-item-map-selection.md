@@ -118,6 +118,59 @@ does not silently confirm the previous target. Controller synthesis
 retains the existing cursor-snapshot and down/up sequencing contract;
 there is no controller-only business action that bypasses these checks.
 
+### 2.1 Exact preceding release gates and identification ordering
+
+Native0x965e0 does **not** treat identification or inventory visibility
+as a modal veto of the shrine-target branch. The reached mouse-up order
+is: earlier title/root-menu handling; ordinary interface up dispatch
+**0x101120 at0x96767**; answer-panel release action through0x89cb0
+when its own shown/button0 condition holds; identification handling;
+then map acceptance beginning **0x96ba2**. Those earlier routines can
+change live game state, and the later map checks read the resulting
+state rather than a snapshot taken on entry. A GUI callback's handling
+of the release is not itself used as a return/consumed gate here.
+
+The identification entry test at **0x96869–0x9689a** reads its **current
+root shown state** and the **shown-at-down byte0x5514d7**. If either
+is false, identification is skipped; button0 continues to0x96ba2.
+If both are true, button0 first attempts Identify, then tests Goodbye.
+**Every nonzero released button** skips the map section, regardless
+of these identification states: the jump is0x968a3 or0x96b9c to
+the later-handler join0x96d8c. This skips only this map section, not
+ordinary interface up dispatch which already happened.
+
+Within the admitted identification branch, all of the following only
+gate the Identify transaction:0x277d70 footer hit/valid category15
+resolution, available gold versus0x277bc0 cost, widget gate word+0x1f0
+equal1, live tab/index bounds, quantity!=0, and0x277e30 confirmation
+of the slotted type. Their failure jumps to **0x96b3f**, which still
+tests Goodbye through0x277cd0 at0x96b46. Successful identification
+also reaches that same Goodbye test after its insertion, refresh,
+sound and receipt calls. Neither success nor failure returns early
+before map acceptance.
+
+Goodbye success hides **both identification G+0x360 and inventory
+G+0x330**, then continues directly to0x96ba2. A failed Goodbye also
+continues there. Goodbye itself does not clear Game+0x668, dragged
+state or the render-produced target. Thus an otherwise eligible left
+release can still accept the stored target after either identification
+outcome. Inventory shown state is not tested as a shrine-acceptance
+condition. Do not require identification/inventory closed, require
+Identify failure, or add a generic “UI consumed click”/matching-down
+latch to the map branch.
+
+Once this point is reached, the explicit remaining skips are exactly
+Game+0x668 clear, dragged Game+0x1db0 nonzero, target X INT32_MAX,
+or absent floored target cell in personal+0xa8, as §2 lists. There is
+no new0x1014f0/modal check between identification and these tests.
+The0x94e7a down-side dragged reset is on the reached normal down
+continuation. Canonical identification slot selection at0x95033 is
+**after** that reset and does not undo it. Earlier in0x94900, a full-map
+hit on either node G+0x3a8 or G+0x3b0 can return before the reset;
+those are separate map-panel hit returns, not identification's slot
+selection. Do not silently reset dragged state on every release or
+use identification's down snapshot as a shrine gate.
+
 ## 3. Cancel/close routes and item quantity
 
 Concrete close routes include ordinary map toggle **0x1031e0** when

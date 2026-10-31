@@ -7,6 +7,12 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Shrine-choice map mode now follows item and creature use, restricts hover to shrine
+  targets and accepts the preceding actual draw's target on eligible left release.
+  It checks known cells with negative-coordinate floor division, starts the delayed
+  native return ability, and preserves item quantity. Deferred mode/source cleanup,
+  float world-clock pulses and GUI-scale label sizing are integrated. CPU/owner-data
+  checks pass; full original-game/controller comparison remains a release gate.
 - Character Select/Create and delete-control placement now uses the owner's effective widget
   frames after resizing, rather than treating the requested sizes as final dimensions. This fixes
   Select extending below its character card. Owner-shape picking replaces the old rectangular
@@ -24,8 +30,8 @@ checkpoint describe the intended setup and remaining limits.
   blackwidget/itemframe tree, native text/footer positions, live selection and
   release gates. Transformed edge/navigation tests and the CPU/owner suite pass;
   read-only captures at GUI scales1/1.5 exercise the owner artwork and typography.
-  Shared3D icons still use cached bitmap compatibility previews; map-item/selector
-  presentation and extended owner validation remain open.
+  Shared3D icons still use cached bitmap compatibility previews; Ring Menu and
+  full map-panel/capture behavior remain open, along with extended owner validation.
 - Native adaptive scene range is integrated: actual unmerged face costs/readiness,
   option-derived window, native equal-key sort, budget threshold, easing and player
   state feed distinct terrain/model/actor/light ranges. Pending cache metadata is

@@ -815,7 +815,7 @@ void Hud::drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) co
     using namespace mapmarks;
     const float bobbing = bob(state.mapClockMs);
     auto outlinedText = [&](const std::string &text, glm::vec2 at, float scale, glm::vec4 fill, glm::vec4 outline) {
-        plasma::TextStyle s = labelStyle((int)(scale * 12.0f), (int)(scale * 3.0f), plasma::TEXT_CENTER, true);
+        plasma::TextStyle s = labelStyle((int)(scale * 12.0f * guiScale), (int)(scale * 3.0f * guiScale), plasma::TEXT_CENTER, true);
         s.string.clear();
         for (char c : text) // (the labels' stars are U+00B1, the font's star)
             s.string.push_back((wchar_t)(unsigned char)c);
@@ -846,8 +846,9 @@ void Hud::drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) co
         }
         if (!k.overlay.empty() && guiLoaded)
             plasmaPlaced(out, k.overlay.c_str(), k.at, glm::vec2(0, -(ICON_RISE - bobbing)), PlasmaFrame{}, nullptr, k.scale);
+        const auto text = markerText(k, state.mapShrineMode, state.mapShrineTarget, state.mapWorldElapsedMs);
         if (!k.label.empty())
-            outlinedText(k.label, glm::vec2(k.at.x, labelY), k.scale, k.colour, glm::vec4(glm::vec3(k.colour) * 0.3f, 1.0f));
+            outlinedText(k.label, glm::vec2(k.at.x, labelY), text.scale, text.colour, glm::vec4(glm::vec3(text.colour) * 0.3f, 1.0f));
         if (!k.note.empty())
             outlinedText(k.note, glm::vec2(k.at.x, labelY - NOTE_RISE * guiScale), k.scale, glm::vec4(1.0f, 0.8f, 0.1f, 1.0f),
                          glm::vec4(0.6f, 0.25f, 0.0f, 1.0f));

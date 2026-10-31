@@ -193,6 +193,9 @@ class Hud {
         using MapMarker = mapmarks::Marker;
         std::vector<MapMarker> mapMarkers;
         int mapClockMs = 0;
+        float mapWorldElapsedMs = 0;
+        bool mapShrineMode = false;
+        mapmarks::Cell mapShrineTarget{mapmarks::Selection::NO_TARGET, mapmarks::Selection::NO_TARGET};
         // The game's pointer (Interface's its pointer node, cursor.plx), shown in its menus, at the
         // mouse (window pixels), with its text (the map cursor's distance).
         bool pointer = false;

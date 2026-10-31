@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -160,9 +161,30 @@ struct Hover {
 };
 // The hover pass over markers sorted far to near: `uiScale` is the interface's scale and
 // `labelWidth` measures a label at a marker's scale (in pixels).
-Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale,
-            const std::function<float(const Marker &)> &labelWidth);
+Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale, const std::function<float(const Marker &)> &labelWidth,
+            bool shrinesOnly = false);
 // Marks the markers standing on a hover target as drawn enlarged.
 void enlargeTargets(std::vector<Marker> &markers, const Hover &hovered);
+
+// Full-map/shrine-choice continuation (steam-item-map-selection.md). The borrowed source
+// address is recorded, never dereferenced, rebound, reserved or consumed by this path.
+struct Selection {
+    bool open = false, shrinesOnly = false, dragged = false;
+    uintptr_t itemSource = 0;
+    static constexpr int32_t NO_TARGET = std::numeric_limits<int32_t>::max();
+    Cell target{NO_TARGET, NO_TARGET};
+    void openShrines();
+    void useItem(const void *slot);
+    void afterInterface();
+    void down() { dragged = false; }
+    void move(glm::dvec2 delta, bool ordinaryMouseUi);
+    void overlayDrawn(const Hover &);
+    std::optional<Cell> destination(int releasedButton, const std::function<bool(Cell)> &known) const;
+};
+struct MarkerText {
+    float scale = 1;
+    glm::vec4 colour{1};
+};
+MarkerText markerText(const Marker &, bool shrineMode, Cell target, float worldElapsedMs);
 
 } // namespace mapmarks

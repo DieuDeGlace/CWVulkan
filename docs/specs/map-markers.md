@@ -25,7 +25,7 @@ Two drawing routines are covered:
 | **overlay** | its own `this` | the MapOverlayWidget |
 | **window** | overlay +0x8 | the interface window. +0x180/+0x184: mouse x, y in pixels. +0x194: the interface's millisecond clock (int). +0x1c4/+0x1c8: window width, height in pixels. +0x48: the font system |
 | **controller** | overlay +0x1a8 | the game controller (the object whose +0x118 is passed to the sprite loader 0xf9ac0, see 0.3) |
-| **world** | controller +0x8 | the world. +0x40: creature list. +0x70: model table. +0x440: the world clock (float ms, increased by each frame's elapsed time in 0x2e2e80). +0x448: the local player |
+| **world** | controller +0x8 | the world. +0x40: creature list. +0x70: model table. +0x440: float32 elapsed world-update ms accumulator, advanced by0x2e2e80; distinct from calendar/time-of-day+0x0c (see §1.8.1). +0x448: the local player |
 | **map** | controller +0x10 | the WorldMap object (Part 2) |
 | **chardata** | local player +0x1528 | the player's character data (0.4) |
 
@@ -430,7 +430,8 @@ behaviour.
 ### 1.8 Drawing (per record, in sorted order)
 
 Fonts and text come from `resource1.dat` (wide string 0x436340). Let **gs** = guiScale
-(controller +0x664) and **t** = the window clock.
+(controller +0x664) and **t** = the window's signed32 clock. The shrine pulse instead
+uses the distinct float world elapsed clock; the exact types/order are §1.8.1.
 
 1. **Text scale and colour.** The text scale ts = the record's scale and the colour = the
    record's colour. In shrine-choice mode, a record with flag A instead gets:
@@ -466,6 +467,40 @@ Fonts and text come from `resource1.dat` (wide string 0x436340). Let **gs** = gu
    * Pass two: fill (1, 0.8, 0.1, 1) (0x46f5a0), outline width 0.
    * The note is yellow text with an orange-brown outline. It blinks as described in 1.3.2
      step 10.
+
+### 1.8.1 Shrine pulse clock versus GUI bob clock
+
+The flag-A shrine-choice **text-color pulse** at **0x286002–0x286047**
+reads **World+0x440 directly as float32 milliseconds**, through
+overlay+0x1a8→Game+0x8→World. It is not the GUI/window clock and
+is not a signed integer reinterpreted or converted to float. The
+phase input is the float32 product of that float with constant
+**0x3c23d70a** (approximately0.01, data RVA0x42e51c). Pass that
+float to **cosf**, call0x286016; multiply the returned float by
+**0.25f**, then add **0.75f**, with a float32 result after each
+operation. Green is0.25f, blue/alpha1.0f. There is no integer
+truncation, time modulo, GUI-scale factor or intermediate double
+phase calculation in this consumer.
+
+That world field is an **elapsed world-update accumulator**, not the
+calendar/time-of-day field. **0x2e2e80** advances+0x440 by adding its
+float32 elapsed-ms argument to the existing float32 field and storing
+the float32 sum. The same routine advances calendar/time-of-day
+**World+0x0c separately**. Do not substitute that calendar value or
+a separately accumulated GUI/render elapsed clock for the pulse.
+This statement specifies the read and its direct producer; it does
+not infer an additional pause/reset policy at the overlay consumer.
+
+The ordinary icon bob and solved-overlay bob are the distinct calls
+**0x286298/0x286455**. Each reads **GUI engine/window+0x194 as
+signed32**, converts that integer to float32 first (signed
+CVTDQ2PS), then multiplies by float **0x3ba3d70a** (approximately0.005,
+data0x42e518), and calls cosf. Its returned float is multiplied by
+**5.0f** before adding to the relevant Y value. There is no unsigned
+conversion or pre-conversion modulo. Negative signed clock words
+therefore remain negative inputs to the conversion. The eligibility
+for these two bobs remains §1.8: ordinary icons need neither flag A
+nor an overlay sprite; the solved overlay itself always uses its bob.
 
 ---
 
