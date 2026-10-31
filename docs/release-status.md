@@ -7,6 +7,16 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Physical inventory wheel messages now retain their event pointer and sign,
+  selecting one owner-tree hit in inventory/shop/crafting priority. Shop and recipe
+  grids can receive wheel input while the bag is visible elsewhere. Opposing
+  messages remain separate; fractional or large deltas do not accumulate into
+  different row counts. Idle input passes leave the stored row alone. Synthetic
+  priority/sign cases cover this routing. Cached widget range/thumb state, precise
+  refresh callbacks, first binding and broader native input comparisons remain open.
+  All five targets build; the full CPU/owner suite,40 world and20 GUI Vulkan cases,
+  shared water and Alpha ordering pass.
+
 - Alpha shared water now draws its sorted fading-scenery queue after the sky and
   before the refraction snapshot. Previously, transparent scenery could write
   depth before its sky background and leave dark silhouettes. Native water keeps

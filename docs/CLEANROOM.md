@@ -72,6 +72,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Inventory wheel target priority and per-message sign normalization follow
+  `steam-inventory-refresh-events.md` section4.2. Input retains the event pointer
+  and reuses the engine's existing owner-tree hit test; no game input code is read.
+  Synthetic cases cover overlap priority, no-hit and signed fractional/large input.
+  Cached range/thumb state and the remaining refresh lifecycle stay separate.
 - Alpha static-scenery pass ordering remains based on
   `alpha-far-static-ordering.md`. Its new normalized-target/fade clarification
   confirms that CPU opacity must not gain a new endpoint clamp or discard.

@@ -35,6 +35,7 @@ struct GLFWwindow;
 // What the window gave since the last frame (filled by main's GLFW callbacks).
 struct MenuInput {
     double scroll = 0;
+    std::vector<inventoryui::WheelEvent> wheelEvents;
     std::vector<int> pressed, buttons, released;
     std::string typed; // text typed this frame (character creation's name)
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
@@ -60,7 +61,12 @@ struct MenuInput {
             lastUsedPad = true;
     }
     void clear() {
-        scroll = 0; pressed.clear(); buttons.clear(); released.clear(); typed.clear();
+        wheelEvents.clear();
+        scroll = 0;
+        pressed.clear();
+        buttons.clear();
+        released.clear();
+        typed.clear();
         gamepadSampled = false;
         pointerSampled = false;
     }

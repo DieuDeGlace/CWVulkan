@@ -10,6 +10,22 @@
 namespace inventoryui {
 using Region = std::array<int32_t, 2>;
 
+// Each wheel message supplies one row attempt; opposing messages remain separate.
+struct WheelEvent {
+    double x = 0, y = 0; // window coordinates at the event
+    int rowStep = 0;
+};
+inline int wheelRowStep(double delta) {
+    return delta < 0 ? 1 : delta > 0 ? -1 : 0;
+}
+template <class Hit> int wheelTarget(const Hit &hit) {
+    // Native priority differs from the controller panel-registration order.
+    for (int which : {0, 1, 2}) // inventory, shop, crafting
+        if (hit(which))
+            return which;
+    return -1;
+}
+
 inline std::vector<Region> regionChoices(std::vector<Region> regions, Region here) {
     regions.push_back(here);
     std::sort(regions.begin(), regions.end());

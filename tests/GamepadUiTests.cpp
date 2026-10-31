@@ -152,6 +152,19 @@ int gamepadUiTests() {
     frame = map.update(pad, true, true, {}, {});
     check(frame.pressed[2], "interactive map has its own saved Y edge");
     inventoryui::Tabs<6> inventoryTabs;
+    check(inventoryui::wheelRowStep(3.5) == -1 && inventoryui::wheelRowStep(.125) == -1 && inventoryui::wheelRowStep(-9) == 1 &&
+              inventoryui::wheelRowStep(0) == 0,
+          "wheel messages use sign rather than magnitude or fractional accumulation");
+    std::vector<int> wheelHits;
+    check(inventoryui::wheelTarget([&](int which) {
+              wheelHits.push_back(which);
+              return true;
+          }) == 0 &&
+              wheelHits == std::vector<int>{0},
+          "inventory wheel hit stops before overlapping shop and crafting");
+    check(inventoryui::wheelTarget([](int which) { return which != 0; }) == 1, "shop wheel priority precedes crafting");
+    check(inventoryui::wheelTarget([](int which) { return which == 2; }) == 2, "crafting can receive wheel with inventory shown elsewhere");
+    check(inventoryui::wheelTarget([](int) { return false; }) == -1, "no grid hit leaves every row unchanged");
     inventoryTabs.scroll = 7;
     inventoryTabs.selected = 42;
     inventoryTabs.selectTab(-1);

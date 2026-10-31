@@ -557,10 +557,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         glfwWindowHint(GLFW_REFRESH_RATE, windowMode.refresh);
     GLFWwindow *window = glfwCreateWindow(windowMode.width, windowMode.height, "CubeVulkan",
                                           windowMode.fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
-    glfwSetScrollCallback(window, [](GLFWwindow *, double, double y) { input.scroll += y; });
+    glfwSetScrollCallback(window, [](GLFWwindow *window, double, double y) {
+        input.scroll += y;
+        if (const int step = inventoryui::wheelRowStep(y)) {
+            double x, pointerY;
+            glfwGetCursorPos(window, &x, &pointerY);
+            input.wheelEvents.push_back({x, pointerY, step});
+        }
+    });
     captureChatInput = false;
     glfwSetCharCallback(window, [](GLFWwindow *, unsigned int c) {
-        if (captureChatInput) chatInput.push_back({ChatInputEvent::Character, (int)(c & 255)});
+        if (captureChatInput)
+            chatInput.push_back({ChatInputEvent::Character, (int)(c & 255)});
         if (c >= 32 && c < 127)
             input.typed += (char)c; // names are plain text, as the game's
     });
@@ -3403,12 +3411,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
             player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
         }
-        static double inventoryWheel = 0; // (the wheel scrolls the inventory while it is open)
-        if (inventoryOpen)
-            inventoryWheel += input.scroll;
-        else if (gameInput.held(gameoptions::WALK)) // the walk key and the wheel: the camera's distance
+        if (!inventoryOpen && gameInput.held(gameoptions::WALK)) // the walk key and the wheel: the camera's distance
             player.zoom = std::clamp(player.zoom * std::pow(.88f, (float)input.scroll), 3.f, 90.f);
-        else if (input.scroll != 0) { // the mouse wheel handling: the map's zoom, about the cursor
+        else if (!inventoryOpen && input.scroll != 0) { // the mouse wheel handling: the map's zoom, about the cursor
             const int oldZoom = mapZoom;
             mapZoom = std::clamp(mapZoom - (int)input.scroll, 0, worldmap::MAX_ZOOM);
             if (mapZoom != oldZoom && mapCursorKnown) {
@@ -4468,33 +4473,40 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 audio.playInterface(soundrules::soundid::MENU_TAB);
             };
             auto scrollPanel = [&](int which, int &offset, int step) {
+                if (!step)
+                    return;
                 const int last = std::max(0, hud.inventoryRowCount(inventoryView, which) - 1);
                 const int before = std::clamp(offset, 0, last);
                 offset = std::clamp(before + step, 0, last);
                 if (offset != before)
                     audio.playInterface(soundrules::soundid::MENU_TAB);
             };
-            if (bagShown) { // the inventory scrolling / scrolling down, by the buttons and the wheel
+            for (const auto &event : input.wheelEvents) {
+                const glm::vec2 point((float)event.x * fw / std::max(ww, 1), (float)event.y * fh / std::max(wh, 1));
+                const int target =
+                    inventoryui::wheelTarget([&](int which) { return hud.inventoryPanelEligible(point, inventoryView, which); });
+                if (target == 0)
+                    scrollPanel(0, inventoryView.scroll, event.rowStep);
+                else if (target == 1)
+                    scrollPanel(1, inventoryView.vendor.scroll, event.rowStep);
+                else if (target == 2)
+                    scrollPanel(2, inventoryView.crafting.scroll, event.rowStep);
+            }
+            if (bagShown) { // the inventory scroll buttons and controller
                 int step = 0;
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverButton)
                         step += inventoryView.hoverButton == 1 ? -1 : 1;
-                step -= (int)inventoryWheel;
-                inventoryWheel -= (int)inventoryWheel;
                 if (input.gamepadPointer.scrollPanel == 0)
                     step += input.gamepadPointer.scrollRows;
                 scrollPanel(0, inventoryView.scroll, step);
             }
-            if (craftingOpen) { // the crafting widget's scroll buttons (and the wheel, without the bag)
+            if (craftingOpen) { // the crafting scroll buttons and controller
                 Hud::Inventory::Crafting &cv = inventoryView.crafting;
                 int step = 0;
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && cv.hoverButton)
                         step += cv.hoverButton == 1 ? -1 : 1;
-                if (!bagShown) {
-                    step -= (int)inventoryWheel;
-                    inventoryWheel -= (int)inventoryWheel;
-                }
                 if (input.gamepadPointer.scrollPanel == 1)
                     step += input.gamepadPointer.scrollRows;
                 scrollPanel(2, cv.scroll, step);

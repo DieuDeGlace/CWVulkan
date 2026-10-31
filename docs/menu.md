@@ -204,6 +204,14 @@ The original game has only one hair color in its creature record; synchronizatio
 the extra style to remote players is not implemented. No hair models, palettes or
 other original artwork are included in either distribution package.
 
+## Inventory wheel input
+
+Inventory wheel input targets the grid under the pointer, in inventory, shop,
+crafting priority. Each physical wheel message attempts one row according to its
+sign; deltas are not saved up between frames or redirected to the bag merely
+because it is open. Controller and button row inputs retain their existing paths.
+The full native widget refresh/scrollbar lifecycle remains a roadmap item.
+
 ## Placed by CubeVulkan where the specs leave it open
 
 These are stand-ins, to be replaced when the specs or a capture give them:
