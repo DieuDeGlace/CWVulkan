@@ -573,8 +573,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (c >= 32 && c < 127)
             input.typed += (char)c; // names are plain text, as the game's
     });
+    input.shiftDown = false;
     glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int modifiers) {
-        if (action == GLFW_PRESS) input.pressed.push_back(key);
+        if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
+            input.shiftDown = action != GLFW_RELEASE;
+        if (action == GLFW_PRESS)
+            input.pressed.push_back(key);
         if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
             chatInput.push_back({ChatInputEvent::Key, key, (modifiers & GLFW_MOD_SHIFT) != 0, action == GLFW_REPEAT});
     });
@@ -3179,8 +3183,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
     };
 
-    auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview) {
+    auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview, const nativesaves::Item *comparison = nullptr) {
         preview.info.clear();
+        preview.comparisonInfo.clear();
         preview.infoIcon.clear();
         preview.infoItem.reset();
         const uint8_t *who = spawned.playerRecord();
@@ -3188,17 +3193,37 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             return;
         const auto originalRaw = Gear::toRecord(original);
         const auto raw = nativeInventory ? nativeplayer::transformed(originalRaw, gear.playerClass()) : originalRaw;
-        const auto it = nativeInventory ? Gear::fromRecord(raw) : original;
+        if (nativeInventory) {
+            iteminformation::Context context;
+            context.player = who;
+            context.classType = gear.playerClass();
+            std::memcpy(context.region.data(), who + worldgen::creature::REGION, 8);
+            context.fullName = [&](const auto &item) { return itemName(Gear::fromRecord(item)); };
+            context.regionName = [&](const auto &item) {
+                const auto view = Gear::fromRecord(item);
+                return landNameOf({view.region[0], view.region[1]});
+            };
+            context.realmName = realmName;
+            context.comparison = comparison;
+            preview.info = iteminformation::format(raw, context);
+            if (comparison) {
+                context.comparison = nullptr;
+                context.classWarning = false;
+                context.scale = .75f;
+                preview.comparisonInfo = iteminformation::format(*comparison, context);
+            }
+            preview.infoItem = raw;
+            preview.infoIcon = spawned.itemSprite(raw.data());
+            loadInventorySprite(preview.infoIcon);
+            return;
+        }
+        const auto &it = original;
         const int32_t *playerRegion = reinterpret_cast<const int32_t *>(who + worldgen::creature::REGION);
         const int effective = nativerules::itemLevel(raw.data(), playerRegion);
         static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1},        {0, 1, 0, 1},
                                               {0.3f, 0.45f, 1, 1},   {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
         auto rarityColour = [&](int r) { return rarities[std::clamp(r, -1, 4) + 1]; };
-        auto tenth = [](float v) {
-            char b[32];
-            std::snprintf(b, sizeof b, "%g", std::round(v * 10.0f) / 10.0f);
-            return std::string(b);
-        };
+        auto tenth = [](float v) { return itempreview::formatNumber(itempreview::roundTenth(v)); };
         const bool equipment = (it.category >= 3 && it.category <= 9) || it.category == 26;
         const bool renowned = equipment && it.modifier % (unsigned)(10 * (it.rarity + 1)) == 0;
         auto &info = preview.info;
@@ -3240,11 +3265,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             info.push_back({"Restores health over " + std::to_string(nativerules::useTime(raw.data()) / 1000) + " seconds", 12, 3,
                             glm::vec4(0.25f, 1, 0.25f, 1), 16});
         preview.infoIcon = it.sprite;
-        if (nativeInventory) {
-            preview.infoItem = raw;
-            preview.infoIcon = spawned.itemSprite(raw.data());
-            loadInventorySprite(preview.infoIcon);
-        }
     };
     while (!glfwWindowShouldClose(window)) {
         input.gamepadSampled = false;
@@ -4079,7 +4099,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             int ww, wh, fw, fh;
             glfwGetWindowSize(window, &ww, &wh);
             glfwGetFramebufferSize(window, &fw, &fh);
-            glm::vec2 mouse((float)cx * fw / std::max(ww, 1), (float)cy * fh / std::max(wh, 1));
+            const glm::vec2 mouse = pointerTestX >= 0 ? glm::vec2((float)pointerTestX, (float)pointerTestY)
+                                                      : glm::vec2((float)cx * fw / std::max(ww, 1), (float)cy * fh / std::max(wh, 1));
             inventoryView.hoverItem = hud.inventoryItemAt(mouse, inventoryView);
             inventoryView.hoverSlot = hud.inventorySlotAt(mouse, inventoryView);
             inventoryView.hoverTab = hud.inventoryTabAt(mouse, inventoryView);
@@ -7117,11 +7138,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (nativeCustomization.edit.open && nativeCustomization.paletteHover >= 0)
                     sources.voxel = &nativeCustomization.hoveredItem;
                 ordinaryInformation.info.clear();
+                ordinaryInformation.comparisonInfo.clear();
                 ordinaryInformation.infoIcon.clear();
                 ordinaryInformation.infoItem.reset();
                 const auto choice = itempreview::select(sources);
                 if (choice.item) {
-                    describePreview(Gear::fromRecord(*choice.item), ordinaryInformation);
+                    itempreview::Equipment comparisons;
+                    const auto &equipment = nativeInventory->equipment;
+                    comparisons.weapons = {&equipment[Gear::WeaponRight], &equipment[Gear::WeaponLeft]};
+                    comparisons.other = {&equipment[Gear::Pet],   &equipment[Gear::Shoulder], &equipment[Gear::Chest],
+                                         &equipment[Gear::Hands], &equipment[Gear::Feet],     &equipment[Gear::Neck]};
+                    comparisons.rings = {&equipment[Gear::RingRight], &equipment[Gear::RingLeft]};
+                    const auto adapted = nativeplayer::transformed(*choice.item, gear.playerClass());
+                    const auto *comparison = itempreview::comparison(choice.item, adapted, comparisons, input.shiftDown);
+                    describePreview(Gear::fromRecord(*choice.item), ordinaryInformation, comparison);
                     ordinaryInformation.infoAnchor = choice.anchor;
                     ordinaryInformation.pointer = hs.pointerAt;
                 }

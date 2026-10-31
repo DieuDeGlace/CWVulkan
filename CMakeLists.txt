@@ -204,6 +204,7 @@ add_library(engine STATIC
     src/VoxelEdit.cpp
     src/VoxelCustomization.cpp
     src/ItemPreview.cpp
+    src/ItemInformation.cpp
     src/HudCustomization.cpp
     src/HairStyle.cpp
     src/ChatLine.cpp

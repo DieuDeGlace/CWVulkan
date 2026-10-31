@@ -189,6 +189,6 @@ stage merely to make them use one synthetic snapshot.
 Map semantic-copy production, current ground-tuple resolution, Ring
 canonical borrowing, clearing boundaries and scalar/origin coupling
 above are stable. Original-equipment comparison and draw/size timing
-are completed by preview section7. The full item formatter's remaining
-stat rows/deltas/effect paragraphs remain explicitly untraced there;
-this supplement does not invent them or upstream quest awards.
+are completed by preview section7. Preview section8 now specifies the
+ordinary stat rows, comparison deltas and effect paragraphs; this source
+supplement does not introduce upstream quest awards.

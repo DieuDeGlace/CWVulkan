@@ -316,7 +316,7 @@ here. The local player's class drives the admitted main class-warning
 block: if0x1094d0 rejects it, the formatter lists each admitting class
 in order **`Warrior `,`Ranger `,`Mage `,`Rogue `**. The comparison call's
 class-warning enable0 suppresses that block. Other category rows and
-effect text remain the explicitly bounded formatter scope below.
+effect text are specified in section8 below.
 
 ### 7.3 Comparison heading and actual returned text endpoint
 
@@ -398,3 +398,228 @@ that frame's already submitted background. Subsequent queries retain
 the new ordinary Widget state as7.4 specifies. Owner clip/blur/cached
 surface traversal remains the shared Plasma contract, not an invented
 extra preview pass.
+
+## 8. Item-information text rows, comparison deltas and effects
+
+This completes ordinary item formatter **0xb7b90** for §7.2's two
+calls. The input is the full supplied item: the main call's adapted
+temporary or the comparison call's original equipped record. Stat
+helpers receive the current local player at World+0x448 for both
+operands. Ground origin only affects §8.2's reserved-owner branch.
+Quantity and the byte argument remain unread; neither adds text nor
+suppresses these rows. Stat calculations remain **stat-rules §2**.
+
+### 8.1 Layout state and pre-stat order
+
+S is the supplied float size factor. Y starts at the caller's signed
+integer start Y converted to float. Text starts at supplied X except
+§8.4's deltas. Body font is **12 times S**, black outline width **3**;
+outline width is not multiplied by S. Resource, line spacing, flags
+and260-unit wrapping are §7.2. Glyph layout/wrapping is0x269210.
+A stated Y advance is float32 S times the stated constant, followed
+by float32 addition to Y. It does not implicitly adopt returned pen Y.
+
+Conditional submissions occur in this order:
+
+1. The enabled full-name heading uses0x1628b0, regional item-name
+   color **0x10a600**, font15 times S and outline4. Its special-plus
+   rule is §7.2. Y becomes **returned pen Y plus24 times S**. Font
+   then returns to12 times S and outline3.
+2. Category23 submits the owner's dictionary **`realmname`** expansion,
+   color **(1,0.9,0.5,1)**. Its seed is signed32 item+0x18; realm
+   kind is0x10cee0 of that seed. Expansion is0x16c3e0(Game dictionary,
+   realmKind, seed), with context0x160f80. This is a realm name.
+   Conversation-script §5.4.1 and lore-and-artifacts supply these
+   existing realm/dictionary contracts. Advance Y by24 times S.
+3. Categories **2,3,4,5,6,7,8,9,15,22,24,26,30** enter the regional
+   description group: native mask **0x454083fc**, category<31.
+   Only categories3..9 and26 first submit the star pair below and
+   advance Y by24 times S once. Every category in the group then
+   submits the named-region string and advances Y by24 times S.
+4. Category23 submits §8.2's artifact-effect sentence, with **no Y
+   advance afterward**.
+5. Category24/subtype4 submits **`RANK `** followed by signed32
+   item+0x08 plus1, with native32-bit wrap, printed as signed decimal.
+   Color is **(1,0.9,0.6,1)** at0x438130. It also has **no Y advance**.
+6. §8.2's reserved-owner and class-warning branches precede the pet
+   row. Category20 with0x5ef80(subtype) true (creature-physics §7.6)
+   submits **`Ridable`**,
+   body font, color **(0.75,0.5,1,1)**, then Y plus **14 times S**.
+   That spelling is native.
+7. §8.3's stats, followed by §8.5's final effects.
+
+The star pair uses font **18 times S** and native font character
+**U+00B1**. The first string contains stored rarity+1 characters,
+color **(0.3,0.3,0.3,1)**. At **the same X/Y**, the second contains
+effective regional rarity+1 characters if that rarity is nonnegative,
+otherwise an empty string. Effective rarity is0x109720 for the local
+player's region; foreground RGBA is0x64680 for that result. They are
+overlaid strings, not adjacent counts or separate lines. Font returns
+to12 times S for the named-region line.
+
+The named-region expansion is exactly **steam-identification-ui §7**:
+0x2b9080 on the item's region, node0x16b210, qualifier`named`, and
+0x16be20 expansion. That section gives the region-name seed and owner
+dictionary context. Its single color here is **(1,0.9,0.5,1)** when
+effective rarity equals stored rarity, otherwise **(0.75,0.75,0.75,1)**.
+Categories3..9/26 also append literal`+` under the heading's same
+special-plus condition. This plain-string draw does not individually
+submit embedded dictionary word colors.
+
+Only the heading and category28 paragraph below adopt returned text Y.
+Other stated advances stay fixed even if text wraps. Sources:0xb7b90
+through owner entry around0xb8860; the cited helpers; colors0x438090,
+0x438120,0x438130,0x438140,0x438150,0x438190.
+
+### 8.2 Artifact, reserved-owner and class-warning details
+
+The artifact-effect index is the **unsigned seed field at item+0x08
+modulo7**, via
+0x108ef0. All sentences use **(0.2,1,0.6,1)**, body font12 times S,
+and leave Y unchanged:
+
+| Index | Literal sentence |
+|---|---|
+|0|You can climb faster.|
+|1|Increases swimming speed.|
+|2|You consume less stamina when diving.|
+|3|Increases riding speed.|
+|4|Increases hang gliding speed.|
+|5|Increases sailing speed.|
+|6|Increases the radius of your lamp.|
+
+For nonnull ground origin with+0xd8 ID nonzero, scan the world creature
+list for kind0 and matching creature ID+0x968; last matching entry
+wins. The formatter selects white if that result is the local player,
+otherwise pure red, sets font9 times S and outline2, and submits the **empty**
+current text builder. This supported body inserts neither the found
+creature's name nor a`Reserved for` label. It nevertheless advances
+Y by **20 times S**. Do not import the use prompt's reservation text.
+Evidence:0xb8860..0xb89c6, especially text call **0xb8928** and the
+empty-builder reset preceding the owner lookup.
+
+When the class-warning argument is enabled, restore body font12 times
+S and outline3, then check0x1094d0 against the local player's class.
+On rejection, test classes1,2,3,4 in order, appending respectively
+**`Warrior `**, **`Ranger `**, **`Mage `**, **`Rogue `** for each accepted
+class. Trailing spaces belong to the literals. Submit the resulting
+pure-red string, including its empty case, and advance Y by20 times S.
+The warning does not prevent later stats. The comparison call disables
+it. Source:0xb89c6 onward; red0x438050, artifact green0x438140.
+
+### 8.3 Stat rows, values, styles and advances
+
+These rows retain this order. They use the item helpers in stat-rules
+§2, not creature totals or stack-scaled values. Round means §8.4.
+
+| Prefix | Helper | Admission | Displayed value | Font | RGBA | Y advance |
+|---|---|---|---|---|---|---|
+|`DAMAGE `|0x10ad90|Supplied category3|Round(selected result)|15×S|(0,1,1,1)|20×S|
+|`ARMOR `|0x108d50|Either raw operand≥0.1|Round(selected result)|15×S|(0,1,1,1)|20×S|
+|`RESISTANCE `|0x10a1e0|Either raw operand≥0.1|Round(selected result)|15×S|(0,1,1,1)|20×S|
+|`HP `|0x1097b0|Either raw operand≥0.1|Round(selected result)|15×S|(0.75,0.5,1,1)|16×S|
+|`HASTE `|0x10a490|Either raw operand≥0.001|Round(selected result×100), then`%`|12×S|(0.75,0.5,1,1)|16×S|
+|`CRITICAL `|0x1090f0|Either raw operand≥0.001|Round(selected result×100), then`%`|12×S|(0.75,0.5,1,1)|16×S|
+|`REGENERATION `|0x109f30|Either raw operand≥0.001|Round(selected result×100), then`%`|12×S|(0.75,0.5,1,1)|16×S|
+
+“Either operand” means selected, or comparison when nonnull. Thresholds
+are tested on **unrounded, unmultiplied** results. A comparison can
+therefore admit a selected zero. There is no additional comparison
+category filter inside these tests. Threshold words are float32
+**0x3dcccccd** for0.1 and **0x3a83126f** for0.001; percentage multiply
+is float32 100. All outlines remain3. There is no separate fixed
+numeric column.
+
+Immediately after reached DAMAGE, round0x10ad50(selected,localPlayer).
+If strictly positive, subtract **the float32 sum S+S** from current Y,
+then submit **`+DAMAGE `** and that rounded bonus. Font12 times S,
+color **(1,0.2,1,1)**; advance Y by20 times S. This row has no delta.
+The two DAMAGE rows thus advance38 units at S=1, not40; no extra
+upgrade-count label appears here.
+
+Source anchors: DAMAGE helper **0xb8d24**, delta operations
+**0xb8e39..0xb8e58**, bonus after **0xb8f70**; main font setters ARMOR
+**0xb9185**, RESISTANCE **0xb9494**, HP **0xb97a7**, percent rows
+**0xb9ace,0xb9ded,0xba10c**. Cyan0x4381b0, purple0x438190,
+magenta0x438170. The post-preface20-unit constant is0x42e5a0,
+distinct from the24-unit heading/region advance.
+
+### 8.4 Rounding and comparison suffixes
+
+For ordinary finite values whose intermediate conversion fits signed32,
+**0xa2740** uses these precision stages. For nonnegative input,
+multiply by float32 **10**, add float32 **0.5**, truncate toward zero
+to signed32, convert that integer to float32, then multiply by stored
+float32 **0.1 (word0x3dcccccd)**. Negative input is sign-flipped, sent
+through that path, then sign-flipped back. A zero result becomes
+positive zero. This is nearest tenth with ties away from zero under
+those operations, not decimal-string rounding or division by10.
+Positive path0xa2778..0xa2793; constants10 at0x42e598,0.5 at0x4ac964,
+0.1 at0x42e528.
+
+Rounded floats are promoted to double for ordinary numeric insertion
+through the fresh text stream. The body selects no fixed one-decimal
+format or forced trailing`.0`; integral results do not receive an
+artificial decimal suffix.
+
+With nonnull comparison, each reached §8.3 row separately rounds its
+selected and comparison values, subtracts rounded comparison from
+rounded selected in float32, then rounds the difference again through
+0xa2740. Percent rows multiply **each operand** by100 in float32
+before its own rounding; the delta is in percentage points.
+An exactly zero rounded difference adds no suffix. Negative uses
+literal **one space** followed by the signed number; positive uses
+literal **` +`** followed by the number. There are no parentheses,
+and percentage-row deltas have no percent sign.
+
+Negative delta RGBA is **(1,0.3,0.3,1)**, positive
+**(0.3,1,0.3,1)**, constants0x4380a0/0x4380d0. Font is always
+**12 times S**, including after15-times-S main rows. Delta X is the
+main text's returned pen X from0x269210; delta Y remains the main row's
+original Y, not returned pen Y. The suffix does not advance Y itself.
+Source: repeated0xb7b90 branches, e.g. DAMAGE0xb8e39..0xb8f70 and
+delta-font setter0xb8dc1.
+
+### 8.5 Final effects and output height
+
+After stats, restore font12 times S and process these in order:
+
+* Category1 with raw heal helper **0x109460≥0.1** submits
+  **`Restores health over `**, signed integer **0x108fa0(item)/1000
+  truncated toward zero**, then **` seconds`**. It does not display
+  a heal-amount number. Color **(0.25,1,0.25,1)**; Y plus16 times S.
+* Raw demon helper **0x109290>0** submits
+  **`Increases damage against demons by `**, Round(float32 helper
+  result times100), then`%`. Color **(1,0.75,0.5,1)**; Y plus16 times
+  S. The helper's item gate is stat-rules §2.6.
+* Category28 submits the subtype description below, color
+  **(0.6,0.5,1,1)**. Y becomes **returned pen Y plus20 times S**.
+  Then submit **`Effect lasts 10 Minutes`**, color **(0,1,1,1)**,
+  and advance Y by16 times S. This is fixed text, not remaining life.
+
+| Category28 subtype | Literal description |
+|---|---|
+|0|HP +20%|
+|1|DAMAGE +20%|
+|2|ARMOR +20%|
+|3|RESISTANCE +20%|
+|4|A refreshing drink that helps against extreme heat.|
+|5|A warming drink that helps against extreme coldness.|
+|6|A very healthy drink that helps against toxic environments.|
+|Other|Empty string; empty submission and subsequent duration line still occur.|
+
+Sources: final stat continuation **0xba329** through **0xba74d**;
+effect fonts0xba410/0xba532/0xba666, colors0x438080/0x438100/
+0x438180/0x4381b0. The formatter returns original X and accumulated Y.
+External minimum height, comparison anchoring and late Widget resizes
+remain §7.3–7.6. No generic weight/price/level or comparison-placeholder
+rows are introduced at the end of this formatter.
+
+### 8.6 Remaining boundary
+
+Ordinary finite row decisions, literal text, colors, advances and delta
+handling above are stable. Owner dictionary wording and the full-name
+resolver retain their existing data-driven contracts. This checkpoint
+does not extend0xa2740 to out-of-range/NaN/infinite stat inputs, claim
+runtime oracles for malformed data, or change0x28c290's separate
+map-location/lore branches.

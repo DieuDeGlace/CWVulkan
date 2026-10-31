@@ -354,6 +354,16 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
         for (int s : {stroke, 0})
             for (bool scalable : {false, true})
                 bakeStyle(labelStyle(size, s, 0, scalable), root);
+    // Equipped-item details scale fonts by three quarters; outline widths remain
+    // unchanged. Keep those fractional styles in the shared atlas too.
+    for (const glm::vec2 font : {glm::vec2(11.25f, 4), glm::vec2(11.25f, 3), glm::vec2(9, 3), glm::vec2(13.5f, 3), glm::vec2(9, 2)})
+        for (float stroke : {font.y, 0.f}) {
+            auto style = labelStyle(12, 0, 0, true);
+            style.pixelSize = font.x;
+            style.strokeRadius = stroke;
+            style.lineSpacing = 1;
+            bakeStyle(style, root);
+        }
     plasma::TextStyle featStyle;
     featStyle.font = "resource1.dat";
     featStyle.pixelSize = feattext::FONT_SIZE;
@@ -482,7 +492,9 @@ void Hud::layout(Renderer &renderer, VkExtent2D screen) {
 // pen through the draw matrix, the plain glyph in the text colour and, with an outline, the
 // outline glyph over it in the outline colour. (The glyphs come from the atlas, baked by
 // bakeText(); one that was not baked is left out.) Returns the final pen's y in text units.
-float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &previous) const {
+float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &previous, glm::vec2 *pen) const {
+    if (pen)
+        *pen = {};
     if (style.string.empty() || style.pixelSize <= 0.0f)
         return 0.0f;
     const int f = fontIndex(style.font);
@@ -514,6 +526,8 @@ float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &
         if (r.stroke > 0.0f)
             quad(p, true, style.strokeColor);
     }
+    if (pen)
+        *pen = text.pen * style.pixelSize / r.size;
     return text.pen.y * style.pixelSize / r.size.y;
 }
 

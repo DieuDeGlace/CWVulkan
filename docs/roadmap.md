@@ -255,6 +255,11 @@ individual feature documents.
   resource-admitted draws; ingredients share native hover/navigation geometry.
   Customization now submits its thumbnails, raw base/attributes/candidate and
   palette through that renderer. Retained-cursor and other callers still need conversion.
+  Ordinary information text now has its specified category rows, effects, float
+  rounding and inline deltas. Equipped comparison uses original address identity,
+  native candidate/Shift order, smaller fonts and fresh late resizes. Fractional
+  comparison glyphs and standalone scaling have owner-tree regressions; earlier
+  selector timing and live map/ground/Ring source bindings remain open.
   The GUI clock now narrows each capped step before wrapping accumulation across
   title/game frames, rather than deriving spin from absolute wall time. CPU/owner
   checks and all40 world/16 GUI Vulkan image cases pass, plus water/Alpha checks.

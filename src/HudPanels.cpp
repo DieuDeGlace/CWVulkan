@@ -197,8 +197,8 @@ void Hud::layoutInvPanel(InvPanel &p) {
 // the widget text drawing (the two-pass text object, plasma-shapes-and-text.md 7.1, scalable mode):
 // a text at a point of the widget (its pivot plus the point), its outline alone first (a
 // transparent fill), then the fill.
-float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &node, const std::wstring &text, glm::vec2 at,
-                      float size, float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap) const {
+float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &node, const std::wstring &text, glm::vec2 at, float size,
+                      float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap, glm::vec2 *pen) const {
     glm::mat4 m = scene->matrix(node);
     m = glm::translate(m, glm::vec3(node.transform.pivot + at, 0));
     plasma::TextStyle style;
@@ -217,7 +217,10 @@ float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &
     }
     style.strokeRadius = 0;
     style.color = color;
-    return at.y + plasmaText(out, style, m);
+    const float endY = at.y + plasmaText(out, style, m, pen);
+    if (pen)
+        *pen += at;
+    return endY;
 }
 
 void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n, glm::vec4 tint, const plasma::Scene *from,
@@ -611,6 +614,7 @@ void Hud::positionPreview(const Inventory &inv) const {
     if (!panels.preview || !panels.preview->widget)
         return;
     plasma::Scene &s = *scene;
+    s.setScale(guiScale);
     plasma::SceneNode &preview = *panels.preview;
     const plasma::SceneNode *hovered = inv.infoAnchor == itempreview::Anchor::Cursor     ? nullptr
                                        : inv.infoAnchor == itempreview::Anchor::Crafting ? panels.crafting.node
@@ -636,11 +640,14 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
         return;
     plasma::Scene &s = *scene;
     plasma::SceneNode &preview = *panels.preview;
-    auto drawText = [&](std::vector<OverlayVertex> &lines) {
-        float y = 25.0f, lineY = y;
-        for (const Inventory::InfoLine &l : inv.info) {
-            const float at = l.over ? lineY : y;
-            const float end = widgetText(lines, preview, latin1(l.text), {14.0f, at}, l.size, l.stroke, l.color, BLACK, plasma::TEXT_WRAP, 260.0f);
+    auto drawText = [&](std::vector<OverlayVertex> &lines, const std::vector<Inventory::InfoLine> &rows, float startY) {
+        float y = startY, lineY = y, penX = 14;
+        for (const Inventory::InfoLine &l : rows) {
+            const float at = l.over ? lineY : y + l.before;
+            glm::vec2 pen;
+            const float end = widgetText(lines, preview, latin1(l.text), {l.suffix ? penX : 14.0f, at}, l.size, l.stroke, l.color, BLACK,
+                                         plasma::TEXT_WRAP, 260.0f, &pen);
+            penX = pen.x;
             lineY = at;
             if (!l.over)
                 y = (l.fromEnd ? end : at) + l.advance;
@@ -660,7 +667,14 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
                      guiitem::previewPlacement(s.matrix(preview), preview.transform.pivot, s.viewSize(preview).x, guiClockMs), out.size());
             // The root/children are already submitted. This size is retained for
             // later queries, without redrawing their background in this callback.
-            resize(drawText(out));
+            float y = drawText(out, inv.info, 25);
+            resize(y);
+            if (!inv.comparisonInfo.empty()) {
+                y += 20;
+                widgetText(out, preview, L"Currently equipped:", {14, y}, 12, 2, glm::vec4(1), BLACK, plasma::TEXT_WRAP, 260);
+                y += 20;
+                resize(drawText(out, inv.comparisonInfo, (float)(int32_t)y));
+            }
         });
         preview.visible = false;
         return;
@@ -668,7 +682,7 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
     // Recording-only bitmap previews retain their compatibility measurement pass.
     for (int pass = 0; pass < 2; pass++) {
         std::vector<OverlayVertex> lines;
-        const float y = drawText(lines);
+        const float y = drawText(lines, inv.info, 25);
         if (pass == 0) {
             resize(y);
             positionPreview(inv);

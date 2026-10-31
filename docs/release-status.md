@@ -7,6 +7,19 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native item details now use an independent text plan for the specified category
+  rows, stars/region/realm text, artifact/rank/pet effects, healing/demon/consumable
+  text, exact float rounding and separately rounded comparison deltas. Equipped
+  comparisons preserve original address identity, candidate/Shift order, smaller
+  fonts and two late resizes. Inline suffixes follow the real glyph pen; fractional
+  fonts share the owner atlas. Tests reproduced missing glyphs and stale standalone
+  GUI scale before correcting both. All five targets, the full CPU/owner suite,
+  40 world/20 GUI Vulkan cases, water and Alpha checks pass. A private read-only
+  gameplay captures at two GUI scales display the selected weapon and its original
+  equipped comparison, with unchanged fixture hashes and matching validated binaries.
+  Earlier selector/source sampling, live map/ground/Ring bindings and broader
+  GUI/input/camera and system checks remain release gates. No owner assets ship.
+
 - Native item-preview selection now positions from stored geometry before its
   later draw. The owner background/children precede icon/text and the text-derived
   resize; a hidden draw retains the size, and growth/shrinking affects the next
@@ -15,8 +28,8 @@ checkpoint describe the intended setup and remaining limits.
   CPU/owner suite, 40 world/20 GUI Vulkan cases, water and Alpha checks pass.
   Ring source selection also retains
   its independent ground-origin flag, rather than forcing it to describe the
-  selected canonical item. Full formatter/comparison text and live source producers
-  remain separate work; this does not certify complete PreviewWidget parity.
+  selected canonical item. The later formatter/comparison implementation is described
+  above; live source producers and timing still prevent complete PreviewWidget parity.
 
 - Native-save customization now uses the actual owner editor root and shared
   WORLD models: equipped thumbnails, raw base/attributes/candidate and material
@@ -29,7 +42,7 @@ checkpoint describe the intended setup and remaining limits.
   all five targets, the full CPU/owner suite, 40 world/20 GUI Vulkan cases, water and
   Alpha checks pass. Private read-only owner-resource captures exercise the pane
   and palette tooltip; they are not original-game pixel comparisons. Broader
-  cached inventory/input state, GUI capture/map controls, full preview comparison
+  cached inventory/input state, GUI capture/map controls, preview source timing
   and map/ground bindings, controller aim and system checks remain release gates.
 
 - Physical inventory wheel messages now retain their event pointer and sign,

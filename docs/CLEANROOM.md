@@ -72,6 +72,14 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Item-detail text and equipped comparisons follow
+  `steam-voxel-widget-information-preview.md` sections4/7/8. A separate engine text
+  plan preserves row admission, owner dictionary callbacks, original equipped
+  records, artifact/rank/effect literals, exact float rounding and separately
+  rounded deltas. Glyph output reports its actual pen for inline suffix placement;
+  comparison fonts retain unscaled outline widths in the shared atlas. Synthetic
+  record tests and owner glyph/lifecycle tests exercise these bounded consumers.
+  Native selector timing and live map/ground/Ring bindings remain separate work.
 - Native information-panel size lifetime follows
   `steam-voxel-widget-information-preview.md` section7: earlier selection uses
   stored geometry, root/children precede the own callback, and later text-derived

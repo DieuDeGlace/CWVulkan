@@ -229,9 +229,12 @@ these bounded paths are not a claim of complete native input or pixel parity.
 Native item information is positioned using the preceding draw's stored frame.
 Its root and children draw before the own callback submits the icon/text and
 resizes the widget. That size affects later queries and the following background;
-hidden/skipped draws retain it. Recording-only bitmap previews keep their existing
-measurement pass. Full category text, comparison deltas and live source bindings
-remain separate work.
+hidden/skipped draws retain it. Native information uses the independently specified
+category rows, effects, rounding and inline comparison deltas. The equipped section
+keeps original equipment records, smaller fonts and its two-stage late resize;
+fractional font styles share the owner-font atlas. Standalone previews establish
+their own GUI scale. Recording-only bitmap previews keep their measurement pass.
+Earlier source sampling and live map/ground/Ring bindings remain separate work.
 
 `--open-upgrade 0` opens this pane for read-only gameplay captures; `--pointer X Y`
 also drives its hover/picking. Recording-only sessions keep the compatibility

@@ -8,6 +8,7 @@
 #include "MapMarks.h"
 #include "InventoryUi.h"
 #include "ItemPreview.h"
+#include "ItemInformation.h"
 #include "InventorySlots.h"
 #include "Renderer.h"
 #include "Plx.h"
@@ -116,14 +117,9 @@ class Hud {
         // The hovered item's details (the item details text), shown in the preview widget: each line
         // its text, size and stroke, colour, the advance after it (from its end when `fromEnd`),
         // and whether it is drawn over the line before (`over`: the coloured rarity marks).
-        struct InfoLine {
-            std::string text;
-            float size = 12, stroke = 3;
-            glm::vec4 color{1};
-            float advance = 16;
-            bool fromEnd = false, over = false;
-        };
+        using InfoLine = iteminformation::Line;
         std::vector<InfoLine> info;
+        std::vector<InfoLine> comparisonInfo;
         std::string infoIcon;
         std::optional<nativesaves::Item> infoItem; // class-adapted preview record; the source stays unchanged
         itempreview::Anchor infoAnchor = itempreview::Anchor::Inventory;
@@ -493,7 +489,7 @@ class Hud {
                       const PlasmaFrame &frame, glm::vec2 *centre = nullptr, float deform = 1.0f) const;
     void drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) const;
     // Returns where the text's last line sits (its pen's y, in the matrix's units).
-    float plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &m) const;
+    float plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &m, glm::vec2 *pen = nullptr) const;
     // The game's panels as the interface's loading builds them (HudPanels.cpp), from gui.plx with the
     // tab icons from icons.plx.
     plx::Document iconsDoc;
@@ -553,7 +549,7 @@ class Hud {
     void drawMapPreview(const State &state, std::vector<OverlayVertex> &out) const;
     // the widget text drawing; returns the y the text ends at (widget units).
     float widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &node, const std::wstring &text, glm::vec2 at, float size,
-                     float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap) const;
+                     float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap, glm::vec2 *pen = nullptr) const;
     void positionPreview(const Inventory &inv) const;
     void drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     int panelItemAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
