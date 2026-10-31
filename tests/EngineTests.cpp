@@ -119,6 +119,7 @@ int skyTests();            // tests/SkyTests.cpp
 int raceKeyTests();        // tests/RaceKeyTests.cpp
 int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
+int plasmaNodeAnimationTests();
 int guiItemTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
@@ -9065,6 +9066,8 @@ static void useKeyPrompts() {
 int main(int argc, char **argv) {
     if (argc == 2 && std::string(argv[1]) == "guirender")
         return guiRenderTests();
+    if (argc == 2 && std::string(argv[1]) == "nodeanimation")
+        return plasmaNodeAnimationTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
         return guiItemTests();
     if (argc == 2 && std::string(argv[1]) == "npcspeech")
@@ -10354,6 +10357,7 @@ int main(int argc, char **argv) {
     failures += worldMapLookTests();   // tests/WorldMapTests.cpp
     failures += saveFormatTests();     // tests/SaveTests.cpp
     failures += guiItemTests();
+    failures += plasmaNodeAnimationTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += windContinueTests();   // tests/WindContinueTests.cpp
     failures += netTests();            // tests/NetTests.cpp

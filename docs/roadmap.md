@@ -27,9 +27,12 @@ individual feature documents.
   `ZoneStates` and SaveTests cover the supported format paths.
 - [x] Eagle title flyover, character select/create/delete, options, binding editor
   and the system menu. `Frontend`, `FrontendRun`, `GameOptions` and FrontendTests
-  cover their implemented rules. Select/Create and delete controls use effective owner widget
-  frames for placement and copied-shape picking; scale 1/1.5 regressions cover the larger minimum
-  frame that previously put Select below its card. Exact final rendering still needs comparison.
+  cover their implemented rules. Select/Create and delete controls use live owner widget
+  frames, physical-pixel padding and copied-shape picking. Ordinary Button release/idle/hover
+  sequences retain per-instance values. Character cards preserve transferred template binding,
+  center with native integer fitting and use filtered left-drag/momentum with separate clocks.
+  Scale0.4096/1/1.5 and synthetic state regressions cover these paths. Cached GUI mask layers,
+  preview creatures and full frontend pixel parity remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

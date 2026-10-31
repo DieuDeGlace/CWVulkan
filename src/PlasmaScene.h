@@ -126,6 +126,12 @@ Widget reboundWidget(const Widget &);
 // ---------------------------------------------------------------------------------------------
 // The tree.
 
+struct NodeAnimation {
+    enum class Target { Shape, Transform, Display } target;
+    size_t property;
+    AttributeAnimation value;
+};
+
 struct SceneNode {
     std::string name;
     const plx::Document *doc = nullptr; // the file it comes from (gui.plx, icons.plx)
@@ -146,6 +152,18 @@ struct SceneNode {
     std::vector<std::unique_ptr<SceneNode>> children; // drawn in order, later ones on top
     // Drawn after the node's shape (a widget's own drawing).
     std::function<void(SceneNode &)> onDraw;
+    // Unanimated shapes share the owner document; an animated instance owns its live properties.
+    std::optional<plx::Object> animatedShape;
+    mutable std::optional<ShapeDrawing> animatedDrawing;
+    std::vector<NodeAnimation> animations;
+    const plx::Object *shapeObject() const;
+    bool playSequence(const std::string &, int period = 0);
+    int sequenceDuration(const std::string &) const;
+    void setSequenceTime(int milliseconds);
+    void advanceSequences(int milliseconds);
+    void stopSequences();
+    void poseSequence(const std::string &); // play, seek to the subtree duration, stop
+    void initializeWidgets();
 
     // The first node of a name, this node first and then each child's subtree in order.
     SceneNode *find(const std::string &n);

@@ -62,6 +62,12 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- character-menu Button initialization/hover animation, raw custom-widget binding transfer,
+  physical-pixel control placement and filtered drag/inertia, from `frontend-characters.md`,
+  `plasma-format-and-scene.md` and `steam-character-list-input-and-frame-init.md`.
+  Instance animation does not modify owner documents. Synthetic state/clock/geometry checks
+  and local owner-data comparisons cover these bounded paths; GUI layers and broader visual
+  comparisons remain open. No original game asset is part of the publication package.
 - shrine-choice map opening, borrowed source lifetime, render-produced target and left-release
   acceptance, from `steam-item-map-selection.md` and `map-markers.md`. The existing native
   return ability keeps its effect boundary and signed32 cell arithmetic. World elapsed time,

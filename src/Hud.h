@@ -362,7 +362,11 @@ class Hud {
         int align = 0;            // 0 left, 1 centred, 2 right, 5 centred both ways
         std::string name;         // the template, or the icon's key
         enum Navigation { NoPoint, ShapeCentre, ChildCentres } navigation = NoPoint;
-        std::string instance;     // optional persistent template owner (separate panels)
+        std::string instance; // optional persistent template owner (separate panels)
+        std::optional<bool> buttonHover;
+        int animationStepMs = 0;
+        bool initializeHidden = false;
+        bool replaceWidget = false; // custom widget keeps the copied artwork's current binding
     };
     using Screen = std::vector<ScreenItem>;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
@@ -379,9 +383,10 @@ class Hud {
                                                std::vector<OverlayVertex> &) const;
     void drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation = nullptr) const;
     // A gui.plx template's size (its frame, interface units); zero when there is none.
-    glm::vec2 templateSize(const std::string &name, glm::vec2 requested = glm::vec2(0)) const;
+    glm::vec2 templateSize(const std::string &name, glm::vec2 requested = glm::vec2(0), bool replaceWidget = false) const;
     // Pick the copied owner shapes, inverse deformation and clipping at the same GUI-unit placement.
     bool templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDescendants = false) const;
+    glm::vec2 templateViewSize(const ScreenItem &) const; // live frame in screen pixels
     identifywindow::Layout identificationLayout() const;
     void drawIdentification(const identifywindow::Shown &, std::vector<OverlayVertex> &) const;
     bool hasInterface() const { return guiLoaded; }
@@ -447,8 +452,14 @@ class Hud {
     // The frontend's templates (drawScreen): a scene of their own, one instance per template
     // and use in a frame, kept for the next frames.
     mutable std::unique_ptr<plasma::Scene> frontScene;
-    mutable std::map<std::string, std::vector<plasma::SceneNode *>> frontNodes;
-    mutable std::map<std::pair<std::string, bool>, plasma::SceneNode *> frontHitNodes;
+    struct TemplateInstance {
+        plasma::SceneNode *node = nullptr;
+        glm::vec2 requested{-1};
+        bool pointerInside = false;
+    };
+    mutable std::map<std::string, std::vector<TemplateInstance>> frontNodes;
+    TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0) const;
+
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;

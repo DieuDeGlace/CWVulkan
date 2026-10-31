@@ -154,6 +154,64 @@ CharacterButtons characterButtons(glm::vec2 cardAt, glm::vec2 cardSize, glm::vec
         {(right - selectSize.x) - 20, (bottom - selectSize.y) - 20}, {(right - toggleSize.x) - 20, cardAt.y + 20}, {right + 20, cardAt.y}};
 }
 
+void fitCharacterFrames(std::vector<CharacterFrame> &cards, glm::ivec2 window, float milliseconds, float scroll) {
+    if (cards.empty())
+        return;
+    const int32_t total = (int32_t)((cards.back().at.y + cards.back().size.y) - cards.front().at.y);
+    float upper = 10, lower = (float)(window.y - 10) - cards.back().size.y;
+    if (total < window.y - 20) {
+        upper = (float)(window.y / 2 - total / 2);
+        lower = (float)(window.y / 2 + total / 2) - cards.back().size.y;
+    }
+    auto shift = [&](float delta) {
+        for (auto &card : cards) {
+            card.at.x = (float)(window.x / 2) - card.size.x * 0.5f;
+            card.at.y += delta;
+        }
+    };
+    if (cards.front().at.y > upper) {
+        const float old = cards.front().at.y;
+        const float next = (upper - old) * gamemath::blendFactor((double)milliseconds, 0.01f) + old;
+        shift(next - cards.front().at.y);
+    }
+    if (cards.front().at.y < upper && cards.back().at.y < lower) {
+        const float old = cards.back().at.y;
+        const float next = (lower - old) * gamemath::blendFactor((double)milliseconds, 0.01f) + old;
+        shift(next - cards.back().at.y);
+    }
+    shift((scroll * 0.001f) * milliseconds);
+}
+
+void CharacterScroll::poll(int32_t y, uint32_t clockMs, bool shown, bool held, int windowWidth, std::vector<CharacterFrame> &cards) {
+    const uint32_t elapsedBits = clockMs - sampledAt;
+    int32_t elapsed;
+    std::memcpy(&elapsed, &elapsedBits, sizeof(elapsed));
+    sampledAt = clockMs;
+    const float previous = pointerY;
+    pointerY = (float)y;
+    const float old = filteredY;
+    filteredY = (pointerY - old) * gamemath::blendFactor((double)elapsed, 0.01f) + old;
+    if (!shown || !held)
+        return;
+    for (auto &card : cards) {
+        card.at.x = (float)(windowWidth / 2) - card.size.x * 0.5f;
+        card.at.y += filteredY - old;
+    }
+    const float impulse = (pointerY - previous) * (float)elapsed;
+    velocity = (impulse + impulse) + velocity;
+}
+
+void CharacterScroll::frame(float milliseconds, bool shown, bool held, glm::ivec2 window, std::vector<CharacterFrame> &cards) {
+    if (!shown) {
+        velocity = 0;
+        return;
+    }
+    if (!held)
+        fitCharacterFrames(cards, window, milliseconds, velocity);
+    // Decay follows displacement, including frames held or with no cards.
+    velocity = (0.0f - velocity) * gamemath::blendFactor((double)milliseconds, 0.005f) + velocity;
+}
+
 float listHeight(int entries) { return entries > 0 ? 230.0f * (float)entries - 10.0f : 0.0f; }
 
 float centredListTop(int entries, float windowHeight) { return windowHeight * 0.5f - listHeight(entries) * 0.5f; }

@@ -74,8 +74,12 @@ The title is the ordinary world (the extracted or generated world, seed 123), wi
 
 **Character select** lists the characters of `Save/characters.db` and "New character".
 
-- Each entry is 600 × 220 at (300, 50 + 230 i). The list is centred when it fits the window, otherwise it is
-  kept between 10 and H − 10 and moved with the pointer.
+- Each entry requests 600 × 220 at (300, 50 + 230 i), keeping the copied artwork's binding
+  when its custom widget replaces the template widget. The list centers horizontally and fits
+  vertically using the native ordered damping and integer height calculations.
+  Left-button dragging uses filtered pointer movement; release resumes fitting and momentum.
+  Pointer polling and frame decay retain their separate clocks. Mouse-wheel scrolling is not
+  added to this list.
 - An entry shows:
   - the character's creature (its class's recording wearing its look), drawn at (100, 110) in the entry, turned
     (−95°, 0°, 45°). While the mouse is over the entry it turns 50° a second and walks on the spot; otherwise it
@@ -91,12 +95,14 @@ The title is the ordinary world (the extracted or generated world, seed 123), wi
 - Select loads that character and plays. `slot` is written.
 
 These are size requests, subject to the owner's widget minimum and bind constraints. Select/Create
-sits 20 GUI units inside the selected card's right and bottom frame edges, using the current effective
-button dimensions. The delete toggle also uses its effective width; Delete Character sits 20 units
+sits 20 physical pixels inside the selected card's right and bottom frame edges, using the current effective
+button dimensions. The delete toggle also uses its effective width; Delete Character sits 20 pixels
 right of the card. The owner transforms are preserved. Picking uses the copied shapes, inverse
 widget deformation and clipping; registered control descendants stay passive, and later controls
-win overlapping picks. The three actions retain mouse-release activation. Full GUI-engine capture,
-held-button visibility and keyed widget poses still need the wider frontend validation.
+win overlapping picks. The three actions retain mouse-release activation and hide while left is held.
+Ordinary Buttons initialize their owner release/leave sequences; enter/leave animate from the current
+instance values. Size requests are not reapplied every draw. Full GUI capture, cached mask/shine
+composition, preview creatures and wider frontend rendering comparisons remain open.
 
 **Character creation** resets the player to a level 1 warrior at the start spot. The camera is at distance 8,
 pitch 90, yaw 0.

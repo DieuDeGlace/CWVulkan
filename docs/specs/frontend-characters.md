@@ -59,8 +59,12 @@ The layer GUI[3] (G+0x130). The title camera keeps circling (P still rides, `fro
 is clear): with T the list's total height (top of the first entry to bottom of the last) and H the
 window height, if T < H − 20 the list is centred vertically (top = H/2 − T/2); otherwise the
 list is moved, eased by the smoothing factor of `creature-upkeep.md` §4.9, so that its top is
-not below 10 and its bottom not above H − 10. A gamepad scrolls it by the stick instead
-(0x101160).
+not below 10 and its bottom not above H − 10. The scroll input supplied by0x101160
+is applied after the fitting corrections, rather than replacing them. Exact frame-query
+spaces, integer stages and order are2.3.3 below.
+The producer is mouse drag with filtered direct motion and a separately decaying
+accumulator; wheel/controller boundaries and fresh card bind defaults are specified
+in [steam-character-list-input-and-frame-init.md](steam-character-list-input-and-frame-init.md).
 
 ### 2.2 One entry (0x26eba0, every frame)
 
@@ -274,6 +278,155 @@ pressed-latch test; their up event still follows the engine's owner,
 active/passive and capture rules just described.
 
 ---
+
+### 2.3.3 Exact GUI[3] frame-query basis, GUI scale and list fitting
+
+Native follow-up to the “parent-relative” terminology above. The full helper
+definitions and inverse/setter behavior are plasma-format-and-scene2.7.2;
+the label does **not** mean ordinary inverse-parent coordinates.
+
+**Root/container construction:**0xf9ac0 creates GUI[3] by0x33cd30 with a
+fresh default transformation and display, no shape and **no widget**, as
+a child of GUI engine root+0x140. Its transform starts identity. The
+inspected0x101bd0/0x103200 list/control paths do not reposition or scale
+GUI[3] itself. They move the individual cards/control widgets. Engine
+root and GUI[3] have no widget ancestor for those roots' frame queries.
+
+**Global scale:**0x101bd0 rewrites the GUI engine root's current matrix
+frame to identity, applies GUI-scale float at interface+0x54c
+(**G+0x664**) to its X/Y basis through0x1028b0, then recomputes the root
+transform through its virtual+8. This is global root scaling, not an
+extra Select-specific local scale.0xa2720 records physical window width
+and height at G+0x1d60/+0x1d64 and enters0x101bd0. That layout routine
+has no separate GUI[7]/[8]/[9] placement which overrides0x103200.
+
+**Queries:**0x32da70/0x32dab0 return components of0x32c340's projected
+frame origin;0x32da30/0x32ad10 return0x32d1d0's transformed effective
+size. The latter is a signed linear-size vector, not a drawing AABB or
+the unmodified requested frame size. The underlying0x32c0c0 first
+distinguishes a nearest ancestor widget from no ancestor widget. The
+no-ancestor case prepends the immediate parent's full world matrix to
+the root-cancelled frame matrix. For the fresh identity GUI[3] path,
+this retains the global GUI-root scale, so these queries are in
+**screen-pixel frame coordinates**, including the current GUI scale and
+the button/card's live style transforms/bind geometry. The nearest-widget
+case elsewhere subtracts only that widget's origin; it is not a general
+full inverse-ancestor transform. Do not substitute that other case here.
+
+Thus the selected-card expressions' literal **20** is20 in this
+screen-pixel query basis: no second GUI-scale multiplier, and no division
+of the queried card/button positions/sizes by GUI scale. The same applies
+to the list's10-pixel margins and20-pixel fitting budget. This specifically
+qualifies the frontend's blanket “GUI units” shorthand. Owner-local
+caption and shape coordinates still transform through their own hierarchy
+and global root scale. They are not thereby all physical-pixel constants.
+
+**Move/size setters:**0x32b560→0x32b250 takes a desired frame origin in
+the query basis, computes the existing Q/bind/live-local inverse correction
+and adds it to the live translation channel; these controller calls pass
+changed/update byte1. It is not the point/pivot placement0x334700.
+Size request0x32c9a0→0x32c6f0 applies the inverse linear Q before its
+constraints. Therefore constructor requests200×30 and600×220 are requests
+under the geometry/scale present **at that call**. Subsequent root-scale or
+keyed-style changes can change measured sizes; do not replace their current
+queries with literal requested dimensions or unconditionally reapply those
+requests after every pose/scale update.
+
+**Horizontal placement and vertical order0x103200:** when GUI[3] is
+shown, the left-button-held bit is clear, and the card vector is nonempty,
+the routine performs upper correction, lower correction, then the common
+scroll/centering pass in that order. Let firstY/lastY/lastH be current
+queried first origin Y, last origin Y and last effective height; W/H are
+the signed32 physical window dimensions. It truncates the float expression
+**(lastY+lastH)−firstY** to signed32 T. Default upper target is10; default
+last-origin lower target is **float(H−10)−lastH**. If **T < H−20**, divide
+T and H by2 as signed integers, truncating toward zero, and use upper
+**float(H/2−T/2)**, lower **float(H/2+T/2)−lastH**.
+
+If firstY exceeds the upper target, obtain the0xa7a0 coefficient using
+the already-float frame-ms argument promoted to double and rate float
+**0.01**, word0x3c23d70a at0x42e51c. Compute the interpolated first Y by
+float target-minus-old, times coefficient, plus old, then subtract a fresh
+first-Y query to get the common shift. Preserve that interpolation-then-
+subtraction order instead of replacing it with a differently rounded
+delta multiplication. Apply the shift to every card's current queried Y.
+Then requery first/last: if firstY is below upper **and** lastY is below
+lower, similarly interpolate lastY toward lower, subtract its fresh query
+and shift every card. Each move also recomputes horizontal centering.
+
+The final pass adds to every card Y the float product **scroll input
+interface+0x50 (G+0x168) times0.001, then times float frame-ms**. The0.001
+word is0x3a83126f at0x42e514. It does not multiply this displacement by
+GUI scale. In each of these three passes, X is **float(signed W/2) minus
+float(queried card width times0.5)**, preserving integer window halving
+before conversion; this matters for odd widths. Calls are0x10372b,
+0x10381b and0x1038ba. Hover selection follows each final-pass move; the
+selected-card control placement described above follows that card loop.
+When GUI[3] is hidden the scroll-input field is cleared. A held left button
+skips the fitting/scroll card loop and hides the three controls as already
+specified. These rules do not move the GUI[3] container instead of its cards.
+
+### 2.3.4 Construction/init/show path and evaluated Button styles
+
+0xf9ac0 independently clones the button2/smallbutton/button nodes with
+**0x3308e0**, preserving their dynamic widget classes and settings, requests
+the sizes, writes captions/registers release callbacks, and initially hides
+the delete controls. Later, after GUI construction, it calls
+**0x333820 on the GUI engine root**, then0x107440 to build cards. The
+initializer traverses hidden screen containers too; it does not treat
+GUI[3]'s initial hidden state as permission to omit its button initialization.
+The subsequent pose evaluation still obeys0x334ec0's local visibility/force
+rules; traversal of a hidden container does not force an independently
+hidden button root to evaluate.
+
+For a copied native **Button** of ordinary Button.type0, virtual init
+**0x369c70** runs the generic widget setup then evaluates **button:release,
+button:release again, button:leave**, in that order. Each named operation
+starts the subtree sequence at period0, seeks to its named duration and
+stops the subtree. This is immediate application of the owner's end poses,
+not simply retaining the loaded/default transform, and not an extra fixed
+Select rotation supplied by the controller. The copy's Button.type and
+sequence strings are preserved; the native controller's template name alone
+does not license substituting another dynamic widget class/type. Exact
+enabled/disabled and checked branches, frame channels and pointer handlers
+are **plasma-format-and-scene2.7.9**.
+
+Cards differ from those Button clones:0x107440 uses**0x333890** for the
+blackwidget node hierarchy and constructs a new CharacterPreviewWidget by
+**0x26ea60→0x268a70→0x328ff0**, whose init slot is generic0x32b830. The
+shallow instance0x333890 shares drawing/transform/display objects initially,
+but **does invoke the source own-Widget clone slot+0x140**, after child
+copying, at0x33399f. The new custom wrapper then attaches through0x334410,
+transferring that cloned root Widget's binding through0x329c70 before
+replacing/deleting it. This adopts the old **raw stored frame position and
+size** as the new bind/frame rectangle, the old deformed inner position
+and unclamped inner size as the new inner bind, and the old bind matrix
+with a recomputed inverse. It does not copy all old runtime Widget settings:
+the new custom wrapper keeps its constructor flags/alignment/enabled state.
+Descendant dynamically cloned own Widgets remain. This corrects the prior
+claim that the card instance has no source Widget/binding to transfer;
+the full reset-binding inputs and no-lazy-query distinction are
+**steam-character-list-input-and-frame-init5–5.1**. The
+custom-widget constructor makes shared root transformation/display unique
+through0x335830/0x3356d0. It does not turn the card into a native Button or
+run button:leave on it. Requests600×220 and initial moves occur before the
+card hierarchy's0x333820 initialization. For an enabled generic Widget,
+that initializer records window size/minimum geometry and caption but
+does not automatically play widget:enable. Disabled setup has its separate
+widget:disable path. Preserve the copied drawing/keyed data and the actual
+new runtime widget's binding/setup rather than an invented idle pose.
+
+During0x107440 the existing controls are temporarily detached, cards are
+cleared/rebuilt and initialized, then controls are reparented7,8,9. The
+builder does not reconstruct or explicitly initialize those controls a
+second time after reparenting. Later show/hide in0x103200 only writes live
+Display.visibility. It does not rerun Button init or replay widget:enable.
+Pointer enter/leave is driven separately by the GUI hit/owner transition
+and starts timed sequences, rather than snapping immediately to hover/end
+poses. Passive caption/decoration descendants still participate in their
+parent's recursive named animation even though they are not separate hits.
+No numeric owner matrix, sequence duration or screenshot-derived style is
+asserted by this audit.
 
 ## 3. Selecting an existing character (0x9f7c0, Select)
 

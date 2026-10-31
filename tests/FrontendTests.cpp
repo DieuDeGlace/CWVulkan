@@ -119,8 +119,62 @@ void menus() {
     FRONT_CHECK(buttons.deleteToggle == glm::vec2(846, 128) && buttons.deleteCharacter == glm::vec2(918, 108));
     const auto deformed = characterButtons({300, 100}, {640, 240}, {210, 90}, {40, 28});
     FRONT_CHECK(deformed.select == glm::vec2(710, 230) && deformed.deleteToggle == glm::vec2(880, 120));
+    // These are physical frame queries: padding does not shrink with GUI scale.
+    const float g = .4096f;
+    const auto small = characterButtons({837, 392}, glm::vec2(600, 220) * g, glm::vec2(200, 66.66678f) * g, glm::vec2(20) * g);
+    FRONT_CHECK(near((837 + 600 * g) - (small.select.x + 200 * g), 20));
+    FRONT_CHECK(near((392 + 220 * g) - (small.select.y + 66.66678f * g), 20));
+    std::vector<CharacterFrame> lowerStart{{{12, 100}, {100, 90.5f}}};
+    std::vector<CharacterFrame> upperStart{{{12, 700}, {100, 90.5f}}};
+    for (int i = 0; i < 8; i++) {
+        fitCharacterFrames(lowerStart, {1001, 1001}, 1000, 0);
+        fitCharacterFrames(upperStart, {1001, 1001}, 1000, 0);
+    }
+    FRONT_CHECK(near(lowerStart[0].at.x, 450) && near(upperStart[0].at.x, 450));    // integer W/2
+    FRONT_CHECK(near(lowerStart[0].at.y, 454.5f) && near(upperStart[0].at.y, 455)); // integer T/H, ordered corrections
+    std::vector<CharacterFrame> scrolling{{{0, 450}, {100, 100}}};
+    fitCharacterFrames(scrolling, {1001, 1000}, 10, 100);
+    FRONT_CHECK(near(scrolling[0].at.y, 451)); // the final input displacement is unscaled pixels
     FRONT_CHECK(std::string(specializationWord(3, 1)) == "Water Mage" && std::string(classWord(4)) == "Rogue");
     FRONT_CHECK(entryLine(7, 2, 1) == "LV 7 Human Warrior" && entryLine(1, 14, 3) == "LV 1  Mage");
+}
+
+void characterDragging() {
+    CharacterScroll input;
+    input.sampledAt = 100;
+    std::vector<CharacterFrame> cards{{{0, 10}, {200, 400}}, {{0, 420}, {200, 400}}};
+    input.poll(100, 110, false, false, 1001, cards);
+    FRONT_CHECK(input.pointerY == 100 && input.sampledAt == 110 && input.velocity == 0);
+    input.press();
+    FRONT_CHECK(input.filteredY == 100);
+    input.poll(120, 120, true, true, 1001, cards);
+    FRONT_CHECK(cards[0].at.x == 400 && cards[0].at.y > 10 && cards[0].at.y < 30);
+    FRONT_CHECK(near(cards[1].at.y - cards[0].at.y, 410) && input.velocity == 400);
+    // Stationary polls continue the filter and clock; they do not add a raw-motion impulse.
+    const float dragged = cards[0].at.y;
+    input.poll(120, 130, true, true, 1001, cards);
+    FRONT_CHECK(cards[0].at.y > dragged && input.velocity == 400 && input.sampledAt == 130);
+    const float held = cards[0].at.y;
+    input.frame(16, true, true, {1001, 600}, cards);
+    FRONT_CHECK(cards[0].at.y == held && input.velocity > 0 && input.velocity < 400);
+    input.press(); // A further press seeds the filter; momentum survives.
+    const float releasedVelocity = input.velocity;
+    input.frame(16, true, false, {1001, 600}, cards);
+    FRONT_CHECK(input.velocity < releasedVelocity && cards[0].at.y != held);
+    const float filter = input.filteredY;
+    input.frame(16, false, false, {1001, 600}, cards);
+    FRONT_CHECK(input.velocity == 0 && input.filteredY == filter);
+    // The clock subtracts modulo32 before signed interpretation; GUI scale is absent.
+    input.sampledAt = 0xfffffff8u;
+    input.poll(125, 2, true, true, 1001, cards);
+    FRONT_CHECK(input.velocity == 100 && input.sampledAt == 2);
+    input.poll(130, 1, true, true, 1001, cards);
+    FRONT_CHECK(input.velocity == 90); // Negative event time is not clamped.
+    cards.clear();
+    input.poll(140, 11, true, true, 1001, cards);
+    FRONT_CHECK(input.velocity == 290); // Empty shown lists still accumulate and decay.
+    input.frame(16, true, false, {1001, 600}, cards);
+    FRONT_CHECK(input.velocity > 0 && input.velocity < 290);
 }
 
 void creation() {
@@ -598,10 +652,10 @@ void ownerCharacterButtons() {
     if (!loaded)
         return;
     glm::vec2 previous(0);
-    for (float scale : {1.0f, 1.5f}) {
+    for (float scale : {0.4096f, 1.0f, 1.5f}) {
         hud.setGuiScale(scale);
         const glm::vec2 frame = hud.templateSize("button2", {200, 30});
-        const glm::vec2 card = hud.templateSize("blackwidget", {600, 220});
+        const glm::vec2 card = hud.templateSize("blackwidget", {600, 220}, true);
         const glm::vec2 toggle = hud.templateSize("smallbutton", {20, 20});
         const glm::vec2 remove = hud.templateSize("button", {300, 30});
         std::printf("Character frames: card %.3fx%.3f, toggle %.3fx%.3f, delete %.3fx%.3f\n", card.x, card.y, toggle.x, toggle.y, remove.x,
@@ -632,6 +686,7 @@ int frontendTests() {
     titleCamera();
     logo();
     menus();
+    characterDragging();
     ownerCharacterButtons();
     friendRows();
     creation();

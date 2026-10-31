@@ -113,6 +113,11 @@ Hud::ScreenItem widget(const std::string &name, glm::vec2 at, glm::vec2 size, co
     w.name = name, w.at = at, w.size = size, w.text = wide(label), w.color = tint;
     return w;
 }
+Hud::ScreenItem characterCard(glm::vec2 at) {
+    auto item = widget("blackwidget", at, ENTRY_SIZE);
+    item.replaceWidget = true;
+    return item;
+}
 
 // A record for the native player from a saved character (race, class, level, gear, looks).
 worldgen::CreatureRecord recordOf(const nativesaves::Character &c, const std::array<uint8_t, 0xb0> *appearance) {
@@ -205,7 +210,7 @@ class Session {
     glm::vec2 window{0}, mouse{0}; // GUI units
     glm::vec2 cardFrame{0}, selectFrame{0}, deleteToggleFrame{0}, deleteFrame{0};
     bool clicked = false;
-    bool pointerDown = false, pointerUp = false;
+    bool pointerDown = false, pointerUp = false, leftHeld = false;
     bool capturingAtPoll = false;
     std::vector<gamepadui::Point> navigationPoints;
     void navigationPoint(glm::vec2 at) {
@@ -249,8 +254,11 @@ class Session {
     int cursor = -1;           // the selected entry (G+0x6c0); listed.size() is "New character"
     int selectedSlot = -1;     // the character on stage (G+0x2264)
     bool deleteShown = false;
-    float listTop = 0;
-    bool listPlaced = false;
+    std::vector<CharacterFrame> cards;
+    float cardScale = 0;
+    CharacterScroll characterScroll;
+    bool pointerClockStarted = false;
+    void layoutCharacterFrames();
 
     // The player on stage: the native player when the game's creatures run, else a stand-in.
     nativesaves::Character stage;
@@ -312,8 +320,23 @@ class Session {
         if (s.log)
             s.log(line);
     }
-    glm::vec2 entryAt(int i) const { return entryPosition(i) + glm::vec2(0, listTop - entryPosition(0).y); }
-    CharacterButtons buttonsAt(int i) const { return characterButtons(entryAt(i), cardFrame, selectFrame, deleteToggleFrame); }
+    glm::vec2 entryAt(int i) const { return i >= 0 && i < (int)cards.size() ? cards[(size_t)i].at / guiScale : entryPosition(i); }
+    Hud::ScreenItem characterControl(const std::string &name, glm::vec2 at, glm::vec2 size, const std::string &caption = "") const {
+        auto item = widget(name, at, size, caption);
+        item.instance = "characters/" + name;
+        item.initializeHidden = name != "button2";
+        return item;
+    }
+    CharacterButtons buttonsAt(int i) const {
+        const auto select = characterControl("button2", {}, SELECT_SIZE);
+        const auto toggle = characterControl("smallbutton", {}, DELETE_TOGGLE_SIZE);
+        const auto size = i >= 0 && i < (int)cards.size() ? cards[(size_t)i].size : cardFrame * guiScale;
+        auto buttons = characterButtons(entryAt(i) * guiScale, size, hud.templateViewSize(select), hud.templateViewSize(toggle));
+        buttons.select /= guiScale;
+        buttons.deleteToggle /= guiScale;
+        buttons.deleteCharacter /= guiScale;
+        return buttons;
+    }
     glm::vec2 lookPanelAt() const { return {0, window.y - LOOK_PANEL_SIZE.y}; }
     glm::vec2 centred(glm::vec2 widgetSize) const { return (window - widgetSize) * 0.5f; }
     glm::vec2 templateSize(const std::string &n, glm::vec2 fallback) {
@@ -349,7 +372,7 @@ bool Session::start(std::string &error) {
     if (!hud.load(s.assets->gameDir(), error))
         return false;
     hud.setGuiScale(s.options ? std::clamp(s.options->guiScale, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX) : 1.0f);
-    cardFrame = hud.templateSize("blackwidget", ENTRY_SIZE);
+    cardFrame = hud.templateSize("blackwidget", ENTRY_SIZE, true);
     selectFrame = hud.templateSize("button2", SELECT_SIZE);
     deleteToggleFrame = hud.templateSize("smallbutton", DELETE_TOGGLE_SIZE);
     deleteFrame = hud.templateSize("button", DELETE_SIZE);
@@ -410,6 +433,8 @@ bool Session::startInGame(std::string &error) {
 void Session::loadList() {
     releasePreviews();
     listed.clear();
+    cards.clear();
+    cardScale = 0;
     if (s.store && s.store->isOpen())
         for (int i = 0; i < s.store->count(); i++) {
             Listed l;
@@ -494,7 +519,7 @@ void Session::previewPanels(std::vector<DrawItem> &opaque) {
         s.renderer->release(std::exchange(previewPanelMesh, 0));
     if (!previewPanelMesh) {
         std::vector<OverlayVertex> vertices;
-        hud.drawScreen({widget("blackwidget", {0, 0}, ENTRY_SIZE, "", {1, 1, 1, .6f})}, vertices);
+        hud.drawScreen({characterCard({0, 0})}, vertices);
         Mesh panel;
         for (const OverlayVertex &v : vertices) {
             panel.vertices.push_back({v.x, v.y, 0, v.r, v.g, v.b, v.a, 4, NATIVE_MENU, 0, 0});
@@ -755,6 +780,25 @@ void Session::readInput(bool poll, double frameMs) {
     glfwGetCursorPos(s.window, &mx, &my);
     s.input->pointerX = mx, s.input->pointerY = my;
     s.input->pointerSampled = true;
+    if (req.pointer.x >= 0)
+        mx = req.pointer.x, my = req.pointer.y;
+    glfwGetWindowSize(s.window, &ww, &wh);
+    mouse = glm::vec2((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh))) / guiScale;
+    pointerDown = std::find(s.input->buttons.begin(), s.input->buttons.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->buttons.end();
+    pointerUp = std::find(s.input->released.begin(), s.input->released.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->released.end();
+    if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; }))
+        characterScroll.press();
+    if (pointerDown)
+        leftHeld = true;
+    if (pointerUp)
+        leftHeld = false;
+    layoutCharacterFrames();
+    if (!pointerClockStarted) {
+        characterScroll.sampledAt = wallClockMs();
+        pointerClockStarted = true;
+    }
+    // Ordinary input polls run even for a stationary cursor, before the controller route.
+    characterScroll.poll((int32_t)(mouse.y * guiScale), wallClockMs(), charactersShown, leftHeld, (int)size.width, cards);
     capturingAtPoll = capturingControl();
     s.input->sampleGamepad(s.window, capturingAtPoll, s.controls);
     const bool ui = front() || anyOpen() || s.input->gamepadModal;
@@ -772,18 +816,18 @@ void Session::readInput(bool poll, double frameMs) {
             s.input->buttons.push_back(button);
         if (pad.released[(size_t)button])
             s.input->released.push_back(button);
+        if (pad.pressed[(size_t)button])
+            characterScroll.press();
     }
+    if (pad.pressed[0])
+        leftHeld = true, pointerDown = true;
+    if (pad.released[0])
+        leftHeld = false, pointerUp = true;
     if (pad.moveCursor) {
         glfwSetCursorPos(s.window, pad.cursor.x, pad.cursor.y);
     }
     if (pad.navigationSound)
         playSound(SOUND_MENU_SELECT);
-    if (req.pointer.x >= 0)
-        mx = req.pointer.x, my = req.pointer.y;
-    glfwGetWindowSize(s.window, &ww, &wh);
-    mouse = glm::vec2((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh))) / guiScale;
-    pointerDown = std::find(s.input->buttons.begin(), s.input->buttons.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->buttons.end();
-    pointerUp = std::find(s.input->released.begin(), s.input->released.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->released.end();
     clicked = pointerDown || pointerUp;
 }
 
@@ -1013,7 +1057,7 @@ void Session::handleClick(bool inGame) {
         const auto buttons = buttonsAt(cursor);
         auto controlHit = [&](const Hud::ScreenItem &item) { return hud.templateHit(item, mouse, /*passiveDescendants=*/true); };
         // These sibling controls are picked in reverse draw order, after the cards.
-        if (!isNew && deleteShown && controlHit(widget("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"))) {
+        if (!isNew && deleteShown && controlHit(characterControl("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"))) {
             // Delete Character (frontend-characters.md §6): no confirmation; "slot" stays.
             if (!req.readOnly)
                 s.store->remove(cursor);
@@ -1023,11 +1067,11 @@ void Session::handleClick(bool inGame) {
             cursor = std::min(cursor, (int)listed.size());
             return;
         }
-        if (!isNew && controlHit(widget("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE))) {
+        if (!isNew && controlHit(characterControl("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE))) {
             deleteShown = true;
             return;
         }
-        if (controlHit(widget("button2", buttons.select, SELECT_SIZE, isNew ? "Create" : "Select"))) {
+        if (controlHit(characterControl("button2", buttons.select, SELECT_SIZE, isNew ? "Create" : "Select"))) {
             if (isNew)
                 startCreation();
             else if (listed[(size_t)cursor].playable) { // Select (frontend-characters.md §3)
@@ -1179,21 +1223,27 @@ void Session::titleItems(Hud::Screen &out) {
     out.push_back(text("1.0.0-1", glm::vec2(px.x - 10, px.y - 15) / guiScale, 12, 3, WHITE, ALIGN_RIGHT));
 }
 
+void Session::layoutCharacterFrames() {
+    const int entries = (int)listed.size() + 1;
+    if (cards.size() != (size_t)entries) {
+        cards.resize((size_t)entries);
+        for (int i = 0; i < entries; i++)
+            cards[(size_t)i] = {entryPosition(i) * guiScale, cardFrame * guiScale};
+        cardScale = guiScale;
+    } else if (cardScale != guiScale) {
+        for (auto &card : cards) {
+            card.at = (card.at / cardScale) * guiScale;
+            card.size = cardFrame * guiScale;
+        }
+        cardScale = guiScale;
+    }
+}
+
 void Session::characterItems(Hud::Screen &out) {
     const int entries = (int)listed.size() + 1;
-    // Fitting the screen (§2.1): centred when the list fits, else kept between 10 and H - 10 and
-    // moved with the pointer (eased).
-    const float height = listHeight(entries);
-    float wanted = centredListTop(entries, window.y);
-    if (height >= window.y - 20) {
-        const float overflow = height - (window.y - 20);
-        wanted = 10 - overflow * std::clamp(mouse.y / std::max(1.0f, window.y), 0.0f, 1.0f);
-    }
-    listTop = listPlaced ? listTop + (wanted - listTop) * gamemath::blendFactor(dtMs, 0.1f) : wanted;
-    listPlaced = true;
     // The entry under the mouse becomes the selected one.
-    for (int i = 0; i < entries; i++)
-        if (hud.templateHit(widget("blackwidget", entryAt(i), ENTRY_SIZE), mouse) && cursor != i) {
+    for (int i = 0; !leftHeld && i < entries; i++)
+        if (hud.templateHit(characterCard(entryAt(i)), mouse) && cursor != i) {
             cursor = i;
             deleteShown = false;
         }
@@ -1214,14 +1264,14 @@ void Session::characterItems(Hud::Screen &out) {
         if (!l.playable)
             out.push_back(text("(no recording of this class)", at + glm::vec2(200, 100), 12, 3, WAITING_COLOUR, ALIGN_LEFT));
     }
-    if (cursor >= 0 && cursor < entries) {
+    if (!leftHeld && cursor >= 0 && cursor < entries) {
         const bool isNew = cursor == (int)listed.size();
         const auto buttons = buttonsAt(cursor);
-        out.push_back(widget("button2", buttons.select, SELECT_SIZE, isNew ? "Create" : "Select"));
+        out.push_back(characterControl("button2", buttons.select, SELECT_SIZE, isNew ? "Create" : "Select"));
         if (!isNew) {
-            out.push_back(widget("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE));
+            out.push_back(characterControl("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE));
             if (deleteShown)
-                out.push_back(widget("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"));
+                out.push_back(characterControl("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"));
         }
     }
     out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
@@ -1459,6 +1509,11 @@ Hud::Screen Session::buildScreen(bool inGame) {
         controlsItems(out);
     if (helpOpen)
         helpItems(out);
+    for (auto &item : out)
+        if (item.kind == Hud::ScreenItem::Template) {
+            item.buttonHover = hud.templateHit(item, mouse, true);
+            item.animationStepMs = (int)dtMs;
+        }
     return out;
 }
 
@@ -1476,6 +1531,7 @@ bool Session::frame() {
         }
     }
     handleKeys(false);
+    characterScroll.frame((float)dtMs, charactersShown, leftHeld, {(int)size.width, (int)size.height}, cards);
     if (req.clickAfter >= 0 && !testClicked && seconds >= req.clickAfter && s.world->pendingCount() == 0) {
         clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;

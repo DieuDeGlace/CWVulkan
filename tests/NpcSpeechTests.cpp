@@ -158,6 +158,12 @@ int npcSpeechTests() {
           fresh.innerSize() == oldWidget.innerSize() && fresh.framePos == oldWidget.framePos &&
           fresh.flags == 0 && fresh.horizontalAlignment == 0 && fresh.verticalAlignment == 0,
           "fresh speech widget keeps live frame/inner geometry without inherited behavior flags");
+    oldWidget.frameSize = {10, 20};
+    oldWidget.minimumSize = {400, 300};
+    const auto constrained = plasma::reboundWidget(oldWidget);
+    check(constrained.frameSize == glm::vec2(10, 20) && constrained.bindSize == glm::vec2(10, 20) &&
+          constrained.innerBindSize == glm::vec2(-30, -30) && constrained.minimumSize == glm::vec2(40, 50),
+          "attachment transfers raw stored geometry and derives its own minimum without old clamps");
     Assets assets;
     if (assets.locate("")) {
         Hud hud;

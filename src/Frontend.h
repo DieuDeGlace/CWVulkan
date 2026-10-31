@@ -137,12 +137,25 @@ glm::vec2 entryPosition(int i);
 struct CharacterButtons {
     glm::vec2 select, deleteToggle, deleteCharacter;
 };
-// Current parent-relative frames, after owner widget size/minimum/bind constraints.
+// Current queried screen-pixel frames, including the GUI scale and evaluated owner poses.
 CharacterButtons characterButtons(glm::vec2 cardAt, glm::vec2 cardSize, glm::vec2 selectSize, glm::vec2 toggleSize);
 // The list's total height for n entries (the characters and "New character").
 float listHeight(int entries);
 // The list's top when it fits the window (centred), or the range it is kept in otherwise.
 float centredListTop(int entries, float windowHeight);
+struct CharacterFrame {
+    glm::vec2 at{0}, size{0};
+};
+void fitCharacterFrames(std::vector<CharacterFrame> &, glm::ivec2 windowPixels, float frameMilliseconds, float scrollInput);
+// Pointer polling and frame animation use separate clocks. Coordinates and movement stay
+// in physical pixels; the owner's GUI scale belongs to the card geometry, not this state.
+struct CharacterScroll {
+    float filteredY = 0, pointerY = 0, velocity = 0;
+    uint32_t sampledAt = 0;
+    void press() { filteredY = pointerY; }
+    void poll(int32_t y, uint32_t clockMs, bool shown, bool held, int windowWidth, std::vector<CharacterFrame> &);
+    void frame(float milliseconds, bool shown, bool held, glm::ivec2 windowPixels, std::vector<CharacterFrame> &);
+};
 // The specialisation's word (Berserker, Guardian, Sniper, Scout, Fire Mage, Water Mage,
 // Assassin, Ninja) and the class's (Warrior, Ranger, Mage, Rogue).
 const char *specializationWord(int cls, int spec);

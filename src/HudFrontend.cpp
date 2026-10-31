@@ -33,7 +33,69 @@ void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) con
     plasmaText(out, style, m);
 }
 
-glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested) const {
+Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index) const {
+    if (!guiLoaded)
+        return nullptr;
+    if (!frontScene)
+        frontScene = std::make_unique<plasma::Scene>(gui);
+    const std::string &owner = item.instance.empty() ? item.name : item.instance;
+    auto &instances = frontNodes[owner];
+    while (instances.size() <= index) {
+        auto *node = frontScene->instance(item.name, &frontScene->root());
+        if (!node)
+            return nullptr;
+        instances.push_back({node});
+    }
+    auto &instance = instances[index];
+    auto &node = *instance.node;
+    const bool first = instance.requested.x < 0;
+    if (first && item.replaceWidget && node.widget)
+        node.widget = plasma::reboundWidget(*node.widget);
+    if (first || instance.requested != item.size) {
+        // Constructor requests precede the global scale and the Button's keyed poses.
+        // Later draws preserve that evaluated frame instead of requesting the size again.
+        frontScene->setScale(1);
+        if (node.widget && item.size.x > 0 && item.size.y > 0)
+            frontScene->resizeTo(node, item.size);
+        instance.requested = item.size;
+    }
+    if (first) {
+        const bool visible = node.visible;
+        if (item.initializeHidden)
+            node.visible = false;
+        node.initializeWidgets();
+        node.visible = visible;
+        if (item.name == "button" || item.name == "button2" || item.name == "smallbutton") {
+            auto passive = [](auto &&self, plasma::SceneNode &parent) -> void {
+                for (auto &child : parent.children) {
+                    child->flags |= plx::NODE_PASSIVE;
+                    self(self, *child);
+                }
+            };
+            passive(passive, node);
+        }
+        // Cached surface/mask composition remains a separate renderer gap. Keep the
+        // moving shine hidden until it can be clipped through the owner's mask.
+        std::vector<plasma::SceneNode *> clips;
+        node.findAll("clip", clips);
+        for (auto *clip : clips)
+            for (auto &child : clip->children) {
+                plasma::TextStyle style;
+                const auto *shape = child->shapeObject();
+                if (!shape || !plasma::textStyle(*shape, child->doc->loaderFlags, style))
+                    child->visible = false;
+            }
+    }
+    frontScene->setScale(guiScale);
+    return &instance;
+}
+
+glm::vec2 Hud::templateViewSize(const ScreenItem &item) const {
+    auto *instance = prepareTemplate(item);
+    return instance && instance->node->widget ? frontScene->viewSize(*instance->node) : glm::vec2(0);
+}
+
+glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested, bool replaceWidget) const {
     if (!guiLoaded)
         return glm::vec2(0);
     if (!frontScene) {
@@ -46,8 +108,11 @@ glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested) const 
         frontScene->setScale(guiScale);
         return glm::vec2(0);
     }
+    if (replaceWidget && probe->widget)
+        probe->widget = plasma::reboundWidget(*probe->widget);
     if (probe->widget && requested.x > 0 && requested.y > 0)
         frontScene->resizeTo(*probe, requested);
+    probe->initializeWidgets();
     glm::vec2 size = probe->widget ? frontScene->viewSize(*probe) : glm::vec2(0);
     if (!probe->widget) {
         glm::vec2 minimum, maximum;
@@ -62,37 +127,32 @@ glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested) const 
 bool Hud::templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDescendants) const {
     if (!guiLoaded || item.kind != ScreenItem::Template)
         return false;
-    if (!frontScene)
-        frontScene = std::make_unique<plasma::Scene>(gui);
-    frontScene->setScale(guiScale);
-    auto &node = frontHitNodes[{item.name, passiveDescendants}];
-    if (!node) {
-        node = frontScene->instance(item.name, &frontScene->root());
-        if (node && passiveDescendants) {
-            // Registered character controls retain the root flags and mark every child
-            // passive before picking (frontend-characters.md §2.3.2).
-            auto markChildren = [](auto &&self, plasma::SceneNode &parent) -> void {
-                for (auto &child : parent.children) {
-                    child->flags |= plx::NODE_PASSIVE;
-                    self(self, *child);
-                }
-            };
-            markChildren(markChildren, *node);
-        }
-    }
-    if (!node)
+    ScreenItem probe = item;
+    if (probe.instance.empty())
+        probe.instance = "hit/" + item.name + (passiveDescendants ? "/passive" : "/ordinary");
+    auto *instance = prepareTemplate(probe);
+    if (!instance)
         return false;
-    if (node->widget) {
-        if (item.size.x > 0 && item.size.y > 0)
-            frontScene->resizeTo(*node, item.size * guiScale);
+    auto *node = instance->node;
+    if (passiveDescendants) {
+        auto passive = [](auto &&self, plasma::SceneNode &parent) -> void {
+            for (auto &child : parent.children) {
+                child->flags |= plx::NODE_PASSIVE;
+                self(self, *child);
+            }
+        };
+        passive(passive, *node);
+    }
+    if (node->widget)
         frontScene->moveTo(*node, item.at * guiScale);
-    } else
+    else
         frontScene->setPosition(*node, item.at * guiScale, glm::vec2(0));
     if (!item.text.empty())
         node->setAllText(item.text);
     auto textHit = [&](const plasma::SceneNode &n, glm::vec2 local) {
         plasma::TextStyle style;
-        if (!n.doc || !plasma::textStyle(n.doc->shapes[(size_t)n.shape], n.doc->loaderFlags, style))
+        const auto *shape = n.shapeObject();
+        if (!shape || !plasma::textStyle(*shape, n.doc->loaderFlags, style))
             return false;
         if (n.text)
             style.string = *n.text;
@@ -126,49 +186,30 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
             break;
         }
         case ScreenItem::Template: {
-            if (!guiLoaded)
-                break;
-            if (!frontScene) {
-                frontScene = std::make_unique<plasma::Scene>(gui);
-            }
-            frontScene->setScale(guiScale);
             const std::string &owner = item.instance.empty() ? item.name : item.instance;
-            auto &list = frontNodes[owner];
-            size_t &k = used[owner];
-            if (k >= list.size()) {
-                plasma::SceneNode *made = frontScene->instance(item.name, &frontScene->root());
-                if (!made)
-                    break;
-                // A button's "clip" node masks a highlight that only shows through it; the overlay
-                // has no clipping layers, so the highlight is left out (a clipped text stays).
-                std::vector<plasma::SceneNode *> clips;
-                made->findAll("clip", clips);
-                for (plasma::SceneNode *clip : clips)
-                    for (auto &child : clip->children) {
-                        plasma::TextStyle style;
-                        const plx::Document &doc = child->doc ? *child->doc : gui;
-                        const bool isText = child->shape >= 0 && child->shape < (int)doc.shapes.size() &&
-                                            plasma::textStyle(doc.shapes[(size_t)child->shape], doc.loaderFlags, style);
-                        if (!isText)
-                            child->visible = false;
-                    }
-                list.push_back(made);
-            }
-            plasma::SceneNode &node = *list[k++];
-            if (node.widget) {
-                if (item.size.x > 0 && item.size.y > 0)
-                    frontScene->resizeTo(node, item.size * guiScale);
+            auto *instance = prepareTemplate(item, used[owner]++);
+            if (!instance)
+                break;
+            auto &node = *instance->node;
+            if (node.widget)
                 frontScene->moveTo(node, item.at * guiScale);
-            } else
+            else
                 frontScene->setPosition(node, item.at * guiScale, glm::vec2(0));
             if (!item.text.empty())
                 node.setAllText(item.text);
+            if (item.buttonHover && node.widget && node.widget->kind == "Button") {
+                if (*item.buttonHover != instance->pointerInside) {
+                    node.playSequence(*item.buttonHover ? "button:enter" : "button:leave");
+                    instance->pointerInside = *item.buttonHover;
+                }
+                node.advanceSequences(item.animationStepMs);
+            }
             sceneNode(out, node, item.color, frontScene.get());
             if (navigation && item.navigation != ScreenItem::NoPoint) {
                 auto localBounds = [&](const plasma::SceneNode &n, glm::vec2 &lo, glm::vec2 &hi) {
                     plasma::TextStyle style;
-                    if (!n.doc || n.shape < 0 || n.shape >= (int)n.doc->shapes.size() ||
-                        !plasma::textStyle(n.doc->shapes[(size_t)n.shape], n.doc->loaderFlags, style))
+                    const auto *shape = n.shapeObject();
+                    if (!shape || !plasma::textStyle(*shape, n.doc->loaderFlags, style))
                         return false;
                     if (n.text)
                         style.string = *n.text;

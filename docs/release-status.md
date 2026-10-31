@@ -7,6 +7,14 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Character-menu controls now initialize and animate the owner's ordinary Button sequences
+  instead of showing the saved gray idle pose. Select uses live effective frames and20 physical
+  pixels of padding. Card binding is transferred from the copied template; horizontal centering,
+  ordered vertical fitting, filtered left-drag and momentum follow the independent specification.
+  Pointer polling and frame decay retain separate clocks. CPU state/owner-data checks cover
+  these paths. Cached GUI masking/shine and preview creature/world rendering remain open;
+  these changes are not a claim of complete menu parity.
+
 - Identification now renders the original selected item through the shared 3D WORLD
   shader path, using owner-extracted CUB geometry and full header dimensions. Native
   projection, rotation, main/dark passes, shininess and weapon spirit cubes are
@@ -153,8 +161,8 @@ checkpoint describe the intended setup and remaining limits.
 - Statue slab: compared 81 columns against owner-exported blocks. All 477 stored
   blocks within the slab height range match; the generator was left unchanged.
 - Character selection: reuses the owner's rounded `gui.plx` frame, blended behind
-  previews so it does not tint them. Opacity remains a visual estimate; a 1:1 colour
-  match and the logo overlay's native light are not established.
+  previews so it does not tint them. The owner's alpha is retained without the earlier extra
+  0.6 multiplier; a full composition match and the logo overlay's native light are not established.
 - Packaging: a separate allowlisted tree and ZIP include required source tables,
   specifications, config templates, project art and dependency notices. Game data,
   screenshots, recordings, saves, SDK checkouts, private handoffs and binaries are

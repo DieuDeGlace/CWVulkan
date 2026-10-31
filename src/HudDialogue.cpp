@@ -34,7 +34,9 @@ void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t g
         if (!it->first.starts_with(prefix) || retained.count(it->first)) { ++it; continue; }
         const auto nodes = it->second;
         auto &children = frontScene->root().children;
-        std::erase_if(children, [&](const auto &node) { return std::find(nodes.begin(),nodes.end(),node.get()) != nodes.end(); });
+        std::erase_if(children, [&](const auto &node) {
+            return std::any_of(nodes.begin(), nodes.end(), [&](const auto &instance) { return instance.node == node.get(); });
+        });
         it = frontNodes.erase(it);
     }
     for (const auto &bubble : bubbles) {
@@ -46,18 +48,20 @@ void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t g
                 node->widget = plasma::reboundWidget(*node->widget);
                 node->widget->kind = "DialogWidget";
             }
-            nodes.push_back(node);
+            nodes.push_back({node});
         }
-        auto &node = *nodes.front();
+        auto &node = *nodes.front().node;
         node.visible = bubble.visible;
-        if (!node.visible || !node.widget) continue;
+        if (!node.visible || !node.widget)
+            continue;
         // moveTo compensates the existing frame origin; offsets remain GUI units.
-        frontScene->moveTo(node, bubble.screenPoint + glm::vec2(-125,-170) * guiScale);
+        frontScene->moveTo(node, bubble.screenPoint + glm::vec2(-125, -170) * guiScale);
         sceneNode(out, node, glm::vec4(1), frontScene.get());
-        if (bubble.page >= bubble.pages.size()) continue;
+        if (bubble.page >= bubble.pages.size())
+            continue;
         const auto frame = frontScene->contentSize(node);
         const auto layout = dialoguepanel::layout(bubble.pages[bubble.page].words, bubble.elapsedMs, frame.x,
-            [this](const auto &word) { return dialogueWordWidth(word); });
+                                                  [this](const auto &word) { return dialogueWordWidth(word); });
         const glm::vec2 at = frontScene->viewPosition(node) / guiScale;
         drawDialogueWords(layout, at, guiTime, out);
         if (onDraw) onDraw(bubble.speaker, layout, frame);
@@ -67,13 +71,13 @@ void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t g
 bool Hud::dialogueChoicesHit(glm::vec2 point) const {
     const auto found = frontNodes.find("dialogue-answers");
     return frontScene && found != frontNodes.end() && !found->second.empty() &&
-           frontScene->hitTest(*found->second.front(), point) != nullptr;
+           frontScene->hitTest(*found->second.front().node, point) != nullptr;
 }
 
 bool Hud::generalDialogueHit(glm::vec2 point) const {
     const auto found = frontNodes.find("dialogue-general");
     return frontScene && found != frontNodes.end() && !found->second.empty() &&
-           frontScene->hitTest(*found->second.front(), point) != nullptr;
+           frontScene->hitTest(*found->second.front().node, point) != nullptr;
 }
 
 void Hud::drawDialogueChoices(dialoguechoice::Panel &panel, glm::vec2 screen, glm::vec2 mouse,

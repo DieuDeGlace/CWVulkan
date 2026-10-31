@@ -531,6 +531,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         bool fullscreen = false;
         int width = 0, height = 0, refresh = 0;
     };
+    if (guiScaleTest > 0)
+        gameOptions.guiScale = std::clamp(guiScaleTest, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX);
     auto windowModeOf = [&](const gameoptions::Options &o) {
         WindowMode m;
         m.fullscreen = o.fullscreen != 0 && !testRun;

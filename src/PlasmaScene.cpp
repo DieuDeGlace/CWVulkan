@@ -241,11 +241,11 @@ glm::vec2 Widget::innerSize() const {
 Widget reboundWidget(const Widget &source) {
     Widget widget;
     widget.bind = source.bind;
-    widget.inverseBind = source.inverseBind;
+    widget.inverseBind = glm::inverse(widget.bind);
     widget.bindPos = widget.framePos = source.framePos;
-    widget.bindSize = widget.frameSize = source.effectiveSize();
+    widget.bindSize = widget.frameSize = source.frameSize;
     widget.innerBindPos = source.innerPosition();
-    widget.innerBindSize = source.innerSize();
+    widget.innerBindSize = source.frameSize + source.innerBindSize - source.bindSize;
     widget.minimumSize = widget.bindSize - widget.innerBindSize;
     return widget;
 }
@@ -399,6 +399,8 @@ SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
     n->widget = from.widget;
     n->text = from.text, n->textColor = from.textColor;
     n->onDraw = from.onDraw;
+    n->animatedShape = from.animatedShape;
+    n->animations = from.animations;
     n->parent = parent;
     SceneNode *made = n.get();
     parent->children.push_back(std::move(n));
@@ -424,6 +426,15 @@ void Scene::setPosition(SceneNode &n, glm::vec2 point, glm::vec2 offset) {
 }
 
 const ShapeDrawing *Scene::drawing(const SceneNode &n) const {
+    if (n.animatedShape) {
+        if (!n.animatedDrawing) {
+            ShapeDrawing shape;
+            if (!buildSmoothMesh(*n.animatedShape, shape))
+                return nullptr;
+            n.animatedDrawing = std::move(shape);
+        }
+        return &*n.animatedDrawing;
+    }
     if (!n.doc || n.shape < 0 || n.shape >= (int)n.doc->shapes.size())
         return nullptr;
     const auto key = std::make_pair(n.doc, n.shape);

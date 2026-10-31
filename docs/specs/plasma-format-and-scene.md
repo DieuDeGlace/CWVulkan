@@ -564,15 +564,28 @@ Typical use: find a template node by name in the loaded document container, then
 under a parent. Two copies exist:
 
 * **Shallow instance** (0x333890, the most used): create a new node under the parent with
-  the same name, the **same** transformation, shape and display objects (shared), copy the
-  flags, the variables and the node's second key/value list; let the source widget clone
-  itself onto the new node (widget class slot 0x140); recurse into each child that is not
-  flagged 0x4. Because the objects are shared, moving, recolouring or retexting one
+  the same name and the **same** transformation, shape and display objects (shared);
+  recursively copy each child not flagged0x4, copy flags, variables and the node's
+  second key/value list, then let the source own Widget clone itself onto the new node
+  (widget class slot0x140, explicit call0x33399f). Because the objects are shared,
+  moving, recolouring or retexting one
   instance changes all of them until the game gives an instance its own object.
 * **Deep copy** (0x3308e0): as above, but the shape, transformation and display are each
   duplicated (shape slot 0x68, transformation 0x373310, display slot 0x10), including all
   frames and sequences. The new node's owner widget is its own cloned widget or else the
   parent's owner widget; when it has one and a shape, the shape is asked to rebuild.
+
+Replacing an instanced node's own Widget through**0x334410** preserves its
+current binding through0x329c70 before deleting the old wrapper. This uses
+old **stored** frame position0x32ab60 and frame size0x32ab80, not queried
+effective/transformed dimensions, as the new bind and initial frame rectangle.
+Old deformed inner position0x32ad70 and **unclamped** size0x32adb0 become
+the new inner bind; new minimum is bind size minus inner size. The old bind
+matrix is copied and its inverse recomputed. This is root-only replacement,
+not descendant Widget removal or wholesale settings/class copying. See
+steam-character-list-input-and-frame-init5 for the character-card constructor
+path where this transfer precedes the600×220 request. Frame/size getters do
+not perform a later automatic template import or artwork-bounds fit.
 
 ### 2.6 Animation
 
@@ -671,11 +684,14 @@ With `n` active keys, period `L`, and `key(i)` meaning index `i` wrapped modulo 
 * **set time(keyable, t)** (0x3690c0): set time on every attribute regardless of the
   playing flag; recompute if any changed.
 
-The widget enable/disable routine (0x32a8d0, 0x32b830) shows the intended use: play
+The widget enable/disable setter (0x32a8d0) shows the intended use: play
 `widget:enable` or `widget:disable` on the widget's node, compute its duration, set every
-keyable in the subtree to that time (0x334ec0, which runs the same traversal as below with
-set-time instead of advance), then stop the subtree. That snaps to the end pose instantly.
-Buttons similarly play `button:enter` / `button:leave` (seen in gui.plx).
+keyable in the subtree to that time (0x334ec0, absolute seek), then stop the subtree.
+That snaps to the end pose under the seek admission rules; the own-node force-bit
+ordering differs from ordinary advance, as2.7.9 specifies.
+The base initializer0x32b830 has a narrower disabled-only path, and Button initialization
+adds its own pose operations; exact distinctions are in2.7.9. Pointer enter/leave starts
+timed Button sequences and does not perform that initializer's end-pose operations.
 
 #### 2.6.6 Per-frame update traversal (0x349cf0 → 0x3358e0 → 0x335920)
 
@@ -717,9 +733,10 @@ widget space; its inverse `B⁻¹` (computed at load, 0x386560) maps back.
 | `B`, `B⁻¹` | identity | file |
 | alignment h, v; flags | 0 | file |
 
-When it initialises (widget class slot 0x38, 0x32b830) a widget records the window size,
-sets `ms = bs − is`, and snaps its node to the `widget:enable` or `widget:disable` end pose
-(2.6.5).
+When it initialises (base widget class slot0x38,0x32b830), a widget records the window
+size and sets `ms = bs − is`. Only a disabled widget starts `widget:disable` and seeks
+to that sequence's duration here; an enabled base Widget does not automatically play
+`widget:enable`. See2.7.9 for the distinct Button override and enable/disable setter.
 
 #### 2.7.2 Derived geometry
 
@@ -743,6 +760,35 @@ sets `ms = bs − is`, and snaps its node to the `widget:enable` or `widget:disa
   widget's frame top-left. x alone 0x32da70, y alone 0x32dab0.
 * **Size** (0x32d1d0) = linear part of `Q` applied to `eff`. x alone 0x32da30, y alone
   0x32ad10.
+
+**Exact coordinate-basis clarification, native0x32c0c0/0x32cae0/0x32cd10:** the label
+“parent-relative” above does not mean applying the full inverse parent-world matrix.
+First0x32cd10 constructs the node's complete world matrix followed by widget bind inverse;
+0x32cae0 prepends the GUI engine root's inverse local matrix and appends framePos.
+The nearest-widget-ancestor branch subtracts only that ancestor's0x32cc50 origin in this
+root-cancelled space. It does not divide by that ancestor's scale or undo its rotation.
+The no-widget-ancestor branch instead prepends the immediate parent's **full world**
+matrix. The abbreviated decompile omits the output argument on its0x100fa0 call;
+native instructions0x32c140–0x32c15b confirm that it fills the result before the product.
+Consequently neither branch is replaceable with a generic inverse-parent transform.
+
+Position0x32c340 projects the resulting matrix origin with a homogeneous reciprocal.
+Size0x32d1d0 applies its XY linear part to the current effective size, without a
+projective divide or a corner AABB. Rotated/sheared/signed extents remain the returned
+vector components. Set-position0x32b560→0x32b250 solves through this Q, the bind matrix
+and inverse live node-local matrix, adding the resulting correction to the live
+translation channel. Set-size0x32c6f0 uses the inverse **linear** Q on the requested
+vector before the normal constraints/resize propagation. Do not replace either setter
+with a raw node translation or assume requested dimensions equal measured dimensions.
+
+For the native character-list hierarchy, the GUI engine root carries GUI scale while
+GUI[3] is a fresh identity container with no widget. There is no widget ancestor above
+its card and control roots. In this specific hierarchy Q retains the global root scale:
+its frame queries and the controller's20/10-pixel padding expressions operate in
+**screen-pixel frame coordinates**. A second multiplication of those queried values or
+padding by GUI scale is incorrect. Owner-local drawing/text values still pass through
+the root's scale at rendering. The construction/layout order and requested-size caveat
+are frontend-characters2.3.3.
 
 #### 2.7.3 Setters
 
@@ -825,6 +871,122 @@ A node participates if it is not flagged 0x4, is visible, and has no widget or t
 The pointer is taken into the node's space with the inverse world matrix, un-deformed by the
 widget's Deformer, and tested against the node's shape and then the widget. Children are
 tested last-first, but only when the node is not a clip node.
+
+#### 2.7.9 Native initialization and Button state sequences
+
+These facts come from native constructors, vtables and handlers, without reading an
+owner Button/blackwidget asset. They preserve the owner's numeric frames rather than
+specifying a replacement angle, color, deformation or background.
+
+**Node initialization0x333820** skips a subtree when node+0x80 bit0x04 is set.
+Otherwise it invokes its own widget's virtual slot+0x38 when present, assigns the
+node's owner-widget pointer+0x78 to that widget, or inherits the parent's owner-widget
+pointer when there is no own widget, then initializes children in list order. It has
+no Display.visibility gate; a hidden screen container can still initialize its locally
+visible descendants. The bit here is node+0x80, distinct from passive/copy/draw fields
+described elsewhere. This is initialization traversal, not ordinary animation advance.
+
+**Base Widget0x328ff0/0x32b830:** constructor initializes enabled byte+0x1a0 to1;
+the copy constructor0x329210 copies that byte and the existing bind/frame/settings.
+Initialization records GUI engine window width/height+0x1c4/+0x1c8 at widget+0x160/+0x164
+and sets minimum size to bindSize minus innerBindSize. If enabled is0 it starts
+`widget:disable` with period0, obtains the named duration through0x3351f0 and seeks
+with0x334ec0. It does **not** explicitly stop afterward in this base initializer.
+If enabled is1 it does not play `widget:enable`. Finally0x32c400 updates matching
+`caption` text shapes from the widget caption when one exists.
+
+The explicit **enabled setter0x32a8d0**, unlike Display.visibility assignment, writes
+the byte and starts `widget:enable` for nonzero, otherwise `widget:disable`, period0.
+It seeks to that named duration, then stops the subtree with0x335170. It does this
+even when the requested enabled value equals the old byte. The native visibility
+helper0xa3a20 only writes the live Display.visibility boolean: it does not invoke
+this setter, reinitialize a widget, or synthesize an enable/leave sequence.
+
+**Button constructor0x369270** installs Button vtable0x47b3a0, sets base widget kind
+field+0x50 to1, stores the caller's signed32 Button.type at+0x2bc and clears held/check
+bytes+0x2b8/+0x2b9. Its sequence-name fields are:
+
+| Button offset | Native default sequence name |
+|---|---|
+|+0x1a8|button:press|
+|+0x1c8|button:release|
+|+0x1e8|button:enter|
+|+0x208|button:leave|
+|+0x228|button:press:checked|
+|+0x248|button:release:checked|
+|+0x268|button:enter:checked|
+|+0x288|button:leave:checked|
+
+The dynamic clone entry0x369c20 uses Button copy constructor0x3694d0: copy base
+settings, all eight sequence strings and Button.type, create a fresh group list and
+clear the new held/check bytes. An independent node copy0x3308e0 calls the original
+widget's dynamic clone entry; it does not replace a Button with a plain Widget.
+
+**Button initialization0x369c70**, virtual slot+0x38, calls the base initializer and
+rebuilds its group list before state poses. For an enabled ordinary type0 Button,
+it performs these three ordered pose operations: **release, release again, leave**.
+Each operation starts that stored sequence on the button's node subtree with period0,
+gets that same name's duration by0x3351f0, seeks the subtree to that duration with
+0x334ec0, then stops it with0x335170. Preserve this as evaluated owner sequences,
+not a guessed idle matrix or an unevaluated current-frame default. In particular the
+leave end pose can change the transform/frame basis used by later placement queries.
+
+For nonzero Button.type the initial pair instead is **press:checked, release:checked**,
+then the common **release, leave** operations. If the checked byte is nonzero afterward,
+append **press, release:checked, leave:checked**. Each named operation independently
+seeks/stops as above. Disabled Buttons skip these Button-specific operations after the
+base disabled-initializer path. The ordinary Select contract can use type0 when that
+is the class/type decoded from the owner's template; no numeric owner pose is assumed
+by the native controller's template name alone.
+
+**Pointer entry0x36a290** chooses `enter:checked` only for nonzero Button.type and
+nonzero checked byte; otherwise it chooses `enter`. **Pointer leave0x36a2c0** similarly
+chooses `leave:checked` or `leave`. Both tail-call0x3342a0 with period0. These handlers
+do **not** compute duration, seek to an end pose, stop, or directly assign a transform.
+The start operation resets each matching attribute's active clock to0. If its first
+key is later than0,0x34af80 captures the current value in slot1 and inserts a time0
+key, as2.6.3 specifies. Property evaluation then follows the ordinary update clock;
+starting a sequence is not equivalent to instantly applying its final key.
+
+**Recursive target and timing:**0x3342a0 visits the button root's shape, transform and
+display, then every descendant, even passive descendants; it starts only attributes
+that contain that named sequence. There is no invented child name filter or restriction
+to the root matrix. Duration0x3351f0 is the maximum last-key time for the named sequence
+across participating shape/transform/display attributes and descendants; node+0x80
+bit0x04 excludes a subtree from that duration traversal. Seeking0x334ec0 first clears
+the per-pass updated flags, then0x334ef0 evaluates absolute time, recomputing changed
+keyables. It admits visible nodes or its force path (node+0x80 bit0x2000 / inherited
+force), and skips node+0x80 bit0x04 and already-evaluated shared keyables. It is not
+permission to apply hidden descendants indiscriminately. Stop0x335170 clears playing
+state/active key lists recursively, skipping excluded child subtrees.
+
+For an unforced parent, a **hidden node whose own node+0x80 bit0x2000 is set**
+is admitted by absolute seek0x334ef0, including its forced descendants. Ordinary
+advance0x335920 instead rejects that hidden node and does not visit its children:
+it incorporates own0x2000 only after visibility/incoming-force admission, for child
+propagation. A visible admitted node's own0x2000 can therefore force hidden descendants
+in both traversals. Node+0x80 bit0x04 still excludes the subtree in both. This is a
+real order distinction, not one generic shared visibility predicate; the explicit
+two-row admission table is steam-character-list-input-and-frame-init §6.
+
+Ordinary GUI update**0x349cf0** stores signed32 step milliseconds at engine+0x190,
+adds them to signed32 clock+0x194, and calls0x3358e0→0x335920. Active attributes advance
+by that step through0x369190/0x34bb50; changed keyables recompute their matrices or
+display/drawing state. Native current-pass flags avoid advancing a shared keyable twice.
+Visibility/force and excluded-node rules remain2.6.6; there is no separate wall-clock
+timer for button hover or a hardcoded hover animation duration.
+
+**Dispatch0x3418d0:** pointer movement stores old/new GUI float XY, uses capture node
+engine+0x168 or hit-tests the GUI root with0x333f60(flags0), and compares the previous
+hit node's owner widget with the new one's. On an owner-widget change it calls the old
+enabled widget's virtual+b8 (leave), then its registered event14; then the new enabled
+widget's virtual+b0 (enter), then registered event13. Afterward it invokes the new
+enabled widget's virtual+a8 move hook and registered event12, and stores the new hit.
+Registered callbacks independently obey the passive-node and enabled-required tests.
+Changing between descendant shapes with the same owner widget does not restart the
+enter/leave sequence. Disabled widget dispatch does not invoke these virtual hover
+handlers. Descendant passivity set by the frontend constructor prevents those shapes
+from becoming separate interactive hits; it does not suppress their parent's animation.
 
 ---
 

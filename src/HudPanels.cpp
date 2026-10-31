@@ -205,7 +205,8 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
     tint *= n.fill;
     const plx::Document &doc = n.doc ? *n.doc : gui;
     plasma::TextStyle style;
-    if (n.shape >= 0 && n.shape < (int)doc.shapes.size() && plasma::textStyle(doc.shapes[(size_t)n.shape], doc.loaderFlags, style)) {
+    const auto *shape = n.shapeObject();
+    if (shape && plasma::textStyle(*shape, doc.loaderFlags, style)) {
         if (n.text)
             style.string = *n.text;
         if (n.textColor)
