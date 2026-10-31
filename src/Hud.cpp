@@ -895,12 +895,13 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     if (panels.customization && !state.customization)
         panels.customization->visible = false;
     const Inventory *information = state.information ? state.information : state.inventory;
-    if (state.mapPreview.empty() && information && information->infoItem && !information->info.empty())
+    if (state.mapPreview.empty() && information && information->infoItem)
         positionPreview(*information); // Selection observes the preceding draw's stored frame.
     ringItems(state.ring);
+    if (!state.interfaceVisible)
+        return;
     if (state.feats)
         drawFeatText(*state.feats, out);
-    drawMapMarkers(state, out);
     // Over-head plates and damage numbers first, so the bars stay on top.
     for (auto &p : state.plates) {
         float w = PLATE_W * scale, h = PLATE_H * scale, x = std::round(p.at.x - w / 2), y = std::round(p.at.y - h);
@@ -1115,7 +1116,10 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
         drawCustomization(*state.customization, out);
     if (state.windows)
         drawScreen(*state.windows, out);
+    drawMapMarkers(state, out); // The game-UI subtree precedes the separate MapOverlay root.
     if (state.mapPreview.empty()) {
+        if (state.informationDraw)
+            state.informationDraw();
         if (information)
             drawPreview(*information, out);
     }

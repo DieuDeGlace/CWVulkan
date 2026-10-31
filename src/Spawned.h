@@ -218,6 +218,9 @@ class SpawnedCreatures {
     // A zone's ground items (zone +0x30, 0xe0 bytes each; an empty slot's item type is 0), made
     // with the zone when it comes into memory; null when its blocks are not in memory yet.
     const std::vector<nativesaves::Record> *groundItems(ExtractedWorld &ew, int zx, int zy);
+    // Resolve an existing zone/index without loading a zone or rechecking its
+    // item type/count/ownership. The returned record is borrowed until mutation.
+    const nativesaves::Record *findGroundItem(const std::array<int32_t, 3> &key) const;
     // The player took ground item `index` of a zone: its slot is emptied.
     void takeGroundItem(int zx, int zy, size_t index);
     // A static object opened, or given its item (+0x28 cleared; a chest stays open).

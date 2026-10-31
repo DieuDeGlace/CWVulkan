@@ -901,7 +901,8 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
             }
             break;
         }
-        case GLFW_KEY_F4: interfaceShown = !interfaceShown; break;
+        case GLFW_KEY_F4:
+            break; // Applied before focused/binding input below.
         case GLFW_KEY_F5:
         case GLFW_KEY_F6:
             if (s.options) {
@@ -921,6 +922,10 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
 
 void Session::handleKeys(bool inGame) {
     MenuInput &in = *s.input;
+    // F4 changes the global GUI ancestor even while a controls row waits for input.
+    for (int key : in.pressed)
+        if (key == GLFW_KEY_F4)
+            interfaceShown = !interfaceShown;
     // A controls row waiting for a key takes the next key or mouse button (open question 6).
     if (controlsOpen && controls.waiting >= 0) {
         gameoptions::Binding first{0, 0};

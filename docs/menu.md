@@ -236,6 +236,13 @@ fractional font styles share the owner-font atlas. Standalone previews establish
 their own GUI scale. Recording-only bitmap previews keep their measurement pass.
 Earlier source sampling and live map/ground/Ring bindings remain separate work.
 
+Information keeps its original record live until its draw callback, after the
+customization palette and map-layer callbacks. Hiding the global interface skips
+widget draw hooks and late resizes while keeping own panel visibility, bindings
+and retained hover/pick state. Selection placement still runs. Physical F4 repeats
+reach the interface-key queue, and visibility toggling precedes binding-wait gates;
+broader synchronous key/focus timing remains open.
+
 `--open-upgrade 0` opens this pane for read-only gameplay captures; `--pointer X Y`
 also drives its hover/picking. Recording-only sessions keep the compatibility
 editor. `EngineTests makesave DIR <recording folder> loot` creates a separate test

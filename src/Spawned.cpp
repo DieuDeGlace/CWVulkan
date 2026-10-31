@@ -1588,6 +1588,13 @@ const std::vector<nativesaves::Record> *SpawnedCreatures::groundItems(ExtractedW
     return lists ? &lists->groundItems : nullptr;
 }
 
+const nativesaves::Record *SpawnedCreatures::findGroundItem(const std::array<int32_t, 3> &key) const {
+    const auto *lists = zoneStates.find({key[0], key[1]});
+    if (!lists || key[2] < 0 || (size_t)key[2] >= lists->groundItems.size())
+        return nullptr;
+    return &lists->groundItems[(size_t)key[2]];
+}
+
 void SpawnedCreatures::takeGroundItem(int zx, int zy, size_t index) {
     nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     if (!lists || index >= lists->groundItems.size())

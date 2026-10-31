@@ -216,6 +216,8 @@ class Hud {
         const identifywindow::Shown *identification = nullptr;
         const customization::Shown *customization = nullptr;
         const Inventory *information = nullptr; // ordinary preview also exists without an open inventory
+        std::function<void()> informationDraw;  // Read the borrowed source after earlier widget callbacks.
+        bool interfaceVisible = true;           // Global GUI ancestor; own panel state/bindings survive hiding.
         // The map's markers (the map overlay's draw, MapMarks.h), far ones first, and the
         // interface's clock their icons bob by; also the quest sprites over people's heads.
         using MapMarker = mapmarks::Marker;

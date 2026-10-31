@@ -577,7 +577,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int modifiers) {
         if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
             input.shiftDown = action != GLFW_RELEASE;
-        if (action == GLFW_PRESS)
+        if (action == GLFW_PRESS || (action == GLFW_REPEAT && key == GLFW_KEY_F4))
             input.pressed.push_back(key);
         if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
             chatInput.push_back({ChatInputEvent::Key, key, (modifiers & GLFW_MOD_SHIFT) != 0, action == GLFW_REPEAT});
@@ -6483,6 +6483,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 return true;
             };
             Hud::State hs;
+            hs.interfaceVisible = !menusReady || menus.interfaceShown();
             hs.feats = &featLabels;
             hs.hp = playerHp;
             hs.maxHp = playerMaxHp;
@@ -7151,7 +7152,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     comparisons.rings = {&equipment[Gear::RingRight], &equipment[Gear::RingLeft]};
                     const auto adapted = nativeplayer::transformed(*choice.item, gear.playerClass());
                     const auto *comparison = itempreview::comparison(choice.item, adapted, comparisons, input.shiftDown);
-                    describePreview(Gear::fromRecord(*choice.item), ordinaryInformation, comparison);
+                    // Resolve the model before GPU preparation, but keep the
+                    // original record live until the information draw callback.
+                    ordinaryInformation.infoItem = adapted;
+                    ordinaryInformation.infoIcon = spawned.itemSprite(adapted.data());
+                    if (hs.interfaceVisible)
+                        loadInventorySprite(ordinaryInformation.infoIcon);
+                    hs.informationDraw = [&, original = choice.item, comparison] {
+                        describePreview(Gear::fromRecord(*original), ordinaryInformation, comparison);
+                    };
                     ordinaryInformation.infoAnchor = choice.anchor;
                     ordinaryInformation.pointer = hs.pointerAt;
                 }

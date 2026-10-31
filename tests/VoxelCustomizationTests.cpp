@@ -1,6 +1,7 @@
 #include "VoxelCustomization.h"
 #include "GameCraft.h"
 #include "Assets.h"
+#include "ItemPreview.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
@@ -145,6 +146,44 @@ int voxelCustomizationTests() {
         if (draws.size() == 2)
             check(draws[0].beforeVertex > 0 && draws[0].beforeVertex == draws[1].beforeVertex && draws[1].beforeVertex < overlay.size(),
                   "owner art and heading precede images, while manual counter follows");
+        inventoryslots::Inventory liveInventory;
+        liveInventory.tabs.resize(4);
+        const auto baseMaterial = nativesaves::makeItem(11, 10, 1);
+        liveInventory.tabs[3].push_back({1, baseMaterial});
+        liveInventory.tabs[3].push_back({1, nativesaves::makeItem(11, 14, 128)});
+        shown.inventory = &liveInventory;
+        shown.pointer = {645, 260}; // The second palette cell in the owner frame.
+        ownerState.paletteHover = 0;
+        ownerState.hoveredItem = baseMaterial;
+        const auto *borrowed = &ownerState.hoveredItem;
+        Hud::Inventory liveInformation;
+        liveInformation.infoItem = baseMaterial;
+        liveInformation.infoIcon = "cube";
+        liveInformation.infoAnchor = itempreview::Anchor::Cursor;
+        liveInformation.pointer = {900, 500};
+        ui.information = &liveInformation;
+        int displayedMaterial = -1;
+        ui.informationDraw = [&] {
+            displayedMaterial = (*borrowed)[0x1c];
+            liveInformation.infoItem = *borrowed;
+            liveInformation.info = {{"Live palette", 12, 3, glm::vec4(1), 16}};
+        };
+        hud.draw(ui, overlay);
+        check(displayedMaterial == 128 && ownerState.paletteHover == 1,
+              "information reads its borrowed member after the earlier palette callback updates it");
+        ui.interfaceVisible = false;
+        shown.pointer = {600, 260};
+        displayedMaterial = -1;
+        const auto retainedPoint = ownerState.edit.pointed;
+        hud.draw(ui, overlay);
+        check(overlay.empty() && hud.itemDraws().empty() && displayedMaterial == -1 && ownerState.paletteHover == 1 &&
+                  ownerState.hoveredItem[0x1c] == 128 && ownerState.edit.pointed == retainedPoint,
+              "hidden GUI ancestor skips widget hooks without clearing their retained draw state");
+        ui.interfaceVisible = true;
+        hud.draw(ui, overlay);
+        check(displayedMaterial == 1 && ownerState.paletteHover == 0, "resumed drawing reads the current live palette member");
+        ui.information = nullptr;
+        ui.informationDraw = {};
         ownerState.edit.open = false;
         hud.draw(ui, overlay);
         check(hud.itemDraws().empty() && !hud.customizationHit({960, 500}), "simple hide removes rendering/hits without clearing state");

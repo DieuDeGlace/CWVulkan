@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Information now reads its borrowed original during the later draw callback,
+  after earlier palette updates, rather than freezing its text/image beforehand.
+  Hidden GUI ancestors skip widget hooks and late size writes while own panel
+  state, placement and bindings survive. Map-marker labels follow the game-UI
+  windows and precede information. Owner-tree tests cover live palette reads,
+  hidden-state retention and resume; all five targets and the full CPU/owner,
+  40 world/20 GUI Vulkan, water and Alpha checks pass. F4 repeats are forwarded and
+  visibility changes precede binding-wait gates. A const existing-zone ground
+  resolver is ready for source wiring. Earlier sampling, map/ground/Ring bindings,
+  full GUI layers and synchronous message/focus timing remain open.
+
 - Native item details now use an independent text plan for the specified category
   rows, stars/region/realm text, artifact/rank/pet effects, healing/demon/consumable
   text, exact float rounding and separately rounded comparison deltas. Equipped

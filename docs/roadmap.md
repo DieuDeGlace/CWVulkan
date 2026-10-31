@@ -260,6 +260,9 @@ individual feature documents.
   native candidate/Shift order, smaller fonts and fresh late resizes. Fractional
   comparison glyphs and standalone scaling have owner-tree regressions; earlier
   selector timing and live map/ground/Ring source bindings remain open.
+  Information now reads borrowed records in its later draw callback; a hidden GUI
+  ancestor suppresses draw-produced hover/pick/size changes without clearing own
+  panel state. The game-UI/map/preview layer order follows the independent audit.
   The GUI clock now narrows each capped step before wrapping accumulation across
   title/game frames, rather than deriving spin from absolute wall time. CPU/owner
   checks and all40 world/16 GUI Vulkan image cases pass, plus water/Alpha checks.

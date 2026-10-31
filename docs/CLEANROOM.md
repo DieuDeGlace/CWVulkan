@@ -72,6 +72,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Live information reads, hidden-ancestor draw admission and the bounded
+  game-UI/MapOverlay/Preview order follow `steam-preview-hidden-interface-order.md`.
+  Information formatting occurs after earlier widget callbacks instead of freezing
+  their mutable member beforehand. Owner-tree tests exercise palette mutation,
+  hidden-state retention and resumed reads. A const ground-key resolver reads only
+  existing zone state and index bounds; it does not invoke lazy generation or add
+  source-validity filters. Complete source sampling and key/focus timing remain open.
 - Item-detail text and equipped comparisons follow
   `steam-voxel-widget-information-preview.md` sections4/7/8. A separate engine text
   plan preserves row admission, owner dictionary callbacks, original equipped
