@@ -7,6 +7,20 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Formula detail results and ingredients now use original-record WORLD images;
+  hovered item information uses a class-adapted copy. Their separate callback,
+  pivot/frame geometry, rotation, dark-pass and depth rules follow the independent
+  specification. Missing result resources skip the detail hook without advancing
+  its local angle, and hidden draws do not accumulate catch-up. GUI timing now
+  narrows each capped elapsed step to float then signed milliseconds and wraps
+  its accumulated total across title/game frames. Ingredient hover/navigation
+  share the same geometry. The full CPU/owner suite, all five targets,40 world
+  and16 GUI Vulkan cases, shared water and Alpha ordering pass. Other icon callers,
+  GUI layers and persistent widget refresh state remain open. Hidden, read-only
+  native-save captures at GUI scale1 render the recipe result/ingredient and hover
+  preview, stop normally and leave the fixture unchanged. Capture executables
+  match the validated build; these are not original-game pixel comparisons.
+
 - Inventory, shop and recipe cells now render their original records through the
   shared WORLD item helper during the owner's InventoryWidget callback, after its
   child frames. Physical inventory slots are retained rather than packed; holes,

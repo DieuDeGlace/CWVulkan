@@ -65,6 +65,7 @@ void Hud::buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons
 
 void Hud::buildPanels() {
     panels = {};
+    recipeEuler = {-120, 0, 0};
     if (!guiLoaded)
         return;
     scene = std::make_unique<plasma::Scene>(gui);
@@ -90,6 +91,8 @@ void Hud::buildPanels() {
     // The formula details (FormulaDetailsWidget: a black widget with the item's shadow, the
     // craft button and bar, resized to 400 x 274).
     if ((panels.details = s.instance("blackwidget", panels.inGame)) && panels.details->widget) {
+        panels.details->widget = plasma::reboundWidget(*panels.details->widget);
+        panels.details->widget->kind = "FormulaDetailsWidget";
         panels.itemShadow = s.instance("itemshadow", panels.details);
         panels.craftButton = s.instance("craftbutton", panels.details);
         panels.craftBar = s.instance("craftbar", panels.details);
@@ -123,7 +126,11 @@ void Hud::buildPanels() {
             if (plasma::SceneNode *n = panels.preview->find(star))
                 n->visible = false;
         if (panels.preview->widget)
+            panels.preview->widget = plasma::reboundWidget(*panels.preview->widget);
+        if (panels.preview->widget) {
+            panels.preview->widget->kind = "InfoWidget";
             s.resizeTo(*panels.preview, glm::vec2(300, 300));
+        }
         panels.preview->visible = false;
     }
     // The character panel (CharacterWidget: a node with no shape, drawn in code).
@@ -500,6 +507,10 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
                          false, false, inv.pointer);
             return;
         }
+        if (&node == panels.details && inv.crafting.open) {
+            drawDetails(inv, out);
+            return;
+        }
         const auto found = std::find(panels.slots.begin(), panels.slots.end(), &node);
         if (found == panels.slots.end() || !node.widget)
             return;
@@ -513,9 +524,6 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
     panels.inGame->visible = false;
     drawCharacter(inv, out);
 
-    if (inv.crafting.open) {
-        drawDetails(inv, out);
-    }
     // The equipment slots' items (SpriteWidget: in each box's content).
     plasma::Scene &s = *scene;
     for (size_t k = 0; k < panels.slots.size() && k < 10 && inv.bagShown; k++) {
@@ -550,20 +558,30 @@ void Hud::drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) con
             image(out, it->second.atlas, {it->second.w, it->second.h}, std::round(centre.x - side / 2), std::round(centre.y - side / 2),
                   side / (float)it->second.w);
     };
-    // (CubeVulkan draws the items' still icons where the game turns their models)
-    const bool overResult = inv.pointer.x > position.x + (content.x * 0.5f - 60.0f) * scaleNow && inv.pointer.y > position.y + 50.0f * scaleNow &&
-                            inv.pointer.x < position.x + (content.x * 0.5f + 60.0f) * scaleNow && inv.pointer.y < position.y + 170.0f * scaleNow;
-    icon(d.icon, position + glm::vec2(view.x * 0.5f, 110.0f * scaleNow), 64.0f * scaleNow * (overResult ? 1.5f : 1.0f));
-    const int columns = std::max(1, (int)((view.x - 10.0f) / 45.0f));
-    const glm::vec2 grid = position + glm::vec2(0, (content.y - 130.0f) * scaleNow);
+    // A missing result resource skips this widget's hook, including its draw-local spin.
+    if (d.original && !itemModels.contains(d.icon))
+        return;
+    const glm::vec2 pointer = s.widgetPointer(node, inv.pointer);
+    const bool overResult = pointer.x > content.x * .5f - 60 && pointer.x < content.x * .5f + 60 && pointer.y > 50 && pointer.y < 170;
+    if (d.original) {
+        recipeEuler.z = (float)guiStepMs * .02f + recipeEuler.z;
+        itemIcon(d.icon, *d.original, guiitem::recipePlacement(position, view.x, scaleNow, recipeEuler, overResult), out.size());
+    } else
+        icon(d.icon, position + glm::vec2(view.x * .5f, 110 * scaleNow), 64 * scaleNow * (overResult ? 1.5f : 1));
+    const int columns = (int)((view.x - 10.0f) / 45.0f);
     for (size_t i = 0; i < d.ingredients.size(); i++) {
-        const float x = std::floor((float)(20 + 70 * ((int)i % columns)) * scaleNow + grid.x);
-        const float y = std::floor((float)(10 + 45 * ((int)i / columns)) * scaleNow + grid.y);
-        icon(d.ingredients[i].icon, glm::vec2(x, y) + 20.0f * scaleNow, 32.0f * scaleNow * ((int)i == d.hoverIngredient ? 1.5f : 1.0f));
+        const auto cell = guiitem::ingredientCell(position, view.x, content.y, scaleNow, (int)i, inv.pointer, guiClockMs);
+        if (!cell)
+            continue;
+        const auto &ingredient = d.ingredients[i];
+        if (ingredient.original)
+            itemIcon(ingredient.icon, *ingredient.original, cell->icon, out.size());
+        else
+            icon(ingredient.icon, cell->icon.screen, 32 * scaleNow * (cell->hovered ? 1.5f : 1));
     }
     widgetText(out, node, latin1(d.name), {content.x * 0.5f, 30.0f}, 12, 3, d.color, BLACK, plasma::TEXT_CENTER | plasma::TEXT_WRAP,
                content.x - 10.0f);
-    for (size_t i = 0; i < d.ingredients.size(); i++) {
+    for (size_t i = 0; columns > 0 && i < d.ingredients.size(); i++) {
         const Inventory::Crafting::Ingredient &g = d.ingredients[i];
         const int row = (int)i / columns;
         widgetText(out, node, latin1(std::to_string(g.have) + "/" + std::to_string(g.need)),
@@ -607,17 +625,23 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
             continue;
         }
         preview.visible = true;
-        sceneNode(out, preview, glm::vec4(1));
+        sceneNode(out, preview, glm::vec4(1), nullptr, [&](const plasma::SceneNode &node) {
+            if (&node == &preview && inv.infoItem)
+                itemIcon(inv.infoIcon, *inv.infoItem,
+                         guiitem::previewPlacement(s.matrix(preview), preview.transform.pivot, s.viewSize(preview).x, guiClockMs),
+                         out.size());
+        });
         preview.visible = false;
         out.insert(out.end(), lines.begin(), lines.end());
-        // The item at the right of the box.
-        if (auto icon = icons.find(inv.infoIcon); icon != icons.end()) {
-            const glm::mat4 m = s.matrix(preview);
-            const glm::vec2 origin = glm::vec2(m * glm::vec4(preview.transform.pivot, 0, 1));
-            const float width = s.viewSize(preview).x, side = width * 0.3f;
-            image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(origin.x + width * 0.75f - side / 2),
-                  std::round(origin.y + width * 0.3f - side / 2), side / (float)icon->second.w);
-        }
+        // Older recording-only sessions retain their bitmap compatibility image.
+        if (!inv.infoItem)
+            if (auto icon = icons.find(inv.infoIcon); icon != icons.end()) {
+                const glm::mat4 m = s.matrix(preview);
+                const glm::vec2 origin = glm::vec2(m * glm::vec4(preview.transform.pivot, 0, 1));
+                const float width = s.viewSize(preview).x, side = width * 0.3f;
+                image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(origin.x + width * 0.75f - side / 2),
+                      std::round(origin.y + width * 0.3f - side / 2), side / (float)icon->second.w);
+            }
     }
 }
 
@@ -807,11 +831,9 @@ std::vector<glm::vec2> Hud::inventoryNavigationPoints(const Inventory &inv, cons
         const float scale = s.matrix(node)[0][0], height = s.contentSize(node).y;
         const int columns = (int)((s.viewSize(node).x - 10) / 45);
         if (columns > 0)
-            for (size_t i = 0; i < inv.crafting.details.ingredients.size(); ++i) {
-                const glm::vec2 corner = glm::vec2(glm::ivec2(origin + scale * glm::vec2(20 + 70 * ((int)i % columns),
-                                                                                     height - 120 + 45 * ((int)i / columns))));
-                points.push_back(glm::vec2(glm::ivec2(corner + 20 * scale)));
-            }
+            for (size_t i = 0; i < inv.crafting.details.ingredients.size(); ++i)
+                if (const auto cell = guiitem::ingredientCell(origin, s.viewSize(node).x, height, scale, (int)i, inv.pointer, guiClockMs))
+                    points.push_back(glm::vec2(glm::ivec2(cell->icon.screen)));
         if (panels.craftButton)
             frameCentre(*panels.craftButton);
     }
@@ -908,13 +930,10 @@ int Hud::ingredientAt(glm::vec2 m, const Inventory &inv) const {
     const plasma::SceneNode &node = *panels.details;
     const float scaleNow = scene->matrix(node)[0][0];
     const glm::vec2 position = scene->contentPosition(node), content = scene->contentSize(node);
-    const int columns = std::max(1, (int)((scene->viewSize(node).x - 10.0f) / 45.0f));
-    for (int i = 0; i < (int)inv.crafting.details.ingredients.size(); i++) {
-        const glm::vec2 at(std::floor((float)(20 + 70 * (i % columns)) * scaleNow + position.x),
-                           std::floor((float)(10 + 45 * (i / columns)) * scaleNow + position.y + (content.y - 130.0f) * scaleNow));
-        if (inside(m, at, glm::vec2(40.0f * scaleNow)))
+    for (int i = 0; i < (int)inv.crafting.details.ingredients.size(); i++)
+        if (const auto cell = guiitem::ingredientCell(position, scene->viewSize(node).x, content.y, scaleNow, i, m, guiClockMs);
+            cell && cell->hovered)
             return i;
-    }
     return -1;
 }
 

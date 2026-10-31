@@ -31,6 +31,10 @@ struct GridCell {
 };
 GridCell gridCell(glm::vec2 origin, float rootScale, glm::ivec2 cellSize, glm::ivec2 index, int category, glm::vec2 pointer,
                   int32_t guiClockMs);
+Placement previewPlacement(const glm::mat4 &root, glm::vec2 pivot, float parentWidth, int32_t guiClockMs);
+Placement recipePlacement(glm::vec2 origin, float parentWidth, float rootScale, glm::vec3 euler, bool hovered);
+std::optional<GridCell> ingredientCell(glm::vec2 origin, float parentWidth, float localHeight, float rootScale, int index,
+                                       glm::vec2 pointer, int32_t guiClockMs);
 float shininess(const nativesaves::Item &);
 glm::vec4 textColour(const nativesaves::Item &, nativesaves::Cell playerRegion);
 glm::vec3 lightDirection();

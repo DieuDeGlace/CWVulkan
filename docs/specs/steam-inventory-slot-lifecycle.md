@@ -823,6 +823,10 @@ performed, and no allocator-dependent stale-pointer result is invented.
 
 ## 8. Auxiliary panel binding, opening and canonical sorts
 
+The bounded follow-up **steam-inventory-refresh-events** supplies the
+separate cached A/row/selection/thumb lifecycle and verified event/callback
+order; simple binding or collection mutation is not an automatic refresh.
+
 This section concerns explicit calls on the traced panel routes; geometry
 callbacks and later transactions remain separate events. Addresses below
 refer to Steam. The common refresh0x280a40 first requires non-null widget

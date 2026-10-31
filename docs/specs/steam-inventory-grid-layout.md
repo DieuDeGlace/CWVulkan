@@ -6,6 +6,10 @@ remaining-runtime-gaps4.15. Sources:0x27c950,0x27d2b0,0x27fce0,
 instructions/constants. No engine, tests, exporter/build output, SDK,
 owner assets or captures were inspected; no game was executed.
 
+Caller/event timing and cached-state lifetime are the independent follow-up
+**steam-inventory-refresh-events**, including distinct tab setters, wheel,
+thumb movement, completed item actions and mutation without refresh.
+
 ## 1. Distinct indices and dimensions
 
 Collection**widget+0x1e8** points to24-byte backing-tab vector entries;

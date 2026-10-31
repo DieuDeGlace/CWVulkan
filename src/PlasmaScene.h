@@ -15,6 +15,7 @@
 #include <glm/glm.hpp>
 
 #include <functional>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
@@ -22,6 +23,12 @@
 #include <vector>
 
 namespace plasma {
+
+// GUI frame timing (steam-gui-item-icons16): narrow each capped step, then accumulate with wrap.
+struct GuiClock {
+    int32_t step = 0, elapsed = 0;
+    void advance(double milliseconds);
+};
 
 // ---------------------------------------------------------------------------------------------
 // Transformations and displays (spec 1.7.2, 1.7.3, 2.2).
@@ -212,6 +219,8 @@ class Scene {
     // A node's local matrix, and its world matrix (through its parents and the root).
     glm::mat4 transformation(const SceneNode &n) const;
     glm::mat4 matrix(const SceneNode &n) const;
+    glm::mat4 inverseMatrix(const SceneNode &n) const;
+    glm::vec2 widgetPointer(const SceneNode &n, glm::vec2 screenPoint) const; // frame-origin displacement through inverse XY
     // The interface's placing of a node: its translation becomes a window point (in its parent's
     // units) plus an offset, less its pivot.
     void setPosition(SceneNode &n, glm::vec2 point, glm::vec2 offset);

@@ -772,6 +772,8 @@ void Session::readInput(bool poll, double frameMs) {
         glfwPollEvents();
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? std::min(1000.0, std::chrono::duration<double, std::milli>(now - last).count()) : frameMs;
+    if (poll)
+        hud.advanceGui(dtMs);
     last = now;
     seconds += dtMs / 1000.0;
     const VkExtent2D current = s.renderer->screenSize();

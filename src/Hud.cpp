@@ -869,6 +869,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     out.clear();
     itemRequests.clear();
     guiClockMs = state.guiClockMs;
+    guiStepMs = state.guiStepMs;
     if (!ready)
         return;
     ringItems(state.ring);

@@ -85,10 +85,12 @@ class Hud {
             struct Ingredient {
                 std::string icon;
                 int have = 0, need = 0;
+                std::optional<nativesaves::Item> original;
             };
             struct Details {
                 bool valid = false;
                 std::string name, icon;
+                std::optional<nativesaves::Item> original;
                 glm::vec4 color{1};
                 std::vector<Ingredient> ingredients;
                 std::string missing;     // "Requires Anvil", "" when nothing is
@@ -115,7 +117,8 @@ class Hud {
         };
         std::vector<InfoLine> info;
         std::string infoIcon;
-        glm::vec2 pointer{0}; // the mouse (the preview follows it)
+        std::optional<nativesaves::Item> infoItem; // class-adapted preview record; the source stays unchanged
+        glm::vec2 pointer{0};                      // the mouse (the preview follows it)
         // The character panel (the character panel's drawing).
         struct Sheet {
             bool valid = false, caster = false;
@@ -211,6 +214,7 @@ class Hud {
         using MapMarker = mapmarks::Marker;
         std::vector<MapMarker> mapMarkers;
         int32_t guiClockMs = 0;
+        int32_t guiStepMs = 0;
         int mapClockMs = 0;
         float mapWorldElapsedMs = 0;
         bool mapShrineMode = false;
@@ -289,6 +293,8 @@ class Hud {
 
     // Loads the extracted HUD art, fonts and names. False (with a reason) if the
     // HUD has not been extracted yet.
+    void advanceGui(double milliseconds) { interfaceClock.advance(milliseconds); }
+    const plasma::GuiClock &guiTiming() const { return interfaceClock; }
     bool load(const std::filesystem::path &gameDir, std::string &error);
     // Builds (or rebuilds after a resize) the atlas for a window of this size.
     void layout(Renderer &renderer, VkExtent2D screen);
@@ -346,7 +352,10 @@ class Hud {
     };
     std::map<std::string, ItemModel> itemModels;
     mutable std::vector<guiitem::Request> itemRequests;
+    plasma::GuiClock interfaceClock;
     mutable int32_t guiClockMs = 0;
+    mutable int32_t guiStepMs = 0;
+    mutable glm::vec3 recipeEuler{-120, 0, 0}; // advances only when the detail widget actually draws
     void uploadItemModels(Renderer &);
     void itemIcon(const std::string &, const nativesaves::Item &, const guiitem::Placement &, size_t beforeVertex) const;
     void ringItems(const State::Ring &) const;

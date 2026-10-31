@@ -36,6 +36,45 @@ GridCell gridCell(glm::vec2 origin, float scale, glm::ivec2 size, glm::ivec2 ind
     return cell;
 }
 
+Placement previewPlacement(const glm::mat4 &root, glm::vec2 pivot, float width, int32_t clock) {
+    const glm::vec4 projected = root * glm::vec4(pivot, 0, 1);
+    const float reciprocal = 1.0f / projected.w;
+    Placement at;
+    at.screen = {width * .75f + projected.x * reciprocal, width * .3f + projected.y * reciprocal};
+    at.euler = {225, 0, phase(clock)};
+    at.size = root[0][0] * .075f;
+    at.screenDepth = -.05f;
+    at.darkPass = true;
+    return at;
+}
+
+Placement recipePlacement(glm::vec2 origin, float width, float scale, glm::vec3 euler, bool hovered) {
+    Placement at;
+    at.screen = {width * .5f + origin.x, scale * 110 + origin.y};
+    at.euler = euler;
+    at.size = scale * (hovered ? .15f : .1f);
+    return at;
+}
+
+std::optional<GridCell> ingredientCell(glm::vec2 origin, float width, float height, float scale, int index, glm::vec2 pointer,
+                                       int32_t clock) {
+    const int columns = (int)((width - 10) / 45);
+    if (columns <= 0 || index < 0)
+        return std::nullopt;
+    const float baseY = origin.y + (height - 130) * scale;
+    GridCell cell;
+    cell.origin = {(float)(int)(scale * (float)(20 + 70 * (index % columns)) + origin.x),
+                   (float)(int)(scale * (float)(10 + 45 * (index / columns)) + baseY)};
+    cell.extent = glm::vec2(40 * scale);
+    cell.hovered = pointer.x >= cell.origin.x && pointer.x < cell.origin.x + cell.extent.x && pointer.y >= cell.origin.y &&
+                   pointer.y < cell.origin.y + cell.extent.y;
+    cell.icon.screen = cell.origin + 20 * scale;
+    cell.icon.euler = {225, 0, phase(clock)};
+    cell.icon.size = scale * (cell.hovered ? .0375f : .025f);
+    cell.icon.darkPass = true;
+    return cell;
+}
+
 float phase(int32_t guiClockMs) {
     return ((float)(guiClockMs % 10000) * 0.0001f) * 360.0f;
 }

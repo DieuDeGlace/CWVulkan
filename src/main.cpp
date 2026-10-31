@@ -1516,7 +1516,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     GameNames itemNameParts;
     auto itemName = [&](const Gear::Item &it) {
         if (speech.count() && itemNameParts.loaded()) {
-            const nativeplayer::Item raw = nativeplayer::item(it.category, it.id, it.material, it.rarity, it.modifier, it.region[0], it.region[1]);
+            const auto raw = Gear::toRecord(it);
             const std::string named = itemnames::name(speech, itemNameParts, raw.data());
             if (!named.empty() && named != "unknown")
                 return named;
@@ -3191,6 +3191,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         double dt = std::min(.1, frameMs / 1000.0);
         double time = std::chrono::duration<double>(now - start).count();
         previous = now;
+        if (hudReady)
+            hud.advanceGui(frameMs);
         steam.pump();
         if (time >= nextSteamCheck) {
             if (!steam.check(steamError)) {
@@ -3222,7 +3224,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         input.sampleGamepad(window, capturingBeforeInput, &gameControls);
         if (menusReady)
-            switch (menus.frame(dt * 1000.0)) {
+            switch (menus.frame(std::min(frameMs, 1000.0))) {
             case frontend::Result::Title:
                 returnToTitle = true;
                 glfwSetWindowShouldClose(window, 1);
@@ -3893,13 +3895,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                                  [&](const gameshop::Item &item) { return gameshop::boughtCount(bought, item); });
                     }
                     for (const gameshop::Offer &o : offers) {
-                        const uint8_t *n = o.item.data();
-                        int32_t id;
-                        std::memcpy(&id, n + 4, 4);
-                        Gear::Item shown;
-                        shown.category = n[0], shown.id = id, shown.material = n[0x1c], shown.rarity = (int8_t)n[0x14];
-                        std::memcpy(&shown.modifier, n + 8, 4);
-                        std::string sprite = spawnedReady ? spawned.itemSprite(n) : std::string();
+                        const auto shown = Gear::fromRecord(o.item);
+                        std::string sprite = spawnedReady ? spawned.itemSprite(o.item.data()) : std::string();
                         loadInventorySprite(sprite);
                         Hud::Inventory::Entry e;
                         e.name = bagName(shown, itemName(shown)) + (gameshop::renowned(o.item) ? "+" : "");
@@ -3989,15 +3986,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     loadInventorySprite(sprite);
                     return sprite;
                 };
-                auto shownOf = [](const gamecraft::Thing &t) {
-                    Gear::Item g;
-                    g.category = t.category, g.id = t.id, g.material = t.material, g.rarity = t.rarity, g.modifier = t.modifier;
-                    g.region[0] = t.region[0], g.region[1] = t.region[1];
-                    g.formula = t.formula;
-                    const auto raw = gamecraft::toRecord(t);
-                    Gear::cubesFrom(raw.data(), g);
-                    return g;
-                };
+                auto shownOf = [](const gamecraft::Thing &t) { return Gear::fromRecord(gamecraft::toRecord(t)); };
                 // (rank 0 always, a higher one once a crafting-book place of the region is solved)
                 const auto tabs = gamecraft::formulas(knownFormulas, gear.playerClass(), region[0], region[1], [&](int rank) {
                     return gamecraft::rankUnlocked(rank, region[0], region[1], saveGame.solvedMissions);
@@ -4039,9 +4028,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         d.name.pop_back(); // (the item naming alone)
                     d.color = cv.items[(size_t)cv.selected].color;
                     d.icon = cv.items[(size_t)cv.selected].icon;
+                    d.original = rawOfThing(f.result);
                     bool missing = false;
                     for (const gamecraft::Ingredient &in : f.ingredients) {
-                        d.ingredients.push_back({iconOf(rawOfThing(in.item)), held(in.item), in.quantity});
+                        const auto raw = rawOfThing(in.item);
+                        d.ingredients.push_back({iconOf(raw), held(in.item), in.quantity, raw});
                         missing |= d.ingredients.back().have < in.quantity;
                     }
                     bool station = true;
@@ -4112,6 +4103,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             { // The hovered item's details (the item details text) for the preview.
                 inventoryView.info.clear();
                 inventoryView.infoIcon.clear();
+                inventoryView.infoItem.reset();
                 const Gear::Item *shown = nullptr;
                 std::optional<Gear::Item> nativeShown;
                 int count = 1;
@@ -4183,6 +4175,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                         glm::vec4(0.25f, 1, 0.25f, 1), 16});
                     (void)count;
                     inventoryView.infoIcon = it.sprite;
+                    if (nativeInventory) {
+                        inventoryView.infoItem = nativeplayer::transformed(raw, gear.playerClass());
+                        inventoryView.infoIcon = spawned.itemSprite(inventoryView.infoItem->data());
+                        loadInventorySprite(inventoryView.infoIcon);
+                    }
                 }
             }
             // --- The identify window and the weapon upgrade widget ------------------------------
@@ -6820,7 +6817,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     hs.windows = &lootWindowItems;
             }
             hs.mapMarkers.insert(hs.mapMarkers.begin(), mapMarkerViews.begin(), mapMarkerViews.end());
-            hs.guiClockMs = (int32_t)(int64_t)(time * 1000.0);
+            hs.guiStepMs = hud.guiTiming().step;
+            hs.guiClockMs = hud.guiTiming().elapsed;
             hs.mapClockMs = hs.guiClockMs;
             hs.mapWorldElapsedMs = spawned.elapsedWorldTime();
             double mapPointerX, mapPointerY;

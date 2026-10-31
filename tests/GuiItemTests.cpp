@@ -141,7 +141,39 @@ void equipmentCallbacks() {
         inventory.crafting.items = inventory.vendor.items;
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 1); // crafting does too
+        auto &details = inventory.crafting.details;
+        details.valid = true;
+        details.original = weapon;
+        details.icon = "synthetic-equipment";
+        details.ingredients.push_back({"synthetic-equipment", 0, 20, weapon});
+        state.guiStepMs = 50;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 3);
+        if (hud.itemDraws().size() == 3) {
+            GUI_CHECK(hud.itemDraws()[1].at.euler == glm::vec3(-120, 0, 1) && !hud.itemDraws()[1].at.darkPass);
+            GUI_CHECK(hud.itemDraws()[2].at.euler == glm::vec3(225, 0, 90) && hud.itemDraws()[2].at.darkPass);
+            GUI_CHECK(hud.itemDraws()[1].beforeVertex <= hud.itemDraws()[2].beforeVertex);
+        }
+        details.icon = "missing-owner-resource";
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 1);
         inventory.crafting.open = false;
+        state.guiStepMs = 1000;
+        hud.draw(state, vertices); // no hidden-time catch-up
+        inventory.crafting.open = true;
+        details.icon = "synthetic-equipment";
+        state.guiStepMs = 25;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 3 && hud.itemDraws()[1].at.euler.z == 1.5f);
+        inventory.crafting.open = false;
+        inventory.info.push_back({"Synthetic preview"});
+        inventory.infoItem = weapon;
+        inventory.infoIcon = "synthetic-equipment";
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 1);
+        if (hud.itemDraws().size() == 1)
+            GUI_CHECK(hud.itemDraws()[0].item == weapon && hud.itemDraws()[0].at.screenDepth == -.05f &&
+                      hud.itemDraws()[0].at.euler == glm::vec3(225, 0, 90) && hud.itemDraws()[0].beforeVertex < vertices.size());
     }
     state.inventory = nullptr;
     state.ring.shown = true;
@@ -169,6 +201,46 @@ int guiItemTests() {
     using namespace guiitem;
     failures = 0;
     equipmentCallbacks();
+    plasma::GuiClock clock;
+    clock.advance(1.99999999);
+    GUI_CHECK(clock.step == 2 && clock.elapsed == 2); // float narrowing precedes integer truncation
+    clock.advance(.9);
+    GUI_CHECK(clock.step == 0 && clock.elapsed == 2);
+    clock.advance(5000);
+    GUI_CHECK(clock.step == 1000 && clock.elapsed == 1002);
+    clock.elapsed = INT32_MAX - 2;
+    clock.advance(5);
+    GUI_CHECK(clock.elapsed == INT32_MIN + 2);
+    clock.advance(-1.75);
+    GUI_CHECK(clock.step == -1 && clock.elapsed == INT32_MIN + 1);
+    glm::mat4 previewRoot(1);
+    previewRoot[0][0] = 2;
+    previewRoot[1][1] = 3;
+    previewRoot[3] = {10, 20, 0, 2};
+    const auto preview = previewPlacement(previewRoot, {4, 6}, 100, 2500);
+    GUI_CHECK(preview.screen == glm::vec2(84, 49) && near(preview.size, .15f) && preview.screenDepth == -.05f && preview.darkPass);
+    const auto result = recipePlacement({10, 20}, 200, .5f, {-120, 0, 37}, false);
+    GUI_CHECK(result.screen == glm::vec2(110, 75) && near(result.size, .05f) && result.euler == glm::vec3(-120, 0, 37) && !result.darkPass);
+    GUI_CHECK(near(recipePlacement({10, 20}, 200, .5f, {}, true).size, .075f));
+    const auto ingredient = ingredientCell({-11.75f, -41.75f}, 100, 200, .5f, 3, {43, 20}, -1);
+    GUI_CHECK(ingredient && ingredient->origin == glm::vec2(33, 20) && ingredient->icon.screen == glm::vec2(43, 30) &&
+              ingredient->hovered && near(ingredient->icon.size, .01875f) && ingredient->icon.darkPass);
+    GUI_CHECK(!ingredientCell({}, 40, 200, 1, 0, {}, 0));
+    plx::Document document;
+    plasma::Scene graph(document);
+    auto *parent = graph.create(&graph.root());
+    parent->local = glm::mat4(1);
+    (*parent->local)[0] = {0, 2, 0, 0};
+    (*parent->local)[1] = {-3, 0, 0, 0};
+    (*parent->local)[3] = {13, 7, 0, 1};
+    auto *child = graph.create(parent);
+    child->local = glm::mat4(1);
+    (*child->local)[0][0] = 4;
+    (*child->local)[1][1] = 5;
+    child->widget.emplace();
+    child->widget->framePos = {7, -8};
+    const auto localPointer = graph.widgetPointer(*child, graph.contentPosition(*child) + glm::vec2(-45, 16));
+    GUI_CHECK(glm::length(localPointer - glm::vec2(2, 3)) < .00001f);
     const auto cell = gridCell({-11.75f, -41.75f}, .5f, {120, 41}, {0, 0}, 9, {-6, -21}, -1);
     GUI_CHECK(cell.origin == glm::vec2(-6, -21) && cell.extent == glm::vec2(60, 20.5f));
     GUI_CHECK(cell.icon.screen == glm::vec2(4, -11) && cell.hovered && near(cell.icon.size, .5f * .03f * 1.5f * .75f));

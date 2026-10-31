@@ -62,6 +62,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Recipe result/ingredient and information-preview WORLD calls from
+  `steam-gui-item-icons.md` §§11/12/16. Class adaptation affects the information
+  icon's copied record, preserving the source. Resource-gated recipe rotation,
+  callback order, strict result hover, ingredient rounding/navigation and GUI
+  step/total precision follow the independent facts. Original records also reach
+  the existing naming helper without discarding wrapped item or spirit data.
+  Synthetic math/state and local owner-tree checks cover these bounded paths.
 - Inventory, shop and recipe grid WORLD item calls from `steam-gui-item-icons.md`
   §9 and `steam-inventory-grid-layout.md`. Native inventory views retain physical
   slots, including holes, and original records; region drawing stops independently

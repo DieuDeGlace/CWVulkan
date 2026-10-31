@@ -836,3 +836,93 @@ subsequent nonnull writer of SpriteWidget's raw resource field+0x1e8:
 the complete0xdf230 fallback contract alone does not prove its reachability
 for a particular shipped equipment/quick-button instance. No game execution, owner assets/captures, SDK or
 replacement implementation were used to fill these boundaries.
+
+## 16. Shared GUI step, detail hover coordinates and callback placement
+
+Native follow-up sources are0xa5a50,0x103200,0x349cf0,0x339b70,
+0x26bf70,0x28c0a0,0x26c2d0,0x32b180,0x100ee0 and0x32cf50.
+No implementation, owner content or capture was inspected.
+
+### 16.1 Producer of recipe-detail step+0x190
+
+The ordinary Game frame first caps its supplied **double elapsed wall
+milliseconds to1000.0**, with no lower clamp, at0xa5afc–0xa5b0a.
+The high-resolution nanosecond producer/cap/interruption contract is
+steam-scene-lighting5.1–5.2. At **0xa7e6f–0xa7e74**, narrow that capped
+double to float32 and retain it. The Interface update call **0xab5ce**
+receives that float;0x103200 preserves it without another cap or
+timestamp subtraction. At **0x106b97**, truncate this float toward zero
+to signed32, and pass that integer to0x349cf0 at0x106ba7.
+
+**0x349cf0** first adds this signed32 duration with32-bit integer
+arithmetic to GUI clock+0x194, stores it at GUI engine+0x190, then clears
+engine field+0x20 and advances its root with0x3358e0. GUI
+constructor0x339b70 initializes+0x190/+0x194 to0. These fields are not
+narrowed absolute timestamps, not the raw uncapped wall interval, not
+world calendar time and not a sum of independently truncated simulation
+substeps. Normal finite nonnegative input gives an integer in0..1000;
+fractional ms are discarded **after** the float32 narrowing. Preserve
+that boundary near whole-millisecond rounding cases.
+
+This update occurs once on each reached ordinary Interface update,
+regardless of recipe-detail or InfoWidget visibility. Hiding that one
+widget does not freeze the GUI's last-step field or total clock. If its
+draw is skipped, its recipe Euler Z does not advance; a later admitted
+draw consumes the **latest one step**, not accumulated hidden time. If
+the encompassing frame/update is not called, there is no new write by
+this producer; the existing Game-frame elapsed cap governs the next
+valid frame. No independent widget pause/catch-up clock is inserted.
+
+In **0x26c2d0**, the original result's resource query0x173b10 and null
+return precede the Z-angle addition described in12.1. Therefore a missing
+result resource also leaves that stored angle unchanged. On a resource-
+admitted draw, the Z update precedes the strict result-hover test and
+the0x26c58d image submission. There is no draw-local1000-ms clamp in
+addition to the producer's cap.
+
+### 16.2 Exact recipe local-pointer query0x32b180
+
+Read cached GUI cursor floats at engine+0x180/+0x184. Obtain the
+Widget's **screen frame origin O through0x32cf50**. Independently,
+**0x100ee0 on the Widget's root node** builds its inverse-world matrix I:
+start from the root transform's cached inverse+0x2e0, or identity if no
+transform, and compose ancestor inverses recursively. This is the
+inverse of that node's transform hierarchy, including the transforms'
+normal pivot/rotation/scale effects. It does not obtain a shape AABB or
+replace that hierarchy with an absolute GUI-scale scalar.
+
+Subtract O.x/O.y from the cached cursor components in float32. Apply
+only I's **2×2 linear XY part** to that displacement: local X is the
+rounded X displacement times I[0], plus rounded Y displacement times
+I[4]; local Y is I[1] times the X displacement, plus I[5] times the Y
+displacement. These indices use the16-float column-major layout of the
+existing Plasma matrix spec. Products and the final additions use
+float32. No inverse-matrix translation term or homogeneous divide is
+performed here, and the resulting coordinates are not integer-snapped.
+
+The origin query remains the actual Widget frame-origin query: its
+bind/frame construction must already be respected. The pointer helper
+does **not** separately multiply by the Widget bind matrix, undo its
+nine-slice deformation, or subtract the root pivot again. In particular,
+“inverse the node's absolute point” and “inverse the deformed drawing”
+are not substitutes for this frame-origin subtraction plus linear
+inverse operation. Use these outputs for12.1's strict X/Y comparisons.
+
+### 16.3 FormulaDetailsWidget and InfoWidget own draw hooks
+
+Constructors **0x26bf70** and **0x28c0a0** both call0x268a70→0x328ff0.
+Base Widget flags+0x150 start at0, and neither derived constructor sets
+bit0x200. Their own vtables are **0x46d3c0** and **0x46fb78**, with
+draw slot+8 pointing to **0x26c2d0** and **0x28c290**, respectively.
+Attaching a copied owner root transfers its old raw Widget geometry,
+not its old flags/settings; see steam-inventory-grid-layout7 and
+steam-character-list-input-and-frame-init5.
+
+Consequently **0x330b20** places both native manual hooks **after their
+root's child traversal** on the usual admitted uncached path, just as
+the flags0 InventoryWidget. Own shape/background draws earlier; the
+native immediate3D calls and subsequent text occur inside their hook,
+not in a later global icon layer. Visibility, excluded-node, cached-
+surface, clip and blur rules still decide whether/how that traversal
+reaches a callback. This is a constructor/ordinary-route fact, not an
+assertion that runtime code can never change a Widget flag.

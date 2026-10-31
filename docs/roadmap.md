@@ -229,8 +229,13 @@ individual feature documents.
   The selected quick-item SpriteWidget also uses the original record. Inventory, shop
   and recipe grids now submit original records at their owner callbacks, preserve
   physical holes and region cutoffs, and use native cell snapping, sizing and colors.
-  Formula details, hovered previews, upgrade/customization and other callers still
-  retain bitmap compatibility paths.
+  Formula results/ingredients and class-adapted information previews now use their
+  distinct owner callbacks, depth, scales and clocks. Recipe spin advances only on
+  resource-admitted draws; ingredients share native hover/navigation geometry.
+  Upgrade/customization, retained-cursor and other callers still need conversion.
+  The GUI clock now narrows each capped step before wrapping accumulation across
+  title/game frames, rather than deriving spin from absolute wall time. CPU/owner
+  checks and all40 world/16 GUI Vulkan image cases pass, plus water/Alpha checks.
   Full map-panel controls, GUI capture/poses and layout-callback timing still
   need implementation/comparison.
 - [x] Ring Menu selector: canonical category1 candidates, retained signed32 selection,

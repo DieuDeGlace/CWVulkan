@@ -3,9 +3,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstring>
 
 namespace plasma {
+
+void GuiClock::advance(double milliseconds) {
+    step = (int32_t)(float)std::min(milliseconds, 1000.0);
+    elapsed = std::bit_cast<int32_t>((uint32_t)elapsed + (uint32_t)step);
+}
 
 namespace {
 
@@ -418,6 +424,16 @@ glm::mat4 Scene::transformation(const SceneNode &n) const {
 
 glm::mat4 Scene::matrix(const SceneNode &n) const {
     return n.parent ? matrix(*n.parent) * transformation(n) : transformation(n);
+}
+
+glm::mat4 Scene::inverseMatrix(const SceneNode &n) const {
+    const auto local = glm::inverse(transformation(n));
+    return n.parent ? local * inverseMatrix(*n.parent) : local;
+}
+
+glm::vec2 Scene::widgetPointer(const SceneNode &n, glm::vec2 point) const {
+    const glm::vec2 displacement = point - contentPosition(n);
+    return linear(inverseMatrix(n), displacement);
 }
 
 void Scene::setPosition(SceneNode &n, glm::vec2 point, glm::vec2 offset) {
