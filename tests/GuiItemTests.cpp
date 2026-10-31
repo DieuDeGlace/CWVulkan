@@ -381,6 +381,20 @@ int guiItemTests() {
     appendDraws(request, {1600, 1024}, state, draws);
     GUI_CHECK(draws.size() == 1 && draws[0].material == glm::vec4(1) && draws[0].view == glm::mat4(1) && draws[0].depthOffset == 0);
     GUI_CHECK(draws.size() == 1 && draws[0].state.direction == overlayState().direction && state.shininess == shininess(request.item));
+    request.kind = Request::Kind::RawEdit;
+    request.allocation = {0, 0, 0}; // no implicit resource normalization at this helper
+    request.model[3] = {3, 4, 5, 1};
+    request.material = {.7f, .2f, .1f, .5f};
+    draws.clear();
+    appendDraws(request, {1600, 1024}, state, draws);
+    GUI_CHECK(draws.size() == 1 && draws[0].model == request.model && draws[0].material == request.material && draws[0].depthOffset == 0);
+    GUI_CHECK(state.front == glm::vec4(1.1f, 1.1f, .9f, 0) && state.back == glm::vec4(.5f, .6f, .8f, 1) &&
+              state.ambient == glm::vec4(.4f, .4f, .4f, 1) && state.white == 0 && state.shininess == 0 && state.glow == 0);
+    request.kind = Request::Kind::Widget;
+    request.allocation = {1, 1, 1};
+    request.at.darkPass = true;
+    appendDraws(request, {1600, 1024}, state, draws);
+    GUI_CHECK(draws.size() >= 2 && draws[1].state.front == editState().front); // later black pass inherits the raw palette
     const auto light = lightDirection();
     GUI_CHECK(near(glm::length(light), 1) && near(light.y / light.x, 0.4f) && near(light.z, -light.x));
     std::printf("GUI item transforms: %s\n", failures ? "FAILED" : "PASS");

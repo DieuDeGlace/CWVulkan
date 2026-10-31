@@ -62,6 +62,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Native edit projection/ray/voxel traversal and raw WORLD draw support from
+  `steam-weapon-customization-edit-view.md`. Full allocation, negative aspect,
+  stored lens constants, signed cell/byte semantics and raw shader state are
+  independently implemented. Synthetic CPU and Vulkan cases verify these bounded
+  paths; editor root/input integration remains open. No owner geometry is shipped.
 - Canonical customization palette production from
   `steam-weapon-customization-palette.md`: selected-material semantic equality,
   four field-only spirit totals, signed32 wrapping and retained click input.

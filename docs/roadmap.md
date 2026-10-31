@@ -229,7 +229,9 @@ individual feature documents.
   [edit-view specification](specs/steam-weapon-customization-edit-view.md) now
   describes its owner root, camera, raw model, picking and input. Native palette
   production is corrected and tested, including negative/wrapped totals and
-  retained draw-to-click state. The editor itself still uses compatibility geometry.
+  retained draw-to-click state. Native model projection, object-space ray/voxel
+  picking and the raw WORLD render pass are implemented and tested; integration
+  into the actual owner editor root and its events still remains.
   AdaptionWidget is a separate native panel; no unverified gold/item upgrade or
   opening action is inferred from its traced price-only callback.
 - [ ] Ordinary WORLD-shader 3D GUI item icons: identification and equipment SpriteWidgets

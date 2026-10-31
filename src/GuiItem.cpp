@@ -221,9 +221,32 @@ ShaderState overlayState() {
     state.direction = direction * (1.0f / std::sqrt(sum));
     return state;
 }
+ShaderState editState() {
+    ShaderState state;
+    state.front = {1.1f, 1.1f, .9f, 0};
+    state.back = {.5f, .6f, .8f, 1};
+    state.ambient = {.4f, .4f, .4f, 1};
+    const auto direction = glm::vec3(.2f, -.4f, -1) * (1.0f / std::sqrt(1.2f));
+    const float length = std::sqrt((direction.x * direction.x + direction.y * direction.y) + direction.z * direction.z);
+    state.direction = direction * (1.0f / length);
+    return state;
+}
+
 void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &out) {
     if (!request.mesh)
         return; // unavailable owner sprite
+    if (request.kind == Request::Kind::RawEdit) {
+        retained = editState();
+        Draw draw;
+        draw.mesh = request.mesh;
+        draw.model = request.model;
+        draw.view = request.view;
+        draw.projection = request.projection;
+        draw.material = request.material;
+        draw.state = retained;
+        out.push_back(draw);
+        return;
+    }
     if (request.kind == Request::Kind::Ring) {
         const auto transform = ringGeometry(request.allocation, viewport, request.at, request.farPlane);
         if (!transform)

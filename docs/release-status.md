@@ -7,6 +7,16 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Customization's native edit projection, object-space pointer ray and voxel/attribute
+  traversal now have independent engine implementations and synthetic regressions.
+  Checks include full header centering, scale independence, stored lens words,
+  exact negative-integer cells, marker exclusion and wrapped attribute coordinates.
+  The GUI renderer accepts the raw edit matrices/material with its specified WORLD
+  palette and retained state. All five targets, the full CPU/owner suite,40 world
+  and20 GUI Vulkan cases, shared water and Alpha ordering pass. The original editor
+  root, presentation and event integration remain unfinished; these backend checks
+  do not establish a completed customization window or native pixel parity.
+
 - Native customization palettes now read every canonical tab directly: the selected
   weapon's exact base-material item precedes four spirit-material aggregates.
   Signed counts wrap and may remain negative; aggregation retains its distinct

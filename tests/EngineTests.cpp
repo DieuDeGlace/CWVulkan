@@ -122,6 +122,7 @@ int saveFormatTests();     // tests/SaveTests.cpp
 int plasmaNodeAnimationTests();
 int itemSelectorTests();
 int guiItemTests();
+int voxelEditTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
 int windContinueTests();   // tests/WindContinueTests.cpp
@@ -9071,6 +9072,8 @@ int main(int argc, char **argv) {
         return plasmaNodeAnimationTests();
     if (argc == 2 && std::string(argv[1]) == "itemselector")
         return itemSelectorTests();
+    if (argc == 2 && std::string(argv[1]) == "voxeledit")
+        return voxelEditTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
         return guiItemTests();
     if (argc == 2 && std::string(argv[1]) == "npcspeech")
@@ -10360,6 +10363,7 @@ int main(int argc, char **argv) {
     failures += worldMapLookTests();   // tests/WorldMapTests.cpp
     failures += saveFormatTests();     // tests/SaveTests.cpp
     failures += guiItemTests();
+    failures += voxelEditTests();
     failures += plasmaNodeAnimationTests();
     failures += itemSelectorTests();
     failures += frontendTests();       // tests/FrontendTests.cpp

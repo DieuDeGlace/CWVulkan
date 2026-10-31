@@ -45,14 +45,17 @@ struct ShaderState {
     float white = 0, glow = 0, shininess = 0;
 };
 ShaderState overlayState();
+ShaderState editState();
 struct Request {
     size_t beforeVertex = 0; // immediate location among the Plasma triangles
     uint32_t mesh = 0, cubeMesh = 0;
     glm::ivec3 allocation{0};
     nativesaves::Item item{};
     Placement at;
-    enum class Kind { Widget, Ring } kind = Kind::Widget;
-    float farPlane = 960; // Ring uses the ordinary screen-overlay lens
+    enum class Kind { Widget, Ring, RawEdit } kind = Kind::Widget;
+    float farPlane = 960;                       // Ring uses the ordinary screen-overlay lens
+    glm::mat4 model{1}, view{1}, projection{1}; // RawEdit accepts the caller's matrices without normalization
+    glm::vec4 material{1};
 };
 struct Draw {
     uint32_t mesh = 0;

@@ -1,5 +1,6 @@
 // Actual Vulkan integration of the immediate UI/WORLD boundary. Synthetic data only.
 #include "Renderer.h"
+#include "VoxelEdit.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include "stb_image.h"
@@ -143,6 +144,23 @@ int guiRenderTests() {
     check("ring-before-plasma", foreground, {ring}, {}, {64, 64}, {0, 255, 0});
     check("ring-main-no-dark-copy", background, {ring}, {}, {64, 64}, {128, 128, 128});
     check("ring-retained-scene-depth", background, {ring}, {preceding}, {64, 64}, {0, 0, 255});
+    guiitem::Request raw;
+    raw.kind = guiitem::Request::Kind::RawEdit;
+    raw.beforeVertex = 6;
+    raw.mesh = ordinary;
+    const auto edit = voxeledit::frame({1, 1, 1}, {128, 128}, glm::mat4(1), {}, {128, 128.0f / 1.2f}, {});
+    if (edit) {
+        raw.model = edit->model;
+        raw.projection = edit->projection;
+        check("edit-raw-native-palette", background, {raw}, {}, {64, 64}, {128, 128, 128});
+        raw.material = {1, 0, 0, 1};
+        // Shader-output §§3/6: red K=128/255 gains saturation before the clamped
+        // luminance mix into G/B and cubic grade, yielding157/3/3 rather than128/0/0.
+        check("edit-raw-material", background, {raw}, {}, {64, 64}, {157, 3, 3});
+        check("edit-raw-before-text", foreground, {raw}, {}, {64, 64}, {0, 255, 0});
+        check("edit-raw-retained-depth", background, {raw}, {preceding}, {64, 64}, {0, 0, 255});
+    } else
+        ++failures;
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
