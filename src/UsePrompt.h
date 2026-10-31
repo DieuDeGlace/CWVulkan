@@ -101,6 +101,7 @@ struct GroundItem {
     // Its box as it is drawn (corners in local blocks); none without a model.
     bool hasModel = false;
     std::array<glm::vec3, 8> box{};
+    int32_t quantity = 1; // Native validity requires nonzero, including negative values.
 };
 
 // Whether the player may pick up one more of an item when it carries `count` equal to it

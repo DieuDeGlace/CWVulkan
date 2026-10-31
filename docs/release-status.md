@@ -7,6 +7,18 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Ground and Ring information are connected. Ring keeps the canonical key sampled
+  before later toggle/repeat work; ground fallback resolves existing zone/index
+  data fresh at draw without loading zones or applying new validity filters.
+  Reserved-origin metadata remains separate when Ring supplies the displayed item.
+  Native bottom placement uses the prior admitted widget height. Target production
+  now rejects quantity zero while preserving negative nonzero quantities, distinct
+  from later record resolution. Packet-backed cleared-slot, target-priority and
+  owner-placement regressions pass, as do all five targets and the full CPU/owner,
+  40 world/20 GUI Vulkan, water and Alpha checks. Private read-only Ring captures
+  exercise both GUI scales; the final executable capture leaves its fixture unchanged.
+  Full earlier UI/comparison sampling and map outputs remain open.
+
 - Information now reads its borrowed original during the later draw callback,
   after earlier palette updates, rather than freezing its text/image beforehand.
   Hidden GUI ancestors skip widget hooks and late size writes while own panel

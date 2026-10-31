@@ -8440,6 +8440,13 @@ static void useKeyTargets() {
         w.scene.groundItems.push_back(g);
         t = useprompt::chooseTargets(w.ready());
         CHECK(t.creature == 0 && t.object == -1 && t.groundItem == 0);
+        w.scene.groundItems[0].quantity = 0;
+        t = useprompt::chooseTargets(w.ready());
+        CHECK(t.object == 0 && t.groundItem == -1);
+        w.scene.groundItems[0].quantity = -1;
+        t = useprompt::chooseTargets(w.ready());
+        CHECK(t.creature == 0 && t.object == -1 && t.groundItem == 0);
+        w.scene.groundItems[0].quantity = 1;
         // One reserved for someone else is not looked at.
         w.scene.groundItems[0].reservedFor = 77;
         t = useprompt::chooseTargets(w.ready());

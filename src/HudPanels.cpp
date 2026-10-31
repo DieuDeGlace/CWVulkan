@@ -616,6 +616,10 @@ void Hud::positionPreview(const Inventory &inv) const {
     plasma::Scene &s = *scene;
     s.setScale(guiScale);
     plasma::SceneNode &preview = *panels.preview;
+    if (inv.infoAnchor == itempreview::Anchor::Ground) {
+        s.setPosition(preview, {std::floor(screen.x / 2), screen.y - s.viewSize(preview).y}, {210, -23});
+        return;
+    }
     const plasma::SceneNode *hovered = inv.infoAnchor == itempreview::Anchor::Cursor     ? nullptr
                                        : inv.infoAnchor == itempreview::Anchor::Crafting ? panels.crafting.node
                                        : inv.infoAnchor == itempreview::Anchor::Shop     ? panels.vendor.node

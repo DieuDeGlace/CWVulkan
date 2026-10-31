@@ -25,6 +25,17 @@ int itemPreviewTests() {
     check(itempreview::formatNumber(itempreview::roundTenth(1.25f)) == "1.3" && itempreview::formatNumber(1) == "1",
           "fresh stream formatting does not force a decimal suffix");
     auto weapon = nativesaves::makeItem(3, 0, 1);
+    inventoryslots::Inventory ringInventory;
+    ringInventory.tabs.resize(1);
+    ringInventory.tabs[0] = {{-1, nativesaves::makeItem(1, 2, 0)}, {3, nativesaves::makeItem(1, 1, 0)}};
+    int32_t runningIndex = 0;
+    const auto beforeRepeat = itempreview::sampleRing(ringInventory, true, runningIndex);
+    runningIndex = 1;
+    check(beforeRepeat.selected == inventoryslots::Index{0, 0} &&
+              itempreview::sampleRing(ringInventory, true, runningIndex).selected == inventoryslots::Index{0, 1},
+          "Ring source retains its earlier canonical key across a later index change, including negative quantities");
+    check(!itempreview::sampleRing(ringInventory, false, runningIndex).selected && runningIndex == 1,
+          "hidden Ring sampling does not change the running index or create a candidate");
     auto alternateWeapon = weapon;
     auto selectedWeapon = weapon;
     itempreview::Equipment comparisons;
@@ -208,6 +219,17 @@ int itemPreviewTests() {
         information.info = {{"A", 12, 3, glm::vec4(1), 16}, {" +1", 12, 3, glm::vec4(1), 0, false, true, true}};
         const auto suffix = textGeometry();
         check(!combined.empty() && combined == suffix, "inline suffix follows the real returned glyph pen at the original baseline");
+        information.infoAnchor = itempreview::Anchor::Ground;
+        hud.draw(ui, overlay);
+        check(hud.itemDraws().size() == 1 && glm::length(hud.itemDraws()[0].at.screen - glm::vec2(1395, 947)) < .001f,
+              "ground placement uses viewport half-width, previous parent height and native offset");
+        information.info[0].advance = 420;
+        hud.draw(ui, overlay);
+        const auto beforeGroundGrowth = hud.itemDraws()[0].at.screen;
+        hud.draw(ui, overlay);
+        check(glm::length(beforeGroundGrowth - glm::vec2(1395, 947)) < .001f &&
+                  glm::length(hud.itemDraws()[0].at.screen - glm::vec2(1395, 702)) < .001f,
+              "ground placement observes the previous admitted size without a new viewport clamp");
         renderer.shutdown();
     } else
         std::puts("SKIP item preview owner tree: owner installation unavailable");

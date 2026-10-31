@@ -453,7 +453,7 @@ bool mayCarryMore(int type, int subtype, int count) {
 }
 
 bool groundItemValid(const GroundItem &g, int64_t playerOwnerId) {
-    if (g.type == 0)
+    if (g.type == 0 || g.quantity == 0)
         return false;
     if (g.type == 0x17 && g.carriesOne)
         return false;

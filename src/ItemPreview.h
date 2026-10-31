@@ -1,11 +1,23 @@
 #pragma once
 // Ordinary PreviewWidget source precedence, from steam-voxel-widget-information-preview.md.
 #include "NativeSaves.h"
+#include "InventorySlots.h"
 #include <array>
 #include <string>
+#include <optional>
 
 namespace itempreview {
-enum class Anchor { Cursor, Inventory, Shop, Crafting };
+enum class Anchor { Cursor, Inventory, Shop, Crafting, Ground };
+struct RingSource {
+    bool shown = false;
+    std::optional<inventoryslots::Index> selected;
+};
+RingSource sampleRing(const inventoryslots::Inventory &, bool shown, int32_t runningIndex);
+struct FrameSources {
+    std::optional<std::array<int32_t, 3>> ground;
+    RingSource ring;
+    bool ordinaryUi = false;
+};
 struct Sources {
     const nativesaves::Item *map = nullptr, *inventory = nullptr, *equipment = nullptr;
     const nativesaves::Item *crafting = nullptr, *shop = nullptr, *formula = nullptr, *voxel = nullptr;

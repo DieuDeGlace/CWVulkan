@@ -259,7 +259,10 @@ individual feature documents.
   rounding and inline deltas. Equipped comparison uses original address identity,
   native candidate/Shift order, smaller fonts and fresh late resizes. Fractional
   comparison glyphs and standalone scaling have owner-tree regressions; earlier
-  selector timing and live map/ground/Ring source bindings remain open.
+  full earlier UI/comparison sampling and map source bindings remain open.
+  Ring keys now precede later toggle/repeat work; ground fallback resolves only
+  existing zone/index data, retaining independent origin metadata and native
+  previous-size placement. Packet-backed cleared-slot and owner-geometry tests pass.
   Information now reads borrowed records in its later draw callback; a hidden GUI
   ancestor suppresses draw-produced hover/pick/size changes without clearing own
   panel state. The game-UI/map/preview layer order follows the independent audit.

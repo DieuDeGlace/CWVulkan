@@ -234,7 +234,11 @@ category rows, effects, rounding and inline comparison deltas. The equipped sect
 keeps original equipment records, smaller fonts and its two-stage late resize;
 fractional font styles share the owner-font atlas. Standalone previews establish
 their own GUI scale. Recording-only bitmap previews keep their measurement pass.
-Earlier source sampling and live map/ground/Ring bindings remain separate work.
+Ring preview keys are sampled before later toggle/repeat work. Ground fallback
+resolves existing zone/index data again at draw, independently from retained origin
+metadata; it never loads a zone or adds quantity/type validity checks. Ground or
+nonordinary-UI information uses the previous-size bottom placement. Full earlier
+UI/comparison sampling and map output bindings remain separate work.
 
 Information keeps its original record live until its draw callback, after the
 customization palette and map-layer callbacks. Hiding the global interface skips

@@ -191,6 +191,10 @@ int steamTerrainTests() {
     std::memcpy(rawItem.data() + 0xd4, &quantity, 4);
     std::memcpy(rawItem.data() + 0xd8, &owner, 8);
     liveItems.replaceGroundItems(lightWorld, itemPacket);
+    const auto *borrowedGround = liveItems.findGroundItem({0, 0, 0});
+    check(borrowedGround && (*borrowedGround)[0] == 0x0b && !liveItems.findGroundItem({0, 0, -1}) && !liveItems.findGroundItem({0, 0, 1}) &&
+              !liveItems.findGroundItem({10000, 10000, 0}),
+          "preview resolves only an existing zone and in-range ground slot");
     const auto ground = liveItems.groundLights(lightWorld, 0, 0);
     check(ground.items.size() == 1, "live item packet supplies ground-light inputs");
     if (ground.items.size() == 1) {
@@ -200,9 +204,11 @@ int steamTerrainTests() {
               "ground-light adapter reads live item identity, position, timer, quantity and owner");
     }
     liveItems.takeGroundItem(0, 0, 0);
+    const auto *clearedGround = liveItems.findGroundItem({0, 0, 0});
+    check(clearedGround && clearedGround == borrowedGround && (*clearedGround)[0] == 0,
+          "fresh preview resolution retains the live slot after pickup without a type/quantity admission filter");
     const auto taken = liveItems.groundLights(lightWorld, 0, 0);
-    check(taken.items.size() == 1 && taken.items[0].category == 0,
-          "pickup clears the item used by light registration");
+    check(taken.items.size() == 1 && taken.items[0].category == 0, "pickup clears the item used by light registration");
     writeLights(false, true, false);
     check(!lightWorld.lightSources(0, 0, solved), "duplicate auxiliary list is rejected");
     writeLights(false, false, true);

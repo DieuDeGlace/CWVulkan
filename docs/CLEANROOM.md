@@ -72,6 +72,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Ground/Ring information bindings follow `steam-preview-source-lifetimes.md`,
+  `steam-ring-selector-rendering.md` and preview sections4/5/7. Ring sampling keeps
+  the earlier canonical key; draw resolves current ground storage without loading
+  zones or rechecking source validity. Ground metadata remains independent when
+  Ring supplies the item; only the adapter's temporary item value is copied, never
+  retained as an original-source snapshot. Native bottom placement uses the earlier
+  stored size. Packet-backed post-pickup and owner-geometry cases cover these paths.
 - Live information reads, hidden-ancestor draw admission and the bounded
   game-UI/MapOverlay/Preview order follow `steam-preview-hidden-interface-order.md`.
   Information formatting occurs after earlier widget callbacks instead of freezing

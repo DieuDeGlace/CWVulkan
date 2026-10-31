@@ -1,9 +1,20 @@
 #include "ItemPreview.h"
 #include "NativeRules.h"
+#include "ItemSelector.h"
 #include <cstring>
 #include <sstream>
 
 namespace itempreview {
+RingSource sampleRing(const inventoryslots::Inventory &inventory, bool shown, int32_t runningIndex) {
+    RingSource source;
+    source.shown = shown;
+    if (shown) {
+        const auto candidates = itemselector::candidates(inventory);
+        if (!candidates.empty())
+            source.selected = candidates[itemselector::wrappedIndex(runningIndex, candidates.size())];
+    }
+    return source;
+}
 float roundTenth(float value) {
     const bool negative = value < 0;
     const float magnitude = negative ? -value : value;

@@ -1445,6 +1445,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     customization::State nativeCustomization;
     customization::Shown customizationView;
     Hud::Inventory ordinaryInformation;
+    itempreview::FrameSources previewSources;
     std::set<std::string> customizationModelAttempts;
     upgradewidget::View upgradeView;
     CubModel upgradeModel; // the hand's weapon model
@@ -3183,7 +3184,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
     };
 
-    auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview, const nativesaves::Item *comparison = nullptr) {
+    auto nativeOrdinaryUi = [&] {
+        return inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
+               nativeCustomization.edit.open || chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
+    };
+    auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview, const nativesaves::Item *comparison = nullptr,
+                               const nativesaves::Record *groundOrigin = nullptr) {
         preview.info.clear();
         preview.comparisonInfo.clear();
         preview.infoIcon.clear();
@@ -3205,9 +3211,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             };
             context.realmName = realmName;
             context.comparison = comparison;
+            if (groundOrigin && groundOrigin->size() >= grounditems::ground::OWNER + sizeof(int64_t)) {
+                int64_t owner;
+                std::memcpy(&owner, groundOrigin->data() + grounditems::ground::OWNER, sizeof owner);
+                context.reserved = owner != 0;
+                context.reservedForLocal = owner == spawned.playerId();
+            }
             preview.info = iteminformation::format(raw, context);
             if (comparison) {
                 context.comparison = nullptr;
+                context.reserved = false;
                 context.classWarning = false;
                 context.scale = .75f;
                 preview.comparisonInfo = iteminformation::format(*comparison, context);
@@ -3267,6 +3280,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         preview.infoIcon = it.sprite;
     };
     while (!glfwWindowShouldClose(window)) {
+        previewSources.ground.reset();
         input.gamepadSampled = false;
         input.pointerSampled = false;
         input.wheelEvents.clear(); // GLFW callbacks below produce only this gameplay frame's wheel messages.
@@ -5118,6 +5132,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     continue;
                 useprompt::GroundItem g;
                 g.type = l.item.category, g.subtype = l.item.id;
+                g.quantity = l.count;
                 g.at = l.at;
                 g.settleMs = l.dropMs;
                 g.noAutoPickup = (l.flags & grounditems::ground::STAYS_FOR_OTHERS) != 0;
@@ -5155,8 +5170,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
 
             const useprompt::Targets targets = useprompt::chooseTargets(scene);
+            if (nativeInventory && targets.groundItem >= 0 && (size_t)targets.groundItem < sceneLoot.size()) {
+                const auto key = sceneLoot[(size_t)targets.groundItem]->zoneItem;
+                if (key[0] != INT_MIN)
+                    previewSources.ground = key;
+            }
             usePrompt = useprompt::decide(scene, targets, useKey);
             const useprompt::Prompt &p = usePrompt;
+            if (p.takesKey && !itemSelector.shown)
+                previewSources.ground.reset();
 
             // A creature aimed at may mark its mission's zone on the map (spec 2.6).
             if (const std::optional<std::array<int32_t, 2>> zone = useprompt::markedZone(spawned.record(targets.creature));
@@ -5403,6 +5425,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (!useExtracted || !blocked(player.position.x, player.position.y + m.y, player.position.z))
                     player.position.y += m.y;
             }
+        }
+
+        if (nativeInventory) {
+            // Native information selection precedes this frame's later Ring
+            // toggle/repeat/label work. Keep canonical identity, not its caption.
+            previewSources.ring = itempreview::sampleRing(nativeInventory->inventory, itemSelector.shown, itemSelector.index);
+            previewSources.ordinaryUi = nativeOrdinaryUi();
         }
 
         // Character motion from what actually happened this frame.
@@ -6861,9 +6890,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             answers.updateVisibility(talk.has_value() || npcSpeech.addressedTo(spawned.playerId()));
             if (nativeInventory) {
-                const bool ordinaryUi = inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
-                                        nativeCustomization.edit.open || chat.typing() || answers.visible() ||
-                                        (menusReady && menus.ordinaryUi());
+                const bool ordinaryUi = nativeOrdinaryUi();
                 if (const int sound = interfaceSoundEdges.sample(ordinaryUi, itemSelector.shown))
                     audio.playInterface(sound);
             }
@@ -7108,7 +7135,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             input.gamepadNavigationPoints.clear();
             if (nativeInventory) {
                 itempreview::Sources sources;
-                sources.ringShown = itemSelector.shown;
+                sources.ringShown = previewSources.ring.shown;
+                if (previewSources.ring.selected)
+                    if (const auto *slot = nativeInventory->inventory.slot(*previewSources.ring.selected))
+                        sources.ring = &slot->item;
+                nativesaves::Item groundPayload{}; // Only the selector's temporary adapter input; never retained.
+                if (previewSources.ground)
+                    if (const auto *record = spawned.findGroundItem(*previewSources.ground);
+                        record && record->size() >= groundPayload.size()) {
+                        std::copy_n(record->data(), groundPayload.size(), groundPayload.data());
+                        sources.ground = &groundPayload;
+                    }
                 if (inventoryOpen) {
                     if (inventoryView.hoverItem >= 0 && (size_t)inventoryView.hoverItem < inventoryView.items.size()) {
                         const auto &entry = inventoryView.items[(size_t)inventoryView.hoverItem];
@@ -7158,10 +7195,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     ordinaryInformation.infoIcon = spawned.itemSprite(adapted.data());
                     if (hs.interfaceVisible)
                         loadInventorySprite(ordinaryInformation.infoIcon);
-                    hs.informationDraw = [&, original = choice.item, comparison] {
-                        describePreview(Gear::fromRecord(*original), ordinaryInformation, comparison);
+                    const bool fromGround = choice.item == &groundPayload;
+                    hs.informationDraw = [&, original = fromGround ? nullptr : choice.item, comparison, fromGround,
+                                          groundKey = previewSources.ground, retainOrigin = choice.groundOrigin] {
+                        const auto *ground = groundKey ? spawned.findGroundItem(*groundKey) : nullptr;
+                        const auto *origin = retainOrigin ? ground : nullptr;
+                        if (fromGround) {
+                            nativesaves::Item payload;
+                            if (!ground || ground->size() < payload.size()) {
+                                ordinaryInformation.info.clear();
+                                ordinaryInformation.comparisonInfo.clear();
+                                ordinaryInformation.infoItem.reset();
+                                return;
+                            }
+                            std::copy_n(ground->data(), payload.size(), payload.data());
+                            describePreview(Gear::fromRecord(payload), ordinaryInformation, comparison, origin);
+                        } else
+                            describePreview(Gear::fromRecord(*original), ordinaryInformation, comparison, origin);
                     };
-                    ordinaryInformation.infoAnchor = choice.anchor;
+                    ordinaryInformation.infoAnchor =
+                        choice.groundOrigin || !previewSources.ordinaryUi ? itempreview::Anchor::Ground : choice.anchor;
                     ordinaryInformation.pointer = hs.pointerAt;
                 }
                 hs.information = &ordinaryInformation;
