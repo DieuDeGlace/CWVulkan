@@ -1,5 +1,6 @@
 #pragma once
 #include "SteamPointLights.h"
+#include "GuiItem.h"
 // Vulkan 1.3 renderer: sky, voxel scene, water, and two directional shadow
 // cascades (MoonandShadow's near/far maps) drawn with dynamic rendering. It draws the world
 // in one of two looks ([Render] Style): Cube World Alpha's (the default) or the Steam
@@ -86,7 +87,8 @@ struct OverlayVertex {
 // they are in.
 enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain, Emote };
 constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
-constexpr uint32_t STEAM_WORLD = 1u << 9; // ordinary world/water pass; excludes sky and menu art
+constexpr uint32_t GUI_WORLD = 1u << 10;    // immediate owner-item WORLD shader; no scene culling/shadow/tint extensions
+constexpr uint32_t STEAM_WORLD = 1u << 9;   // ordinary world/water pass; excludes sky and menu art
 
 struct DrawItem {
     uint32_t mesh = 0;
@@ -214,7 +216,10 @@ class Renderer {
     // Interface: an RGBA atlas (uploaded once, replaced on a later call) and the
     // triangles to draw over the next frame (3 vertices each, atlas texels as uv).
     bool setOverlayAtlas(uint32_t width, uint32_t height, const uint8_t *rgba);
-    void overlay(std::vector<OverlayVertex> triangles) { overlayVertices = std::move(triangles); }
+    void overlay(std::vector<OverlayVertex> triangles, const std::vector<guiitem::Request> &items = {}) {
+        overlayVertices = std::move(triangles);
+        guiRequests = items;
+    }
     VkExtent2D screenSize() const { return extent; }
 
   private:
@@ -310,9 +315,13 @@ class Renderer {
     void destroyPostTargets();
     void destroyPostResources();
     Image uploadImage(uint32_t w, uint32_t h, VkFormat format, const void *data, size_t bytes);
-    void recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 jitter, const glm::mat4 &clipToPrevious,
-                    bool reproject);
+    void recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 jitter, const glm::mat4 &clipToPrevious, bool reproject);
+    bool uploadOverlay();
+    void drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth);
     void drawOverlay(VkCommandBuffer cmd);
+    bool prepareGui(size_t draws);
+    void recordGui(VkCommandBuffer cmd, uint32_t imageIndex);
+    void destroyGui();
     // Shared water samples an immutable copy of the opaque scene, never a live attachment.
     Image waterColour, waterDepth;
     VkDescriptorSetLayout waterSetLayout = VK_NULL_HANDLE;
@@ -388,7 +397,21 @@ class Renderer {
     VkDescriptorPool overlayPool = VK_NULL_HANDLE;
     VkDescriptorSet overlaySet = VK_NULL_HANDLE;
     VkPipelineLayout overlayLayout = VK_NULL_HANDLE;
-    VkPipeline overlayPipeline = VK_NULL_HANDLE;
+    VkPipeline overlayPipeline = VK_NULL_HANDLE, guiOverlayPipeline = VK_NULL_HANDLE, guiModelPipeline = VK_NULL_HANDLE;
+    Image guiDepth;
+    bool guiDepthFresh = true;
+    Buffer guiZeroPoints;
+    VkDeviceSize guiUniformStride = 0;
+    struct GuiFrame {
+        Buffer uniforms;
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        std::vector<VkDescriptorSet> sets;
+        VkImageView farView = VK_NULL_HANDLE, nearView = VK_NULL_HANDLE;
+    };
+    GuiFrame guiFrames[FRAMES];
+    std::vector<guiitem::Request> guiRequests;
+    std::vector<guiitem::Draw> guiDraws;
+    std::vector<std::pair<size_t, size_t>> guiGroups; // overlay vertex boundary, end of this item's immediate draws
     Buffer overlayBuffers[FRAMES];
     VkDeviceSize overlayCapacity[FRAMES] = {};
     std::vector<OverlayVertex> overlayVertices;

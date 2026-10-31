@@ -115,10 +115,12 @@ static std::filesystem::path spawnsDir(const std::filesystem::path &gameDir) {
 
 static int failures = 0;
 int alphaRenderingTests(); // tests/AlphaRenderTests.cpp
-int skyTests();           // tests/SkyTests.cpp
-int raceKeyTests();       // tests/RaceKeyTests.cpp
+int skyTests();            // tests/SkyTests.cpp
+int raceKeyTests();        // tests/RaceKeyTests.cpp
 int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
+int guiItemTests();
+int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
 int windContinueTests();   // tests/WindContinueTests.cpp
 int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
@@ -9061,6 +9063,10 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "guirender")
+        return guiRenderTests();
+    if (argc == 2 && std::string(argv[1]) == "guiitems")
+        return guiItemTests();
     if (argc == 2 && std::string(argv[1]) == "npcspeech")
         return npcSpeechTests();
     if (argc == 2 && std::string(argv[1]) == "steamcreatures")
@@ -10347,6 +10353,7 @@ int main(int argc, char **argv) {
     failures += raceKeyTests();        // tests/RaceKeyTests.cpp
     failures += worldMapLookTests();   // tests/WorldMapTests.cpp
     failures += saveFormatTests();     // tests/SaveTests.cpp
+    failures += guiItemTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += windContinueTests();   // tests/WindContinueTests.cpp
     failures += netTests();            // tests/NetTests.cpp
@@ -10381,4 +10388,3 @@ int main(int argc, char **argv) {
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }
-

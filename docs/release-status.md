@@ -7,6 +7,16 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Identification now renders the original selected item through the shared 3D WORLD
+  shader path, using owner-extracted CUB geometry and full header dimensions. Native
+  projection, rotation, main/dark passes, shininess and weapon spirit cubes are
+  integrated with immediate UI ordering and retained depth. CPU checks and 13 actual
+  Vulkan image checks pass, including TAA/SMAA, shadows and both lighting presets.
+  Read-only native-save captures at GUI scales1/1.5 render the selected owner sprite
+  and stop normally with the fixture save unchanged.
+  Other widget callers still need conversion from bitmap previews; full inherited
+  callback state, offscreen GUI layers and original-game visual comparison remain open.
+
 - Shrine-choice map mode now follows item and creature use, restricts hover to shrine
   targets and accepts the preceding actual draw's target on eligible left release.
   It checks known cells with negative-coordinate floor division, starts the delayed
@@ -30,7 +40,7 @@ checkpoint describe the intended setup and remaining limits.
   blackwidget/itemframe tree, native text/footer positions, live selection and
   release gates. Transformed edge/navigation tests and the CPU/owner suite pass;
   read-only captures at GUI scales1/1.5 exercise the owner artwork and typography.
-  Shared3D icons still use cached bitmap compatibility previews; Ring Menu and
+  The remaining shared3D icon callers still use bitmap compatibility previews; Ring Menu and
   full map-panel/capture behavior remain open, along with extended owner validation.
 - Native adaptive scene range is integrated: actual unmerged face costs/readiness,
   option-derived window, native equal-key sort, budget threshold, easing and player

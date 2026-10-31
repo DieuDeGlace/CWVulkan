@@ -7,6 +7,7 @@
 #include <array>
 
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace identifywindow {
@@ -65,6 +66,7 @@ struct Layout {
 // What the window shows.
 struct Shown {
     bool slotted = false;
+    std::optional<nativesaves::Item> original; // live selected category15 record, never the identified result
     std::string name, icon, regionDescription; // the slotted item's name and icon key (Hud::addIcon)
     glm::vec4 colour{1}, regionColour{1};      // its rarity's colour
     int count = 0;

@@ -45,13 +45,13 @@ layout(set = 0, binding = 0) uniform Frame {
 
 layout(push_constant) uniform Push {
     mat4 model;
-    vec4 params; // x instance flags, y shadow cascade (0 far, 1 near), z model height (voxels), w pixel opacity (separate from material light)
+    vec4 params; // x instance flags, y shadow cascade (0 far, 1 near), z model height (GUI: clip depth offset), w pixel opacity (separate from material light)
     vec4 look;   // Alpha look: x light where the object stands (0..1), y hit flash, z shimmer, w 1 for clouds;
-                 // Steam look's star and cloud passes: x opacity, y fog scale
+                 // Steam look's star and cloud passes: x opacity, y fog scale. Immediate GUI: w is float Glow.
     uvec4 lights; // Alpha look: up to 10 point-light indices, 8 bits each in x..z; w count
 } pc;
 
-const uint SWAY = 1u, GLOW = 2u, WATER = 4u, STEAM_VERTEX = 128u, LAVA_LIGHTING = 256u, STEAM_WORLD = 512u;
+const uint SWAY = 1u, GLOW = 2u, WATER = 4u, STEAM_VERTEX = 128u, LAVA_LIGHTING = 256u, STEAM_WORLD = 512u, GUI_WORLD = 1024u;
 
 // Vanilla's colour stages (Steam world pixel shader, as re-expressed in
 // SteamShadows' InlineTerrain.h). Lit surface colours get a saturation boost

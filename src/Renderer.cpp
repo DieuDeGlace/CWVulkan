@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include "Config.h"
+#include "RendererUniforms.h"
 #include "NativeKeyOrder.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -40,27 +41,9 @@ constexpr int MAX_POINT_LIGHTS = 64;
 // draw is lit by (docs/specs/alpha-rendering.md 10.2).
 constexpr int FRAME_LIGHTS = 16, LIGHTS_PER_DRAW = 10;
 
-// std140-compatible: only mat4 and vec4. Must match shaders/common.glsl.
-struct FrameUniforms {
-    glm::mat4 viewProj, invViewProj, lightFar, lightNear;
-    glm::vec4 eye, lightDir, front, back, ambient, fog, sky, shadowFar, shadowNear, wind, focus,
-        sunDisk, moonDisk, steamSky[6];
-    glm::vec4 alphaSky1, alphaSky2, alphaFog, alphaFront, alphaBack, alphaAmbient, alphaMaterial, alphaSun,
-        alphaView, sunColour, alphaMoonFront, alphaMoonBack, alphaNight;
-    glm::mat4 skyProj, view;
-    glm::vec4 pointLights[MAX_POINT_LIGHTS], pointColours[MAX_POINT_LIGHTS];
-    glm::vec4 steamSun, steamMaterial; // direction/ambient alpha, frame material RGBA
-};
-struct NativeGpuPoint {
-    glm::vec4 position, colour;
-};
-struct PushConstants {
-    glm::mat4 model;
-    glm::vec4 params;
-    glm::vec4 look;    // Alpha look: light where the object stands, hit flash, shimmer
-    glm::uvec4 lights; // Alpha look: point-light indices, 8 bits each in x..z; w count
-};
-static_assert(sizeof(PushConstants) <= 128, "push constants beyond Vulkan's guaranteed 128 bytes");
+using rendergpu::FrameUniforms;
+using rendergpu::NativeGpuPoint;
+using rendergpu::PushConstants;
 
 // Half the light-space depth range in blocks: tall mountains far from the
 // player can still cast into the map.
@@ -534,18 +517,16 @@ bool Renderer::createPipelines(std::string &error) {
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     };
     Desc descs[] = {
-        {beamV, beamF, true, false, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &beamPipeline,
-         VK_FRONT_FACE_COUNTER_CLOCKWISE},
+        {beamV, beamF, true, false, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &beamPipeline, VK_FRONT_FACE_COUNTER_CLOCKWISE},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &scenePipeline},
-        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &mirroredScenePipeline,
-         VK_FRONT_FACE_CLOCKWISE},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &mirroredScenePipeline, VK_FRONT_FACE_CLOCKWISE},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryDepthPipeline,
          VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredDepthPipeline,
          VK_FRONT_FACE_CLOCKWISE, nullptr, 0},
         {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryFadePipeline},
-        {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredFadePipeline,
-         VK_FRONT_FACE_CLOCKWISE},
+        {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredFadePipeline, VK_FRONT_FACE_CLOCKWISE},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &guiModelPipeline},
         {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS, &menuPipeline},
         {sceneV, sceneF, true, false, true, false, false, VK_COMPARE_OP_ALWAYS, &menuBackgroundPipeline},
         {sceneV, waterF, true, true, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterPipeline},
@@ -553,16 +534,14 @@ bool Renderer::createPipelines(std::string &error) {
          VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0xf, waterLayout},
         {alphaV, omegaWaterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &omegaAlphaWaterPipeline,
          VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0xf, waterLayout},
-        {sceneV, waterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterDepthPipeline,
-         VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0},
+        {sceneV, waterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterDepthPipeline, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+         nullptr, 0},
         {shadowV, VK_NULL_HANDLE, true, true, false, false, true, VK_COMPARE_OP_LESS, &shadowPipeline},
         {skyV, skyF, false, false, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &skyPipeline},
         {alphaV, alphaF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaScenePipeline},
-        {alphaV, alphaF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaMirroredPipeline,
-         VK_FRONT_FACE_CLOCKWISE},
+        {alphaV, alphaF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaMirroredPipeline, VK_FRONT_FACE_CLOCKWISE},
         {alphaV, alphaF, true, true, true, true, false, VK_COMPARE_OP_LESS, &alphaSceneryPipeline},
-        {alphaV, alphaF, true, true, true, true, false, VK_COMPARE_OP_LESS, &alphaMirroredSceneryPipeline,
-         VK_FRONT_FACE_CLOCKWISE},
+        {alphaV, alphaF, true, true, true, true, false, VK_COMPARE_OP_LESS, &alphaMirroredSceneryPipeline, VK_FRONT_FACE_CLOCKWISE},
         // Alpha water: blended, no culling, depth writes on (docs/specs/alpha-rendering.md 12).
         {alphaV, alphaWaterF, true, true, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &alphaWaterPipeline},
         {skyV, alphaSkyF, false, false, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &alphaSkyPipeline},
@@ -731,6 +710,12 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     info.pDynamicState = &dynamic;
     info.layout = overlayLayout;
     VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &overlayPipeline);
+    if (result == VK_SUCCESS) {
+        // Same Plasma drawing state, compatible with the retained depth attachment used
+        // while item callbacks interleave WORLD draws. Plasma itself never tests/writes depth.
+        rendering.depthAttachmentFormat = DEPTH_FORMAT;
+        result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &guiOverlayPipeline);
+    }
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, fs, nullptr);
     if (result != VK_SUCCESS) {
@@ -2124,6 +2109,7 @@ void Renderer::shutdown() {
     if (!device)
         return;
     vkDeviceWaitIdle(device);
+    destroyGui();
     for (auto &p : pending)
         destroyBuffer(p.staging);
     pending.clear();
@@ -2137,10 +2123,32 @@ void Renderer::shutdown() {
         vkDestroyFence(device, fr.fence, nullptr);
         vkDestroySemaphore(device, fr.acquired, nullptr);
     }
-    for (auto p : {scenePipeline, mirroredScenePipeline, menuPipeline, menuBackgroundPipeline, waterPipeline, waterDepthPipeline, shadowPipeline, skyPipeline,
-                   alphaScenePipeline, alphaMirroredPipeline, alphaSceneryPipeline, alphaMirroredSceneryPipeline, alphaWaterPipeline, alphaSkyPipeline, alphaSpritePipeline,
-                   alphaCloudPipeline, steamCloudPipeline, steamStarPipeline, beamPipeline, omegaWaterPipeline, omegaAlphaWaterPipeline, sceneryDepthPipeline,
-                   sceneryMirroredDepthPipeline, sceneryFadePipeline, sceneryMirroredFadePipeline})
+    for (auto p : {guiModelPipeline,
+                   scenePipeline,
+                   mirroredScenePipeline,
+                   menuPipeline,
+                   menuBackgroundPipeline,
+                   waterPipeline,
+                   waterDepthPipeline,
+                   shadowPipeline,
+                   skyPipeline,
+                   alphaScenePipeline,
+                   alphaMirroredPipeline,
+                   alphaSceneryPipeline,
+                   alphaMirroredSceneryPipeline,
+                   alphaWaterPipeline,
+                   alphaSkyPipeline,
+                   alphaSpritePipeline,
+                   alphaCloudPipeline,
+                   steamCloudPipeline,
+                   steamStarPipeline,
+                   beamPipeline,
+                   omegaWaterPipeline,
+                   omegaAlphaWaterPipeline,
+                   sceneryDepthPipeline,
+                   sceneryMirroredDepthPipeline,
+                   sceneryFadePipeline,
+                   sceneryMirroredFadePipeline})
         vkDestroyPipeline(device, p, nullptr);
     destroyBuffer(starBuffer);
     destroyMapPipeline();
@@ -2155,6 +2163,8 @@ void Renderer::shutdown() {
         destroyBuffer(b);
     if (overlayPipeline)
         vkDestroyPipeline(device, overlayPipeline, nullptr);
+    if (guiOverlayPipeline)
+        vkDestroyPipeline(device, guiOverlayPipeline, nullptr);
     vkDestroyPipelineLayout(device, overlayLayout, nullptr);
     vkDestroyDescriptorPool(device, overlayPool, nullptr);
     vkDestroyDescriptorSetLayout(device, overlaySetLayout, nullptr);

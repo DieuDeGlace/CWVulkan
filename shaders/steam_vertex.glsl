@@ -25,7 +25,9 @@ vec3 steamMaterialColour(vec3 palette, vec3 illumination, float ambientAlpha, ui
     float gain = clamp(1 + .5 * (ambientAlpha - illumination.g), 1, 2);
     vec3 saturated = clamp(gain * palette + (1 - gain) * dot(LUMA, palette), 0, 2);
     vec3 colour = illumination * saturated * f.steamMaterial.rgb;
-    if ((flags & GLOW) != 0u)
+    if ((flags & GUI_WORLD) != 0u)
+        colour += pc.look.w * (palette * f.steamMaterial.rgb - colour);
+    else if ((flags & GLOW) != 0u)
         colour += palette * f.steamMaterial.rgb - colour;
     // White0 also clamps. Pixel opacity is a separate draw constant.
     return clamp(colour + pc.look.y * (1 - colour), 0, 1);

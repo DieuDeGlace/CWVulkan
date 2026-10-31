@@ -33,6 +33,12 @@ try {
         $passed = @(Select-String -LiteralPath $gpuLog -Pattern '^Steam shader .* PASS$')
         if (!$passed.Count) { throw "No Vulkan image results were produced; read $gpuLog" }
         Write-Output "Vulkan image checks passed: $($passed.Count); $gpuLog"
+        $guiLog = Join-Path $LogDirectory 'gui-item-images.log'
+        & $testProgram guirender *> $guiLog
+        if ($LASTEXITCODE -ne 0) { throw "GUI item image tests failed; read $guiLog" }
+        $guiPassed = @(Select-String -LiteralPath $guiLog -Pattern '^GUI WORLD .* PASS$')
+        if (!$guiPassed.Count) { throw "No GUI item image results were produced; read $guiLog" }
+        Write-Output "GUI item image checks passed: $($guiPassed.Count); $guiLog"
         $waterLog = Join-Path $LogDirectory 'shared-water-images.log'
         & $testProgram sharedwater *> $waterLog
         if ($LASTEXITCODE -ne 0) { throw "Shared water image tests failed; read $waterLog" }

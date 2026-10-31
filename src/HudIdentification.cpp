@@ -45,12 +45,17 @@ void Hud::drawIdentification(const identifywindow::Shown &shown, std::vector<Ove
         return result;
     };
     if (shown.slotted) {
-        // Compatibility bitmap preview until the shared native WORLD-shader GUI item pass is wired.
-        // The frame itself remains the owner's tree; no replacement frame or fixed-size slot is constructed.
-        if (const auto found = icons.find(shown.icon); found != icons.end() && found->second.w > 0) {
+        const glm::vec2 centre = scene->contentPosition(*panels.identificationFrame) + scene->screenSize(*panels.identificationFrame) * .5f;
+        if (shown.original) {
+            guiitem::Placement at;
+            at.screen = centre;
+            at.euler = {225, 0, guiitem::phase(guiClockMs)};
+            at.size = 0.06f * layout.nodeToScreen[0][0];
+            at.darkPass = true;
+            itemIcon(shown.icon, *shown.original, at, out.size());
+        } else if (const auto found = icons.find(shown.icon); found != icons.end() && found->second.w > 0) {
+            // Older recording-only sessions have no original item record.
             const auto &icon = found->second;
-            const glm::vec2 centre =
-                scene->contentPosition(*panels.identificationFrame) + scene->screenSize(*panels.identificationFrame) * .5f;
             image(out, icon.atlas, {icon.w, icon.h}, centre.x - (float)icon.w * guiScale * .5f, centre.y - (float)icon.h * guiScale * .5f,
                   guiScale);
         }

@@ -34,7 +34,7 @@
 #include "TalkScripts.h"
 #include "TalkGen.h"
 #include "ItemCatalog.h"
-#include "ItemIcon.h"
+#include "CubModel.h"
 #include <deque>
 #include <set>
 #include "Config.h"
@@ -1480,7 +1480,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         return std::string();
     };
     if (hudReady && hud.hasInventoryArt()) {
-        std::set<std::string> sprites;
+        std::set<std::string> sprites{"cube"};
         for (size_t i = 0; i < gear.itemCount(); i++)
             if (!gear.item(i).sprite.empty())
                 sprites.insert(gear.item(i).sprite);
@@ -1491,7 +1491,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (auto path = assets.resolve(fs::path("sprites") / (name + ".cub"))) {
                 CubModel cub;
                 if (cub.load(*path))
-                    hud.addIcon(name, renderItemIcon(cub, 64), 64);
+                    hud.addItemIcon(name, cub);
             }
         hud.layout(renderer, renderer.screenSize());
     }
@@ -1499,7 +1499,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (auto path = assets.resolve(fs::path("sprites") / "gold-coin.cub")) {
             CubModel cub;
             if (cub.load(*path)) {
-                hud.addIcon("gold-coin", renderItemIcon(cub, 64), 64);
+                hud.addItemIcon("gold-coin", cub);
                 hud.layout(renderer, renderer.screenSize());
             }
         }
@@ -1599,8 +1599,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // The game's ground item (a zone's item, 0x2a5b70; loot-pickup.md): lies where it fell as
         // its own model, turned by `rotation` (degrees), hopping in place while its pick-up delay
         // `dropMs` (+0xc8) runs; coins are then taken within 4 blocks, anything else with the use key.
-        bool onGround = false, taken = false; // (taken: the use key chose it, or it was walked over)
-        bool notice = false; // picking it up is received as the game's pick-up notice (§4)
+        bool onGround = false, taken = false;       // (taken: the use key chose it, or it was walked over)
+        bool notice = false;                        // picking it up is received as the game's pick-up notice (§4)
         std::array<int, 3> zoneItem{INT_MIN, 0, 0}; // a zone's own item: its zone and index
         std::array<int32_t, 2> zone{INT_MIN, 0};    // a dropped item: the zone whose list holds it
         int model = -1;
@@ -1727,6 +1727,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     };
     std::vector<Carried> bag;
     std::function<void()> rebuildInventoryViews;
+    std::set<std::string> inventoryIconAttempts; // this session owns its Hud and GPU resources
     auto resetDailyProgress = [&] {
         nativeprogress::resetDay(saveGame);
         if (nativeInventory && rebuildInventoryViews) {
@@ -1837,12 +1838,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (item.sprite.empty())
                 if (const auto *model = catalog.model(item.category, item.id, item.material); model && !model->sprites.empty())
                     item.sprite = *model->sprites.begin();
-            static std::set<std::string> cached;
-            if (!item.sprite.empty() && cached.insert(item.sprite).second)
+            if (!item.sprite.empty() && inventoryIconAttempts.insert(item.sprite).second)
                 if (const auto path = assets.resolve(fs::path("sprites") / (item.sprite + ".cub"))) {
                     CubModel model;
                     if (model.load(*path)) {
-                        hud.addIcon(item.sprite, renderItemIcon(model, 64), 64);
+                        hud.addItemIcon(item.sprite, model);
                         hud.layout(renderer, renderer.screenSize());
                     }
                 }
@@ -2271,7 +2271,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (auto path = assets.resolve(fs::path("sprites") / (l.item.sprite + ".cub"))) {
                 CubModel cub;
                 if (cub.load(*path)) {
-                    hud.addIcon(l.item.sprite, renderItemIcon(cub, 64), 64);
+                    hud.addItemIcon(l.item.sprite, cub);
                     hud.layout(renderer, renderer.screenSize());
                 }
             }
@@ -3862,7 +3862,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
                                 CubModel cub;
                                 if (cub.load(*path)) {
-                                    hud.addIcon(sprite, renderItemIcon(cub, 64), 64);
+                                    hud.addItemIcon(sprite, cub);
                                     hud.layout(renderer, renderer.screenSize());
                                 }
                             }
@@ -3955,7 +3955,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
                             CubModel cub;
                             if (cub.load(*path)) {
-                                hud.addIcon(sprite, renderItemIcon(cub, 64), 64);
+                                hud.addItemIcon(sprite, cub);
                                 hud.layout(renderer, renderer.screenSize());
                             }
                         }
@@ -4163,7 +4163,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
                             CubModel cub;
                             if (cub.load(*path)) {
-                                hud.addIcon(sprite, renderItemIcon(cub, 64), 64);
+                                hud.addItemIcon(sprite, cub);
                                 hud.layout(renderer, renderer.screenSize());
                             }
                         }
@@ -4244,6 +4244,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     auto &shown = identificationView;
                     if (identify.slotted && slotted && identify.item[0] == gameshop::UNIDENTIFIED) {
                         shown.slotted = true;
+                        shown.original = identify.item;
                         shown.name = bagName(slotted->item, itemName(slotted->item));
                         shown.icon = iconOf(!slotted->item.sprite.empty() ? slotted->item.sprite
                                             : spawnedReady                ? spawned.itemSprite(identify.item.data())
@@ -5946,9 +5947,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 // A zone whose ground items the host sent anew is shown anew.
                 for (const auto &[zx, zy] : spawned.takeReplacedGround()) {
                     zoneItemsLoaded.erase({zx, zy});
-                    loot.erase(std::remove_if(loot.begin(), loot.end(),
-                                              [&](const Loot &l) { return l.zoneItem[0] == zx && l.zoneItem[1] == zy; }),
-                               loot.end());
+                    loot.erase(
+                        std::remove_if(loot.begin(), loot.end(), [&](const Loot &l) { return l.zoneItem[0] == zx && l.zoneItem[1] == zy; }),
+                        loot.end());
                 }
                 // What this player picked up: the host's pick-up notices (loot-pickup.md §4).
                 for (const cwnet::PickupRecord &n : spawned.events().pickups) {
@@ -6401,12 +6402,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 hs.quickItem.key = "Q", hs.quickUse.key = "E", hs.quickSkill.key = "R";
                 // An item's picture for a button: its sprite rendered once into the HUD's icons.
                 auto showIcon = [&](const std::string &sprite) {
-                    static std::set<std::string> iconsTried;
-                    if (!sprite.empty() && iconsTried.insert(sprite).second)
+                    if (!sprite.empty() && inventoryIconAttempts.insert(sprite).second)
                         if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
                             CubModel cub;
                             if (cub.load(*path)) {
-                                hud.addIcon(sprite, renderItemIcon(cub, 64), 64);
+                                hud.addItemIcon(sprite, cub);
                                 hud.layout(renderer, renderer.screenSize());
                             }
                         }
@@ -6699,7 +6699,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     hs.windows = &lootWindowItems;
             }
             hs.mapMarkers.insert(hs.mapMarkers.begin(), mapMarkerViews.begin(), mapMarkerViews.end());
-            hs.mapClockMs = (int)(time * 1000.0);
+            hs.guiClockMs = (int32_t)(int64_t)(time * 1000.0);
+            hs.mapClockMs = hs.guiClockMs;
             hs.mapWorldElapsedMs = spawned.elapsedWorldTime();
             double mapPointerX, mapPointerY;
             pointerPosition(&mapPointerX, &mapPointerY);
@@ -6869,7 +6870,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             if (menusReady)
                 menus.draw(hudVertices);
-            renderer.overlay(hudVertices);
+            if (menusReady && !menus.interfaceShown())
+                renderer.overlay(hudVertices);
+            else
+                renderer.overlay(hudVertices, hud.itemDraws());
         }
         Camera camera{eye, target};
         camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);

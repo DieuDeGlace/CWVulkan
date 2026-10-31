@@ -236,6 +236,8 @@ bool Renderer::createPostTargets() {
 
 void Renderer::destroyPostTargets() {
     destroyWaterTargets();
+    destroyImage(guiDepth);
+    guiDepthFresh = true;
     for (Image *i : {&sceneColor, &depthImages[0], &depthImages[1], &history[0], &history[1], &smaaEdges, &smaaWeights})
         destroyImage(*i);
 }
@@ -253,9 +255,9 @@ void Renderer::destroyPostResources() {
     destroyImage(searchTex);
 }
 
-void Renderer::drawOverlay(VkCommandBuffer cmd) {
+bool Renderer::uploadOverlay() {
     if (!overlayImage.image || overlayVertices.empty())
-        return;
+        return false;
     VkDeviceSize bytes = overlayVertices.size() * sizeof(OverlayVertex);
     Buffer &vb = overlayBuffers[frameIndex];
     if (overlayCapacity[frameIndex] < bytes) {
@@ -265,20 +267,29 @@ void Renderer::drawOverlay(VkCommandBuffer cmd) {
                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
     if (!vb.mapped)
-        return;
+        return false;
     auto *out = (OverlayVertex *)vb.mapped;
     for (size_t i = 0; i < overlayVertices.size(); i++) {
         out[i] = overlayVertices[i];
         out[i].u /= overlayWidth; // Atlas texels to normalised coordinates.
         out[i].v /= overlayHeight;
     }
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayPipeline);
+    return true;
+}
+void Renderer::drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth) {
+    if (!count || !overlayImage.image || !overlayBuffers[frameIndex].buffer)
+        return;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, depth ? guiOverlayPipeline : overlayPipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayLayout, 0, 1, &overlaySet, 0, nullptr);
     float screen[2] = {(float)extent.width, (float)extent.height};
     vkCmdPushConstants(cmd, overlayLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(screen), screen);
     VkDeviceSize zero = 0;
-    vkCmdBindVertexBuffers(cmd, 0, 1, &vb.buffer, &zero);
-    vkCmdDraw(cmd, (uint32_t)overlayVertices.size(), 1, 0, 0);
+    vkCmdBindVertexBuffers(cmd, 0, 1, &overlayBuffers[frameIndex].buffer, &zero);
+    vkCmdDraw(cmd, count, 1, first, 0);
+}
+void Renderer::drawOverlay(VkCommandBuffer cmd) {
+    if (uploadOverlay())
+        drawOverlayRange(cmd, 0, (uint32_t)overlayVertices.size(), false);
 }
 
 void Renderer::recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 jitter, const glm::mat4 &clipToPrevious,
@@ -377,8 +388,14 @@ void Renderer::recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 ji
         begin(swapViews[imageIndex], false);
         fullscreen(copyPipeline, copySets[p], nullptr, 0);
     }
-    // The interface, sharp, over the anti-aliased image.
-    drawOverlay(cmd);
-    vkCmdEndRendering(cmd);
+    // The interface, sharp, over the anti-aliased image. Item callbacks retain scene
+    // depth and interleave WORLD models with the Plasma triangle stream.
+    if (guiRequests.empty()) {
+        drawOverlay(cmd);
+        vkCmdEndRendering(cmd);
+    } else {
+        vkCmdEndRendering(cmd);
+        recordGui(cmd, imageIndex);
+    }
     postFresh = false;
 }

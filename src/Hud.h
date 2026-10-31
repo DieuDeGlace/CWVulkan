@@ -33,6 +33,7 @@ struct Layout;
 namespace feattext { struct Label; }
 
 class ChatLine;
+struct CubModel;
 
 class Hud {
   public:
@@ -192,6 +193,7 @@ class Hud {
         // interface's clock their icons bob by; also the quest sprites over people's heads.
         using MapMarker = mapmarks::Marker;
         std::vector<MapMarker> mapMarkers;
+        int32_t guiClockMs = 0;
         int mapClockMs = 0;
         float mapWorldElapsedMs = 0;
         bool mapShrineMode = false;
@@ -210,6 +212,9 @@ class Hud {
     bool hasInventoryArt() const { return inventoryReady || (scene && panels.bag.node); }
     // An icon (RGBA, size x size) to pack into the atlas at the next layout().
     void addIcon(const std::string &key, std::vector<uint8_t> rgba, int size);
+    // Retains the owner CUB allocation and native voxel data for immediate 3D widget draws.
+    void addItemIcon(const std::string &key, const CubModel &);
+    const std::vector<guiitem::Request> &itemDraws() const { return itemRequests; }
     // OverworldEvents' quest sprites (assets/OverworldEvents/quest-icons.png, 320 x 80): the
     // orange question mark ("quest-event"), the grey one ("quest-destination") and the orange
     // exclamation mark ("quest-offer"), their green background keyed out as the mod does.
@@ -314,6 +319,16 @@ class Hud {
     };
     Picture tabs, panel, slotFrame;
     std::map<std::string, Picture> icons;
+    struct ItemModel {
+        Mesh pending;
+        glm::ivec3 allocation{0};
+        uint32_t mesh = 0;
+    };
+    std::map<std::string, ItemModel> itemModels;
+    mutable std::vector<guiitem::Request> itemRequests;
+    mutable int32_t guiClockMs = 0;
+    void uploadItemModels(Renderer &);
+    void itemIcon(const std::string &, const nativesaves::Item &, const guiitem::Placement &, size_t beforeVertex) const;
     std::map<std::string, glm::u8vec3> colours;
     float panelDark = .55f, slotDark = .65f;
     bool inventoryReady = false;

@@ -364,6 +364,7 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
 }
 
 void Hud::layout(Renderer &renderer, VkExtent2D screen) {
+    uploadItemModels(renderer);
     if (hudFont.empty() || !screen.height || !screen.width)
         return;
     scale = std::min(screen.height / 1080.f, screen.width / 1280.f);
@@ -869,6 +870,8 @@ float Hud::mapLabelWidth(const State::MapMarker &marker) const {
 void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
                const std::function<void(std::vector<OverlayVertex> &)> &overlays) const {
     out.clear();
+    itemRequests.clear();
+    guiClockMs = state.guiClockMs;
     if (!ready)
         return;
     if (state.feats)

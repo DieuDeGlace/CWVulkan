@@ -192,6 +192,7 @@ add_library(engine STATIC
     src/PlasmaScene.cpp
     src/HudPanels.cpp
     src/HudIdentification.cpp
+    src/HudItems.cpp
     src/HudFrontend.cpp
     src/GameShop.cpp
     src/GameCraft.cpp
@@ -205,6 +206,7 @@ add_library(engine STATIC
     src/WorldMap.cpp
     src/MapLook.cpp
     src/HudCoin.cpp
+    src/GuiItem.cpp
     src/PyroCreatures.cpp
     src/OverworldEvents.cpp
     src/events/StateStore.cpp
@@ -234,6 +236,7 @@ add_library(engine STATIC
     src/InventorySlots.cpp
     src/Renderer.cpp
     src/RendererPost.cpp
+    src/RendererGui.cpp
     src/RendererWater.cpp
     src/WaterLook.cpp
     src/RendererMap.cpp
@@ -334,7 +337,7 @@ target_sources(engine PRIVATE src/SteamVoxel.cpp)
 target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
-target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp)
+target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)
 target_sources(EngineTests PRIVATE tests/SteamPointLightsTests.cpp)

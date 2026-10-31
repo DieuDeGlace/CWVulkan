@@ -31,7 +31,8 @@ void main() {
         return;
     }
     vec3 world = (pc.model * vec4(inPosition, 1)).xyz;
-    world = sway(world, inPosition, flags);
+    if ((flags & GUI_WORLD) == 0u)
+        world = sway(world, inPosition, flags);
     vWorld = world;
     vec3 normal = (flags & 16u) != 0u
         ? normalize(vec3(inNormalFlags.x, inNormalFlags.z, inNormalFlags.w) / 127.5 - 1)
@@ -44,6 +45,8 @@ void main() {
     }
     vFlags = flags;
     gl_Position = f.viewProj * vec4(world, 1);
+    if ((flags & GUI_WORLD) != 0u)
+        gl_Position.z -= pc.params.z; // native shader DepthOffset, not NDC translation
     // Preserve homogeneous coordinates for division after raster interpolation.
     vClip = vec4(gl_Position.x, -gl_Position.y, gl_Position.zw);
     vView = (f.view * vec4(world, 1)).xyz;
