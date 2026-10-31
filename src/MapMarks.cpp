@@ -1,11 +1,44 @@
 #include "MapMarks.h"
+#include "NativePlayer.h"
 
 #include <algorithm>
 #include <cmath>
+#include <bit>
+#include <cstring>
 
 namespace mapmarks {
 
 namespace {
+void copySemantic(nativesaves::Item &destination, const nativesaves::Item &source) {
+    if (&destination == &source)
+        return;
+    destination[0] = source[0];
+    std::copy(source.begin() + 4, source.begin() + 0x15, destination.begin() + 4);
+    std::copy(source.begin() + 0x18, source.begin() + 0x9e, destination.begin() + 0x18);
+}
+std::optional<nativesaves::Item> markerItem(const Marker &marker) {
+    if (marker.originalItem)
+        return *marker.originalItem;
+    const auto &item = marker.item;
+    if (!item.category)
+        return std::nullopt;
+    // These are the generator-set fields. Supplied inline records above retain
+    // every attribute and count rather than taking this generated-item path.
+    return nativeplayer::item(item.category, item.id, item.material, item.rarity, item.modifier, item.region.x, item.region.y,
+                              std::bit_cast<int32_t>(item.realm));
+}
+worldgen::Item generatedView(const nativesaves::Item &source) {
+    worldgen::Item item;
+    item.category = source[0];
+    std::memcpy(&item.id, source.data() + 4, 4);
+    std::memcpy(&item.modifier, source.data() + 8, 4);
+    std::memcpy(&item.region.x, source.data() + 0x0c, 4);
+    std::memcpy(&item.region.y, source.data() + 0x10, 4);
+    item.rarity = source[0x14];
+    std::memcpy(&item.realm, source.data() + 0x18, 4);
+    item.material = source[0x1c];
+    return item;
+}
 
 // Size from a numerator: numerator / unit * mapScale / 2.5.
 Size sized(float numerator, int unit, float mapScale, bool hides) {
@@ -194,9 +227,13 @@ Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale
         if (k.flightTarget)
             h.flight = spot, h.flightToPlayer = !k.flightPoint;
         if (k.reportsHover) {
-            if (k.item.category != 0)
-                h.item = k.item;
-            else if (k.reportsCell)
+            const auto original = markerItem(k);
+            if (original && (*original)[0]) {
+                if (!h.originalItem)
+                    h.originalItem.emplace();
+                copySemantic(*h.originalItem, *original);
+                h.item = generatedView(*original);
+            } else if (k.reportsCell)
                 h.cell = Cell{k.block.x >> 4, k.block.y >> 4}; // (an arithmetic shift floors)
             h.chosen = spot;
         }
@@ -205,12 +242,35 @@ Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale
     return h;
 }
 
-void enlargeTargets(std::vector<Marker> &markers, const Hover &hovered) {
-    for (Marker &k : markers) {
-        const glm::ivec2 spot(k.block.x, k.block.y);
-        k.enlarged = (hovered.flight && *hovered.flight == spot) || (hovered.shrine && *hovered.shrine == spot) ||
-                     (hovered.chosen && *hovered.chosen == spot);
+void PreviewOutputs::admittedDraw(const Hover *hovered) {
+    const nativesaves::Item empty{};
+    copySemantic(item, empty);
+    flight = lore = {NONE, NONE};
+    if (!hovered)
+        return;
+    if (hovered->originalItem && (*hovered->originalItem)[0])
+        copySemantic(item, *hovered->originalItem);
+    else if (!hovered->originalItem && hovered->item.category) {
+        Marker generated;
+        generated.item = hovered->item;
+        copySemantic(item, *markerItem(generated));
     }
+    if (hovered->flight) {
+        flight = {hovered->flight->x, hovered->flight->y};
+        flightToPlayer = hovered->flightToPlayer;
+    }
+    if (hovered->cell)
+        lore = *hovered->cell;
+}
+
+void enlargeTargets(std::vector<Marker> &markers, const Hover &hovered) {
+    for (Marker &k : markers)
+        k.enlarged = hoveredTarget(k, hovered);
+}
+bool hoveredTarget(const Marker &marker, const Hover &hovered) {
+    const glm::ivec2 spot(marker.block.x, marker.block.y);
+    return (hovered.flight && *hovered.flight == spot) || (hovered.shrine && *hovered.shrine == spot) ||
+           (hovered.chosen && *hovered.chosen == spot);
 }
 
 void Selection::openShrines() {

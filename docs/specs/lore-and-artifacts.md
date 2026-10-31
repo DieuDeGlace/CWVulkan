@@ -699,9 +699,13 @@ gets "NEW" (0x46f578), shown when (clock / 600 ms) is odd, i.e. blinking every 6
 A marker entry built for a role-14 place carries a pointer to its artifact item (when the
 category is not 0) and the flag "known" in its byte +0x82. When the cursor hovers such a known
 marker (the nearest under the cursor), the map copies the artifact item into its hovered-item
-slot (map+0x1b0), from which the item is shown (the drawing was not traced, see Open
-questions). Lore-building markers (plot type 14, §4.5) carry no item; hovering them sets the
-hovered cell instead, which opens the lore panel.
+slot (map+0x1b0), from which the ordinary PreviewWidget item branch shows it.
+Exact payload provenance, coordinate sampling, precedence and the distinct lore/flight
+text are now specified in [steam-preview-map-location-lore.md](steam-preview-map-location-lore.md).
+Lore-building markers (plot type14, §4.5) carry no item; their hovered16-block cell
+instead selects the validated static lore branch. The source/selection/draw lifetime
+contracts are also in [steam-preview-source-lifetimes.md](steam-preview-source-lifetimes.md)
+and [steam-preview-hidden-interface-order.md](steam-preview-hidden-interface-order.md).
 
 ---
 
@@ -728,8 +732,11 @@ hovered cell instead, which opens the lore panel.
 2. **Hostility-8 Examine** (§2.4) queues interaction kind 3; its handling was not traced.
 3. **Chat line**: 0x26bf10 → 0x26b670 was not traced. The realm name and the " lore increased
    to N%." part are two coloured appends; the trailing line break suggests they form one line.
-4. **Map hover tooltip**: the drawing of the hovered item (map+0x1b0) and the link between the
-   map's hovered cell (map+0x250) and the panel's cell (+0x220 in 0x28e640) were not traced.
+4. **Map hover tooltip — resolved by later native audit**:
+   [steam-preview-map-location-lore.md](steam-preview-map-location-lore.md) gives
+   the semantic item copy, coordinate producers/snapshots, flight/lore/item precedence
+   and exact flight/static-lore presentation. Ordinary item/comparison drawing is
+   [steam-voxel-widget-information-preview.md](steam-voxel-widget-information-preview.md) §§7–8.
 5. **Target selection**: how the controller picks the targeted static object (+0x1e7c..+0x1e84),
    including its distance, was not traced.
 6. **Dialog already open**: if the dialog page list is not empty before Examine, the new pages

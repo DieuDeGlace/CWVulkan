@@ -125,6 +125,7 @@ int guiItemTests();
 int voxelEditTests();
 int voxelCustomizationTests();
 int itemPreviewTests();
+int mapPreviewTests();
 int hairStyleTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
@@ -8025,6 +8026,49 @@ static void mapMarkers() {
     std::vector<Marker> all{flight, building, distant};
     enlargeTargets(all, h);
     CHECK(all[0].enlarged && all[1].enlarged && !all[2].enlarged);
+    Marker supplied = flight;
+    supplied.flightTarget = false;
+    supplied.item.category = 23; // A conflicting legacy header must not replace supplied semantics.
+    auto suppliedItem = nativesaves::makeItem(3, 13, 1);
+    supplied.originalItem = &suppliedItem;
+    for (size_t i = 0; i < 128; ++i)
+        suppliedItem[0x1d + i] = (uint8_t)i;
+    suppliedItem[0x9d] = 2;
+    suppliedItem[1] = suppliedItem[0x15] = suppliedItem[0x9f] = 0x77;
+    const auto payloadHover = hover({supplied, building}, {104, 100}, 1, nullptr);
+    CHECK(payloadHover.originalItem && payloadHover.item.category == 3 && payloadHover.cell == (Cell{-2, 2}) &&
+          (*payloadHover.originalItem)[0x1d + 127] == 127 && (*payloadHover.originalItem)[0x9d] == 2);
+    PreviewOutputs outputs;
+    outputs.item.fill(0x5a);
+    outputs.admittedDraw(&payloadHover);
+    CHECK(outputs.item[0] == 3 && outputs.item[0x1d + 127] == 127 && outputs.item[0x9d] == 2 && outputs.item[1] == 0x5a &&
+          outputs.item[0x15] == 0x5a && outputs.item[0x9f] == 0x5a);
+    const auto copiedLore = outputs.lore;
+    const auto *liveItem = &outputs.item;
+    outputs.admittedDraw(nullptr); // A reached minimap/dragged draw resets; a skipped draw never calls this.
+    CHECK(copiedLore == (Cell{-2, 2}) && outputs.lore == (Cell{PreviewOutputs::NONE, PreviewOutputs::NONE}) && (*liveItem)[0] == 0 &&
+          (*liveItem)[0x1d + 127] == 0 && (*liveItem)[0x9d] == 0 && (*liveItem)[1] == 0x5a);
+    Hover playerFlight;
+    playerFlight.flight = glm::ivec2(-17, 33);
+    playerFlight.flightToPlayer = true;
+    outputs.admittedDraw(&playerFlight);
+    CHECK(outputs.flight == (Cell{-17, 33}) && outputs.flightToPlayer);
+    outputs.admittedDraw(nullptr);
+    CHECK(outputs.flight == (Cell{PreviewOutputs::NONE, PreviewOutputs::NONE}) && outputs.flightToPlayer);
+    outputs.admittedDraw(&h);
+    CHECK(outputs.flight == (Cell{4096, 2048}) && !outputs.flightToPlayer);
+    suppliedItem = {};
+    supplied.reportsCell = true;
+    const auto emptySupplied = hover({supplied}, {104, 100}, 1, nullptr);
+    CHECK(!emptySupplied.originalItem && emptySupplied.item.category == 0 && emptySupplied.cell);
+    Marker generated = supplied;
+    generated.originalItem = nullptr;
+    generated.item.category = 23;
+    generated.item.realm = 0xff010203;
+    const auto artifactHover = hover({generated}, {104, 100}, 1, nullptr);
+    CHECK(artifactHover.originalItem && (*artifactHover.originalItem)[0] == 23 && (*artifactHover.originalItem)[0x9d] == 0 &&
+          std::all_of(artifactHover.originalItem->begin() + 0x1d, artifactHover.originalItem->begin() + 0x9d,
+                      [](uint8_t value) { return value == 0; }));
 }
 
 // Writes a .plx stream with plain (unsealed) tag names, as a test document.
@@ -9088,6 +9132,8 @@ int main(int argc, char **argv) {
         return voxelCustomizationTests();
     if (argc == 2 && std::string(argv[1]) == "itempreview")
         return itemPreviewTests();
+    if (argc == 2 && std::string(argv[1]) == "mappreview")
+        return mapPreviewTests();
     if (argc == 2 && std::string(argv[1]) == "voxeledit")
         return voxelEditTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
@@ -10382,6 +10428,7 @@ int main(int argc, char **argv) {
     failures += voxelEditTests();
     failures += voxelCustomizationTests();
     failures += itemPreviewTests();
+    failures += mapPreviewTests();
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
     failures += itemSelectorTests();

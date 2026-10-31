@@ -831,6 +831,16 @@ bool Hud::loadQuestIcons(const std::filesystem::path &file) {
 // Texts are drawn twice: white with a darker outline, then their colour without one.
 void Hud::drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) const {
     using namespace mapmarks;
+    Hover hovered;
+    if (state.mapInteractive)
+        hovered = hover(
+            state.mapMarkers, state.pointerAt, guiScale, [&](const Marker &marker) { return mapLabelWidth(marker); }, state.mapShrineMode);
+    mapOutputs.admittedDraw(&hovered);
+    if (state.mapOverlayDraw)
+        state.mapOverlayDraw(hovered);
+    const Cell target = state.mapOverlayDraw ? (hovered.shrine ? Cell{hovered.shrine->x, hovered.shrine->y}
+                                                               : Cell{PreviewOutputs::NONE, PreviewOutputs::NONE})
+                                             : state.mapShrineTarget;
     const float bobbing = bob(state.mapClockMs);
     auto outlinedText = [&](const std::string &text, glm::vec2 at, float scale, glm::vec4 fill, glm::vec4 outline) {
         plasma::TextStyle s = labelStyle((int)(scale * 12.0f * guiScale), (int)(scale * 3.0f * guiScale), plasma::TEXT_CENTER, true);
@@ -859,12 +869,13 @@ void Hud::drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) co
         if (!k.icon.empty() && guiLoaded) {
             const bool still = k.shrineTarget || !k.overlay.empty();
             const float rise = ICON_RISE - (still ? 0.0f : bobbing);
-            plasmaPlaced(out, k.icon.c_str(), k.at, glm::vec2(0, -rise), PlasmaFrame{}, nullptr, k.enlarged ? HOVERED_ICON_SCALE : k.scale);
+            const bool enlarged = state.mapInteractive ? hoveredTarget(k, hovered) : k.enlarged;
+            plasmaPlaced(out, k.icon.c_str(), k.at, glm::vec2(0, -rise), PlasmaFrame{}, nullptr, enlarged ? HOVERED_ICON_SCALE : k.scale);
             labelY += (float)(int)(LABEL_DROP * guiScale);
         }
         if (!k.overlay.empty() && guiLoaded)
             plasmaPlaced(out, k.overlay.c_str(), k.at, glm::vec2(0, -(ICON_RISE - bobbing)), PlasmaFrame{}, nullptr, k.scale);
-        const auto text = markerText(k, state.mapShrineMode, state.mapShrineTarget, state.mapWorldElapsedMs);
+        const auto text = markerText(k, state.mapShrineMode, target, state.mapWorldElapsedMs);
         if (!k.label.empty())
             outlinedText(k.label, glm::vec2(k.at.x, labelY), text.scale, text.colour, glm::vec4(glm::vec3(text.colour) * 0.3f, 1.0f));
         if (!k.note.empty())
@@ -895,7 +906,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     if (panels.customization && !state.customization)
         panels.customization->visible = false;
     const Inventory *information = state.information ? state.information : state.inventory;
-    if (state.mapPreview.empty() && information && information->infoItem)
+    if (information && (state.mapInformation || (state.mapPreview.empty() && information->infoItem)))
         positionPreview(*information); // Selection observes the preceding draw's stored frame.
     ringItems(state.ring);
     if (!state.interfaceVisible)
@@ -1117,7 +1128,9 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     if (state.windows)
         drawScreen(*state.windows, out);
     drawMapMarkers(state, out); // The game-UI subtree precedes the separate MapOverlay root.
-    if (state.mapPreview.empty()) {
+    if (state.mapInformation)
+        drawNativeMapPreview(state, out);
+    else if (state.mapPreview.empty()) {
         if (state.informationDraw)
             state.informationDraw();
         if (information)
@@ -1125,7 +1138,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     }
     if (overlays)
         overlays(out);
-    drawMapPreview(state, out);
+    if (!state.mapInformation)
+        drawMapPreview(state, out);
     drawPointer(state, out);
 }
 

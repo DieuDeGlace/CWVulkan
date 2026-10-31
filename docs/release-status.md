@@ -7,6 +7,20 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native map information now uses the independent map-location/lore audit.
+  Overlay drawing publishes semantic item records and independent flight/lore
+  outputs; hidden draws retain them. Earlier coordinates stay copied while the
+  item and target-kind flag remain live. Flight pricing/distance/time and static
+  styled lore words use their specified arithmetic, spacing, fixed origins and
+  late geometry. Rejected lore suppresses the item branch. Owner-tree and numeric
+  regressions pass, along with all five targets and the full CPU/owner suite, 40 world/
+  20 GUI Vulkan, water and Alpha checks. The expanded 789-snapshot strict audit
+  still reports the existing street-lamp turn differences in three fixture sets;
+  this is a development checkpoint, not a final parity release. Complete map
+  collection/camera/capture timing and earlier inventory sampling remain open.
+  A read-only owner-data capture confirms artifact tooltip text; category23
+  procedural voxel resources are not yet supplied to its icon renderer.
+
 - Ground and Ring information are connected. Ring keeps the canonical key sampled
   before later toggle/repeat work; ground fallback resolves existing zone/index
   data fresh at draw without loading zones or applying new validity filters.
@@ -17,7 +31,8 @@ checkpoint describe the intended setup and remaining limits.
   owner-placement regressions pass, as do all five targets and the full CPU/owner,
   40 world/20 GUI Vulkan, water and Alpha checks. Private read-only Ring captures
   exercise both GUI scales; the final executable capture leaves its fixture unchanged.
-  Full earlier UI/comparison sampling and map outputs remain open.
+  Full earlier UI/comparison sampling remains open; the bounded map-output
+  implementation is described above.
 
 - Information now reads its borrowed original during the later draw callback,
   after earlier palette updates, rather than freezing its text/image beforehand.

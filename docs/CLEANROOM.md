@@ -72,6 +72,14 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Map information follows `steam-preview-map-location-lore.md`: complete semantic
+  item payloads stay live in the overlay member, while flight/lore coordinates
+  are copied before the later draw. Reached minimap/drag draws reset outputs;
+  hidden ancestors retain them. Flight quotes use current physical coordinates,
+  known points and the live target flag. Static lore keeps fixed headers, styled
+  words, native punctuation gaps and page spacing without activating page effects.
+  Owner-tree tests cover draw order, previous backgrounds and late 115/145/124/103
+  heights. Full GUI collection/capture and earlier inventory sampling remain open.
 - Ground/Ring information bindings follow `steam-preview-source-lifetimes.md`,
   `steam-ring-selector-rendering.md` and preview sections4/5/7. Ring sampling keeps
   the earlier canonical key; draw resolves current ground storage without loading

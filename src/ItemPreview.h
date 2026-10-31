@@ -5,6 +5,7 @@
 #include <array>
 #include <string>
 #include <optional>
+#include <limits>
 
 namespace itempreview {
 enum class Anchor { Cursor, Inventory, Shop, Crafting, Ground };
@@ -17,6 +18,8 @@ struct FrameSources {
     std::optional<std::array<int32_t, 3>> ground;
     RingSource ring;
     bool ordinaryUi = false;
+    static constexpr int32_t NO_COORDINATE = std::numeric_limits<int32_t>::max();
+    std::array<int32_t, 2> flight{NO_COORDINATE, NO_COORDINATE}, lore{NO_COORDINATE, NO_COORDINATE};
 };
 struct Sources {
     const nativesaves::Item *map = nullptr, *inventory = nullptr, *equipment = nullptr;

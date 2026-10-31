@@ -8,6 +8,7 @@
 // Everything here is plain data and arithmetic; main.cpp gathers the facts, Hud draws the
 // overlay's markers and WorldMap the 3D ones.
 #include "worldgen/ZoneRecords.h" // worldgen::Item
+#include "NativeSaves.h"
 
 #include <glm/glm.hpp>
 
@@ -140,6 +141,7 @@ struct Marker {
     // CubeVulkan's own: a quest sprite from OverworldEvents' atlas drawn instead, its bottom
     // centre on the marker. Not a map marker of the game's; never hovered.
     std::string questSprite;
+    const nativesaves::Item *originalItem = nullptr; // Borrowed until overlay drawing; never regenerated from its icon.
 };
 
 constexpr float HOVERED_ICON_SCALE = 1.25f;
@@ -152,12 +154,22 @@ float bob(int clockMs);
 // What the pointer chose (spec 1.7). Every field is the last one written by a hit nearer than
 // the ones before it, so a later hit only overwrites the fields its own flags write.
 struct Hover {
-    int best = -1; // the nearest marker hit
+    int best = -1;                                    // the nearest marker hit
     std::optional<glm::ivec2> flight, shrine, chosen; // flight target, shrine target, hover-chosen spot
-    bool flightToPlayer = false; // the flight target is not a flight point but a player
-    std::optional<Cell> cell;  // a lore building's cell
-    worldgen::Item item;    // an item to show
-    glm::ivec3 cursor{0};      // the map's cursor, in blocks
+    bool flightToPlayer = false;                      // the flight target is not a flight point but a player
+    std::optional<Cell> cell;                         // a lore building's cell
+    worldgen::Item item;                              // an item to show
+    glm::ivec3 cursor{0};                             // the map's cursor, in blocks
+    std::optional<nativesaves::Item> originalItem;
+};
+// Persistent outputs written only by an admitted MapOverlay draw. Flight/lore
+// coordinates are copied by selection; item storage remains a live borrowed member.
+struct PreviewOutputs {
+    static constexpr int32_t NONE = std::numeric_limits<int32_t>::max();
+    nativesaves::Item item{};
+    Cell flight{NONE, NONE}, lore{NONE, NONE};
+    bool flightToPlayer = false; // The source byte is not reset with the coordinate pairs.
+    void admittedDraw(const Hover *interactiveHover);
 };
 // The hover pass over markers sorted far to near: `uiScale` is the interface's scale and
 // `labelWidth` measures a label at a marker's scale (in pixels).
@@ -165,6 +177,7 @@ Hover hover(const std::vector<Marker> &markers, glm::vec2 pointer, float uiScale
             bool shrinesOnly = false);
 // Marks the markers standing on a hover target as drawn enlarged.
 void enlargeTargets(std::vector<Marker> &markers, const Hover &hovered);
+bool hoveredTarget(const Marker &, const Hover &);
 
 // Full-map/shrine-choice continuation (steam-item-map-selection.md). The borrowed source
 // address is recorded, never dereferenced, rebound, reserved or consumed by this path.

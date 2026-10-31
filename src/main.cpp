@@ -57,6 +57,7 @@
 #include "Missions.h"
 #include "Lore.h"
 #include "MapMarks.h"
+#include "MapPreview.h"
 #include "UsePrompt.h"
 #include "ItemSelector.h"
 #include "Renderer.h"
@@ -1391,30 +1392,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     bool flightmasterMode = false, flightSelected = false;
     // the distance text (and PreviewWidget's the distance format, the same): metres to two
     // figures below 1000, kilometres with a tenth below 10 km, else whole kilometres.
-    auto flatDistance = [](int metres) {
-        if (metres < 10)
-            return std::to_string(metres) + " m";
-        if (metres < 500)
-            return std::to_string(metres / 10 * 10) + " m";
-        if (metres < 1000)
-            return std::to_string(metres / 100 * 100) + " m";
-        const int km = metres / 1000, tenths = metres / 100 - km * 10;
-        return metres < 10000 && tenths > 0 ? std::to_string(km) + "." + std::to_string(tenths) + " km" : std::to_string(km) + " km";
-    };
+    auto flatDistance = mappreview::distanceText;
     std::array<int32_t, 2> selectedFlightPoint{0, 0};
     std::set<std::array<int32_t, 2>> boughtFlights(saveGame.flightPoints.begin(), saveGame.flightPoints.end());
-    auto flightPrice = [&](std::array<int32_t, 2> point) { // 0x2adce0
-        const double px = (double)player.position.x + (double)(extractedWorld.originDotsX() >> 16) - (double)point[0];
-        const double py = (double)player.position.y + (double)(extractedWorld.originDotsY() >> 16) - (double)point[1];
-        double best = std::sqrt(px * px + py * py);
-        for (const auto &known : boughtFlights) { // half a leg from a known one
-            const double dx = (double)(known[0] - point[0]), dy = (double)(known[1] - point[1]);
-            const double leg = std::sqrt(dx * dx + dy * dy);
-            if (best < 0.0 || leg * 0.5 < best)
-                best = leg * 0.5;
+    auto flightContext = [&] {
+        mappreview::FlightContext context;
+        context.known = &boughtFlights;
+        context.money = playerGold;
+        if (const auto *record = spawned.playerRecord()) {
+            std::memcpy(context.physical.data(), record + 0x10, 24);
+            context.ability = record[0x68];
+            std::memcpy(&context.abilityMs, record + 0x6c, 4);
+            std::memcpy(context.destination.data(), record + 0x1b0, 8);
+            std::memcpy(context.start.data(), record + 0x1b8, 24);
+        } else {
+            context.physical[0] = int64_t(double(player.position.x) * 65536) + extractedWorld.originDotsX();
+            context.physical[1] = int64_t(double(player.position.y) * 65536) + extractedWorld.originDotsY();
         }
-        return std::max(100, (int)std::max(0.0, best) / 100);
+        return context;
     };
+    auto flightPrice = [&](std::array<int32_t, 2> point) { return mappreview::flightPrice(point, flightContext()); };
     // The game's ground height at a block (the ground height), for the map's position.
     auto groundOf = [](double x, double y) { return (double)worldgen::groundHeight((int32_t)std::floor(x), (int32_t)std::floor(y)); };
     const float &minimapScale = gameOptions.mapScale; // options.cfg "mapScale" (the game's default 1; F5 / F6)
@@ -5169,6 +5166,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 scene.vehicleName = itemName(vehicle->item);
             }
 
+            if (!mapOpen)
+                flightmasterMode = false; // Early frame clear; an admitted flight-master use can reopen it below.
             const useprompt::Targets targets = useprompt::chooseTargets(scene);
             if (nativeInventory && targets.groundItem >= 0 && (size_t)targets.groundItem < sceneLoot.size()) {
                 const auto key = sceneLoot[(size_t)targets.groundItem]->zoneItem;
@@ -5432,6 +5431,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // toggle/repeat/label work. Keep canonical identity, not its caption.
             previewSources.ring = itempreview::sampleRing(nativeInventory->inventory, itemSelector.shown, itemSelector.index);
             previewSources.ordinaryUi = nativeOrdinaryUi();
+            previewSources.flight = hud.mapPreviewOutputs().flight;
+            previewSources.lore = hud.mapPreviewOutputs().lore;
         }
 
         // Character motion from what actually happened this frame.
@@ -7042,12 +7043,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             hs.pointerAt = {(float)mapPointerX, (float)mapPointerY};
             // The actual overlay draw owns these cached targets. A hidden interface keeps
             // the preceding draw's result; release never repicks from new coordinates.
-            if (!menusReady || menus.interfaceShown()) {
-                mapmarks::Hover hovered;
-                if (mapOpen && !mapSelection.dragged)
-                    hovered = mapmarks::hover(
-                        hs.mapMarkers, hs.pointerAt, hud.interfaceScale(),
-                        [&](const mapmarks::Marker &marker) { return hud.mapLabelWidth(marker); }, mapSelection.shrinesOnly);
+            auto acceptMapHover = [&](const mapmarks::Hover &hovered) {
                 mapSelection.overlayDrawn(hovered);
                 flightSelected = false;
                 if (hovered.flight && !hovered.flightToPlayer) {
@@ -7060,13 +7056,34 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     mapCursor = glm::dvec3(hovered.cursor);
                     mapCursorKnown = mapCursorFromOverlay = true;
                 }
+            };
+            if (nativeInventory) {
+                hs.mapInteractive = mapOpen && !mapSelection.dragged;
+                hs.mapOverlayDraw = acceptMapHover;
+                if (hs.interfaceVisible && hs.mapInteractive) {
+                    // Prepare a possible next icon without publishing map outputs
+                    // before the actual MapOverlay draw.
+                    const auto candidate = mapmarks::hover(
+                        hs.mapMarkers, hs.pointerAt, hud.interfaceScale(),
+                        [&](const mapmarks::Marker &marker) { return hud.mapLabelWidth(marker); }, mapSelection.shrinesOnly);
+                    if (candidate.originalItem)
+                        loadInventorySprite(
+                            spawned.itemSprite(nativeplayer::transformed(*candidate.originalItem, gear.playerClass()).data()));
+                }
+            } else if (!menusReady || menus.interfaceShown()) {
+                mapmarks::Hover hovered;
+                if (mapOpen && !mapSelection.dragged)
+                    hovered = mapmarks::hover(
+                        hs.mapMarkers, hs.pointerAt, hud.interfaceScale(),
+                        [&](const mapmarks::Marker &marker) { return hud.mapLabelWidth(marker); }, mapSelection.shrinesOnly);
+                acceptMapHover(hovered);
                 mapmarks::enlargeTargets(hs.mapMarkers, hovered);
             }
             hs.mapShrineMode = mapSelection.shrinesOnly;
             hs.mapShrineTarget = mapSelection.target;
             // The lore panel of the lore building under the pointer (the lore spec's 4.5): its realm,
             // how much of the realm's lore is read, and the building's tale.
-            if (mapOpen && hoveredLoreCell && lore::isLoreBuilding(*hoveredLoreCell)) {
+            if (!nativeInventory && mapOpen && hoveredLoreCell && lore::isLoreBuilding(*hoveredLoreCell)) {
                 using Line = Hud::Inventory::InfoLine;
                 const lore::Cell cell = *hoveredLoreCell;
                 const uint32_t realm = lore::realmOf(cell);
@@ -7081,7 +7098,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 std::mt19937 seeded(worldgen::random((uint32_t)cell[0] + 57u * (uint32_t)cell[1]));
                 for (const std::string &line : playScript(script, speech, seeded, &talkNames).lines)
                     hs.mapPreview.push_back(Line{line, 12, 3, glm::vec4(1), 10, true});
-            } else if (mapOpen && hoveredArtifact.category != 0 && talkNames.item) {
+            } else if (!nativeInventory && mapOpen && hoveredArtifact.category != 0 && talkNames.item) {
                 // A revealed artifact's place: the artifact hidden there (spec: open question: the
                 // game's drawing of it was not traced; CubeVulkan names it).
                 using Line = Hud::Inventory::InfoLine;
@@ -7100,7 +7117,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             hs.pointer = hud.hasPointer() && (inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible());
             // the flight point preview for the selected flight point: its name, the
             // distance, and the flight time (once known) or what it costs.
-            if (mapOpen && flightSelected) {
+            if (!nativeInventory && mapOpen && flightSelected) {
                 using Line = Hud::Inventory::InfoLine;
                 const glm::dvec2 here(player.position.x + (double)(extractedWorld.originDotsX() >> 16),
                                       player.position.y + (double)(extractedWorld.originDotsY() >> 16));
@@ -7134,7 +7151,33 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             std::vector<glm::vec2> answerPoints;
             input.gamepadNavigationPoints.clear();
             if (nativeInventory) {
+                hs.mapInformation = previewSources.flight[0] != itempreview::FrameSources::NO_COORDINATE ||
+                                    previewSources.lore[0] != itempreview::FrameSources::NO_COORDINATE;
+                if (previewSources.flight[0] != itempreview::FrameSources::NO_COORDINATE)
+                    hs.mapInformationDraw = [&, target = previewSources.flight] {
+                        return mappreview::flight(target, hud.mapPreviewOutputs().flightToPlayer, flightContext());
+                    };
+                else if (previewSources.lore[0] != itempreview::FrameSources::NO_COORDINATE)
+                    hs.mapLoreDraw = [&, cell = previewSources.lore]() -> std::optional<mappreview::Lore> {
+                        if (!lore::isLoreBuilding(cell))
+                            return std::nullopt;
+                        const auto place = mappreview::lorePlace(cell);
+                        const uint32_t realm = worldgen::placeStyle(place[0], place[1]);
+                        mappreview::Lore content;
+                        content.realm = realmName(realm);
+                        content.percent = mappreview::lorePercent(loreBook[realm].size());
+                        TalkScript script;
+                        script.tokens = lore::tale(cell);
+                        std::mt19937 seeded(worldgen::random(uint32_t(cell[0]) + 57u * uint32_t(cell[1])));
+                        auto compiled = playScript(script, speech, seeded, &talkNames);
+                        for (auto &page : compiled.pages)
+                            content.pages.push_back(std::move(page.words));
+                        return content;
+                    };
+                ordinaryInformation.infoAnchor = previewSources.ordinaryUi ? itempreview::Anchor::Cursor : itempreview::Anchor::Ground;
+                ordinaryInformation.pointer = hs.pointerAt;
                 itempreview::Sources sources;
+                sources.map = &hud.mapPreviewOutputs().item;
                 sources.ringShown = previewSources.ring.shown;
                 if (previewSources.ring.selected)
                     if (const auto *slot = nativeInventory->inventory.slot(*previewSources.ring.selected))
@@ -7457,8 +7500,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // The map overlay's markers (MapMarks.h): places, missions, lands, flight points and
             // stars, drawn far to near; then the marker under the pointer.
             mapMarkerViews.clear();
-            if (!mapOpen)
-                flightmasterMode = false;
             {
                 const int unit = worldmap::scaleOf(mapZoom);
                 const int clockMs = (int)(time * 1000.0);

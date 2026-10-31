@@ -6,6 +6,7 @@
 // dict_en.xml. Everything is laid out as the game lays it out at 1920x1080 and
 // scaled with the window height.
 #include "MapMarks.h"
+#include "MapPreview.h"
 #include "InventoryUi.h"
 #include "ItemPreview.h"
 #include "ItemInformation.h"
@@ -222,6 +223,8 @@ class Hud {
         // interface's clock their icons bob by; also the quest sprites over people's heads.
         using MapMarker = mapmarks::Marker;
         std::vector<MapMarker> mapMarkers;
+        bool mapInteractive = false;
+        std::function<void(const mapmarks::Hover &)> mapOverlayDraw;
         int32_t guiClockMs = 0;
         int32_t guiStepMs = 0;
         int mapClockMs = 0;
@@ -236,10 +239,14 @@ class Hud {
         // The preview widget over the open map (the flight point preview): its lines,
         // at the pointer plus 30 units each way; none when empty.
         std::vector<Inventory::InfoLine> mapPreview;
+        bool mapInformation = false; // Copied coordinates select this branch even when its content is rejected.
+        std::function<std::vector<Inventory::InfoLine>()> mapInformationDraw;
+        std::function<std::optional<mappreview::Lore>()> mapLoreDraw;
     };
     // The game's two fonts, from the owner's installation.
     bool loadMenu(const std::filesystem::path &gameDir, std::string &error);
     bool hasInventoryArt() const { return inventoryReady || (scene && panels.bag.node); }
+    const mapmarks::PreviewOutputs &mapPreviewOutputs() const { return mapOutputs; }
     // An icon (RGBA, size x size) to pack into the atlas at the next layout().
     void addIcon(const std::string &key, std::vector<uint8_t> rgba, int size);
     // Retains the owner CUB allocation and native voxel data for immediate 3D widget draws.
@@ -518,6 +525,8 @@ class Hud {
         // The crafting widget's selection frame; the formula details and its parts.
         plasma::SceneNode *selector = nullptr, *details = nullptr, *craftButton = nullptr, *craftBar = nullptr, *itemShadow = nullptr;
     } panels;
+    mutable mapmarks::PreviewOutputs mapOutputs;
+    mutable float previewLineSpacing = 4;
     mutable int craftingClass = -1; // the class the crafting tabs' icons are for
     void layoutDetails();
     void drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) const;
@@ -549,9 +558,11 @@ class Hud {
     plasma::SceneNode *cursorNode = nullptr;
     void drawPointer(const State &state, std::vector<OverlayVertex> &out) const;
     void drawMapPreview(const State &state, std::vector<OverlayVertex> &out) const;
+    void drawNativeMapPreview(const State &state, std::vector<OverlayVertex> &out) const;
     // the widget text drawing; returns the y the text ends at (widget units).
     float widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &node, const std::wstring &text, glm::vec2 at, float size,
-                     float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap, glm::vec2 *pen = nullptr) const;
+                     float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap, glm::vec2 *pen = nullptr,
+                     float lineSpacing = 1) const;
     void positionPreview(const Inventory &inv) const;
     void drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     int panelItemAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;

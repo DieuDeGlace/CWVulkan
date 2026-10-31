@@ -198,14 +198,15 @@ void Hud::layoutInvPanel(InvPanel &p) {
 // a text at a point of the widget (its pivot plus the point), its outline alone first (a
 // transparent fill), then the fill.
 float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &node, const std::wstring &text, glm::vec2 at, float size,
-                      float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap, glm::vec2 *pen) const {
+                      float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap, glm::vec2 *pen,
+                      float lineSpacing) const {
     glm::mat4 m = scene->matrix(node);
     m = glm::translate(m, glm::vec3(node.transform.pivot + at, 0));
     plasma::TextStyle style;
     style.string = text;
     style.font = "resource1.dat";
     style.pixelSize = size;
-    style.lineSpacing = 1;
+    style.lineSpacing = lineSpacing;
     style.flags = flags;
     style.wrapWidth = wrap;
     style.scalable = true;
@@ -667,6 +668,7 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
         sceneNode(out, preview, glm::vec4(1), nullptr, [&](const plasma::SceneNode &node) {
             if (&node != &preview)
                 return;
+            previewLineSpacing = 1;
             itemIcon(inv.infoIcon, *inv.infoItem,
                      guiitem::previewPlacement(s.matrix(preview), preview.transform.pivot, s.viewSize(preview).x, guiClockMs), out.size());
             // The root/children are already submitted. This size is retained for
@@ -704,6 +706,56 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
                   std::round(origin.y + width * 0.3f - side / 2), side / (float)icon->second.w);
         }
     }
+}
+
+void Hud::drawNativeMapPreview(const State &state, std::vector<OverlayVertex> &out) const {
+    if (!scene || !panels.preview || !panels.preview->widget)
+        return;
+    auto &preview = *panels.preview;
+    preview.visible = true;
+    sceneNode(out, preview, glm::vec4(1), nullptr, [&](const plasma::SceneNode &node) {
+        if (&node != &preview)
+            return;
+        float y = 25;
+        if (state.mapInformationDraw) {
+            const auto rows = state.mapInformationDraw();
+            if (rows.empty())
+                return;
+            for (const auto &row : rows) {
+                const float end = widgetText(out, preview, latin1(row.text), {14, y}, row.size, row.stroke, row.color, BLACK,
+                                             plasma::TEXT_WRAP, scene->contentSize(preview).x - 30, nullptr, previewLineSpacing);
+                y = end + row.advance;
+            }
+        } else if (state.mapLoreDraw) {
+            const auto content = state.mapLoreDraw();
+            if (!content)
+                return; // Rejection neither resizes nor falls through to an item.
+            const float width = scene->contentSize(preview).x;
+            widgetText(out, preview, latin1(content->realm), {14, 25}, 12, 3, {1, .8f, .5f, 1}, BLACK, plasma::TEXT_WRAP, width - 20,
+                       nullptr, previewLineSpacing);
+            widgetText(out, preview, latin1("Lore " + std::to_string(content->percent) + "%"), {14, 49}, 12, 3,
+                       content->percent < 100 ? glm::vec4(.75f, .75f, .75f, 1) : glm::vec4(.6f, 1, .25f, 1), BLACK, plasma::TEXT_WRAP,
+                       width - 20, nullptr, previewLineSpacing);
+            previewLineSpacing = 2;
+            const auto layout = mappreview::layoutLore(*content, scene->contentSize(preview).x - 30, [&](const auto &word) {
+                plasma::TextStyle style;
+                style.font = "resource1.dat";
+                style.pixelSize = 12;
+                style.lineSpacing = previewLineSpacing;
+                style.scalable = true;
+                style.string = word;
+                plasma::TextBox bounds;
+                return plasma::textBounds(plasmaFonts[0], style, scene->matrix(preview), bounds) ? bounds.maximum.x - bounds.minimum.x : 0;
+            });
+            for (const auto &placed : layout.words)
+                widgetText(out, preview, placed.word.text, placed.at, 12, 3, placed.word.colour, BLACK, 0, 0, nullptr, previewLineSpacing);
+            y = layout.end.y + 30;
+        } else
+            return;
+        const float parentScale = scene->matrix(*preview.parent)[0][0];
+        scene->resizeTo(preview, glm::vec2(scene->contentSize(preview).x, y) * parentScale);
+    });
+    preview.visible = false;
 }
 
 void Hud::drawMapPreview(const State &state, std::vector<OverlayVertex> &out) const {

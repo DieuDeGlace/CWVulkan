@@ -255,11 +255,19 @@ individual feature documents.
   resource-admitted draws; ingredients share native hover/navigation geometry.
   Customization now submits its thumbnails, raw base/attributes/candidate and
   palette through that renderer. Retained-cursor and other callers still need conversion.
+  Category23 procedural artifact models still need owner-resource extraction or
+  the missing shape specifications; a model-list index cannot represent them.
   Ordinary information text now has its specified category rows, effects, float
   rounding and inline deltas. Equipped comparison uses original address identity,
   native candidate/Shift order, smaller fonts and fresh late resizes. Fractional
   comparison glyphs and standalone scaling have owner-tree regressions; earlier
-  full earlier UI/comparison sampling and map source bindings remain open.
+  full earlier UI/comparison sampling remains open. Native map outputs now retain
+  the full semantic payload in live storage, copy earlier flight/lore coordinates
+  and publish only during an admitted overlay draw. Flight/lore/item precedence,
+  exact flight quotes and static styled lore text follow the independent map audit.
+  Owner-tree checks cover hidden/reset state, fixed body origins and late panel
+  sizing; the full CPU/owner and 40 world/20 GUI Vulkan suites pass. Complete map
+  collection/capture timing and camera state remain separate gaps.
   Ring keys now precede later toggle/repeat work; ground fallback resolves only
   existing zone/index data, retaining independent origin metadata and native
   previous-size placement. Packet-backed cleared-slot and owner-geometry tests pass.
