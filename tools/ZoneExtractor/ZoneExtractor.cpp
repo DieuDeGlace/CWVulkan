@@ -1,4 +1,5 @@
 ﻿#include "../../src/SceneCapture.h"
+#include "../../src/ProceduralItemData.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -53,6 +54,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <fstream>
+#include <sstream>
 
 namespace extract {
 constexpr uintptr_t REGION_AT_RVA = 0x2ada20;    // void (World*, IntVector2* out, x, y)
@@ -85,6 +88,8 @@ static int64_t floorDiv(int64_t a, int64_t b) { return a / b - ((a % b != 0) && 
 struct Job {
     std::string path;
     std::vector<unsigned char> data;
+    bool atomic = false;
+    std::atomic<int> *written = nullptr, *failed = nullptr;
 };
 static std::deque<Job> jobs;
 static std::mutex jobsMutex;
@@ -98,11 +103,19 @@ static void writer() {
             job = std::move(jobs.front());
             jobs.pop_front();
         }
+        const std::string target = job.atomic ? job.path + ".tmp" : job.path;
         FILE *f = nullptr;
-        if (fopen_s(&f, job.path.c_str(), "wb") == 0 && f) {
-            fwrite(job.data.data(), 1, job.data.size(), f);
-            fclose(f);
+        bool success = fopen_s(&f, target.c_str(), "wb") == 0 && f;
+        if (success) {
+            success = fwrite(job.data.data(), 1, job.data.size(), f) == job.data.size();
+            success = fclose(f) == 0 && success;
+            if (success && job.atomic)
+                success = MoveFileExA(target.c_str(), job.path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
         }
+        if (success && job.written)
+            ++*job.written;
+        else if (!success && job.failed)
+            ++*job.failed;
     }
 }
 
@@ -6352,9 +6365,178 @@ static void run(cube::Game *g) {
 }
 } // namespace soundlist
 
+// Finished native procedural resources, copied on the game's window thread.
+// Data/ABI facts: docs/specs/steam-procedural-item-resources.md sections1–5.
+namespace proceduralcapture {
+using proceduralitem::Key;
+constexpr const char *REQUEST = "Extract\\procedural-items.request";
+constexpr const char *PROCESSING = "Extract\\procedural-items.processing";
+constexpr const char *STATUS = "Extract\\procedural-items.status";
+static std::deque<Key> pending;
+static std::atomic<int> written{0}, writeFailed{0};
+static int queued = 0, lookupFailed = 0;
+static bool active = false;
+static ULONGLONG nextStatus = 0;
+
+static bool copyNative(const void *source, void *destination, size_t count) {
+    __try {
+        memcpy(destination, source, count);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+static void *lookup(void *store, Key key) {
+    using Function = void *(__fastcall *)(void *, int32_t, uint32_t);
+    __try {
+        return reinterpret_cast<Function>(base() + 0x1737b0)(store, key.id, key.modifier);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return nullptr;
+    }
+}
+static DWORD windowThread() {
+    struct Search {
+        DWORD process, thread = 0;
+    } search{GetCurrentProcessId()};
+    EnumWindows(
+        [](HWND window, LPARAM parameter) -> BOOL {
+            auto &search = *reinterpret_cast<Search *>(parameter);
+            DWORD process = 0;
+            const DWORD thread = GetWindowThreadProcessId(window, &process);
+            if (process == search.process && IsWindowVisible(window) && !GetWindow(window, GW_OWNER)) {
+                search.thread = thread;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&search));
+    return search.thread;
+}
+static bool status(const std::string &text) {
+    const std::string temporary = std::string(STATUS) + ".tmp";
+    FILE *file = nullptr;
+    if (fopen_s(&file, temporary.c_str(), "wb") || !file)
+        return false;
+    const bool complete = fwrite(text.data(), 1, text.size(), file) == text.size();
+    return fclose(file) == 0 && complete && MoveFileExA(temporary.c_str(), STATUS, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+}
+static bool readRequest() {
+    WIN32_FILE_ATTRIBUTE_DATA attributes{};
+    if (!GetFileAttributesExA(PROCESSING, GetFileExInfoStandard, &attributes) || attributes.nFileSizeHigh ||
+        attributes.nFileSizeLow > proceduralitem::MAX_REQUEST_BYTES)
+        return false;
+    std::ifstream input(PROCESSING, std::ios::binary);
+    std::string text(attributes.nFileSizeLow, '\0');
+    input.read(text.data(), std::streamsize(text.size()));
+    if (input.gcount() != std::streamsize(text.size()))
+        return false;
+    char trailing;
+    if (input.get(trailing))
+        return false;
+    std::vector<Key> keys;
+    if (!proceduralitem::decodeRequest(text, keys))
+        return false;
+    pending.assign(keys.begin(), keys.end());
+    return true;
+}
+static bool capture(void *store, Key key) {
+    const auto *native = static_cast<const uint8_t *>(lookup(store, key));
+    if (!native)
+        return false;
+    proceduralitem::Resource resource;
+    resource.key = key;
+    resource.origin = proceduralitem::Origin::NativeLookup;
+    resource.sourceTimestamp = SUPPORTED_TIMESTAMP;
+    const uint8_t *rgb = nullptr;
+    if (!copyNative(native + 0x68, &rgb, sizeof rgb) || !rgb || !copyNative(native + 0x88, resource.dimensions.data(), 12) ||
+        resource.dimensions != std::array<int32_t, 3>{24, 24, 24} || !copyNative(native + 0x99, &resource.classification, 1) ||
+        !copyNative(native + 0x9a, &resource.mode, 1) || !copyNative(native + 0x9c, &resource.radius, 4) ||
+        !copyNative(native + 0xa0, resource.shade.data(), 3))
+        return false;
+    resource.rgb.resize(3 * 24 * 24 * 24);
+    if (!copyNative(rgb, resource.rgb.data(), resource.rgb.size()))
+        return false;
+    std::vector<uint8_t> encoded;
+    if (!proceduralitem::encode(resource, encoded))
+        return false;
+    Job job{"Extract\\procedural-items\\" + proceduralitem::fileName(key), std::move(encoded)};
+    job.atomic = true;
+    job.written = &written;
+    job.failed = &writeFailed;
+    {
+        std::lock_guard lock(jobsMutex);
+        jobs.push_back(std::move(job));
+    }
+    jobsReady.notify_one();
+    return true;
+}
+static void tick(cube::Game *game) {
+    const bool requested =
+        GetFileAttributesA(REQUEST) != INVALID_FILE_ATTRIBUTES || GetFileAttributesA(PROCESSING) != INVALID_FILE_ATTRIBUTES;
+    if (!active && !requested)
+        return;
+    // OnGameTick must actually be running on the native window thread. Do not
+    // move this lookup into the asynchronous file writer or a generic zone lock.
+    if (GetCurrentThreadId() != windowThread()) {
+        const ULONGLONG now = GetTickCount64();
+        if (now >= nextStatus) {
+            status("CWP1 waiting: capture requires the game's window-thread tick.\n");
+            nextStatus = now + 1000;
+        }
+        return;
+    }
+    void *store = nullptr, *device = nullptr;
+    if (!copyNative(reinterpret_cast<const uint8_t *>(game->world) + 0x70, &store, sizeof store) || !store ||
+        !copyNative(static_cast<const uint8_t *>(store) + 8, &device, sizeof device) || !device)
+        return;
+    if (!active) {
+        if (GetFileAttributesA(PROCESSING) == INVALID_FILE_ATTRIBUTES && !MoveFileExA(REQUEST, PROCESSING, MOVEFILE_REPLACE_EXISTING))
+            return;
+        pending.clear();
+        if (!readRequest()) {
+            status("CWP1 error: expected 1..512 unique signed-ID/full-modifier-hex pairs.\n");
+            DeleteFileA(PROCESSING);
+            return;
+        }
+        CreateDirectoryA("Extract\\procedural-items", nullptr);
+        written = writeFailed = 0;
+        queued = lookupFailed = 0;
+        active = true;
+        nextStatus = 0;
+        log("Procedural resource capture started: " + std::to_string(pending.size()) + " full keys");
+    }
+    if (!pending.empty()) {
+        const Key key = pending.front();
+        pending.pop_front();
+        if (capture(store, key))
+            ++queued;
+        else
+            ++lookupFailed;
+    }
+    const bool complete = pending.empty() && written.load() + writeFailed.load() == queued;
+    const ULONGLONG now = GetTickCount64();
+    bool statusWritten = false;
+    if (complete || now >= nextStatus) {
+        statusWritten = status(std::string("CWP1 ") + (complete ? "complete" : "pending") + " remaining=" + std::to_string(pending.size()) +
+                               " written=" + std::to_string(written.load()) + " lookup_failed=" + std::to_string(lookupFailed) +
+                               " write_failed=" + std::to_string(writeFailed.load()) + "\n");
+        nextStatus = now + 250;
+    }
+    if (complete && statusWritten) {
+        active = false;
+        DeleteFileA(PROCESSING);
+        log("Procedural resource capture completed: " + std::to_string(written.load()) + " written, " +
+            std::to_string(lookupFailed + writeFailed.load()) + " failed");
+    }
+}
+} // namespace proceduralcapture
+
 static void tick(cube::Game *g) {
     netrecorder::poll(); // also outside a world, so a recording can start before joining
-    if (!g || !g->world || !g->world->local_creature || !supported())
+    if (!g || !g->world || !supported())
+        return;
+    proceduralcapture::tick(g);
+    if (!g->world->local_creature)
         return;
     oracle::run(g->world);
     soundlist::run(g);

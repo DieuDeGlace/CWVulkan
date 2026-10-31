@@ -7,6 +7,7 @@
 // scaled with the window height.
 #include "MapMarks.h"
 #include "MapPreview.h"
+#include "SteamVoxel.h"
 #include "InventoryUi.h"
 #include "ItemPreview.h"
 #include "ItemInformation.h"
@@ -251,7 +252,9 @@ class Hud {
     // An icon (RGBA, size x size) to pack into the atlas at the next layout().
     void addIcon(const std::string &key, std::vector<uint8_t> rgba, int size);
     // Retains the owner CUB allocation and native voxel data for immediate 3D widget draws.
-    void addItemIcon(const std::string &key, const CubModel &, bool retainVolume = false);
+    void addItemIcon(const std::string &key, const CubModel &, bool retainVolume = false,
+                     steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock);
+    void prepareItemResources(Renderer &renderer) { uploadItemModels(renderer); }
     const std::vector<guiitem::Request> &itemDraws() const { return itemRequests; }
     // OverworldEvents' quest sprites (assets/OverworldEvents/quest-icons.png, 320 x 80): the
     // orange question mark ("quest-event"), the grey one ("quest-destination") and the orange

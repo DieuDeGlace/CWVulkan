@@ -58,6 +58,7 @@
 #include "Lore.h"
 #include "MapMarks.h"
 #include "MapPreview.h"
+#include "ProceduralItems.h"
 #include "UsePrompt.h"
 #include "ItemSelector.h"
 #include "Renderer.h"
@@ -1741,9 +1742,24 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     std::vector<Carried> bag;
     std::function<void()> rebuildInventoryViews;
     std::set<std::string> inventoryIconAttempts; // this session owns its Hud and GPU resources
+    proceduralitem::OwnerCache proceduralModels(assets.gameDir() / "Extract" / "procedural-items");
     auto loadInventorySprite = [&](const std::string &sprite) {
         if (sprite.empty() || !inventoryIconAttempts.insert(sprite).second)
             return;
+        if (const auto key = proceduralitem::parseSpriteKey(sprite)) {
+            std::string diagnostic;
+            const auto &resource = proceduralModels.get(*key, &diagnostic);
+            if (!diagnostic.empty())
+                logLine(diagnostic);
+            CubModel cub;
+            cub.sx = resource.dimensions[0];
+            cub.sy = resource.dimensions[1];
+            cub.sz = resource.dimensions[2];
+            cub.rgb = resource.rgb;
+            hud.addItemIcon(sprite, cub, false, steamvoxel::CubEncoding::Unhalved);
+            hud.prepareItemResources(renderer); // A live Preview source can resolve its new resource during drawing.
+            return;
+        }
         if (const auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
             CubModel cub;
             if (cub.load(*path)) {

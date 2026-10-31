@@ -131,7 +131,8 @@ modifier):
 2. If the entry already holds a model, return it.
 3. Otherwise make a new model object (0xa8 bytes, 0x16e6b0 with the store's device and flag
    1), store it in the entry, and fill it with the generator 0x2b880 (generator state, model,
-   id, modifier). Return the model. Models are never removed from the cache.
+   id, modifier). Return the model. The lookup itself does not remove entries;
+   borrowed pointers still require the live store's lifetime.
 
 **The generator 0x2b880** works on a small state object (discarded afterwards) holding the
 model, the id, the modifier and a 32-bit **counter** (+0x30):
@@ -148,7 +149,8 @@ model, the id, the modifier and a 32-bit **counter** (+0x30):
 4. **Shape.** By the id: 0 → 0x30790, 1 → 0x2bf90, 2 → 0x2e490, 3 → 0x2ffd0, 4 → four more
    draws and 0x2daf0 around the model's centre, 5 → 0x2cae0, 6 → 0x2f450, any other id → a
    colour of three draws (each (x xor x shifted left 5) & 0x7f) and 0x2fc60 around the
-   centre. These shape generators are not specified here.
+   centre. The eight exact families are specified separately in
+   [steam-procedural-item-resources §§8–16](steam-procedural-item-resources.md).
 5. **Finish.** 0x170700 (model, 0) builds the model for drawing.
 
 The model depends only on (id, modifier), and is the same every time for the same pair.
@@ -156,9 +158,9 @@ The model depends only on (id, modifier), and is the same every time for the sam
 The later native audit [steam-procedural-item-resources.md](steam-procedural-item-resources.md)
 specifies the exact live cache layout/lookup ABI, raw24³ RGB allocation,
 generation-ready capture boundaries, native meshing mode and why geometry itself
-depends on the modifier's RNG state. Its first checkpoint supplies a bounded
-owner-data export contract; it does not replace the eight pending shape algorithms
-with recolored stock models.
+depends on the modifier's RNG state. It supplies both a bounded owner-data export
+contract and all eight shape-family algorithms, including their byte-color
+operations, ordered primitives and retained trig/runtime-verification boundaries.
 
 ---
 
@@ -232,12 +234,12 @@ What the extraction does not capture, in the game's own terms:
 
 ## Open questions
 
-1. **Procedural shape algorithms.** Category0x17 includes artifacts
-   (lore-and-artifacts §5.1). Exact shape generators0x30790,0x2bf90,
-   0x2e490,0x2ffd0,0x2daf0,0x2cae0,0x2f450 and0x2fc60 remain the
-   separate audit in [steam-procedural-item-resources.md](steam-procedural-item-resources.md).
-   That supplement now establishes how completed owner RGB resources can be
-   captured per full(id,modifier) key, including the native meshing-mode metadata.
+1. **Procedural generated-volume verification.** Category0x17 includes artifacts
+   (lore-and-artifacts §5.1). All eight generator-family contracts are now in
+   [steam-procedural-item-resources.md](steam-procedural-item-resources.md), together
+   with completed-owner-RGB capture per full(id,modifier) key and native meshing
+   metadata. No native volume comparison was run in that audit; its§17 identifies
+   bounded branch coverage and the remaining internal CRT-trig boundary.
 2. **Model list order.** The index space is the order the game loads its model files in;
    CubeVulkan already relies on that order (`sprites.txt`), but the loader itself was not
    specified here.

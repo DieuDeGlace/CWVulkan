@@ -61,12 +61,18 @@ bool CubModel::exposed(int x, int y, int z) const {
     return false;
 }
 
-Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour) const {
+Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncoding encoding) const {
     Mesh m;
     m.nativeCentre = glm::vec3(0, 0, (float)sz * .5f); // x/y are already centered in emitted vertices
     auto isSolid = [&](int x, int y, int z) { return solid(x, y, z); };
+    const bool alphaUnhalved = renderStyle() == RenderStyle::Alpha && encoding == steamvoxel::CubEncoding::Unhalved;
     auto colour = [&](int x, int y, int z) {
         auto c = color(x, y, z);
+        if (alphaUnhalved) {
+            c.r = uint8_t(std::min(255, int(c.r) * 2));
+            c.g = uint8_t(std::min(255, int(c.g) * 2));
+            c.b = uint8_t(std::min(255, int(c.b) * 2));
+        }
         c.flags = flags;
         return c;
     };
@@ -93,8 +99,8 @@ Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour) const {
         };
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = steamvoxel::CORNERS[face][k];
-            const auto encoded = steamvoxel::cubCorner({c.r, c.g, c.b},
-                {x + corner[0], y + corner[1], z + corner[2]}, face, probe);
+            const auto encoded =
+                steamvoxel::cubCorner({c.r, c.g, c.b}, {x + corner[0], y + corner[1], z + corner[2]}, face, probe, {}, encoding);
             return CornerShade{encoded.r, encoded.g, encoded.b, encoded.a};
         };
         meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, nativeColour, shade, m, 1.f, offset, VoxelLayout::SteamCub);

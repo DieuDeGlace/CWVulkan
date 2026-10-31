@@ -91,7 +91,7 @@ No game assets, saves, Steam runtime or loader binaries are included.
 
 $hashes = foreach ($file in (Get-ChildItem -LiteralPath $stage -File -Recurse | Sort-Object FullName)) {
     $name = $file.FullName.Substring($stage.Length + 1).Replace('\', '/')
-    if ($name -match '(^|/)(Extract|Save|Saves|Mods|sprites|music|sounds)/|\.(cub|cwz|rec|cwa|cwm|db|dat|plx|pdb|obj|lib|log)$' -or
+    if ($name -match '(^|/)(Extract|Save|Saves|Mods|sprites|music|sounds)/|\.(cub|cwz|rec|cwa|cwm|cwp|db|dat|plx|pdb|obj|lib|log)$' -or
         ($file.Extension -eq '.dll' -and $name -ne 'CubeVulkan/tools/ZoneExtractor.dll') -or
         ($file.Extension -eq '.png' -and $name -ne 'CubeVulkan/assets/OverworldEvents/quest-icons.png')) {
         throw "Unexpected release payload: $name"

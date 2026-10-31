@@ -172,6 +172,8 @@ add_library(engine STATIC
     src/MapPreview.cpp
     src/UsePrompt.cpp
     src/NativeItems.cpp
+    src/ProceduralItemData.cpp
+    src/ProceduralItems.cpp
     src/NativeCrt.cpp
     src/NativeUpdate.cpp
     src/NativeAI.cpp
@@ -261,8 +263,12 @@ target_sources(engine PRIVATE src/GamepadUi.cpp)
 target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
+    # Procedural voxel bytes depend on the specified float/double staging.
+    set_source_files_properties(src/ProceduralItems.cpp PROPERTIES COMPILE_OPTIONS /fp:strict)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
     target_compile_definitions(engine PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    set_source_files_properties(src/ProceduralItems.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
 add_executable(CubeVulkan src/main.cpp)
@@ -309,7 +315,7 @@ target_link_libraries(CubeVulkanDataCheck PRIVATE engine)
 # Needs the CWSDK headers vendored in the sibling SteamCubeWorldMods checkout.
 set(CWSDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../SteamCubeWorldMods/vendor/cwmods CACHE PATH "CWSDK headers")
 if(EXISTS ${CWSDK_DIR}/cwsdk.h)
-    add_library(ZoneExtractor SHARED tools/ZoneExtractor/ZoneExtractor.cpp)
+    add_library(ZoneExtractor SHARED tools/ZoneExtractor/ZoneExtractor.cpp src/ProceduralItemData.cpp)
     target_include_directories(ZoneExtractor PRIVATE ${CWSDK_DIR})
     target_compile_definitions(ZoneExtractor PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(ZoneExtractor PRIVATE user32 d3d11)
@@ -348,6 +354,7 @@ target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp tests/ItemSelectorTests.cpp)
 target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp tests/VoxelCustomizationTests.cpp tests/ItemPreviewTests.cpp tests/MapPreviewTests.cpp)
+target_sources(EngineTests PRIVATE tests/ProceduralItemTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

@@ -255,8 +255,15 @@ individual feature documents.
   resource-admitted draws; ingredients share native hover/navigation geometry.
   Customization now submits its thumbnails, raw base/attributes/candidate and
   palette through that renderer. Retained-cursor and other callers still need conversion.
-  Category23 procedural artifact models still need owner-resource extraction or
-  the missing shape specifications; a model-list index cannot represent them.
+  Category 23 procedural artifacts now use a full-key resource cache shared by
+  the GUI and world model paths. The extractor can publish completed native
+  volumes through an atomic request/status protocol; all eight independently
+  specified shape families provide a fallback. Full allocations and native mode 1
+  inputs are retained, with a separate Alpha appearance conversion. Codec,
+  malformed-input, cache, generator and world-loader checks pass, as do the full
+  CPU/owner and 40 world/20 GUI Vulkan suites. Native RGB/metadata comparisons and
+  broader original-game visual coverage remain required; the current native
+  capture is waiting at the mod-loader dialog because control tools cannot start.
   Ordinary information text now has its specified category rows, effects, float
   rounding and inline deltas. Equipped comparison uses original address identity,
   native candidate/Shift order, smaller fonts and fresh late resizes. Fractional

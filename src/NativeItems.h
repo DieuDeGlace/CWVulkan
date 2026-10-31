@@ -121,8 +121,8 @@ private:
     bool idBoundCoversAbove = false;             // CWI3: the key at idBound answers for every id above
 };
 
-// A model the game makes for a category 0x17 item (0x1737b0, 0x2b880). Its voxels come from
-// shape generators the spec does not describe, so only what leads up to them is here.
+// Initial parameters for a category 0x17 procedural item (0x1737b0, 0x2b880).
+// ProceduralItems owns the resulting voxel resource and its independent shape generators.
 struct OnDemandModel {
     int32_t id = 0;
     uint32_t modifier = 0;

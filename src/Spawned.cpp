@@ -3,6 +3,7 @@
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
 #include "NativeItems.h"
+#include "ProceduralItems.h"
 #include "NativeRules.h"
 #include "NativeUpdate.h"
 #include "NativeInteract.h"
@@ -15,6 +16,7 @@
 #include "NativeBuffs.h"
 
 #include <cmath>
+#include <bit>
 #include <cstring>
 #include <fstream>
 #include <random>
@@ -760,6 +762,10 @@ bool SpawnedCreatures::loadSpecials(const std::filesystem::path &file) {
 }
 
 std::string SpawnedCreatures::itemSprite(const uint8_t *item) const {
+    if (item && item[0] == nativeitems::CATEGORY_ON_DEMAND) {
+        const auto fields = nativeitems::fieldsOf(item);
+        return proceduralitem::spriteKey({std::bit_cast<int32_t>(fields.id), fields.modifier});
+    }
     const int id = nativeitems::modelId(item);
     return id >= 0 && (size_t)id < sprites.size() ? sprites[id].name : std::string();
 }

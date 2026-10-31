@@ -2,6 +2,7 @@
 // Cube World .cub sprite: int32 size x, y, z, then x*y*z RGB triples with x
 // varying fastest, then y, then z. Black (0,0,0) is empty.
 #include "Mesher.h"
+#include "SteamVoxel.h"
 #include <glm/gtc/type_precision.hpp>
 #include <filesystem>
 #include <string>
@@ -17,5 +18,5 @@ struct CubModel {
     // Mesh in voxel units, centred on x/y with its base at z = 0. In the Alpha look each corner
     // fades towards `shade`, the model's shade colour, as it is closed in (black for all but
     // the clouds).
-    Mesh mesh(uint8_t flags = 0, glm::u8vec3 shade = glm::u8vec3(0)) const;
+    Mesh mesh(uint8_t flags = 0, glm::u8vec3 shade = glm::u8vec3(0), steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock) const;
 };

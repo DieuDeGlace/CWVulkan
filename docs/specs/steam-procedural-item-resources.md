@@ -4,9 +4,9 @@ Independent native-only supplement to [item-models §3](item-models.md)
 and [voxel vertex inputs](steam-voxel-vertex-inputs.md). Addresses are
 Steam RVAs, relative to the live executable module base. No implementation,
 tests, exporter/build, SDK, owner assets/captures or game execution were
-used. This first checkpoint specifies native resource acquisition and
-owner-data capture; the eight shape-family algorithms remain §6's
-explicit separate audit.
+used. Specifies native resource acquisition/owner-data capture and all
+eight reached shape-family algorithms, with precision/verification
+boundaries retained explicitly in§17.
 
 ## 1. Resource identity and the live cache
 
@@ -193,9 +193,8 @@ for this specification.
 ## 6. Shape-family audit boundary
 
 The acquisition/export, allocation/mode and RNG-dependence contract
-above is stable. Sections7–10 now specify the shared box/color
-primitive and complete ID3/4/5/6 and default-ID families. Exact remaining
-families are IDs0/1/2 at0x30790/0x2bf90/0x2e490.
+above is stable. Sections7–16 specify the shared box/color
+primitive and complete ID0/1/2/3/4/5/6 and default-ID families.
 No claim is made that one observed instance defines a family, and no
 approximate shape substitutes for an unaudited algorithm or uncaptured key.
 
@@ -225,8 +224,8 @@ to an eight-bit palette is performed. The scalar constants are:
 
 The sphere0x2fc60 and faceted-solid0x2daf0 use the **same channel
 interpolation, half scaling, clamp and truncation**, but their fraction
-is float32 **(Z−centerZ+radius)/(2 times radius)**. Their bounded
-ID4/default calls have positive radius8; ID6 uses3..5. There is no final
+is float32 **(Z−centerZ+radius)/(2 times radius)**. The calls in§§9–10
+use radius8; later families use their separately stated positive radii. There is no final
 re-normalization based on the occupied extent. These are source voxel
 bytes; mode+0x9a=1 subsequently prevents a second stock-CUB half-color
 step in mesh encoding.
@@ -430,3 +429,389 @@ mesher follows. The trigonometric call arguments and float32 staging
 are verified; the C-runtime implementation's internal sinf/cosf
 approximation has not been independently specified here. Completed
 owner RGB captures remain the exact oracle for lattice-edge cases.
+
+## 13. Additional shared solid primitives
+
+All primitives below ignore out-of-allocation writes and overwrite
+previous bytes. Channel interpolation/half scaling/clamp/truncation
+is§7, with the fraction given below. They consume no RNG draws.
+
+* **0x2f0f0, XZ annulus extruded along Y:** inputs are X/Z integer
+  center, lowerY, outer radius r, Y extent e, radial thickness t,
+  and colors A/B. Candidate X/Z are center−r through center+r
+  inclusive. Admit the half-voxel-center squared distance
+  **(Z−centerZ−0.5)²+(X−centerX−0.5)²** when it is≤r² and
+  ≥(r−t)², both inclusive. Fill Y from lowerY inclusive to lowerY+e
+  exclusive. Native nesting is X, Z, Y. Color fraction is
+  float32(Z−centerZ+r) divided by float32(2r), not Y-based.
+* **0x2d7b0, filled XZ disc extruded along Y:** same interval,
+  outer-distance predicate, order and fraction, but **no inner-radius
+  exclusion**.
+* **0x30130, upper half of that XZ disc:** same as0x2d7b0 except
+  candidate Z starts at centerZ and ends at centerZ+r inclusive.
+  It is not a hollow ring; the half-unit center shift still applies.
+* **0x30460, upper YZ disc extruded along X:** exchange X/Y roles
+  in0x30130. Y is the outer loop, Z next, X innermost from lowerX
+  inclusive to lowerX+extentX exclusive. Predicate is
+  (Z−centerZ−0.5)²+(Y−centerY−0.5)²≤r²; fraction still uses Z.
+* **0x2d430, filled XY disc extruded along Z:** candidate X/Y are
+  center−r through center+r inclusive; admit
+  (Y−centerY−0.5)²+(X−centerX−0.5)²≤r². Fill Z from lowerZ
+  inclusive to lowerZ+extentZ exclusive. Nesting is X,Y,Z;
+  fraction is float32(Z−lowerZ) divided by float32(extentZ).
+* **0x2fb80, single voxel:** multiply supplied float RGB by0.5,
+  clamp each channel0..255, truncate toward zero, then write one
+  in-bounds resource voxel. It accepts the **resource**, not the
+  generator-state pointer. No interpolation or extra randomness.
+
+These finite-radius tests use float32 arithmetic. No resource-origin
+translation or occupied-bound fitting is hidden inside them.
+
+## 14. ID2 complete family: band and one or repeated settings
+
+Entry **0x2e490**, dispatched at0x2bc6f. Let c be the post-initial-
+palette counter. Retain initial first palette A and third palette C.
+Replace the second palette with M: each channel is **100 plus an
+unsigned modulo70** draw, R from c+2, G from c+1, B from c.
+Then choose:
+
+| Parameter | Draw/value |
+|---|---|
+|Radius R|6 plus(X(c+3) modulo4), hence6..9|
+|Band width W|1 plus(X(c+4) modulo5), hence1..5|
+|Thickness T|1 plus(X(c+5) modulo3), hence1..3|
+|Band style|X(c+6) bitwise-and3|
+
+The counter is now c+7. Define lowerY **Y0=12−floor(W/2)**.
+Every band call below is0x2f0f0, centered at **X=12,Z=12**.
+Unless C is stated, its colors are M and **M times0.75**;
+C calls use C and C times0.75. Constant0.75 is word0x3f400000
+atRVA0x42e710. Calls occur in listed order:
+
+| Style | Ordered band calls: radius; lowerY; width; thickness; palette | Later effective radius E |
+|---|---|---|
+|0|R;Y0;W;T;M|R|
+|1|R−1;Y0;W;T;C → R;Y0−2;2;T+1;M → R;Y0+W;2;T+1;M|R−1|
+|2|R+1;Y0;W;T+1;M → R;Y0−2;2;T+1;M → R;Y0+W;2;T+1;M|R|
+|3|R−1;Y0;W;T;C → R−1;Y0−2;1;T;M → R;Y0−1;1;T+1;M → R;Y0+W;1;T+1;M → R−1;Y0+W+1;1;T;M|R−1|
+
+E is an input to the later setting; do not substitute the largest
+radius drawn by that style. The first setting decision consumes
+**X(c+7)'s low bit**.
+
+### 14.1 Low bit0: one setting above the band
+
+Choose setting radius **a=floor(W/2)+1+(X(c+8) bitwise-and1)**,
+height **h=1+(X(c+9) bitwise-and1)**, and square/disc by
+**X(c+10) bitwise-and1**. Counter ends c+11. Construction order:
+
+* For square bit1: draw a constant-M box at lower
+  **(12−a,11−a,13+E)**, extent **(2a+2,2a+2,1)**; then a
+  constant-A box at lower **(13−a,12−a,14+E)**, extent
+  **(2a,2a,h)**. Finally single-voxel helper0x2fb80 with color
+  **A+150 per channel** at **(12+a,11+a,13+E+h)**.
+* For disc bit0: draw0x2d430 centered X/Y=(12,12), lowerZ=13+E,
+  radius a+1, extentZ1, constant M; then the same primitive at
+  lowerZ=14+E, radius a, extentZ h, constant A. Finally use
+  0x2fb80 with A+150 at **(trunc32(13−float32(a) times0.5),
+  the same Y,13+E+h)**. The multiply and subtraction are float32.
+
+“Constant” supplies the same color as both endpoints; the shared
+primitive still applies its half scaling. Neither case uses the
+original second palette, adds a spirit attribute or consumes another
+random value.
+
+### 14.2 Low bit1: repeated cubic ornaments around the XZ circle
+
+Choose count **n=2+(X(c+8) bitwise-and3)**, hence2..5, and cube
+edge **s=2+(X(c+9) unsigned modulo W)**. W≥1, so this divisor is
+never zero. Counter ends c+10. Each i=0..n−1 uses§12.1's exact
+float/double angle-production sequence with this n.
+
+LowerX is **trunc32(cosf(angle) times float32(E+1) plus13.5)
+minus floor(s/2)**. LowerZ substitutes sinf. LowerY is
+**12−floor(s/2)**. The precomputed center13.5 is12 plus float32
+**1.5** (word0x3fc00000 atRVA0x42e548); do not silently substitute
+12.5 or Crown's13. Write the s³ box with A and A times0.5, then
+single-voxel helper0x2fb80 with **A+150** at its far corner
+lower+(s−1,s−1,s−1). Iterate ascending i; later ornaments overwrite
+earlier data. There are no further RNG draws or geometry passes
+before the common mesher. The same explicit CRT-trig boundary as§12
+applies to exact lattice-edge comparison.
+
+## 15. ID1 complete family: body variants followed by noise-shaped chains
+
+Entry **0x2bf90**, dispatched at0x2bc62. Let c be the counter after
+the initial palettes; retain first palette A. Choose **k=X(c)
+unsigned modulo3**, **r=k+3**, **Zc=k+5=r+2**, and orientation bit
+**b=X(c+1) bitwise-and1**. Replace the second palette with gray M:
+R=100 plus(X(c+4) modulo50), G=100 plus(X(c+3) modulo50),
+B=100 plus(X(c+2) modulo50). Choose style **X(c+5) bitwise-and3**.
+Counter ends at **c+6**; the entire remaining body/chain construction
+consumes no further counter values. Initial palettes three/four are
+unused.
+
+All constant-M primitives receive M for both colors. Every main
+A-colored body below instead receives A and temporary A times0.5.
+Sphere means0x2fc60's half-voxel-center predicate/gradient with the
+stated center/radius, as§9; box/disc helpers are§§7/13. All calls
+listed for a branch occur in that order.
+
+### 15.1 Body style1
+
+* b=1: upper-XZ half-disc0x30130 centered X=12/Z=Zc, lowerY12,
+  radius r+1, extentY2, constant M; then upper-YZ half-disc0x30460
+  centered Y=12/Z=Zc, lowerX12, radius r+1, extentX2, constant M.
+* b=0: sphere at **(12,12,Zc+r)**, radius integer floor(r/2),
+  constant M.
+* Either b then draws the main sphere at **(12,12,Zc)**, radius r,
+  colors A/A times0.5. No extra highlight point follows this style.
+
+### 15.2 Body style2
+
+* b=1: constant-M box lower **(11−r,11,Zc)**, extent
+  **(2r+2,2,r+1)**, then box lower **(11,11−r,Zc)**, extent
+  **(2,2r+2,r+1)**.
+* b=0: let q be integer floor(3r/4). Draw constant-M box at
+  **(13−q,13−q,Zc+r+2)**, extent **(2q−2,2q−2,1)**, then box
+  at **(12−q,12−q,Zc+r+1)**, extent **(2q,2q,1)**.
+* Either b then draws the main box lower **(12−r,12−r,2)**,
+  extent **(2r,2r,2r)**, colors A/A times0.5. No highlight follows.
+
+### 15.3 Body style3
+
+* b=1: constant-M box at **(11−r,12,Zc)**, extent **(2r+2,1,r+1)**.
+* b=0: constant-M box at **(11−r,11,1)**, extent **(2r+2,2,2r+2)**.
+* Set Yg=12 for b1,13 for b0. Draw the main box lower
+  **(12−r,Yg,2)**, extent **(2r,1,2r)**, colors A/A times0.5.
+  Then single-voxel0x2fb80 with **A+150** at **(10+r,Yg,2r)**.
+
+### 15.4 Body style0
+
+* b=1: upper-XZ half-disc0x30130 centered X=12/Z=Zc, lowerY12,
+  radius r+1, extentY1, constant M.
+* b=0: filled-XZ disc0x2d7b0 centered X=12/Z=Zc, lowerY11,
+  radius r+1, extentY2, constant M.
+* Set Yg as in style3. Draw filled-XZ disc0x2d7b0 centered
+  X=12/Z=Zc, lowerY=Yg, radius r, extentY1, colors A/A times0.5.
+  Then single-voxel0x2fb80 with **A+150** at **(10+r,Yg,2r)**.
+
+### 15.5 Shared final chain points: exact coordinate/precision contract
+
+Every style next emits the chains **after** its body/highlight.
+This is point sampling, not a continuous line rasterizer, mesh tube
+or interpolation between adjacent generated points. Set:
+
+* Z0=**Zc+r=2r+2**;
+* remaining=24−Z0, sample count L=4 times remaining;
+* spread=float32(remaining) **divided by float32 3**.
+
+For each integer sample i from0 through L−1, compute t=float32(i)
+divided by float32(L−1), then **u=t times t**, float32. Sample Z is
+**float32(i) times0.25 plus float32(Z0)**, with separate float32
+multiply/add. Promote u to double, subtract double0.5, add that
+difference to itself in double, take absolute value by clearing the
+double sign bit, then narrow to float32 v. Define q as **float32
+1 minus float32(v times v)**. This double/narrow boundary is native
+0x2c6c4..0x2c6e3; do not silently reshape the curve to linear t.
+
+Noise is existing double-input/float-output **0x2e0c0**, independently
+specified in [worldgen-terrain §1.4](worldgen-terrain.md). Its arguments
+are, in double operation order:
+
+* X: double(q) times0.25, plus **signed32 modifier converted to
+  double**, then plus8741;
+* Y: **signed32 wrapped(modifier times13) converted to double**,
+  plus double(sampleZ) times0.25, then plus32992.
+
+Both signed conversions and the32-bit multiply are explicit in
+0x2c680..0x2c710. They differ from interpreting the modifier as an
+unsigned real value even though the cache retains all its bits.
+These offsets are double8741 atRVA0x42e928 and double32992 at
+0x42e930. The noise is independent of world seed, clock or further RNG.
+
+Let span be float32(q times spread). For jitter, first evaluate
+**float32(u times0.5), then that times spread, then multiply the
+result by the returned float32 noise**, each operation float32.
+Native0x2c720..0x2c740 establishes this grouping; the algebraically
+equivalent noise-times-u-first chain is not the instruction order.
+
+Write two points per sample using0x2fb80 and color M, in this order:
+right X is trunc32 of **(12.5 plus span) plus jitter**; left X is
+trunc32 of **(12.5 minus span) plus jitter**, all float32 operations.
+Both use **Y=12**, Z=trunc32(sampleZ). Thus jitter displaces both
+sides in the same X direction; it is not negated on the left.
+Duplicate writes replace prior bytes. The single-voxel helper supplies
+the usual half-color/clamp/truncation; no connecting geometry or more
+shape pass follows before the common mesher.
+
+## 16. ID0 complete family: curved vessel, patterns and handles
+
+Entry **0x30790**, dispatched at0x2bc55. Let c be the counter after
+the initial twelve palette draws. Preserve the **fourth initial palette
+D**; the other three are replaced below. Draws/parameters are:
+
+| Source | Meaning |
+|---|---|
+|X(c) unsigned modulo6|R0=8 minus this remainder, hence3..8|
+|X(c+1) modulo6|R2=8 minus this remainder, hence3..8|
+|X(c+2) modulo12|Height H=24 minus this remainder, hence13..24|
+|X(c+3) modulo3|Profile mode0/1/2|
+|X(c+4) bitwise-and3|Color pattern0/1/2/3|
+|c+5..c+7|New standard palette A: R from c+7, G from c+6, B from c+5, each modulo250 plus10|
+|X(c+8) modulo3|Handle count0/1/2|
+|X(c+9) modulo(floor(H/4)+1)|First handle Z layer S|
+|X(c+10) bitwise-and1|Use D on the top two body layers|
+|X(c+11) bitwise-and1|Use D on the bottom two body layers|
+|X(c+12) bitwise-and1|Use D for handles|
+
+Counter ends **c+13**. Palette B is A plus float32 **30** per
+channel, not clamped at that stage (constant0x41f00000 atRVA0x42e5a8).
+Palette C is the native hue-shifted derivative in§16.1. There are no
+more RNG draws in the layer, pattern or handle operations.
+
+### 16.1 Derived palette C: native mixed-precision HSV round trip
+
+At **0x30b26/0x30b4c/0x30b51**, divide A's three float channels by
+float32 **255**, actual DIVSS operations. Pass that normalized triple
+through RGB→HSV **0x2e360**, add **float32 180** (word0x43340000
+atRVA0x42e7d4) to returned hue,
+then HSV→RGB **0x2df40** and multiply each returned float channel by
+float32 255. The multiplied results are C; they are not first
+converted to bytes. The shader or standard color-library hue wrapping
+is not an interchangeable substitute for this sequence.
+
+For the reached finite positive RGB inputs,0x2e360 takes min/max
+of the supplied float channels, promotes selected extrema to double,
+and computes delta=max−min in double. Returned V is max narrowed to
+float. If delta<**double1e−5** (word0x3ee4f8b588e368f1 atRVA0x42e8d0),
+it returns H=0,S=0. Otherwise S is double(delta/max) narrowed to
+float. Hue branch priority is red maximum, then green maximum,
+otherwise blue maximum. Form its numerator **as a float subtraction**:
+G−B for red, B−R for green, R−G for blue. Promote that numerator
+to double and divide by delta; add double0/2/4 respectively, then
+narrow that result to float. Promote this float, multiply by double60,
+narrow to float; if negative, promote/add double360/narrow again.
+
+After the caller's float180 addition,0x2df40 returns RGB=(V,V,V)
+when S≤0. Otherwise promote hue to double and, **if hue≥360, set
+it to0**, rather than subtracting360. This native reset is important:
+it collapses the upper half of shifted hues to sector0. Divide by
+double60; sector is trunc32 of that quotient and fraction is the
+quotient minus sector. With S/V promoted to double, compute three
+double intermediates:
+
+* low=(1−S) times V;
+* falling=(1−S times fraction) times V;
+* rising=(1−(1−fraction) times S) times V.
+
+Sector outputs before narrowing each selected channel to float are:
+0=(V,rising,low),1=(falling,V,low),2=(low,V,rising),
+3=(low,falling,V),4=(rising,low,V),5=(V,low,falling).
+The reached hue range produces only these sectors. This specifies
+the active positive-input subset, not the helper's unreachable
+negative/NaN saturation cases. Constants double2/4/60/360 are at
+0x4ac9d8/0x42e8e8/0x42e8f0/0x42e908; double1 is0x4ac9b8.
+
+### 16.2 Ordered layers, radius and hollow wall
+
+Visit integer Z from0 through H−1. At each layer, float32
+**t=float32(Z)/float32(H−1)**. First compute the base layer color L
+as **A times(1−t) plus B times t**, separately per float32 channel.
+This unwarped t controls color even when the profile mode differs.
+
+The radius parameter p is t for profile0, t times t for profile1,
+or **1−(1−t) times(1−t)** for profile2, all float32. Set q=1−p.
+Radius is the float32 sum of two terms, preserving this grouping:
+**(q times(R0 times0.5) plus p times R0) times q**, plus
+**(q times R0 plus p times R2) times p**. Each multiply/add is a
+separate float32 operation; do not replace it with an expanded
+quadratic or evaluate it in double. Native0x30cc1..0x30cf9 fixes
+this evaluation order.
+
+Candidate X begins at trunc32((12−radius)−2), continues ascending
+while float32(X)≤**(12+radius)+2**. Candidate Y has the same lower
+expression, with upper limit **(radius+2)+12**, and is the inner
+loop. These float32 bounds are0x30cfd..0x30d67. For a candidate,
+the squared radial distance is float32 **(Y−12+0.5)² plus
+(X−12+0.5)²**. The **plus0.5** places the test center at11.5;
+do not reuse the minus0.5 center of§13's disc primitives.
+
+Admit distance≤radius². At Z>0 also require distance≥(radius−1)²,
+inclusive. Z0 is therefore a filled base disk; subsequent layers
+are one-unit-thick annuli. The top remains open: a color-band flag
+does not fill its hole. There is no post-fill erasure/erosion pass.
+
+### 16.3 Body color patterns and overrides
+
+For each admitted body voxel, begin with L and select:
+
+* Pattern0: retain L.
+* Pattern1: use C when **floor(Z/2) unsigned modulo3 is0**, else L.
+* Pattern2: use C only when both **(floor(Z/4)+trunc32(Y/2)+
+  trunc32(X/2)) is even** and **Z bitwise-and2 is0**; else L.
+* Pattern3: call existing float-output/double-input noise0x2e0c0
+  twice, with signed32 modifier m converted to double:
+  first at **((double(Y) times0.3 plus155) plus m,
+  (double(Z) times0.5 plus1003) plus m)**;
+  second at **((double(X) times0.3 plus3411) plus m,
+  (double(Z) times0.5 plus2131) plus m)**.
+  Sum the two returned floats, clamp that float sum0..1, cube it
+  using float32 multiplications, and mix each channel as
+  **L plus(C−L) times the cubed weight**, float32. The two Y
+  noise offsets differ; the second call's argument is not omitted
+  or reused unchanged. Native0x30e11..0x30e90 verifies both.
+
+After the pattern, replace the color by D if its top-band flag is
+set and Z≥H−2; then replace by D if the bottom-band flag is set
+and Z<2. These are color overrides on admitted voxels only. Multiply
+the selected float RGB by0.5, clamp0..255, truncate toward zero and
+store. Noise double offsets155/1003/2131/3411 are atRVA0x42e900/
+0x42e910/0x42e918/0x42e920; double0.3 is0x42e8d8 and0.5 is0x4ac9a8.
+
+### 16.4 Handles fill empty cells after that layer's body
+
+After the body of a layer, handles run only if count>0 and
+**S≤Z≤H−1**. Float32 handle fraction f is(Z−S)/(H−1−S), with
+integer differences converted before division. This denominator
+is positive for every native parameter combination above. Compute
+g=**(0.5−f)+(0.5−f)** in float32, bulge=**(1−g times g) times5**
+in float32. Right coordinate Q is trunc32 of **bulge plus
+((12+0.5)+radius)**; the center sum and radius addition occur
+before the final bulge addition (0x31102..0x3112d). The constant5
+is float word0x40a00000 atRVA0x42e584.
+
+Handle RGB comes from the **unpatterned base L**, or D when the
+handle-color flag is set. Top/bottom body color flags do not alter
+this choice. Apply the same half-color/clamp/truncation as a point
+write, but write only when the candidate's existing stored RGB is
+exactly(0,0,0). Nonblack body or earlier handle data is preserved.
+Out-of-bounds reads behave as black for this test; out-of-bounds
+writes are still ignored, so geometry is clipped to24³.
+
+At Y=11 then12, try **X=Q, then Q−1**, at current Z. If count2,
+then form **M=24−Q** and, at Y=11 then12, try **X=M−1, then M**.
+This is a full-width reflection, not23−Q, and does not replace the
+right handle. Each candidate independently performs the black-only
+test. The zero read is native BSS storage atRVA0x55284c, not an
+asset color or arbitrary uninitialized byte. Continue to the next
+Z layer; there is no final handle connection/repair pass.
+
+## 17. Verification/coverage boundary
+
+All eight dispatch-family caller algorithms and their reached
+primitive/color operations are specified above. No original-game
+execution or native generated-volume comparison was performed for
+this audit. The independently specified simplex noise/tables and
+the explicit CRT sinf/cosf boundary remain linked dependencies;
+compiled native constants/operation orders here are source evidence,
+not runtime capture claims.
+
+For owner-data verification, capture full key+metadata+RGB using§§1–5,
+and label the family/branch parameters from these definitions. Useful
+bounded coverage includes every ID0 profile/pattern/handle count and
+clipped-handle cases, all ID1 styles/orientation bits, all ID2 styles
+and setting branches, ID5 edge/count combinations, and ID6's radii/
+collar counts. Preserve native completed volumes as the oracle;
+do not replace branch coverage with one mask per family or silently
+accept a geometric near-match when exact voxel data is available.

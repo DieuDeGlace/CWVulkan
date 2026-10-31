@@ -72,6 +72,14 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Procedural artifact resources follow `steam-procedural-item-resources.md`:
+  independent generators implement the seven named families and default sphere,
+  preserving full ID/modifier keys, allocation dimensions and native color mode.
+  The extractor copies completed native resources on the game thread to a separate
+  owner-data format; captured RGB and game data stay outside publication. GUI and
+  dropped-item consumers prefer those owner records. Synthetic codec, cache,
+  geometry and rendering checks pass; exact native volume comparisons remain a
+  separate gate and must not be inferred from generated fixtures.
 - Map draw phases follow `steam-map-rendering-phases.md`: current 3D map work
   precedes GUI, and flat markers collect at the admitted Overlay callback rather
   than using the preceding camera's screen positions. F4 suppresses 3D and GUI

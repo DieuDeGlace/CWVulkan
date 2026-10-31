@@ -4,6 +4,7 @@
 #include "AlphaLook.h"
 #include "Assets.h"
 #include "CubModel.h"
+#include "ProceduralItems.h"
 #include "Extracted.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
@@ -43,6 +44,7 @@ SkyColumn skyColumnAt(int32_t x, int32_t y) {
 World::World(const Terrain &t, const Assets &a, Renderer &r, int view, ExtractedWorld *ex)
     : land(t), assets(a), renderer(r), viewZones(view), extracted(ex) {
     renderer.resetSceneRange();
+    proceduralModels = std::make_unique<proceduralitem::OwnerCache>(a.gameDir() / "Extract" / "procedural-items");
     beamMesh = renderer.upload(lightbeam::mesh());
     // What the Alpha look asks about the world around the camera.
     WorldProbe probe;
@@ -376,6 +378,21 @@ void World::tintHair(CubModel &cub, glm::u8vec3 tint, const HairLook *look) {
     }
 }
 
+bool World::readModelVolume(const std::string &name, CubModel &cub, steamvoxel::CubEncoding &encoding) const {
+    encoding = steamvoxel::CubEncoding::Stock;
+    if (const auto key = proceduralitem::parseSpriteKey(name)) {
+        const auto &resource = proceduralModels->get(*key);
+        cub.sx = resource.dimensions[0];
+        cub.sy = resource.dimensions[1];
+        cub.sz = resource.dimensions[2];
+        cub.rgb = resource.rgb;
+        encoding = steamvoxel::CubEncoding::Unhalved;
+        return true;
+    }
+    const auto path = assets.resolve(fs::path("sprites") / (name + ".cub"));
+    return path && cub.load(*path);
+}
+
 int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const HairLook *look) {
     bool tinted = hair;
     bool dual = hair && look && look->dual;
@@ -388,21 +405,22 @@ int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const
     if (auto it = modelIndex.find(key); it != modelIndex.end())
         return it->second;
     int index = -1;
-    if (auto path = assets.resolve(fs::path("sprites") / (name + ".cub"))) {
-        CubModel cub;
-        if (cub.load(*path)) {
-            if (tinted)
-                tintHair(cub, tint, dual ? look : nullptr);
-            Mesh mesh = cub.mesh();
-            Model m;
-            m.mesh = renderer.upload(mesh);
-            m.height = mesh.max.z;
-            m.size = glm::vec3(cub.sx, cub.sy, cub.sz);
-            m.name = name, m.tint = tint, m.tinted = tinted;
-            if (m.mesh) {
-                index = (int)models.size();
-                models.push_back(m);
-            }
+    CubModel cub;
+    steamvoxel::CubEncoding encoding;
+    if (readModelVolume(name, cub, encoding)) {
+        if (tinted)
+            tintHair(cub, tint, dual ? look : nullptr);
+        Mesh mesh = cub.mesh(0, {}, encoding);
+        Model model;
+        model.mesh = renderer.upload(mesh);
+        model.height = mesh.max.z;
+        model.size = glm::vec3(cub.sx, cub.sy, cub.sz);
+        model.name = name;
+        model.tint = tint;
+        model.tinted = tinted;
+        if (model.mesh) {
+            index = int(models.size());
+            models.push_back(std::move(model));
         }
     }
     if (index < 0)
@@ -419,7 +437,8 @@ const std::vector<World::Voxel> &World::voxels(int model) const {
     if (!m.voxelsRead) {
         m.voxelsRead = true;
         CubModel cub;
-        if (auto path = assets.resolve(fs::path("sprites") / (m.name + ".cub")); path && cub.load(*path)) {
+        steamvoxel::CubEncoding encoding;
+        if (readModelVolume(m.name, cub, encoding)) {
             if (m.tinted)
                 tintHair(cub, m.tint, nullptr);
             for (int z = 0; z < cub.sz; z++)
@@ -427,8 +446,12 @@ const std::vector<World::Voxel> &World::voxels(int model) const {
                     for (int x = 0; x < cub.sx; x++)
                         if (cub.exposed(x, y, z)) {
                             VoxelColor c = cub.color(x, y, z);
-                            m.voxels.push_back({glm::vec3(x - cub.sx * .5f, y - cub.sy * .5f, z),
-                                                glm::u8vec3(c.r, c.g, c.b)});
+                            if (encoding == steamvoxel::CubEncoding::Unhalved) {
+                                c.r = uint8_t(std::min(255, int(c.r) * 2));
+                                c.g = uint8_t(std::min(255, int(c.g) * 2));
+                                c.b = uint8_t(std::min(255, int(c.b) * 2));
+                            }
+                            m.voxels.push_back({glm::vec3(x - cub.sx * .5f, y - cub.sy * .5f, z), glm::u8vec3(c.r, c.g, c.b)});
                         }
         }
     }

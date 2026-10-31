@@ -126,6 +126,7 @@ int voxelEditTests();
 int voxelCustomizationTests();
 int itemPreviewTests();
 int mapPreviewTests();
+int proceduralItemTests();
 int hairStyleTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
@@ -9134,6 +9135,8 @@ int main(int argc, char **argv) {
         return itemPreviewTests();
     if (argc == 2 && std::string(argv[1]) == "mappreview")
         return mapPreviewTests();
+    if (argc == 2 && std::string(argv[1]) == "proceduralitems")
+        return proceduralItemTests();
     if (argc == 2 && std::string(argv[1]) == "voxeledit")
         return voxelEditTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
@@ -10429,6 +10432,7 @@ int main(int argc, char **argv) {
     failures += voxelCustomizationTests();
     failures += itemPreviewTests();
     failures += mapPreviewTests();
+    failures += proceduralItemTests();
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
     failures += itemSelectorTests();

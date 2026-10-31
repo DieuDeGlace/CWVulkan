@@ -12,8 +12,16 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 class Assets;
+struct CubModel;
+namespace proceduralitem {
+class OwnerCache;
+}
+namespace steamvoxel {
+enum class CubEncoding;
+}
 namespace alphalight {
 class LightVolume;
 }
@@ -140,6 +148,8 @@ class World {
     class ExtractedWorld *extracted;
     uint32_t beamMesh = 0;
     std::vector<Model> models;
+    std::unique_ptr<proceduralitem::OwnerCache> proceduralModels;
+    bool readModelVolume(const std::string &, CubModel &, steamvoxel::CubEncoding &) const;
     std::unordered_map<std::string, int> modelIndex;
     std::map<Key, Zone> zones;
     std::map<Key, std::future<Generated>> jobs;
