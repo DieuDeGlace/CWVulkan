@@ -135,7 +135,7 @@ void Hud::buildPanels() {
         if (panels.preview->widget)
             panels.preview->widget = plasma::reboundWidget(*panels.preview->widget);
         if (panels.preview->widget) {
-            panels.preview->widget->kind = "InfoWidget";
+            panels.preview->widget->kind = "PreviewWidget";
             s.resizeTo(*panels.preview, glm::vec2(300, 300));
         }
         panels.preview->visible = false;
@@ -607,8 +607,8 @@ void Hud::drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) con
 // the preview panel's drawing for an item: its details from (14, 25), 260 wide, the box as tall as
 // they need (200 at least); the item turning at the right. Placed beside the hovered panel
 // (Game's preview placement while in a menu).
-void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) const {
-    if (!panels.preview || !panels.preview->widget || inv.info.empty())
+void Hud::positionPreview(const Inventory &inv) const {
+    if (!panels.preview || !panels.preview->widget)
         return;
     plasma::Scene &s = *scene;
     plasma::SceneNode &preview = *panels.preview;
@@ -618,11 +618,25 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
                                                                                          : panels.bag.node;
     if (hovered == panels.crafting.node && hovered) {
         const auto bag = s.viewSize(*panels.bag.node), craft = s.viewSize(*hovered);
-        s.setPosition(*panels.crafting.node, {screen.x / 2 - bag.x * .5f - craft.x, screen.y / 2 - bag.y}, {-10, -50});
+        s.setPosition(*panels.crafting.node, {std::floor(screen.x / 2) - bag.x * .5f - craft.x, std::floor(screen.y / 2) - bag.y},
+                      {-10, -50});
     }
-    // Two passes: the first sizes the box from where the lines end, the second draws it.
-    for (int pass = 0; pass < 2; pass++) {
-        std::vector<OverlayVertex> lines;
+    const glm::vec2 pointer = inv.pointer;
+    s.setPosition(preview, pointer, {30, 30});
+    if (hovered) {
+        if (s.contentPosition(*hovered).x + s.screenSize(*hovered).x * .5f > pointer.x)
+            s.setPosition(preview, {0, pointer.y}, {s.viewPosition(*hovered).x - 30 - s.contentSize(preview).x, 30});
+        else
+            s.setPosition(preview, {0, pointer.y}, {s.viewPosition(*hovered).x + s.screenSize(*hovered).x + 30, 30});
+    }
+}
+
+void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) const {
+    if (!panels.preview || !panels.preview->widget || inv.info.empty())
+        return;
+    plasma::Scene &s = *scene;
+    plasma::SceneNode &preview = *panels.preview;
+    auto drawText = [&](std::vector<OverlayVertex> &lines) {
         float y = 25.0f, lineY = y;
         for (const Inventory::InfoLine &l : inv.info) {
             const float at = l.over ? lineY : y;
@@ -631,37 +645,46 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
             if (!l.over)
                 y = (l.fromEnd ? end : at) + l.advance;
         }
+        return y;
+    };
+    auto resize = [&](float height) {
+        const float parentScale = s.matrix(*preview.parent)[0][0];
+        s.resizeTo(preview, glm::vec2(s.contentSize(preview).x, std::max(200.0f, height)) * parentScale);
+    };
+    if (inv.infoItem) {
+        preview.visible = true;
+        sceneNode(out, preview, glm::vec4(1), nullptr, [&](const plasma::SceneNode &node) {
+            if (&node != &preview)
+                return;
+            itemIcon(inv.infoIcon, *inv.infoItem,
+                     guiitem::previewPlacement(s.matrix(preview), preview.transform.pivot, s.viewSize(preview).x, guiClockMs), out.size());
+            // The root/children are already submitted. This size is retained for
+            // later queries, without redrawing their background in this callback.
+            resize(drawText(out));
+        });
+        preview.visible = false;
+        return;
+    }
+    // Recording-only bitmap previews retain their compatibility measurement pass.
+    for (int pass = 0; pass < 2; pass++) {
+        std::vector<OverlayVertex> lines;
+        const float y = drawText(lines);
         if (pass == 0) {
-            const float scaleNow = s.matrix(*preview.parent)[0][0];
-            s.resizeTo(preview, glm::vec2(s.contentSize(preview).x, std::max(200.0f, y)) * scaleNow);
-            const glm::vec2 pointer = inv.pointer;
-            s.setPosition(preview, pointer, {30, 30});
-            if (hovered) {
-                if (s.contentPosition(*hovered).x + s.screenSize(*hovered).x * .5f > pointer.x)
-                    s.setPosition(preview, {0, pointer.y}, {s.viewPosition(*hovered).x - 30 - s.contentSize(preview).x, 30});
-                else
-                    s.setPosition(preview, {0, pointer.y}, {s.viewPosition(*hovered).x + s.screenSize(*hovered).x + 30, 30});
-            }
+            resize(y);
+            positionPreview(inv);
             continue;
         }
         preview.visible = true;
-        sceneNode(out, preview, glm::vec4(1), nullptr, [&](const plasma::SceneNode &node) {
-            if (&node == &preview && inv.infoItem)
-                itemIcon(inv.infoIcon, *inv.infoItem,
-                         guiitem::previewPlacement(s.matrix(preview), preview.transform.pivot, s.viewSize(preview).x, guiClockMs),
-                         out.size());
-        });
+        sceneNode(out, preview, glm::vec4(1));
         preview.visible = false;
         out.insert(out.end(), lines.begin(), lines.end());
-        // Older recording-only sessions retain their bitmap compatibility image.
-        if (!inv.infoItem)
-            if (auto icon = icons.find(inv.infoIcon); icon != icons.end()) {
-                const glm::mat4 m = s.matrix(preview);
-                const glm::vec2 origin = glm::vec2(m * glm::vec4(preview.transform.pivot, 0, 1));
-                const float width = s.viewSize(preview).x, side = width * 0.3f;
-                image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(origin.x + width * 0.75f - side / 2),
-                      std::round(origin.y + width * 0.3f - side / 2), side / (float)icon->second.w);
-            }
+        if (auto icon = icons.find(inv.infoIcon); icon != icons.end()) {
+            const glm::mat4 m = s.matrix(preview);
+            const glm::vec2 origin = glm::vec2(m * glm::vec4(preview.transform.pivot, 0, 1));
+            const float width = s.viewSize(preview).x, side = width * 0.3f;
+            image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(origin.x + width * 0.75f - side / 2),
+                  std::round(origin.y + width * 0.3f - side / 2), side / (float)icon->second.w);
+        }
     }
 }
 

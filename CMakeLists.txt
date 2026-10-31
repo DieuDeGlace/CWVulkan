@@ -345,7 +345,7 @@ target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp tests/ItemSelectorTests.cpp)
-target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp tests/VoxelCustomizationTests.cpp)
+target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp tests/VoxelCustomizationTests.cpp tests/ItemPreviewTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

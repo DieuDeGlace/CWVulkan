@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native item-preview selection now positions from stored geometry before its
+  later draw. The owner background/children precede icon/text and the text-derived
+  resize; a hidden draw retains the size, and growth/shrinking affects the next
+  background. Four owner-tree lifecycle regressions fail against the previous
+  implementation and pass with this correction. All five targets, the full
+  CPU/owner suite, 40 world/20 GUI Vulkan cases, water and Alpha checks pass.
+  Ring source selection also retains
+  its independent ground-origin flag, rather than forcing it to describe the
+  selected canonical item. Full formatter/comparison text and live source producers
+  remain separate work; this does not certify complete PreviewWidget parity.
+
 - Native-save customization now uses the actual owner editor root and shared
   WORLD models: equipped thumbnails, raw base/attributes/candidate and material
   palette, with native picking, cached clicks, rotation and bench/movement gates.

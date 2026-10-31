@@ -72,6 +72,14 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Native information-panel size lifetime follows
+  `steam-voxel-widget-information-preview.md` section7: earlier selection uses
+  stored geometry, root/children precede the own callback, and later text-derived
+  resizes do not redraw that background. Owner-tree regressions cover initial,
+  hidden, growth and shrink transitions. `steam-preview-source-lifetimes.md`
+  independently clarifies that Ring can retain a distinct ground-origin record;
+  source selection preserves that flag without inventing a copied stack or a
+  quantity formatter. Full formatter rows/deltas and live source wiring remain open.
 - Native customization root, draw plan and event continuation follow
   `steam-voxel-widget-presentation-input.md`,
   `steam-weapon-customization-edit-view.md` and

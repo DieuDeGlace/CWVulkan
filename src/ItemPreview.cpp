@@ -4,7 +4,7 @@ namespace itempreview {
 Selection select(const Sources &source) {
     const Selection ground{source.ground, Anchor::Cursor, source.ground != nullptr};
     if (source.ringShown)
-        return source.ring ? Selection{source.ring, Anchor::Cursor, false} : ground;
+        return source.ring ? Selection{source.ring, Anchor::Cursor, source.ground != nullptr} : ground;
     if (source.map && (*source.map)[0])
         return {source.map, Anchor::Cursor};
     if (source.inventory)

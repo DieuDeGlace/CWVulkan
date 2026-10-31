@@ -554,6 +554,7 @@ class Hud {
     // the widget text drawing; returns the y the text ends at (widget units).
     float widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &node, const std::wstring &text, glm::vec2 at, float size,
                      float stroke, glm::vec4 color, glm::vec4 strokeColor, int flags, float wrap) const;
+    void positionPreview(const Inventory &inv) const;
     void drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     int panelItemAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
     int panelSlotAt(glm::vec2 mouse, const Inventory &inv) const;

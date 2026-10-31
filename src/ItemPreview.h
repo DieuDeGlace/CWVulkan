@@ -13,7 +13,7 @@ struct Sources {
 struct Selection {
     const nativesaves::Item *item = nullptr; // borrowed original, not an adapted copy
     Anchor anchor = Anchor::Cursor;
-    bool ground = false;
+    bool groundOrigin = false; // Ring may retain this even when its selected item differs.
 };
 Selection select(const Sources &);
 } // namespace itempreview

@@ -207,8 +207,8 @@ other original artwork are included in either distribution package.
 ## Weapon customization
 
 Native-save sessions use an owner `blackwidget` rebound as a VoxelWidget with an
-800 × 800 requested size,
-with its actual frame queries, shape hit test and after-children callback. Equipped
+800 × 800 requested size. Placement, hit testing and the after-children callback
+use the actual owner hierarchy. Equipped
 thumbnails, the raw editable model, attributes and material palette use the shared
 WORLD renderer. Only editable weapon resources retain their raw voxel volume;
 ordinary icons continue sharing the mesh cache. No models are distributed.
@@ -225,6 +225,13 @@ anchor. Inventory/equipment can take precedence, and an empty shown formula pane
 blocks the palette fallback. Broader cached inventory state, GUI capture/layers,
 full information comparison/map/ground sources and controller aim remain open;
 these bounded paths are not a claim of complete native input or pixel parity.
+
+Native item information is positioned using the preceding draw's stored frame.
+Its root and children draw before the own callback submits the icon/text and
+resizes the widget. That size affects later queries and the following background;
+hidden/skipped draws retain it. Recording-only bitmap previews keep their existing
+measurement pass. Full category text, comparison deltas and live source bindings
+remain separate work.
 
 `--open-upgrade 0` opens this pane for read-only gameplay captures; `--pointer X Y`
 also drives its hover/picking. Recording-only sessions keep the compatibility

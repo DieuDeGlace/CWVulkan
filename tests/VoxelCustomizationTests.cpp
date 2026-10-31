@@ -1,7 +1,6 @@
 #include "VoxelCustomization.h"
 #include "GameCraft.h"
 #include "Assets.h"
-#include "ItemPreview.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
@@ -17,26 +16,6 @@ int voxelCustomizationTests() {
         }
     };
     auto weapon = nativesaves::makeItem(3, 0, 1);
-    auto hoveredCube = nativesaves::makeItem(11, 14, 128);
-    itempreview::Sources sources;
-    sources.voxel = &hoveredCube;
-    auto preview = itempreview::select(sources);
-    check(preview.item == &hoveredCube && preview.anchor == itempreview::Anchor::Crafting,
-          "palette preview borrows the original and anchors to crafting");
-    sources.formulaShown = true;
-    check(itempreview::select(sources).item == nullptr, "shown formula details block the palette even with no hovered ingredient");
-    sources.formula = &weapon;
-    check(itempreview::select(sources).item == &weapon, "formula details retain their earlier choice");
-    sources.inventory = &hoveredCube;
-    check(itempreview::select(sources).item == &hoveredCube && itempreview::select(sources).anchor == itempreview::Anchor::Inventory,
-          "canonical hover precedes formula and voxel state");
-    sources.map = &weapon;
-    check(itempreview::select(sources).item == &weapon && itempreview::select(sources).anchor == itempreview::Anchor::Cursor,
-          "embedded map item has no added shown test and precedes canonical hover");
-    sources.ringShown = true;
-    check(itempreview::select(sources).item == nullptr, "Ring bypasses the whole ordinary hover chain");
-    sources.ground = &hoveredCube;
-    check(itempreview::select(sources).ground, "a missing Ring source can retain the separate ground fallback");
     check(gamecraft::placeCube(weapon.data(), 129, 0, 0, 7) && weapon[0x1d] == 0x81, "placement stores the low coordinate byte");
     check(!gamecraft::removeCube(weapon.data(), 129, 0, 0) && weapon[0x9d] == 1,
           "removal compares the full argument to signed stored coordinates");

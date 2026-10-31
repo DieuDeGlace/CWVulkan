@@ -880,6 +880,9 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
         return;
     if (panels.customization && !state.customization)
         panels.customization->visible = false;
+    const Inventory *information = state.information ? state.information : state.inventory;
+    if (state.mapPreview.empty() && information && information->infoItem && !information->info.empty())
+        positionPreview(*information); // Selection observes the preceding draw's stored frame.
     ringItems(state.ring);
     if (state.feats)
         drawFeatText(*state.feats, out);
@@ -1099,10 +1102,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     if (state.windows)
         drawScreen(*state.windows, out);
     if (state.mapPreview.empty()) {
-        if (state.information)
-            drawPreview(*state.information, out);
-        else if (state.inventory)
-            drawPreview(*state.inventory, out);
+        if (information)
+            drawPreview(*information, out);
     }
     if (overlays)
         overlays(out);

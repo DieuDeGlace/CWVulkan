@@ -258,7 +258,7 @@ dispatch **0x133c70** supplies the low8 virtual-key code. Shift is
 virtual key **0x10**, not a configured logical action or a newly queried
 device state in the preview selector.
 
-The second-weapon decision reads this byte at **0xb720f**, and the
+The second-weapon decision reads this byte at **0xb7203**, and the
 second-ring decision reads it at **0xb739c**. Each uses the then-current
 stored byte; there is no separate Shift snapshot, press edge, or compare
 mode latched by0xb6b00. Their current comparison-null tests still apply
@@ -369,11 +369,32 @@ height, **after** that frame's earlier placement used the older geometry.
 Other location/lore draw branches retain their separate size writers;
 this item-only contract does not claim that they leave height unchanged.
 
-### 7.5 Remaining formatter boundary
+### 7.5 Formatter checkpoint boundary
 
 Source selection, comparison record identity, the actual argument roles,
 quantity/unused-byte behavior, heading placement and frame-size timing
-above are stable. The complete category-specific stat rows, comparison
-delta formatting and effect-description paragraphs in0xb7b90 are not
-newly specified by this checkpoint. They must not be replaced by invented
-generic text on the strength of this narrower call contract.
+above are stable. Section8 now supplies the category-specific text rows,
+comparison deltas and effect paragraphs of0xb7b90. This does not replace
+the existing independent item-name, dictionary or item-stat contracts
+with generic descriptions.
+
+### 7.6 Owner background/children precede the late item-size change
+
+Preview constructor0x28c0a0 retains fresh Widget flags0, including
+clear bit0x200. In the ordinary admitted uncached **0x330b20** traversal,
+the node's own shape is drawn, then admitted children are traversed,
+then the clear-bit0x200 branch invokes its own draw hook0x28c290.
+The before-children and after-children choice is explicit around
+the0x331511 continuation; existing GUI-item-icons16.3 gives the same
+constructor/vtable facts.
+
+Consequently the frame/background and child shapes have already drawn
+with the geometry that existed when they were visited. Only afterward
+does the item hook draw its icon/main text and perform its first resize,
+then any comparison text and second resize. It does not redraw the
+owner root or children after those writes in the same callback. A new
+text-derived size is therefore not grounds to retroactively expand
+that frame's already submitted background. Subsequent queries retain
+the new ordinary Widget state as7.4 specifies. Owner clip/blur/cached
+surface traversal remains the shared Plasma contract, not an invented
+extra preview pass.
