@@ -1,5 +1,6 @@
 #include "GuiItem.h"
 #include "NativePose.h"
+#include "NativeRules.h"
 #include "worldgen/Noise.h"
 #include <bit>
 #include <glm/gtc/matrix_transform.hpp>
@@ -15,6 +16,24 @@ Placement spritePlacement(glm::vec2 origin, glm::vec2 size, int32_t clock) {
     at.size = size.x * 0.0006f;
     at.darkPass = true;
     return at;
+}
+
+GridCell gridCell(glm::vec2 origin, float scale, glm::ivec2 size, glm::ivec2 index, int category, glm::vec2 pointer, int32_t clock) {
+    GridCell cell;
+    const glm::ivec2 offset{10 + (size.x + 5) * index.x, 40 + (size.y + 5) * index.y};
+    cell.origin = glm::vec2(glm::ivec2(glm::vec2(offset) * scale + origin));
+    cell.extent = glm::vec2(size) * scale;
+    cell.hovered = pointer.x >= cell.origin.x && pointer.y >= cell.origin.y && pointer.x < cell.origin.x + cell.extent.x &&
+                   pointer.y < cell.origin.y + cell.extent.y;
+    cell.icon.screen = cell.origin + (float)(size.y / 2) * scale;
+    cell.icon.euler = {225, 0, phase(clock)};
+    cell.icon.size = scale * 0.03f;
+    if (cell.hovered)
+        cell.icon.size *= 1.5f;
+    if (category == 9)
+        cell.icon.size *= 0.75f;
+    cell.icon.darkPass = true;
+    return cell;
 }
 
 float phase(int32_t guiClockMs) {
@@ -129,6 +148,26 @@ float shininess(const nativesaves::Item &item) {
         category == 24 && (subtype == 4 || subtype == 5 || subtype == 7 || subtype == 8 || subtype == 10 || subtype == 18);
     return category == 23 || shinySpecial ? 1.0f : 0.0f;
 }
+glm::vec4 textColour(const nativesaves::Item &item, nativesaves::Cell region) {
+    const int type = item[0];
+    int32_t subtype;
+    std::memcpy(&subtype, item.data() + nativesaves::item::SUBTYPE, sizeof subtype);
+    if (type == 23 || type == 24)
+        return {1, .6f, .25f, 1};
+    if (type == 21)
+        return {.7f, 1, .25f, 1};
+    if (type == 0)
+        return glm::vec4(1);
+    if (type == 22 || (type == 1 && subtype == 13))
+        return {.5f, 1, 1, 1};
+    if (type == 13)
+        return {.5f, .1f, 1, 1};
+    const bool regional = type < 31 && ((0x440083fcu >> type) & 1u);
+    const int rarity = regional ? nativerules::itemLevel(item.data(), region.data()) : (int)item[nativesaves::item::RARITY];
+    static const glm::vec4 palette[] = {{.7f, .7f, .7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {.3f, .45f, 1, 1}, {.55f, .2f, 1, 1}, {1, 1, 0, 1}};
+    return palette[std::clamp(rarity, -1, 4) + 1];
+}
+
 glm::vec3 lightDirection() {
     const float a = 1.0f / std::sqrt(2.1599998474121094f);
     glm::vec3 direction(a, a * 0.4f, -a);

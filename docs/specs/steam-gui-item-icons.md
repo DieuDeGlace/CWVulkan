@@ -400,7 +400,10 @@ are limited to the tab's physical slot count.
 For mode**+0x280=0**, tabs0/1 also stop the usable record interval at the
 first nonzero-quantity stack whose original item region pair**+0x0c/+0x10**
 differs from widget's selected region pair**+0x1f0/+0x1f4**. Empty holes
-do not terminate this scan. This presumes the independently specified
+do not terminate this scan. It starts at the **first visible physical slot**,
+not at slot0 or a compacted matching-region start. The complete interval,
+hover/reset, navigation, distinct scrollbar count/geometry and text rules
+are **steam-inventory-grid-layout1–7**. This presumes the independently specified
 canonical ordering; it does not search arbitrary later records for matches.
 For each usable index, ordinary icon admission is **quantity!=0**. Modes
 **2/3**, crafting-list/shop, admit their usable records even at quantity0.

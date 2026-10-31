@@ -62,6 +62,13 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Inventory, shop and recipe grid WORLD item calls from `steam-gui-item-icons.md`
+  §9 and `steam-inventory-grid-layout.md`. Native inventory views retain physical
+  slots, including holes, and original records; region drawing stops independently
+  of whole-tab scrollbar counting. Cell rounding, hover scaling, names and colors
+  follow the independent facts. Only locally loaded owner geometry reaches the
+  renderer; no original asset is added to source or runtime packages. Persistent
+  widget refresh/callback timing and broader original-game comparisons remain open.
 - Ring Menu input, canonical candidate identity, selected Use/Quick Item, combined UI
   sound edges and queued screen-overlay rendering, from `steam-inventory-slot-lifecycle.md`
   §9 and `steam-ring-selector-rendering.md`. Original item records, owner selector/fonts

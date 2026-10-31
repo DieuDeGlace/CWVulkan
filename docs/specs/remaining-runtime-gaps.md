@@ -967,6 +967,9 @@ speech/page consumers in §§3 and 5.
 
 Sources: **0x27f7a0** (next row), **0x280270** (previous row), **0x280a40**
 (refresh), **0x280e30** (selection frame), and **0x280c80** (scrollbar).
+Follow-up **steam-inventory-grid-layout2–5** distinguishes the physical
+viewport interval from the full-tab count, and supplies raw zero/negative
+boundaries, hover reset/retention and exact integer thumb placement.
 Each inventory/list/shop widget owns a vector of **signed i32 row offsets** at
 **+0x288 / +0x290 / +0x298**, one entry per backing tab. This is persistent
 **per-widget, per-tab** state. In contrast, the selected item pair **+0x278 / +0x27c**

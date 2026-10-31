@@ -1,5 +1,6 @@
 #include "ItemSelector.h"
 #include "GameMath.h"
+#include "GuiItem.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -25,12 +26,7 @@ size_t wrappedIndex(int32_t index, size_t count) {
 }
 
 glm::vec4 candidateColour(const nativesaves::Item &item) {
-    int32_t subtype;
-    std::memcpy(&subtype, item.data() + nativesaves::item::SUBTYPE, sizeof subtype);
-    if (subtype == 13)
-        return {.5f, 1, 1, 1};
-    static const glm::vec4 palette[] = {{.7f, .7f, .7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {.3f, .45f, 1, 1}, {.55f, .2f, 1, 1}, {1, 1, 0, 1}};
-    return palette[std::clamp((int)item[nativesaves::item::RARITY], -1, 4) + 1];
+    return guiitem::textColour(item, {}); // category1 ignores region; subtype13 retains its fixed cyan
 }
 
 Update Selector::frame(const Input &input, size_t count, double elapsed, float scale) {

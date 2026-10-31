@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace {
 // A narrow string as the font reads it: Latin-1 (the rarity mark is 0xb1, the coin 0xae).
@@ -37,6 +38,8 @@ void Hud::buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons
     plasma::SceneNode *node = s.instance("blackwidget", panels.inGame);
     if (!node || !node->widget)
         return;
+    node->widget = plasma::reboundWidget(*node->widget);
+    node->widget->kind = "InventoryWidget";
     p.node = node;
     p.tabParent = s.create(node);
     p.cellParent = s.create(node);
@@ -157,8 +160,8 @@ void Hud::layoutInvPanel(InvPanel &p) {
     plasma::Scene &s = *scene;
     const glm::vec2 content = s.contentSize(*p.node);
     const int cw = panels.cellWidth, ch = panels.cellHeight;
-    p.columns = std::max(1, (int)((content.x - 10.0f) / (float)(cw + 5)));
-    p.rows = std::max(1, (int)((content.y - 40.0f) / (float)(ch + 5)));
+    p.columns = (int)((content.x - 10.0f) / (float)(cw + 5));
+    p.rows = (int)((content.y - 40.0f) / (float)(ch + 5));
     p.cellParent->children.clear();
     p.cells.clear();
     for (int x = 0; x < p.columns; x++)
@@ -244,20 +247,64 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
 }
 
 // The items a widget shows on its tab, in order (the indices into the list).
-static std::vector<int> shownOf(const Hud::InvList &list) {
+static std::vector<int> shownOf(const Hud::InvList &list, int first = 0) {
     std::vector<int> shown;
+    if (list.canonicalTabs) {
+        if (list.tab < 0 || (size_t)list.tab >= list.canonicalTabs->size())
+            return shown;
+        const auto &slots = (*list.canonicalTabs)[(size_t)list.tab];
+        size_t end = slots.size();
+        if (list.region)
+            for (size_t i = (size_t)std::max(0, first); i < slots.size(); ++i) {
+                if (slots[i].count == 0)
+                    continue;
+                inventoryui::Region region;
+                std::memcpy(region.data(), slots[i].item.data() + nativesaves::item::REGION, sizeof region);
+                if (region != *list.region) {
+                    end = i;
+                    break;
+                }
+            }
+        shown.assign(end, -1);
+        for (size_t i = 0; i < list.items->size(); ++i) {
+            const auto &entry = (*list.items)[i];
+            if (entry.tab == list.tab && entry.slotIndex >= 0 && (size_t)entry.slotIndex < end)
+                shown[(size_t)entry.slotIndex] = (int)i;
+        }
+        return shown;
+    }
     for (size_t i = 0; i < list.items->size(); i++)
-        if ((*list.items)[i].tab == list.tab && (list.all || (*list.items)[i].count != 0) &&
+        if ((*list.items)[i].tab == list.tab && (list.all || list.includeZeroQuantity || (*list.items)[i].count != 0) &&
             (!list.region || (*list.items)[i].region == *list.region))
             shown.push_back((int)i);
     return shown;
 }
 
 int Hud::invRowCount(const InvPanel &p, const InvList &list) const {
-    if (!p.node)
+    if (!p.node || p.columns <= 0)
         return 1;
-    const int count = (int)shownOf(list).size();
-    if (count == 0)
+    int count;
+    bool physicallyEmpty;
+    if (list.canonicalTabs) {
+        if (list.tab < 0 || (size_t)list.tab >= list.canonicalTabs->size())
+            return 1;
+        const auto &slots = (*list.canonicalTabs)[(size_t)list.tab];
+        physicallyEmpty = slots.empty();
+        count = (int)slots.size();
+        if (list.region) {
+            count = 0;
+            for (const auto &slot : slots) {
+                inventoryui::Region region;
+                std::memcpy(region.data(), slot.item.data() + nativesaves::item::REGION, sizeof region);
+                if (slot.count != 0 && region == *list.region)
+                    ++count;
+            }
+        }
+    } else {
+        count = (int)shownOf(list).size();
+        physicallyEmpty = count == 0;
+    }
+    if (physicallyEmpty)
         return 0;
     return std::max(1, (count - 1) / p.columns - p.rows + 2);
 }
@@ -281,11 +328,10 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
         const glm::vec2 content = s.contentSize(*p.node);
         if (rowCount) {
             const int track = (int)(content.y - 70.0f), buttonHeight = track / rowCount;
-            const float y = rowCount > 1 ? (float)(std::clamp(list.scroll, 0, rowCount - 1) * (track - buttonHeight) / (rowCount - 1) + 35) : 35.0f;
+            const float y = rowCount > 1 ? (float)(list.scroll * (track - buttonHeight) / (rowCount - 1) + 35) : 35.0f;
             s.moveTo(button, glm::vec2(content.x - 28.0f, y));
             s.resizeTo(button, glm::vec2(s.contentSize(button).x, (float)buttonHeight));
         }
-        button.visible = rowCount > 0;
     }
     for (auto [name, value] : {std::pair{"upbutton", 1}, std::pair{"downbutton", 2}})
         if (auto it = p.buttons.find(name); it != p.buttons.end() && it->second)
@@ -340,7 +386,8 @@ void Hud::placePanels(const Inventory &inv) const {
             const std::vector<int> shown = shownOf(list);
             const auto at = std::find(shown.begin(), shown.end(), c.selected);
             const int first = panels.crafting.columns * c.scroll, index = (int)(at - shown.begin()) - first;
-            const bool on = at != shown.end() && index >= 0 && index < panels.crafting.columns * panels.crafting.rows;
+            const bool on =
+                panels.crafting.columns > 0 && at != shown.end() && index >= 0 && index < panels.crafting.columns * panels.crafting.rows;
             panels.selector->visible = on;
             if (on)
                 s.moveTo(*panels.selector, glm::vec2((float)(index % panels.crafting.columns * (panels.cellWidth + 5) + 10),
@@ -372,7 +419,7 @@ void Hud::placePanels(const Inventory &inv) const {
 // name (the bag's first two tabs), the names (a count for stacks, the rarity's colour, red
 // when the class may not use them) and, with a vendor, the prices.
 void Hud::drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const InvList &list, const std::string &title,
-                       const std::string &region, bool vendor, bool selling) const {
+                       const std::string &region, bool vendor, bool selling, glm::vec2 pointer) const {
     if (!p.node || !p.node->visible)
         return;
     plasma::Scene &s = *scene;
@@ -380,15 +427,24 @@ void Hud::drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const
     const float scaleNow = s.matrix(node)[0][0];
     const glm::vec2 position = s.contentPosition(node), content = s.contentSize(node);
     const int cw = panels.cellWidth, ch = panels.cellHeight, columns = p.columns, rows = p.rows;
-    const std::vector<int> shown = shownOf(list);
+    if (columns <= 0 || rows <= 0)
+        return;
+    const std::vector<int> shown = shownOf(list, columns * list.scroll);
     const int first = columns * list.scroll, last = std::min((int)shown.size(), first + columns * rows);
     for (int i = first; i < last; i++) {
+        if (shown[(size_t)i] < 0)
+            continue;
         const int index = i - first;
         const float x = std::floor(((float)(index % columns * (cw + 5) + 10)) * scaleNow + position.x);
         const float y = std::floor(((float)(index / columns * (ch + 5) + 40)) * scaleNow + position.y);
         const Inventory::Entry &e = (*list.items)[(size_t)shown[(size_t)i]];
-        // The item turning in its cell, larger under the pointer (CubeVulkan: its still icon).
-        if (auto icon = icons.find(e.icon); icon != icons.end()) {
+        if (e.count == 0 && !list.all && !vendor)
+            continue;
+        if (e.original) {
+            const auto cell =
+                guiitem::gridCell(position, scaleNow, {cw, ch}, {index % columns, index / columns}, (*e.original)[0], pointer, guiClockMs);
+            itemIcon(e.icon, *e.original, cell.icon, out.size());
+        } else if (auto icon = icons.find(e.icon); icon != icons.end()) {
             const float side = (float)ch * scaleNow * 0.8f * (shown[(size_t)i] == list.hoverItem ? 1.25f : 1.0f);
             const float centre = (float)(ch / 2) * scaleNow;
             image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(x + centre - side / 2),
@@ -400,16 +456,20 @@ void Hud::drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const
         widgetText(out, node, latin1(region), {(content.x + 15.0f - 60.0f) * 0.5f, content.y - 12.0f}, 12, 3, glm::vec4(1), BLACK,
                    plasma::TEXT_CENTER, 0);
     for (int i = first; i < last; i++) {
+        if (shown[(size_t)i] < 0)
+            continue;
         const Inventory::Entry &e = (*list.items)[(size_t)shown[(size_t)i]];
+        if (e.original && ((*e.original)[0] == 0 || (vendor && e.count == 0)))
+            continue;
         const int column = (i - first) % columns, row = (i - first) / columns;
         std::string name = e.name;
-        if (vendor || list.all ? e.count > 0 : e.stack)
+        if (vendor || list.all ? e.count > 0 && (!list.all || list.tab != 6) : e.stack)
             name += " (" + std::to_string(e.count) + ")";
-        widgetText(out, node, latin1(name), {(float)(ch + 20 + column * (cw + 5)), (float)(ch + row * (ch + 5) + (list.all ? 13 : 10))}, 12, 3,
-                   e.allowed ? e.color : glm::vec4(1, 0.25f, 0.25f, 1), BLACK, plasma::TEXT_WRAP, (float)(cw - ch - 20));
+        widgetText(out, node, latin1(name), {(float)(ch + 20 + column * (cw + 5)), (float)(ch + row * (ch + 5) + (list.all ? 13 : 10))}, 12,
+                   3, e.allowed ? e.color : glm::vec4(1, 0.25f, 0.25f, 1), BLACK, plasma::TEXT_WRAP, (float)(cw - ch - 20));
         // What it costs (a vendor's), or sells for (the bag's, with a vendor open).
-        if (e.price > 0 && (vendor || selling)) {
-            const float right = vendor ? (float)(column * (cw + 5) + cw + 10) : (float)(cw + column * (cw + 5) + 6);
+        if (e.price != 0 && (vendor || selling)) {
+            const float right = (float)(column * (cw + 5) + cw + 6);
             widgetText(out, node, latin1(std::to_string(e.price) + " \xae"), {right, (float)(ch + 37 + row * (ch + 5))}, 12, 3,
                        glm::vec4(1, 0.9f, 0, 1), BLACK, plasma::TEXT_RIGHT, 0);
         }
@@ -421,9 +481,25 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         return;
     placePanels(inv);
     panels.inGame->visible = true;
-    // SpriteWidget hooks run after the slot's own shape and before its child labels/frame.
-    // Keep the original record: this caller neither adapts gear nor enlarges hovered slots.
-    auto equipment = [&](const plasma::SceneNode &node) {
+    const auto bag = bagList(inv), vendor = vendorList(inv), crafting = craftingList(inv);
+    const int tab = std::clamp(inv.tab, 0, 5);
+    // InventoryWidget draws after its children; SpriteWidget draws before its children.
+    // Both submit the original record at the owner's callback position.
+    auto drawWidget = [&](const plasma::SceneNode &node) {
+        if (&node == panels.bag.node && inv.bagShown) {
+            drawInvPanel(out, panels.bag, bag, BAG_TITLES[tab], tab <= 1 ? inv.regionName : std::string(), false,
+                         inv.vendor.open && tab != 1 && tab != 5, inv.pointer);
+            return;
+        }
+        if (&node == panels.vendor.node && inv.vendor.open) {
+            drawInvPanel(out, panels.vendor, vendor, "Vendor", {}, true, false, inv.pointer);
+            return;
+        }
+        if (&node == panels.crafting.node && inv.crafting.open) {
+            drawInvPanel(out, panels.crafting, crafting, std::string("Crafting: ") + CRAFT_TITLES[std::clamp(inv.crafting.tab, 0, 5)], {},
+                         false, false, inv.pointer);
+            return;
+        }
         const auto found = std::find(panels.slots.begin(), panels.slots.end(), &node);
         if (found == panels.slots.end() || !node.widget)
             return;
@@ -433,20 +509,11 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         const auto at = guiitem::spritePlacement(scene->contentPosition(node), scene->screenSize(node), guiClockMs);
         itemIcon(inv.slots[index], *inv.slotItems[index], at, out.size());
     };
-    sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, equipment);
+    sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, drawWidget);
     panels.inGame->visible = false;
     drawCharacter(inv, out);
 
-    const InvList bag = bagList(inv);
-    const int tab = std::clamp(inv.tab, 0, 5);
-    if (inv.bagShown)
-        drawInvPanel(out, panels.bag, bag, BAG_TITLES[tab], tab <= 1 ? inv.regionName : std::string(), false,
-                 inv.vendor.open && tab != 1 && tab != 5);
-    if (inv.vendor.open)
-        drawInvPanel(out, panels.vendor, vendorList(inv), "Vendor", std::string(), true, false);
     if (inv.crafting.open) {
-        drawInvPanel(out, panels.crafting, craftingList(inv), std::string("Crafting: ") + CRAFT_TITLES[std::clamp(inv.crafting.tab, 0, 5)],
-                     std::string(), false, false);
         drawDetails(inv, out);
     }
     // The equipment slots' items (SpriteWidget: in each box's content).
@@ -655,11 +722,22 @@ void Hud::drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) c
 // --- What the pointer is on --------------------------------------------------------------
 
 Hud::InvList Hud::bagList(const Inventory &inv) const {
-    return {&inv.items, inv.tab, inv.scroll, inv.hoverItem, inv.hoverTab, inv.hoverButton, false, inv.selected,
-            inv.tab < 2 ? &inv.activeRegion : nullptr, inv.tab < 2 && inv.regionChoices.size() > 1};
+    return {&inv.items,
+            inv.tab,
+            inv.scroll,
+            inv.hoverItem,
+            inv.hoverTab,
+            inv.hoverButton,
+            false,
+            inv.selected,
+            inv.tab < 2 ? &inv.activeRegion : nullptr,
+            inv.tab < 2 && inv.regionChoices.size() > 1,
+            inv.canonicalTabs};
 }
 Hud::InvList Hud::vendorList(const Inventory &inv) const {
-    return {&inv.vendor.items, inv.vendor.tab, inv.vendor.scroll, inv.vendor.hoverItem, inv.vendor.hoverTab, inv.vendor.hoverButton};
+    InvList list{&inv.vendor.items, inv.vendor.tab, inv.vendor.scroll, inv.vendor.hoverItem, inv.vendor.hoverTab, inv.vendor.hoverButton};
+    list.includeZeroQuantity = true;
+    return list;
 }
 Hud::InvList Hud::craftingList(const Inventory &inv) const {
     const Inventory::Crafting &c = inv.crafting;
@@ -676,8 +754,8 @@ int Hud::inventoryFirstItem(const Inventory &inv, int which) const {
     if (!hasPanels())
         return -1;
     const InvList list = listOf(inv, which);
-    const auto shown = shownOf(list);
     const int first = list.scroll * invPanel(which).columns;
+    const auto shown = shownOf(list, first);
     return first >= 0 && first < (int)shown.size() ? shown[(size_t)first] : -1;
 }
 
@@ -779,24 +857,41 @@ bool Hud::inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int whic
     return scene->hitTest(*panel.node, mouse, textHit) != nullptr;
 }
 
-int Hud::panelItemAt(glm::vec2 m, const Inventory &inv, int which) const {
-    const InvPanel &p = invPanel(which);
-    if (!hasPanels() || !p.node || !p.node->visible)
+int Hud::panelPhysicalAt(glm::vec2 m, const InvPanel &p, const InvList &list) const {
+    if (!p.node || !p.node->visible || p.columns <= 0 || p.rows <= 0 || list.scroll < 0)
         return -1;
-    placePanels(inv);
-    const InvList list = listOf(inv, which);
     const float scaleNow = scene->matrix(*p.node)[0][0];
     const glm::vec2 position = scene->contentPosition(*p.node);
-    const std::vector<int> shown = shownOf(list);
-    const int first = p.columns * list.scroll, last = std::min((int)shown.size(), first + p.columns * p.rows);
+    const int first = p.columns * list.scroll;
+    const auto shown = shownOf(list, first);
+    const int last = std::min((int)shown.size(), first + p.columns * p.rows);
     for (int i = first; i < last; i++) {
         const int index = i - first;
-        const glm::vec2 at((float)(index % p.columns * (panels.cellWidth + 5) + 10) * scaleNow + position.x,
-                           (float)(index / p.columns * (panels.cellHeight + 5) + 40) * scaleNow + position.y);
-        if (inside(m, at, glm::vec2((float)panels.cellWidth, (float)panels.cellHeight) * scaleNow))
-            return shown[(size_t)i];
+        const auto cell =
+            guiitem::gridCell(position, scaleNow, {panels.cellWidth, panels.cellHeight}, {index % p.columns, index / p.columns}, 0, m, 0);
+        if (cell.hovered)
+            return i;
     }
     return -1;
+}
+
+int Hud::panelItemAt(glm::vec2 m, const Inventory &inv, int which) const {
+    if (!hasPanels())
+        return -1;
+    placePanels(inv);
+    const auto &panel = invPanel(which);
+    const auto list = listOf(inv, which);
+    const int physical = panelPhysicalAt(m, panel, list);
+    const auto shown = shownOf(list, panel.columns * list.scroll);
+    return physical >= 0 && (size_t)physical < shown.size() ? shown[(size_t)physical] : -1;
+}
+
+inventoryslots::Index Hud::inventorySourceAt(glm::vec2 mouse, const Inventory &inv) const {
+    if (!hasPanels() || !inv.canonicalTabs || !inv.bagShown)
+        return {};
+    placePanels(inv);
+    const int slot = panelPhysicalAt(mouse, panels.bag, bagList(inv));
+    return slot >= 0 ? inventoryslots::Index{inv.tab, slot} : inventoryslots::Index{};
 }
 
 bool Hud::craftButtonAt(glm::vec2 m, const Inventory &inv) const {

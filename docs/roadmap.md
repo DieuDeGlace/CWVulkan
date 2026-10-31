@@ -226,8 +226,11 @@ individual feature documents.
   pass. Broader original-game/controller and map-panel event comparisons remain.
 - [ ] Ordinary WORLD-shader 3D GUI item icons: identification and equipment SpriteWidgets
   now use the shared helper, including full item records and per-widget callback ordering.
-  The selected quick-item SpriteWidget also uses the original record. Inventory grids,
-  crafting and other previews retain bitmap compatibility paths.
+  The selected quick-item SpriteWidget also uses the original record. Inventory, shop
+  and recipe grids now submit original records at their owner callbacks, preserve
+  physical holes and region cutoffs, and use native cell snapping, sizing and colors.
+  Formula details, hovered previews, upgrade/customization and other callers still
+  retain bitmap compatibility paths.
   Full map-panel controls, GUI capture/poses and layout-callback timing still
   need implementation/comparison.
 - [x] Ring Menu selector: canonical category1 candidates, retained signed32 selection,

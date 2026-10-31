@@ -1738,6 +1738,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     std::vector<Carried> bag;
     std::function<void()> rebuildInventoryViews;
     std::set<std::string> inventoryIconAttempts; // this session owns its Hud and GPU resources
+    auto loadInventorySprite = [&](const std::string &sprite) {
+        if (sprite.empty() || !inventoryIconAttempts.insert(sprite).second)
+            return;
+        if (const auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
+            CubModel cub;
+            if (cub.load(*path)) {
+                hud.addItemIcon(sprite, cub);
+                hud.layout(renderer, renderer.screenSize());
+            }
+        }
+    };
     auto resetDailyProgress = [&] {
         nativeprogress::resetDay(saveGame);
         if (nativeInventory && rebuildInventoryViews) {
@@ -1848,14 +1859,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (item.sprite.empty())
                 if (const auto *model = catalog.model(item.category, item.id, item.material); model && !model->sprites.empty())
                     item.sprite = *model->sprites.begin();
-            if (!item.sprite.empty() && inventoryIconAttempts.insert(item.sprite).second)
-                if (const auto path = assets.resolve(fs::path("sprites") / (item.sprite + ".cub"))) {
-                    CubModel model;
-                    if (model.load(*path)) {
-                        hud.addItemIcon(item.sprite, model);
-                        hud.layout(renderer, renderer.screenSize());
-                    }
-                }
+            loadInventorySprite(item.sprite);
             return item;
         };
         std::array<Gear::Item, Gear::SLOTS> equipment;
@@ -3812,6 +3816,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             };
             listed.clear();
             inventoryView.items.clear();
+            inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
             const worldgen::Int2 here = regionHere();
             if (!inventoryRegionActive) {
                 inventoryView.activeRegion = {here.x, here.y};
@@ -3828,13 +3833,38 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
             const size_t gearRows = listed.size();
             std::vector<inventoryslots::Index> nativeRows;
-            for (const Carried &c : bag) { // then what the bag holds (not usable yet)
-                inventoryView.items.push_back({bagName(c.item, itemName(c.item)), c.item.sprite, c.count, true,
-                                               nativeInventory ? c.item.tab : tabOf(c.item.category), stacks(c.item.category),
-                                               rarityColour(c.item.rarity)});
-                inventoryView.items.back().region = {c.item.region[0], c.item.region[1]};
-                nativeRows.push_back({c.item.tab, c.item.index});
-            }
+            nativesaves::Cell viewRegion{here.x, here.y};
+            if (const auto *actor = spawned.playerRecord())
+                std::memcpy(viewRegion.data(), actor + worldgen::creature::REGION, sizeof viewRegion);
+            if (nativeInventory) {
+                const auto &tabs = nativeInventory->inventory.tabs;
+                for (size_t tab = 0; tab < tabs.size(); ++tab)
+                    for (size_t slot = 0; slot < tabs[tab].size(); ++slot) {
+                        const auto &stack = tabs[tab][slot];
+                        auto item = Gear::fromRecord(stack.item);
+                        if (item.category)
+                            item.sprite = spawned.itemSprite(stack.item.data());
+                        loadInventorySprite(item.sprite);
+                        Hud::Inventory::Entry entry;
+                        entry.name = item.category ? bagName(item, itemName(item)) : "";
+                        entry.icon = item.sprite;
+                        entry.count = stack.count;
+                        entry.allowed = nativerules::classMayUse(stack.item.data(), gear.playerClass());
+                        entry.tab = (int)tab;
+                        entry.stack = stacks(item.category);
+                        entry.color = guiitem::textColour(stack.item, viewRegion);
+                        entry.region = {item.region[0], item.region[1]};
+                        entry.slotIndex = (int)slot;
+                        entry.original = stack.item;
+                        inventoryView.items.push_back(std::move(entry));
+                        nativeRows.push_back({(int)tab, (int)slot});
+                    }
+            } else
+                for (const Carried &c : bag) {
+                    inventoryView.items.push_back({bagName(c.item, itemName(c.item)), c.item.sprite, c.count, true, tabOf(c.item.category),
+                                                   stacks(c.item.category), rarityColour(c.item.rarity)});
+                    inventoryView.items.back().region = {c.item.region[0], c.item.region[1]};
+                }
             auto refreshRegions = [&] {
                 std::vector<inventoryui::Region> regions;
                 for (const auto &entry : inventoryView.items)
@@ -3862,7 +3892,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         offers = gameshop::stock(vendorTrade.shop, day, gear.playerClass(), tier,
                                                  [&](const gameshop::Item &item) { return gameshop::boughtCount(bought, item); });
                     }
-                    static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
                     for (const gameshop::Offer &o : offers) {
                         const uint8_t *n = o.item.data();
                         int32_t id;
@@ -3871,23 +3900,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         shown.category = n[0], shown.id = id, shown.material = n[0x1c], shown.rarity = (int8_t)n[0x14];
                         std::memcpy(&shown.modifier, n + 8, 4);
                         std::string sprite = spawnedReady ? spawned.itemSprite(n) : std::string();
-                        static std::set<std::string> tried;
-                        if (!sprite.empty() && tried.insert(sprite).second)
-                            if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
-                                CubModel cub;
-                                if (cub.load(*path)) {
-                                    hud.addItemIcon(sprite, cub);
-                                    hud.layout(renderer, renderer.screenSize());
-                                }
-                            }
+                        loadInventorySprite(sprite);
                         Hud::Inventory::Entry e;
                         e.name = bagName(shown, itemName(shown)) + (gameshop::renowned(o.item) ? "+" : "");
                         e.icon = sprite;
                         e.count = o.count;
-                        e.allowed = !(shown.category >= 3 && shown.category <= 9) || catalog.mayUse(shown.category, shown.id, shown.material, gear.playerClass());
+                        e.allowed = nativerules::classMayUse(o.item.data(), gear.playerClass());
                         e.tab = inventoryView.vendor.tab;
-                        e.color = rarities[std::clamp((int)shown.rarity, -1, 4) + 1];
+                        e.color = guiitem::textColour(o.item, viewRegion);
                         e.price = inventoryView.vendor.tab == 1 ? gameshop::sellPrice(o.item) : gameshop::price(o.item);
+                        e.original = o.item;
                         inventoryView.vendor.items.push_back(e);
                         vendorRaws.push_back(o.item);
                     }
@@ -3924,10 +3946,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 inventoryView.pointer = glm::vec2(fw * 0.45f, fh * 0.25f);
             }
             inventoryslots::Index hoveredNative;
-            if (nativeInventory && inventoryView.hoverItem >= 0 && (size_t)inventoryView.hoverItem < bag.size()) {
-                const auto &item = bag[(size_t)inventoryView.hoverItem].item;
-                hoveredNative = {item.tab, item.index};
-            }
+            if (nativeInventory)
+                hoveredNative = hud.inventorySourceAt(mouse, inventoryView);
+            if (nativeInventory && hoverTest >= 0 && inventoryView.hoverItem >= 0 && (size_t)inventoryView.hoverItem < nativeRows.size())
+                hoveredNative = nativeRows[(size_t)inventoryView.hoverItem];
             // --open-crafting: the crafting widget alone on that tab.
             if (craftTabTest >= 0) {
                 craftingOpen = true, bagShown = false;
@@ -3964,15 +3986,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 // An item's icon: the sprite the game draws for it, rendered once.
                 auto iconOf = [&](const gameshop::Item &raw) {
                     std::string sprite = spawnedReady ? spawned.itemSprite(raw.data()) : std::string();
-                    static std::set<std::string> tried;
-                    if (!sprite.empty() && tried.insert(sprite).second)
-                        if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
-                            CubModel cub;
-                            if (cub.load(*path)) {
-                                hud.addItemIcon(sprite, cub);
-                                hud.layout(renderer, renderer.screenSize());
-                            }
-                        }
+                    loadInventorySprite(sprite);
                     return sprite;
                 };
                 auto shownOf = [](const gamecraft::Thing &t) {
@@ -3984,7 +3998,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     Gear::cubesFrom(raw.data(), g);
                     return g;
                 };
-                static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
                 // (rank 0 always, a higher one once a crafting-book place of the region is solved)
                 const auto tabs = gamecraft::formulas(knownFormulas, gear.playerClass(), region[0], region[1], [&](int rank) {
                     return gamecraft::rankUnlocked(rank, region[0], region[1], saveGame.solvedMissions);
@@ -3998,10 +4011,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         e.name = bagName(shown, itemName(shown)) + (gameshop::renowned(raw) ? "+" : "");
                         e.icon = iconOf(raw);
                         e.count = gamecraft::times(f, held);
-                        e.allowed = !(shown.category >= 3 && shown.category <= 9) ||
-                                    catalog.mayUse(shown.category, shown.id, shown.material, gear.playerClass());
+                        e.allowed = nativerules::classMayUse(raw.data(), gear.playerClass());
                         e.tab = t;
-                        e.color = rarities[std::clamp(shown.rarity, -1, 4) + 1];
+                        e.color = guiitem::textColour(raw, viewRegion);
+                        e.original = raw;
                         cv.items.push_back(e);
                         craftRows.push_back(f);
                     }
@@ -4100,17 +4113,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 inventoryView.info.clear();
                 inventoryView.infoIcon.clear();
                 const Gear::Item *shown = nullptr;
+                std::optional<Gear::Item> nativeShown;
                 int count = 1;
-                if (inventoryView.hoverItem >= 0 && inventoryView.hoverItem < (int)listed.size())
+                if (nativeInventory) {
+                    if (const auto *stack = nativeInventory->inventory.slot(hoveredNative); stack && stack->item[0] != 0) {
+                        nativeShown = Gear::fromRecord(stack->item);
+                        nativeShown->sprite = spawnedReady ? spawned.itemSprite(stack->item.data()) : std::string();
+                        shown = &*nativeShown;
+                        count = stack->count;
+                    }
+                } else if (inventoryView.hoverItem >= 0 && inventoryView.hoverItem < (int)listed.size())
                     shown = &gear.item(listed[(size_t)inventoryView.hoverItem]);
                 else if (inventoryView.hoverItem >= (int)listed.size() && inventoryView.hoverItem - listed.size() < bag.size())
-                    shown = &bag[(size_t)inventoryView.hoverItem - listed.size()].item, count = bag[(size_t)inventoryView.hoverItem - listed.size()].count;
-                else if (inventoryView.hoverSlot >= 0 && gear.equipped(equipSlotOf(inventoryView.hoverSlot)).category)
+                    shown = &bag[(size_t)inventoryView.hoverItem - listed.size()].item,
+                    count = bag[(size_t)inventoryView.hoverItem - listed.size()].count;
+                if (!shown && inventoryView.hoverSlot >= 0 && gear.equipped(equipSlotOf(inventoryView.hoverSlot)).category)
                     shown = &gear.equipped(equipSlotOf(inventoryView.hoverSlot));
                 const uint8_t *who = spawned.playerRecord();
                 if (shown && who) {
                     const Gear::Item &it = *shown;
-                    const nativeplayer::Item raw = nativeplayer::item(it.category, it.id, it.material, it.rarity, it.modifier, it.region[0], it.region[1]);
+                    const auto raw = Gear::toRecord(it);
                     const int32_t *playerRegion = reinterpret_cast<const int32_t *>(who + worldgen::creature::REGION);
                     const int effective = nativerules::itemLevel(raw.data(), playerRegion);
                     static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
@@ -6453,14 +6475,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 hs.quickItem.key = "Q", hs.quickUse.key = "E", hs.quickSkill.key = "R";
                 // An item's picture for a button: its sprite rendered once into the HUD's icons.
                 auto showIcon = [&](const std::string &sprite) {
-                    if (!sprite.empty() && inventoryIconAttempts.insert(sprite).second)
-                        if (auto path = assets.resolve(fs::path("sprites") / (sprite + ".cub"))) {
-                            CubModel cub;
-                            if (cub.load(*path)) {
-                                hud.addItemIcon(sprite, cub);
-                                hud.layout(renderer, renderer.screenSize());
-                            }
-                        }
+                    loadInventorySprite(sprite);
                     return !sprite.empty();
                 };
                 for (const Carried &c : bag) // compatibility sessions have no canonical selector storage

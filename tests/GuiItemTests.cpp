@@ -70,6 +70,79 @@ void equipmentCallbacks() {
     inventory.slots[1] = "missing-owner-resource";
     hud.draw(state, vertices);
     GUI_CHECK(hud.itemDraws().empty());
+    // The grid's canonical positions include holes; navigation includes the unused tail.
+    inventory.slotItems = {};
+    inventoryslots::Tabs tabs;
+    tabs.resize(6);
+    inventory.canonicalTabs = &tabs;
+    inventory.tab = 2;
+    const auto points = hud.inventoryNavigationPoints(inventory);
+    const int capacity = (int)points.size() - 10;
+    GUI_CHECK(capacity >= 3);
+    if (capacity >= 3) {
+        int columns = 1;
+        while (columns < capacity && points[10 + columns].y == points[10].y)
+            ++columns;
+        const int rows = capacity / columns;
+        const auto populate = [&](int tab, int length) {
+            tabs[(size_t)tab].assign((size_t)length, nativesaves::Stack{1, weapon});
+            inventory.items.clear();
+            for (int i = 0; i < length; ++i) {
+                Hud::Inventory::Entry entry;
+                entry.icon = "synthetic-equipment";
+                entry.name = "Synthetic";
+                entry.tab = tab;
+                entry.slotIndex = i;
+                entry.original = weapon;
+                inventory.items.push_back(entry);
+            }
+        };
+        populate(2, capacity - 1);
+        tabs[2][1].count = inventory.items[1].count = 0;
+        tabs[2][2].count = inventory.items[2].count = -2;
+        inventory.pointer = points[11];
+        GUI_CHECK(hud.inventorySourceAt(points[11], inventory) == inventoryslots::Index{2, 1});
+        GUI_CHECK(hud.inventorySourceAt(points.back(), inventory) == inventoryslots::Index{});
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == (size_t)capacity - 2);
+        if (hud.itemDraws().size() >= 2) {
+            GUI_CHECK(hud.itemDraws()[0].at.screen == points[10] && hud.itemDraws()[1].at.screen == points[12]);
+            GUI_CHECK(hud.itemDraws()[1].item == weapon);
+        }
+        inventory.tab = 0;
+        populate(0, capacity * 2 + 1);
+        // A foreign region cuts drawing, but later matching slots still affect the range.
+        const int32_t foreign = 7;
+        std::memcpy(tabs[0][1].item.data() + nativesaves::item::REGION, &foreign, sizeof foreign);
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 1);
+        const int matching = (int)tabs[0].size() - 1;
+        GUI_CHECK(hud.inventoryRowCount(inventory) == std::max(1, (matching - 1) / columns - rows + 2));
+        inventory.scroll = 2; // the earlier mismatch must not cut a later viewport
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == (size_t)std::min(capacity, (int)tabs[0].size() - 2 * columns));
+        for (auto &slot : tabs[0])
+            slot.count = 0;
+        GUI_CHECK(hud.inventoryRowCount(inventory) >= 1);
+        tabs[0].clear();
+        GUI_CHECK(hud.inventoryRowCount(inventory) == 0);
+        inventory.tab = 6;
+        GUI_CHECK(hud.inventoryRowCount(inventory) == 1);
+        inventory.tab = 0;
+
+        inventory.bagShown = false;
+        inventory.vendor.open = true;
+        inventory.vendor.items = {inventory.items[0]};
+        inventory.vendor.items[0].count = 0;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 1); // shop icons admit zero quantity
+        inventory.vendor.open = false;
+        inventory.crafting.open = true;
+        inventory.crafting.items = inventory.vendor.items;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 1); // crafting does too
+        inventory.crafting.open = false;
+    }
     state.inventory = nullptr;
     state.ring.shown = true;
     state.ring.radius = 200;
@@ -96,6 +169,19 @@ int guiItemTests() {
     using namespace guiitem;
     failures = 0;
     equipmentCallbacks();
+    const auto cell = gridCell({-11.75f, -41.75f}, .5f, {120, 41}, {0, 0}, 9, {-6, -21}, -1);
+    GUI_CHECK(cell.origin == glm::vec2(-6, -21) && cell.extent == glm::vec2(60, 20.5f));
+    GUI_CHECK(cell.icon.screen == glm::vec2(4, -11) && cell.hovered && near(cell.icon.size, .5f * .03f * 1.5f * .75f));
+    GUI_CHECK(cell.icon.euler == glm::vec3(225, 0, phase(-1)) && cell.icon.darkPass);
+    GUI_CHECK(!gridCell({-11.75f, -41.75f}, .5f, {120, 41}, {0, 0}, 9, {54, -21}, 0).hovered);
+    const auto mirrored = gridCell({0, 0}, -1, {120, 41}, {1, 2}, 3, {-135, -132}, 0);
+    GUI_CHECK(!mirrored.hovered && mirrored.extent == glm::vec2(-120, -41) && near(mirrored.icon.size, -.03f));
+    GUI_CHECK(textColour(nativesaves::makeItem(23, 0), {}) == glm::vec4(1, .6f, .25f, 1));
+    GUI_CHECK(textColour(nativesaves::makeItem(21, 0), {}) == glm::vec4(.7f, 1, .25f, 1));
+    GUI_CHECK(textColour(nativesaves::makeItem(1, 13), {}) == glm::vec4(.5f, 1, 1, 1));
+    auto unsignedRarity = nativesaves::makeItem(1, 0);
+    unsignedRarity[nativesaves::item::RARITY] = 0xff;
+    GUI_CHECK(textColour(unsignedRarity, {}) == glm::vec4(1, 1, 0, 1));
     GUI_CHECK(near(phase(-1), -0.036f) && phase(10000) == 0 && near(phase(2500), 90));
     const auto sprite = spritePlacement({30.25f, -20.5f}, {100, 40}, 2500);
     GUI_CHECK(sprite.screen == glm::vec2(80.25f, -0.5f) && near(sprite.size, 0.06f) && sprite.euler == glm::vec3(225, 0, 90) &&

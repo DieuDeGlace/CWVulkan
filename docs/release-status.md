@@ -7,6 +7,20 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Inventory, shop and recipe cells now render their original records through the
+  shared WORLD item helper during the owner's InventoryWidget callback, after its
+  child frames. Physical inventory slots are retained rather than packed; holes,
+  per-viewport region cutoffs and full-tab scrollbar counts remain distinct.
+  Screen snapping truncates toward zero, hover uses half-open rectangles, and
+  icons retain native signed scale, category sizing, GUI spin and spirit data.
+  Labels use native class/color and mode-specific quantity admission. Resource
+  loads are shared within a session. Formula details, hovered previews and other
+  callers still need conversion; full GUI layers and refresh timing remain open.
+  All five targets build; the full CPU/owner suite, 40 world and 16 GUI Vulkan
+  cases, shared water and Alpha ordering pass. A hidden, read-only native-save
+  capture renders the owner grid model and stops normally with the fixture
+  unchanged. These checks do not establish complete native visual parity.
+
 - Ring Menu now uses canonical category1 slots, retained signed selection and native
   neutral/repeat/animation state. Selected Use precedes independent Quick Item; the later
   toggle and selection update preserve same-frame ordering and pre-repeat labels.

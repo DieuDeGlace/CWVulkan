@@ -7,6 +7,7 @@
 // scaled with the window height.
 #include "MapMarks.h"
 #include "InventoryUi.h"
+#include "InventorySlots.h"
 #include "Renderer.h"
 #include "Plx.h"
 #include "PlasmaShape.h"
@@ -63,6 +64,8 @@ class Hud {
             glm::vec4 color{1};  // its rarity's colour (the rarity colour)
             int price = 0;       // what it costs (a vendor's) or sells for (the bag's, with a vendor open)
             inventoryui::Region region{};
+            int slotIndex = -1; // physical index within the canonical tab; legacy lists have no backing slots
+            std::optional<nativesaves::Item> original;
         };
         // The vendor beside the bag (InventoryWidget type 3): its offers on tab 0, what the
         // player sold to it on tab 1 (buy back).
@@ -123,7 +126,8 @@ class Hud {
         } sheet;
         std::string regionName;   // the region whose items the equipment tab shows
         std::vector<Entry> items; // the list (equipment tab)
-        std::string slots[10];    // icons: L weapon, R weapon, L ring, R ring, neck, shoulder, chest, hands, feet, pet
+        const std::vector<std::vector<nativesaves::Stack>> *canonicalTabs = nullptr;
+        std::string slots[10]; // icons: L weapon, R weapon, L ring, R ring, neck, shoulder, chest, hands, feet, pet
         std::array<std::optional<nativesaves::Item>, 10> slotItems; // original SpriteWidget records; absent in legacy sessions
         std::string name, className, specialization;
         int level = 0;
@@ -238,6 +242,7 @@ class Hud {
     int inventorySlotAt(glm::vec2 mouse) const;
     // The same on the game's own panels (gui.plx), when they are built; the tab under it.
     int inventoryItemAt(glm::vec2 mouse, const Inventory &inv) const;
+    inventoryslots::Index inventorySourceAt(glm::vec2 mouse, const Inventory &inv) const;
     int inventorySlotAt(glm::vec2 mouse, const Inventory &inv) const;
     int inventoryTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 0); }
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
@@ -278,6 +283,8 @@ class Hud {
         int selected = -1;
         const inventoryui::Region *region = nullptr;
         bool regionArrows = false;
+        const std::vector<std::vector<nativesaves::Stack>> *canonicalTabs = nullptr;
+        bool includeZeroQuantity = false;
     };
 
     // Loads the extracted HUD art, fonts and names. False (with a reason) if the
@@ -499,10 +506,11 @@ class Hud {
     void placeInvPanel(const InvPanel &p, const InvList &list) const;
     int invRowCount(const InvPanel &p, const InvList &list) const;
     void drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const InvList &list, const std::string &title,
-                      const std::string &region, bool vendor, bool selling) const;
+                      const std::string &region, bool vendor, bool selling, glm::vec2 pointer) const;
     InvList bagList(const Inventory &inv) const;
     InvList vendorList(const Inventory &inv) const;
     const InvPanel &invPanel(int which) const;
+    int panelPhysicalAt(glm::vec2 mouse, const InvPanel &, const InvList &) const;
     void placePanels(const Inventory &inv) const;
     void drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     void drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) const;
