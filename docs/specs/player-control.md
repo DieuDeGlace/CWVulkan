@@ -417,11 +417,209 @@ ability has finished and +0x6c > 10000.0: ability = 0.
    position) × 1/65536, per axis.
 7. The special skill key: `skills-and-interactions.md` §1.4. Then controller +0x1e60 = 0.
 
-The **charge target** (used in §4.9) is chosen in the same targeting pass: walking the
-candidates in order, a creature becomes it when its hostility kind (+0x60) is 1 or 7 and no
-charge target has been chosen yet, or when its squared distance from P (integer squares of
-the position differences, each shifted right by 16, summed, × 1/65536) is below the best
-so far (this second test does not look at the kind).
+The **charge target** (used in §4.9) is a separate temporary ID chosen
+inside the common crosshair/LOS creature pass. Its complete admission,
+integer distance metric, initial hostility rule and lifetime follow.
+
+### 4.5.1 Complete strong-charge candidate selection
+
+Stable bounded native-only contract for finite ordinary inputs in
+**0x8ae50**. The charge target is not independently chosen from all
+nearby actors, and is not necessarily Game+0x1e58. It uses the same
+caller-supplied candidate list as ordinary creature targeting.
+
+**World container and local-player membership.** The source is a
+**doubly linked list of creature pointers**, not an ID tree or hash
+iteration. World+0x40 holds the sentinel pointer and+0x48 its64-bit
+count. A list node has next at+0, previous at+8 and creature pointer
+at+0x10; nodes are0x18 bytes. World constructor0x29a130 initializes
+this empty self-linked list through0x3c0b0. At
+**0xa998b–0xa9993**, the builder obtains the sentinel and starts at
+its next link; at **0xa9a91–0xa9a97**, it follows each next link until
+the sentinel is reached. That existing link order is the initial
+candidate order before the float sort.
+
+The verified common registration **0x29d0d0**, using0x36c20/0x3c0b0,
+inserts a new pointer node **before the sentinel, after the old tail**,
+increments World+0x48 and also registers the ID in the separate map.
+The list does not compare IDs, so neither signed nor unsigned ID order
+defines its traversal. World+0x450 is a distinct ID lookup tree;
+0xe720's key comparisons are **signed64** at0xe735–0xe757, but this
+builder does not traverse that tree.
+
+The actual local P is registered through **0x29d0d0 at0x7f64e**, then
+stored in World+0x448 at0x7f657. It is therefore an ordinary member of
+this same source list, not an actor implicitly supplied outside it.
+The outer builder applies its usual health/distance/frustum gates to
+P too. If those pass, **include its candidate record in the sort**.
+Only later does the inner pointer comparison at
+**0x8b42c–0x8b42f** skip self. Dead or outer-frustum-rejected P does not
+gain a forced candidate. A local player's drawn/physical separation
+also uses the ordinary key calculation, not an assumed zero.
+
+**Startup emptiness is not established by this bounded trace.** Game
+constructor0x7ea80 receives its World as an incoming argument and stores
+that pointer at Game+8 at **0x7eade**; it does not itself construct a
+new World there. The0x7f64e registration appends to the then-current
+tail without an empty-list assertion or a forced front insertion.
+Although0x29a130 initializes a new World's list empty, that fact alone
+does not establish its contents after all intervening caller/setup
+operations. If the list is still empty at registration, P becomes its
+first entry, but this supplement does **not** establish that condition
+or an unconditional P-before-zone-creatures rule. Caller provenance
+and all intervening list mutation paths were deliberately not expanded.
+
+Thus omitting P before the sort can change both the32-entry branch
+boundary and larger-input equal-key permutations even though self
+cannot become a charge target. Preserve the actual source-list position;
+do not invent a prepend/append step merely because a facade stores P
+separately. This bounded trace establishes the common tail-registration
+path, not every later deletion/splice/reinsertion producer or a universal
+chronological ordering rule. Existing next links remain authoritative.
+
+**Caller list and order.** Native **0xa99c0–0xa9a8c** walks the World
+creature list, admitting health>0, a player-distance key≤25600 and the
+outer retained-renderer visibility test. The distance is candidate
+**raw drawn** XYZ minus player **raw physical** XYZ, subtracting in64-bit
+fixed units first, then converting each difference to float32 blocks.
+The key is float32 **(X²+Y²)+Z²**, with separate rounded multiplies/adds,
+through0x83c00,0x6d6b0 and0x2b650. It is not candidate physical position,
+eye distance, step-adjusted height or the charge metric below.
+
+The outer0xe08c0 query uses raw drawn center, radius
+**max(float32(0.6f×max(sizeX,sizeY)),sizeZ)** and float maximum160.
+Sizes are+0x84/+0x88/+0x8c. The constants are0x42e708 (word0x3f19999a),
+0x438008 (float25600) and0x437fec (float160). The point and sphere
+query uses **G+0x18's retained renderer**, not new current-frame camera
+matrices. See corrected [use-prompt §2.1](use-prompt.md#21-creature-candidates-built-in-0xa5a50).
+
+Each accepted16-byte record has pointer+0, float key+8 and byte+0xc
+initially0. **0x7d720 at0xa9abf** sorts these records ascending by key,
+with initial budget equal to record count. For finite keys it has the
+**same insertion, sample, partition, recursion and heap decisions** as
+[controller-handoff §4.1–4.3](steam-controller-handoff.md#41-pivot-sample-order)
+and [scene-lighting §2.6.2](steam-scene-lighting.md#262-equal-distance-ordering-can-affect-the-selected-threshold),
+applied to whole16-byte records and the float key+8. Native counterparts
+are driver**0x7ba00**, insertion**0x757f0**, sample**0x703d0**,
+partition**0x79980**, heap creation**0x76810**, extraction**0x7b3e0**
+and repair**0x7a4f0**. Thus≤32 preserves incoming equal-key order;
+larger runs use the specified in-place sample/partition/heap order,
+not a stable sort or ID tie-break. The three/nine sample boundary is
+41/42 entries; heap creation's upward repair stops at its original
+parent and equal children choose the right child, as in that contract.
+
+**Filters and geometry before charge scoring.** Walk that sorted list
+in its actual order. The charge clause inherits the ordinary loop's
+filters; it does not run before them or on rejected candidates:
+
+- Skip the local player. While P's ability is0x76, skip its pet ID+0x9d8.
+- While ability0x23 has **timer<float(duration0x4f220(P))**, skip candidate
+  hostility byte+0x60 equal1 or7.
+- Skip when0x5ee50(C) is true and C+0x19c is nonzero; skip race0x11d;
+  skip race0x12e when C+0x19c is nonzero.
+- Before the loop, the active-offensive flag is true when timer is
+  **≤float(duration)** and0x5eea0(P's ability) is nonzero. If set,
+  require0x50550(P,C) nonzero. The similarly computed active0x86/0x87
+  flag, using0x5eed0, requires0x50550(P,C) zero. Equality is included
+  in these two precomputed flags, unlike the strict0x23 test above.
+
+These branches are **0x8b42c–0x8b502**. There is no separate fresh HP
+test at the charge clause; health>0 was the caller-list admission.
+
+Next, at **0x8b505–0x8b594**, make the step-adjusted drawn tuple by
+the **same exact conversion as the later creature LOS endpoint**:
+negate stored float+0x990 by sign-bit flip, multiply by float65536,
+truncate toward zero to signed64, and add that offset to full drawn Z
+with low64 arithmetic. Full drawn X/Y remain unchanged. The inner
+0xe08c0 query uses this tuple, radius **C's sizeX+0x84**, and float
+maximum**256** at0x42e5c4. It does not reuse the outer radius or its
+160 range. The conversion details are
+[use-prompt §2.2.1](use-prompt.md#221-exact-fixed-endpoint-of-creature-los).
+
+For an admitted point, run the ordinary eight-corner projected box.
+It is centered at the step-adjusted drawn point, with **full side lengths
+(sizeX+1,sizeY+1,sizeZ+1)**; corners use half those lengths on either side.
+Only corners with positive view-space Z contribute. Require at least
+one projected X<0, X>0, Y<0 and Y>0. A projected zero does not satisfy
+either strict sign. A separate ray/sphere intersection or additional
+perpendicular-distance cutoff is not part of the charge clause.
+
+After box construction, calculate the integer player-to-drawn metric
+below and update the independent nearby-creature choice. Then require
+the complete box sign test, set G+0x1e88, and pass **eye-to-step-adjusted
+drawn LOS at0x8baef**, maximum256, flag0. On success set this candidate
+record's+0xc byte1. Calculate depth t from **raw unadjusted drawn minus
+stored eye**, dotted with stored F, and require **t≥0**. These are the
+same LOS/depth operations as [frame-order §8.3](steam-gameplay-frame-order.md#83-creature-depth-is-an-independent-per-pass-minimum).
+
+Inside this surviving branch, ordinary perpendicular ranking may update
+G+0x1e58, and the separate aim-depth minimum may update. Neither update
+has to win for charge selection to run. Another independent minimum
+of player distance updates at0x8bd05–0x8bd11; it is **not** the charge
+best score. The charge clause follows at **0x8bd15–0x8bd3b**.
+
+**Exact charge metric and strict selection.** The score was computed
+at **0x8b934–0x8b9d2**, using player **physical** XYZ+0x10/+0x18/+0x20
+minus candidate **raw drawn** XYZ+0xb10/+0xb18/+0xb20. Subtract each
+pair as64-bit integers, retaining low64 bits. There is no step-height
+adjustment, coordinate-to-float subtraction or use of the caller's
+stored float sort key.
+
+For each axis, multiply its integer difference by itself, retaining
+the low64 product and interpreting it as signed64. Divide that signed
+product by65536 **toward zero**. Native implements this with a65535
+correction for negative products followed by arithmetic shift16; for
+ordinary nonoverflowing squares it is simply the square shifted right16.
+Perform this truncating division **separately on all three products**.
+Add the X and Y quotients, then Z, retaining low64 bits. Convert that
+one signed64 sum to float32, then multiply by float1/65536. This final
+float is the charge distance² score. Do not move the shift after the
+sum, truncate the coordinates before squaring, or substitute the
+float-square metric that sorted the list.
+
+At **0x8b351–0x8b372**, initialize charge best score to **float−1**
+(word0xbf800000 at0x4aca4c) and its64-bit chosen ID to0. A candidate
+replaces the choice if its hostility **byte+0x60 is1 or7 and the charge
+best score is negative**, or if its score is **strictly smaller** than
+the charge best score. On replacement save both this score and the
+candidate ID+0x08. This tests the negative score sentinel, not whether
+the chosen ID happens to be0, and not0x50550's return value.
+
+With ordinary nonnegative scores, a neutral candidate encountered before
+the first admitted kind1/7 does **not** seed a choice, even at score0.
+The first admitted kind1/7 seeds it regardless of the independent
+minimum distance already seen. After that, a later candidate of **any
+kind** can replace it when strictly nearer by this score. Equal scores
+retain the earlier actual sorted-list entry; there is no epsilon or
+smaller-ID secondary test. Earlier ignored neutrals are not revisited.
+
+For a derived arithmetic check, fixed differences(255,255,255) have
+three squared values65025, each truncating to0 before the sum; their
+charge score is0 despite nonzero separation and a positive float sort
+key. This illustrates why these two metrics are not interchangeable.
+
+**Chosen-ID lifetime and strong attack.** The score and ID are per-call
+temporaries, initialized even when the candidate list is empty. The
+score is no longer needed after the creature loop. The chosen ID is
+retained unchanged through movement/aim preparation, ultimate, object,
+ground, fallback, Use, pet and Quick Item handling. Later changes to
+Game+0x1e58 do not retarget it, and it is not stored in aim override+0x1e60.
+
+Only the reached late attack route can consume it. Ordinary-UI
+predicate0x1014f0 at0x8ee23 may bypass that route. If strong-held
+Game+0x1a71 is nonzero, call **0x60720 at0x8ee99**, using the current
+class-key byte+0x1a72 as force. If that helper succeeds, copy the saved
+ID into the then-current player's **+0x1a8 at0x8eeb5**. This assignment
+has no nonzero-ID, liveness, resolve, new LOS or current-selected-target
+test; a saved0 is also written. If the helper fails, this assignment
+does not execute. The branch jumps to the common attack continuation
+instead of also processing the released-strong path. The later outer
+general-dialogue speaker override occurs after0x8ae50 returns and does
+not change this already selected charge link.
+
+This audit covers the finite ordinary caller/candidate path. Exceptional
+nonfinite conversion behavior, concurrent mutation of candidate storage
+and other ability handlers' uses of+0x1a8 are not newly specified here.
 
 ### 4.6 Gamepad aim assist (camera)
 
@@ -466,7 +664,8 @@ If P's ability is 0x9a: clear +0x128 bit 2; if +0x6c < duration and the owner (0
 
 ### 4.9 The attack keys
 
-If the chat line is typing (0x1014f0), the rest of 0x8ae50 (§4.9–§4.12) is skipped and
+If the ordinary-UI predicate0x1014f0 is true (broader than chat typing),
+the rest of0x8ae50 (§4.9–§4.12) is skipped and
 0x5515a6..0x5515a8 keep their values.
 
 1. **Normal attack wanted** = the attack key, except false when the walk key is held and the

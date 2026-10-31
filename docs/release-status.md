@@ -10,6 +10,32 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Target-candidate visibility now queries the completed renderer epoch, including
+  the outer height-aware sphere and separate step-adjusted inner width/range.
+  Candidate float keys use the independently specified insertion/partition/heap
+  ordering rather than an always-stable sort. The shared admitted loop retains
+  strong-charge selection independently of ordinary selected ID and aim depth.
+  Its score truncates each low64 squared axis before summing; the first hostile
+  kind seeds it and later kinds replace only on a strictly lower score. The live
+  path no longer makes a second line-sphere/nearby charge search. Ability0x23's
+  hostile exclusion is strict below duration. Derived regressions cover tall
+  candidates, distinct frustum epochs/radii/points, quantization, neutral seeding,
+  ties and the duration boundary. Full camera state, GUI focus and native/device
+  comparisons remain open. Targeting now visits the engine's retained creature
+  registration order, including ordinary outer admission of the local player
+  before inner skip-self. Updates/storage moves keep their membership position;
+  removal/recreation and a reloaded local player join the tail. Resident, runtime,
+  network and newly added creature paths record registration without copying raw
+  records. This removes zone-grouped/local-first ordering from candidate input.
+  Full native list-mutation producer coverage and other World consumers' visit
+  order remain separate validation/integration work. All five targets build;
+  control/target/registration regressions pass. Both Vulkan lighting styles pass
+  retained culling epoch/range/lifetime checks and camera projection checks.
+  The full CPU run retains exactly the same two modded generator-reference
+  failures, with no new failures. Read-only combat/movement and conversation runs
+  exit normally with the fixture save unchanged. Inherited fixture appearance
+  remains unaccepted; these checks do not establish native visual parity.
+
 - Creature targeting now runs once before early control. Selected IDs, the
   projected-box flag and independent minimum aim depth survive into the later
   object/item/fallback pass. Cached aim metadata is evaluated after movement at
@@ -23,8 +49,8 @@ older successful runs; none of these bounded changes establishes complete parity
   coordinate addition; ground LOS retains its raw tuple. Target/control/ray tests
   cover separate phases, depth/rank ties, high-coordinate low bits, strict range,
   flags, zero crossings, missing zones and nearby fallback without extra LOS.
-  Full camera anchors/obstruction, legacy radian storage, strong-charge candidate
-  details, live GUI focus and original-game comparisons remain open. The shared
+  Full camera anchors/obstruction, legacy radian storage, live GUI focus and
+  original-game comparisons remain open. The shared
   camera visibility predicate is specified/tested, but its eight-corner camera
   caller has not replaced the legacy positioning bridge yet. All five targets
   build; focused tests and the full CPU suite add no new failures. The latter
@@ -47,7 +73,7 @@ older successful runs; none of these bounded changes establishes complete parity
   post-Use pet timing, strict mount boundaries, owner look and buff/callback output.
   All five targets build; a read-only movement/attack/dodge run exits normally with
   the fixture unchanged. The full CPU run still has only the two reference failures
-  below. Full camera state, strong-charge candidates and live GUI admission
+  below. Full camera state and live GUI admission
   remain open; these changes do not complete controller/GUI parity.
 
 - The rendered/client World now completes its substeps and one full-frame drawn

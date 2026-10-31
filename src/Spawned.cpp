@@ -262,6 +262,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             // What 0x2e17d0 copies beside the record: who it keeps with (+0xc08), its special
             // moves (+0xbd0), the races it may call up (+0xbf0) and its inventory (+0x9f0).
             Creature cr{std::move(m.record), {}};
+            registerCreature(cr);
             cr.side.group = m.extras.group;
             cr.side.skills = m.extras.abilities;
             cr.side.summonRaces = m.extras.abilities2;
@@ -382,6 +383,7 @@ int64_t SpawnedCreatures::make(int race, int hostility, int level, const int64_t
     const auto maxHealth = [](const uint8_t *record) { return nativerules::maxHealth(record); };
     worldgen::MadeCreature m = worldgen::makeInPlay(id, race, hostility, level, dots, region, 0, worldgen::creatureTables(), maxHealth);
     Creature cr{std::move(m.record), {}};
+    registerCreature(cr);
     cr.side.skills = m.extras.abilities;
     cr.side.summonRaces = m.extras.abilities2;
     cr.side.inventory = worldgen::inventoryRecords(m.extras.inventory);
@@ -409,6 +411,25 @@ void SpawnedCreatures::remove(int64_t id) {
                 ai.erase(id);
                 return;
             }
+}
+
+void SpawnedCreatures::registerCreature(Creature &creature) {
+    if (!creature.registration)
+        creature.registration = nextRegistration++;
+}
+
+void SpawnedCreatures::forEachWorldCreature(const std::function<void(const uint8_t *)> &f) const {
+    std::vector<const Creature *> ordered;
+    if (hasPlayer)
+        ordered.push_back(&player);
+    for (const auto &[zone, list] : zones)
+        for (const Creature &creature : list)
+            ordered.push_back(&creature);
+    // Zone storage can move or regroup creatures; those changes do not register
+    // them again. Unique ordinals preserve membership order without record copies.
+    std::sort(ordered.begin(), ordered.end(), [](const Creature *a, const Creature *b) { return a->registration < b->registration; });
+    for (const Creature *creature : ordered)
+        f(creature->record.data());
 }
 
 void SpawnedCreatures::forEach(const std::function<void(const uint8_t *)> &f) const {
@@ -1018,6 +1039,11 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs) {
     };
     std::vector<nativeai::Creature *> *alsoListing[] = {&a.creatures, &hw.creatures, &fw.creatures};
     iw.added = [&](nativeai::Creature *made) { // at the end of every list, so it takes its turns this frame
+        for (Creature &creature : born)
+            if (&creature.side == made) {
+                registerCreature(creature);
+                break;
+            }
         w.creatures.push_back(made->record);
         sides.push_back(made);
         for (std::vector<nativeai::Creature *> *list : alsoListing)
@@ -1265,6 +1291,7 @@ void SpawnedCreatures::settle(std::list<Creature> &born) {
     for (Creature &made : born) {
         const int64_t *at = reinterpret_cast<const int64_t *>(&made.record[worldgen::creature::POSITION]);
         const std::pair<int, int> zone{(int)std::floor((double)(at[0] >> 16) / 64.0), (int)std::floor((double)(at[1] >> 16) / 64.0)};
+        registerCreature(made);
         seenAlive.insert(get<int64_t>(made.record, worldgen::creature::ID));
         summoned++;
         zones[zone].push_back(std::move(made));
@@ -1423,6 +1450,7 @@ void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, floa
         // A human's size (the game's for the TEST character: 0.96 by 0.96 by 2.16 blocks).
         put<float>(r, 0x84, 0.96f), put<float>(r, 0x88, 0.96f), put<float>(r, 0x8c, 2.16f);
         put<uint32_t>(r, 0xbcc, 0);
+        registerCreature(player);
         hasPlayer = true;
         if (!gearRecord.empty())
             setPlayerGear(gearRecord);
@@ -2124,6 +2152,7 @@ uint8_t *SpawnedCreatures::networkCreature(int64_t id, bool &made) {
     // 0x4ce80 with the id, then into the world (0x29d0d0).
     std::vector<Creature> &list = zones[NETWORK_ZONE];
     list.push_back({worldgen::newCreature(id), {}});
+    registerCreature(list.back());
     made = true;
     return list.back().record.data();
 }

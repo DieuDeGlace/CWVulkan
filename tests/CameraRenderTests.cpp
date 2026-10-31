@@ -84,7 +84,11 @@ int cameraRenderTests() {
             stbi_image_free(pixels);
             return count > 4 && count < size_t(width * height / 3) ? sum / double(count) : glm::dvec2(-10000);
         };
+        const steampoints::Point ahead{0, 0, 0}, behind{0, -8 * 65536, 0};
+        bool culling = !renderer.steamSphereVisible(ahead, .5f, 160);
         const auto before = centroid("-baseline", true);
+        culling = culling && renderer.steamSphereVisible(ahead, .5f, 160) && !renderer.steamSphereVisible(behind, .5f, 160) &&
+                  !renderer.steamSphereVisible(ahead, .5f, 2);
         camera.viewShake = {.5f, .25f}; // Native left/up view-space units.
         const auto after = centroid("-shake", false);
         // Pinhole projection, independently of the renderer's view-matrix implementation.
@@ -95,7 +99,16 @@ int cameraRenderTests() {
         std::cout << "Camera renderer " << name << (pass ? " PASS" : " FAIL") << " delta " << after.x - before.x << ','
                   << after.y - before.y << " expected " << expected.x << ',' << expected.y << '\n';
         failures += !pass;
+        // Mutating the next camera cannot change the completed renderer epoch.
+        camera.target = {0, -8, 0};
+        camera.viewShake = {};
+        culling = culling && renderer.steamSphereVisible(ahead, .5f, 160) && !renderer.steamSphereVisible(behind, .5f, 160);
+        renderer.frame(camera, lighting, {0, 0, 0}, 0, {}, {});
+        culling = culling && !renderer.steamSphereVisible(ahead, .5f, 160) && renderer.steamSphereVisible(behind, .5f, 160);
         renderer.shutdown();
+        culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
+        std::cout << "Camera culling " << name << (culling ? " PASS" : " FAIL") << " retained renderer epoch/range/lifetime\n";
+        failures += !culling;
     }
     glfwDestroyWindow(window);
     glfwTerminate();

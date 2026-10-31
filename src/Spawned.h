@@ -174,6 +174,7 @@ class SpawnedCreatures {
     // physics flags). The next setPlayer makes it and places it.
     void resetPlayer() {
         player.side = nativeai::Creature{};
+        player.registration = 0;
         hasPlayer = placed = false;
     }
     // A creature's record stands about a block above the surface its drawn feet are on
@@ -341,6 +342,8 @@ class SpawnedCreatures {
     void remove(int64_t id);
     // Every near creature's record.
     void forEach(const std::function<void(const uint8_t *)> &f) const;
+    // All registered creatures, including the player, in retained insertion order.
+    void forEachWorldCreature(const std::function<void(const uint8_t *)> &f) const;
     // A model id's sprite (sprites/<name>.cub); empty when there is none.
     std::string spriteName(int id) const { return id >= 0 && (size_t)id < sprites.size() ? sprites[(size_t)id].name : std::string(); }
     // While `change` alters what the creatures' maximum health depends on (the player's
@@ -462,8 +465,11 @@ class SpawnedCreatures {
         // swing), so a swing never steps back when an update arrives.
         float sentAbilityTime = 0, shownAbilityTime = 0;
         uint8_t shownAbility = 0;
+        uint64_t registration = 0; // world membership, retained across storage moves
     };
-    std::vector<Sprite> sprites;                          // by model id
+    uint64_t nextRegistration = 1;
+    void registerCreature(Creature &creature);
+    std::vector<Sprite> sprites; // by model id
     // Absolute zone -> its creatures. The creatures the network brings belong to no zone: they are
     // kept under NETWORK_ZONE, a key no zone has, so every walk over the world's creatures sees
     // them (first, as the map orders it) while the zones' comings and goings leave them alone.

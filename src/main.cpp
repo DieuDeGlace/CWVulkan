@@ -3833,7 +3833,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 nativeUseScene.playerAt = localPosition(me->record, worldgen::creature::POSITION);
                 nativeUseScene.abilityDuration = spawned.playerAbilityDuration();
                 nativeUseScene.camera = useCamera;
-                spawned.forEach([&](const uint8_t *record) {
+                nativeUseScene.sphereVisible = [&](const auto &position, float radius, float range) {
+                    return renderer.steamSphereVisible(position, radius, range);
+                };
+                // World membership order precedes distance sorting; self is skipped later.
+                spawned.forEachWorldCreature([&](const uint8_t *record) {
                     nativeUseScene.creatures.push_back({record, localPosition(record, 0xb10), nativerules::hostile(me->record, record)});
                 });
                 nativeUseScene.creatureById = [&](int64_t id) -> const uint8_t * {
@@ -3859,18 +3863,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 frameTargetCreature = nativeCreatureTargets.creature;
                 frameProjectedCreatureBox = nativeCreatureTargets.overCreature;
 
-                // Strong-charge selection remains separate from the selected creature and
-                // minimum aim depth. Its remaining candidate details still need parity work.
-                float chargeDistance = -1;
-                const glm::vec3 eye = useCamera.eye, dir = useCamera.forward;
-                for (const auto &candidate : spawned.targets(extractedWorld, player.position, 100)) {
-                    const float along = glm::dot(candidate.at - eye, dir);
-                    if (along < 0 || glm::length(eye + dir * along - candidate.at) > 1.0f)
-                        continue;
-                    const float distance = glm::dot(candidate.at - player.position, candidate.at - player.position);
-                    if ((candidate.hostile && controlInput.chargeTarget == 0) || chargeDistance < 0 || distance < chargeDistance)
-                        chargeDistance = distance, controlInput.chargeTarget = candidate.id;
-                }
+                // Retain the independent charge choice through later target replacements.
+                controlInput.chargeTarget = nativeCreatureTargets.chargeTarget;
+                const glm::vec3 dir = useCamera.forward;
                 nativecontrol::Aim aim;
                 std::copy(useCamera.fixedRayOrigin->begin(), useCamera.fixedRayOrigin->end(), aim.rayOrigin);
                 std::copy(useCamera.fixedEye->begin(), useCamera.fixedEye->end(), aim.eye);

@@ -72,7 +72,7 @@ int targetStageTests() {
     creatures();
     scene.sight = [](glm::vec3, glm::vec3, float) { return false; };
     const auto blocked = useprompt::chooseCreatures(scene);
-    check(blocked.overCreature && blocked.creature == 0 && blocked.aimDepth == -1,
+    check(blocked.overCreature && blocked.creature == 0 && blocked.aimDepth == -1 && blocked.chargeTarget == 0,
           "box is set before failed LOS without inventing creature/depth");
     scene.sight = [](glm::vec3, glm::vec3, float) { return true; };
     player[0x68] = 0x86;
@@ -147,7 +147,16 @@ int targetStageTests() {
     fixedScene.camera.eye = {0, 0, 3};
     fixedScene.camera.fixedEye = std::array<int64_t, 3>{originX, 0, 3 * 65536};
     fixedScene.creatures = {{fixedCreature.data(), {5, 0, 3.1f}, true}};
-    int fixedCalls = 0, approximateCalls = 0;
+    int fixedCalls = 0, approximateCalls = 0, sphereCalls = 0;
+    put<float>(fixedCreature, 0x8c, 8);
+    fixedScene.sphereVisible = [&](const auto &point, float radius, float range) {
+        ++sphereCalls;
+        const bool outer = sphereCalls == 1;
+        check(point == useprompt::FixedPoint{originX + 5 * 65536 + 3, 0, 3 * 65536 + (outer ? 6554 : 1)} && radius == (outer ? 8 : 2) &&
+                  range == (outer ? 160 : 256),
+              "outer/inner queries preserve distinct fixed points, height/width radii and ranges");
+        return true;
+    };
     fixedScene.sight = [&](glm::vec3, glm::vec3, float) {
         ++approximateCalls;
         return false;
@@ -159,7 +168,7 @@ int targetStageTests() {
               "LOS retains low fixed units and truncates the negated float step product");
         return true;
     };
-    check(useprompt::chooseCreatures(fixedScene).creature == 5 && fixedCalls == 1 && approximateCalls == 0,
+    check(useprompt::chooseCreatures(fixedScene).creature == 5 && fixedCalls == 1 && approximateCalls == 0 && sphereCalls == 2,
           "fixed creature LOS replaces rather than duplicates the approximate callback");
     fixedScene.camera.eye.z = 3.1f;
     fixedScene.camera.fixedEye = useprompt::FixedPoint{originX + 111, 0, 3 * 65536 + 6554};
@@ -195,6 +204,69 @@ int targetStageTests() {
     };
     check(useprompt::chooseTargets(fixedScene, {}).groundItem == 0 && fixedCalls == 1 && approximateCalls == 0,
           "blocked crosshair LOS does not add a second LOS gate to nearby ground fallback");
+    Record tall;
+    setup(tall, 6);
+    put<float>(tall, 0x84, 1);
+    put<float>(tall, 0x88, 1);
+    put<float>(tall, 0x8c, 10);
+    put<float>(tall, 0x990, 9);
+    drawn(tall, 5 * 65536, 0, 9 * 65536);
+    useprompt::Scene tallScene;
+    tallScene.player = player.data();
+    tallScene.creatures = {{tall.data(), {5, 0, 9}, true}};
+    check(useprompt::chooseCreatures(tallScene).creature == 6,
+          "outer candidate sphere includes height when the center lies above the camera edge");
+    Record chargePlayer, chargeHostile, chargeNeutral;
+    setup(chargePlayer, 10);
+    setup(chargeHostile, 11);
+    setup(chargeNeutral, 12);
+    chargeHostile[0x60] = 1;
+    chargeNeutral[0x60] = 3;
+    drawn(chargeHostile, 256, 0, 0);
+    drawn(chargeNeutral, 255, 255, 255);
+    useprompt::Scene chargeScene;
+    chargeScene.player = chargePlayer.data();
+    chargeScene.camera.fixedEye = useprompt::FixedPoint{0, 0, 0};
+    auto chargeCandidates = [&](int64_t hostileX, int64_t neutralX, int64_t neutralYZ) {
+        drawn(chargeHostile, hostileX, 0, 0);
+        drawn(chargeNeutral, neutralX, neutralYZ, neutralYZ);
+        chargeScene.creatures = {
+            {chargeHostile.data(), {float(hostileX) / 65536, 0, 0}, true},
+            {chargeNeutral.data(), {float(neutralX) / 65536, float(neutralYZ) / 65536, float(neutralYZ) / 65536}, false}};
+    };
+    chargeCandidates(256, 255, 255);
+    auto charged = useprompt::chooseCreatures(chargeScene);
+    check(charged.creature == 11 && charged.chargeTarget == 12,
+          "later neutral can win quantized charge score without winning selected-creature rank");
+    chargeCandidates(1, 2, 0);
+    check(useprompt::chooseCreatures(chargeScene).chargeTarget == 11, "equal zero charge scores retain the first hostile choice");
+    chargeScene.creatures.front().hostileToPlayer = false;
+    check(useprompt::chooseCreatures(chargeScene).chargeTarget == 11,
+          "charge seeding uses hostility kind rather than the player-relative hostility predicate");
+    chargeCandidates(2, 1, 0);
+    check(useprompt::chooseCreatures(chargeScene).chargeTarget == 11,
+          "earlier closer neutral does not seed charge score before an admitted kind1/7");
+    chargePlayer[0x68] = 0x23;
+    put<float>(chargePlayer, 0x6c, 100);
+    chargeScene.abilityDuration = 100;
+    check(useprompt::chooseCreatures(chargeScene).chargeTarget == 11,
+          "ability23 hostile exclusion is strict below duration, not inclusive at equality");
+    put<float>(chargePlayer, 0x6c, 99);
+    check(useprompt::chooseCreatures(chargeScene).chargeTarget == 0, "ability23 excludes hostile charge candidate below duration");
+    chargePlayer[0x68] = 0;
+    put<float>(chargePlayer, 0x6c, 100000);
+    drawn(chargePlayer, 0, 0, 0);
+    chargeScene.creatures = {{chargePlayer.data(), {0, 0, 0}, false}, {chargeHostile.data(), {2.0f / 65536, 0, 0}, true}};
+    int outerQueries = 0, innerQueries = 0;
+    chargeScene.sphereVisible = [&](const auto &, float, float range) {
+        if (range == 160)
+            ++outerQueries;
+        else if (range == 256)
+            ++innerQueries;
+        return true;
+    };
+    check(useprompt::chooseCreatures(chargeScene).chargeTarget == 11 && outerQueries == 2 && innerQueries == 1,
+          "local player participates in outer candidate admission before the inner skip-self gate");
     std::printf("Target stages: %s\n", failures ? "FAILED" : "passed");
     return failures;
 }

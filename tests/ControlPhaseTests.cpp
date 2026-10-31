@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace {
 using Record = std::array<uint8_t, 0x2000>;
@@ -206,6 +207,33 @@ int controlPhaseTests() {
             check(ownershipQuery == 3 && sound == 0x7c && actor->record[0x68] == 0x9b,
                   "facade resolves local ID and invokes current ownership/sound hooks");
         }
+    }
+    { // World registration is independent of zone storage and signed actor IDs.
+        SpawnedCreatures creatures;
+        ExtractedWorld blocks;
+        creatures.setNativePlayer(true);
+        bool made = false;
+        creatures.networkCreature(42, made);
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 100, 1, true);
+        creatures.networkCreature(-7, made);
+        auto order = [&] {
+            std::vector<int64_t> ids;
+            creatures.forEachWorldCreature([&](const uint8_t *record) {
+                int64_t id;
+                std::memcpy(&id, record + 8, sizeof id);
+                ids.push_back(id);
+            });
+            return ids;
+        };
+        check(order() == std::vector<int64_t>{42, 1, -7}, "world visit order follows registration rather than ID or local-first grouping");
+        creatures.networkCreature(42, made);
+        check(!made && order() == std::vector<int64_t>{42, 1, -7}, "updating a registered creature preserves its list position");
+        creatures.remove(42);
+        creatures.networkCreature(42, made);
+        check(made && order() == std::vector<int64_t>{1, -7, 42}, "removed and recreated creature rejoins at the tail");
+        creatures.resetPlayer();
+        creatures.setPlayer(blocks, {0, 0, 130}, 0, {0, 0, 0}, 100, 1, true);
+        check(order() == std::vector<int64_t>{-7, 42, 1}, "recreated local player also rejoins at the tail");
     }
     std::printf("Control phases: %s\n", failures ? "FAILED" : "passed");
     return failures;

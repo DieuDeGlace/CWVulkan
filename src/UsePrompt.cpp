@@ -1,5 +1,6 @@
 #include "UsePrompt.h"
 #include "GameMath.h"
+#include "NativeKeyOrder.h"
 
 #include "worldgen/Residents.h"
 #include "NativeInteract.h"
@@ -55,16 +56,47 @@ template <class T> T read(const uint8_t *r, size_t at) {
     std::memcpy(&v, r + at, sizeof v);
     return v;
 }
-template <class T> void write(uint8_t *r, size_t at, T v) { std::memcpy(r + at, &v, sizeof v); }
+template <class T> void write(uint8_t *r, size_t at, T v) {
+    std::memcpy(r + at, &v, sizeof v);
+}
 
-int64_t idOf(const uint8_t *r) { return read<int64_t>(r, worldgen::creature::ID); }
-int hostilityOf(const uint8_t *r) { return r[worldgen::creature::HOSTILITY]; }
-int raceOf(const uint8_t *r) { return read<int32_t>(r, worldgen::creature::RACE); }
-int abilityOf(const uint8_t *r) { return r[worldgen::creature::ABILITY]; }
-uint32_t flagsOf(const uint8_t *r) { return read<uint32_t>(r, worldgen::creature::FLAGS); }
-glm::vec3 sizeOf(const uint8_t *r) { return {read<float>(r, SIZE), read<float>(r, SIZE + 4), read<float>(r, SIZE + 8)}; }
+int64_t idOf(const uint8_t *r) {
+    return read<int64_t>(r, worldgen::creature::ID);
+}
+int hostilityOf(const uint8_t *r) {
+    return r[worldgen::creature::HOSTILITY];
+}
+int raceOf(const uint8_t *r) {
+    return read<int32_t>(r, worldgen::creature::RACE);
+}
+int abilityOf(const uint8_t *r) {
+    return r[worldgen::creature::ABILITY];
+}
+uint32_t flagsOf(const uint8_t *r) {
+    return read<uint32_t>(r, worldgen::creature::FLAGS);
+}
+glm::vec3 sizeOf(const uint8_t *r) {
+    return {read<float>(r, SIZE), read<float>(r, SIZE + 4), read<float>(r, SIZE + 8)};
+}
 
-float distance2(glm::vec3 a, glm::vec3 b) { return glm::dot(a - b, a - b); }
+float distance2(glm::vec3 a, glm::vec3 b) {
+    return glm::dot(a - b, a - b);
+}
+
+float chargeDistanceSquared(const uint8_t *player, const uint8_t *candidate) {
+    const auto physical = read<FixedPoint>(player, worldgen::creature::POSITION);
+    const auto drawn = read<FixedPoint>(candidate, 0xb10);
+    int64_t sum = 0;
+    for (int axis = 0; axis < 3; ++axis) {
+        const uint64_t difference = uint64_t(gamemath::subtractFixed(physical[axis], drawn[axis]));
+        const uint64_t bits = difference * difference;
+        int64_t product;
+        std::memcpy(&product, &bits, sizeof product);
+        // Each signed low64 square truncates separately, before the low64 sum.
+        sum = gamemath::addFixed(sum, product / 65536);
+    }
+    return float(sum) * (1.0f / 65536.0f);
+}
 
 void startAbility(uint8_t *r, int ability) {
     r[worldgen::creature::ABILITY] = (uint8_t)ability;
@@ -155,7 +187,7 @@ bool leftOut(const Scene &s, const uint8_t *c, bool hostile) {
         return true;
     if (mine == RIDING && idOf(c) == read<int64_t>(me, PET))
         return true;
-    if (mine == 0x23 && running && (hostility == 1 || hostility == 7))
+    if (mine == 0x23 && read<float>(me, ABILITY_MS) < s.abilityDuration && (hostility == 1 || hostility == 7))
         return true;
     if (hostility == 8 && race >= 0xf4 && race <= 0xf7 && staged)
         return true;
@@ -484,21 +516,31 @@ CreatureTargets chooseCreatures(const Scene &s) {
             d2 = gamemath::fixedDistanceSquared(player, drawn);
         }
         const glm::vec3 size = sizeOf(c.record);
-        if (d2 > CANDIDATE2 || !camera.sees(c.at, 0.6f * std::max(size.x, size.y)))
+        if (d2 > CANDIDATE2)
+            continue;
+        const float radius = std::max(0.6f * std::max(size.x, size.y), size.z);
+        const bool visible =
+            s.sphereVisible ? s.sphereVisible(read<FixedPoint>(c.record, 0xb10), radius, 160.0f) : camera.sees(c.at, radius);
+        if (!visible)
             continue;
         near.push_back({d2, &c});
     }
-    std::stable_sort(near.begin(), near.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+    keyorder::sort(near, [](const auto &candidate) { return candidate.first; });
 
     // The creature under the crosshair nearest the view's middle line, and the nearest one
     // within 4 blocks (spec 2.2).
     int64_t nearbyCreature = 0;
-    float nearbyCreature2 = -1.0f, bestOffLine = -1.0f;
+    float nearbyCreature2 = -1.0f, bestOffLine = -1.0f, bestCharge = -1.0f;
     for (const auto &[d2, c] : near) {
         if (leftOut(s, c->record, c->hostileToPlayer))
             continue;
         const glm::vec3 aim = c->at - glm::vec3(0, 0, read<float>(c->record, AIM_DROP));
-        if (!camera.sees(aim, 0.0f))
+        auto endpoint = read<FixedPoint>(c->record, 0xb10);
+        const float drop = -read<float>(c->record, AIM_DROP) * 65536.0f;
+        endpoint[2] = gamemath::addFixed(endpoint[2], int64_t(drop));
+        const bool visiblePoint = s.sphereVisible ? s.sphereVisible(endpoint, read<float>(c->record, SIZE), SIGHT_TO_CREATURE)
+                                                  : camera.sees(aim, read<float>(c->record, SIZE));
+        if (!visiblePoint)
             continue;
         if (d2 < NEARBY2 && (nearbyCreature2 < 0.0f || d2 < nearbyCreature2))
             nearbyCreature = idOf(c->record), nearbyCreature2 = d2;
@@ -508,10 +550,6 @@ CreatureTargets chooseCreatures(const Scene &s) {
         t.overCreature = true;
         bool visible;
         if (camera.fixedEye && s.fixedSight) {
-            std::array<int64_t, 3> endpoint;
-            std::memcpy(endpoint.data(), c->record + 0xb10, sizeof endpoint);
-            const float drop = -read<float>(c->record, AIM_DROP) * 65536.0f;
-            endpoint[2] = gamemath::addFixed(endpoint[2], int64_t(drop));
             visible = s.fixedSight(*camera.fixedEye, endpoint, SIGHT_TO_CREATURE);
         } else {
             visible = sight(s, camera.eye, aim, SIGHT_TO_CREATURE);
@@ -541,6 +579,12 @@ CreatureTargets chooseCreatures(const Scene &s) {
             if (!(along >= 0.0f))
                 continue;
             offLine = glm::length(c->at - (camera.eye + camera.forward * along));
+        }
+        const float chargeScore = chargeDistanceSquared(s.player, c->record);
+        const int kind = hostilityOf(c->record);
+        if (((kind == 1 || kind == 7) && bestCharge < 0.0f) || chargeScore < bestCharge) {
+            bestCharge = chargeScore;
+            t.chargeTarget = idOf(c->record);
         }
         const bool healing = abilityOf(s.player) == 0x86 || abilityOf(s.player) == 0x87;
         if (c->hostileToPlayer != healing && (t.aimDepth < 0.0f || along < t.aimDepth))

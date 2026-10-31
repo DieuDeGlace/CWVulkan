@@ -135,7 +135,9 @@ struct Scene {
     Item vehicle{};              // the equipped vehicle or special item (type 0: none)
     std::string vehicleName;     // its short name
     std::function<bool(glm::vec3 from, glm::vec3 to, float limit)> sight; // clearLine through the world
-    // Prefer exact fixed endpoints for creature LOS when camera.fixedEye is retained.
+    // Query the completed renderer epoch, distinct from the stored aim camera.
+    std::function<bool(const FixedPoint &, float radius, float range)> sphereVisible;
+    // Prefer exact fixed endpoints for target LOS when native coordinates are retained.
     std::function<bool(const std::array<int64_t, 3> &, const std::array<int64_t, 3> &, float)> fixedSight;
     std::function<const uint8_t *(int64_t id)> creatureById; // null when it is gone
 };
@@ -157,6 +159,7 @@ struct CreatureTargets {
     int64_t creature = 0, nearby = 0;
     bool overCreature = false;
     float aimDepth = -1;
+    int64_t chargeTarget = 0; // independent per-pass choice retained until late strong attack
 };
 CreatureTargets chooseCreatures(const Scene &scene);
 Targets chooseTargets(const Scene &scene, const CreatureTargets &creatures);

@@ -178,10 +178,23 @@ when the zone is not loaded or the index is outside the list.
 
 ### 2.1 Creature candidates (built in 0xa5a50)
 
-Every creature in the world list whose health (+0x180) is above 0 and whose render position
-(+0xb10) is within 160 blocks of the player's position (d² ≤ 25600, 0x438008). It must also
-pass the renderer's visibility test (0xe08c0 on controller +0x18) for a sphere of radius
-0.6 (0x42e708) × the larger of size x and size y. The list is sorted by that distance.
+For finite ordinary inputs, take every creature in the world list whose health
+(+0x180) is above0. Subtract the player's **raw physical** XYZ from the candidate's
+**raw drawn** XYZ+0xb10/+0xb18/+0xb20 in signed64 fixed units first. Convert each
+difference to float32, multiply by float1/65536, and form float32
+**(X²+Y²)+Z²**. Admit keys **≤25600** (0x438008). This is not the integer-quantized
+distance used later by the charge branch.
+
+The outer visibility query **0xe08c0 at0xa9a5f**, on retained renderer G+0x18,
+uses the raw drawn center, float maximum**160** (0x437fec), and radius
+**max(float32(0.6f×max(sizeX,sizeY)),sizeZ)**. The0.6 word is0x3f19999a at0x42e708.
+Including sizeZ is a correction to the former horizontal-only radius shorthand;
+native0xa9a3a–0xa9a50 takes that additional maximum explicitly.
+
+Accepted16-byte records contain the creature pointer at+0, float distance² key
+at+8 and an initially zero byte at+0xc. The list is sorted ascending by that
+float key, with the native equal-key ordering documented in
+[player-control §4.5.1](player-control.md#451-complete-strong-charge-candidate-selection).
 
 ### 2.2 Creature under the crosshair, and the nearby creature
 

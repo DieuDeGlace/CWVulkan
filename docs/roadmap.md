@@ -149,6 +149,10 @@ individual feature documents.
   turns and broader dungeon/theme oracles still prevent a complete parity claim.
 - [ ] Remaining ability/AI cases. Broader recordings are needed beyond the samples
   currently supplied, including integrated pet combat and appearance comparisons.
+  Target candidates now retain engine World registration order across record updates
+  and storage moves, including the local player at its actual registration point;
+  removal/recreation appends at the tail. Full native list-mutation producer coverage
+  and remaining World consumers' visit ordering still need validation/integration.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
   repeats, click phases, root/system/Options/Controls points, inventory grids,
   equipment and recipe points, panel scrolling, tab rows and region filters are
@@ -158,10 +162,13 @@ individual feature documents.
   ownership/enabled state, Button copy/group/press semantics and resize propagation
   have synthetic regressions; scrollbar sizing retains its loaded dynamic class.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
-  hooks, full camera/focus integration, strong-charge candidates and hardware
-  comparisons remain. Creature selection now runs once before early control;
+  hooks, full camera/focus integration and hardware comparisons remain. Creature selection now runs once before early control;
   separate minimum depth, post-movement aim, early assistance, later speaker
-  override and manual-stick slowdown have bounded stage regressions. Large region
+  override and manual-stick slowdown have bounded stage regressions. Target
+  candidate culling now uses the retained renderer, height-aware outer radius and
+  separate inner radius/range. Strong charge uses that same filtered/sorted loop,
+  with separately quantized integer scoring and retained ID. Registration order
+  includes self before inner skip-self; full native lifecycle ordering remains open. Large region
   lists now follow the verified key-only insertion/partition/heap order, including
   signed32 distance wrapping. Tests cover the independently derived33-choice tie
   fixture, heap ties and finite-key ordering without inventing a stable tie-break.
@@ -418,8 +425,11 @@ individual feature documents.
   and flag0x40 rules. Target LOS has exact fixed endpoints, a double range check,
   independently normalized float direction and native epsilon comparison; it
   ignores0x40, unlike the aim ray. Derived tests cover boundaries, fixed low bits,
-  mode differences and fallbacks without extra LOS. Strong-charge candidates,
-  shared focused-Widget admission and full camera-state integration remain open.
+  mode differences and fallbacks without extra LOS. Native candidate float-key
+  ordering now reuses the verified insertion/partition/heap algorithm. The charge
+  score truncates each squared fixed axis before summing and remains distinct
+  from selected ID, minimum depth and later speaker override. Shared focused-
+  Widget admission and full camera-state integration remain open.
   Orbit-distance smoothing now uses its separate float 0.004 coefficient in
   both frontend and gameplay; the camera uses capped wall time rather than the
   simulation's 100-ms limit. Explosion notices use physical-player squared
