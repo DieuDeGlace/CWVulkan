@@ -106,6 +106,13 @@ void Hud::buildPanels() {
         s.resizeTo(*panels.identification, glm::vec2(350, 285));
         panels.identification->visible = false;
     }
+    if ((panels.customization = s.instance("blackwidget", panels.inGame)) && panels.customization->widget) {
+        auto &root = *panels.customization;
+        root.widget = plasma::reboundWidget(*root.widget);
+        root.widget->kind = "VoxelWidget";
+        s.resizeTo(root, {800, 800});
+        root.visible = false;
+    }
     // The equipment slots: "equipmentboxright" for even slots, "equipmentboxleft" for odd.
     for (int i = 0; i < 10; i++) {
         plasma::SceneNode *slot = s.instance(i % 2 ? "equipmentboxleft" : "equipmentboxright", panels.inGame);
@@ -520,7 +527,12 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         const auto at = guiitem::spritePlacement(scene->contentPosition(node), scene->screenSize(node), guiClockMs);
         itemIcon(inv.slots[index], *inv.slotItems[index], at, out.size());
     };
+    const bool customizationShown = panels.customization && panels.customization->visible;
+    if (panels.customization)
+        panels.customization->visible = false; // its independent root callback follows the ordinary inventory tree
     sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, drawWidget);
+    if (panels.customization)
+        panels.customization->visible = customizationShown;
     panels.inGame->visible = false;
     drawCharacter(inv, out);
 
@@ -539,7 +551,6 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(centre.x - side / 2), std::round(centre.y - side / 2),
               side / (float)icon->second.w);
     }
-    drawPreview(inv, out);
 }
 
 // the formula details drawing: the result turning at the top (larger under the pointer), the
@@ -601,8 +612,14 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
         return;
     plasma::Scene &s = *scene;
     plasma::SceneNode &preview = *panels.preview;
-    const plasma::SceneNode &hovered = inv.vendor.open && inv.vendor.hoverItem >= 0 && panels.vendor.node ? *panels.vendor.node
-                                                                                                          : *panels.bag.node;
+    const plasma::SceneNode *hovered = inv.infoAnchor == itempreview::Anchor::Cursor     ? nullptr
+                                       : inv.infoAnchor == itempreview::Anchor::Crafting ? panels.crafting.node
+                                       : inv.infoAnchor == itempreview::Anchor::Shop     ? panels.vendor.node
+                                                                                         : panels.bag.node;
+    if (hovered == panels.crafting.node && hovered) {
+        const auto bag = s.viewSize(*panels.bag.node), craft = s.viewSize(*hovered);
+        s.setPosition(*panels.crafting.node, {screen.x / 2 - bag.x * .5f - craft.x, screen.y / 2 - bag.y}, {-10, -50});
+    }
     // Two passes: the first sizes the box from where the lines end, the second draws it.
     for (int pass = 0; pass < 2; pass++) {
         std::vector<OverlayVertex> lines;
@@ -618,10 +635,13 @@ void Hud::drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) con
             const float scaleNow = s.matrix(*preview.parent)[0][0];
             s.resizeTo(preview, glm::vec2(s.contentSize(preview).x, std::max(200.0f, y)) * scaleNow);
             const glm::vec2 pointer = inv.pointer;
-            if (s.contentPosition(hovered).x + s.screenSize(hovered).x * 0.5f > pointer.x)
-                s.setPosition(preview, glm::vec2(0, pointer.y), glm::vec2(s.viewPosition(hovered).x - 10.0f - s.contentSize(preview).x, 30.0f));
-            else
-                s.setPosition(preview, glm::vec2(0, pointer.y), glm::vec2(s.viewPosition(hovered).x + s.screenSize(hovered).x + 10.0f, 30.0f));
+            s.setPosition(preview, pointer, {30, 30});
+            if (hovered) {
+                if (s.contentPosition(*hovered).x + s.screenSize(*hovered).x * .5f > pointer.x)
+                    s.setPosition(preview, {0, pointer.y}, {s.viewPosition(*hovered).x - 30 - s.contentSize(preview).x, 30});
+                else
+                    s.setPosition(preview, {0, pointer.y}, {s.viewPosition(*hovered).x + s.screenSize(*hovered).x + 30, 30});
+            }
             continue;
         }
         preview.visible = true;

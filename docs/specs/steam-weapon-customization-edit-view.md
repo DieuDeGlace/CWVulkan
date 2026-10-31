@@ -99,6 +99,10 @@ Earlier handler early returns still apply; this is not an unconditional
 global down handler. There is no corresponding0x965e0 customization
 commit or new release latch in this path.
 
+The precise preceding map returns, non-consuming ordinary GUI/item/
+crafting routes and post-edit health/chat/selector completion are now
+specified in [the focused down-event addendum](steam-voxel-widget-down-event-routing.md).
+
 0x294c70 toggles selected palette between the hovered index and−1,
 and requests sound0x58.0x294ca0 copies hovered thumbnail to selected
 equipped index and requests0x58. Neither clears carrying or resets pose.
@@ -382,3 +386,102 @@ footer typography and all parent input early-return combinations are
 not exhaustively restated here. Missing extra quick-button/raw
 SpriteWidget producers remain gui-item-icons15; this direct VoxelWidget
 raw edit path does not close those separate alias/producer questions.
+
+## 9. Click-coordinate widths and ordinary root hit scope
+
+This narrow follow-up independently traces **0x292650**, rather than
+inferring click comparisons from the draw/highlight path in sections5/6.
+Picked/placement XYZ **+0x2c8/+0x2cc/+0x2d0** and carried XYZ
+**+0x380/+0x384/+0x388** are signed32 fields. The item's active attribute
+list instead stores four-byte entries beginning at **item+0x1d**:
+one coordinate byte each for X/Y/Z, followed by the material byte.
+The unsigned active count remains **item+0x9d**.
+
+### 9.1 Pickup searches byte aliases but remembers the full picked tuple
+
+In the reached valid-hit/current-weapon branch, with no valid palette
+selection and carrying false, **0x292650** searches active attributes in
+stored order. At **0x29286a–0x29288d** it copies **only the low byte** of
+each picked signed32 coordinate into a three-byte search tuple. The
+comparison at **0x2928b8–0x2928c8** is byte-for-byte equality over those
+three bytes. There is no signed8-range rejection or full signed32
+coordinate comparison here. The first matching active attribute wins.
+
+On success it sets carrying true and zero-extends that matched entry's
+material byte into **+0x38c** at **0x2928ca–0x2928da**. However, carried
+XYZ are copied from the **original full signed32 picked fields**, not
+from the matched attribute's bytes. The three full-width loads/stores
+are **0x2928e1–0x292904**. Pickup does not remove the attribute at this
+stage. No match leaves carrying false; it does not canonicalize the
+picked tuple into signed8 coordinates.
+
+For example, a picked X of **129** can match stored coordinate byte
+**0x81**, whose signed8 value is−127. The resulting carried X is **129**,
+not−127. The other two coordinates must also match by their low bytes.
+
+### 9.2 Placement narrows; removal uses full signed32 comparison
+
+Placement/update helper **0x108b90** uses **only the low8 bits** of each
+supplied coordinate. It makes a three-byte search tuple and compares it
+directly to the active entry bytes at **0x108bfa–0x108c03**. A match
+updates that entry's material. Otherwise its normal capacity logic can
+append the three low coordinate bytes and material byte. Relevant byte
+argument capture is **0x108bb9–0x108bc8**, and new-entry stores are
+**0x108c5e–0x108c75**. It does not first require the incoming signed32
+coordinates to lie in−128..127. A supplied coordinate129 therefore
+matches/stores the byte0x81. The bytes are later interpreted as signed8
+where their rendering/removal consumers require signed coordinates.
+
+The click passes the current **full signed32** picked/placement fields
+to this helper for a selected palette cube at **0x292714–0x292743**, and
+for a carried cube's destination at **0x292825–0x29283e**. Narrowing is
+the placement helper's byte behavior; there is no preceding clamp.
+
+Removal helper **0x10a0e0 is different**. It retains each supplied
+coordinate as a full signed32 value. At **0x10a120/0x10a127/0x10a12e**
+it **sign-extends the stored X/Y/Z attribute bytes** into signed32,
+then compares those three integers with the supplied full-width tuple
+at **0x10a143–0x10a14d**. It does not truncate the supplied tuple to
+bytes. Thus an argument outside−128..127 cannot equal that axis's
+sign-extended stored coordinate. The first full tuple match is removed;
+later active four-byte entries shift down in order and the count
+decrements. A nonmatching tuple leaves the list/count unchanged.
+
+For a carried move, **0x292650** first calls removal with the remembered
+full carried XYZ at **0x2927fe–0x292816**, then calls placement with the
+current full picked XYZ at **0x292825–0x29283e**, then clears carrying.
+It does not require removal to succeed before placement. The no-hit /
+no-selected-weapon route, when its GUI-null and carrying gates admit
+removal, likewise forwards remembered full carried XYZ at
+**0x292945–0x29295d**; the previously stated live-item assumption remains.
+
+Consequently the example pickup at X129 remembers129, but a later
+removal request using129 does **not** match the old stored byte0x81:
+that byte sign-extends to−127. Subsequent placement still follows its
+own low-byte update/append rules. A pickup at actual signed32 X−127,
+in contrast, can remove that entry. These are distinct native contracts;
+using byte equality for removal or normalizing carried XYZ to the
+matched stored coordinates would change the observed state transition.
+This example establishes arithmetic behavior, not an assertion that an
+owner weapon normally contains out-of-range editable geometry.
+
+### 9.3 Constructor adds no separate rectangular hit boundary
+
+The ordinary owner **blackwidget** clone/root attachment remains
+section1. Native **0x292380** calls the ordinary text-Widget base
+**0x268a70→0x328ff0**, retains fresh Widget flags0, then initializes edit
+fields and the font. It does not add an own-surface/frame-hit flag, a
+new hit-clipping rectangle, or a class-specific root hit shape. The
+base's **0x335830/0x3356d0** calls make shared shape/display data unique
+when needed; they do not add a VoxelWidget clipping policy. Interface
+setup **0xf9ac0** then stores this wrapper, requests800×800 through
+0x32c9a0, and hides it. That sequence has no extra VoxelWidget-specific
+hit/clip flag setter.
+
+The owner's existing root/child shape and display/keyed clipping, the
+ordinary Plasma hit traversal, and the separately stated GUI capture /
+click-handler gates still apply. This audit does not inspect the owner
+art or assert that its entire requested800×800 frame is pickable. It
+also does not add a Widget-frame/shape gate to the independent raw ray
+calculation in section5. A projected cube or a picked integer outside
+that nominal frame does not by itself establish a new native root clip.

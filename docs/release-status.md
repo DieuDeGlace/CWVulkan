@@ -7,6 +7,20 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native-save customization now uses the actual owner editor root and shared
+  WORLD models: equipped thumbnails, raw base/attributes/candidate and material
+  palette, with native picking, cached clicks, rotation and bench/movement gates.
+  Ordinary item downs rejoin the editor before shared health/chat/Ring completion.
+  Full-coordinate pickup/removal and byte placement retain their distinct rules.
+  Palette information follows native source priority and the hidden crafting
+  anchor; text and image use a separate class-adapted copy. Gameplay wheel events
+  are cleared before each poll, preventing idle-frame replay. Focused regressions,
+  all five targets, the full CPU/owner suite, 40 world/20 GUI Vulkan cases, water and
+  Alpha checks pass. Private read-only owner-resource captures exercise the pane
+  and palette tooltip; they are not original-game pixel comparisons. Broader
+  cached inventory/input state, GUI capture/map controls, full preview comparison
+  and map/ground bindings, controller aim and system checks remain release gates.
+
 - Physical inventory wheel messages now retain their event pointer and sign,
   selecting one owner-tree hit in inventory/shop/crafting priority. Shop and recipe
   grids can receive wheel input while the bag is visible elsewhere. Opposing
@@ -43,9 +57,9 @@ checkpoint describe the intended setup and remaining limits.
   exact negative-integer cells, marker exclusion and wrapped attribute coordinates.
   The GUI renderer accepts the raw edit matrices/material with its specified WORLD
   palette and retained state. All five targets, the full CPU/owner suite,40 world
-  and20 GUI Vulkan cases, shared water and Alpha ordering pass. The original editor
-  root, presentation and event integration remain unfinished; these backend checks
-  do not establish a completed customization window or native pixel parity.
+  and20 GUI Vulkan cases, shared water and Alpha ordering pass. The editor root,
+  presentation and event continuation are now integrated above; these backend
+  checks alone do not establish native pixel parity.
 
 - Native customization palettes now read every canonical tab directly: the selected
   weapon's exact base-material item precedes four spirit-material aggregates.
@@ -54,9 +68,8 @@ checkpoint describe the intended setup and remaining limits.
   the later draw rebuilds its entries. Synthetic regressions cover ordering,
   extra tabs, inactive attributes, heterogeneous spirits, cancellation and overflow.
   All five targets, the full CPU/owner suite,40 world/16 GUI Vulkan cases and
-  water/Alpha checks pass. The actual VoxelWidget editor, rendering and input still
-  need replacement from the new independent edit-view specification; this is not
-  a claim of complete customization parity.
+  water/Alpha checks pass. The later owner-root integration is described above;
+  these palette checks alone do not establish complete customization parity.
 
 - Newly loaded inventory models now share one pending atlas rebuild before drawing,
   instead of rebuilding and uploading the font/icon atlas for every new item.

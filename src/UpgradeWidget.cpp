@@ -253,7 +253,8 @@ ClickResult click(Widget &w, uint8_t *weapon, bool overOtherWidget) {
     }
     // Picking a placed cube up: nothing changes until it is put down.
     for (int i = 0; i < cubeCount(weapon); i++)
-        if (cubeAt(weapon, i) == at) {
+        if (const auto stored = cubeAt(weapon, i);
+            (uint8_t)stored.x == (uint8_t)at.x && (uint8_t)stored.y == (uint8_t)at.y && (uint8_t)stored.z == (uint8_t)at.z) {
             w.carrying = true;
             w.carried = at;
             w.carriedMaterial = cubeMaterial(weapon, i);

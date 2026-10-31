@@ -22,8 +22,9 @@ individual feature documents.
   written rules. Coins are picked up near the player rather than flying to them.
 - [x] Identification and cube-editing backends: `IdentifyWindow`, `UpgradeWidget`,
   the main-loop handlers and `LootWindowTests` exercise their implemented rules.
-  The VoxelWidget editor's native geometry/input remains open below; the existing
-  compatibility picture is not complete Steam window parity.
+  Native-save customization now uses the owner editor root and raw WORLD models;
+  remaining cached GUI/input comparisons are detailed below. Recording-only
+  sessions retain their compatibility picture.
 - [x] Generated conversations, regional mission checks, lore/artifact data, map
   markers and interactions. `TalkGen`, `TalkScripts`, `Missions`, `Lore`, `MapMarks`
   and `UsePrompt` are wired into play. Remaining script/network gaps are below.
@@ -234,8 +235,14 @@ individual feature documents.
   describes its owner root, camera, raw model, picking and input. Native palette
   production is corrected and tested, including negative/wrapped totals and
   retained draw-to-click state. Native model projection, object-space ray/voxel
-  picking and the raw WORLD render pass are implemented and tested; integration
-  into the actual owner editor root and its events still remains.
+  picking and the raw WORLD render pass are implemented and tested. The actual
+  owner root, headings/footer, thumbnail/palette calls, right-drag/pad rotation,
+  bench/movement gates and shared native down continuation are integrated.
+  Full signed pickup coordinates, byte placement and full-coordinate removal
+  retain their native asymmetry. Palette tooltips use original-source priority
+  and the hidden crafting anchor, with a separate adapted text/image copy.
+  Cached inventory refresh/hover state, broader GUI capture/map subtrees, full
+  comparison/map/ground preview bindings and controller aim still need work.
   AdaptionWidget is a separate native panel; no unverified gold/item upgrade or
   opening action is inferred from its traced price-only callback.
 - [ ] Ordinary WORLD-shader 3D GUI item icons: identification and equipment SpriteWidgets
@@ -246,7 +253,8 @@ individual feature documents.
   Formula results/ingredients and class-adapted information previews now use their
   distinct owner callbacks, depth, scales and clocks. Recipe spin advances only on
   resource-admitted draws; ingredients share native hover/navigation geometry.
-  Upgrade/customization, retained-cursor and other callers still need conversion.
+  Customization now submits its thumbnails, raw base/attributes/candidate and
+  palette through that renderer. Retained-cursor and other callers still need conversion.
   The GUI clock now narrows each capped step before wrapping accumulation across
   title/game frames, rather than deriving spin from absolute wall time. CPU/owner
   checks and all40 world/16 GUI Vulkan image cases pass, plus water/Alpha checks.

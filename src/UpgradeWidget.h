@@ -5,10 +5,8 @@
 // material from +0x1d, the count at +0x9d), which the weapon damage reads as its upgrade count
 // and the creature pose draws as a coloured voxel on the weapon (creature-pose-items.md §9.1).
 //
-// The rules (what a click does, the palette, the cap) follow the spec. The spec gives no
-// geometry: the window here is CubeVulkan's, built of gui.plx templates like the shop windows,
-// with the weapon drawn by casting rays through its voxels so that what is drawn and what the
-// pointer picks are the same.
+// The native owner window and retained draw/input state are in VoxelCustomization/HudCustomization.
+// The orthographic picture and layout below remain for older recording-only sessions.
 #include "CubModel.h"
 #include "GameShop.h"
 #include "Hud.h"
@@ -35,9 +33,9 @@ constexpr int32_t CUBE_SUBTYPE = 10;
 // own cap (16, or 32 two-handed: gamecraft::cubeCap) is the place routine's.
 constexpr int WIDGET_LIMIT = 32;
 
-// A voxel of the weapon model, counted from its corner (the cube entries' x, y, z).
+// Full picked/carried coordinates. Placement stores low bytes; removal compares full integers.
 struct Voxel {
-    int8_t x = 0, y = 0, z = 0;
+    int32_t x = 0, y = 0, z = 0;
     bool operator==(const Voxel &o) const { return x == o.x && y == o.y && z == o.z; }
 };
 

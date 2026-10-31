@@ -409,13 +409,15 @@ int stationEntity(int workstation) {
     }
 }
 
-int cubeCap(const uint8_t *item) { return nativerules::twoHandedWeapon(item) ? CUBES_TWO_HANDED : CUBES_ONE_HANDED; }
+int cubeCap(const uint8_t *item) {
+    return nativerules::twoHandedWeapon(item) ? CUBES_TWO_HANDED : CUBES_ONE_HANDED;
+}
 
-bool placeCube(uint8_t *item, int8_t x, int8_t y, int8_t z, uint8_t material) {
+bool placeCube(uint8_t *item, int32_t x, int32_t y, int32_t z, uint8_t material) {
     const int count = item[ATTRIBUTE_COUNT];
     for (int i = 0; i < count; i++) {
         uint8_t *cube = item + ATTRIBUTES + (size_t)i * ATTRIBUTE_SIZE;
-        if ((int8_t)cube[0] == x && (int8_t)cube[1] == y && (int8_t)cube[2] == z) {
+        if (cube[0] == (uint8_t)x && cube[1] == (uint8_t)y && cube[2] == (uint8_t)z) {
             cube[3] = material;
             return true;
         }
@@ -428,7 +430,7 @@ bool placeCube(uint8_t *item, int8_t x, int8_t y, int8_t z, uint8_t material) {
     return true;
 }
 
-bool removeCube(uint8_t *item, int8_t x, int8_t y, int8_t z) {
+bool removeCube(uint8_t *item, int32_t x, int32_t y, int32_t z) {
     const int count = item[ATTRIBUTE_COUNT];
     for (int i = 0; i < count; i++) {
         uint8_t *cube = item + ATTRIBUTES + (size_t)i * ATTRIBUTE_SIZE;

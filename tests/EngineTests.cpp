@@ -123,6 +123,7 @@ int plasmaNodeAnimationTests();
 int itemSelectorTests();
 int guiItemTests();
 int voxelEditTests();
+int voxelCustomizationTests();
 int hairStyleTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
@@ -9075,6 +9076,8 @@ int main(int argc, char **argv) {
         return itemSelectorTests();
     if (argc == 2 && std::string(argv[1]) == "hairstyle")
         return hairStyleTests();
+    if (argc == 2 && std::string(argv[1]) == "customization")
+        return voxelCustomizationTests();
     if (argc == 2 && std::string(argv[1]) == "voxeledit")
         return voxelEditTests();
     if (argc == 2 && std::string(argv[1]) == "guiitems")
@@ -10367,6 +10370,7 @@ int main(int argc, char **argv) {
     failures += saveFormatTests();     // tests/SaveTests.cpp
     failures += guiItemTests();
     failures += voxelEditTests();
+    failures += voxelCustomizationTests();
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
     failures += itemSelectorTests();

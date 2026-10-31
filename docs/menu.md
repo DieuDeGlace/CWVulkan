@@ -204,6 +204,33 @@ The original game has only one hair color in its creature record; synchronizatio
 the extra style to remote players is not implemented. No hair models, palettes or
 other original artwork are included in either distribution package.
 
+## Weapon customization
+
+Native-save sessions use an owner `blackwidget` rebound as a VoxelWidget with an
+800 × 800 requested size,
+with its actual frame queries, shape hit test and after-children callback. Equipped
+thumbnails, the raw editable model, attributes and material palette use the shared
+WORLD renderer. Only editable weapon resources retain their raw voxel volume;
+ordinary icons continue sharing the mesh cache. No models are distributed.
+
+Bench opening resets selection/carry but preserves hand and rotation. The draw
+updates the cached pick/palette state used by later clicks. Picking retains full
+signed coordinates; byte placement and full-coordinate removal remain distinct.
+Native down handling rejoins customization after ordinary item actions, then runs
+the shared health/chat/Ring completion. Wheel messages are cleared before each
+gameplay poll so a delivered event is not replayed on idle frames.
+
+Palette information uses the native source priority and hidden crafting-panel
+anchor. Inventory/equipment can take precedence, and an empty shown formula panel
+blocks the palette fallback. Broader cached inventory state, GUI capture/layers,
+full information comparison/map/ground sources and controller aim remain open;
+these bounded paths are not a claim of complete native input or pixel parity.
+
+`--open-upgrade 0` opens this pane for read-only gameplay captures; `--pointer X Y`
+also drives its hover/picking. Recording-only sessions keep the compatibility
+editor. `EngineTests makesave DIR <recording folder> loot` creates a separate test
+profile with generated equipment/materials; use a new directory, not an owner save.
+
 ## Inventory wheel input
 
 Inventory wheel input targets the grid under the pointer, in inventory, shop,

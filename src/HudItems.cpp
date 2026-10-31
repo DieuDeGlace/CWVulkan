@@ -4,12 +4,17 @@
 #include "MapLook.h"
 #include <algorithm>
 
-void Hud::addItemIcon(const std::string &key, const CubModel &cub) {
-    if (itemModels.contains(key))
+void Hud::addItemIcon(const std::string &key, const CubModel &cub, bool retainVolume) {
+    if (auto found = itemModels.find(key); found != itemModels.end()) {
+        if (retainVolume && !found->second.volume)
+            found->second.volume = std::make_shared<CubModel>(cub);
         return;
+    }
     // Compatibility consumers retain their atlas image until their own caller is converted.
     addIcon(key, renderItemIcon(cub, 64), 64);
     auto &model = itemModels[key];
+    if (retainVolume)
+        model.volume = std::make_shared<CubModel>(cub);
     model.allocation = {cub.sx, cub.sy, cub.sz};
     worldmap::meshModel({cub.sx, cub.sy, cub.sz, cub.rgb.data()}, 0, cub.sx - 1, 0, cub.sy - 1, true, model.pending);
 }

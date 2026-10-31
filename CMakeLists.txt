@@ -202,6 +202,9 @@ add_library(engine STATIC
     src/IdentifyWindow.cpp
     src/UpgradeWidget.cpp
     src/VoxelEdit.cpp
+    src/VoxelCustomization.cpp
+    src/ItemPreview.cpp
+    src/HudCustomization.cpp
     src/HairStyle.cpp
     src/ChatLine.cpp
     src/ChatCommands.cpp
@@ -342,7 +345,7 @@ target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp tests/ItemSelectorTests.cpp)
-target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp)
+target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp tests/VoxelCustomizationTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

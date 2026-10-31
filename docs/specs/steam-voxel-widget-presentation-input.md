@@ -82,6 +82,10 @@ The offset/pitch in these screen calculations has no additional GUI-scale
 multiplier. In particular, the quantity positions in section1 cannot be
 obtained by reusing these snapped icon-center coordinates.
 
+The exact sequential float32 evaluation, and the separate ordinary
+information panel's hover priority/placement/adaptation, are clarified in
+[the information-preview follow-up](steam-voxel-widget-information-preview.md).
+
 The hover test reads the cached GUI cursor floats **engine+0x180/+0x184**
 and uses **left<=X<left+40, top<=Y<top+40**. It is a direct rectangle test,
 not an additional GUI-tree hit/capture query. It does not require held/down/

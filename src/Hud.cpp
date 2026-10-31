@@ -878,6 +878,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     guiStepMs = state.guiStepMs;
     if (!ready)
         return;
+    if (panels.customization && !state.customization)
+        panels.customization->visible = false;
     ringItems(state.ring);
     if (state.feats)
         drawFeatText(*state.feats, out);
@@ -1092,9 +1094,18 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
         drawInventory(*state.inventory, out);
     if (state.identification)
         drawIdentification(*state.identification, out);
+    if (state.customization)
+        drawCustomization(*state.customization, out);
     if (state.windows)
         drawScreen(*state.windows, out);
-    if (overlays) overlays(out);
+    if (state.mapPreview.empty()) {
+        if (state.information)
+            drawPreview(*state.information, out);
+        else if (state.inventory)
+            drawPreview(*state.inventory, out);
+    }
+    if (overlays)
+        overlays(out);
     drawMapPreview(state, out);
     drawPointer(state, out);
 }

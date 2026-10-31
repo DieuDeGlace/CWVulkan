@@ -108,9 +108,9 @@ int stationEntity(int workstation);
 // How many cubes a weapon holds: 32 for a two-handed weapon (type 3, a 2H subtype), else 16.
 int cubeCap(const uint8_t *item);
 // 0x108b90: a cube at (x, y, z). An existing one there only changes its material; a new one is
-// appended while there is room. False when it did not fit.
-bool placeCube(uint8_t *item, int8_t x, int8_t y, int8_t z, uint8_t material);
-// 0x10a0e0: removes the first cube at (x, y, z); later ones move down. False when none is there.
-bool removeCube(uint8_t *item, int8_t x, int8_t y, int8_t z);
+// appended while there is room. Coordinates narrow to bytes. False when it did not fit.
+bool placeCube(uint8_t *item, int32_t x, int32_t y, int32_t z, uint8_t material);
+// Removal compares full integers against signed stored bytes; later entries move down.
+bool removeCube(uint8_t *item, int32_t x, int32_t y, int32_t z);
 
 } // namespace gamecraft

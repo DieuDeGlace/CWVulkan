@@ -66,6 +66,7 @@
 #include "FeatText.h"
 #include "IdentifyWindow.h"
 #include "UpgradeWidget.h"
+#include "VoxelCustomization.h"
 #include "SteamSession.h"
 #include "World.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -1436,9 +1437,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // through the interface's screens (lootWindowItems, a frame's items).
     identifywindow::Window identify;
     identifywindow::Shown identificationView;
-    upgradewidget::Widget upgrade;
+    upgradewidget::Widget upgrade; // recording-only compatibility view
+    customization::State nativeCustomization;
+    customization::Shown customizationView;
+    Hud::Inventory ordinaryInformation;
+    std::set<std::string> customizationModelAttempts;
     upgradewidget::View upgradeView;
-    CubModel upgradeModel;                       // the hand's weapon model
+    CubModel upgradeModel; // the hand's weapon model
     std::string upgradeModelSprite, upgradePictureKey;
     ChatLine chat;
     feattext::Store featTexts;
@@ -3148,7 +3153,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             feedback(std::u16string(u"multiplayerWidget->checkGame = ") + (session.toggleGameCheck() ? u"1" : u"0"));
             break;
         case chatcommand::Kind::NamePet:
-            if (command.argument.size() >= 16) feedback(u"Name is too long.");
+            if (command.argument.size() >= 16)
+                feedback(u"Name is too long.");
             else if (auto *me = spawned.localPlayer(); me && me->record) {
                 auto *item = me->record + 0x8b8;
                 if (chatcommand::namePet(item, command.argument) && gear.equipped(Gear::Pet).category == 20) {
@@ -3165,15 +3171,85 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 chatcommand::startMotion(me->record, spawned.playerAbilityDuration(), command.ability);
             break;
         case chatcommand::Kind::Text:
-            if (session.started()) session.say(line);
-            else chat.receive(std::u16string(character.name.begin(), character.name.end()), line);
+            if (session.started())
+                session.say(line);
+            else
+                chat.receive(std::u16string(character.name.begin(), character.name.end()), line);
             break;
         }
     };
 
+    auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview) {
+        preview.info.clear();
+        preview.infoIcon.clear();
+        preview.infoItem.reset();
+        const uint8_t *who = spawned.playerRecord();
+        if (!who)
+            return;
+        const auto originalRaw = Gear::toRecord(original);
+        const auto raw = nativeInventory ? nativeplayer::transformed(originalRaw, gear.playerClass()) : originalRaw;
+        const auto it = nativeInventory ? Gear::fromRecord(raw) : original;
+        const int32_t *playerRegion = reinterpret_cast<const int32_t *>(who + worldgen::creature::REGION);
+        const int effective = nativerules::itemLevel(raw.data(), playerRegion);
+        static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1},        {0, 1, 0, 1},
+                                              {0.3f, 0.45f, 1, 1},   {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
+        auto rarityColour = [&](int r) { return rarities[std::clamp(r, -1, 4) + 1]; };
+        auto tenth = [](float v) {
+            char b[32];
+            std::snprintf(b, sizeof b, "%g", std::round(v * 10.0f) / 10.0f);
+            return std::string(b);
+        };
+        const bool equipment = (it.category >= 3 && it.category <= 9) || it.category == 26;
+        const bool renowned = equipment && it.modifier % (unsigned)(10 * (it.rarity + 1)) == 0;
+        auto &info = preview.info;
+        info.push_back({itemName(it) + (renowned ? "+" : ""), 15, 4, rarityColour(effective), 24, true});
+        if (it.region[0] || it.region[1]) {
+            if (equipment) {
+                info.push_back({std::string((size_t)std::max(0, it.rarity + 1), (char)0xb1), 18, 3, glm::vec4(0.3f, 0.3f, 0.3f, 1), 24});
+                info.push_back(
+                    {std::string((size_t)std::max(0, effective + 1), (char)0xb1), 18, 3, rarityColour(effective), 0, false, true});
+            }
+            if (const std::string land = landNameOf({it.region[0], it.region[1]}); !land.empty())
+                info.push_back({land + (renowned ? "+" : ""), 12, 3,
+                                effective == it.rarity ? glm::vec4(1, 0.9f, 0.5f, 1) : glm::vec4(0.75f, 0.75f, 0.75f, 1), 24});
+        }
+        if (!catalog.mayUse(it.category, it.id, it.material, gear.playerClass())) { // the classes that can
+            std::string classes;
+            static const char *const names[5] = {"", "Warrior ", "Ranger ", "Mage ", "Rogue "};
+            for (int c = 1; c <= 4; c++)
+                if (catalog.mayUse(it.category, it.id, it.material, c))
+                    classes += names[c];
+            info.push_back({classes, 12, 3, glm::vec4(1, 0, 0, 1), 20});
+        }
+        const glm::vec4 cyan(0, 1, 1, 1), lilac(0.75f, 0.5f, 1, 1);
+        if (it.category == 3)
+            info.push_back({"DAMAGE " + tenth(nativerules::weaponDamage(raw.data(), who)), 15, 3, cyan, 20});
+        if (const float v = nativerules::itemArmor(raw.data(), who); v >= 0.1f)
+            info.push_back({"ARMOR " + tenth(v), 15, 3, cyan, 20});
+        if (const float v = nativerules::itemResistance(raw.data(), who); v >= 0.1f)
+            info.push_back({"RESISTANCE " + tenth(v), 15, 3, cyan, 20});
+        if (const float v = nativerules::itemHealth(raw.data(), who); v >= 0.1f)
+            info.push_back({"HP " + tenth(v), 15, 3, lilac, 16});
+        if (const float v = nativerules::itemHaste(raw.data(), who); v >= 0.001f)
+            info.push_back({"HASTE " + tenth(v * 100.0f) + "%", 12, 3, lilac, 16});
+        if (const float v = nativerules::itemCritical(raw.data(), who); v >= 0.001f)
+            info.push_back({"CRITICAL " + tenth(v * 100.0f) + "%", 12, 3, lilac, 16});
+        if (const float v = nativerules::itemStaminaRegen(raw.data(), who); v >= 0.001f)
+            info.push_back({"REGENERATION " + tenth(v * 100.0f) + "%", 12, 3, lilac, 16});
+        if (it.category == 1 && it.id != 9 && it.id != 13) // healing food and potions
+            info.push_back({"Restores health over " + std::to_string(nativerules::useTime(raw.data()) / 1000) + " seconds", 12, 3,
+                            glm::vec4(0.25f, 1, 0.25f, 1), 16});
+        preview.infoIcon = it.sprite;
+        if (nativeInventory) {
+            preview.infoItem = raw;
+            preview.infoIcon = spawned.itemSprite(raw.data());
+            loadInventorySprite(preview.infoIcon);
+        }
+    };
     while (!glfwWindowShouldClose(window)) {
         input.gamepadSampled = false;
         input.pointerSampled = false;
+        input.wheelEvents.clear(); // GLFW callbacks below produce only this gameplay frame's wheel messages.
         glfwPollEvents();
         if (std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
             saveProgress();
@@ -3198,7 +3274,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
         // The screens over the game take their keys first (the interface keys F1 to F6 always,
         // everything while one is open). Start Menu and Exit Game end the session.
-        const bool panelsBeforeInput = inventoryOpen || mapOpen || answers.visible() || (menusReady && menus.open());
+        const bool panelsBeforeInput =
+            inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible() || (menusReady && menus.open());
         const bool capturingBeforeInput = menusReady && menus.capturingControl();
         input.gamepadModal = panelsBeforeInput || chat.typing();
         input.gamepadMapMode = mapOpen;
@@ -3209,12 +3286,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             int width, height;
             glfwGetWindowSize(window, &width, &height);
             const auto size = renderer.screenSize();
-            const glm::vec2 point((float)(x * size.width / std::max(width, 1)),
-                                  (float)(y * size.height / std::max(height, 1)));
-            input.gamepadPanels = {hud.inventoryPanelEligible(point, inventoryView, 0),
-                                   hud.inventoryPanelEligible(point, inventoryView, 2),
+            const glm::vec2 point((float)(x * size.width / std::max(width, 1)), (float)(y * size.height / std::max(height, 1)));
+            input.gamepadPanels = {hud.inventoryPanelEligible(point, inventoryView, 0), hud.inventoryPanelEligible(point, inventoryView, 2),
                                    hud.inventoryPanelEligible(point, inventoryView, 1)};
         }
+        const auto physicalDowns = input.buttons;
+        const auto physicalUps = input.released;
+        const glm::vec2 previousGuiPointer{(float)input.pointerX, (float)input.pointerY};
         input.sampleGamepad(window, capturingBeforeInput, &gameControls);
         if (menusReady)
             switch (menus.frame(std::min(frameMs, 1000.0))) {
@@ -3222,9 +3300,24 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 returnToTitle = true;
                 glfwSetWindowShouldClose(window, 1);
                 break;
-            case frontend::Result::Quit: glfwSetWindowShouldClose(window, 1); break;
-            default: break;
+            case frontend::Result::Quit:
+                glfwSetWindowShouldClose(window, 1);
+                break;
+            default:
+                break;
             }
+        auto gameDowns = physicalDowns;
+        if (nativeInventory) {
+            auto gameUps = physicalUps;
+            for (int button = 0; button < 3; ++button) {
+                if (input.gamepadPointer.pressed[(size_t)button])
+                    gameDowns.push_back(button);
+                if (input.gamepadPointer.released[(size_t)button])
+                    gameUps.push_back(button);
+            }
+            input.buttons = gameDowns;
+            input.released = std::move(gameUps);
+        }
         bool menusOpen = menusReady && menus.open();
         std::vector<int> pressed = input.pressed;
         input.pressed.clear();
@@ -3272,6 +3365,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             itemSelector.hide();
         if (gameInput.gamepad().dismiss) {
             inventoryOpen = craftingOpen = mapOpen = false;
+            nativeCustomization.edit.open = false;
             bagShown = true;
             if (menusReady)
                 menus.dismiss();
@@ -3365,10 +3459,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // Native-style mouse look leaves right mouse free to start a special
         // immediately. Menus/inventory release the pointer for interaction.
         // (in the game's menus the game draws its own pointer, cursor.plx)
-        int cursorMode = menusOpen ? GLFW_CURSOR_NORMAL
-                         : mouseLook && !inventoryOpen && !mapOpen && !answers.visible() ? GLFW_CURSOR_DISABLED
-                         : hud.hasPointer() && (inventoryOpen || mapOpen || answers.visible()) ? GLFW_CURSOR_HIDDEN
-                                                                          : GLFW_CURSOR_NORMAL;
+        int cursorMode =
+            menusOpen                                                                                              ? GLFW_CURSOR_NORMAL
+            : mouseLook && !inventoryOpen && !nativeCustomization.edit.open && !mapOpen && !answers.visible()      ? GLFW_CURSOR_DISABLED
+            : hud.hasPointer() && (inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible()) ? GLFW_CURSOR_HIDDEN
+                                                                                                                   : GLFW_CURSOR_NORMAL;
         if (glfwGetInputMode(window, GLFW_CURSOR) != cursorMode) {
             glfwSetInputMode(window, GLFW_CURSOR, cursorMode);
             pointerPosition(&lastX, &lastY);
@@ -3377,10 +3472,26 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         pointerPosition(&mx, &my);
         mapSelection.move({mx - lastX, my - lastY},
                           !input.lastUsedPad && (inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible()));
+        hud.customizationLayout(nativeCustomization.edit.open);
+        const auto renderExtent = renderer.screenSize();
+        int pointerWindowWidth, pointerWindowHeight;
+        glfwGetWindowSize(window, &pointerWindowWidth, &pointerWindowHeight);
+        const glm::vec2 customizationPointer = pointerTestX >= 0
+                                                   ? glm::vec2((float)pointerTestX, (float)pointerTestY)
+                                                   : glm::vec2((float)mx * renderExtent.width / std::max(1, pointerWindowWidth),
+                                                               (float)my * renderExtent.height / std::max(1, pointerWindowHeight));
+        const bool customizationNode =
+            nativeCustomization.edit.open && (!menusReady || menus.interfaceShown()) && hud.customizationHit(customizationPointer);
+        if (nativeCustomization.edit.open && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+            nativeCustomization.rotatePointer({(float)(mx - lastX) * renderExtent.width / std::max(1, pointerWindowWidth),
+                                               (float)(my - lastY) * renderExtent.height / std::max(1, pointerWindowHeight)},
+                                              (float)gameOptions.cameraSpeed);
+        const bool customizationDragLook = nativeCustomization.edit.open && !input.lastUsedPad &&
+                                           glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !customizationNode;
         const bool answerDragLook = answers.visible() && !input.lastUsedPad &&
-            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
-            !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
-            !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
+                                    glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
+                                    !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
+                                    !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
         if (mapOpen && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             // the pointer movement: dragging with the right button moves the map, 2^zoom blocks a
             // pixel, along the camera's turn.
@@ -3392,8 +3503,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 mapMoved = true;
             }
         } else if (!inventoryOpen && !mapOpen && !menusOpen && glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
-                   (answers.visible() ? answerDragLook
-                                      : (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
+                   (answers.visible()               ? answerDragLook
+                    : nativeCustomization.edit.open ? customizationDragLook
+                                                    : (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
             // The look input, scaled by the camera speed option and turned over by invert-Y.
             constexpr float RADIANS_A_PIXEL = .005f;
             const float speed = RADIANS_A_PIXEL * gameOptions.lookSpeed(), vertical = gameOptions.invertY ? -1.0f : 1.0f;
@@ -3404,7 +3516,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         lastY = my;
         const GamepadCamera padTurn = gamepadCamera(gameInput.gamepad().look, frameMs);
         constexpr double PAD_RADIANS = 0.017453292519943295;
-        if (upgrade.open) {
+        if (nativeCustomization.edit.open)
+            nativeCustomization.rotatePad(padTurn.pitch, padTurn.yaw);
+        else if (upgrade.open) {
             upgradeView.yawDegrees = (float)((double)upgradeView.yawDegrees + padTurn.yaw);
             upgradeView.pitchDegrees = (float)((double)upgradeView.pitchDegrees + padTurn.pitch);
         } else {
@@ -3773,11 +3887,17 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             identifyTest = false;
         }
         if (upgradeTest >= 0 && time > 2 && haveGear) { // --open-upgrade
-            inventoryOpen = hud.hasInventoryArt();
-            bagShown = true;
             upgrade = {};
-            upgrade.open = true;
-            upgrade.hand = (int)upgradeTest == upgradewidget::LEFT_HAND ? upgradewidget::LEFT_HAND : upgradewidget::RIGHT_HAND;
+            if (nativeInventory) {
+                nativeCustomization.edit.open = true;
+                nativeCustomization.edit.hand =
+                    (int)upgradeTest == upgradewidget::LEFT_HAND ? upgradewidget::LEFT_HAND : upgradewidget::RIGHT_HAND;
+            } else {
+                inventoryOpen = hud.hasInventoryArt();
+                bagShown = true;
+                upgrade.open = true;
+                upgrade.hand = (int)upgradeTest == upgradewidget::LEFT_HAND ? upgradewidget::LEFT_HAND : upgradewidget::RIGHT_HAND;
+            }
             upgradeTest = -1;
         }
         if (closeInventoryAt >= 0 && time > closeInventoryAt) { // --close-inventory
@@ -3788,6 +3908,46 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             vendorTrade.open = upgrade.open = false, inventoryRegionActive = false, identify.close();
         lootWindowItems.clear();
         identificationView = {};
+        std::array<int, 3> completedDowns{}, downOrdinals{};
+        auto nativeDownPoint = [&](int button) {
+            const bool physical = button >= 0 && button < 3 &&
+                                  downOrdinals[(size_t)button]++ < (int)std::count(physicalDowns.begin(), physicalDowns.end(), button);
+            if (!physical)
+                return customizationPointer;
+            return glm::vec2(previousGuiPointer.x * renderExtent.width / std::max(1, pointerWindowWidth),
+                             previousGuiPointer.y * renderExtent.height / std::max(1, pointerWindowHeight));
+        };
+        auto finishNativeDown = [&](int button, float oldMaximum, glm::vec2 point) {
+            if (!nativeInventory || button < 0 || button >= 3)
+                return;
+            if (button == GLFW_MOUSE_BUTTON_LEFT && nativeCustomization.edit.open) {
+                hud.customizationLayout(true);
+                const auto hand = nativeCustomization.edit.hand == 1 ? Gear::WeaponLeft : Gear::WeaponRight;
+                auto &weapon = nativeInventory->equipment[(size_t)hand];
+                bool guiNode = false;
+                if (!menusReady || menus.interfaceShown()) {
+                    guiNode = hud.customizationGuiHit(point, identify.open);
+                    if (inventoryOpen)
+                        for (int which : {0, 1, 2})
+                            guiNode = guiNode || hud.inventoryPanelEligible(point, inventoryView, which);
+                    guiNode = guiNode || hud.dialogueChoicesHit(point) || hud.generalDialogueHit(point);
+                }
+                bool sound = false;
+                const auto result = nativeCustomization.press(&weapon, guiNode, sound);
+                if (sound)
+                    audio.playInterface(0x58);
+                if (result.takeOne)
+                    customization::consumePalette(nativeInventory->inventory, result.taken);
+                if (result.weaponChanged || result.takeOne) {
+                    rebuildInventoryViews();
+                    applyGear(true);
+                }
+            }
+            if (auto *actor = spawned.localPlayer())
+                playerHp = inventoryslots::adjustHealth(actor->record, oldMaximum, [&] { return spawned.playerMaxHealth(); });
+            chat.stopEditing();
+            itemSelector.hide();
+        };
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
@@ -4090,87 +4250,22 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 cv.details.progress = craftButton.progress;
             } else
                 craftButton.update((float)(dt * 1000.0), false, false);
-            { // The hovered item's details (the item details text) for the preview.
+            if (!nativeInventory) { // Older recording-only sessions retain their inventory-view source.
                 inventoryView.info.clear();
                 inventoryView.infoIcon.clear();
                 inventoryView.infoItem.reset();
+                inventoryView.infoAnchor = inventoryView.vendor.open && inventoryView.vendor.hoverItem >= 0
+                                               ? itempreview::Anchor::Shop
+                                               : itempreview::Anchor::Inventory;
                 const Gear::Item *shown = nullptr;
-                std::optional<Gear::Item> nativeShown;
-                int count = 1;
-                if (nativeInventory) {
-                    if (const auto *stack = nativeInventory->inventory.slot(hoveredNative); stack && stack->item[0] != 0) {
-                        nativeShown = Gear::fromRecord(stack->item);
-                        nativeShown->sprite = spawnedReady ? spawned.itemSprite(stack->item.data()) : std::string();
-                        shown = &*nativeShown;
-                        count = stack->count;
-                    }
-                } else if (inventoryView.hoverItem >= 0 && inventoryView.hoverItem < (int)listed.size())
+                if (inventoryView.hoverItem >= 0 && inventoryView.hoverItem < (int)listed.size())
                     shown = &gear.item(listed[(size_t)inventoryView.hoverItem]);
                 else if (inventoryView.hoverItem >= (int)listed.size() && inventoryView.hoverItem - listed.size() < bag.size())
-                    shown = &bag[(size_t)inventoryView.hoverItem - listed.size()].item,
-                    count = bag[(size_t)inventoryView.hoverItem - listed.size()].count;
+                    shown = &bag[(size_t)inventoryView.hoverItem - listed.size()].item;
                 if (!shown && inventoryView.hoverSlot >= 0 && gear.equipped(equipSlotOf(inventoryView.hoverSlot)).category)
                     shown = &gear.equipped(equipSlotOf(inventoryView.hoverSlot));
-                const uint8_t *who = spawned.playerRecord();
-                if (shown && who) {
-                    const Gear::Item &it = *shown;
-                    const auto raw = Gear::toRecord(it);
-                    const int32_t *playerRegion = reinterpret_cast<const int32_t *>(who + worldgen::creature::REGION);
-                    const int effective = nativerules::itemLevel(raw.data(), playerRegion);
-                    static const glm::vec4 rarities[6] = {{0.7f, 0.7f, 0.7f, 1}, {1, 1, 1, 1}, {0, 1, 0, 1}, {0.3f, 0.45f, 1, 1}, {0.55f, 0.2f, 1, 1}, {1, 1, 0, 1}};
-                    auto rarityColour = [&](int r) { return rarities[std::clamp(r, -1, 4) + 1]; };
-                    auto tenth = [](float v) {
-                        char b[32];
-                        std::snprintf(b, sizeof b, "%g", std::round(v * 10.0f) / 10.0f);
-                        return std::string(b);
-                    };
-                    const bool equipment = (it.category >= 3 && it.category <= 9) || it.category == 26;
-                    const bool renowned = equipment && it.modifier % (unsigned)(10 * (it.rarity + 1)) == 0;
-                    auto &info = inventoryView.info;
-                    info.push_back({itemName(it) + (renowned ? "+" : ""), 15, 4, rarityColour(effective), 24, true});
-                    if (it.region[0] || it.region[1]) {
-                        if (equipment) {
-                            info.push_back({std::string((size_t)std::max(0, it.rarity + 1), (char)0xb1), 18, 3, glm::vec4(0.3f, 0.3f, 0.3f, 1), 24});
-                            info.push_back({std::string((size_t)std::max(0, effective + 1), (char)0xb1), 18, 3, rarityColour(effective), 0, false, true});
-                        }
-                        if (const std::string land = landNameOf({it.region[0], it.region[1]}); !land.empty())
-                            info.push_back({land + (renowned ? "+" : ""), 12, 3,
-                                            effective == it.rarity ? glm::vec4(1, 0.9f, 0.5f, 1) : glm::vec4(0.75f, 0.75f, 0.75f, 1), 24});
-                    }
-                    if (!catalog.mayUse(it.category, it.id, it.material, gear.playerClass())) { // the classes that can
-                        std::string classes;
-                        static const char *const names[5] = {"", "Warrior ", "Ranger ", "Mage ", "Rogue "};
-                        for (int c = 1; c <= 4; c++)
-                            if (catalog.mayUse(it.category, it.id, it.material, c))
-                                classes += names[c];
-                        info.push_back({classes, 12, 3, glm::vec4(1, 0, 0, 1), 20});
-                    }
-                    const glm::vec4 cyan(0, 1, 1, 1), lilac(0.75f, 0.5f, 1, 1);
-                    if (it.category == 3)
-                        info.push_back({"DAMAGE " + tenth(nativerules::weaponDamage(raw.data(), who)), 15, 3, cyan, 20});
-                    if (const float v = nativerules::itemArmor(raw.data(), who); v >= 0.1f)
-                        info.push_back({"ARMOR " + tenth(v), 15, 3, cyan, 20});
-                    if (const float v = nativerules::itemResistance(raw.data(), who); v >= 0.1f)
-                        info.push_back({"RESISTANCE " + tenth(v), 15, 3, cyan, 20});
-                    if (const float v = nativerules::itemHealth(raw.data(), who); v >= 0.1f)
-                        info.push_back({"HP " + tenth(v), 15, 3, lilac, 16});
-                    if (const float v = nativerules::itemHaste(raw.data(), who); v >= 0.001f)
-                        info.push_back({"HASTE " + tenth(v * 100.0f) + "%", 12, 3, lilac, 16});
-                    if (const float v = nativerules::itemCritical(raw.data(), who); v >= 0.001f)
-                        info.push_back({"CRITICAL " + tenth(v * 100.0f) + "%", 12, 3, lilac, 16});
-                    if (const float v = nativerules::itemStaminaRegen(raw.data(), who); v >= 0.001f)
-                        info.push_back({"REGENERATION " + tenth(v * 100.0f) + "%", 12, 3, lilac, 16});
-                    if (it.category == 1 && it.id != 9 && it.id != 13) // healing food and potions
-                        info.push_back({"Restores health over " + std::to_string(nativerules::useTime(raw.data()) / 1000) + " seconds", 12, 3,
-                                        glm::vec4(0.25f, 1, 0.25f, 1), 16});
-                    (void)count;
-                    inventoryView.infoIcon = it.sprite;
-                    if (nativeInventory) {
-                        inventoryView.infoItem = nativeplayer::transformed(raw, gear.playerClass());
-                        inventoryView.infoIcon = spawned.itemSprite(inventoryView.infoItem->data());
-                        loadInventorySprite(inventoryView.infoIcon);
-                    }
-                }
+                if (shown)
+                    describePreview(*shown, inventoryView);
             }
             // --- The identify window and the weapon upgrade widget ------------------------------
             {
@@ -4544,7 +4639,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                      {255, 51, 51, 255}});
                 audio.playInterface(gameshop::SOUND_REFUSED);
             };
-            for (int button : input.buttons) {
+            auto handleInventoryDown = [&](int button) {
                 if (nativeInventory && button == GLFW_MOUSE_BUTTON_MIDDLE && !mapOpen) {
                     if (auto *actor = spawned.localPlayer())
                         if (auto item = nativeInventory->inventory.dropOne(hoveredNative, actor->record)) {
@@ -4553,33 +4648,32 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             actor->interactions.push_back(request);
                             rebuildInventoryViews();
                         }
-                    continue;
+                    return;
                 }
                 if ((button != GLFW_MOUSE_BUTTON_LEFT && !(nativeInventory && button == GLFW_MOUSE_BUTTON_RIGHT)) ||
                     inventoryView.hoverButton)
-                    continue;
+                    return;
                 if (const int region = hud.inventoryRegionButtonAt(mouse, inventoryView)) {
                     changeRegion(region);
-                    continue;
+                    return;
                 }
                 if (craftingOpen && inventoryView.crafting.hoverTab >= 0) { // the crafting tabs
                     changePanelTab(2, inventoryView.crafting.hoverTab);
-                    continue;
+                    return;
                 }
                 if (craftingOpen && inventoryView.crafting.hoverItem >= 0) { // the inventory selection frame(true)
                     inventoryView.crafting.selected = inventoryView.crafting.hoverItem;
                     audio.playInterface(soundrules::soundid::MENU_SELECT);
-                    continue;
+                    return;
                 }
                 if (craftingOpen && inventoryView.crafting.hoverButton)
-                    continue;
+                    return;
                 if (vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
                     changePanelTab(1, inventoryView.vendor.hoverTab);
-                    continue;
+                    return;
                 }
                 if (nativeInventory && vendorTrade.open) {
                     if (auto *actor = spawned.localPlayer()) {
-                        const float oldMaximum = spawned.playerMaxHealth();
                         const auto *source = nativeInventory->inventory.slot(hoveredNative);
                         if (source && source->count != 0)
                             gameshop::sellSlot(nativeInventory->inventory, hoveredNative, soldItems, trade);
@@ -4596,10 +4690,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                 gameshop::purchase(nativeInventory->inventory, offer, trade);
                         }
                         rebuildInventoryViews();
-                        playerHp = inventoryslots::adjustHealth(actor->record, oldMaximum, [&] { return spawned.playerMaxHealth(); });
-                        chat.stopEditing();
                     }
-                    continue;
+                    return;
                 }
                 if (vendorTrade.open && inventoryView.vendor.hoverItem >= 0 &&
                     inventoryView.vendor.hoverItem < (int)vendorRaws.size()) { // Game's buying (and buying back)
@@ -4611,7 +4703,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     if (cost > playerGold) {
                         texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "Not enough money.", warning});
                         audio.playInterface(gameshop::SOUND_REFUSED);
-                        continue;
+                        return;
                     }
                     int32_t subtype;
                     std::memcpy(&subtype, offer.data() + 4, 4);
@@ -4622,7 +4714,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     if (!useprompt::mayCarryMore(offer[0], subtype, carried)) {
                         texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "You can't carry more of these items.", warning});
                         audio.playInterface(gameshop::SOUND_REFUSED);
-                        continue;
+                        return;
                     }
                     playerGold -= cost;
                     receive(offer);
@@ -4636,19 +4728,19 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     playerUnits(purchasePosition);
                     audio.playAt(gameshop::SOUND_BOUGHT, purchasePosition, 1, 1);
                     logLine("Vendor: bought for " + std::to_string(cost) + " gold");
-                    continue;
+                    return;
                 }
                 if (vendorTrade.open && inventoryView.hoverItem >= 0) { // selling (not specials or artifacts)
                     const int k = inventoryView.hoverItem;
                     if (inventoryView.items[(size_t)k].tab == 1 || inventoryView.items[(size_t)k].tab == 5) {
                         logLine("Vendor: that is not for sale");
-                        continue;
+                        return;
                     }
                     Gear::Item it;
                     if (nativeInventory) {
                         const auto *stack = nativeInventory->inventory.slot(hoveredNative);
                         if (!stack || stack->count == 0)
-                            continue;
+                            return;
                         it = Gear::fromRecord(stack->item);
                     } else
                         it = k < (int)listed.size() ? gear.item(listed[(size_t)k]) : bag[(size_t)k - listed.size()].item;
@@ -4667,15 +4759,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     } else
                         consumeCarried((size_t)k - listed.size());
                     logLine("Vendor: sold " + itemName(it) + " for " + std::to_string(gameshop::sellPrice(raw)) + " gold");
-                    continue;
+                    return;
                 }
                 if (inventoryView.hoverTab >= 0) { // the inventory tab selection
                     changePanelTab(0, inventoryView.hoverTab);
-                    continue;
+                    return;
                 }
                 if (nativeInventory) {
                     if (auto *actor = spawned.localPlayer()) {
-                        const float oldMaximum = spawned.playerMaxHealth();
                         auto outcome = upgrade.open ? inventoryslots::UseResult{}
                                                     : inventoryslots::use(*nativeInventory, hoveredNative, actor->record, button,
                                                                           glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
@@ -4708,10 +4799,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             }
                         }
                         rebuildInventoryViews();
-                        playerHp = inventoryslots::adjustHealth(actor->record, oldMaximum, [&] { return spawned.playerMaxHealth(); });
-                        chat.stopEditing();
                     }
-                    continue;
+                    return;
                 }
                 if (inventoryView.hoverItem >= (int)gearRows) {
                     const size_t j = (size_t)inventoryView.hoverItem - gearRows;
@@ -4754,6 +4843,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         gear.unequip(s);
                         applyGear();
                     }
+                }
+            };
+            for (int button : input.buttons) {
+                const float oldMaximum = spawned.playerMaxHealth();
+                handleInventoryDown(button);
+                if (nativeInventory) {
+                    finishNativeDown(button, oldMaximum, nativeDownPoint(button));
+                    if (button >= 0 && button < 3)
+                        ++completedDowns[(size_t)button];
                 }
             }
             if (input.gamepadPointer.regionDirection)
@@ -4828,6 +4926,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     default: sheet.travel[k] = (f * 12.0f + 8.0f) * 0.5f; break;                    // light radius
                     }
                 }
+            }
+        }
+        if (nativeInventory) {
+            auto completed = completedDowns;
+            for (int button : gameDowns) {
+                if (button < 0 || button >= 3)
+                    continue;
+                if (completed[(size_t)button] > 0) {
+                    --completed[(size_t)button];
+                    continue;
+                }
+                finishNativeDown(button, spawned.playerMaxHealth(), nativeDownPoint(button));
             }
         }
         // The game's default controls: attack (left mouse), special (right mouse; a
@@ -5166,7 +5276,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     break;
                 }
                 case Action::Customize:
-                    logLine("Use: the customization bench's window is not ported");
+                    if (nativeInventory) {
+                        nativeCustomization.toggleBench();
+                        logLine(nativeCustomization.edit.open ? "Customization: opened" : "Customization: closed");
+                    }
                     break;
                 case Action::ExamineLore: {
                     const worldgen::ZoneObject &o = sceneObjects[(size_t)p.object];
@@ -6321,6 +6434,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                                (int32_t)std::clamp(frameMs, 0.0, 1000.0));
         // Interface/frame cleanup is independent of drawing and does not consume an item.
         mapSelection.afterInterface();
+        if (nativeCustomization.edit.open && !(mapOpen && input.lastUsedPad)) {
+            const auto stick = gameInput.gamepad().movement;
+            const bool keys = gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) || gameInput.held(gameoptions::LEFT) ||
+                              gameInput.held(gameoptions::RIGHT);
+            if ((!chat.typing() && keys) || std::sqrt(stick.x * stick.x + stick.y * stick.y) > .01f)
+                nativeCustomization.edit.open = false;
+        }
         bool mapCursorFromOverlay = false;
         if (hudReady) {
             VkExtent2D screen = renderer.screenSize();
@@ -6720,33 +6840,37 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             answers.updateVisibility(talk.has_value() || npcSpeech.addressedTo(spawned.playerId()));
             if (nativeInventory) {
                 const bool ordinaryUi = inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
-                                        chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
+                                        nativeCustomization.edit.open || chat.typing() || answers.visible() ||
+                                        (menusReady && menus.ordinaryUi());
                 if (const int sound = interfaceSoundEdges.sample(ordinaryUi, itemSelector.shown))
                     audio.playInterface(sound);
             }
             if (nativePlayer) {
                 const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
                 const bool leaning = (spawned.playerToggles() & 0x400) != 0;
-                hs.crosshair = !generalDialogue.visible() && !ordinaryUi && !leaning && ability != 156;
-                hs.zoomCrosshair = !generalDialogue.visible() && !ordinaryUi && leaning;
+                hs.crosshair = !generalDialogue.visible() && !nativeCustomization.edit.open && !ordinaryUi && !leaning && ability != 156;
+                hs.zoomCrosshair = !generalDialogue.visible() && !nativeCustomization.edit.open && !ordinaryUi && leaning;
             }
-            if (!npcSpeech.emotes().empty()) speechEnvironment.eachActor([&](const npcspeech::Actor &actor) {
-                const auto active = npcSpeech.emotes().find(actor.id);
-                if (active == npcSpeech.emotes().end() || !(actor.health > 0)) return;
-                const auto pose = npcspeech::emotePose(active->second);
-                const auto asset = spawned.spriteAsset(world, pose.model);
-                if (!asset) return;
-                const npcspeech::Point offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY(), 0};
-                const auto game = npcspeech::emoteTransform(actor, pose, asset->header, offset);
-                DrawItem draw;
-                draw.mesh = world.modelMesh(asset->model);
-                draw.model = glm::translate(glm::mat4(1), glm::vec3(0,0,(float)ExtractedWorld::Z_OFFSET)) * game *
-                    glm::translate(glm::mat4(1), glm::vec3(asset->header.x*.5f,asset->header.y*.5f,0));
-                draw.flags = GLOW;
-                draw.kind = DrawKind::Emote;
-                draw.nativeActor = npcspeech::actorSphere(actor);
-                opaque.push_back(std::move(draw));
-            });
+            if (!npcSpeech.emotes().empty())
+                speechEnvironment.eachActor([&](const npcspeech::Actor &actor) {
+                    const auto active = npcSpeech.emotes().find(actor.id);
+                    if (active == npcSpeech.emotes().end() || !(actor.health > 0))
+                        return;
+                    const auto pose = npcspeech::emotePose(active->second);
+                    const auto asset = spawned.spriteAsset(world, pose.model);
+                    if (!asset)
+                        return;
+                    const npcspeech::Point offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY(), 0};
+                    const auto game = npcspeech::emoteTransform(actor, pose, asset->header, offset);
+                    DrawItem draw;
+                    draw.mesh = world.modelMesh(asset->model);
+                    draw.model = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
+                                 glm::translate(glm::mat4(1), glm::vec3(asset->header.x * .5f, asset->header.y * .5f, 0));
+                    draw.flags = GLOW;
+                    draw.kind = DrawKind::Emote;
+                    draw.nativeActor = npcspeech::actorSphere(actor);
+                    opaque.push_back(std::move(draw));
+                });
             for (auto &q : quests) { // the tracker: what is left to do, in the game's words
                 if (q.state == 2)
                     continue;
@@ -6815,6 +6939,44 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 hs.inventory = &inventoryView;
             if (identify.open)
                 hs.identification = &identificationView;
+            if (nativeInventory && nativeCustomization.edit.open) {
+                customizationView = {};
+                customizationView.state = &nativeCustomization;
+                customizationView.inventory = &nativeInventory->inventory;
+                customizationView.equipment = {nativeInventory->equipment[(size_t)Gear::WeaponRight],
+                                               nativeInventory->equipment[(size_t)Gear::WeaponLeft]};
+                customizationView.icon = [&](const auto &item) { return spawnedReady ? spawned.itemSprite(item.data()) : std::string(); };
+                customizationView.pointer = customizationPointer;
+                auto preload = [&](const nativesaves::Item &item, bool volume) {
+                    const auto name = customizationView.icon(item);
+                    if (name.empty())
+                        return;
+                    if (!volume) {
+                        loadInventorySprite(name);
+                        return;
+                    }
+                    if (customizationModelAttempts.insert(name).second)
+                        if (const auto path = assets.resolve(fs::path("sprites") / (name + ".cub"))) {
+                            CubModel model;
+                            if (model.load(*path))
+                                hud.addItemIcon(name, model, true);
+                        }
+                };
+                if (!menusReady || menus.interfaceShown()) {
+                    loadInventorySprite("cube");
+                    for (const auto &item : customizationView.equipment)
+                        if (item[0])
+                            preload(item, true);
+                    for (int hand : {nativeCustomization.edit.hand, 0, 1})
+                        if (hand >= 0 && hand < 2 && customizationView.equipment[(size_t)hand][0]) {
+                            for (const auto &entry :
+                                 upgradewidget::paletteOf(nativeInventory->inventory, customizationView.equipment[(size_t)hand]))
+                                preload(entry.item, false);
+                            break;
+                        }
+                }
+                hs.customization = &customizationView;
+            }
             { // the identify window, the upgrade widget and the chat line (Hud::State::windows)
                 if (!lootWindowItems.empty())
                     hs.windows = &lootWindowItems;
@@ -6886,7 +7048,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // Interface's its pointer node: the game's pointer in its menus; on the open map, the flat
             // distance from the player to the map's cursor (the distance text, a metre
             // being two blocks).
-            hs.pointer = hud.hasPointer() && (inventoryOpen || mapOpen || answers.visible());
+            hs.pointer = hud.hasPointer() && (inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible());
             // the flight point preview for the selected flight point: its name, the
             // distance, and the flight time (once known) or what it costs.
             if (mapOpen && flightSelected) {
@@ -6922,6 +7084,49 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             std::vector<glm::vec2> answerPoints;
             input.gamepadNavigationPoints.clear();
+            if (nativeInventory) {
+                itempreview::Sources sources;
+                sources.ringShown = itemSelector.shown;
+                if (inventoryOpen) {
+                    if (inventoryView.hoverItem >= 0 && (size_t)inventoryView.hoverItem < inventoryView.items.size()) {
+                        const auto &entry = inventoryView.items[(size_t)inventoryView.hoverItem];
+                        const auto *slot = nativeInventory->inventory.slot({entry.tab, entry.slotIndex});
+                        if (slot && slot->count != 0)
+                            sources.inventory = &slot->item;
+                    }
+                    if (inventoryView.hoverSlot >= 0)
+                        sources.equipment = &nativeInventory->equipment[(size_t)equipSlotOf(inventoryView.hoverSlot)];
+                    const auto &crafting = inventoryView.crafting;
+                    if (crafting.open && crafting.hoverItem >= 0 && (size_t)crafting.hoverItem < crafting.items.size()) {
+                        const auto &entry = crafting.items[(size_t)crafting.hoverItem];
+                        if (entry.count >= 0 && entry.original)
+                            sources.crafting = &*entry.original;
+                    }
+                    const auto &vendor = inventoryView.vendor;
+                    if (vendor.open && vendor.hoverItem >= 0 && (size_t)vendor.hoverItem < vendor.items.size() &&
+                        vendor.items[(size_t)vendor.hoverItem].original)
+                        sources.shop = &*vendor.items[(size_t)vendor.hoverItem].original;
+                    sources.formulaShown = crafting.open && crafting.details.valid;
+                    if (sources.formulaShown && crafting.details.hoverIngredient >= 0 &&
+                        (size_t)crafting.details.hoverIngredient < crafting.details.ingredients.size()) {
+                        const auto &original = crafting.details.ingredients[(size_t)crafting.details.hoverIngredient].original;
+                        if (original)
+                            sources.formula = &*original;
+                    }
+                }
+                if (nativeCustomization.edit.open && nativeCustomization.paletteHover >= 0)
+                    sources.voxel = &nativeCustomization.hoveredItem;
+                ordinaryInformation.info.clear();
+                ordinaryInformation.infoIcon.clear();
+                ordinaryInformation.infoItem.reset();
+                const auto choice = itempreview::select(sources);
+                if (choice.item) {
+                    describePreview(Gear::fromRecord(*choice.item), ordinaryInformation);
+                    ordinaryInformation.infoAnchor = choice.anchor;
+                    ordinaryInformation.pointer = hs.pointerAt;
+                }
+                hs.information = &ordinaryInformation;
+            }
             hud.prepareFrame(renderer, renderer.screenSize());
             hud.draw(hs, hudVertices, [&](std::vector<OverlayVertex> &out) {
                 if (menusReady && !menus.interfaceShown())

@@ -445,13 +445,14 @@ int addTestLoot(const char *folder) {
     };
     add(0, 2, makeItem(gameshop::UNIDENTIFIED, 0, 0, 2, 4242));
     add(3, 6, makeItem(upgradewidget::CUBE_TYPE, upgradewidget::CUBE_SUBTYPE, 1, 0));
-    add(3, 3, makeItem(upgradewidget::CUBE_TYPE, upgradewidget::CUBE_SUBTYPE, 0x80, 0));
-    add(3, 3, makeItem(upgradewidget::CUBE_TYPE, upgradewidget::CUBE_SUBTYPE, 0x82, 0));
-    add(3, 2, makeItem(upgradewidget::CUBE_TYPE, upgradewidget::CUBE_SUBTYPE, 0x83, 0));
+    add(3, 3, makeItem(upgradewidget::CUBE_TYPE, 14, 0x80, 0));
+    add(3, 3, makeItem(upgradewidget::CUBE_TYPE, 14, 0x81, 0));
+    add(3, 3, makeItem(upgradewidget::CUBE_TYPE, 14, 0x82, 0));
+    add(3, 2, makeItem(upgradewidget::CUBE_TYPE, 14, 0x83, 0));
     c.gold = 500;
     if (!store.save(0, c))
         return 1;
-    std::printf("character 0: an unidentified item, 14 material cubes and 500 gold added\n");
+    std::printf("character 0: an unidentified item, 17 material/spirit cubes and 500 gold added\n");
     return 0;
 }
 

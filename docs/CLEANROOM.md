@@ -72,6 +72,16 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Native customization root, draw plan and event continuation follow
+  `steam-voxel-widget-presentation-input.md`,
+  `steam-weapon-customization-edit-view.md` and
+  `steam-voxel-widget-down-event-routing.md`. The implementation reads only
+  those independent descriptions and owner runtime resources. Full-coordinate
+  pickup/removal and byte placement are tested separately; no native code or
+  geometry is included in either package. Palette information-source precedence
+  follows `steam-voxel-widget-information-preview.md`, preserving the original
+  record and using a separate class-adapted copy for text/image. Full cached GUI
+  lifecycle, comparison/map/ground bindings and controller aim remain separate.
 - Inventory wheel target priority and per-message sign normalization follow
   `steam-inventory-refresh-events.md` section4.2. Input retains the event pointer
   and reuses the engine's existing owner-tree hit test; no game input code is read.
@@ -87,12 +97,12 @@ Done so far with the full process:
   `steam-weapon-customization-edit-view.md`. Full allocation, negative aspect,
   stored lens constants, signed cell/byte semantics and raw shader state are
   independently implemented. Synthetic CPU and Vulkan cases verify these bounded
-  paths; editor root/input integration remains open. No owner geometry is shipped.
+  paths; the root/event integration is described above. No owner geometry is shipped.
 - Canonical customization palette production from
   `steam-weapon-customization-palette.md`: selected-material semantic equality,
   four field-only spirit totals, signed32 wrapping and retained click input.
   One engine-owned pass accumulates the five totals without copying game code.
-  Full editor geometry/input remains separate; no artwork or owner asset is added.
+  Editor presentation is described above; no artwork or owner asset is added.
 - Recipe result/ingredient and information-preview WORLD calls from
   `steam-gui-item-icons.md` §§11/12/16. Class adaptation affects the information
   icon's copied record, preserving the source. Resource-gated recipe rotation,

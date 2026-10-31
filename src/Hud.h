@@ -7,6 +7,7 @@
 // scaled with the window height.
 #include "MapMarks.h"
 #include "InventoryUi.h"
+#include "ItemPreview.h"
 #include "InventorySlots.h"
 #include "Renderer.h"
 #include "Plx.h"
@@ -31,7 +32,14 @@ namespace identifywindow {
 struct Shown;
 struct Layout;
 } // namespace identifywindow
-namespace feattext { struct Label; }
+namespace feattext {
+struct Label;
+}
+namespace customization {
+struct State;
+struct Shown;
+struct Layout;
+} // namespace customization
 
 class ChatLine;
 struct CubModel;
@@ -118,7 +126,8 @@ class Hud {
         std::vector<InfoLine> info;
         std::string infoIcon;
         std::optional<nativesaves::Item> infoItem; // class-adapted preview record; the source stays unchanged
-        glm::vec2 pointer{0};                      // the mouse (the preview follows it)
+        itempreview::Anchor infoAnchor = itempreview::Anchor::Inventory;
+        glm::vec2 pointer{0}; // the mouse (the preview follows it)
         // The character panel (the character panel's drawing).
         struct Sheet {
             bool valid = false, caster = false;
@@ -209,6 +218,8 @@ class Hud {
         // the chat line): items as drawScreen takes them; none when null.
         const std::vector<ScreenItem> *windows = nullptr;
         const identifywindow::Shown *identification = nullptr;
+        const customization::Shown *customization = nullptr;
+        const Inventory *information = nullptr; // ordinary preview also exists without an open inventory
         // The map's markers (the map overlay's draw, MapMarks.h), far ones first, and the
         // interface's clock their icons bob by; also the quest sprites over people's heads.
         using MapMarker = mapmarks::Marker;
@@ -234,7 +245,7 @@ class Hud {
     // An icon (RGBA, size x size) to pack into the atlas at the next layout().
     void addIcon(const std::string &key, std::vector<uint8_t> rgba, int size);
     // Retains the owner CUB allocation and native voxel data for immediate 3D widget draws.
-    void addItemIcon(const std::string &key, const CubModel &);
+    void addItemIcon(const std::string &key, const CubModel &, bool retainVolume = false);
     const std::vector<guiitem::Request> &itemDraws() const { return itemRequests; }
     // OverworldEvents' quest sprites (assets/OverworldEvents/quest-icons.png, 320 x 80): the
     // orange question mark ("quest-event"), the grey one ("quest-destination") and the orange
@@ -351,6 +362,7 @@ class Hud {
         Mesh pending;
         glm::ivec3 allocation{0};
         uint32_t mesh = 0;
+        std::shared_ptr<const CubModel> volume;
     };
     std::map<std::string, ItemModel> itemModels;
     mutable std::vector<guiitem::Request> itemRequests;
@@ -380,6 +392,9 @@ class Hud {
     // game's interface scale (options.cfg guiScale; 1 without it).
   public:
     void setGuiScale(float s) { guiScale = s; }
+    customization::Layout customizationLayout(bool shown) const;
+    bool customizationHit(glm::vec2 pointer) const;
+    bool customizationGuiHit(glm::vec2 pointer, bool identificationShown) const;
 
     // The frontend's screens (Frontend.h), drawn every frame the way the game's widgets draw
     // them (frontend-title.md §0.1): texts through the two-pass text helper, flat squares,
@@ -421,6 +436,7 @@ class Hud {
     glm::vec2 templateViewSize(const ScreenItem &) const; // live frame in screen pixels
     identifywindow::Layout identificationLayout() const;
     void drawIdentification(const identifywindow::Shown &, std::vector<OverlayVertex> &) const;
+    void drawCustomization(const customization::Shown &, std::vector<OverlayVertex> &) const;
     bool hasInterface() const { return guiLoaded; }
     glm::ivec2 iconSize(const std::string &key) const {
         auto it = icons.find(key);
@@ -497,7 +513,7 @@ class Hud {
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
-        plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr;
+        plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr, *customization = nullptr;
         InvPanel bag, vendor, crafting;
         std::vector<plasma::SceneNode *> slots;
         int cellWidth = 40, cellHeight = 40;
