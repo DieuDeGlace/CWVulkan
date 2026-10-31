@@ -7,6 +7,15 @@
 #include <cstring>
 
 namespace guiitem {
+Placement spritePlacement(glm::vec2 origin, glm::vec2 size, int32_t clock) {
+    Placement at;
+    at.screen = origin + size * 0.5f;
+    at.euler = {225, 0, phase(clock)};
+    at.size = size.x * 0.0006f;
+    at.darkPass = true;
+    return at;
+}
+
 float phase(int32_t guiClockMs) {
     return ((float)(guiClockMs % 10000) * 0.0001f) * 360.0f;
 }

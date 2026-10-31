@@ -4740,6 +4740,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     icon = gear.sprite(g);
                 else if (gear.equipped(g).category != 0 && partMatrix[s] >= 0)
                     icon = spriteForPartMatrix(partMatrix[s]);
+                if (nativeInventory) {
+                    inventoryView.slotItems[(size_t)s] = nativeInventory->equipment[(size_t)g];
+                    icon = gear.equipped(g).sprite;
+                } else
+                    inventoryView.slotItems[(size_t)s].reset();
                 inventoryView.slots[s] = icon;
             }
             std::string name = character.name;

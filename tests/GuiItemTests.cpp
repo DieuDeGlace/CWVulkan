@@ -1,5 +1,8 @@
 // Mathematical checks derived from steam-gui-item-icons.md; no game asset is distributed.
 #include "GuiItem.h"
+#include "Assets.h"
+#include "CubModel.h"
+#include "Hud.h"
 #include <bit>
 #include <cmath>
 #include <cstdio>
@@ -17,11 +20,68 @@ int failures = 0;
 bool near(float a, float b) {
     return std::abs(a - b) < 1e-6f;
 }
+void equipmentCallbacks() {
+    Assets assets;
+    if (!assets.locate("")) {
+        std::puts("SKIP equipment callbacks: owner install unavailable");
+        return;
+    }
+    Hud hud;
+    std::string error;
+    GUI_CHECK(hud.load(assets.gameDir(), error));
+    if (!hud.hasPanels())
+        return;
+    Renderer renderer;
+    renderer.initHeadless(RenderSettings{});
+    CubModel cub;
+    cub.sx = cub.sy = cub.sz = 1;
+    cub.rgb = {120, 80, 40};
+    hud.addItemIcon("synthetic-equipment", cub);
+    hud.setGuiScale(1);
+    hud.layout(renderer, {1920, 1080});
+    Hud::Inventory inventory;
+    inventory.sheet.valid = true;
+    inventory.slots[0] = inventory.slots[1] = "synthetic-equipment";
+    auto weapon = nativesaves::makeItem(3, 0, 1);
+    weapon[0x9d] = 1;
+    weapon[0x1d] = uint8_t(-2);
+    inventory.slotItems[0] = weapon;
+    inventory.slotItems[1] = nativesaves::makeItem(9, 0);
+    Hud::State state;
+    state.inventory = &inventory;
+    state.guiClockMs = 2500;
+    std::vector<OverlayVertex> vertices;
+    hud.draw(state, vertices);
+    const auto requests = hud.itemDraws();
+    GUI_CHECK(requests.size() == 2);
+    if (requests.size() == 2) {
+        GUI_CHECK(requests[0].item == weapon && requests[1].item == *inventory.slotItems[1]);
+        GUI_CHECK(requests[0].beforeVertex < requests[1].beforeVertex && requests[1].beforeVertex < vertices.size());
+        GUI_CHECK(requests[0].at.size > 0 && requests[0].at.euler == glm::vec3(225, 0, 90) && requests[0].at.darkPass);
+        inventory.hoverSlot = 0;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 2 && hud.itemDraws()[0].at.size == requests[0].at.size);
+    }
+    inventory.bagShown = false;
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().empty());
+    inventory.bagShown = true;
+    inventory.slotItems[0] = nativesaves::Item{};
+    inventory.slots[1] = "missing-owner-resource";
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().empty());
+    renderer.shutdown();
+}
 } // namespace
 int guiItemTests() {
     using namespace guiitem;
     failures = 0;
+    equipmentCallbacks();
     GUI_CHECK(near(phase(-1), -0.036f) && phase(10000) == 0 && near(phase(2500), 90));
+    const auto sprite = spritePlacement({30.25f, -20.5f}, {100, 40}, 2500);
+    GUI_CHECK(sprite.screen == glm::vec2(80.25f, -0.5f) && near(sprite.size, 0.06f) && sprite.euler == glm::vec3(225, 0, 90) &&
+              sprite.darkPass && sprite.screenDepth == 0);
+    GUI_CHECK(near(spritePlacement({0, 0}, {-100, 40}, -1).size, -0.06f)); // signed width, no absolute/height substitute
     Placement at;
     at.screen = {800, 512};
     at.size = 0.1f;

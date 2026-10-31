@@ -105,6 +105,11 @@ void Hud::buildPanels() {
         plasma::SceneNode *slot = s.instance(i % 2 ? "equipmentboxleft" : "equipmentboxright", panels.inGame);
         if (!slot)
             break;
+        if (slot->widget) {
+            slot->widget = plasma::reboundWidget(*slot->widget);
+            slot->widget->kind = "SpriteWidget";
+            slot->widget->flags |= plasma::WIDGET_DRAW_FIRST;
+        }
         slot->setText("info", latin1(SLOT_INFO[i]));
         panels.slots.push_back(slot);
     }
@@ -198,7 +203,8 @@ float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &
     return at.y + plasmaText(out, style, m);
 }
 
-void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n, glm::vec4 tint, const plasma::Scene *from) const {
+void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n, glm::vec4 tint, const plasma::Scene *from,
+                    const WidgetDraw &drawWidget) const {
     if (!n.visible)
         return;
     const plasma::Scene &in = from ? *from : *scene;
@@ -222,10 +228,19 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
             out.push_back({d.positions[i].x, d.positions[i].y, u, v, (uint8_t)c.r, (uint8_t)c.g, (uint8_t)c.b, (uint8_t)c.a});
         }
     }
-    if (n.onDraw)
-        n.onDraw(const_cast<plasma::SceneNode &>(n));
+    auto callback = [&] {
+        if (n.onDraw)
+            n.onDraw(const_cast<plasma::SceneNode &>(n));
+        if (drawWidget && n.widget)
+            drawWidget(n);
+    };
+    const bool beforeChildren = n.widget && (n.widget->flags & plasma::WIDGET_DRAW_FIRST);
+    if (beforeChildren)
+        callback();
     for (auto &c : n.children)
-        sceneNode(out, *c, tint, from);
+        sceneNode(out, *c, tint, from, drawWidget);
+    if (!beforeChildren)
+        callback();
 }
 
 // The items a widget shows on its tab, in order (the indices into the list).
@@ -406,7 +421,19 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         return;
     placePanels(inv);
     panels.inGame->visible = true;
-    sceneNode(out, *panels.inGame, glm::vec4(1));
+    // SpriteWidget hooks run after the slot's own shape and before its child labels/frame.
+    // Keep the original record: this caller neither adapts gear nor enlarges hovered slots.
+    auto equipment = [&](const plasma::SceneNode &node) {
+        const auto found = std::find(panels.slots.begin(), panels.slots.end(), &node);
+        if (found == panels.slots.end() || !node.widget)
+            return;
+        const size_t index = (size_t)(found - panels.slots.begin());
+        if (index >= inv.slotItems.size() || !inv.slotItems[index] || (*inv.slotItems[index])[0] == 0)
+            return;
+        const auto at = guiitem::spritePlacement(scene->contentPosition(node), scene->screenSize(node), guiClockMs);
+        itemIcon(inv.slots[index], *inv.slotItems[index], at, out.size());
+    };
+    sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, equipment);
     panels.inGame->visible = false;
     drawCharacter(inv, out);
 
@@ -425,6 +452,8 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
     // The equipment slots' items (SpriteWidget: in each box's content).
     plasma::Scene &s = *scene;
     for (size_t k = 0; k < panels.slots.size() && k < 10 && inv.bagShown; k++) {
+        if (inv.slotItems[k])
+            continue; // native items were submitted inside their owner callbacks above
         const plasma::SceneNode &slot = *panels.slots[k];
         auto icon = icons.find(inv.slots[k]);
         if (!slot.widget || icon == icons.end())

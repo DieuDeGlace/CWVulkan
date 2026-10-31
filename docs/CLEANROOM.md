@@ -62,6 +62,11 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- equipment SpriteWidget item calls from `steam-gui-item-icons.md` §10. Original
+  equipment records and owner CUB geometry reach the shared WORLD helper inside
+  each copied widget's draw callback; legacy record-less previews remain separate.
+  Synthetic placement and local owner-tree checks cover sizing, callback order,
+  attributes, visibility and missing resources. No owner assets are distributed.
 - character-menu Button initialization/hover animation, raw custom-widget binding transfer,
   physical-pixel control placement and filtered drag/inertia, from `frontend-characters.md`,
   `plasma-format-and-scene.md` and `steam-character-list-input-and-frame-init.md`.

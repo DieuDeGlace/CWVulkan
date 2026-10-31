@@ -7,6 +7,16 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Native equipment slots now render original item records through the shared3D WORLD
+  helper at each SpriteWidget's owner-tree callback. The copied binding, full-header
+  sizing, signed GUI spin, dark/main passes and spirit attributes remain intact;
+  child labels/frame art follow the item. Hover does not enlarge this caller.
+  Record-less legacy sessions retain compatibility images. Inventory grids,
+  quick buttons, crafting and other item-preview callers still need conversion.
+  Headless owner-tree checks cover record preservation, draw order, empty/missing
+  resources and visibility. All five targets, the full CPU/owner-data suite,
+  40 world and13 GUI Vulkan image checks, shared water and Alpha ordering pass.
+
 - Character-menu controls now initialize and animate the owner's ordinary Button sequences
   instead of showing the saved gray idle pose. Select uses live effective frames and20 physical
   pixels of padding. Card binding is transferred from the copied template; horizontal centering,

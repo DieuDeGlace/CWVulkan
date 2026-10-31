@@ -793,15 +793,18 @@ void Session::readInput(bool poll, double frameMs) {
     if (pointerUp)
         leftHeld = false;
     layoutCharacterFrames();
-    if (!pointerClockStarted) {
-        characterScroll.sampledAt = wallClockMs();
-        pointerClockStarted = true;
-    }
-    // Ordinary input polls run even for a stationary cursor, before the controller route.
-    characterScroll.poll((int32_t)(mouse.y * guiScale), wallClockMs(), charactersShown, leftHeld, (int)size.width, cards);
     capturingAtPoll = capturingControl();
-    s.input->sampleGamepad(s.window, capturingAtPoll, s.controls);
     const bool ui = front() || anyOpen() || s.input->gamepadModal;
+    const bool focused = req.pointer.x >= 0 || glfwGetWindowAttrib(s.window, GLFW_FOCUSED);
+    if (ui && focused && !capturingAtPoll) {
+        if (!pointerClockStarted) {
+            characterScroll.sampledAt = wallClockMs();
+            pointerClockStarted = true;
+        }
+        // Stationary ordinary-UI polls still advance the filter, before the controller route.
+        characterScroll.poll((int32_t)(mouse.y * guiScale), wallClockMs(), charactersShown, leftHeld, (int)size.width, cards);
+    }
+    s.input->sampleGamepad(s.window, capturingAtPoll, s.controls);
     std::vector<gamepadui::Point> points;
     if (!front())
         points = s.input->gamepadNavigationPoints;

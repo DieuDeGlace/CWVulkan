@@ -224,8 +224,10 @@ individual feature documents.
   arithmetic and mount placement. Shrine text uses the float world-update clock,
   separately from GUI bobbing. State, negative-coordinate, timing and owner-data tests
   pass. Broader original-game/controller and map-panel event comparisons remain.
-- [ ] Ordinary WORLD-shader 3D GUI item icons, replacing the existing cached bitmap
-  compatibility previews, and the Ring Menu selector, including its common down-tail
+- [ ] Ordinary WORLD-shader 3D GUI item icons: identification and equipment SpriteWidgets
+  now use the shared helper, including full item records and per-widget callback ordering.
+  Inventory grids, quick buttons, crafting and other previews retain bitmap compatibility
+  paths. The Ring Menu selector, including its common down-tail
   close. Full map-panel controls, GUI capture/poses and layout-callback timing still
   need implementation/comparison.
 - [x] Complete-record inventory slot backend and starter-kit consumer: six native

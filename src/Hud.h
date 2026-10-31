@@ -121,9 +121,10 @@ class Hud {
             float travel[7] = {}; // climbing, swimming, diving (stamina/s), riding, gliding, sailing, light radius (m)
             int artifacts[7] = {};
         } sheet;
-        std::string regionName;                 // the region whose items the equipment tab shows
-        std::vector<Entry> items;   // the list (equipment tab)
-        std::string slots[10];      // icons: L weapon, R weapon, L ring, R ring, neck, shoulder, chest, hands, feet, pet
+        std::string regionName;   // the region whose items the equipment tab shows
+        std::vector<Entry> items; // the list (equipment tab)
+        std::string slots[10];    // icons: L weapon, R weapon, L ring, R ring, neck, shoulder, chest, hands, feet, pet
+        std::array<std::optional<nativesaves::Item>, 10> slotItems; // original SpriteWidget records; absent in legacy sessions
         std::string name, className, specialization;
         int level = 0;
         std::vector<std::pair<std::string, std::string>> stats; // label, value
@@ -491,7 +492,9 @@ class Hud {
     void drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     void drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     // (through `from`, the gui scene when none)
-    void sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n, glm::vec4 tint, const plasma::Scene *from = nullptr) const;
+    using WidgetDraw = std::function<void(const plasma::SceneNode &)>;
+    void sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n, glm::vec4 tint, const plasma::Scene *from = nullptr,
+                   const WidgetDraw &drawWidget = {}) const;
     // The game's pointer (cursor.plx under the engine's root: not scaled by the interface).
     plx::Document cursorDoc;
     std::unique_ptr<plasma::Scene> cursorScene;

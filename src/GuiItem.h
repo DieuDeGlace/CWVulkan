@@ -20,6 +20,7 @@ struct Geometry {
 };
 std::optional<Geometry> geometry(int category, glm::ivec3 allocation, glm::ivec2 viewport, const Placement &);
 float phase(int32_t guiClockMs);
+Placement spritePlacement(glm::vec2 frameOrigin, glm::vec2 frameSize, int32_t guiClockMs);
 float shininess(const nativesaves::Item &);
 glm::vec3 lightDirection();
 // The WORLD values retained between shared item calls after screen-overlay setup.
