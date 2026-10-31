@@ -258,6 +258,7 @@ add_library(engine STATIC
     src/RendererMap.cpp
     src/Audio.cpp
     src/SoundRules.cpp
+    src/TerrainRay.cpp
     src/Mods.cpp
     src/Config.cpp)
 add_dependencies(engine shaders)
@@ -366,7 +367,7 @@ target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
-target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp)
+target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp)
 target_sources(EngineTests PRIVATE tests/HairStyleTests.cpp)
 
 target_sources(engine PRIVATE src/SteamPointLights.cpp)

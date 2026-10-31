@@ -337,3 +337,155 @@ It does not specify a replacement uniform interpolation formula for the
 complete0x2b68e0 body: the network blend-state description is netcode-roles
 §5, and further ability-specific drawn-position/pose overrides inside
 that native body are not newly resolved by this bounded ordering trace.
+
+## 8. Aim override and separate terrain/creature-depth producers
+
+### 8.1 G+0x1e60: verified zero writes, reads and unresolved nonzero source
+
+This is a64-bit field, distinct from selected creature **G+0x1e58**,
+the projected-box byte+0x1e88 and a creature's own ability-target ID+0x1a8.
+
+| Native point | Established operation |
+|---|---|
+| Game constructor0x7ea80, store0x7ee51 | Initialize+0x1e60 to0. |
+|0x8ae50 at0x8c1e2 | Test whether the field is zero before creature-depth aim-point replacement. This consumer does not resolve its ID to construct an aim point. |
+|0x8ae50 at0x8c610 | Clear it to0 after the working aim/look-vector preparation and early ultimate handler, before movement yaw assistance. |
+| Creature/status presentation0xb0680 at0xb1fa5 | Read it; when nonzero and equal to a visited creature ID, its presentation branch shows the separate G+0x308 marker. This is not a producer. |
+
+**A nonzero producer remains unresolved.** Searches of the native exports
+and checked direct-displacement references establish these Game-object
+uses, not a verified nonzero store. Other appearances of literal0x1e60
+include large stack/exception-frame offsets and do not establish a Game
+field writer. Computed-address aliases or arbitrary bulk writes are not
+exhaustively excluded. This is not a proof that no reachable nonzero
+producer exists, and does not justify inventing a lock key or copying the
+selected/charge target into this field.
+
+The frame-entry target reset (§2) does **not** clear+0x1e60. If the outer
+0x8ae50 call is skipped or its early focus/chat/ability exit is taken,
+0x8c610 is not reached and an already nonzero value is retained. If the
+routine reaches the later ordinary-UI gate, the clear has **already**
+happened. Thus a nonzero value suppresses the current reached snap test
+before being cleared, rather than being cleared first and ignored.
+
+### 8.2 Initial working point and the terrain scalar
+
+At0x8ae50 entry, take the stored ray origin **G+0x1dd8/+0x1de0/+0x1de8**
+and forward vector from the stored camera/world basis **G+0x1ec4/+0x1ec8/
++0x1ecc**. These belong to the earlier camera epoch (§3), not a newly
+computed current-frame view. Form an initial fixed point at origin plus
+F×100 blocks; each component multiplies **float F by float100, then
+float65536**, truncates to signed64, then adds the fixed origin.
+
+The terrain scalar is returned by **0x2d1d20 at0x8b26d**, using that
+**look-at origin**, F, and **float limit60** (word0x42700000 at0x42e7b8).
+The two used flag bytes supplied by this caller are0 and1. There is no
+additional caller limit100 on a successful result. When the result is
+≥0, replace the working point by origin plus **F×returned scalar**, with
+the same float multiply-by-distance, then multiply-by65536, signed64
+truncation/add order. Negative or unordered returns retain the initial
+100-block point.
+
+Importantly, the positive-limit helper's return is **min(limit, traveled
+distance)**, not a negative no-hit sentinel; native exit0x2d2216–0x2d2223
+performs that min. With this caller's finite positive60 limit, an otherwise
+clear ray reaching its cap returns60. An immediate blocked/unavailable
+starting cell can return0. The ordinary clear-ray endpoint is therefore
+**look-at+60F**, not a100-block fallback for “no terrain hit.” The helper
+walks through effective types whose type byte AND0xfd is0 (air/water),
+with flag0x40 clear under the supplied flag1; blocked/missing data,
+crossing budget or range terminates the walk. The complete positive-limit
+boundary walk, coordinate widths, candidate quantization, tie order and
+exits are now specified in
+[the positive terrain-ray supplement](steam-positive-terrain-ray.md).
+
+This terrain return is consumed before the creature pass; it is not the
+creature-depth scalar below, and neither is an ID stored at+0x1e58/+0x1e60.
+
+### 8.3 Creature depth is an independent per-pass minimum
+
+The creature pass initializes its local **minimum aim depth to float−1**.
+For each candidate passing the existing eligibility/projection tests,
+set **G+0x1e88 at0x8ba32 before LOS**. Only after the eye-to-step-adjusted
+drawn-point LOS succeeds through **0x2b5d90 at0x8baef** calculate depth
+from the candidate's **raw drawn XYZ+0xb10/+0xb18/+0xb20 minus stored eye
+G+0x1dc0/+0x1dc8/+0x1dd0**. Depth does **not** use the Z adjustment made
+for the LOS endpoint, terrain hit point, look-at origin or final target ID.
+
+Subtract signed64 fixed coordinates first; convert each difference to
+float blocks with exact1/65536. At **0x8bb56–0x8bb9e**, multiply by the
+matching F component and add **Y contribution+X contribution first,
+then Z**, all separate float operations. Call this signed ray parameter
+t. Use F as stored: there is no normalization or division by F's squared
+length in this dot product. Only **t≥0** reaches the associated ranking/depth updates.
+
+Two independent decisions then occur:
+
+* Selected creature **G+0x1e58** uses smallest perpendicular distance to
+  the view ray, computed using the quantized fixed closest point
+  **eye+trunc64(float(F×t)×65536)**. Convert closest-point-minus-drawn
+  differences to float blocks, sum X²+Y² then Z², and take **sqrtf at
+  0x8bca8** before the strict distance comparison. Its ID store is0x8bcc4;
+  do not substitute a raw squared-distance tie test for this rounded distance.
+* Minimum aim depth uses **smallest t**, only when hostility predicate
+  **0x50550(P,candidate)** equals true, or equals false when P's ability
+  **at this producer stage** is0x86/0x87. The hostility/depth update is
+  **0x8bceb–0x8bd01**. Equal t does not replace the previous minimum.
+
+Consequently the nearest-depth creature can differ from the selected
+smallest-perpendicular-distance creature. Box overlap alone does not
+produce a depth: failed LOS or negative t leaves it unchanged. No matching
+candidate leaves depth−1. These values are produced in the creature pass,
+before movement and the early ultimate, and are not reconstructed from a
+later object/item fallback or general-dialog speaker target.
+
+### 8.4 Working aim point, beam retention, ultimate and clear order
+
+After movement/early-return checks and weapon move preparation, test at
+**0x8c1e2**: override+0x1e60 must be0, minimum depth≥0, and P's **then-current
+ability must not be0x33**. If admitted, construct fixed point **Q=stored
+eye+trunc64(float(F×minimum depth)×65536)**. Convert Q minus P's current
+physical fixed position to float blocks, dot with F in **Y+X then Z**
+order, and replace the working aim point only for a **strictly positive**
+dot. Zero/negative leaves the terrain/default point.
+
+There is **no min/comparison with the terrain scalar** here. They have
+different origins (terrain: look-at; depth: eye). Do not clip this depth
+by the terrain-distance number or retrieve a fresh ray for the selected
+creature. A nonzero override skips only this replacement; it does not
+itself identify a point or replace target+0x1e58.
+
+Next, for abilities **0x1f/0x20/0x21/0x22**, compare integer wind-up
+0x4ead0(P,−1) widened to double with **double(current float timer) minus
+the retained double frame ms**. When wind-up is **strictly less**, reuse
+the stored fixed point **P+0xae0/+0xae8/+0xaf0** as the working point;
+otherwise store the current working point there. Equality takes the
+store-current-point path. This beam retention can supersede a newly
+computed terrain/depth point.
+
+Then clear player+0x128 mask0x200 and write its look vector+0x174/+0x178/
++0x17c from working point minus current physical player, converted to
+float blocks. Only **after that** handle the early ultimate edge; only
+**after the ultimate** clear G+0x1e60 at0x8c610 and update the ultimate
+previous byte. Movement yaw assistance follows, using the selected
+creature+0x1e58, and then owner-look/object/item/Use stages (§6). The
+override/box byte are not additional movement-assistance gates. Later
+owner-look or general-speaker writes do not regenerate these earlier
+terrain/depth locals.
+
+The early ultimate does not trigger a second creature-depth filter or
+look-point construction in this pass, even if it changes ability. Late
+strong-attack code can assign a different local **charge candidate ID**
+to **P+0x1a8** when0x60720 succeeds. That is the separate charge selection
+described in player-control §§4.5/4.9, not a producer for Game+0x1e60 and
+not a substitute for the minimum aim depth.
+
+Finite dataflow references, not native captures: let F=(0,0,1), stored
+eye Z=0, stored look-at Z=8 blocks and player physical Z=7. A clear
+terrain scalar60 gives initial working Z=68. An eligible minimum creature
+depth20, override0 and ability not0x33 replace it by **eye Z+20=20**, with
+positive player-relative dot13. An already nonzero override instead keeps
+68 for this test, then is cleared if0x8c610 is reached. Box hit with failed
+LOS can leave box1, depth−1 and target0; it does not create a depth from a
+later speaker target. The supplied scalar/eligibility assumptions define
+these arithmetic examples, not a fabricated gameplay producer of override.

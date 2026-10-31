@@ -24,9 +24,19 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace nativecontrol {
+
+struct Aim {
+    int64_t rayOrigin[3] = {0, 0, 0}; // where the aiming ray starts
+    int64_t eye[3] = {0, 0, 0};       // the camera's eye
+    float forward[3] = {0, 0, 1};     // the view direction F (one long)
+    float wallDistance = -1;          // how far the ray gets through the blocks (< 0: no hit)
+    float aimDepth = -1;              // the nearest hostile creature along F (< 0: none)
+    bool override = false;            // the aim is not pulled onto a creature
+};
 
 // This frame's keys and camera (spec 1.1, 1.2).
 struct Input {
@@ -50,6 +60,8 @@ struct Input {
     bool ordinaryUi = false;      // gates late attacks/class/dodge, not movement or ultimate (dialogue spec 12)
     // From the frame's targeting (spec 4.5): the aim point (aimPoint) and the creature the
     // strong attack charges at.
+    // Cached terrain/depth inputs; beginFrame computes their point after movement.
+    std::optional<Aim> nativeAim;
     bool hasAim = false;
     int64_t aimAt[3] = {0, 0, 0};
     int64_t chargeTarget = 0;
@@ -94,14 +106,6 @@ void frame(const Input &in, State &state, nativeai::Creature &player, double dt,
 void attack(const Input &in, State &state, nativeai::Creature &player);
 
 // The aim point (spec 4.5 steps 2 and 3).
-struct Aim {
-    int64_t rayOrigin[3] = {0, 0, 0}; // where the aiming ray starts
-    int64_t eye[3] = {0, 0, 0};       // the camera's eye
-    float forward[3] = {0, 0, 1};     // the view direction F (one long)
-    float wallDistance = -1;          // how far the ray gets through the blocks (< 0: no hit)
-    float aimDepth = -1;              // the nearest hostile creature along F (< 0: none)
-    bool override = false;            // the aim is not pulled onto a creature
-};
 void aimPoint(const Aim &aim, const uint8_t *player, int64_t out[3]);
 
 // The gamepad's aim assist (spec 4.6): the yaw the camera turns toward, from the one it

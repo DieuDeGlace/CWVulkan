@@ -8,6 +8,7 @@
 #include "PyroCreatures.h"
 #include "GameMath.h"
 #include "CameraMotion.h"
+#include "TerrainRay.h"
 #include "Body.h"
 #include "DeathEffects.h"
 #include "Speech.h"
@@ -1603,6 +1604,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     struct Loot {
         double asked = -10; // when this player last asked its host for it (a pick-up interaction)
         glm::vec3 at;
+        std::optional<useprompt::FixedPoint> fixedPosition; // retained native ground tuple
         double age = 0;
         int gold = 0;
         bool hasItem = false;
@@ -3198,6 +3200,28 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
     float viewYaw = player.yaw, viewPitch = player.pitch, viewZoom = player.zoom;
+    auto retainUseCamera = [&](glm::vec3 eye, glm::vec3 target) {
+        constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
+        const auto basis =
+            cameramotion::basis(double(viewPitch) * DEGREES_PER_RADIAN + 90.0, 0, double(viewYaw) * DEGREES_PER_RADIAN - 90.0);
+        useCamera.eye = eye;
+        useCamera.rayOrigin = target;
+        useCamera.forward = basis[2];
+        useCamera.right = -basis[0];
+        useCamera.up = basis[1];
+        const auto screen = renderer.screenSize();
+        useCamera.tanHalfHeight = std::tan(glm::radians(renderSettings.fov) * 0.5f);
+        useCamera.tanHalfWidth = useCamera.tanHalfHeight * (screen.height ? float(screen.width) / float(screen.height) : 1.0f);
+        useCamera.fixedEye.emplace();
+        useCamera.fixedRayOrigin.emplace();
+        toUnits(eye, useCamera.fixedEye->data());
+        toUnits(target, useCamera.fixedRayOrigin->data());
+    };
+    // Startup bridge until the frontend and gameplay share the full fixed camera state.
+    const glm::vec3 initialFocus = player.position + glm::vec3(0, 0, 1.6f);
+    retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
+                                                        std::sin(viewPitch)),
+                    initialFocus);
 
     auto submitChat = [&](const std::u16string &line) {
         const auto command = chatcommand::parse(line);
@@ -3607,17 +3631,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         lastX = mx;
         lastY = my;
-        const GamepadCamera padTurn = gamepadCamera(gameInput.gamepad().look, frameMs);
-        constexpr double PAD_RADIANS = 0.017453292519943295;
-        if (nativeCustomization.edit.open)
-            nativeCustomization.rotatePad(padTurn.pitch, padTurn.yaw);
-        else if (upgrade.open) {
-            upgradeView.yawDegrees = (float)((double)upgradeView.yawDegrees + padTurn.yaw);
-            upgradeView.pitchDegrees = (float)((double)upgradeView.pitchDegrees + padTurn.pitch);
-        } else {
-            player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
-            player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
-        }
         std::vector<int> wheelInventoryTargets;
         wheelInventoryTargets.reserve(input.wheelEvents.size());
         for (const auto &event : input.wheelEvents) {
@@ -3739,6 +3752,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             spawned.simulate(extractedWorld, ms);
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
         }
+        useprompt::Scene nativeUseScene;
+        useprompt::CreatureTargets nativeCreatureTargets;
+        int64_t frameTargetCreature = 0;
+        bool frameProjectedCreatureBox = false;
         const bool nativeMove = nativePlayer && !player.fly;
         bool nativeControlPrepared = false;
         glm::vec3 before = player.position;
@@ -3805,50 +3822,65 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             controlInput.attack = gameInput.held(gameoptions::ATTACK) || gameInput.pressed(gameoptions::ATTACK);
             controlInput.strongAttack = gameInput.held(gameoptions::SPECIAL_ATTACK) || gameInput.pressed(gameoptions::SPECIAL_ATTACK);
             controlInput.attack = controlInput.attack || (autoAttack && std::fmod(time, 1.2) < 0.15);
-            {
-                // Where the player looks, as the game's input finds it: along the camera's
-                // ray from its focus to the first solid block within 60 (100 blocks out
-                // without one), or the nearest monster the crosshair is on, if that is in
-                // front of the player. (CubeVulkan's camera; the crosshair's test on a
-                // creature is a block around its middle, not the game's projected box.)
-                const glm::vec3 focus = player.position + glm::vec3(0, 0, 1.6f);
-                const glm::vec3 dir = -glm::vec3(std::cos(player.yaw) * std::cos(player.pitch),
-                                                 std::sin(player.yaw) * std::cos(player.pitch), std::sin(player.pitch));
-                const glm::vec3 eye = focus - dir * player.zoom;
-                float reach = 0;
-                while (reach < 60 && !extractedWorld.solidAt(focus.x + dir.x * reach, focus.y + dir.y * reach, focus.z + dir.z * reach))
-                    reach += .25f;
-                float attackAlong = -1, chargeDistance = -1;
-                controlInput.chargeTarget = 0;
-                for (const SpawnedCreatures::Target &c : spawned.targets(extractedWorld, player.position, 100)) {
-                    const glm::vec3 middle = c.at; // (its record: a block above its feet, about its middle)
-                    const float along = glm::dot(middle - eye, dir);
-                    if (along < 0 || glm::length(eye + dir * along - middle) > 1.0f)
-                        continue; // not under the crosshair
-                    // The strong attack's charge target: the first monster, or any nearer one.
-                    const float closeness = glm::dot(c.at - player.position, c.at - player.position);
-                    if ((c.hostile && controlInput.chargeTarget == 0) || chargeDistance < 0 || closeness < chargeDistance)
-                        chargeDistance = closeness, controlInput.chargeTarget = c.id;
-                    if (c.hostile && (attackAlong < 0 || along < attackAlong))
-                        attackAlong = along;
-                }
-                auto toDots = [&](glm::vec3 p, int64_t out[3]) {
-                    out[0] = (int64_t)std::llround((double)p.x * 65536) + extractedWorld.originDotsX();
-                    out[1] = (int64_t)std::llround((double)p.y * 65536) + extractedWorld.originDotsY();
-                    out[2] = (int64_t)std::llround(((double)p.z + SpawnedCreatures::NATIVE_FEET - ExtractedWorld::Z_OFFSET) * 65536);
+            if (auto *me = spawned.localPlayer();
+                me && me->record[worldgen::creature::ABILITY] != 0x9c && me->record[worldgen::creature::ABILITY] != 0x9d) {
+                auto localPosition = [&](const uint8_t *record, size_t offset) {
+                    int64_t fixed[3];
+                    std::memcpy(fixed, record + offset, sizeof fixed);
+                    return extractedWorld.toLocal(fixed);
                 };
-                nativecontrol::Aim aim;
-                toDots(focus, aim.rayOrigin);
-                toDots(eye, aim.eye);
-                aim.forward[0] = dir.x, aim.forward[1] = dir.y, aim.forward[2] = dir.z;
-                aim.wallDistance = reach < 60 ? reach : -1.0f;
-                aim.aimDepth = attackAlong;
-                controlInput.hasAim = false;
-                if (const nativeai::Creature *me = spawned.localPlayer()) {
-                    nativecontrol::aimPoint(aim, me->record, controlInput.aimAt);
-                    controlInput.hasAim = true;
+                nativeUseScene.player = me->record;
+                nativeUseScene.playerAt = localPosition(me->record, worldgen::creature::POSITION);
+                nativeUseScene.abilityDuration = spawned.playerAbilityDuration();
+                nativeUseScene.camera = useCamera;
+                spawned.forEach([&](const uint8_t *record) {
+                    nativeUseScene.creatures.push_back({record, localPosition(record, 0xb10), nativerules::hostile(me->record, record)});
+                });
+                nativeUseScene.creatureById = [&](int64_t id) -> const uint8_t * {
+                    return id == spawned.playerId() ? spawned.playerRecord() : spawned.record(id);
+                };
+                nativeUseScene.sight = [&](glm::vec3 from, glm::vec3 to, float limit) {
+                    return useprompt::clearLine(from, to, limit,
+                                                [&](int x, int y, int z) { return extractedWorld.solidAt(x + 0.5, y + 0.5, z + 0.5); });
+                };
+                terrainray::World rayWorld;
+                rayWorld.hasZone = [&](int32_t x, int32_t y) { return extractedWorld.gameZoneLoaded(x, y); };
+                rayWorld.block = [&](int32_t x, int32_t y, int32_t z) {
+                    const auto block = extractedWorld.gameBlock(x, y, z);
+                    return terrainray::Cell{block[4], block[5]};
+                };
+                nativeUseScene.fixedSight = [rayWorld](const auto &from, const auto &to, float limit) {
+                    return terrainray::visible(rayWorld, from, to, limit, terrainray::Material::TypeOnly);
+                };
+                const float reach =
+                    terrainray::trace(rayWorld, *useCamera.fixedRayOrigin, {useCamera.forward.x, useCamera.forward.y, useCamera.forward.z},
+                                      60.0f, terrainray::Material::HonorFlag40);
+                nativeCreatureTargets = useprompt::chooseCreatures(nativeUseScene);
+                frameTargetCreature = nativeCreatureTargets.creature;
+                frameProjectedCreatureBox = nativeCreatureTargets.overCreature;
+
+                // Strong-charge selection remains separate from the selected creature and
+                // minimum aim depth. Its remaining candidate details still need parity work.
+                float chargeDistance = -1;
+                const glm::vec3 eye = useCamera.eye, dir = useCamera.forward;
+                for (const auto &candidate : spawned.targets(extractedWorld, player.position, 100)) {
+                    const float along = glm::dot(candidate.at - eye, dir);
+                    if (along < 0 || glm::length(eye + dir * along - candidate.at) > 1.0f)
+                        continue;
+                    const float distance = glm::dot(candidate.at - player.position, candidate.at - player.position);
+                    if ((candidate.hostile && controlInput.chargeTarget == 0) || chargeDistance < 0 || distance < chargeDistance)
+                        chargeDistance = distance, controlInput.chargeTarget = candidate.id;
                 }
-                crosshairCreature = controlInput.chargeTarget;
+                nativecontrol::Aim aim;
+                std::copy(useCamera.fixedRayOrigin->begin(), useCamera.fixedRayOrigin->end(), aim.rayOrigin);
+                std::copy(useCamera.fixedEye->begin(), useCamera.fixedEye->end(), aim.eye);
+                aim.forward[0] = dir.x;
+                aim.forward[1] = dir.y;
+                aim.forward[2] = dir.z;
+                aim.wallDistance = reach;
+                aim.aimDepth = nativeCreatureTargets.aimDepth;
+                controlInput.nativeAim = aim;
+                crosshairCreature = frameTargetCreature;
             }
             if (autoDodge) // the dodge key, 0.1 s every 3 s, between --auto-walk's jumps
                 controlInput.dodge = controlInput.dodge || (std::fmod(time, 3.0) > 1.3 && std::fmod(time, 3.0) < 1.4);
@@ -3878,8 +3910,24 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 for (int component = 0; component < 3; ++component)
                     controlInput.camera[axis][component] = cameraBasis[axis][component];
             nativeControlPrepared = spawned.prepareControl(controlInput, gamemath::frameMilliseconds(frameMs));
-            if (nativeControlPrepared)
-                spawned.controlOwnerLook(); // assistance belongs before this stage when integrated
+            if (nativeControlPrepared) {
+                nativecontrol::AimAssist assist;
+                assist.player = spawned.playerRecord();
+                assist.target = frameTargetCreature ? spawned.record(frameTargetCreature) : nullptr;
+                assist.stickX = gameInput.gamepad().movement.x;
+                assist.stickY = gameInput.gamepad().movement.y;
+                std::copy(useCamera.fixedRayOrigin->begin(), useCamera.fixedRayOrigin->end(), assist.rayOrigin);
+                assist.forward[0] = useCamera.forward.x;
+                assist.forward[1] = useCamera.forward.y;
+                assist.forward[2] = useCamera.forward.z;
+                assist.cameraYaw = yawDeg;
+                assist.turnYaw = double(player.yaw) * DEGREES_PER_RADIAN - 90.0;
+                assist.dt = gamemath::frameMilliseconds(frameMs);
+                const double assistedYaw = nativecontrol::aimAssist(assist);
+                if (assistedYaw != assist.turnYaw)
+                    player.yaw = float((assistedYaw + 90.0) * 0.017453292519943295);
+                spawned.controlOwnerLook();
+            }
             glm::vec3 at, velocity;
             float facing;
             bool onGround;
@@ -5176,17 +5224,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         count += c.count;
                 return count;
             };
-            useprompt::Scene scene;
-            scene.player = me->record;
+            useprompt::Scene scene = std::move(nativeUseScene);
             scene.playerAt = placeOf(me->record);
             scene.abilityDuration = spawned.playerAbilityDuration();
-            scene.camera = useCamera;
-            spawned.forEach([&](const uint8_t *r) { scene.creatures.push_back({r, placeOf(r), nativerules::hostile(me->record, r)}); });
-            scene.creatureById = [&](int64_t id) -> const uint8_t * { return spawned.record(id); };
-            scene.sight = [&](glm::vec3 from, glm::vec3 to, float limit) {
-                return useprompt::clearLine(from, to, limit,
-                                            [&](int x, int y, int z) { return extractedWorld.solidAt(x + 0.5, y + 0.5, z + 0.5); });
-            };
             scene.useDown = itemInputHeld(gameoptions::USE) || std::exchange(autoUsePress, false);
             scene.dodgeHeld = gameInput.held(gameoptions::DODGE);
             scene.walkHeld = gameInput.held(gameoptions::WALK);
@@ -5195,12 +5235,19 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
             // The static objects of the zones within 8 blocks of the player (zone +0x60), each
             // as the world keeps it now: a door shut or open, a seat's user, an item given.
-            const double blockX = (double)scene.playerAt.x + (double)(extractedWorld.originDotsX() >> 16);
-            const double blockY = (double)scene.playerAt.y + (double)(extractedWorld.originDotsY() >> 16);
-            auto zoneOf = [](double block) { return (int32_t)std::floor(block / 64.0); };
+            useprompt::FixedPoint playerFixed;
+            std::memcpy(playerFixed.data(), me->record + worldgen::creature::POSITION, sizeof playerFixed);
+            auto zoneOf = [](int64_t fixed) {
+                const int32_t block = terrainray::blockCoordinate(fixed);
+                return block / 64 - (block < 0 && block % 64 != 0 ? 1 : 0);
+            };
+            const int32_t minZoneX = zoneOf(gamemath::subtractFixed(playerFixed[0], 8 * 65536));
+            const int32_t maxZoneX = zoneOf(gamemath::addFixed(playerFixed[0], 8 * 65536));
+            const int32_t minZoneY = zoneOf(gamemath::subtractFixed(playerFixed[1], 8 * 65536));
+            const int32_t maxZoneY = zoneOf(gamemath::addFixed(playerFixed[1], 8 * 65536));
             std::vector<worldgen::ZoneObject> sceneObjects; // beside scene.objects
-            for (int32_t zx = zoneOf(blockX - 8); zx <= zoneOf(blockX + 8); zx++)
-                for (int32_t zy = zoneOf(blockY - 8); zy <= zoneOf(blockY + 8); zy++) {
+            for (int32_t zx = minZoneX; zx <= maxZoneX; zx++)
+                for (int32_t zy = minZoneY; zy <= maxZoneY; zy++) {
                     std::vector<worldgen::ZoneObject> objects;
                     if (!extractedWorld.gameObjects(zx, zy, objects))
                         continue;
@@ -5210,7 +5257,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         useprompt::Object u;
                         const int64_t dots[3] = {o.x, o.y, o.z};
                         u.at = extractedWorld.toLocal(dots);
-                        if (glm::dot(u.at - scene.playerAt, u.at - scene.playerAt) > 16.0f)
+                        u.fixedPosition = useprompt::FixedPoint{o.x, o.y, o.z};
+                        if (gamemath::fixedDistanceSquared(playerFixed.data(), dots) > 16.0f)
                             continue; // (beyond the use key's 4 blocks)
                         u.zoneX = zx, u.zoneY = zy, u.index = (int32_t)i, u.type = o.type;
                         const worldgen::ObjectSize base = worldgen::objectSize(o.type);
@@ -5245,9 +5293,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             // The items lying within 4 blocks (zone +0x30, and what deaths dropped).
             std::vector<Loot *> sceneLoot; // beside scene.groundItems
             for (Loot &l : loot) {
-                if (!l.onGround || !l.hasItem || glm::dot(l.at - scene.playerAt, l.at - scene.playerAt) > 16.0f)
+                if (!l.onGround || !l.hasItem)
+                    continue;
+                const float distance = l.fixedPosition ? gamemath::fixedDistanceSquared(playerFixed.data(), l.fixedPosition->data())
+                                                       : glm::dot(l.at - scene.playerAt, l.at - scene.playerAt);
+                if (distance > 16.0f)
                     continue;
                 useprompt::GroundItem g;
+                g.fixedPosition = l.fixedPosition;
                 g.type = l.item.category, g.subtype = l.item.id;
                 g.quantity = l.count;
                 g.at = l.at;
@@ -5288,7 +5341,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
             if (!mapOpen)
                 flightmasterMode = false; // Early frame clear; an admitted flight-master use can reopen it below.
-            const useprompt::Targets targets = useprompt::chooseTargets(scene);
+            const useprompt::Targets targets = useprompt::chooseTargets(scene, nativeCreatureTargets);
+            frameTargetCreature = targets.creature;
+            crosshairCreature = frameTargetCreature;
             if (nativeInventory && targets.groundItem >= 0 && (size_t)targets.groundItem < sceneLoot.size()) {
                 const auto key = sceneLoot[(size_t)targets.groundItem]->zoneItem;
                 if (key[0] != INT_MIN)
@@ -5931,6 +5986,47 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!serverMode) // a dedicated server draws nothing, so it streams no meshes
             world.update(player.position);
 
+        if (generalDialogue.visible()) {
+            frameTargetCreature = generalDialogue.speaker(); // including zero/missing IDs
+            const auto *speaker = frameTargetCreature == spawned.playerId() ? spawned.playerRecord() : spawned.record(frameTargetCreature);
+            if (auto *me = spawned.localPlayer(); me && speaker) {
+                for (int axis = 0; axis < 3; ++axis) {
+                    int64_t from, to;
+                    std::memcpy(&from, me->record + worldgen::creature::POSITION + axis * 8, sizeof from);
+                    std::memcpy(&to, speaker + worldgen::creature::POSITION + axis * 8, sizeof to);
+                    const float delta = gamemath::fixedBlocksBetween(to, from);
+                    std::memcpy(me->record + 0x174 + axis * 4, &delta, sizeof delta);
+                }
+                uint16_t flags;
+                std::memcpy(&flags, me->record + 0x128, sizeof flags);
+                flags |= 4;
+                std::memcpy(me->record + 0x128, &flags, sizeof flags);
+            }
+            crosshairCreature = frameTargetCreature;
+        }
+        float trackingDistance = -1;
+        if (frameProjectedCreatureBox && frameTargetCreature) {
+            const auto *target = frameTargetCreature == spawned.playerId() ? spawned.playerRecord() : spawned.record(frameTargetCreature);
+            float health = 0;
+            if (target)
+                std::memcpy(&health, target + worldgen::creature::HEALTH, sizeof health);
+            if (target && health > 0) {
+                int64_t drawn[3];
+                std::memcpy(drawn, target + 0xb10, sizeof drawn);
+                trackingDistance = std::sqrt(gamemath::fixedDistanceSquared(drawn, useCamera.fixedEye->data()));
+            }
+        }
+        const GamepadCamera padTurn = gamepadCamera(gameInput.gamepad().look, frameMs, trackingDistance);
+        constexpr double PAD_RADIANS = 0.017453292519943295;
+        if (nativeCustomization.edit.open)
+            nativeCustomization.rotatePad(padTurn.pitch, padTurn.yaw);
+        else if (upgrade.open && !nativePlayer) {
+            upgradeView.yawDegrees = (float)((double)upgradeView.yawDegrees + padTurn.yaw);
+            upgradeView.pitchDegrees = (float)((double)upgradeView.pitchDegrees + padTurn.pitch);
+        } else {
+            player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
+            player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
+        }
         { // Gameplay-camera §2: capped wall interval, with independent orbit-distance smoothing.
             const float s = gamemath::blendFactor(gamemath::frameMilliseconds(frameMs), (float)gameOptions.smoothingConstant());
             viewYaw += (player.yaw - viewYaw) * s;
@@ -5958,15 +6054,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             toUnits(eye, ear);
             audio.setListener(ear);
         }
-        if (glm::length(target - eye) > 1e-4f) { // the view the use key's crosshair is in (next frame)
-            const VkExtent2D screen = renderer.screenSize();
-            useCamera.eye = eye;
-            useCamera.forward = glm::normalize(target - eye);
-            useCamera.right = glm::normalize(glm::cross(useCamera.forward, glm::vec3(0, 0, 1)));
-            useCamera.up = glm::cross(useCamera.right, useCamera.forward);
-            useCamera.tanHalfHeight = std::tan(glm::radians(renderSettings.fov) * 0.5f);
-            useCamera.tanHalfWidth = useCamera.tanHalfHeight * (screen.height ? (float)screen.width / (float)screen.height : 1.0f);
-        }
+        retainUseCamera(eye, target);
         Lighting lighting = lightingAt(hour, dayNight, regionLook(columnAt(player.position.x, player.position.y)));
         if (mode == progression::Mode::Pyro && !session.started())
             session.visitLocalRegion(regionHere(), playerLevel);
@@ -6233,6 +6321,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 const Gear::Item it = groundLoot(g, at, rotation, dropMs, level, owner == LOCAL_PLAYER);
                 Loot &l = loot.back();
                 std::memcpy(l.raw.data(), g + ITEM, l.raw.size());
+                l.fixedPosition.emplace();
+                std::memcpy(l.fixedPosition->data(), g + POSITION, sizeof(*l.fixedPosition));
                 l.notice = true;
                 l.timerMs = timer, l.flags = g[FLAGS], l.count = count, l.noticeType = g[ITEM];
                 return it;

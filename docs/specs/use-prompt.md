@@ -218,13 +218,58 @@ float at C +0x990. If P fails the visibility test 0xe08c0, C is skipped. Otherwi
      sight test passes when the two points are closer than 0.01 blocks. It fails when they
      are farther apart than the limit. Otherwise it casts a ray through the blocks (0x2d1d20)
      and passes if nothing is hit before the full distance minus 0.01.
-  3. If there is line of sight: t = (P − camera) · F. If t ≥ 0, take the distance from P to the
+  3. If there is line of sight: use C's **unadjusted raw drawn tuple** D for
+     depth/ranking: t = (D − camera) · F. If t ≥ 0, take the distance from D to the
      point camera + t·F (the perpendicular distance to the view ray). If it is the smallest
      so far, the **targeted creature** (+0x1e58) becomes C.
 
 So among the creatures under the crosshair, the one closest to the centre line of the view
 wins. There is no limit on its distance from the player here; each prompt has its own range
 (§3.6).
+
+#### 2.2.1 Exact fixed endpoint of creature LOS
+
+Stable bounded native-only clarification of **0x8baef**, after the
+crosshair-box flag write. Read the candidate's stored **float32 step
+offset+0x990** at0x8ba4e. Flip its float sign bit at0x8ba56, using
+mask0x80000000 from0x4acb30. Multiply that negated float by
+**float65536** at0x8ba6d. Truncate this **float32 product toward zero to
+signed64**, instruction0x8ba71. There is no double product, floor,
+signed32 narrowing or conversion of the absolute drawn Z to float.
+
+The fixed endpoint copies all three full signed64 drawn components
+**+0xb10/+0xb18/+0xb20**. X and Y remain unchanged. Add the converted
+signed64 offset to drawn Z at **0x8bab7**, retaining the low64 bits.
+For finite representable offset conversions this is also expressible
+as drawnZ minus the toward-zero signed64 conversion of
+float32(stepOffset times65536). The actual native sequence negates
+the float first and then adds its converted offset; an overflow-checked
+or wider coordinate expression must not alter its low64 result.
+
+The LOS start is the retained full fixed eye tuple
+**Game+0x1dc0/+0x1dc8/+0x1dd0**, not the look-at point or player physical
+position. The helper0x2b5d90 receives float maximum**256**,
+word0x43800000 at0x42e5c4, and flag**0**, from
+**0x8bac1–0x8baef**. It subtracts fixed endpoint/start components in64
+bits before its conversions; no float absolute-position subtraction
+is introduced here. Its precheck, float norm, three divisions and
+L−float0.01 acceptance are the same arithmetic detailed in
+[camera §6.4](steam-gameplay-camera.md#64-complete-visibility-guard0x2b5c00-for-the-eight-eye-corners),
+but its terrain helper is0x2d1d20 with flags0,0. Therefore this LOS
+does **not** test block flag0x40.
+
+Derived example, not a runtime capture: drawnZ655360 and step-offset
+word0x3dcccccd (float0.1) produce negative scaled float
+**−6553.60009765625**, truncated offset**−6553**, and fixed endpoint
+Z**648807**. Replacing this with subtraction in absolute float block
+coordinates can produce a different fixed endpoint.
+
+The adjusted endpoint belongs to this LOS call. After it succeeds,
+depth and perpendicular ranking use the **unadjusted** drawn tuple,
+as corrected above and specified precisely in
+[frame-order §8.3](steam-gameplay-frame-order.md#83-creature-depth-is-an-independent-per-pass-minimum).
+This supplement does not replace the earlier projection/box arithmetic
+with the LOS endpoint-conversion sequence.
 
 ### 2.3 Static objects
 
@@ -288,6 +333,48 @@ Let d² = d²(player position, G's position). If d² > 16, skip G. Then:
       −0.5 (0x42e80c) of its size. Apply the crosshair test of §2.2. If it passes: the
       **targeted ground item** becomes (zone x, zone y, i), the targeted creature becomes 0,
       the targeted object becomes empty, and c² becomes the best camera distance.
+
+#### 2.4.1 Complete direct LOS call inventory inside0x8ae50
+
+There are **four direct0x2b5d90 call sites** in this routine. Every one
+supplies flag0, so each uses0x2d1d20 with flags0,0: effective type0/2
+is passable and flag0x40 is ignored. This statement is restricted to
+these LOS calls. The distinct earlier direct aim ray at0x8b26d supplies
+flags0,1 and **does** honor0x40; see
+[the positive terrain-ray contract](steam-positive-terrain-ray.md).
+
+| Call RVA | Reached role | Fixed start | Fixed end | Float maximum |
+|---|---|---|---|---|
+|0x8baef|Creature crosshair LOS|Stored eye Game+0x1dc0 tuple|Candidate drawn tuple with the §2.2.1 Z adjustment|256, constant0x42e5c4|
+|0x8cfbb|Nearby static-object candidate replacing the previous nearby object|Current local player's physical tuple Creature+0x10|Object center described below|8, constant0x4aca30|
+|0x8d092|Static-object crosshair candidate after the camera-distance gate|Current local player's physical tuple Creature+0x10|Separately rebuilt object center described below|8, constant0x4aca30|
+|0x8d923|Ground-item crosshair candidate after the camera-distance gate|Stored eye Game+0x1dc0 tuple|Ground record's full fixed tuple+0xa0/+0xa8/+0xb0|200, constant0x42e5c0|
+
+For each object call, obtain the third float extent H returned by
+**0x13a960(object)**. Multiply H by float0.5, then multiply that rounded
+float by float65536; truncate toward zero to signed64. Add the result
+to the object's full signed64 Z at+0x18, retaining low64 bits. Its full
+fixed X/Y at+0x08/+0x10 remain unchanged. This is half-height above the
+object origin, with no owner-model occupied-geometry center substitution.
+The two independently reached constructions are
+**0x8cf27–0x8cf8f** and **0x8cffe–0x8d066**. The0.5 constant is0x4ac964;
+the8 limit is loaded at0x8ccb1. These two calls can both occur for the
+same object when their separate candidate gates pass.
+
+The ground call uses the position tuple directly, without a model-center,
+half-height, drop-rotation, bob or step correction. Its stored eye start
+is selected at0x8d7d6 and the200 constant is loaded at0x8d435. Model
+lookup and the ground model's crosshair-box construction happen only
+after the LOS succeeds; they do not change that already tested endpoint.
+
+The later fallback selection in §2.5 reuses the retained nearby candidates;
+it makes **no additional LOS call or fresh terrain ray**. In particular,
+the nearby creature and nearby ground-item selection paths do not gain
+the crosshair paths' LOS requirement merely because they later become
+fallback targets. A nearby object's retained eligibility already includes
+its0x8cfbb test. This is not a new general visibility guarantee for every
+eventual target. Other routines/callers and nonfinite conversion cases
+are outside this bounded call-site audit.
 
 ### 2.5 Fallbacks and the dead player
 

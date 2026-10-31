@@ -158,7 +158,10 @@ individual feature documents.
   ownership/enabled state, Button copy/group/press semantics and resize propagation
   have synthetic regressions; scrollbar sizing retains its loaded dynamic class.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
-  hooks, native frame order, aim integration and hardware comparisons remain. Large region
+  hooks, full camera/focus integration, strong-charge candidates and hardware
+  comparisons remain. Creature selection now runs once before early control;
+  separate minimum depth, post-movement aim, early assistance, later speaker
+  override and manual-stick slowdown have bounded stage regressions. Large region
   lists now follow the verified key-only insertion/partition/heap order, including
   signed32 distance wrapping. Tests cover the independently derived33-choice tie
   fixture, heap ties and finite-key ordering without inventing a stable tie-break.
@@ -407,8 +410,16 @@ individual feature documents.
   movement/ultimate and owner-look with Use, then pet, Quick Item and late attacks.
   Stage tokens preserve skipped edge histories, and the late ordinary-UI gate is
   sampled fresh. Ownership/sound hooks, local lookup and ultimate buff forwarding
-  have actual-facade regressions. Shared focused-Widget admission, creature/aim
-  selection, assistance/manual-stick order and camera-state integration remain open.
+  have actual-facade regressions. Creature targeting now retains one early
+  selection/depth/box result through the later object/item pass. Assistance follows
+  ultimate processing and manual-stick slowdown follows live speaker override.
+  Aim metadata is evaluated after movement rather than before the admitted stage.
+  The60-block aim ray now follows fixed native stepping, missing-zone/budget order
+  and flag0x40 rules. Target LOS has exact fixed endpoints, a double range check,
+  independently normalized float direction and native epsilon comparison; it
+  ignores0x40, unlike the aim ray. Derived tests cover boundaries, fixed low bits,
+  mode differences and fallbacks without extra LOS. Strong-charge candidates,
+  shared focused-Widget admission and full camera-state integration remain open.
   Orbit-distance smoothing now uses its separate float 0.004 coefficient in
   both frontend and gameplay; the camera uses capped wall time rather than the
   simulation's 100-ms limit. Explosion notices use physical-player squared
@@ -416,7 +427,7 @@ individual feature documents.
   translates the render view, CPU clip view and speech projection while eye/aim
   remain unshaken. Focused float references and two Vulkan projection cases cover
   these bounded consumers. Full double-degree state, fixed look-at/eye updates,
-  terrain obstruction and input/targeting order remain open. Shake reads the
+  eight-corner camera obstruction and remaining input/GUI integration stay open. Shake reads the
   client world's float simulation clock after its substeps. Ordinary world frames
   now consume the retained capped double interval, 16-ms steps and a narrowed
   float residual without whole-ms carry; the final zero step is not skipped.

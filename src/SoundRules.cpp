@@ -3,7 +3,6 @@
 #include "GameMath.h"
 
 #include <algorithm>
-#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -42,13 +41,7 @@ bool isExplosion(int number) {
 }
 
 float distanceSquared(const int64_t a[3], const int64_t b[3]) {
-    float squared = 0.0f;
-    for (int axis = 0; axis < 3; ++axis) {
-        const int64_t fixed = std::bit_cast<int64_t>(uint64_t(a[axis]) - uint64_t(b[axis]));
-        const float blocks = float(fixed) * (1.0f / 65536.0f);
-        squared += blocks * blocks;
-    }
-    return squared;
+    return gamemath::fixedDistanceSquared(a, b);
 }
 
 float explosionShake(float distanceSquaredBlocks) {

@@ -856,7 +856,14 @@ bool beginFrame(const Input &in, State &st, nativeai::Creature &player, double d
     if (!lasting(c.b(ABILITY)) && !in.strongAttack && finished(c, hasBuff) && c.f(ABILITY_TIME) > LONG_FINISHED_MS)
         c.b(ABILITY) = 0;
 
-    aimAndLook(in, player, dt, hasBuff);
+    if (in.nativeAim) {
+        Input prepared = in;
+        aimPoint(*in.nativeAim, player.record, prepared.aimAt);
+        prepared.hasAim = true;
+        aimAndLook(prepared, player, dt, hasBuff);
+    } else {
+        aimAndLook(in, player, dt, hasBuff);
+    }
     specialSkillKey(in, st, player, world);
 
     return true;

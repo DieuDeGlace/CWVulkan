@@ -153,6 +153,28 @@ int controlPhaseTests() {
         nativecontrol::pet(input, state, actor, world);
         check(record[0x68] == 0 && get<float>(record, 0x6c) == duration + 100, "new finished edge dismounts without timer reset");
     }
+    { // Cached ray inputs are evaluated only after the movement/early-return region.
+        Record record;
+        nativeai::Creature actor;
+        setup(record, actor);
+        put<int64_t>(record, 0x20, 20 * 65536);
+        nativecontrol::Input input;
+        input.nativeAim.emplace();
+        input.nativeAim->rayOrigin[2] = 8 * 65536;
+        input.nativeAim->forward[2] = 1;
+        input.nativeAim->wallDistance = 60;
+        input.nativeAim->aimDepth = 20; // player-relative dot0 rejects this snap
+        input.hasAim = true;
+        input.aimAt[2] = -999; // an old prepared point must not win
+        nativecontrol::State state;
+        nativecontrol::World world;
+        check(nativecontrol::beginFrame(input, state, actor, 0, world), "cached native aim reaches its named stage");
+        check(get<float>(record, 0x17c) == 48, "working aim uses current physical player instead of stale precomputed point");
+        input.typing = true;
+        put<float>(record, 0x17c, 9);
+        check(!nativecontrol::beginFrame(input, state, actor, 0, world) && get<float>(record, 0x17c) == 9,
+              "early chat return does not construct or apply cached aim");
+    }
     { // Production facade: local lookup, current ownership/sound hooks and buff transport.
         ExtractedWorld blocks;
         SpawnedCreatures creatures;

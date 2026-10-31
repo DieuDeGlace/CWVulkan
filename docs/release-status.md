@@ -10,6 +10,30 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Creature targeting now runs once before early control. Selected IDs, the
+  projected-box flag and independent minimum aim depth survive into the later
+  object/item/fallback pass. Cached aim metadata is evaluated after movement at
+  its admitted early stage; assistance follows ultimate processing, before owner
+  look. Live speaker override and manual-stick slowdown precede camera smoothing.
+  The sixty-block aim ray follows the independently specified fixed traversal,
+  loaded-zone lookup order, crossing budget and flag0x40 obstruction rule. All
+  four target LOS calls use fixed endpoints and a distinct type-only predicate,
+  double range rejection, float normalization and full-length-minus-epsilon
+  comparison. Creature step offsets and object half-heights truncate before low64
+  coordinate addition; ground LOS retains its raw tuple. Target/control/ray tests
+  cover separate phases, depth/rank ties, high-coordinate low bits, strict range,
+  flags, zero crossings, missing zones and nearby fallback without extra LOS.
+  Full camera anchors/obstruction, legacy radian storage, strong-charge candidate
+  details, live GUI focus and original-game comparisons remain open. The shared
+  camera visibility predicate is specified/tested, but its eight-corner camera
+  caller has not replaced the legacy positioning bridge yet. All five targets
+  build; focused tests and the full CPU suite add no new failures. The latter
+  retains exactly the two modded generator-oracle assertions described below.
+  Read-only movement/attack/dodge and conversation runs both exit normally with
+  the fixture save unchanged. The inherited blue fixture scene and missing
+  owner orc-hair-m08 model remain unresolved; these runs are integration checks,
+  not native visual acceptance.
+
 - Local control now has explicit early movement/ultimate, owner-look, pet and late
   attack stages. The canonical live path runs Use before pet, Quick Item before
   late attacks, and samples ordinary UI again at that late gate. Chat skips the
@@ -23,8 +47,8 @@ older successful runs; none of these bounded changes establishes complete parity
   post-Use pet timing, strict mount boundaries, owner look and buff/callback output.
   All five targets build; a read-only movement/attack/dodge run exits normally with
   the fixture unchanged. The full CPU run still has only the two reference failures
-  below. Creature/aim stage sharing, early assistance and later manual-stick
-  ordering remain open; these changes do not complete controller/GUI parity.
+  below. Full camera state, strong-charge candidates and live GUI admission
+  remain open; these changes do not complete controller/GUI parity.
 
 - The rendered/client World now completes its substeps and one full-frame drawn
   position update before creature targeting and local input. New input abilities

@@ -400,8 +400,12 @@ Do not make water solid in this camera traversal from the argument's name.
 ### 6.3 Exact terrain ray stepping used here
 
 0x2a0d40 starts traveled float distance0 and block indices from
-**floor(fixed/65536) narrowed to signed32**, helper0xfd80. A missing
-zone or initial nonwater/nonair block stops at distance0. It reads
+helper0xfd80. Where the mathematically floored block index fits signed32,
+this is
+**floor(fixed/65536)**. The exact narrowing-before-negative-comparison
+order and its out-of-range quirk are specified in
+[terrain-ray §2](steam-positive-terrain-ray.md#2-initial-cell-and-coordinate-widths).
+A missing zone or initial nonwater/nonair block stops at distance0. It reads
 effective blocks with0xeb90. While current block is clear, it permits
 at most **501 boundary steps** and calculates the next boundary distance:
 
@@ -423,6 +427,140 @@ Stop at an obstructing block, missing zone,501 steps, or traveled reaching
 maximum. Return **the smaller of traveled and maximum**, with no safety
 skin subtraction. Boundary hits can produce a zero step before the index
 moves; they are not an excuse to add an epsilon to eye distance.
+
+### 6.4 Complete visibility guard0x2b5c00 for the eight eye corners
+
+Stable bounded native-only supplement to §6.2. The call is at
+**0xae917**. Its start is the current eye plus the selected fixed
+quarter-block corner; its end is the local player's **raw physical**
+tuple at Creature+0x10/+0x18/+0x20. The helper does not substitute drawn
+coordinates, the look-at anchor, a head point or a new camera epoch.
+The caller supplies float**200**, word0x43480000 at0x42e5c0, loaded at
+**0xae836** and placed in argument6's slot at0xae8d5. The legacy
+water-mode byte is argument4 and argument5 is1. They do not change this
+guard's terrain predicate, as explained below.
+
+#### Range rejection precedes the float direction calculation
+
+The first operation is **0xf3e20(start,end,float maximum)**, called at
+**0x2b5c3a**. It is a coordinate-distance rejection, not a terrain query,
+zone test or range clamp. A true result makes the visibility guard
+return false immediately. Its finite arithmetic is:
+
+- Subtract **start minus end in signed64 fixed units before converting**
+  a difference. For X, convert that integer difference to double,
+  multiply by double1/65536 at0x43ef58 (word0x3ef0000000000000), clear
+  the sign bit, and reject if this absolute double exceeds the float
+  maximum widened to double. Equality passes.
+- Apply the same early absolute-component test to Y. There is no
+  corresponding preliminary absolute-Z branch.
+- If both tests pass, form double block deltas for all three axes from
+  those signed64 differences. Square in double; add **Y²+X² first,
+  then Z²**, in double. Separately square the supplied maximum in
+  **float32**, then widen that rounded square to double. Reject only
+  when the double squared separation is **strictly greater** than this
+  widened value. Equality passes. The final operations are
+  **0xf3e9a–0xf3ee3**.
+
+For this camera call, the comparison radius-squared is exactly40000.
+This is not a double norm computed from separately converted absolute
+positions, and not a float squared-distance precheck. There is no
+double square root at this stage. Beyond200 the guard fails; it does
+not cast a shortened200-block ray and treat reaching that cap as seeing
+the end point.
+
+#### Float norm, near success and unit direction
+
+After the precheck passes, **0x2b5c52–0x2b5cc9** separately subtracts
+**end minus start** in signed64 fixed units on each axis. Convert each
+whole integer difference to float32, then multiply by float1/65536.
+Square the resulting float components and sum in float32 as
+**(X²+Y²)+Z²**, with rounding after each multiplication and addition.
+Neither the double precheck's deltas nor its sum are reused here.
+
+If that float squared separation is **strictly less** than the float
+at0x4ac954, word**0x38d1b717** (approximately0.0001), return true
+immediately. There is no terrain lookup, zone-availability requirement
+or division on that near branch. Equality enters the terrain branch.
+The comparison is at **0x2b5ccd–0x2b5cd4**.
+
+Otherwise compute **sqrtf** of the float sum, yielding float length L
+at **0x2b5ce1**. Divide each block-delta component by that same L using
+three separate float divisions, **X then Y then Z**, at
+**0x2b5d06/0x2b5d19/0x2b5d1e**. Do not replace these divisions with a
+shared rounded reciprocal or normalize from fixed-coordinate absolute
+positions. This unit-direction preparation is performed by the guard;
+the terrain traversal itself does not normalize its input.
+
+#### Traversal and final comparison
+
+Call **0x2a0d40** at **0x2b5d37**, using the original fixed start, the
+three normalized floats, and **L as its float maximum**. The maximum
+is not200 or L−0.01, and is not clamped again to200 after float norm
+rounding. Section6.3 gives that helper's cell stepping, budget, missing
+zone behavior and common min return; the exact shared coordinate
+conversion is linked there.
+
+The wrapper forwards its two legacy bytes and final opaque argument
+into additional stack slots, but **0x2a0d40 reads none of them**. Its
+effective-block admission is **type0/2**, equivalently type AND0xfd
+equal0; it does not inspect block flag0x40. Thus changing the camera's
+water-mode byte does not make water obstruct these guard rays, and
+the supplied byte1 does not introduce the separate0x40 obstruction test.
+No actor, CUB or object intersection is added by the forwarded argument.
+
+After the traversal returns, subtract float epsilon at0x42e51c,
+word**0x3c23d70a** (approximately0.01), from the saved float L. Return
+true if the returned ray parameter is **at least that rounded float
+subtraction**, including equality. Native **0x2b5d3c–0x2b5d51** performs
+the subtraction before comparison. This is not a comparison of
+returned-distance+epsilon against L and does not shorten the ray before
+traversal. The observable Boolean is the low return byte, as tested at
+0xae91c; upper return-register bits are not a Boolean-value contract.
+
+The eight calls and their failure accumulation retain §6.2's order:
+evaluate all eight even after failure, and only then decide whether to
+run the separate look-at-corner shortening batch. The guard itself does
+not write camera distances or positions.
+
+#### Necessary distinction from target LOS0x2b5d90
+
+The target LOS wrapper has the same **0xf3e20 precheck**, fixed subtraction
+before float conversion, near threshold, float sqrt/three divisions and
+final L−0.01 test. Its terrain call at **0x2b5ec0** is instead
+**0x2d1d20**, with the first flag forced0 and its own caller's flag
+forwarded as the second flag. That second flag determines whether
+otherwise passable type0/2 cells with0x40 obstruct. See
+[positive terrain ray](steam-positive-terrain-ray.md) for that predicate
+and full boundary arithmetic.
+
+For the ordinary targeting call specifically, **0x8bade clears argument4
+before0x8baef**, so this target LOS supplies second flag0 and also ignores
+0x40. It must not inherit flag1 from the distinct earlier aim-ray call
+at0x8b26d. The camera guard's use of0x2a0d40, the target wrapper's
+caller-dependent flag, and the aim ray's explicit flag1 remain separate
+contracts. The camera's200 input is not a global target-LOS limit.
+
+#### Derived finite checks and scope
+
+These examples are arithmetic references, not original runtime captures:
+
+- A separation of fixed(7864320,10485760,0), namely(120,160,0) blocks,
+  passes the200 precheck at exact double squared distance40000. Adding
+  one fixed Z unit makes the double sum **40000+2⁻³²**, which exceeds
+  the limit and fails before any float norm or terrain call. A float
+  sum would lose that Z term and incorrectly pass the precheck.
+- An axial separation of exactly13107200 fixed units is200 blocks and
+  passes. One further fixed unit fails the early absolute-axis test.
+- A separation of655 fixed X units has squared norm below the near
+  threshold, so succeeds even with no loaded terrain. At656 fixed X
+  units it takes the ray branch; a missing initial zone returns ray0
+  and fails the positive L−epsilon threshold.
+
+This supplement covers the finite ordinary eight-corner camera calls.
+Nonfinite inputs, invalid integer-conversion cases and unrelated callers'
+argument/lifetime policies are not newly specified. No uncertainty in
+those cases changes the reached terrain-helper or flag choice above.
 
 ## 7. Matrices, precision, shake and projection
 

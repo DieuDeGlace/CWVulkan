@@ -124,6 +124,8 @@ int plasmaInputTests();
 int plasmaLayoutTests();
 int cameraMotionTests();
 int controlPhaseTests();
+int targetStageTests();
+int terrainRayTests();
 int cameraRenderTests();
 int itemSelectorTests();
 int guiItemTests();
@@ -9136,6 +9138,10 @@ int main(int argc, char **argv) {
         return plasmaNodeAnimationTests();
     if (argc == 2 && std::string(argv[1]) == "guiinput")
         return plasmaInputTests();
+    if (argc == 2 && std::string(argv[1]) == "terrainray")
+        return terrainRayTests();
+    if (argc == 2 && std::string(argv[1]) == "targetstages")
+        return targetStageTests();
     if (argc == 2 && std::string(argv[1]) == "controlphases")
         return controlPhaseTests();
     if (argc == 2 && std::string(argv[1]) == "worldmap")
@@ -10471,6 +10477,8 @@ int main(int argc, char **argv) {
     failures += plasmaLayoutTests();
     failures += cameraMotionTests();
     failures += controlPhaseTests();
+    failures += targetStageTests();
+    failures += terrainRayTests();
     failures += itemSelectorTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += windContinueTests();   // tests/WindContinueTests.cpp

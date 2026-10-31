@@ -1,4 +1,5 @@
 #include "UsePrompt.h"
+#include "GameMath.h"
 
 #include "worldgen/Residents.h"
 #include "NativeInteract.h"
@@ -464,8 +465,8 @@ bool groundItemValid(const GroundItem &g, int64_t playerOwnerId) {
     return g.reservedFor == 0 || g.reservedFor == playerOwnerId;
 }
 
-Targets chooseTargets(const Scene &s) {
-    Targets t;
+CreatureTargets chooseCreatures(const Scene &s) {
+    CreatureTargets t;
     if (!s.player)
         return t;
     const Camera &camera = s.camera;
@@ -475,7 +476,13 @@ Targets chooseTargets(const Scene &s) {
     for (const Creature &c : s.creatures) {
         if (!c.record || !(read<float>(c.record, worldgen::creature::HEALTH) > 0.0f))
             continue;
-        const float d2 = distance2(s.playerAt, c.at);
+        float d2 = distance2(s.playerAt, c.at);
+        if (camera.fixedEye) {
+            int64_t player[3], drawn[3];
+            std::memcpy(player, s.player + worldgen::creature::POSITION, sizeof player);
+            std::memcpy(drawn, c.record + 0xb10, sizeof drawn);
+            d2 = gamemath::fixedDistanceSquared(player, drawn);
+        }
         const glm::vec3 size = sizeOf(c.record);
         if (d2 > CANDIDATE2 || !camera.sees(c.at, 0.6f * std::max(size.x, size.y)))
             continue;
@@ -499,15 +506,63 @@ Targets chooseTargets(const Scene &s) {
         if (!camera.crosshairIn(boxCorners(aim - box * 0.5f, box)))
             continue;
         t.overCreature = true;
-        if (!sight(s, camera.eye, aim, SIGHT_TO_CREATURE))
+        bool visible;
+        if (camera.fixedEye && s.fixedSight) {
+            std::array<int64_t, 3> endpoint;
+            std::memcpy(endpoint.data(), c->record + 0xb10, sizeof endpoint);
+            const float drop = -read<float>(c->record, AIM_DROP) * 65536.0f;
+            endpoint[2] = gamemath::addFixed(endpoint[2], int64_t(drop));
+            visible = s.fixedSight(*camera.fixedEye, endpoint, SIGHT_TO_CREATURE);
+        } else {
+            visible = sight(s, camera.eye, aim, SIGHT_TO_CREATURE);
+        }
+        if (!visible)
             continue;
-        const float along = glm::dot(aim - camera.eye, camera.forward);
-        if (along < 0.0f)
-            continue;
-        const float offLine = glm::length(aim - (camera.eye + camera.forward * along));
+        // Depth and perpendicular rank use raw drawn position, not the step-adjusted
+        // LOS endpoint. Native closest points quantize independently per fixed axis.
+        float along = glm::dot(c->at - camera.eye, camera.forward);
+        float offLine = 0;
+        if (camera.fixedEye) {
+            int64_t drawn[3], closest[3];
+            std::memcpy(drawn, c->record + 0xb10, sizeof drawn);
+            const auto &eye = *camera.fixedEye;
+            const float dx = gamemath::fixedBlocksBetween(drawn[0], eye[0]);
+            const float dy = gamemath::fixedBlocksBetween(drawn[1], eye[1]);
+            const float dz = gamemath::fixedBlocksBetween(drawn[2], eye[2]);
+            along = (dy * camera.forward.y + dx * camera.forward.x) + dz * camera.forward.z;
+            if (!(along >= 0.0f))
+                continue;
+            for (int axis = 0; axis < 3; ++axis) {
+                const float blocks = camera.forward[axis] * along;
+                closest[axis] = gamemath::addFixed(eye[axis], int64_t(blocks * 65536.0f));
+            }
+            offLine = std::sqrt(gamemath::fixedDistanceSquared(closest, drawn));
+        } else {
+            if (!(along >= 0.0f))
+                continue;
+            offLine = glm::length(c->at - (camera.eye + camera.forward * along));
+        }
+        const bool healing = abilityOf(s.player) == 0x86 || abilityOf(s.player) == 0x87;
+        if (c->hostileToPlayer != healing && (t.aimDepth < 0.0f || along < t.aimDepth))
+            t.aimDepth = along;
         if (bestOffLine < 0.0f || offLine < bestOffLine)
             bestOffLine = offLine, t.creature = idOf(c->record);
     }
+
+    t.nearby = nearbyCreature;
+    return t;
+}
+
+Targets chooseTargets(const Scene &s, const CreatureTargets &creatures) {
+    Targets t;
+    if (!s.player)
+        return t;
+    const Camera &camera = s.camera;
+    t.creature = creatures.creature;
+    t.overCreature = creatures.overCreature;
+    int64_t nearbyCreature = creatures.nearby;
+
+    const auto playerFixed = read<FixedPoint>(s.player, worldgen::creature::POSITION);
 
     // Static objects within 4 blocks (spec 2.3): one under the crosshair, seen from the
     // player, beats a creature; the nearest seen is kept for later.
@@ -517,18 +572,30 @@ Targets chooseTargets(const Scene &s) {
         const Object &o = s.objects[i];
         if (o.item[0] == 0 && !targetable(o.type))
             continue;
-        const float d2 = distance2(s.playerAt, o.at);
+        const float d2 =
+            o.fixedPosition ? gamemath::fixedDistanceSquared(playerFixed.data(), o.fixedPosition->data()) : distance2(s.playerAt, o.at);
         if (d2 > NEARBY2)
             continue;
         const glm::vec3 centre = o.at + glm::vec3(0, 0, o.size.z * 0.5f);
-        const float camera2 = distance2(camera.eye, centre);
-        if ((nearbyObject2 < 0.0f || d2 < nearbyObject2) && sight(s, s.playerAt, centre, SIGHT_TO_OBJECT)) {
+        auto fixedCentre = o.fixedPosition;
+        if (fixedCentre) {
+            const float halfHeight = o.size.z * .5f;
+            (*fixedCentre)[2] = gamemath::addFixed((*fixedCentre)[2], int64_t(halfHeight * 65536.0f));
+        }
+        const float camera2 = camera.fixedEye && fixedCentre ? gamemath::fixedDistanceSquared(camera.fixedEye->data(), fixedCentre->data())
+                                                             : distance2(camera.eye, centre);
+        const auto visible = [&] {
+            if (s.fixedSight && fixedCentre)
+                return s.fixedSight(playerFixed, *fixedCentre, SIGHT_TO_OBJECT);
+            return sight(s, s.playerAt, centre, SIGHT_TO_OBJECT);
+        };
+        if ((nearbyObject2 < 0.0f || d2 < nearbyObject2) && visible()) {
             nearbyObject = (int)i, nearbyObject2 = d2;
             nearbyCreature = 0;
         }
         if (bestCamera2 >= 0.0f && bestCamera2 <= camera2)
             continue;
-        if (!sight(s, s.playerAt, centre, SIGHT_TO_OBJECT))
+        if (!visible())
             continue;
         const glm::vec3 size = o.quarterTurn ? glm::vec3(o.size.y, o.size.x, o.size.z) : o.size;
         if (camera.crosshairIn(boxCorners(o.at - glm::vec3(size.x * 0.5f, size.y * 0.5f, 0.0f), size))) {
@@ -551,7 +618,8 @@ Targets chooseTargets(const Scene &s) {
         const GroundItem &g = s.groundItems[i];
         if (!groundItemValid(g, owner))
             continue;
-        float d2 = distance2(s.playerAt, g.at);
+        float d2 =
+            g.fixedPosition ? gamemath::fixedDistanceSquared(playerFixed.data(), g.fixedPosition->data()) : distance2(s.playerAt, g.at);
         if (d2 > NEARBY2)
             continue;
         if ((g.type == 0x0c || g.type == 0x0e) && !g.noAutoPickup) { // picked up by walking over it
@@ -559,7 +627,9 @@ Targets chooseTargets(const Scene &s) {
                 t.walkedOver.push_back((int)i);
             continue;
         }
-        float camera2 = distance2(camera.eye, g.at);
+        float camera2 = camera.fixedEye && g.fixedPosition
+                            ? gamemath::fixedDistanceSquared(camera.fixedEye->data(), g.fixedPosition->data())
+                            : distance2(camera.eye, g.at);
         if (!mayCarryMore(g.type, g.subtype, g.carriedCount))
             d2 += CARRY_PENALTY2, camera2 += CARRY_PENALTY2;
         if (nearbyItem2 < 0.0f || d2 < nearbyItem2) {
@@ -568,7 +638,10 @@ Targets chooseTargets(const Scene &s) {
         }
         if (bestCamera2 >= 0.0f && camera2 >= bestCamera2)
             continue;
-        if (!sight(s, camera.eye, g.at, SIGHT_TO_ITEM) || !g.hasModel)
+        const bool visible = s.fixedSight && camera.fixedEye && g.fixedPosition
+                                 ? s.fixedSight(*camera.fixedEye, *g.fixedPosition, SIGHT_TO_ITEM)
+                                 : sight(s, camera.eye, g.at, SIGHT_TO_ITEM);
+        if (!visible || !g.hasModel)
             continue;
         if (camera.crosshairIn(g.box)) {
             t.groundItem = (int)i;
@@ -587,6 +660,10 @@ Targets chooseTargets(const Scene &s) {
     if (t.groundItem < 0)
         t.groundItem = nearbyItem;
     return t;
+}
+
+Targets chooseTargets(const Scene &scene) {
+    return chooseTargets(scene, chooseCreatures(scene));
 }
 
 std::optional<std::array<int32_t, 2>> markedZone(const uint8_t *target) {

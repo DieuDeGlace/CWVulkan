@@ -393,15 +393,22 @@ ability has finished and +0x6c > 10000.0: ability = 0.
    * otherwise first = 0x5fc40(P, off); second: w = 5 → 6; w = 3 → 0x12; w = 4 → 0x15; w = 6
      or the second slot's subtype +0x63c = 6 → 0x1a; w = 7 or +0x63c = 7 → 0x19; w = 8 →
      0x1c; two-handed (0x5e9b0) → 0x3c; +0x63c = 0xd → 9; else 0x40.
-2. **Aim point.** Start with the ray origin (controller +0x1dd8..) + F × 100.0 blocks; if the
-   block ray-cast 0x2d1d20 from the ray origin along F reports a distance d ≥ 0, the aim
-   point is the ray origin + F × d (each component truncated to the 64-bit position grid
-   after × 65536). F here is (B × 0 + A × 0) + C, per axis.
-3. **Snap to a creature.** The targeting pass (§2 step 3) also keeps the **aim depth**: among
-   the creatures under the crosshair with line of sight, the smallest t = (aim point − eye) ·
+2. **Aim point.** Start with the ray origin (controller +0x1dd8..) + F ×100.0 blocks.
+   The call0x8b26d→0x2d1d20 uses **limit60** and flags0/1. A return d≥0 replaces the
+   point by ray origin+F×d, multiplying float F by d then65536 before signed64 truncation.
+   A clear ray reaching the helper's positive limit returns60, not a negative no-hit
+   sentinel; thus it ordinarily selects60 rather than the initial100. F here is
+   (B×0+A×0)+C, per axis. This clarifies the older fallback shorthand; exact producer,
+   origins and finite references are [gameplay frame order §8](steam-gameplay-frame-order.md).
+3. **Snap to a creature.** The targeting pass (§2 step3) separately keeps the **aim depth**:
+   among creatures under the crosshair with line of sight, the smallest
+   t = (creature's raw drawn position − stored eye) ·
    F, taken only when t ≥ 0, whose hostility to P (0x50550) is "hostile" (or "not hostile" while P's ability is 0x86
    or 0x87). If controller +0x1e60 = 0, the aim depth is ≥ 0 and P's ability is not 0x33:
-   Q = eye (+0x1dc0..) + F × aim depth; if (Q − P's position) · F > 0, the aim point = Q.
+   Q = eye (+0x1dc0..) + F×aim depth; if (Q−P's position)·F>0, the aim point=Q.
+   This depth need not belong to selected creature+0x1e58 and is not clipped by the
+   terrain scalar. Game+0x1e60's nonzero producer remains unverified; preserve its
+   read-before-clear behavior without inventing a selected-target/charge-target writer.
 4. If P's ability is 0x8c, 0x4f220 is called and its result dropped.
 5. **Beams lock their aim.** If P's ability is 0x1f, 0x20, 0x21 or 0x22: if
    double(0x4ead0(P, −1)) < double(+0x6c) − *dt* (its first part ended before this frame),

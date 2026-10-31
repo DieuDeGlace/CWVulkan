@@ -32,6 +32,7 @@
 
 namespace useprompt {
 
+using FixedPoint = std::array<int64_t, 3>;
 using Item = std::array<uint8_t, 0xa0>; // a game item: type +0, subtype (i32) +4, rarity +0x14
 
 // The view the crosshair is in: the camera's place and its unit axes, and the tangents of half
@@ -40,6 +41,9 @@ struct Camera {
     glm::vec3 eye{0};
     glm::vec3 forward{1, 0, 0}, right{0, -1, 0}, up{0, 0, 1};
     float tanHalfWidth = 1, tanHalfHeight = 1;
+    glm::vec3 rayOrigin{0};                         // retained look-at position, distinct from eye
+    std::optional<std::array<int64_t, 3>> fixedEye; // native fixed eye when supplied by the camera
+    std::optional<std::array<int64_t, 3>> fixedRayOrigin;
 
     // Whether a sphere is at least partly in view (the renderer's visibility test, 0xe08c0).
     bool sees(glm::vec3 centre, float radius) const;
@@ -61,7 +65,7 @@ bool clearLine(glm::vec3 from, glm::vec3 to, float limit, const std::function<bo
 // A creature the crosshair might fall on.
 struct Creature {
     const uint8_t *record = nullptr;
-    glm::vec3 at{0};         // its position
+    glm::vec3 at{0};              // its drawn position
     bool hostileToPlayer = false; // the damage permission check (0x50550) between the player and it
 };
 
@@ -81,6 +85,7 @@ struct Object {
     // A chest (type 0x16): whether its 16-block cell is a known place already (opened), and
     // whether the zone holds an item for it.
     bool chestCellKnown = false, chestHasItem = false;
+    std::optional<FixedPoint> fixedPosition; // authoritative unadjusted origin, when available
 };
 
 // An item lying on the ground (zone +0x30, spec 0.4).
@@ -101,7 +106,8 @@ struct GroundItem {
     // Its box as it is drawn (corners in local blocks); none without a model.
     bool hasModel = false;
     std::array<glm::vec3, 8> box{};
-    int32_t quantity = 1; // Native validity requires nonzero, including negative values.
+    int32_t quantity = 1;                    // Native validity requires nonzero, including negative values.
+    std::optional<FixedPoint> fixedPosition; // raw ground tuple, independent of the drawn model
 };
 
 // Whether the player may pick up one more of an item when it carries `count` equal to it
@@ -129,7 +135,9 @@ struct Scene {
     Item vehicle{};              // the equipped vehicle or special item (type 0: none)
     std::string vehicleName;     // its short name
     std::function<bool(glm::vec3 from, glm::vec3 to, float limit)> sight; // clearLine through the world
-    std::function<const uint8_t *(int64_t id)> creatureById;              // null when it is gone
+    // Prefer exact fixed endpoints for creature LOS when camera.fixedEye is retained.
+    std::function<bool(const std::array<int64_t, 3> &, const std::array<int64_t, 3> &, float)> fixedSight;
+    std::function<const uint8_t *(int64_t id)> creatureById; // null when it is gone
 };
 
 // What the use key aims at (spec 0.5). Objects and ground items are indices into the
@@ -143,7 +151,16 @@ struct Targets {
     std::vector<int> walkedOver;
 };
 
-// The target selection (0x8ae50, spec 2).
+// Creature selection precedes movement/ultimate/assistance. Only value IDs/depth
+// survive into the later object/item/fallback pass; do not rerun selection there.
+struct CreatureTargets {
+    int64_t creature = 0, nearby = 0;
+    bool overCreature = false;
+    float aimDepth = -1;
+};
+CreatureTargets chooseCreatures(const Scene &scene);
+Targets chooseTargets(const Scene &scene, const CreatureTargets &creatures);
+// Compatibility selection for callers without interleaved input stages.
 Targets chooseTargets(const Scene &scene);
 
 // The mission zone a targeted creature marks on the map (spec 2.6): its zone key (+0x1b0),

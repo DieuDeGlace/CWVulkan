@@ -306,6 +306,11 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
     return nullptr;
 }
 
+bool ExtractedWorld::gameZoneLoaded(int32_t x, int32_t y) const {
+    std::lock_guard lock(cacheMutex);
+    return std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == Key{x, y} && entry.second; });
+}
+
 ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z, bool *loaded) {
     static const GameBlock stone{0xc8, 0xc8, 0xc8, 0, 1, 0}, air{0xff, 0xff, 0xff, 0, 0, 0}, water{0xff, 0xff, 0xff, 0, 2, 0};
     const int ax = (int)floorDiv(x, 64), ay = (int)floorDiv(y, 64);
