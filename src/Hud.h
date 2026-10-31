@@ -223,6 +223,7 @@ class Hud {
         // interface's clock their icons bob by; also the quest sprites over people's heads.
         using MapMarker = mapmarks::Marker;
         std::vector<MapMarker> mapMarkers;
+        std::function<std::vector<MapMarker>()> collectMapMarkers;
         bool mapInteractive = false;
         std::function<void(const mapmarks::Hover &)> mapOverlayDraw;
         int32_t guiClockMs = 0;

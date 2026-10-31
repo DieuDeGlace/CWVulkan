@@ -163,13 +163,19 @@ int voxelCustomizationTests() {
         liveInformation.pointer = {900, 500};
         ui.information = &liveInformation;
         int displayedMaterial = -1;
+        int collectedMaterial = -1;
+        ui.collectMapMarkers = [&] {
+            collectedMaterial = (*borrowed)[0x1c];
+            return std::vector<mapmarks::Marker>{};
+        };
         ui.informationDraw = [&] {
             displayedMaterial = (*borrowed)[0x1c];
+            check(collectedMaterial == displayedMaterial, "map collection follows game UI and precedes information");
             liveInformation.infoItem = *borrowed;
             liveInformation.info = {{"Live palette", 12, 3, glm::vec4(1), 16}};
         };
         hud.draw(ui, overlay);
-        check(displayedMaterial == 128 && ownerState.paletteHover == 1,
+        check(displayedMaterial == 128 && collectedMaterial == 128 && ownerState.paletteHover == 1,
               "information reads its borrowed member after the earlier palette callback updates it");
         ui.interfaceVisible = false;
         shown.pointer = {600, 260};
@@ -184,6 +190,7 @@ int voxelCustomizationTests() {
         check(displayedMaterial == 1 && ownerState.paletteHover == 0, "resumed drawing reads the current live palette member");
         ui.information = nullptr;
         ui.informationDraw = {};
+        ui.collectMapMarkers = {};
         ownerState.edit.open = false;
         hud.draw(ui, overlay);
         check(hud.itemDraws().empty() && !hud.customizationHit({960, 500}), "simple hide removes rendering/hits without clearing state");

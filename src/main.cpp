@@ -574,10 +574,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (c >= 32 && c < 127)
             input.typed += (char)c; // names are plain text, as the game's
     });
-    input.shiftDown = false;
+    input.shiftDown = input.controlDown = false;
     glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int modifiers) {
         if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
             input.shiftDown = action != GLFW_RELEASE;
+        if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
+            input.controlDown = action != GLFW_RELEASE;
         if (action == GLFW_PRESS || (action == GLFW_REPEAT && key == GLFW_KEY_F4))
             input.pressed.push_back(key);
         if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
@@ -1386,6 +1388,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // map is drawn: a frame late for what uses it, as in the game.)
     glm::dvec3 mapCursor(0);
     bool mapCursorKnown = false;
+    std::string mapPointerText;
     // Flight (WorldMap's the flight master mode, the selected flight point): the map opened by a flight
     // master shows the flight points, the one under the pointer is selected, and a click buys
     // it (the flight price, 0x2adce0) or, once known, takes off on the eagle.
@@ -1417,8 +1420,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     const float &minimapScale = gameOptions.mapScale; // options.cfg "mapScale" (the game's default 1; F5 / F6)
     glm::vec2 mapViewCentre(1.0f, 1.0f);
     const int &showRarity = gameOptions.showRarity; // options.cfg "showRarity" (the game's default: on)
-    std::vector<Hud::State::MapMarker> mapMarkerViews; // the markers drawn over the map (a frame late)
-    std::optional<lore::Cell> hoveredLoreCell;         // the lore building under the pointer: its lore panel
+    std::optional<lore::Cell> hoveredLoreCell;      // the lore building under the pointer: its lore panel
     worldgen::Item hoveredArtifact;                 // the artifact of the place under the pointer
     if (hudReady && !hud.loadQuestIcons(root / "assets" / "OverworldEvents" / "quest-icons.png"))
         logLine("Quest sprites: assets/OverworldEvents/quest-icons.png not found");
@@ -5433,6 +5435,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             previewSources.ordinaryUi = nativeOrdinaryUi();
             previewSources.flight = hud.mapPreviewOutputs().flight;
             previewSources.lore = hud.mapPreviewOutputs().lore;
+            const std::array<int64_t, 3> cursor{int64_t(mapCursor.x * 65536), int64_t(mapCursor.y * 65536),
+                                                mapCursorKnown ? int64_t(mapCursor.z * 65536) : -65536};
+            mapPointerText = mappreview::pointerDistance(flightContext().physical, cursor, hud.hasInterface());
         }
 
         // Character motion from what actually happened this frame.
@@ -6492,7 +6497,287 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if ((!chat.typing() && keys) || std::sqrt(stick.x * stick.x + stick.y * stick.y) > .01f)
                 nativeCustomization.edit.open = false;
         }
-        bool mapCursorFromOverlay = false;
+        Camera camera{eye, target};
+        camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
+        // The map (the game's frame update, the map rendering): its position, its overlay between the
+        // corner and the middle, its regions.
+        std::function<std::vector<mapmarks::Marker>()> collectMapMarkers;
+        if (useExtracted && !serverMode) {
+            if (mapTest >= 0) {
+                mapOpen = true;
+                flightmasterMode = flightsTest;
+                if (shrinesTest)
+                    mapSelection.openShrines();
+                mapZoom = std::clamp((int)mapTest, 0, worldmap::MAX_ZOOM);
+                mapTest = -1;
+            }
+            const glm::dvec3 playerBlocks((double)player.position.x + (double)(extractedWorld.originDotsX() >> 16),
+                                          (double)player.position.y + (double)(extractedWorld.originDotsY() >> 16),
+                                          (double)player.position.z - ExtractedWorld::Z_OFFSET);
+            if (!mapOpen)
+                mapMoved = false;
+            if (!mapMoved) {
+                targetMapPosition = playerBlocks;
+                mapPosition = targetMapPosition;
+            } else
+                targetMapPosition.z =
+                    worldgen::groundHeight((int32_t)std::floor(targetMapPosition.x), (int32_t)std::floor(targetMapPosition.y));
+            const double stepMs = dt * 1000.0;
+            mapPosition += (targetMapPosition - mapPosition) * (double)gamemath::blendFactor(stepMs, 0.01f);
+            const VkExtent2D size = renderer.screenSize();
+            const float w = (float)std::max(1u, size.width), h = (float)std::max(1u, size.height);
+            const glm::vec2 cornerPosition(1.0f - h * 0.3f / w * minimapScale, 1.0f - minimapScale * 0.2f);
+            if (!mapPlaced)
+                mapViewCentre = cornerPosition, mapPlaced = true;
+            const float f = gamemath::blendFactor(stepMs, 0.01f);
+            mapViewCentre += ((mapOpen ? glm::vec2(0.5f, 0.6f) : cornerPosition) - mapViewCentre) * f;
+            mapLabelScale += ((mapOpen ? 1.8f : minimapScale) - mapLabelScale) * f;
+            // GUI keycode0x11 is a retained Control message bit, independent of map mode.
+            const bool halfRadius = input.controlDown;
+            const int radius = halfRadius ? worldmap::RADIUS / 2 : worldmap::RADIUS;
+            if (!menusReady || menus.interfaceShown()) { // Native scene bit0x20 suppresses the3D map too.
+                worldMap.update(renderer, mapPosition, mapZoom);
+                worldmap::Map::View view;
+                view.center = mapPosition;
+                view.level = mapZoom;
+                view.radius = radius;
+                view.pitch = viewPitch, view.yaw = viewYaw;
+                view.cursor = mapViewCentre;
+                view.viewScale = minimapScale * mapLabelScale; // options mapScale x the eased scale (§4.1)
+                view.screen = glm::vec2(w, h);
+                // The player's own marker models on the map: its head and hair, the hair in its colour.
+                if (!mapPlayerSet) {
+                    mapPlayerSet = true;
+                    CubModel head, hair;
+                    glm::u8vec3 hairColor(255);
+                    bool haveHead = false, haveHair = false;
+                    for (const auto &part : character.parts()) {
+                        if (part.matrix != 3 && part.matrix != 4)
+                            continue;
+                        if (auto path = assets.resolve(fs::path("sprites") / (part.sprite + ".cub"))) {
+                            if (part.matrix == 3)
+                                haveHead = head.load(*path);
+                            else
+                                haveHair = hair.load(*path), hairColor = part.tint;
+                        }
+                    }
+                    if (haveHead)
+                        mapPlayerLooks = worldMap.looks(renderer, head, haveHair ? &hair : nullptr, hairColor,
+                                                        playerHairStyle.dual ? &playerHairStyle : nullptr);
+                    if (auto path = assets.resolve(fs::path("sprites") / "cube.cub")) { // the flight route's dot (the cube sprite)
+                        CubModel cube;
+                        if (cube.load(*path))
+                            worldMap.setCube(renderer, cube);
+                    }
+                }
+                view.player = playerBlocks;
+                view.worldClockMs = time * 1000.0;
+                { // the route: to the selected flight point, or the flight's destination while flying
+                    float flightMs = 0;
+                    const uint8_t *me = spawned.playerRecord();
+                    if (flightSelected)
+                        view.route = true, view.routeTarget = glm::ivec2(selectedFlightPoint[0], selectedFlightPoint[1]);
+                    else if (me && spawned.playerAbility(flightMs) == 0x9c) {
+                        int32_t to[2];
+                        std::memcpy(to, me + 0x1b0, 8);
+                        view.route = true, view.routeTarget = glm::ivec2(to[0], to[1]);
+                    }
+                    if (view.route)
+                        view.routeTargetZ = (int)worldgen::groundHeight(view.routeTarget.x, view.routeTarget.y, 0);
+                }
+                { // The world map's creature markers (MapMarks.h): the player, the creatures leading it to a
+                  // mission, and the tombstone where it last died.
+                    static std::map<std::tuple<std::string, std::string, int>, int> looksOf; // (models, hair colour) -> Map::looks
+                    auto looks = [&](const std::string &first, const std::string &hairName, glm::u8vec3 colour) {
+                        const auto key = std::make_tuple(first, hairName, (colour.r << 16) | (colour.g << 8) | colour.b);
+                        if (auto known = looksOf.find(key); known != looksOf.end())
+                            return known->second;
+                        int index = -1;
+                        CubModel model, hair;
+                        const auto modelPath = first.empty() ? std::nullopt : assets.resolve(fs::path("sprites") / (first + ".cub"));
+                        const auto hairPath = hairName.empty() ? std::nullopt : assets.resolve(fs::path("sprites") / (hairName + ".cub"));
+                        if (modelPath && model.load(*modelPath))
+                            index = worldMap.looks(renderer, model, hairPath && hair.load(*hairPath) ? &hair : nullptr, colour);
+                        return looksOf[key] = index;
+                    };
+                    worldmap::Map::View::Mark me; // (a player: no pulse)
+                    me.looks = mapPlayerLooks;
+                    me.at = playerBlocks;
+                    me.turnDegrees = glm::degrees(heading - character.forward()); // (as the body turns)
+                    view.marks.push_back(me);
+                    spawned.forEach([&](const uint8_t *c) {
+                        const int hostility = c[worldgen::creature::HOSTILITY], ability = c[worldgen::creature::ABILITY];
+                        uint16_t toggles;
+                        int32_t destination[2];
+                        std::memcpy(&toggles, c + worldgen::creature::TOGGLES, 2), std::memcpy(destination, c + 0x1b0, 8);
+                        const bool destinationDone =
+                            missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, {destination[0], destination[1]});
+                        if (!mapmarks::showsCreature(hostility, ability, toggles, destinationDone))
+                            return;
+                        // Its head (its chest when it has none) and its hair, from its looks (+0x78).
+                        int16_t head, hair, chest;
+                        std::memcpy(&head, c + 0x90, 2), std::memcpy(&hair, c + 0x92, 2), std::memcpy(&chest, c + 0x98, 2);
+                        std::string first = spawned.spriteName(head);
+                        if (first.empty())
+                            first = spawned.spriteName(chest);
+                        int64_t shown[3]; // where it is drawn (+0xb10), and its turn (+0xb3c, degrees)
+                        float turn;
+                        std::memcpy(shown, c + 0xb10, 24), std::memcpy(&turn, c + 0xb3c, 4);
+                        worldmap::Map::View::Mark k;
+                        k.looks = looks(first, spawned.spriteName(hair), glm::u8vec3(c[0x7a], c[0x7b], c[0x7c]));
+                        k.at = glm::dvec3((double)shown[0], (double)shown[1], (double)shown[2]) / 65536.0;
+                        k.turnDegrees = turn;
+                        k.pulses = hostility != 0;
+                        view.marks.push_back(k);
+                    });
+                    if (saveGame.tombstoneMs > 0) {
+                        constexpr int TOMBSTONE_MODEL = 0xde7; // tombstone.cub in the world's model table
+                        worldmap::Map::View::Mark k;
+                        k.looks = looks(spawned.spriteName(TOMBSTONE_MODEL), "", glm::u8vec3(255));
+                        k.at = glm::dvec3((double)saveGame.deathPosition[0], (double)saveGame.deathPosition[1],
+                                          (double)saveGame.deathPosition[2]);
+                        k.pulses = true;
+                        view.marks.push_back(k);
+                    }
+                }
+                worldMap.collect(view, opaque);
+                mapCursorKnown = false;
+                mapCursor = {double(INT_MAX), double(INT_MAX), -1};
+                if (!halfRadius) { // Control suppresses terrain picking; dragging and minimap mode do not.
+
+                    double px, py;
+                    pointerPosition(&px, &py);
+                    if (pointerTestX >= 0)
+                        px = pointerTestX, py = pointerTestY;
+                    mapCursorKnown = worldMap.pick(view, glm::vec2((float)px, (float)py), mapCursor);
+                    static bool told = false; // (testing: where the pointer meets the map)
+                    if (pointerTestX >= 0 && mapCursorKnown && !told && time > 5) {
+                        told = true;
+                        logLine("Map cursor: " + std::to_string((int64_t)mapCursor.x) + " " + std::to_string((int64_t)mapCursor.y) + " " +
+                                std::to_string((int64_t)mapCursor.z) + " (the player at " + std::to_string((int64_t)playerBlocks.x) + " " +
+                                std::to_string((int64_t)playerBlocks.y) + ")");
+                    }
+                }
+                // The map overlay's markers (MapMarks.h): places, missions, lands, flight points and
+                // stars, drawn far to near; then the marker under the pointer.
+                collectMapMarkers = [&, view = std::move(view)] {
+                    std::vector<mapmarks::Marker> markers;
+                    const int unit = worldmap::scaleOf(mapZoom);
+                    const int clockMs = (int)(time * 1000.0);
+                    std::set<std::array<int32_t, 2>> marked; // the missions marked on the map (+0xb8)
+                    for (const SaveGame::Marked &m : saveGame.marked)
+                        marked.insert({m.x, m.y});
+                    auto isKnown = [&](mapmarks::Cell zone) {
+                        return missionsTest || marked.count(zone) || saveGame.solvedMissions.count(zone);
+                    };
+                    for (const worldmap::Map::Projected &p : worldMap.markers(view)) {
+                        const worldgen::MapRegion::Marker &k = p.marker;
+                        mapmarks::Marker v;
+                        v.at = p.at;
+                        v.depth = p.depth;
+                        v.block = glm::ivec3(k.x, k.y, k.z);
+                        // A place: shops and inns once their zone is discovered; shrines, lore buildings and
+                        // treasure cells once their cell is known (used).
+                        if (k.list == 0) {
+                            constexpr int SHRINE = 12, LORE_BUILDING = 14, TREASURE = 15;
+                            if (k.type == SHRINE || k.type == LORE_BUILDING || k.type == TREASURE) {
+                                if (!usedCells.count({worldgen::floorDiv(k.x, 4), worldgen::floorDiv(k.y, 4)}))
+                                    continue;
+                            } else if (worldgen::placeKind(k.px, k.py, k.big) != 0 && !discoveredPlaces.count({k.px, k.py}))
+                                continue;
+                            v.scale = mapmarks::placeScale(k.type, unit, mapLabelScale);
+                            v.icon = mapmarks::placeIcon(k.type);
+                            v.shrineTarget = k.type == SHRINE;
+                            v.reportsHover = v.reportsCell = k.type == LORE_BUILDING; // (hovering a read lore building shows its lore)
+                        } else if (k.list == 1) {                                     // a place's mission
+                            const mapmarks::Cell zone{k.px, k.py};
+                            bool known = isKnown(zone);
+                            constexpr int ARTIFACT_PLACE = 14;
+                            const worldgen::Item artifact =
+                                k.kind == ARTIFACT_PLACE ? worldgen::placeArtifact(k.px, k.py) : worldgen::Item{};
+                            if (k.kind == ARTIFACT_PLACE && !known) { // ten pieces of its realm's lore reveal it
+                                const auto realmLore = loreBook.find(artifact.realm);
+                                if (mapmarks::revealedByLore(k.kind, known, realmLore == loreBook.end() ? 0 : realmLore->second.size())) {
+                                    known = true;
+                                    marked.insert(zone);
+                                    saveGame.marked.push_back({k.px, k.py, "", ""});
+                                    saveGame.missionTimers[zone] = mapmarks::LORE_NOTE_MS;
+                                    logLine("Lore revealed the artifact of place " + std::to_string(k.px) + "," + std::to_string(k.py));
+                                }
+                            }
+                            mapmarks::MissionFacts facts;
+                            facts.kind = k.kind, facts.level = k.level, facts.unit = unit, facts.mapScale = mapLabelScale;
+                            facts.discovered = discoveredPlaces.count(zone) != 0;
+                            facts.known = known;
+                            facts.completed = missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, zone);
+                            facts.newNote = saveGame.missionTimers.count(zone) != 0;
+                            facts.clockMs = clockMs;
+                            facts.showRarity = showRarity != 0;
+                            const mapmarks::MissionLook look = mapmarks::missionLook(facts);
+                            if (!look.shown)
+                                continue;
+                            v.scale = look.scale;
+                            v.colour = look.colour;
+                            if (look.named) {
+                                v.label = placeNameOf(k.px, k.py, k.type);
+                                if (look.stars > 0) // (the font draws U+00B1 as a star)
+                                    v.label += "\n" + std::string((size_t)look.stars, (char)0xb1);
+                            }
+                            if (look.icon)
+                                v.icon = look.icon;
+                            if (look.solved)
+                                v.overlay = "solved";
+                            if (look.note)
+                                v.note = "NEW";
+                            v.reportsHover = look.reportsHover;
+                            v.item = artifact;
+                        } else if (k.list == 3) { // a flight point, while a flight master shows them
+                            const mapmarks::Size size = mapmarks::pointSize(unit, mapLabelScale);
+                            if (!flightmasterMode || !size.shown)
+                                continue;
+                            v.scale = size.scale;
+                            v.icon = boughtFlights.count({k.x, k.y}) ? "flight-point" : "cross";
+                            v.flightTarget = v.reportsHover = v.flightPoint = true;
+                        } else { // a land's name
+                            if (!discoveredAreas.count({k.px, k.py}))
+                                continue;
+                            v.scale = mapmarks::landSize(unit, mapLabelScale).scale;
+                            v.label = landNameOf({k.px, k.py});
+                            v.colour = mapmarks::landColour(k.type);
+                        }
+                        markers.push_back(v);
+                    }
+                    // The stars the player set on the map (the character's map stars).
+                    const mapmarks::Size starSize = mapmarks::pointSize(unit, mapLabelScale);
+                    if (starSize.shown)
+                        for (const auto &t : saveGame.treasures) {
+                            mapmarks::Marker v;
+                            v.block = glm::ivec3(t[0], t[1], t[2]);
+                            if (!worldMap.project(view, glm::dvec3(v.block), v.at, &v.depth))
+                                continue;
+                            v.icon = "star";
+                            v.scale = starSize.scale;
+                            v.reportsHover = true;
+                            markers.push_back(v);
+                        }
+                    std::stable_sort(markers.begin(), markers.end(),
+                                     [](const mapmarks::Marker &a, const mapmarks::Marker &b) { return a.depth > b.depth; });
+                    // The quests' sprites (OverworldEvents' MapMarkers), over the game's markers: an
+                    // orange question mark on an encounter, a grey one on an accepted objective, at 0.6
+                    // of the stars' size.
+                    if (starSize.shown)
+                        for (const OverworldEvents::Pin &pin : events.pins()) {
+                            mapmarks::Marker v;
+                            if (!worldMap.project(view, glm::dvec3((double)pin.x, (double)pin.y, (double)pin.z), v.at))
+                                continue;
+                            v.questSprite = pin.destination ? "quest-destination" : "quest-event";
+                            v.scale = starSize.scale * 0.6f;
+                            markers.push_back(v);
+                        }
+                    return markers;
+                };
+            }
+        }
         if (hudReady) {
             VkExtent2D screen = renderer.screenSize();
             if (screen.width != hudSize.width || screen.height != hudSize.height) {
@@ -7031,7 +7316,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 if (!lootWindowItems.empty())
                     hs.windows = &lootWindowItems;
             }
-            hs.mapMarkers.insert(hs.mapMarkers.begin(), mapMarkerViews.begin(), mapMarkerViews.end());
+            if (collectMapMarkers) {
+                if (nativeInventory)
+                    hs.collectMapMarkers = std::move(collectMapMarkers);
+                else {
+                    const auto markers = collectMapMarkers();
+                    hs.mapMarkers.insert(hs.mapMarkers.begin(), markers.begin(), markers.end());
+                }
+            }
             hs.guiStepMs = hud.guiTiming().step;
             hs.guiClockMs = hud.guiTiming().elapsed;
             hs.mapClockMs = hs.guiClockMs;
@@ -7054,22 +7346,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 hoveredArtifact = hovered.item;
                 if (hovered.best >= 0) {
                     mapCursor = glm::dvec3(hovered.cursor);
-                    mapCursorKnown = mapCursorFromOverlay = true;
+                    mapCursorKnown = true;
                 }
             };
             if (nativeInventory) {
                 hs.mapInteractive = mapOpen && !mapSelection.dragged;
                 hs.mapOverlayDraw = acceptMapHover;
-                if (hs.interfaceVisible && hs.mapInteractive) {
-                    // Prepare a possible next icon without publishing map outputs
-                    // before the actual MapOverlay draw.
-                    const auto candidate = mapmarks::hover(
-                        hs.mapMarkers, hs.pointerAt, hud.interfaceScale(),
-                        [&](const mapmarks::Marker &marker) { return hud.mapLabelWidth(marker); }, mapSelection.shrinesOnly);
-                    if (candidate.originalItem)
-                        loadInventorySprite(
-                            spawned.itemSprite(nativeplayer::transformed(*candidate.originalItem, gear.playerClass()).data()));
-                }
             } else if (!menusReady || menus.interfaceShown()) {
                 mapmarks::Hover hovered;
                 if (mapOpen && !mapSelection.dragged)
@@ -7140,7 +7422,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 else
                     hs.mapPreview.push_back(Line{"Cost: " + std::to_string(cost) + " gold", 12, 3, glm::vec4(1, 0, 0, 1), 0, true});
             }
-            if (hs.pointer) {
+            if (nativeInventory)
+                hs.pointerText = mapPointerText;
+            else if (hs.pointer) {
                 hs.pointerText.clear();
                 if (mapOpen && mapCursorKnown) {
                     const glm::dvec2 here(player.position.x + (double)(extractedWorld.originDotsX() >> 16),
@@ -7338,279 +7622,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 renderer.overlay(hudVertices);
             else
                 renderer.overlay(hudVertices, hud.itemDraws());
-        }
-        Camera camera{eye, target};
-        camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
-        // The map (the game's frame update, the map rendering): its position, its overlay between the
-        // corner and the middle, its regions.
-        if (useExtracted && !serverMode) {
-            if (mapTest >= 0) {
-                mapOpen = true;
-                flightmasterMode = flightsTest;
-                if (shrinesTest)
-                    mapSelection.openShrines();
-                mapZoom = std::clamp((int)mapTest, 0, worldmap::MAX_ZOOM);
-                mapTest = -1;
-            }
-            const glm::dvec3 playerBlocks((double)player.position.x + (double)(extractedWorld.originDotsX() >> 16),
-                                          (double)player.position.y + (double)(extractedWorld.originDotsY() >> 16),
-                                          (double)player.position.z - ExtractedWorld::Z_OFFSET);
-            if (!mapOpen)
-                mapMoved = false;
-            if (!mapMoved) {
-                targetMapPosition = playerBlocks;
-                mapPosition = targetMapPosition;
-            } else
-                targetMapPosition.z = worldgen::groundHeight((int32_t)std::floor(targetMapPosition.x), (int32_t)std::floor(targetMapPosition.y));
-            const double stepMs = dt * 1000.0;
-            mapPosition += (targetMapPosition - mapPosition) * (double)gamemath::blendFactor(stepMs, 0.01f);
-            const VkExtent2D size = renderer.screenSize();
-            const float w = (float)std::max(1u, size.width), h = (float)std::max(1u, size.height);
-            const glm::vec2 cornerPosition(1.0f - h * 0.3f / w * minimapScale, 1.0f - minimapScale * 0.2f);
-            if (!mapPlaced)
-                mapViewCentre = cornerPosition, mapPlaced = true;
-            const float f = gamemath::blendFactor(stepMs, 0.01f);
-            mapViewCentre += ((mapOpen ? glm::vec2(0.5f, 0.6f) : cornerPosition) - mapViewCentre) * f;
-            mapLabelScale += ((mapOpen ? 1.8f : minimapScale) - mapLabelScale) * f;
-            // §4.6 halves the radius on a flag the spec reads as Control held (its open question 2).
-            // The vanilla screenshots (options mapScale 0.75) show the corner map at half radius
-            // and the open map whole, so the flag is taken as "the map is not open".
-            const bool halfRadius = !mapOpen;
-            const int radius = halfRadius ? worldmap::RADIUS / 2 : worldmap::RADIUS;
-            worldMap.update(renderer, mapPosition, mapZoom);
-            worldmap::Map::View view;
-            view.center = mapPosition;
-            view.level = mapZoom;
-            view.radius = radius;
-            view.pitch = viewPitch, view.yaw = viewYaw;
-            view.cursor = mapViewCentre;
-            view.viewScale = minimapScale * mapLabelScale; // options mapScale x the eased scale (§4.1)
-            view.screen = glm::vec2(w, h);
-            // The player's own marker models on the map: its head and hair, the hair in its colour.
-            if (!mapPlayerSet) {
-                mapPlayerSet = true;
-                CubModel head, hair;
-                glm::u8vec3 hairColor(255);
-                bool haveHead = false, haveHair = false;
-                for (const auto &part : character.parts()) {
-                    if (part.matrix != 3 && part.matrix != 4)
-                        continue;
-                    if (auto path = assets.resolve(fs::path("sprites") / (part.sprite + ".cub"))) {
-                        if (part.matrix == 3)
-                            haveHead = head.load(*path);
-                        else
-                            haveHair = hair.load(*path), hairColor = part.tint;
-                    }
-                }
-                if (haveHead)
-                    mapPlayerLooks = worldMap.looks(renderer, head, haveHair ? &hair : nullptr, hairColor,
-                                                    playerHairStyle.dual ? &playerHairStyle : nullptr);
-                if (auto path = assets.resolve(fs::path("sprites") / "cube.cub")) { // the flight route's dot (the cube sprite)
-                    CubModel cube;
-                    if (cube.load(*path))
-                        worldMap.setCube(renderer, cube);
-                }
-            }
-            view.player = playerBlocks;
-            view.worldClockMs = time * 1000.0;
-            { // the route: to the selected flight point, or the flight's destination while flying
-                float flightMs = 0;
-                const uint8_t *me = spawned.playerRecord();
-                if (flightSelected)
-                    view.route = true, view.routeTarget = glm::ivec2(selectedFlightPoint[0], selectedFlightPoint[1]);
-                else if (me && spawned.playerAbility(flightMs) == 0x9c) {
-                    int32_t to[2];
-                    std::memcpy(to, me + 0x1b0, 8);
-                    view.route = true, view.routeTarget = glm::ivec2(to[0], to[1]);
-                }
-                if (view.route)
-                    view.routeTargetZ = (int)worldgen::groundHeight(view.routeTarget.x, view.routeTarget.y, 0);
-            }
-            { // The world map's creature markers (MapMarks.h): the player, the creatures leading it to a
-              // mission, and the tombstone where it last died.
-                static std::map<std::tuple<std::string, std::string, int>, int> looksOf; // (models, hair colour) -> Map::looks
-                auto looks = [&](const std::string &first, const std::string &hairName, glm::u8vec3 colour) {
-                    const auto key = std::make_tuple(first, hairName, (colour.r << 16) | (colour.g << 8) | colour.b);
-                    if (auto known = looksOf.find(key); known != looksOf.end())
-                        return known->second;
-                    int index = -1;
-                    CubModel model, hair;
-                    const auto modelPath = first.empty() ? std::nullopt : assets.resolve(fs::path("sprites") / (first + ".cub"));
-                    const auto hairPath = hairName.empty() ? std::nullopt : assets.resolve(fs::path("sprites") / (hairName + ".cub"));
-                    if (modelPath && model.load(*modelPath))
-                        index = worldMap.looks(renderer, model, hairPath && hair.load(*hairPath) ? &hair : nullptr, colour);
-                    return looksOf[key] = index;
-                };
-                worldmap::Map::View::Mark me; // (a player: no pulse)
-                me.looks = mapPlayerLooks;
-                me.at = playerBlocks;
-                me.turnDegrees = glm::degrees(heading - character.forward()); // (as the body turns)
-                view.marks.push_back(me);
-                spawned.forEach([&](const uint8_t *c) {
-                    const int hostility = c[worldgen::creature::HOSTILITY], ability = c[worldgen::creature::ABILITY];
-                    uint16_t toggles;
-                    int32_t destination[2];
-                    std::memcpy(&toggles, c + worldgen::creature::TOGGLES, 2), std::memcpy(destination, c + 0x1b0, 8);
-                    const bool destinationDone =
-                        missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, {destination[0], destination[1]});
-                    if (!mapmarks::showsCreature(hostility, ability, toggles, destinationDone))
-                        return;
-                    // Its head (its chest when it has none) and its hair, from its looks (+0x78).
-                    int16_t head, hair, chest;
-                    std::memcpy(&head, c + 0x90, 2), std::memcpy(&hair, c + 0x92, 2), std::memcpy(&chest, c + 0x98, 2);
-                    std::string first = spawned.spriteName(head);
-                    if (first.empty())
-                        first = spawned.spriteName(chest);
-                    int64_t shown[3]; // where it is drawn (+0xb10), and its turn (+0xb3c, degrees)
-                    float turn;
-                    std::memcpy(shown, c + 0xb10, 24), std::memcpy(&turn, c + 0xb3c, 4);
-                    worldmap::Map::View::Mark k;
-                    k.looks = looks(first, spawned.spriteName(hair), glm::u8vec3(c[0x7a], c[0x7b], c[0x7c]));
-                    k.at = glm::dvec3((double)shown[0], (double)shown[1], (double)shown[2]) / 65536.0;
-                    k.turnDegrees = turn;
-                    k.pulses = hostility != 0;
-                    view.marks.push_back(k);
-                });
-                if (saveGame.tombstoneMs > 0) {
-                    constexpr int TOMBSTONE_MODEL = 0xde7; // tombstone.cub in the world's model table
-                    worldmap::Map::View::Mark k;
-                    k.looks = looks(spawned.spriteName(TOMBSTONE_MODEL), "", glm::u8vec3(255));
-                    k.at = glm::dvec3((double)saveGame.deathPosition[0], (double)saveGame.deathPosition[1], (double)saveGame.deathPosition[2]);
-                    k.pulses = true;
-                    view.marks.push_back(k);
-                }
-            }
-            worldMap.collect(view, opaque);
-            if (!mapCursorFromOverlay)
-                mapCursorKnown = false;
-            if (mapOpen && !halfRadius && !mapCursorFromOverlay) { // (no cursor on the minimap, nor at half radius: §4.6)
-                double px, py;
-                pointerPosition(&px, &py);
-                if (pointerTestX >= 0)
-                    px = pointerTestX, py = pointerTestY;
-                mapCursorKnown = worldMap.pick(view, glm::vec2((float)px, (float)py), mapCursor);
-                static bool told = false; // (testing: where the pointer meets the map)
-                if (pointerTestX >= 0 && mapCursorKnown && !told && time > 5) {
-                    told = true;
-                    logLine("Map cursor: " + std::to_string((int64_t)mapCursor.x) + " " + std::to_string((int64_t)mapCursor.y) + " " +
-                            std::to_string((int64_t)mapCursor.z) + " (the player at " +
-                            std::to_string((int64_t)playerBlocks.x) + " " + std::to_string((int64_t)playerBlocks.y) + ")");
-                }
-            }
-            // The map overlay's markers (MapMarks.h): places, missions, lands, flight points and
-            // stars, drawn far to near; then the marker under the pointer.
-            mapMarkerViews.clear();
-            {
-                const int unit = worldmap::scaleOf(mapZoom);
-                const int clockMs = (int)(time * 1000.0);
-                std::set<std::array<int32_t, 2>> marked; // the missions marked on the map (+0xb8)
-                for (const SaveGame::Marked &m : saveGame.marked)
-                    marked.insert({m.x, m.y});
-                auto isKnown = [&](mapmarks::Cell zone) { return missionsTest || marked.count(zone) || saveGame.solvedMissions.count(zone); };
-                for (const worldmap::Map::Projected &p : worldMap.markers(view)) {
-                    const worldgen::MapRegion::Marker &k = p.marker;
-                    mapmarks::Marker v;
-                    v.at = p.at;
-                    v.depth = p.depth;
-                    v.block = glm::ivec3(k.x, k.y, k.z);
-                    // A place: shops and inns once their zone is discovered; shrines, lore buildings and
-                    // treasure cells once their cell is known (used).
-                    if (k.list == 0) {
-                        constexpr int SHRINE = 12, LORE_BUILDING = 14, TREASURE = 15;
-                        if (k.type == SHRINE || k.type == LORE_BUILDING || k.type == TREASURE) {
-                            if (!usedCells.count({worldgen::floorDiv(k.x, 4), worldgen::floorDiv(k.y, 4)}))
-                                continue;
-                        } else if (worldgen::placeKind(k.px, k.py, k.big) != 0 && !discoveredPlaces.count({k.px, k.py}))
-                            continue;
-                        v.scale = mapmarks::placeScale(k.type, unit, mapLabelScale);
-                        v.icon = mapmarks::placeIcon(k.type);
-                        v.shrineTarget = k.type == SHRINE;
-                        v.reportsHover = v.reportsCell = k.type == LORE_BUILDING; // (hovering a read lore building shows its lore)
-                    } else if (k.list == 1) { // a place's mission
-                        const mapmarks::Cell zone{k.px, k.py};
-                        bool known = isKnown(zone);
-                        constexpr int ARTIFACT_PLACE = 14;
-                        const worldgen::Item artifact = k.kind == ARTIFACT_PLACE ? worldgen::placeArtifact(k.px, k.py) : worldgen::Item{};
-                        if (k.kind == ARTIFACT_PLACE && !known) { // ten pieces of its realm's lore reveal it
-                            const auto realmLore = loreBook.find(artifact.realm);
-                            if (mapmarks::revealedByLore(k.kind, known, realmLore == loreBook.end() ? 0 : realmLore->second.size())) {
-                                known = true;
-                                marked.insert(zone);
-                                saveGame.marked.push_back({k.px, k.py, "", ""});
-                                saveGame.missionTimers[zone] = mapmarks::LORE_NOTE_MS;
-                                logLine("Lore revealed the artifact of place " + std::to_string(k.px) + "," + std::to_string(k.py));
-                            }
-                        }
-                        mapmarks::MissionFacts facts;
-                        facts.kind = k.kind, facts.level = k.level, facts.unit = unit, facts.mapScale = mapLabelScale;
-                        facts.discovered = discoveredPlaces.count(zone) != 0;
-                        facts.known = known;
-                        facts.completed = missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, zone);
-                        facts.newNote = saveGame.missionTimers.count(zone) != 0;
-                        facts.clockMs = clockMs;
-                        facts.showRarity = showRarity != 0;
-                        const mapmarks::MissionLook look = mapmarks::missionLook(facts);
-                        if (!look.shown)
-                            continue;
-                        v.scale = look.scale;
-                        v.colour = look.colour;
-                        if (look.named) {
-                            v.label = placeNameOf(k.px, k.py, k.type);
-                            if (look.stars > 0) // (the font draws U+00B1 as a star)
-                                v.label += "\n" + std::string((size_t)look.stars, (char)0xb1);
-                        }
-                        if (look.icon)
-                            v.icon = look.icon;
-                        if (look.solved)
-                            v.overlay = "solved";
-                        if (look.note)
-                            v.note = "NEW";
-                        v.reportsHover = look.reportsHover;
-                        v.item = artifact;
-                    } else if (k.list == 3) { // a flight point, while a flight master shows them
-                        const mapmarks::Size size = mapmarks::pointSize(unit, mapLabelScale);
-                        if (!flightmasterMode || !size.shown)
-                            continue;
-                        v.scale = size.scale;
-                        v.icon = boughtFlights.count({k.x, k.y}) ? "flight-point" : "cross";
-                        v.flightTarget = v.reportsHover = v.flightPoint = true;
-                    } else { // a land's name
-                        if (!discoveredAreas.count({k.px, k.py}))
-                            continue;
-                        v.scale = mapmarks::landSize(unit, mapLabelScale).scale;
-                        v.label = landNameOf({k.px, k.py});
-                        v.colour = mapmarks::landColour(k.type);
-                    }
-                    mapMarkerViews.push_back(v);
-                }
-                // The stars the player set on the map (the character's map stars).
-                const mapmarks::Size starSize = mapmarks::pointSize(unit, mapLabelScale);
-                if (starSize.shown)
-                    for (const auto &t : saveGame.treasures) {
-                        mapmarks::Marker v;
-                        v.block = glm::ivec3(t[0], t[1], t[2]);
-                        if (!worldMap.project(view, glm::dvec3(v.block), v.at, &v.depth))
-                            continue;
-                        v.icon = "star";
-                        v.scale = starSize.scale;
-                        v.reportsHover = true;
-                        mapMarkerViews.push_back(v);
-                    }
-                std::stable_sort(mapMarkerViews.begin(), mapMarkerViews.end(),
-                                 [](const mapmarks::Marker &a, const mapmarks::Marker &b) { return a.depth > b.depth; });
-                // The quests' sprites (OverworldEvents' MapMarkers), over the game's markers: an
-                // orange question mark on an encounter, a grey one on an accepted objective, at 0.6
-                // of the stars' size.
-                if (starSize.shown)
-                    for (const OverworldEvents::Pin &pin : events.pins()) {
-                        mapmarks::Marker v;
-                        if (!worldMap.project(view, glm::dvec3((double)pin.x, (double)pin.y, (double)pin.z), v.at))
-                            continue;
-                        v.questSprite = pin.destination ? "quest-destination" : "quest-event";
-                        v.scale = starSize.scale * 0.6f;
-                        mapMarkerViews.push_back(v);
-                    }
-            }
         }
         if (serverMode) {
             // A dedicated server draws nothing: it keeps the world running at about

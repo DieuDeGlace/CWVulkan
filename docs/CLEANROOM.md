@@ -72,6 +72,14 @@ same oracles that check them today:
 (None left: the last two, `NativePlayer`'s `transformed()` and `NativeMenu`, are below.)
 
 Done so far with the full process:
+- Map draw phases follow `steam-map-rendering-phases.md`: current 3D map work
+  precedes GUI, and flat markers collect at the admitted Overlay callback rather
+  than using the preceding camera's screen positions. F4 suppresses 3D and GUI
+  map draws; retained Control message state selects half radius independently
+  of full-map mode. Pointer text samples retained cursor data earlier, with its
+  distinct float32 distance norm. Pixel-centre, owner callback-order and hidden
+  collection regressions cover these changes. Broader input/camera phase fidelity
+  and hovered-land highlighting remain separate work.
 - Map information follows `steam-preview-map-location-lore.md`: complete semantic
   item payloads stay live in the overlay member, while flight/lore coordinates
   are copied before the later draw. Reached minimap/drag draws reset outputs;

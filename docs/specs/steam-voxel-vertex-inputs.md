@@ -96,8 +96,10 @@ replaced by that sample during asset meshing.
 
 With sprite+0x9a nonzero, the halving is omitted: RGB remains the full §2
 result, fourth component2.0 packs as **low8(510)=254**, and shader V is254/255.
-Map region sprites created via0x1737b0 use mode1; the special map behavior is
-already specified in `worldmap-rendering.md`. Don't impose that map encoding
+Category0x17 procedural item sprites created via0x1737b0 also use mode1;
+that call is the item-resource cache, not the map-region constructor.
+Its allocation/metadata is specified in `steam-procedural-item-resources.md`.
+The special map behavior remains in `worldmap-rendering.md`. Don't impose mode1
 on the ordinary stock CUB asset path, or silently saturate its2.0 alpha to255.
 
 **Exact simple example:** a fully open white CUB corner with zero additive

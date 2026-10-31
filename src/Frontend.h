@@ -35,6 +35,7 @@ struct GLFWwindow;
 // What the window gave since the last frame (filled by main's GLFW callbacks).
 struct MenuInput {
     bool shiftDown = false; // Physical message state survives per-frame clear.
+    bool controlDown = false;
     double scroll = 0;
     std::vector<inventoryui::WheelEvent> wheelEvents;
     std::vector<int> pressed, buttons, released;

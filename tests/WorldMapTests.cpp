@@ -161,6 +161,13 @@ void camera() {
     glm::vec4 clip = worldmap::clipOf(cam, glm::vec3(cam.view * glm::vec4(0, 0, 0, 1)));
     MAP_CHECK(near(clip.x / clip.w, 0, 1e-5f) && near(clip.y / clip.w, 0, 1e-5f));
     MAP_CHECK(near(clip.w, 300, 1e-3f));
+    const auto samePixelA = worldmap::mapCamera(0, 0, 1, {.50001f, .60001f}, {1920, 1080});
+    const auto samePixelB = worldmap::mapCamera(0, 0, 1, {.50002f, .60002f}, {1920, 1080});
+    MAP_CHECK(samePixelA.lens == samePixelB.lens);
+    const auto nextPixel = worldmap::mapCamera(0, 0, 1, {.50055f, .60001f}, {1920, 1080});
+    MAP_CHECK(near(nextPixel.lens.z - samePixelA.lens.z, 2.f / 1920.f, 1e-7f));
+    const auto oddWindow = worldmap::mapCamera(0, 0, 1, {.5f, .5f}, {1919, 1079});
+    MAP_CHECK(near(oddWindow.lens.z, -1.f / 1919.f, 1e-7f) && near(oddWindow.lens.w, -1.f / 1079.f, 1e-7f));
     // Looking straight down with the camera facing south (CubeVulkan's yaw 90 degrees puts the
     // eye north of the player): south is up the screen, so a unit north is 0.00644 down, and
     // east is on the left.

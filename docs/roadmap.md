@@ -277,7 +277,13 @@ individual feature documents.
   The GUI clock now narrows each capped step before wrapping accumulation across
   title/game frames, rather than deriving spin from absolute wall time. CPU/owner
   checks and all40 world/16 GUI Vulkan image cases pass, plus water/Alpha checks.
-  Full map-panel controls, GUI capture/poses and layout-callback timing still
+  Current 3D map projection now precedes GUI, with flat collection at the actual
+  Overlay callback. F4 suppresses both map passes; Control's retained message bit
+  controls half radius, while pointer text samples earlier retained cursor data
+  using its specified float32 norm. Screen-centre pixel truncation and owner
+  callback-order tests pass with the full validation suite. Earlier camera/input
+  phases, hovered-land highlighting, full map-panel controls, GUI capture/poses
+  and layout-callback timing still
   need implementation/comparison.
 - [x] Ring Menu selector: canonical category1 candidates, retained signed32 selection,
   neutral/repeat state, native label-before-selection timing, filtered input gates,

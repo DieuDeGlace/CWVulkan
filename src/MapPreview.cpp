@@ -29,6 +29,14 @@ std::string distanceText(int32_t metres) {
     const int32_t km = metres / 1000, tenth = metres / 100 - km * 10;
     return std::to_string(km) + (metres < 10000 && tenth ? "." + std::to_string(tenth) : "") + " km";
 }
+std::string pointerDistance(const std::array<int64_t, 3> &physical, const std::array<int64_t, 3> &cursor, bool overlayShown) {
+    if (!overlayShown || cursor[2] < 0)
+        return {};
+    const float x = float(physical[0] - cursor[0]) * float(BLOCK);
+    const float y = float(physical[1] - cursor[1]) * float(BLOCK);
+    const float norm = std::sqrt(x * x + y * y);
+    return distanceText(int32_t(double(norm) * .5));
+}
 int32_t flightPrice(Cell target, const FlightContext &context) {
     const double x = double(context.physical[0]) * BLOCK - double(target[0]);
     const double y = double(context.physical[1]) * BLOCK - double(target[1]);

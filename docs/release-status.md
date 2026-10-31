@@ -7,6 +7,17 @@ checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
 
+- Current map matrices now precede GUI drawing, and marker collection/projection
+  runs inside the admitted Overlay callback after earlier game-UI widgets.
+  F4 suppresses the 3D map too; half radius uses retained Control message state,
+  independent of full-map mode. Terrain picks precede later marker cursor snaps;
+  pointer text samples retained cursor data earlier using its float32 norm.
+  Eased screen centres truncate to pixels before projection. Numeric/owner-tree
+  regressions, all five targets and the full CPU/owner suite, 40 world/20 GUI Vulkan,
+  water and Alpha checks pass. A fresh hidden owner-data capture completed with
+  the test save unchanged. Earlier input/centre/toggle phase fidelity, hovered-land
+  highlighting and procedural artifact resources remain open.
+
 - Native map information now uses the independent map-location/lore audit.
   Overlay drawing publishes semantic item records and independent flight/lore
   outputs; hidden draws retain them. Earlier coordinates stay copied while the

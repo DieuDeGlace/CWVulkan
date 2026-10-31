@@ -1,5 +1,5 @@
 #pragma once
-// Independent PreviewWidget flight text contract: steam-preview-map-location-lore.md section4.
+// Map information and pointer text from the independent Preview/map-phase specifications.
 #include "ItemInformation.h"
 #include "MapMarks.h"
 #include "DialogueWords.h"
@@ -17,6 +17,7 @@ struct FlightContext {
     Cell destination{};
 };
 std::string distanceText(int32_t metres);
+std::string pointerDistance(const std::array<int64_t, 3> &physical, const std::array<int64_t, 3> &cursor, bool overlayShown);
 int32_t flightPrice(Cell target, const FlightContext &);
 std::vector<iteminformation::Line> flight(Cell target, bool playerTarget, const FlightContext &);
 struct Lore {

@@ -153,6 +153,13 @@ model, the id, the modifier and a 32-bit **counter** (+0x30):
 
 The model depends only on (id, modifier), and is the same every time for the same pair.
 
+The later native audit [steam-procedural-item-resources.md](steam-procedural-item-resources.md)
+specifies the exact live cache layout/lookup ABI, raw24³ RGB allocation,
+generation-ready capture boundaries, native meshing mode and why geometry itself
+depends on the modifier's RNG state. Its first checkpoint supplies a bounded
+owner-data export contract; it does not replace the eight pending shape algorithms
+with recolored stock models.
+
 ---
 
 ## 4. The extracted table (Extract/oracle/item-models.bin)
@@ -225,9 +232,12 @@ What the extraction does not capture, in the game's own terms:
 
 ## Open questions
 
-1. **Which items are category 0x17**, and the four shape generators (0x30790, 0x2bf90,
-   0x2e490, 0x2ffd0), 0x2daf0, 0x2cae0, 0x2f450, 0x2fc60 and the finishing step 0x170700, are
-   not specified. A clean port of §3 needs them, or a recording of the models the game makes.
+1. **Procedural shape algorithms.** Category0x17 includes artifacts
+   (lore-and-artifacts §5.1). Exact shape generators0x30790,0x2bf90,
+   0x2e490,0x2ffd0,0x2daf0,0x2cae0,0x2f450 and0x2fc60 remain the
+   separate audit in [steam-procedural-item-resources.md](steam-procedural-item-resources.md).
+   That supplement now establishes how completed owner RGB resources can be
+   captured per full(id,modifier) key, including the native meshing-mode metadata.
 2. **Model list order.** The index space is the order the game loads its model files in;
    CubeVulkan already relies on that order (`sprites.txt`), but the loader itself was not
    specified here.

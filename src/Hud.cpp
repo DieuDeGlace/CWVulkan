@@ -831,10 +831,14 @@ bool Hud::loadQuestIcons(const std::filesystem::path &file) {
 // Texts are drawn twice: white with a darker outline, then their colour without one.
 void Hud::drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) const {
     using namespace mapmarks;
+    auto collected = state.collectMapMarkers ? state.collectMapMarkers() : std::vector<Marker>{};
+    if (state.collectMapMarkers)
+        collected.insert(collected.end(), state.mapMarkers.begin(), state.mapMarkers.end());
+    const auto &markers = state.collectMapMarkers ? collected : state.mapMarkers;
     Hover hovered;
     if (state.mapInteractive)
-        hovered = hover(
-            state.mapMarkers, state.pointerAt, guiScale, [&](const Marker &marker) { return mapLabelWidth(marker); }, state.mapShrineMode);
+        hovered =
+            hover(markers, state.pointerAt, guiScale, [&](const Marker &marker) { return mapLabelWidth(marker); }, state.mapShrineMode);
     mapOutputs.admittedDraw(&hovered);
     if (state.mapOverlayDraw)
         state.mapOverlayDraw(hovered);
@@ -856,7 +860,7 @@ void Hud::drawMapMarkers(const State &state, std::vector<OverlayVertex> &out) co
         s.color = fill;
         plasmaText(out, s, m);
     };
-    for (const State::MapMarker &k : state.mapMarkers) {
+    for (const State::MapMarker &k : markers) {
         if (!k.questSprite.empty()) { // (OverworldEvents' quest sprites: anchored at their bottom centre)
             if (auto icon = icons.find(k.questSprite); icon != icons.end()) {
                 const float scale = std::clamp(k.scale, 0.25f, 2.0f);

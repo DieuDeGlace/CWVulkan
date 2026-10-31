@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <initializer_list>
 #include <utility>
+#include <cmath>
 
 int mapPreviewTests() {
     int failures = 0;
@@ -16,6 +17,10 @@ int mapPreviewTests() {
         }
     };
     using namespace mappreview;
+    check(pointerDistance({655359999, 0, 0}, {0, 0, 0}, true) == "5 km",
+          "pointer distance uses float32 fixed conversion/norm before double metre conversion");
+    check(pointerDistance({655359999, 0, 0}, {0, 0, -1}, true).empty() && pointerDistance({655359999, 0, 0}, {0, 0, 0}, false).empty(),
+          "pointer text admits only own-shown Overlay and nonnegative fixed cursor Z");
     for (const auto &[metres, text] : std::initializer_list<std::pair<int, const char *>>{{9, "9 m"},
                                                                                           {19, "10 m"},
                                                                                           {499, "490 m"},
@@ -109,8 +114,12 @@ int mapPreviewTests() {
         marker.block = {300, 400, 0};
         marker.flightTarget = marker.reportsHover = true;
         marker.originalItem = &original;
-        ui.mapMarkers.push_back(marker);
-        int overlayDraws = 0, informationDraws = 0;
+        std::vector<mapmarks::Marker> currentMarkers{marker};
+        int collectionDraws = 0, overlayDraws = 0, informationDraws = 0;
+        ui.collectMapMarkers = [&] {
+            ++collectionDraws;
+            return currentMarkers;
+        };
         ui.mapOverlayDraw = [&](const auto &) { ++overlayDraws; };
         ui.informationDraw = [&] {
             ++informationDraws;
@@ -126,7 +135,7 @@ int mapPreviewTests() {
         sources.map = borrowed;
         const auto selected = itempreview::select(sources);
         original[0] = 28;
-        ui.mapMarkers[0].block = {500, 600, 0};
+        currentMarkers[0].block = {500, 600, 0};
         hud.draw(ui, overlay);
         check(selected.item == borrowed && (*selected.item)[0] == 28 && copied == (Cell{300, 400}) &&
                   hud.mapPreviewOutputs().flight == (Cell{500, 600}),
@@ -134,15 +143,17 @@ int mapPreviewTests() {
         ui.interfaceVisible = false;
         original[0] = 24;
         hud.draw(ui, overlay);
-        check(overlayDraws == 2 && informationDraws == 2 && (*borrowed)[0] == 28, "hidden ancestor skips map and information callbacks");
+        check(collectionDraws == 2 && overlayDraws == 2 && informationDraws == 2 && (*borrowed)[0] == 28,
+              "hidden ancestor skips collection, map and information callbacks");
         ui.interfaceVisible = true;
         ui.mapInteractive = false;
         ui.informationDraw = [&] { check((*borrowed)[0] == 0, "reached minimap reset precedes information drawing"); };
         hud.draw(ui, overlay);
-        check(overlayDraws == 3 && hud.mapPreviewOutputs().flight[0] == mapmarks::PreviewOutputs::NONE &&
+        check(collectionDraws == 3 && overlayDraws == 3 && hud.mapPreviewOutputs().flight[0] == mapmarks::PreviewOutputs::NONE &&
                   hud.mapPreviewOutputs().flightToPlayer,
               "reached minimap clears the pair without clearing the live flag");
         ui.mapMarkers.clear();
+        ui.collectMapMarkers = {};
         ui.mapOverlayDraw = {};
         ui.informationDraw = {};
         hud.draw(ui, overlay);

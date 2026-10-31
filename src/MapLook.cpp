@@ -211,7 +211,10 @@ MapCamera mapCamera(float cameraYaw, float cameraPitch, float viewScale, glm::ve
     camera.view = view;
     const float focal = 1.0f / std::tan(HALF_FIELD_OF_VIEW);
     const float aspect = screen.x / std::max(screen.y, 1e-4f);
-    camera.lens = glm::vec4(-focal / aspect, focal, 2 * centre.x - 1, 2 * centre.y - 1);
+    // The wrapper converts each eased screen centre to integer pixels first.
+    const glm::vec2 pixel(float(int32_t(screen.x * centre.x)), float(int32_t(screen.y * centre.y)));
+    const glm::vec2 shift = 2.f * (pixel - screen * .5f) / screen;
+    camera.lens = glm::vec4(-focal / aspect, focal, shift.x, shift.y);
     return camera;
 }
 
