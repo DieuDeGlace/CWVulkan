@@ -7,6 +7,7 @@
 // writes to the game's save (characters.db / world.db).
 #include <glm/glm.hpp>
 #include "InventorySlots.h"
+#include "HairStyle.h"
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -57,6 +58,7 @@ const char *specializationName(int classType, int specialization);
 
 // CubeVulkan's own progress for one character: where they are and what they wear.
 struct SaveGame {
+    std::optional<hair::Style> hairStyle; // CubeVulkan notes, never the native appearance bytes
     std::optional<inventoryslots::PlayerState> nativeInventory;
     bool inventoryAuthoritative = false;
     struct Worn {

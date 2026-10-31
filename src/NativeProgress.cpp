@@ -359,6 +359,7 @@ Item keptFound(ItemPool &pool, const SaveGame::Found &found) {
 // The notes: what CubeVulkan keeps of a character beyond the game's format.
 std::string notesOf(const SaveGame &s) {
     SaveGame n;
+    n.hairStyle = s.hairStyle;
     n.quests = s.quests;
     n.marked = s.marked;
     n.takenItems = s.takenItems;
@@ -376,6 +377,7 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
     {
         SaveGame n;
         if (!notes.empty() && n.parse(notes)) {
+            s.hairStyle = n.hairStyle;
             s.quests = n.quests, s.marked = n.marked, s.takenItems = n.takenItems, s.usedObjects = n.usedObjects;
         }
     }

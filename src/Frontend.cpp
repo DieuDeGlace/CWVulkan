@@ -273,8 +273,61 @@ const Counts *countsOf(int32_t race) {
 int wrapped(int value, int count) { return value < 0 ? count - 1 : value >= count ? 0 : value; }
 } // namespace
 
-int facesOf(int32_t race) { return countsOf(race) ? countsOf(race)->faces : 1; }
-int haircutsOf(int32_t race) { return countsOf(race) ? countsOf(race)->haircuts : 1; }
+int facesOf(int32_t race) {
+    return countsOf(race) ? countsOf(race)->faces : 1;
+}
+int haircutsOf(int32_t race) {
+    return countsOf(race) ? countsOf(race)->haircuts : 1;
+}
+
+void HairEditor::reset(hair::Style style) {
+    committed = preview = hair::normalised(style);
+}
+void HairEditor::arrow(int row, int direction) {
+    if (row == 0)
+        committed.dual = !committed.dual;
+    else if (row == 1 || row == 2) {
+        float &value = row == 1 ? committed.start : committed.blend;
+        const int percent = (int)std::lround(value * 100);
+        value = (float)std::clamp(percent + (direction < 0 ? -5 : 5), 0, 100) / 100;
+    }
+    preview = committed;
+}
+void HairEditor::hover(std::optional<glm::u8vec3> color) {
+    preview = committed;
+    if (preview.dual && color)
+        preview.second = *color;
+}
+void HairEditor::choose(glm::u8vec3 color) {
+    committed.dual = true;
+    committed.second = color;
+    preview = committed;
+}
+bool HairEditor::press(glm::vec2 panelPoint, glm::vec2 arrowSize) {
+    auto hits = [&](glm::vec2 at) {
+        const auto p = panelPoint - at;
+        return p.x >= 0 && p.y >= 0 && p.x < arrowSize.x && p.y < arrowSize.y;
+    };
+    for (int row = 0; row < 3; ++row) {
+        const float y = 55.0f + 30.0f * row - arrowSize.y * .5f - 5;
+        const int direction = hits({SECOND_HAIR_LEFT_ARROW_X, y}) ? -1 : hits({SECOND_HAIR_RIGHT_ARROW_X, y}) ? 1 : 0;
+        if (direction) {
+            arrow(row, direction);
+            return true;
+        }
+    }
+    int column, row;
+    if (!secondHairCellAt(panelPoint, column, row))
+        return false;
+    choose(glm::u8vec3(hairCellColour(column, row) * 255.0f));
+    return true;
+}
+glm::vec2 secondHairPanelAt(glm::vec2 window) {
+    return {std::max(0.0f, window.x - LOOK_PANEL_SIZE.x - 10), 20};
+}
+bool secondHairCellAt(glm::vec2 point, int &column, int &row) {
+    return hairCellAt(point - SECOND_HAIR_GRID + HAIR_GRID, column, row);
+}
 
 void Look::reset() {
     race = cls = sex = face = haircut = 0;

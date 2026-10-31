@@ -1,12 +1,16 @@
 # Engine readiness checklist
 
-Audited against the source and tests on 2026-10-30. The checkboxes in the first
+Audited against the source and tests on 2026-10-31. The checkboxes in the first
 section mean implemented and exercised in the stated checks; they do not certify
 complete Steam or pixel parity. Older progress notes are in Git history and the
 individual feature documents.
 
 ## Implemented
 
+- [x] Optional engine-owned dual-tone hair controls in character creation only.
+  Hover/commit, second color, start/blend, local model/map rendering and profile
+  metadata are tested. Native appearance bytes remain unchanged. Remote peers
+  do not yet receive the extra style; this extension does not establish UI parity.
 - [x] Clean-room generator: terrain, structures, placements, items, residents and
   encounters in `src/worldgen/`, from the written specifications. Owner-exported
   terrain/structure/creature comparisons run in EngineTests when available.

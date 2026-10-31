@@ -29,6 +29,16 @@ CubeVulkan's code, and those who write the code don't read the game's code.
 Similarities with the game are expected where behaviour must match (constants, the order of
 random draws, data layouts). What must not happen is lifting code or its expression.
 
+## Engine-specific appearance extension
+
+The optional dual-tone hair controls are a user-requested engine feature, not a
+port of native behavior. Their implementation uses CubeVulkan's existing tinting,
+frontend, configuration and profile-note APIs. Initial values may be read from the
+owner's INI data; no mod implementation or native source is consulted. Hair models
+and palette artwork are loaded from the owner's installation at runtime and stay
+out of source and runtime packages. The native character appearance format is
+unchanged, and the extra style currently applies only to the local player.
+
 ## Audit, 2026-10-27
 
 - Comments and docs no longer use names that a third-party reconstruction invented for the

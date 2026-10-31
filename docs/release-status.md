@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-10-30
+# Source review checkpoint — 2026-10-31
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -6,6 +6,18 @@ describe prototypes that have since been replaced; the current README and this
 checkpoint describe the intended setup and remaining limits.
 
 ## Current handoff items
+
+- Character creation now includes optional dual-tone hair controls: second-color
+  preview/selection, enable, transition start and blend. The native palette and
+  runtime-loaded hair models are reused without a mod DLL. Per-character engine
+  notes retain the style through local selection, play and map rendering, leaving
+  the native appearance record unchanged. Synthetic tests cover gradient/skin
+  handling, hover/commit, bounds, cache identity and metadata round trips. Hidden
+  read-only creation captures exercise Steam and Alpha lighting. Remote-player
+  synchronization of this extra appearance remains open; no owner assets ship.
+  All five targets build; the full CPU/owner suite,40 world and20 GUI Vulkan cases,
+  shared water and Alpha ordering pass. The captures verify the new controls and
+  hair; broader background/camera and original-game visual comparisons remain open.
 
 - Customization's native edit projection, object-space pointer ray and voxel/attribute
   traversal now have independent engine implementations and synthetic regressions.

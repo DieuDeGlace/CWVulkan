@@ -184,6 +184,26 @@ can be requested with `--play --character slot-0 --no-save --ring-menu --capture
   Page Up and Page Down change the hour, P is the tap skill, 1 swaps the weapon; any of them gives way to a
   binding on the same key.
 
+## Optional character-creation hair controls
+
+Character creation has an additional dual-tone hair panel. Enable it, choose a second
+color from the ordinary palette, and adjust Start and Blend in five-percent steps.
+Start places the transition below the roots; Blend controls its width. A zero blend
+makes a sharp split. Hovering a color previews it until the pointer leaves; clicking
+commits it. These extra controls appear only during creation, and adjusting them does
+not regenerate the character's starting equipment.
+
+The gradient uses the owner's loaded hair model and preserves its shaded voxels and
+skin colors. The saved style follows the character through selection, local gameplay
+and the map avatar. It is stored in CubeVulkan's existing per-profile notes, alongside
+the native character row; the native appearance record keeps its original format.
+Existing second-color INI settings can supply initial values without a mod DLL.
+
+This is a user-requested engine extension, rather than a claimed Steam UI feature.
+The original game has only one hair color in its creature record; synchronization of
+the extra style to remote players is not implemented. No hair models, palettes or
+other original artwork are included in either distribution package.
+
 ## Placed by CubeVulkan where the specs leave it open
 
 These are stand-ins, to be replaced when the specs or a capture give them:

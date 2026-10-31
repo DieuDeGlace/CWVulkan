@@ -835,12 +835,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             front.farStart = false;
         }
     }
+    front.newHairStyle = hair::fromConfig(config, "_NewCharacter");
+    front.importedHairStyle = [&](const std::string &name) { return hair::fromConfig(config, name); };
     front.sprites = &sprites, front.options = &gameOptions, front.controls = &gameControls;
     front.dayNight = dayNight, front.minutesPerSecond = minutesPerSecond;
     front.startHour = saves.world().timeMs / 3600000.0f; // (Save/world.db, or a new world's 10:00)
     front.log = [](const std::string &line) { logLine(line); };
     std::vector<CharacterEntry> recordedOnly = listCharacters(assets.gameDir());
     front.recorded = &recordedOnly;
+    std::optional<hair::Style> createdHairStyle;
     std::optional<glm::vec3> enteredAt; // where the front screens put the player (frontend-title.md §6.1)
     if (launchMenu) {
         frontend::Request request;
@@ -861,6 +864,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         if (result.placed)
             enteredAt = result.feet;
+        createdHairStyle = result.createdHairStyle;
         characters = everyCharacter(); // (creation may have made one)
         chosen = nullptr;
         for (const CharacterEntry &c : characters)
@@ -1001,6 +1005,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
     }
 
+    if (createdHairStyle)
+        saveGame.hairStyle = *createdHairStyle;
+    const hair::Style playerHairStyle = saveGame.hairStyle.value_or(hair::fromConfig(config, chosen ? chosen->name : ""));
+    spawned.setPlayerHairStyle(playerHairStyle);
     // The player character, posed by the game's own recorded part matrices.
     CharacterRecording character;
     std::vector<int> characterModels;
@@ -1014,31 +1022,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 character.restyle(chosen->head, chosen->hair, chosen->hand, chosen->foot, chosen->hairColor);
                 character.name = chosen->name;
             }
-            // Built-in DualHair: [Hair] SecondColor=R,G,B[,START,BLEND] in CubeVulkan.ini, or
-            // the character's entry in an imported Mods/DualHair.ini ([Characters] Name=...).
-            World::HairLook look;
-            std::string spec = config.text("Hair", "SecondColor");
-            if (spec.empty() && !character.name.empty())
-                spec = config.text("Characters", character.name);
-            look.start = (float)config.number("DualHair", "StartPercent", 40, 0, 100) / 100;
-            look.blend = (float)config.number("DualHair", "BlendPercent", 35, 0, 100) / 100;
-            if (config.flag("DualHair", "Enabled", true) && !spec.empty()) {
-                int r, g, b, start = -1, blend = -1;
-                unsigned hex;
-                if (std::sscanf(spec.c_str(), "%d , %d , %d , %d , %d", &r, &g, &b, &start, &blend) >= 3) {
-                    look.dual = true;
-                    look.second = glm::u8vec3(std::clamp(r, 0, 255), std::clamp(g, 0, 255), std::clamp(b, 0, 255));
-                } else if (std::sscanf(spec.c_str(), " #%6x , %d , %d", &hex, &start, &blend) >= 1) {
-                    look.dual = true;
-                    look.second = glm::u8vec3(hex >> 16, (hex >> 8) & 255, hex & 255);
-                }
-                if (start >= 0 && blend >= 0) {
-                    look.start = std::min(start, 100) / 100.f;
-                    look.blend = std::min(blend, 100) / 100.f;
-                }
-            }
+            const auto &look = playerHairStyle;
             if (look.dual)
-                logLine("Hair: second colour " + spec);
+                logLine("Hair: built-in dual-tone appearance");
             for (auto &p : character.parts())
                 characterModels.push_back(world.loadModel(p.sprite, p.tint, p.hair, look.dual ? &look : nullptr));
             logLine("Character: " + character.summary());
@@ -7065,7 +7051,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     }
                 }
                 if (haveHead)
-                    mapPlayerLooks = worldMap.looks(renderer, head, haveHair ? &hair : nullptr, hairColor);
+                    mapPlayerLooks = worldMap.looks(renderer, head, haveHair ? &hair : nullptr, hairColor,
+                                                    playerHairStyle.dual ? &playerHairStyle : nullptr);
                 if (auto path = assets.resolve(fs::path("sprites") / "cube.cub")) { // the flight route's dot (the cube sprite)
                     CubModel cube;
                     if (cube.load(*path))

@@ -7,6 +7,7 @@
 // and turns with the world camera. The minimap in the top right and the open map in the
 // middle are the same draw; only its screen centre and scale move between them.
 #include "CubModel.h"
+#include "HairStyle.h"
 #include "MapLook.h"
 #include "Mesher.h"
 #include "Renderer.h"
@@ -86,7 +87,8 @@ class Map {
     void setCube(Renderer &renderer, const CubModel &cube);
     // A marker's models, for View::Mark: a creature's head (or chest) and its hair in the
     // hair's colour, or the tombstone alone.
-    int looks(Renderer &renderer, const CubModel &first, const CubModel *hair, glm::u8vec3 hairColor);
+    int looks(Renderer &renderer, const CubModel &first, const CubModel *hairModel, glm::u8vec3 hairColor,
+              const hair::Style *style = nullptr);
     // The region markers around the view's centre on the screen (map-markers.md §0.6, §0.7):
     // where (window pixels from the top left) and how deep, in the regions' order.
     struct Projected {

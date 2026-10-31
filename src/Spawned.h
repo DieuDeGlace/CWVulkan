@@ -15,6 +15,7 @@
 #include "ZoneStates.h"
 #include "GroundItems.h"
 #include "EnemyRespawn.h"
+#include "HairStyle.h"
 #include <list>
 #include <functional>
 #include "worldgen/Residents.h"
@@ -52,6 +53,7 @@ class SpawnedCreatures {
     bool remoteClient() const { return client; }
     // The local player's creature id: 1 until a host gives it another (packet 4).
     int64_t playerId() const { return localId; }
+    void setPlayerHairStyle(hair::Style style) { playerHairStyle = hair::normalised(style); }
     void setPlayerId(int64_t id);
     // A creature the network brings (a guest's player in a host world, any creature in a mirror):
     // the one with this id, or a new one made with the constructor's defaults (`made` set). Such
@@ -469,8 +471,9 @@ class SpawnedCreatures {
     // The hit routine's world over this world's creatures (`byId` is filled and must outlive it).
     nativehit::World hitWorld(ExtractedWorld &ew, std::map<int64_t, nativeai::Creature *> &byId);
     void keepHitRecords(nativehit::World &hw);
-    std::map<int, nativepose::Model> models;              // model id -> what the pose sees
-    std::map<std::tuple<int, int, int, int, bool>, int> tinted; // (model id, r, g, b, hair) -> World model
+    std::map<int, nativepose::Model> models; // model id -> what the pose sees
+    hair::Style playerHairStyle;
+    std::map<std::tuple<int, int, int, int, bool, std::array<uint32_t, 3>>, int> tinted; // model, RGB, recoloring, optional gradient
     uint32_t drawn = 0;
     double carriedMs = 0;                                 // the part of a millisecond not yet simulated
     uint32_t randState = 0x12345678;                      // rand() for the creatures' update
@@ -552,6 +555,6 @@ class SpawnedCreatures {
     nativedrop::World dropWorld(ExtractedWorld &ew);
     void keepDrops(ExtractedWorld &ew, const nativedrop::World &dw, int64_t from, int32_t level, bool reward);
     std::vector<nativeai::Creature *> worldList(); // the player first, then every creature
-    std::map<int64_t, uint8_t> lastAbility;               // for abilities(): each one's at the last call
-    int worldModel(World &world, int id, const float *tint, bool hair);
+    std::map<int64_t, uint8_t> lastAbility;        // for abilities(): each one's at the last call
+    int worldModel(World &world, int id, const float *tint, bool recoloured, const hair::Style *look = nullptr);
 };

@@ -250,6 +250,7 @@ class Session {
     };
     struct Listed {
         nativesaves::Character character;
+        hair::Style hairStyle;
         CharacterEntry entry;
         bool playable = false;
         Preview preview;
@@ -274,6 +275,8 @@ class Session {
 
     // Character creation.
     Look look;
+    HairEditor hairEditor;
+    hair::Style appliedHairStyle;
     std::string name;
     bool previewing = false;
 
@@ -296,6 +299,8 @@ class Session {
     void enterWorld(); // Continue, Select, Create Character: the player rebuilt from the save
     void stageDefaultPlayer();
     void applyLook(bool preview);
+    void applyHairStyle();
+    void secondHairItems(Hud::Screen &out);
     void startCreation();
     nativesaves::Cell startCell(std::array<int64_t, 3> &position) const;
     uint32_t account() const;
@@ -445,6 +450,11 @@ void Session::loadList() {
         for (int i = 0; i < s.store->count(); i++) {
             Listed l;
             s.store->load(i, l.character);
+            l.hairStyle = s.importedHairStyle ? s.importedHairStyle(l.character.name) : hair::Style{};
+            std::string notes;
+            SaveGame metadata;
+            if (s.store->readNotes(i, notes) && metadata.parse(notes) && metadata.hairStyle)
+                l.hairStyle = *metadata.hairStyle;
             l.playable = s.recorded && s.sprites && nativeprogress::entryFor(l.character, i, *s.recorded, *s.sprites, l.entry);
             listed.push_back(std::move(l));
         }
@@ -470,7 +480,7 @@ void Session::makePreviews() {
                 continue;
             }
             if (part.hair)
-                World::tintHair(cub, part.tint, nullptr);
+                World::tintHair(cub, part.tint, l.hairStyle.dual ? &l.hairStyle : nullptr);
             p.meshes.push_back(screenModel(*s.renderer, cub));
         }
         p.loaded = true;
@@ -606,6 +616,14 @@ void Session::previewItems(std::vector<DrawItem> &opaque) {
 
 void Session::putOnStage(const nativesaves::Character &c, bool ride) {
     stage = c;
+    appliedHairStyle = s.importedHairStyle ? s.importedHairStyle(c.name) : hair::Style{};
+    for (const auto &listedCharacter : listed)
+        if (&listedCharacter.character == &c) {
+            appliedHairStyle = listedCharacter.hairStyle;
+            break;
+        }
+    if (s.spawned)
+        s.spawned->setPlayerHairStyle(appliedHairStyle);
     stageHasLooks = nativeprogress::appearanceOf(c.looks, stageLooks);
     const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
     riderFeet = c.position == std::array<int64_t, 3>{0, 0, 0} && s.extracted ? s.extracted->home()
@@ -625,6 +643,9 @@ void Session::putOnStage(const nativesaves::Character &c, bool ride) {
 // warrior with two iron swords and the race's own looks. CubeVulkan puts it at the world's home
 // rather than at (0, 0, 0), where an extracted world has nothing to show.
 void Session::stageDefaultPlayer() {
+    appliedHairStyle = {};
+    if (s.spawned)
+        s.spawned->setPlayerHairStyle(appliedHairStyle);
     nativesaves::Character c = newCharacter({0, 0}, {0, 0, 0});
     c.name = "Wollay";
     stage = c;
@@ -691,6 +712,15 @@ void Session::applyLook(bool preview) {
     stageHasLooks = nativeprogress::appearanceOf(stage.looks, stageLooks);
     if (s.spawned)
         s.spawned->setPlayerGear(recordOf(stage, stageHasLooks ? &stageLooks : nullptr));
+    applyHairStyle();
+}
+
+void Session::applyHairStyle() {
+    if (appliedHairStyle != hairEditor.preview) {
+        appliedHairStyle = hairEditor.preview;
+        if (s.spawned)
+            s.spawned->setPlayerHairStyle(appliedHairStyle);
+    }
 }
 
 // Create on the "New character" entry (frontend-characters.md §4.1).
@@ -704,6 +734,7 @@ void Session::startCreation() {
     stage = newCharacter(home, position);
     name.clear();
     look.reset();
+    hairEditor.reset(s.newHairStyle);
     applyLook(false);
     const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
     riderFeet = nativeprogress::localFeet(position, frame);
@@ -1096,6 +1127,11 @@ void Session::handleClick(bool inGame) {
         return;
     }
     if (creationShown) {
+        if (pointerDown && hairEditor.press(mouse - secondHairPanelAt(window), templateSize("leftbutton", {20, 20}))) {
+            applyHairStyle();
+            playSound(SOUND_MENU_SELECT);
+            return;
+        }
         const glm::vec2 m = mouse - lookPanelAt();
         const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
         for (int row = 0; row < LOOK_ROWS; row++) {
@@ -1125,9 +1161,21 @@ void Session::handleClick(bool inGame) {
             int index = (int)listed.size();
             if (!req.readOnly && s.store)
                 index = s.store->create(stage);
+            if (!req.readOnly && s.store && index < 0) {
+                creationShown = true;
+                log("Characters: could not save the new character");
+                return;
+            }
+            if (!req.readOnly && s.store) {
+                SaveGame metadata;
+                metadata.hairStyle = hairEditor.committed;
+                if (!s.store->writeNotes(index, metadata.text()))
+                    log("Characters: could not save the dual-tone appearance settings");
+            }
             log("Characters: created \"" + name + "\" as character " + std::to_string(index));
             outcome.slot = index;
             outcome.created = true;
+            outcome.createdHairStyle = hairEditor.committed;
             helpOpen = playAfterHelp = true; // the help sheet; the world follows when it is closed
         }
     }
@@ -1288,7 +1336,44 @@ void Session::characterItems(Hud::Screen &out) {
     out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
 }
 
+void Session::secondHairItems(Hud::Screen &out) {
+    const glm::vec2 panel = secondHairPanelAt(window), point = mouse - panel;
+    std::optional<glm::u8vec3> hovered;
+    int column, row;
+    if (!optionsOpen && secondHairCellAt(point, column, row))
+        hovered = glm::u8vec3(hairCellColour(column, row) * 255.0f);
+    hairEditor.hover(hovered);
+    applyHairStyle();
+    out.push_back(widget("blackwidget", panel, LOOK_PANEL_SIZE));
+    out.push_back(text("Dual-tone hair", panel + glm::vec2(15, 25), 12, 3, {1, .8f, .5f, 1}, ALIGN_LEFT));
+    const auto &style = hairEditor.committed;
+    const std::array<std::string, 3> values{style.dual ? "On" : "Off", std::to_string((int)std::lround(style.start * 100)) + "%",
+                                            std::to_string((int)std::lround(style.blend * 100)) + "%"};
+    const char *labels[] = {"Enabled", "Start", "Blend"};
+    const auto arrow = templateSize("leftbutton", {20, 20});
+    for (int i = 0; i < 3; ++i) {
+        const float y = 55.0f + 30.0f * i;
+        out.push_back(text(labels[i], panel + glm::vec2(15, y), 12, 3, WHITE, ALIGN_LEFT));
+        out.push_back(text(values[(size_t)i], panel + glm::vec2(LOOK_VALUE_X, y), 12, 3, WHITE, ALIGN_CENTRE));
+        const glm::vec2 left{SECOND_HAIR_LEFT_ARROW_X, y - arrow.y * .5f - 5}, right{SECOND_HAIR_RIGHT_ARROW_X, y - arrow.y * .5f - 5};
+        out.push_back(widget("leftbutton", panel + left, {}, "", inside(point, left, arrow) ? ARROW_HOVERED : WHITE));
+        out.push_back(widget("rightbutton", panel + right, {}, "", inside(point, right, arrow) ? ARROW_HOVERED : WHITE));
+    }
+    out.push_back(text("Second color", panel + glm::vec2(LOOK_PANEL_SIZE.x * .5f, 155), 12, 3, WHITE, ALIGN_CENTRE));
+    for (int r = 0; r < HAIR_ROWS; ++r)
+        for (int c = 0; c < HAIR_COLUMNS; ++c) {
+            const auto color = hairCellColour(c, r);
+            const auto at = panel + SECOND_HAIR_GRID + glm::vec2(c, r) * HAIR_CELL;
+            const bool selected = glm::u8vec3(color * 255.0f) == style.second;
+            out.push_back(square(at, glm::vec2(HAIR_CELL), selected ? WHITE : BLACK));
+            out.push_back(square(at + glm::vec2(1), glm::vec2(HAIR_CELL - 2), glm::vec4(color, 1)));
+            navigationPoint(at + glm::vec2(HAIR_CELL * .5f));
+        }
+    out.push_back(text("0% blend = sharp split", panel + glm::vec2(15, 315), 12, 3, WHITE, ALIGN_LEFT));
+}
+
 void Session::creationItems(Hud::Screen &out) {
+    secondHairItems(out);
     const glm::vec2 panel = lookPanelAt(), m = mouse - panel;
     // Hovering the grid previews its colour on the player; leaving it restores the committed one.
     look.preview = look.committed;

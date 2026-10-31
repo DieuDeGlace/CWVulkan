@@ -1927,17 +1927,17 @@ std::optional<SpawnedCreatures::SpriteAsset> SpawnedCreatures::spriteAsset(World
     return SpriteAsset{model, glm::ivec3(world.modelSize(model))};
 }
 
-int SpawnedCreatures::worldModel(World &world, int id, const float *tint, bool hair) {
+int SpawnedCreatures::worldModel(World &world, int id, const float *tint, bool recoloured, const hair::Style *look) {
     if (id < 0 || (size_t)id >= sprites.size() || sprites[id].name.empty())
         return -1;
     // The hair takes the appearance's colour (the draw's tint) and, like every hair
     // sprite, does not show its red, green and blue marker voxels (the model loading).
-    const int r = hair ? (int)std::lround(tint[0] * 255) : 255, g = hair ? (int)std::lround(tint[1] * 255) : 255,
-              b = hair ? (int)std::lround(tint[2] * 255) : 255;
-    auto key = std::make_tuple(id, r, g, b, hair);
+    const int r = recoloured ? (int)std::lround(tint[0] * 255) : 255, g = recoloured ? (int)std::lround(tint[1] * 255) : 255,
+              b = recoloured ? (int)std::lround(tint[2] * 255) : 255;
+    auto key = std::make_tuple(id, r, g, b, recoloured, look ? hair::cacheKey(*look) : std::array<uint32_t, 3>{});
     if (auto it = tinted.find(key); it != tinted.end())
         return it->second;
-    const int m = world.loadModel(sprites[id].name, glm::u8vec3(r, g, b), hair);
+    const int m = world.loadModel(sprites[id].name, glm::u8vec3(r, g, b), recoloured, look);
     tinted[key] = m;
     return m;
 }
@@ -2008,7 +2008,8 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
                 // The hair takes the appearance's colour, a spirit cube (the white cube.cub) its
                 // material's: both are the model recoloured by the draw's tint.
                 const bool recoloured = id == hairModel || id == SPIRIT_CUBE_MODEL;
-                const int m = worldModel(world, id, d.tint, recoloured);
+                const auto *look = isPlayer && id == hairModel && playerHairStyle.dual ? &playerHairStyle : nullptr;
+                const int m = worldModel(world, id, d.tint, recoloured, look);
                 const uint32_t mesh = world.modelMesh(m);
                 if (!mesh)
                     continue;

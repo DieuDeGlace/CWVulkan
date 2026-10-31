@@ -194,6 +194,20 @@ struct Look {
 int facesOf(int32_t race);
 int haircutsOf(int32_t race);
 
+// Engine appearance extension; the native look record still carries only its primary color.
+constexpr glm::vec2 SECOND_HAIR_GRID{13, 170};
+constexpr float SECOND_HAIR_LEFT_ARROW_X = 105, SECOND_HAIR_RIGHT_ARROW_X = 255;
+struct HairEditor {
+    hair::Style committed, preview;
+    void reset(hair::Style style);
+    void arrow(int row, int direction); // enable, gradient start, gradient blend
+    void hover(std::optional<glm::u8vec3> color);
+    void choose(glm::u8vec3 color);
+    bool press(glm::vec2 panelPoint, glm::vec2 arrowSize);
+};
+glm::vec2 secondHairPanelAt(glm::vec2 window);
+bool secondHairCellAt(glm::vec2 point, int &column, int &row);
+
 // The starting kit (0x913b0): equipment, inventory and recipes for the class, the random parts
 // from srand(the account's low 32 bits); `region` is where the player stands.
 void giveStartingKit(nativesaves::Character &c, uint32_t account, nativesaves::Cell region);
@@ -326,6 +340,8 @@ struct Services {
     const nativeprogress::SpriteTable *sprites = nullptr;
     gameoptions::Options *options = nullptr;
     gameoptions::Controls *controls = nullptr;
+    hair::Style newHairStyle;
+    std::function<hair::Style(const std::string &)> importedHairStyle;
     DayNightSettings dayNight;
     float minutesPerSecond = 1;
     // The world's time of day (hours): Save/world.db's when there is one, else the new world's 10:00.
@@ -352,8 +368,9 @@ struct Request {
 
 struct Result {
     enum Action { Quit, Play, Resume, Title, Stay } action = Quit;
-    int slot = -1;     // the character to play
+    int slot = -1;        // the character to play
     bool created = false; // made in character creation (its help sheet was shown)
+    std::optional<hair::Style> createdHairStyle;
     // Play: the player was rebuilt from the save and stands at `feet` (local blocks, CubeVulkan's
     // feet a block under the record), facing yaw 0 (frontend-title.md §6.1). The game starts
     // there, without searching for ground.

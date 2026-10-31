@@ -4,6 +4,7 @@
 #include "Renderer.h"
 #include "Terrain.h"
 #include "VegetationWind.h"
+#include "HairStyle.h"
 #include <algorithm>
 #include <future>
 #include <map>
@@ -55,11 +56,7 @@ class World {
     // multiply its grey voxels by `tint` (the creature's hair colour).
     // Second hair colour (built-in DualHair): blended in from `start` of the way
     // down the hair over `blend` more (0-1).
-    struct HairLook {
-        bool dual = false;
-        glm::u8vec3 second{255};
-        float start = .4f, blend = .35f;
-    };
+    using HairLook = hair::Style;
     // Colours a hair sprite as the game does (look: DualHair second colour, or null).
     static void tintHair(struct CubModel &cub, glm::u8vec3 tint, const HairLook *look);
     int loadModel(const std::string &name, glm::u8vec3 tint = glm::u8vec3(255), bool hair = false,

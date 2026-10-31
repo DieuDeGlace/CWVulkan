@@ -3,6 +3,7 @@
 #include "WorldMap.h"
 
 #include "MapMarks.h"
+#include "World.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -308,10 +309,16 @@ void Map::setCube(Renderer &renderer, const CubModel &model) {
     cube = spriteOf(renderer, model, glm::vec3(1));
 }
 
-int Map::looks(Renderer &renderer, const CubModel &first, const CubModel *hair, glm::u8vec3 hairColor) {
+int Map::looks(Renderer &renderer, const CubModel &first, const CubModel *hairModel, glm::u8vec3 hairColor, const hair::Style *style) {
     std::vector<Sprite> sprites{spriteOf(renderer, first, glm::vec3(1))};
-    if (hair)
-        sprites.push_back(spriteOf(renderer, *hair, glm::vec3(hairColor) / 255.0f));
+    if (hairModel) {
+        if (style && style->dual) {
+            auto tinted = *hairModel;
+            World::tintHair(tinted, hairColor, style);
+            sprites.push_back(spriteOf(renderer, tinted, glm::vec3(1)));
+        } else
+            sprites.push_back(spriteOf(renderer, *hairModel, glm::vec3(hairColor) / 255.0f));
+    }
     markLooks.push_back(std::move(sprites));
     return (int)markLooks.size() - 1;
 }

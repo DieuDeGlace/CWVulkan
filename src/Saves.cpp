@@ -140,6 +140,7 @@ bool SaveGame::parseFields(const std::string &text) {
     specialization = -1;
     hour = -1, day = 0;
     created = Created{};
+    hairStyle.reset();
     quests.clear();
     killed.clear();
     usedCells.clear();
@@ -168,25 +169,38 @@ bool SaveGame::parseFields(const std::string &text) {
             any = true;
             continue;
         }
-        if (!any) return false;
-        if (key == "world") {
-            if (!(s >> std::quoted(world))) return false;
+        if (!any)
+            return false;
+        if (key == "hair_style") {
+            int enabled, r, g, b, start, blend;
+            if (!(s >> enabled >> r >> g >> b >> start >> blend) || enabled < 0 || enabled > 1 || r < 0 || r > 255 || g < 0 || g > 255 ||
+                b < 0 || b > 255 || start < 0 || start > 100 || blend < 0 || blend > 100)
+                return false;
+            hairStyle = hair::Style{enabled != 0, glm::u8vec3(r, g, b), start / 100.0f, blend / 100.0f};
+        } else if (key == "world") {
+            if (!(s >> std::quoted(world)))
+                return false;
         } else if (key == "saved") {
-            if (!(s >> savedAt) || savedAt < 0) return false;
+            if (!(s >> savedAt) || savedAt < 0)
+                return false;
         } else if (key == "position") {
-            if (!(s >> position.x >> position.y >> position.z) || !std::isfinite(position.x) ||
-                !std::isfinite(position.y) || !std::isfinite(position.z)) return false;
+            if (!(s >> position.x >> position.y >> position.z) || !std::isfinite(position.x) || !std::isfinite(position.y) ||
+                !std::isfinite(position.z))
+                return false;
             hasPosition = true;
         } else if (key == "yaw") {
-            if (!(s >> yaw) || !std::isfinite(yaw)) return false;
+            if (!(s >> yaw) || !std::isfinite(yaw))
+                return false;
         } else if (key == "heading") {
-            if (!(s >> heading) || !std::isfinite(heading)) return false;
+            if (!(s >> heading) || !std::isfinite(heading))
+                return false;
         } else if (key == "hp") {
-            if (!(s >> hpFraction) || !std::isfinite(hpFraction) || hpFraction < 0 || hpFraction > 1) return false;
-        }
-        else if (key == "worn") {
+            if (!(s >> hpFraction) || !std::isfinite(hpFraction) || hpFraction < 0 || hpFraction > 1)
+                return false;
+        } else if (key == "worn") {
             Worn w;
-            if (!(s >> w.category >> w.id >> w.material >> w.rarity >> w.modifier) || worn.size() >= Gear::SLOTS) return false;
+            if (!(s >> w.category >> w.id >> w.material >> w.rarity >> w.modifier) || worn.size() >= Gear::SLOTS)
+                return false;
             worn.push_back(w);
             hasGear = true;
         } else if (key == "level") {
@@ -194,18 +208,22 @@ bool SaveGame::parseFields(const std::string &text) {
         } else if (key == "xp") {
             if (!(s >> xp) || xp < 0) return false;
         } else if (key == "specialization") {
-            if (!(s >> specialization) || specialization < 0 || specialization > 255) return false;
+            if (!(s >> specialization) || specialization < 0 || specialization > 255)
+                return false;
         } else if (key == "gold") {
-            if (!(s >> gold) || gold < 0) return false;
+            if (!(s >> gold) || gold < 0)
+                return false;
         } else if (key == "time") {
-            if (!(s >> day >> hour) || day < 0 || !std::isfinite(hour) || hour < 0 || hour > 24) return false;
-        }
-        else if (key == "created") {
+            if (!(s >> day >> hour) || day < 0 || !std::isfinite(hour) || hour < 0 || hour > 24)
+                return false;
+        } else if (key == "created") {
             int r = 255, g = 255, b = 255;
-            if (!(s >> created.classType >> created.specialization >> std::quoted(created.race) >> std::quoted(created.gender) >> std::quoted(created.head) >>
-                std::quoted(created.hair) >> std::quoted(created.hand) >> std::quoted(created.foot) >> r >> g >> b) ||
-                created.classType < 1 || created.classType > 4 || created.specialization < 0 || created.specialization > 1 ||
-                r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) return false;
+            if (!(s >> created.classType >> created.specialization >> std::quoted(created.race) >> std::quoted(created.gender) >>
+                  std::quoted(created.head) >> std::quoted(created.hair) >> std::quoted(created.hand) >> std::quoted(created.foot) >> r >>
+                  g >> b) ||
+                created.classType < 1 || created.classType > 4 || created.specialization < 0 || created.specialization > 1 || r < 0 ||
+                r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+                return false;
             created.hairColor = glm::u8vec3(std::clamp(r, 0, 255), std::clamp(g, 0, 255), std::clamp(b, 0, 255));
         } else if (key == "marked") {
             Marked m;
@@ -270,22 +288,23 @@ bool SaveGame::parseFields(const std::string &text) {
             quests.push_back(q);
         } else if (key == "name") {
             std::getline(s, created.name);
-            if (!created.name.empty() && (created.name[0] == ' ' || created.name[0] == '\t')) created.name.erase(0, 1);
-        }
-        else if (key == "bag") {
+            if (!created.name.empty() && (created.name[0] == ' ' || created.name[0] == '\t'))
+                created.name.erase(0, 1);
+        } else if (key == "bag") {
             Bagged b;
             if (!(s >> b.category >> b.id >> b.material >> b.rarity >> b.modifier >> b.count >> b.region[0] >> b.region[1]) ||
                 b.count <= 0 || bag.size() >= 100000)
                 return false;
             bag.push_back(b);
-        }
-        else if (key == "found") {
+        } else if (key == "found") {
             Found f;
             if (!(s >> f.category >> f.id >> f.material >> f.rarity >> f.modifier >> f.level >> f.slot >> std::quoted(f.sprite) >> f.hp >>
-                f.attack >> f.armor >> f.critical) || f.slot < 0 || f.slot >= Gear::SLOTS || f.level < 0 ||
-                !std::isfinite(f.hp) || !std::isfinite(f.attack) || !std::isfinite(f.armor) || !std::isfinite(f.critical) ||
-                found.size() >= 100000) return false;
-            if (f.sprite == "-") f.sprite.clear();
+                  f.attack >> f.armor >> f.critical) ||
+                f.slot < 0 || f.slot >= Gear::SLOTS || f.level < 0 || !std::isfinite(f.hp) || !std::isfinite(f.attack) ||
+                !std::isfinite(f.armor) || !std::isfinite(f.critical) || found.size() >= 100000)
+                return false;
+            if (f.sprite == "-")
+                f.sprite.clear();
             if (!(s >> f.region[0] >> f.region[1])) // (older saves have no region)
                 f.region[0] = f.region[1] = 0;
             found.push_back(f);
@@ -301,6 +320,11 @@ std::string SaveGame::text() const {
     out << std::setprecision(std::numeric_limits<float>::max_digits10);
     out << "cubevulkan-save 1\n# CubeVulkan progress (Steam Cube World's own save is not touched)\n";
     out << "saved " << savedAt << '\n';
+    if (hairStyle) {
+        const auto style = hair::normalised(*hairStyle);
+        out << "hair_style " << style.dual << ' ' << (int)style.second.r << ' ' << (int)style.second.g << ' ' << (int)style.second.b << ' '
+            << (int)std::lround(style.start * 100) << ' ' << (int)std::lround(style.blend * 100) << '\n';
+    }
     if (!world.empty())
         out << "world " << std::quoted(world) << '\n';
     if (hasPosition)
