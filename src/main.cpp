@@ -3814,16 +3814,21 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (time - logged >= (autoWalk || autoAttack || autoDodge ? 1 : 5)) {
                 logged = time;
                 logLine("Player (native): at " + std::to_string(player.position.x) + " " + std::to_string(player.position.y) + " " +
-                        std::to_string(player.position.z) + ", rising " + std::to_string(player.verticalSpeed) + ", ability " + std::to_string(ability) + ", stamina " + std::to_string(spawned.playerStamina()) + ", moves started " + std::to_string(spawned.playerMoves()));
+                        std::to_string(player.position.z) + ", rising " + std::to_string(player.verticalSpeed) + ", ability " +
+                        std::to_string(ability) + ", stamina " + std::to_string(spawned.playerStamina()) + ", moves started " +
+                        std::to_string(spawned.playerMoves()));
             }
-            // The game's camera yaw (degrees) has its forward at -row 1 of its turn: CubeVulkan's
-            // yaw less a quarter turn. Its rows for swimming: row 0 to the left, row 2 ahead
-            // with the pitch (CubeVulkan's camera, not the game's measured matrix).
-            const double yawDeg = (double)player.yaw * 57.29577951308232 - 90.0;
+            // Controls consume the retained displayed camera, before this frame's later
+            // smoothing. Mouse/pad requests change targets, not these unshaken A/B/C columns.
+            // Bridge the legacy orbit's radians until its storage also uses native degrees.
+            constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
+            const double yawDeg = double(viewYaw) * DEGREES_PER_RADIAN - 90.0;
+            const double pitchDeg = double(viewPitch) * DEGREES_PER_RADIAN + 90.0;
             controlInput.cameraYaw = yawDeg;
-            const float t = (float)(yawDeg * 0.017453292519943295), cp = std::cos(player.pitch), sp = std::sin(player.pitch);
-            const float rows[3][3] = {{std::cos(t), std::sin(t), 0}, {0, 0, 1}, {std::sin(t) * cp, -std::cos(t) * cp, -sp}};
-            std::memcpy(controlInput.camera, rows, sizeof rows);
+            const glm::mat3 cameraBasis = cameramotion::basis(pitchDeg, 0, yawDeg);
+            for (int axis = 0; axis < 3; ++axis)
+                for (int component = 0; component < 3; ++component)
+                    controlInput.camera[axis][component] = cameraBasis[axis][component];
             glm::vec3 at, velocity;
             float facing;
             bool onGround;

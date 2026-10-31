@@ -128,8 +128,13 @@ keeps the earlier candidate. This state is rebuilt, not a latched lock-on.
 
 ### 3.1 Movement yaw assistance
 
-This occurs within0x8ae50 after creature selection and attack/skill handling,
-before static-object/ground-item targeting and nearby fallbacks. Require
+This occurs within0x8ae50 after creature selection and its earlier
+movement/ability/ultimate stage, before static-object/ground-item targeting
+and nearby fallbacks. **Late primary/strong/class/standing-dodge handling
+is later**, after direct-use work and its ordinary-UI gate; “attack/skill
+handling” here must not move that late region ahead of assistance.
+Whole-frame admission, including the **world-step batch before0x8ae50**,
+is [gameplay frame order](steam-gameplay-frame-order.md). Require
 current nonzero creature target to resolve with **HP>0**, and filtered
 **LEFT movement stick G+0x1d6c/+0x1d70 squared length strictly greater
 than float32(0.1)**. It adds no right-stick, held-aim, last-device,

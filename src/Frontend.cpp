@@ -18,10 +18,6 @@
 
 namespace frontend {
 
-namespace {
-constexpr double DEGREES = 0.0174533; // the game's degrees-to-radians factor
-}
-
 // --- The camera ------------------------------------------------------------------------------
 
 void OrbitCamera::set(double p, double r, double y, float d) {
@@ -50,9 +46,7 @@ void OrbitCamera::smooth(double dtMs, int cameraSmoothness) {
 }
 
 glm::dvec3 OrbitCamera::forward() const {
-    const double p = pitch * DEGREES, r = roll * DEGREES, y = yaw * DEGREES;
-    return {std::cos(y) * std::sin(r) * std::cos(p) + std::sin(y) * std::sin(p),
-            std::sin(y) * std::sin(r) * std::cos(p) - std::cos(y) * std::sin(p), std::cos(p) * std::cos(r)};
+    return glm::dvec3(cameramotion::basis(pitch, roll, yaw)[2]);
 }
 
 glm::dvec3 OrbitCamera::eye(glm::dvec3 lookAt) const { return lookAt - (double)distance * forward(); }

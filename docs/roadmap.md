@@ -394,6 +394,14 @@ individual feature documents.
   are now available. Their remaining consumers and native visual comparisons still
   need implementation/validation. Scene range and Steam sky easing now use the
   verified float-rounded scene interval, distinct from the double camera interval.
+  Movement now samples retained displayed yaw/pitch rather than current input
+  targets. Controls and frontend forward vectors share the float camera-to-world
+  basis, including its full up column, native radians constant and system CRT trig.
+  Pole, tilted/rolled and double-to-float regressions pass. Legacy gameplay angle
+  storage still needs conversion to native double degrees. The newly documented
+  [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
+  earlier World stepping and split early/late input phases; that broader live-loop
+  integration remains open.
   Orbit-distance smoothing now uses its separate float 0.004 coefficient in
   both frontend and gameplay; the camera uses capped wall time rather than the
   simulation's 100-ms limit. Explosion notices use physical-player squared

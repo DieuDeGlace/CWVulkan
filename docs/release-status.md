@@ -10,6 +10,16 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Movement controls now sample retained displayed angles rather than mouse/pad
+  targets. Their unshaken left/up/forward basis and the frontend forward vector
+  share native float radians/trig, including pitched/rolled up vectors. Focused
+  angle/pole/orthogonality checks, all five builds and both Vulkan camera styles
+  pass; the full CPU run still has only the two modded-oracle failures below.
+  Gameplay's legacy radian storage, complete frame/target order and full camera
+  positioning remain open. The independent ordinary-frame supplement now traces
+  World-before-input and separate early/late action gates; it is a specification
+  for remaining integration, not a claim that the whole loop is already matched.
+
 - Camera/audio timing now follows the independent ordinary-frame/host distinction.
   Frontend and gameplay orbit distance use rate 0.004 independently of angle
   smoothness; camera easing retains the capped double wall interval. Ordinary

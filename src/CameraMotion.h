@@ -1,9 +1,10 @@
 #pragma once
-// docs/specs/steam-gameplay-camera.md §2/§7.2: frame coefficients and view-only shake.
-// Angles, fixed anchors, obstruction and manual input retain their own contracts.
+// docs/specs/steam-gameplay-camera.md: frame coefficients, unshaken basis and view shake.
+// Fixed anchors, obstruction and manual-input producers retain their own contracts.
 #include "GameMath.h"
 #include "NativeCrt.h"
 #include <glm/vec2.hpp>
+#include <glm/mat3x3.hpp>
 
 namespace cameramotion {
 inline float angleRate(int smoothness) {
@@ -14,6 +15,20 @@ inline float distance(float current, float requested, double ms) {
 }
 inline float decayShake(float current, double ms) {
     return current + (0.0f - current) * gamemath::blendFactor(gamemath::frameMilliseconds(ms), 0.005f);
+}
+// Camera-to-world columns A/B/C, T*Rz(yaw)*Ry(roll)*Rx(pitch), before shake.
+// Narrow each displayed double angle before multiplying by the native float constant.
+inline glm::mat3 basis(double pitchDegrees, double rollDegrees, double yawDegrees) {
+    constexpr float RADIANS_PER_DEGREE = 0.01745329238474369f;
+    const float p = float(pitchDegrees) * RADIANS_PER_DEGREE;
+    const float r = float(rollDegrees) * RADIANS_PER_DEGREE;
+    const float y = float(yawDegrees) * RADIANS_PER_DEGREE;
+    const float cp = nativecrt::cosf(p), sp = nativecrt::sinf(p);
+    const float cr = nativecrt::cosf(r), sr = nativecrt::sinf(r);
+    const float cy = nativecrt::cosf(y), sy = nativecrt::sinf(y);
+    return {{cy * cr, sy * cr, -sr},
+            {(cy * sr) * sp - sy * cp, (sy * sr) * sp + cy * cp, cr * sp},
+            {(cy * sr) * cp + sy * sp, (sy * sr) * cp - cy * sp, cr * cp}};
 }
 // Native view basis: positive X points left, positive Y points up.
 inline glm::vec2 viewShake(float worldClockMs, float magnitude) {

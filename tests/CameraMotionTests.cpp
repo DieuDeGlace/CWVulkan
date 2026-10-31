@@ -84,6 +84,21 @@ int cameraMotionTests() {
     check(cameramotion::distance(8, 12, 2000) == cameramotion::distance(8, 12, 1000), "camera wall interval caps at 1000 ms");
     check(cameramotion::distance(8, 12, 1000) != cameramotion::distance(8, 12, 100), "camera does not use simulation's 100 ms cap");
     check(cameramotion::decayShake(1, 0.01) == 0.9998999834060669f, "shake has independent 0.005 decay");
+    // Native pitch is measured from straight up. A/B/C remain defined at the poles,
+    // and nonzero pitch/roll must supply a real up column rather than world +Z.
+    const auto horizontal = cameramotion::basis(90, 0, 0);
+    check(horizontal[0] == glm::vec3(1, 0, 0), "horizontal left basis points +X");
+    check(horizontal[1].z == 1 && horizontal[2].y == -1 && horizontal[2].z == -4.371138828673793e-8f,
+          "horizontal basis uses native float radians/trig");
+    const auto upward = cameramotion::basis(0, 0, 0);
+    check(upward == glm::mat3(1), "straight-up camera basis is finite identity");
+    const auto tilted = cameramotion::basis(37, 23, -51);
+    for (int column = 0; column < 3; ++column) {
+        check(close(glm::dot(tilted[column], tilted[column]), 1), "tilted camera axes retain unit length");
+        check(close(glm::dot(tilted[column], tilted[(column + 1) % 3]), 0), "tilted camera axes remain orthogonal");
+    }
+    check(tilted[1] != glm::vec3(0, 0, 1), "tilted camera up is not replaced with world vertical");
+    check(cameramotion::basis(37.00000000001, 23.00000000001, -51.00000000001) == tilted, "displayed double angles narrow before trig");
     const auto zero = cameramotion::viewShake(0, 1), phase = cameramotion::viewShake(100, 1);
     check(zero.x == 0.5f && zero.y == 0.5f, "view shake is half-magnitude in both axes at clock zero");
     check(close(phase.x, -0.49499624967575073f) && close(phase.y, -0.32682180404663086f),
