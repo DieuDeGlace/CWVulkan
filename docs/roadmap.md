@@ -277,6 +277,8 @@ individual feature documents.
   styles1/2/5 update/collide/retire and render owner cube.cub from the independent
   [contract](specs/steam-particle-bursts.md). Zero-time queries, double angle steps,
   full-header matrices and opaque/no-cull material rendering have CPU/GPU checks.
+  Particle admission uses native+0x49c; distinct shorter/wider-range GPU fixtures
+  reproduced and corrected an initial+0x4a4 binding mistake.
   Body fragments still use a separate simulation/cap, other styles lack motion/draw
   rules, and full native CRT/block-light publication remain open. Other object
   families and listening comparisons also remain. The independently traced

@@ -405,11 +405,22 @@ int steamShaderTests() {
     checkPoints("range-actor-distinct-from-model", {emote}, {82,214,60});
     const auto rangeEmptyPath = root / "range-empty.png";
     renderer.capture(rangeEmptyPath.string());
-    renderer.frame(camera,lighting,{0,0,0},0,{},{});
+    renderer.frame(camera, lighting, {0, 0, 0}, 0, {}, {});
     const auto rangeEmpty = centre(rangeEmptyPath);
-    if (!rangeEmpty) ++failures;
+    if (rangeEmpty) {
+        DrawItem particle = emote;
+        particle.nativeActor.reset();
+        particle.kind = DrawKind::Particle;
+        particle.castShadow = false;
+        particle.nativeParticle = scenevisibility::Sphere{{0, 30 * 65536, 65536}, 2};
+        checkPoints("particle-native-range-admitted", {particle}, {82, 214, 60});
+        particle.nativeParticle->centre[1] = 40 * 65536;
+        checkPoints("particle-native-range-cutoff", {particle}, *rangeEmpty);
+    }
+    if (!rangeEmpty)
+        ++failures;
     else {
-        emote.nativeActor->centre = {0,70*65536,65536};
+        emote.nativeActor->centre = {0, 70 * 65536, 65536};
         checkPoints("range-actor-budget-cutoff", {emote}, *rangeEmpty);
         rangeMeshesReady = false;
         emote.nativeActor->centre = {0,40*65536,65536};

@@ -1791,7 +1791,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             const steampoints::Point relative{gamemath::subtractFixed(particle.centre[0], (int64_t)(worldProbe.origin.x * 65536)),
                                               gamemath::subtractFixed(particle.centre[1], (int64_t)(worldProbe.origin.y * 65536)),
                                               particle.centre[2]};
-            return scenevisibility::sphere(relative, particle.radius, nativeEye, nativePlanes, sceneDistance);
+            return scenevisibility::sphere(relative, particle.radius, nativeEye, nativePlanes, modelDistance);
         }
         if (item.nativeActor) {
             const auto &actor = *item.nativeActor;

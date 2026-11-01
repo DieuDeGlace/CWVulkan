@@ -10,6 +10,15 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Particle admission now uses native renderer+0x49c, the shorter ordinary-model
+  radius, rather than the wider adaptive+0x4a4 scene/fog radius. A Vulkan regression
+  reproduced the prior erroneous admission between those radii; both admitted and
+  cutoff cases pass after correction, alongside all45 Steam shader checks. All five
+  targets build. The preceding particle CPU/other image results remain the baseline;
+  this correction changes only the particle gate. The independent
+  [body-particle contract](specs/steam-body-voxel-particles.md) now specifies the
+  next shared-list integration, including retained prepared parts and head insertion.
+
 - Ordinary particle bursts now enter a local live list before outgoing events
   clear. Every style consumes its shared expansion draws; supported styles1/2/5
   implement their extra color/age draws, fixed-coordinate motion, once-frame
