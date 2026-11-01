@@ -315,6 +315,21 @@ int blockMutationTests() {
                   actors.events().blockChanges.size() == notices,
               "destructive-source zero repeat appends retained history without breaking blocks twice");
     }
+    {
+        ExtractedWorld terrain;
+        std::string error;
+        check(terrain.open(directory, error), "block-light fixture opens");
+        check(terrain.gameBlockLight(64, 0, 0) == 255, "missing block-light zone is fully lit without being loaded");
+        terrain.setGameBlock(0, 0, 2, {0, 0, 0, 0, 10, 0});
+        terrain.setGameBlock(0, 0, 3, {0, 0, 0, 0, 12, 0});
+        terrain.setGameBlock(0, 0, 4, {0, 0, 0, 0, 19, 0});
+        terrain.setGameBlock(0, 0, 5, {3, 0, 0, 0, 0, 40});
+        check(terrain.gameBlockLight(0, 0, 2) == 40, "channel0 climbs types10/12/19 and combines open-block channels");
+        terrain.setGameBlock(0, 0, 5, {2, 0, 0, 0, 2, 0});
+        check(terrain.gameBlockLight(0, 0, 5) == 5, "dark open water retains the native floor5");
+        terrain.setGameBlock(0, 0, 5, {250, 0, 0, 0, 1, 17});
+        check(terrain.gameBlockLight(0, 0, 5) == 17, "solid light reads byte5 rather than palette red");
+    }
     materials(directory, 0, 0, std::numeric_limits<float>::quiet_NaN());
     {
         std::string error;

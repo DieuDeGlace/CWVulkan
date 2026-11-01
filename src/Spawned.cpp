@@ -635,10 +635,7 @@ float SpawnedCreatures::strike(int64_t id, float damage, bool critical, float ch
         auto f = byId.find(i);
         return f == byId.end() ? nullptr : f->second;
     };
-    hw.rand = [this] {
-        randState ^= randState << 13, randState ^= randState >> 17, randState ^= randState << 5;
-        return (int)(randState & 0x7fff);
-    };
+    hw.rand = [this] { return drawWorldRandom(); };
     hw.died = [&](nativeai::Creature *c) {
         if (lastWorld && !client)
             dropFrom(*lastWorld, c);
@@ -700,10 +697,7 @@ void SpawnedCreatures::keepBlockChanges(const std::vector<std::array<uint8_t, 0x
 
 nativedrop::World SpawnedCreatures::dropWorld(ExtractedWorld &ew) {
     nativedrop::World dw;
-    dw.rand = [this] {
-        randState ^= randState << 13, randState ^= randState >> 17, randState ^= randState << 5;
-        return (int)(randState & 0x7fff);
-    };
+    dw.rand = [this] { return drawWorldRandom(); };
     dw.creatures = worldList();
     auto byId = std::make_shared<std::map<int64_t, nativeai::Creature *>>();
     for (nativeai::Creature *c : dw.creatures) {
@@ -923,10 +917,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         ew.gameBlock(x, y, 0, &loaded);
         return loaded;
     };
-    w.rand = [this] {
-        randState ^= randState << 13, randState ^= randState >> 17, randState ^= randState << 5;
-        return (int)(randState & 0x7fff);
-    };
+    w.rand = [this] { return drawWorldRandom(); };
     u.rand = w.rand;
     // The physics reads and gives buffs, finds mounts, owners and riders by id, and lays the
     // fire trail's areas among the effect objects.
@@ -2387,10 +2378,7 @@ nativehit::World SpawnedCreatures::hitWorld(ExtractedWorld &ew, std::map<int64_t
         auto f = byId.find(id);
         return f == byId.end() ? nullptr : f->second;
     };
-    hw.rand = [this] {
-        randState ^= randState << 13, randState ^= randState >> 17, randState ^= randState << 5;
-        return (int)(randState & 0x7fff);
-    };
+    hw.rand = [this] { return drawWorldRandom(); };
     hw.died = [this, &ew](nativeai::Creature *c) {
         if (c == &player.side || client)
             return;
@@ -2716,4 +2704,11 @@ void SpawnedCreatures::layItem(ExtractedWorld &ew, const uint8_t *item, const in
     p.count = count;
     nativedrop::place(dw, p, nullptr);
     keepDrops(ew, dw, 0, 0, false);
+}
+
+int SpawnedCreatures::drawWorldRandom() {
+    randState ^= randState << 13;
+    randState ^= randState >> 17;
+    randState ^= randState << 5;
+    return int(randState & 0x7fff);
 }

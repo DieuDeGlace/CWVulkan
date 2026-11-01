@@ -273,9 +273,13 @@ individual feature documents.
   support downward fills. Focused and full CPU/owner-data checks, Vulkan image
   suites and a no-save combat run pass. Fresh material capture, original-game peer
   acceptance, exact publication latency and broader visual/CRT comparisons remain.
-  Local particle expansion/rendering is next from the independent styles1/2/5
-  [contract](specs/steam-particle-bursts.md); other object families and listening
-  comparisons remain open. The independently traced
+  Local burst expansion now preserves all shared draw groups and cap ordering;
+  styles1/2/5 update/collide/retire and render owner cube.cub from the independent
+  [contract](specs/steam-particle-bursts.md). Zero-time queries, double angle steps,
+  full-header matrices and opaque/no-cull material rendering have CPU/GPU checks.
+  Body fragments still use a separate simulation/cap, other styles lack motion/draw
+  rules, and full native CRT/block-light publication remain open. Other object
+  families and listening comparisons also remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.
 - [x] Saved inventory loading preserves the stored tab count, including zero or

@@ -83,7 +83,7 @@ void main() {
     vec3 sun = max(dot(N, D), 0) * f.alphaFront.rgb;
     vec3 backColour = cloud ? f.alphaFront.rgb : f.alphaBack.rgb;
     vec3 sky = f.alphaAmbient.rgb + max(dot(N, -D), 0) * backColour;
-    float strength = f.alphaMaterial.a * pc.look.x * inColor.a;
+    float strength = f.alphaMaterial.a * pc.material.a * pc.look.x * inColor.a;
     vec3 points = pointLightSum(world, N);
 
     // CubeVulkan's moon (src/AlphaMoon.h; not part of the spec): opposite the sun, lighting
@@ -103,7 +103,7 @@ void main() {
     vec3 moonLit = moonFill + moonDirect;
     vec3 moonShaded = moonCasts ? moonFill : moonLit;
 
-    vec3 colour = inColor.rgb * f.alphaMaterial.rgb;
+    vec3 colour = inColor.rgb * (f.alphaMaterial.rgb * pc.material.rgb);
     // By moonlight colours fade towards grey, as they do to the eye at night, so the
     // moonlit world reads blue rather than as a dim day.
     vec3 moonColour = mix(colour, vec3(dot(colour, LUMA)), MOON_GREY);

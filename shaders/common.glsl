@@ -49,6 +49,7 @@ layout(push_constant) uniform Push {
     vec4 look;   // Alpha look: x light where the object stands (0..1), y hit flash, z shimmer, w 1 for clouds;
                  // Steam look's star and cloud passes: x opacity, y fog scale. Immediate GUI: w is float Glow.
     uvec4 lights; // Alpha look: up to 10 point-light indices, 8 bits each in x..z; w count
+    vec4 material; // instance material RGBA; identity for ordinary draws
 } pc;
 
 const uint SWAY = 1u, GLOW = 2u, WATER = 4u, STEAM_VERTEX = 128u, LAVA_LIGHTING = 256u, STEAM_WORLD = 512u, GUI_WORLD = 1024u;

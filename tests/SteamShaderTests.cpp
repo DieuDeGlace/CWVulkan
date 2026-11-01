@@ -119,6 +119,36 @@ int steamShaderTests() {
         stbi_image_free(pixels);
         return value;
     };
+    {
+        const DrawItem saved = item;
+        const uint32_t originalMesh = item.mesh;
+        Mesh back = mesh;
+        std::swap(back.indices[1], back.indices[2]);
+        const uint32_t backMesh = renderer.upload(back);
+        renderer.settings.fogDistance = 1000000;
+        item.kind = DrawKind::Particle;
+        item.nativeParticle = scenevisibility::Sphere{{0, 0, 65536}, 1};
+        item.flags = GLOW;
+        item.flash = 0;
+        item.castShadow = false;
+        for (int test = 0; test < 3; ++test) {
+            item.mesh = test == 1 ? backMesh : originalMesh;
+            item.material = test == 2 ? glm::vec4(0) : glm::vec4(1, 1, 1, 0);
+            const auto capture = root / ("particle-" + std::to_string(test) + ".png");
+            renderer.capture(capture.string());
+            renderer.frame(camera, lighting, {0, 0, 0}, 0, {item}, {});
+            const auto pixel = centre(capture);
+            const std::array<int, 3> expected = test == 2 ? std::array<int, 3>{0, 0, 0} : std::array<int, 3>{82, 214, 60};
+            bool matches = pixel.has_value();
+            if (pixel)
+                for (int c = 0; c < 3; ++c)
+                    matches &= std::abs((*pixel)[c] - expected[c]) <= 2;
+            std::cout << "Steam shader particle " << test << (matches ? " PASS\n" : " FAIL\n");
+            failures += !matches;
+        }
+        item = saved;
+        renderer.settings.fogDistance = 2;
+    }
     const auto sky = centre(skyCapture);
     mesh.vertices[0].y = 3;
     mesh.max.y = 3;

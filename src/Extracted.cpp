@@ -404,6 +404,20 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::writableZone(int ax, int a
     scope->replacements.emplace(Key{ax, ay}, draft);
     return draft;
 }
+int ExtractedWorld::gameBlockLight(int32_t x, int32_t y, int32_t z) {
+    bool loaded = false;
+    auto block = gameBlock(x, y, z, &loaded);
+    if (!loaded)
+        return 255;
+    while (block[4] == 10 || block[4] == 12 || block[4] == 19) {
+        const uint32_t next = uint32_t(z) + 1;
+        std::memcpy(&z, &next, sizeof z);
+        block = gameBlock(x, y, z);
+    }
+    if (block[4] == 0 || block[4] == 2)
+        return std::max<int>(block[0] < 5 ? 5 : block[0], block[5]);
+    return block[5];
+}
 bool ExtractedWorld::removeGameBlock(int32_t x, int32_t y, int32_t z) {
     if (!blockEdits()) {
         auto batch = editBlocks();

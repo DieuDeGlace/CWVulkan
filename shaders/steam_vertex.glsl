@@ -24,11 +24,11 @@ vec3 steamPoints(vec3 world, vec3 normal) {
 vec3 steamMaterialColour(vec3 palette, vec3 illumination, float ambientAlpha, uint flags) {
     float gain = clamp(1 + .5 * (ambientAlpha - illumination.g), 1, 2);
     vec3 saturated = clamp(gain * palette + (1 - gain) * dot(LUMA, palette), 0, 2);
-    vec3 colour = illumination * saturated * f.steamMaterial.rgb;
+    vec3 colour = illumination * saturated * (f.steamMaterial.rgb * pc.material.rgb);
     if ((flags & GUI_WORLD) != 0u)
-        colour += pc.look.w * (palette * f.steamMaterial.rgb - colour);
+        colour += pc.look.w * (palette * (f.steamMaterial.rgb * pc.material.rgb) - colour);
     else if ((flags & GLOW) != 0u)
-        colour += palette * f.steamMaterial.rgb - colour;
+        colour += palette * (f.steamMaterial.rgb * pc.material.rgb) - colour;
     // White0 also clamps. Pixel opacity is a separate draw constant.
     return clamp(colour + pc.look.y * (1 - colour), 0, 1);
 }
@@ -44,7 +44,8 @@ void steamVertexColours(vec3 world, vec3 normal, vec4 palette, uint flags,
     const vec3 axis = vec3(.597022294998169, .3980148732662201, .696526050567627);
     float orientation = .5 + .5 * abs(dot(normal, axis));
     float facing = max(.7 * dot(normal, direction) + .3, 0);
-    float sunlight = palette.a * (pc.look.x * f.steamMaterial.a);
+    float materialAlpha = f.steamMaterial.a * pc.material.a;
+    float sunlight = palette.a * (materialAlpha * pc.look.x);
     vec3 local = ambient * orientation + steamPoints(world, normal);
     vec3 full = clamp(clamp(front * facing + back * orientation, 0, 1) * sunlight + local, 0, 1);
     lit = steamMaterialColour(palette.rgb, full, ambientAlpha, flags);

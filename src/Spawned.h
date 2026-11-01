@@ -82,6 +82,9 @@ class SpawnedCreatures {
     // The world's event lists (world+0x90 .. +0x170): what its steps made since they were last
     // emptied. The host hands them to its guests each tick; a client sends its own player's.
     cwnet::WorldEvents &events() { return worldEvents; }
+    // Shared engine World stream, also consumed by local ordinary burst expansion.
+    // The legacy provider is not a claim of native CRT stream parity.
+    int drawWorldRandom();
     // Host tick step 5 (netcode-roles.md §2): the sounds, damage numbers (applied by 0x29dcf0),
     // buffs and effect objects the guests caused.
     void applyGuestEvents(ExtractedWorld &ew, const cwnet::GuestEvents &caused);

@@ -13,6 +13,7 @@
 #include "TerrainRay.h"
 #include "Body.h"
 #include "DeathEffects.h"
+#include "NativeParticles.h"
 #include "Speech.h"
 #include "DialogueChoices.h"
 #include "DialoguePanel.h"
@@ -1849,6 +1850,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // Deaths as the game shows them: the body bursts into its voxels (DeathEffects.h). Coins
     // are ground items (layCoins).
     DeathEffects deathFx;
+    nativeparticles::System burstParticles;
+    int burstParticleModel = -1;
     const int coinModel = world.loadModel("gold-coin");
     std::vector<char> wasDead(actors.count(), 0);
     uint32_t fragmentMeshId = 0;
@@ -6603,6 +6606,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             // The end of the frame: what this player caused goes to its host (with its record,
             // at most every 32 ms), and the client world's lists start empty again.
+            if (!serverMode)
+                burstParticles.append(spawned.events().particles, [&] { return spawned.drawWorldRandom(); });
             session.endFrame(nowMs);
             spawned.events() = cwnet::WorldEvents{};
             static double netLogged = 0; // for the log: who this player is and whom it sees
@@ -6647,6 +6652,42 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             transientLights.hit(number, [&spawned](int64_t id) { return spawned.record(id); });
         transientLights.advance(frameMs); // births age before their first scene collection
 
+        if (!serverMode && useExtracted) {
+            burstParticles.update(int32_t(gamemath::frameMilliseconds(frameMs)),
+                                  [&](int32_t x, int32_t y, int32_t z) { return extractedWorld.gameBlock(x, y, z)[4]; });
+            if (!burstParticles.states().empty() && burstParticleModel < 0)
+                burstParticleModel = world.loadModel("cube");
+            if (const uint32_t mesh = world.modelMesh(burstParticleModel)) {
+                const glm::ivec3 dimensions(world.modelSize(burstParticleModel));
+                const std::array<int64_t, 2> offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
+                for (const auto &particle : burstParticles.states()) {
+                    if (!nativeparticles::supportedStyle(particle.style))
+                        continue;
+                    DrawItem draw;
+                    draw.mesh = mesh;
+                    draw.kind = DrawKind::Particle;
+                    draw.castShadow = false;
+                    draw.model = nativeparticles::matrix(particle, offset, dimensions);
+                    draw.model[3].z += ExtractedWorld::Z_OFFSET;
+                    // Owner meshes are X/Y-centered; native matrices address voxel corners.
+                    draw.model = glm::translate(draw.model, glm::vec3(dimensions.x * .5f, dimensions.y * .5f, 0));
+                    draw.nativeParticle = scenevisibility::Sphere{particle.position, particle.size};
+                    draw.material = particle.colour;
+                    if (particle.style == 1 || particle.style == 2) {
+                        draw.flags = GLOW;
+                        draw.material.a = 1;
+                    } else {
+                        const auto &p = particle.position;
+                        const float light =
+                            float(extractedWorld.gameBlockLight(gamemath::floorFixedBlock(p[0]), gamemath::floorFixedBlock(p[1]),
+                                                                gamemath::floorFixedBlock(p[2]))) /
+                            255.0f;
+                        draw.standingLight = std::max(.2f, light);
+                    }
+                    opaque.push_back(std::move(draw));
+                }
+            }
+        }
         // Death fragments (one mesh, rebuilt each frame).
         if (fragmentMeshId)
             renderer.release(fragmentMeshId), fragmentMeshId = 0;

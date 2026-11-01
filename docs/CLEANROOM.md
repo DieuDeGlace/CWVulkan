@@ -64,6 +64,18 @@ only that prose and engine code to move received event consumption after the Wor
 and drawn-position passes. Broader terrain/restoration behavior was not inferred
 from the limited helper trace.
 
+## Ordinary burst particle consumer, 2026-11-01
+
+NativeParticles, the main-loop adapter and the dedicated WORLD particle pass were
+written from steam-particle-bursts.md, creature-upkeep.md section4.7 and engine code
+only. The independent native-only author separately resolved shared expansion for
+all style tags and cube.cub's owner-file identity/catalog/data binding. No native
+implementation, original instructions, reconstructed code or model bytes were read
+by the implementer. Synthetic CPU records and asset-free GPU triangles check the
+bounded1/2/5 rules. The World random provider remains the engine's legacy provider;
+its draw ordering is not asserted to close native CRT state/seed parity. Body
+particles and unknown later-style motion/draw are separate remaining work.
+
 ## Destructive terrain and model cleanup, 2026-11-01
 
 The same independent native-only author supplied the complete bounded destructive

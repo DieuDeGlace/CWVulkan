@@ -87,7 +87,7 @@ struct OverlayVertex {
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block
 // they are in.
-enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain, Emote };
+enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain, Emote, Particle };
 constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
 constexpr uint32_t GUI_WORLD = 1u << 10;    // immediate owner-item WORLD shader; no scene culling/shadow/tint extensions
 constexpr uint32_t STEAM_WORLD = 1u << 9;   // ordinary world/water pass; excludes sky and menu art
@@ -102,7 +102,9 @@ struct DrawItem {
     lightbeam::Placement beam; // only DrawKind::LightBeam consumes this
     std::optional<steamscenery::Bounds> nativeScenery;
     std::optional<alphascenery::Placement> alphaScenery;
-    float opacity = 1; // independent from the baked sunlight/material factor
+    float opacity = 1;                                     // independent from the baked sunlight/material factor
+    glm::vec4 material{1};                                 // particle material; independent of vertex color and pixel opacity
+    std::optional<scenevisibility::Sphere> nativeParticle; // scene range, source anchor and size radius
     // A point light the object gives off in the Alpha look (lamps, torches, fires): its colour
     // at night, its reach in blocks (0 = none) and where it is.
     glm::vec3 lightColour{0};
@@ -355,12 +357,12 @@ class Renderer {
     // The Alpha look's pipelines: world, world with reversed winding, water, sky, and the
     // stars and sun sprite.
     VkPipeline beamPipeline = VK_NULL_HANDLE;
-    VkPipeline sceneryDepthPipeline = VK_NULL_HANDLE, sceneryMirroredDepthPipeline = VK_NULL_HANDLE,
-               sceneryFadePipeline = VK_NULL_HANDLE, sceneryMirroredFadePipeline = VK_NULL_HANDLE;
+    VkPipeline particlePipeline = VK_NULL_HANDLE, alphaParticlePipeline = VK_NULL_HANDLE;
+    VkPipeline sceneryDepthPipeline = VK_NULL_HANDLE, sceneryMirroredDepthPipeline = VK_NULL_HANDLE, sceneryFadePipeline = VK_NULL_HANDLE,
+               sceneryMirroredFadePipeline = VK_NULL_HANDLE;
     VkPipeline alphaSceneryPipeline = VK_NULL_HANDLE, alphaMirroredSceneryPipeline = VK_NULL_HANDLE;
-    VkPipeline alphaScenePipeline = VK_NULL_HANDLE, alphaMirroredPipeline = VK_NULL_HANDLE,
-               alphaWaterPipeline = VK_NULL_HANDLE, alphaSkyPipeline = VK_NULL_HANDLE,
-               alphaSpritePipeline = VK_NULL_HANDLE, alphaCloudPipeline = VK_NULL_HANDLE;
+    VkPipeline alphaScenePipeline = VK_NULL_HANDLE, alphaMirroredPipeline = VK_NULL_HANDLE, alphaWaterPipeline = VK_NULL_HANDLE,
+               alphaSkyPipeline = VK_NULL_HANDLE, alphaSpritePipeline = VK_NULL_HANDLE, alphaCloudPipeline = VK_NULL_HANDLE;
     // The Steam look's clouds (blended, they fade near the camera) and star cubes.
     VkPipeline steamCloudPipeline = VK_NULL_HANDLE, steamStarPipeline = VK_NULL_HANDLE;
     Buffer starBuffer; // the 3000 stars (position on the sky sphere, size)

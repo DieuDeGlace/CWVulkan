@@ -1,3 +1,4 @@
+#include "GameMath.h"
 #include "Renderer.h"
 #include "Config.h"
 #include "RendererUniforms.h"
@@ -517,6 +518,8 @@ bool Renderer::createPipelines(std::string &error) {
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     };
     Desc descs[] = {
+        {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &particlePipeline},
+        {alphaV, alphaF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &alphaParticlePipeline},
         {beamV, beamF, true, false, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &beamPipeline, VK_FRONT_FACE_COUNTER_CLOCKWISE},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &scenePipeline},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &mirroredScenePipeline, VK_FRONT_FACE_CLOCKWISE},
@@ -1550,43 +1553,57 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         set.w = count;
         return set;
     };
+    glm::uvec4 inheritedWorldLights(0);
+    float inheritedWorldOpacity = 1;
     // shading: false for the shadow maps, which need no light.
     auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true, std::optional<float> opacity = {}) {
         const GpuMesh &m = meshes[item.mesh];
         VkDeviceSize zero = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
-        PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, opacity.value_or(item.opacity)), glm::vec4(1, 0, 0, 0),
-                         glm::uvec4(0)};
+        PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, opacity.value_or(item.opacity)),
+                         glm::vec4(1, 0, 0, 0), glm::uvec4(0)};
+        pc.material = item.material;
+        const bool particle = item.kind == DrawKind::Particle;
         if (!alphaLook && !menuSky && shading) {
             pc.params.x = (float)(item.flags | STEAM_WORLD);
             pc.look.y = item.flash;
-            steampoints::ZoneKey key;
-            if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
-                key = item.nativeLights->key;
-            } else {
-                const steampoints::Point origin{(int64_t)(worldProbe.origin.x * 65536),
-                    (int64_t)(worldProbe.origin.y * 65536), 0};
-                key = steampoints::bindingZone(item.model, m.nativeCentre.value_or((m.min + m.max) * .5f), origin);
+            if (!particle) {
+                steampoints::ZoneKey key;
+                if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
+                    key = item.nativeLights->key;
+                } else {
+                    const steampoints::Point origin{(int64_t)(worldProbe.origin.x * 65536), (int64_t)(worldProbe.origin.y * 65536), 0};
+                    key = steampoints::bindingZone(item.model, m.nativeCentre.value_or((m.min + m.max) * .5f), origin);
+                }
+                if (const auto batch = nativeBatches.find(key); batch != nativeBatches.end())
+                    pc.lights = {batch->second.x, 0, 0, batch->second.y};
             }
-            if (const auto batch = nativeBatches.find(key); batch != nativeBatches.end())
-                pc.lights = {batch->second.x, 0, 0, batch->second.y};
 
-            if (item.kind == DrawKind::Scenery && item.standingLight >= 0)
+            if ((item.kind == DrawKind::Scenery || particle) && item.standingLight >= 0)
                 pc.look.x = item.standingLight; // baked sunlight, separate from pixel opacity
         }
         if (alphaLook && shading) {
             // Creatures and items take the light of the block just above where they are (11.2).
             // Zone models take the light where they stand too (vegetation-wind.md §4.5), which
             // the world works out with their zone (standingLight).
-            float standing = item.standingLight >= 0 ? item.standingLight
+            float standing = item.standingLight >= 0        ? item.standingLight
                              : item.kind == DrawKind::Model ? lightOfBlock(glm::vec3(item.model[3]) + glm::vec3(0, 0, .1f))
                                                             : 1.f;
             pc.look = glm::vec4(standing, item.flash, item.shimmer ? 1.f : 0.f, 0);
-            pc.lights = lightSetOf(item);
+            if (!particle)
+                pc.lights = lightSetOf(item);
         }
-        vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                           sizeof(pc), &pc);
+        if (shading) {
+            if (particle) {
+                pc.lights = inheritedWorldLights;
+                pc.params.w = inheritedWorldOpacity;
+            } else {
+                inheritedWorldLights = pc.lights;
+                inheritedWorldOpacity = pc.params.w;
+            }
+        }
+        vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
         draws++;
     };
@@ -1769,6 +1786,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             return false;
         if (!meshes[item.mesh].indexCount)
             return false;
+        if (item.nativeParticle) {
+            const auto &particle = *item.nativeParticle;
+            const steampoints::Point relative{gamemath::subtractFixed(particle.centre[0], (int64_t)(worldProbe.origin.x * 65536)),
+                                              gamemath::subtractFixed(particle.centre[1], (int64_t)(worldProbe.origin.y * 65536)),
+                                              particle.centre[2]};
+            return scenevisibility::sphere(relative, particle.radius, nativeEye, nativePlanes, sceneDistance);
+        }
         if (item.nativeActor) {
             const auto &actor = *item.nativeActor;
             const steampoints::Point relative{
@@ -1804,8 +1828,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             // Shared refraction needs actors in the opaque scene snapshot. The
             // native Alpha path retains its separate post-water actor pass.
             const bool late = alphaLook && !sharedWater && item.kind == DrawKind::Model;
-            if ((!alphaLook && item.nativeScenery) || item.kind == DrawKind::LightBeam || late != afterWater ||
-                (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
+            if ((!alphaLook && item.nativeScenery) || item.kind == DrawKind::LightBeam || item.kind == DrawKind::Particle ||
+                late != afterWater || (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
             std::optional<float> opacity;
             const bool staticAlpha = alphaLook && item.alphaScenery.has_value();
@@ -1913,6 +1937,12 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // scenery in its snapshot; retain the same sorted queue and depth writes.
     if (alphaLook && sharedWater)
         drawAlphaFar();
+    // Ordinary burst particles inherit WORLD tables/opacity and precede water.
+    // State2 is opaque, depth-writing LEQUAL with culling disabled.
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaLook ? alphaParticlePipeline : particlePipeline);
+    for (const DrawItem &item : opaque)
+        if (item.kind == DrawKind::Particle && visible(item))
+            bindAndDraw(item, 0);
     const bool waterVisible = std::any_of(water.begin(), water.end(), visible);
     if (sharedWater && waterVisible) {
         vkCmdEndRendering(cmd);
@@ -2165,6 +2195,8 @@ void Renderer::shutdown() {
                    steamCloudPipeline,
                    steamStarPipeline,
                    beamPipeline,
+                   particlePipeline,
+                   alphaParticlePipeline,
                    omegaWaterPipeline,
                    omegaAlphaWaterPipeline,
                    sceneryDepthPipeline,

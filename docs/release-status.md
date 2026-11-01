@@ -10,6 +10,28 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary particle bursts now enter a local live list before outgoing events
+  clear. Every style consumes its shared expansion draws; supported styles1/2/5
+  implement their extra color/age draws, fixed-coordinate motion, once-frame
+  integer-ms update, collision queries and strict lifetime retirement. The1000-entry
+  cap discards the newest tail after expansion. Zero-time style5 queries and the
+  collision-off double angle advance have focused regressions.
+  Geometry loads the owner's cube.cub with full-header centering; no substitute
+  model or owner bytes enter packages. The before-water draw uses an opaque,
+  depth-writing LEQUAL/no-cull pipeline, source-size sphere admission and inherited
+  WORLD point tables/opacity. A128-byte push layout supplies per-instance material
+  RGBA, with identity defaults for existing draws. Style5 uses the documented stored
+  block channel0 accessor, including upward type10/12/19 traversal and the light floor.
+  All five targets build without warnings; the full CPU/owner-data suite,43 shader,
+  2 camera,20 GUI,6 map and shared-water/Alpha-scenery image checks pass. New GPU
+  cases check zero material alpha without blending, reversed faces and RGB material.
+  A no-save combat run exits0 with a frame and unchanged character database; it is
+  a stability check, not native particle-image acceptance. The blue scene and
+  missing owner hair remain visually unaccepted. Other particle styles retain only
+  shared expansion state; body fragments still have a separate simulation/cap.
+  Shared body-list integration, full native CRT streams and completed native
+  block-light publication remain open, alongside wider visual/peer acceptance.
+
 - Destructive race0x90 first visits now emit debris, apply guarded terrain removal,
   append day-stamped notices/sound, clean unsupported ordinary models and then visit
   live area targets in the specified order. Zero-time repeats retain their native

@@ -261,6 +261,7 @@ add_library(engine STATIC
     src/TerrainRay.cpp
     src/CameraPosition.cpp
     src/NativeDeadCreatures.cpp
+    src/NativeParticles.cpp
     src/NativeWorldObjects.cpp
     src/ResidentEffects.cpp
     src/ResidentPass.cpp
@@ -277,11 +278,11 @@ target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
     # Procedural voxel bytes depend on the specified float/double staging.
-    set_source_files_properties(src/ProceduralItems.cpp PROPERTIES COMPILE_OPTIONS /fp:strict)
+    set_source_files_properties(src/ProceduralItems.cpp src/NativeParticles.cpp PROPERTIES COMPILE_OPTIONS /fp:strict)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
     target_compile_definitions(engine PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
-    set_source_files_properties(src/ProceduralItems.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+    set_source_files_properties(src/ProceduralItems.cpp src/NativeParticles.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
 add_executable(CubeVulkan src/main.cpp)
@@ -403,3 +404,5 @@ target_sources(EngineTests PRIVATE tests/SteamCreatureLightsTests.cpp)
 
 target_sources(engine PRIVATE src/NpcSpeech.cpp)
 target_sources(EngineTests PRIVATE tests/NpcSpeechTests.cpp)
+
+target_sources(EngineTests PRIVATE tests/ParticleTests.cpp)

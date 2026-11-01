@@ -140,6 +140,8 @@ class ExtractedWorld {
     BlockEdits editBlocks() { return BlockEdits(*this); }
     // Physical removal only (effect-objects §2.7.2): loaded, stored cells; water below Z1.
     // No history append, column growth, model cleanup or render request is implied.
+    // Native channel0 accessor over loaded stored blocks (creature-upkeep §4.7).
+    int gameBlockLight(int32_t x, int32_t y, int32_t z);
     bool removeGameBlock(int32_t x, int32_t y, int32_t z);
     bool setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block);
     void rememberBlockChange(const nativesaves::BlockChange &change);

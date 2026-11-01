@@ -18,8 +18,9 @@ struct NativeGpuPoint {
 struct PushConstants {
     glm::mat4 model;
     glm::vec4 params;
-    glm::vec4 look;    // Alpha look: light where the object stands, hit flash, shimmer
-    glm::uvec4 lights; // Alpha look: point-light indices, 8 bits each in x..z; w count
+    glm::vec4 look;        // Alpha look: light where the object stands, hit flash, shimmer
+    glm::uvec4 lights;     // Alpha look: point-light indices, 8 bits each in x..z; w count
+    glm::vec4 material{1}; // per-draw multiplier, before native vertex color stages
 };
 static_assert(sizeof(PushConstants) <= 128, "push constants beyond Vulkan's guaranteed 128 bytes");
 

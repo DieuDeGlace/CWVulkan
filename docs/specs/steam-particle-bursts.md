@@ -117,6 +117,15 @@ on frustum admission, later collision, particle age or eventual cap removal.
 The later updater's1000-entry trim discards newest tail entries only after
 the expansion has already consumed these draws for all emitted records.
 
+**Shared expansion applies to every burst style tag.** In particular,
+styles0/3/4/6/7/8 also consume the same12 base draws, copy RGBA/size, set
+the extra matrix to identity, and receive age0, collision0, freeze0 and
+lifetime4000. The only style comparisons in this expansion block are the
+style1 color/draw13 case and style5 age/collision/draw13 case above. An
+unsupported later style must not be skipped at expansion in a way that
+omits its CRT draws ahead of a bounded style. This common producer fact
+does not establish those other styles' update, draw or resource branches.
+
 ## 4. Once-per-frame update, age and cap
 
 The Game frame calls **0xb37f0 at0xaaed9**, after expansion and before

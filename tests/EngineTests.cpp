@@ -173,6 +173,7 @@ int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests(); // tests/ObjectClockTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int blockMutationTests();
+int particleTests();
 int deadCreatureTests();   // tests/DeadCreatureTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -9339,6 +9340,8 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && std::string(argv[1]) == "net")
         return netTests();
+    if (argc == 2 && std::string(argv[1]) == "particles")
+        return particleTests();
     if (argc == 2 && std::string(argv[1]) == "blockedits")
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "deadcreatures")
@@ -10635,6 +10638,7 @@ int main(int argc, char **argv) {
     failures += worldObjectTests();
     failures += deadCreatureTests();
     failures += blockMutationTests();
+    failures += particleTests();
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }
