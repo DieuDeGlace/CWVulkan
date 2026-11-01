@@ -894,13 +894,13 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         w.creatures.push_back(creature->record);
         sides.push_back(creature);
     }
-    // Their upkeep (0x2de4c0), as the server's world runs it. The light (0xda830) is not
-    // ported: sneaking creatures see the dark as at no light.
+    // Their upkeep and lit particles use the same loaded-column channel0 source.
     nativeupkeep::World u;
     u.client = client;
     u.local = hasPlayer ? player.record.data() : nullptr;
     u.time = elapsedWorldMs;
     u.day = dayMs;
+    u.light = [&](int x, int y, int z) { return ew.gameBlockLight(x, y, z); };
     u.byId = [&](int64_t id) -> nativeai::Creature * {
         auto f = byId.find(id);
         return f == byId.end() ? nullptr : f->second;

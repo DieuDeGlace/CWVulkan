@@ -12,6 +12,6 @@ struct Result {
     std::vector<soundrules::RequestRecord> sounds;
 };
 // Damage is already reduced by the hit producer. This must not apply armor again.
-// The frame's existing death pass collects the player's resulting health state.
+// The frame queues a death candidate only for the returned strict-negative flag.
 Result apply(nativeai::Creature &player, const nativehit::Number &number);
 } // namespace nativeplayerhit

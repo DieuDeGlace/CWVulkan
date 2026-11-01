@@ -1,5 +1,11 @@
 # Steam host CRT initialization and thread lifetime
 
+Main/window-thread construction, synchronous World/pose/particle sharing,
+UI reseeds and worker distinctions continue in
+[main CRT stream](steam-main-crt-stream.md). Its seed123 setup arithmetic
+reference is labeled to a content-initialization subphase, not fresh worker
+or first-frame state.
+
 Stable bounded native audit, 2026-10-31. Sources are original host/Game
 construction, native thread launch/entry instructions, **0x83e60 → 0xf5520**,
 and the specified World time/resident/pet prelude. No game execution or

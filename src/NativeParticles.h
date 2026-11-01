@@ -1,5 +1,5 @@
 #pragma once
-// Ordinary burst styles1/2/5, from docs/specs/steam-particle-bursts.md.
+// Shared burst/body particles, from docs/specs/steam-{particle-bursts,body-voxel-particles}.md.
 // Owner geometry and rendering are separate from this fixed-coordinate simulation.
 #include <array>
 #include <cstdint>

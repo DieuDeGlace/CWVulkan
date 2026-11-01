@@ -64,6 +64,18 @@ only that prose and engine code to move received event consumption after the Wor
 and drawn-position passes. Broader terrain/restoration behavior was not inferred
 from the limited helper trace.
 
+## Stored light publication, 2026-11-01
+
+The implementer used steam-block-light-publication.md, corrected creature-upkeep4.7,
+worldgen-terrain-zone6 and engine sources only. The independent native-only author
+traced storage, phase boundaries and byte3 without implementation access. Target
+stored-red writeback, effective queries and upkeep binding follow that prose. The
+engine deliberately publishes a safe immutable zone snapshot and serializes writers;
+it does not claim native per-record race/timing identity. Synthetic roof/sea inputs
+exercise the actual CPU mesh path in both styles. No owner block/model bytes enter
+source or runtime packages. The separate main-thread CRT prose remains a later
+implementation contract, with unknown initial numeric state explicitly preserved.
+
 ## Shared body particles and death candidates, 2026-11-01
 
 The implementer read steam-body-voxel-particles.md, the linked death-candidate and

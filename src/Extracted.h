@@ -135,13 +135,14 @@ class ExtractedWorld {
         explicit BlockEdits(ExtractedWorld &world);
         ExtractedWorld &world;
         BlockEdits *previous, *root;
+        std::unique_lock<std::mutex> writerLock;
         std::map<std::pair<int, int>, std::shared_ptr<Zone>> replacements;
     };
     BlockEdits editBlocks() { return BlockEdits(*this); }
-    // Physical removal only (effect-objects §2.7.2): loaded, stored cells; water below Z1.
-    // No history append, column growth, model cleanup or render request is implied.
     // Native channel0 accessor over loaded stored blocks (creature-upkeep §4.7).
     int gameBlockLight(int32_t x, int32_t y, int32_t z);
+    // Physical removal only (effect-objects §2.7.2): loaded, stored cells; water below Z1.
+    // No history append, column growth, model cleanup or render request is implied.
     bool removeGameBlock(int32_t x, int32_t y, int32_t z);
     bool setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block);
     void rememberBlockChange(const nativesaves::BlockChange &change);
@@ -219,6 +220,7 @@ class ExtractedWorld {
     std::shared_ptr<Zone> editedZone(int ax, int ay) const;
     std::shared_ptr<Zone> writableZone(int ax, int ay);
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
+    void publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     using Key = std::pair<int, int>;
     std::filesystem::path folder;
@@ -240,6 +242,7 @@ class ExtractedWorld {
     bool generatedMode = false;
     glm::vec3 homeLocal{0};
     // Small cache of decoded zones shared by the worker threads.
+    std::mutex terrainWriterMutex; // serialize COW commits; readers retain immutable snapshots
     mutable std::mutex cacheMutex;
     std::list<std::pair<Key, std::shared_ptr<Zone>>> cache;
     struct Kept {

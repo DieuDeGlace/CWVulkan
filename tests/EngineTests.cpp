@@ -175,6 +175,7 @@ int worldObjectTests(); // tests/WorldObjectTests.cpp
 int blockMutationTests();
 int particleTests();
 int bodyParticleTests();
+int lightPublicationTests();
 int deadCreatureTests();   // tests/DeadCreatureTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -9341,6 +9342,8 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && std::string(argv[1]) == "net")
         return netTests();
+    if (argc == 2 && std::string(argv[1]) == "lightpublication")
+        return lightPublicationTests();
     if (argc == 2 && std::string(argv[1]) == "bodyparticles")
         return bodyParticleTests();
     if (argc == 2 && std::string(argv[1]) == "particles")
@@ -10643,6 +10646,7 @@ int main(int argc, char **argv) {
     failures += blockMutationTests();
     failures += particleTests();
     failures += bodyParticleTests();
+    failures += lightPublicationTests();
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

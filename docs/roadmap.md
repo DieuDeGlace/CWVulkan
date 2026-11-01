@@ -287,8 +287,13 @@ individual feature documents.
   Frame-local received/strict-negative player death candidates replace the old
   persistent-death-driven fragment trigger; birth runs before current-frame pose.
   The corrected stored-block accessor reads auxiliary byte3, independently of flags.
-  Other style consumers are specified but not implemented; full native CRT,
-  completed stored-red publication/upkeep binding and visual acceptance remain open. Other object
+  Completed target-zone air/water red now publishes before geometry in both styles,
+  without history/dirty/halo changes. Upkeep and particles share the corrected
+  accessor; real CPU-mesh roof/sea/physical-edit cases and full CPU/GPU checks pass.
+  Safe engine writer serialization retains immutable snapshots and lazy metadata.
+  Combined host/client terrain caches still need separate World ownership.
+  Other style consumers are specified but not implemented; full native CRT and
+  broader visual/peer acceptance remain open. Other object
   families and listening comparisons also remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.

@@ -356,8 +356,10 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
 thread_local ExtractedWorld::BlockEdits *ExtractedWorld::activeEdits = nullptr;
 
 ExtractedWorld::BlockEdits::BlockEdits(ExtractedWorld &owner) : world(owner), previous(activeEdits), root(owner.blockEdits()) {
-    if (!root)
+    if (!root) {
         root = this;
+        writerLock = std::unique_lock(world.terrainWriterMutex);
+    }
     activeEdits = this;
 }
 ExtractedWorld::BlockEdits::~BlockEdits() {
@@ -706,13 +708,28 @@ std::vector<std::pair<int, int>> ExtractedWorld::takeChangedZones() {
 }
 
 bool ExtractedWorld::gameObjects(int ax, int ay, std::vector<worldgen::ZoneObject> &out) {
-    const std::shared_ptr<Zone> zone = cached(ax, ay);
+    auto zone = editedZone(ax, ay);
+    if (!zone)
+        zone = cached(ax, ay);
     if (!zone)
         return false;
-    // An extracted zone keeps no objects of its own: the generator's, on the world's seed
-    // (as the game makes them; the generator is set to the extraction's seed with its creatures).
-    if (!zone->objectsMade)
-        zone->objects = worldgen::zoneObjects(ax, ay), zone->objectsMade = true;
+    if (zone->objectsMade) {
+        out = zone->objects;
+        return true;
+    }
+    // Lazy metadata must be immutable too: a simultaneous block/light writer
+    // copies the same Zone. Publish initialization through the shared write scope.
+    auto edits = editBlocks();
+    zone = editedZone(ax, ay);
+    if (!zone)
+        zone = cached(ax, ay);
+    if (!zone)
+        return false;
+    if (!zone->objectsMade) {
+        zone = writableZone(ax, ay);
+        zone->objects = worldgen::zoneObjects(ax, ay);
+        zone->objectsMade = true;
+    }
     out = zone->objects;
     return true;
 }
@@ -925,6 +942,34 @@ std::optional<worldgen::MeshLightVolume> ExtractedWorld::lightsFor(int ax, int a
                 target.blocks.push_back({block.r, block.g, block.b, block.glow, block.type, block.flags});
         }
     return worldgen::meshZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & { return columns[y - ay + 1][x - ax + 1]; });
+}
+
+void ExtractedWorld::publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light) {
+    auto edits = editBlocks();
+    auto current = editedZone(ax, ay);
+    if (!current)
+        current = cached(ax, ay);
+    if (!current || current->identity != source->identity)
+        return;
+    std::shared_ptr<Zone> draft;
+    for (int x = 0; x < 64; ++x)
+        for (int y = 0; y < 64; ++y) {
+            const size_t column = size_t(x) * 64 + y;
+            const Column &stored = current->columns[column];
+            for (size_t z = 0; z < stored.blocks.size(); ++z) {
+                const Block &block = stored.blocks[z];
+                if (block.type != 0 && block.type != 2)
+                    continue;
+                const uint8_t red = light.at(int64_t(ax) * 64 + x, int64_t(ay) * 64 + y, int64_t(stored.base) + int64_t(z));
+                if (red == block.r)
+                    continue;
+                if (!draft)
+                    draft = writableZone(ax, ay);
+                draft->columns[column].blocks[z].r = red;
+            }
+        }
+    // No notice/history/dirty request: this is the completed solver's stored data.
+    // A single safe engine snapshot replaces native per-record concurrent stores.
 }
 
 void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved) {
@@ -1381,9 +1426,12 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         *nativeBounds = nativeBox;
     worldgen::MeshLightVolume localLight;
     auto &solvedLight = nativeLight ? *nativeLight : localLight;
-    if (!alphaLook)
-        if (auto solved = lightsFor(ax, ay, around))
-            solvedLight = std::move(*solved);
+    // Gameplay light is independent of the selected rendering palette. Publish
+    // target stored-air/water red before model samples, geometry and GPU install.
+    if (auto solved = lightsFor(ax, ay, around)) {
+        solvedLight = std::move(*solved);
+        publishBlockLight(ax, ay, self, solvedLight);
+    }
     const bool nativeEncoding = !alphaLook && !solvedLight.columns.empty();
     // Column lookup over the zone and a one-column border from its neighbours.
     // Missing neighbours count as this zone's edge column (no cliff walls at

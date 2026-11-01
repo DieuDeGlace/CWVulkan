@@ -408,3 +408,5 @@ target_sources(EngineTests PRIVATE tests/NpcSpeechTests.cpp)
 target_sources(EngineTests PRIVATE tests/ParticleTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/BodyParticleTests.cpp)
+
+target_sources(EngineTests PRIVATE tests/LightPublicationTests.cpp)

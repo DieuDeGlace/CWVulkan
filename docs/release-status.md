@@ -10,6 +10,28 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Completed mesh-light solves now write target-zone stored air/water red back
+  before model samples and terrain/GPU installation, in both rendering styles.
+  Other block bytes, halo records, loaded-zone identity, history and dirty queues
+  remain intact. Physical writes are immediately readable; dirty requests preserve
+  old red until another solve. Upkeep and lit particles use the same corrected
+  stored-column accessor, including the native signed fixed-coordinate narrowing.
+  Engine commits use serialized immutable snapshots rather than reproducing native
+  per-record concurrent writes. Lazy object metadata now follows that same write
+  scope, preventing it from being mutated while another writer copies the Zone.
+  Actual roofed-room CPU mesh tests verify stored red, the native spread floor21,
+  auxiliary/effective sea rules, unchanged halo/identity/queues and physical edits
+  before remeshing. The full CPU/owner suite and all Vulkan image suites pass;
+  final focused fixture/cleanup checks pass. No-save Steam and Alpha runs both exit0
+  with viewed frames and unchanged character data. The first45-second observation
+  window was too short; retained-handle runs allowed full startup/cleanup to finish.
+  Images remain stability evidence, not native pixel acceptance. Native partial-write
+  concurrency and broader visual/peer comparisons remain outside this bounded result.
+  The existing combined-session setup still shares one terrain reader between host
+  and client; independent World cache/light ownership is the next integration task.
+  The independent main-thread CRT contract is available for later stream work; exact
+  first-frame seeds and all reached reset/consumer integration remain open.
+
 - Native body fragments now share the ordinary particle list, update, owner cube
   draw and1000-entry tail cap. Prepared sprite IDs and the exact ten cached part
   matrices are retained by value; death visuals no longer recompute a corpse pose

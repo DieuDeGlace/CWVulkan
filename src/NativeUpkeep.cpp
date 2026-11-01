@@ -784,9 +784,9 @@ struct Upkeep {
             // Night is 1 at midnight, 0 at noon.
             const float u = nativecrt::powf(((w.day + w.day) / MS_PER_DAY) - 1.0f, 2.0f);
             const float night = nativecrt::powf(1.0f - u, 2.0f);
-            const int light = w.light ? w.light((int)(get<int64_t>(r, POSITION) >> 16),
-                                                (int)(get<int64_t>(r, POSITION + 8) >> 16),
-                                                (int)(get<int64_t>(r, POSITION + 16) >> 16))
+            const int light = w.light ? w.light(gamemath::floorFixedBlock(get<int64_t>(r, POSITION)),
+                                                gamemath::floorFixedBlock(get<int64_t>(r, POSITION + 8)),
+                                                gamemath::floorFixedBlock(get<int64_t>(r, POSITION + 16)))
                                       : 0;
             const float lit = ((float)light / 255.0f) * night;
             const float base = sneakBase(SNEAK_SKILL_LEVEL);
