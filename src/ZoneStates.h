@@ -47,8 +47,8 @@ class ZoneStates {
   public:
     using BlocksChanged = std::function<void(Cell zone, const std::vector<BlockChange> &changes)>;
     // `world` holds the stored states (null: nothing is applied or recorded). In server mode
-    // nothing is applied (0x2ae0c0). `blocks` is told a zone's block changes whenever they are
-    // set: after the zone is made and after each change in play.
+    // nothing is applied (0x2ae0c0). `blocks` replays stored history when a zone is loaded;
+    // appending live history never invokes that callback.
     ZoneStates(nativesaves::WorldState *world = nullptr, bool serverMode = false, BlocksChanged blocks = {});
 
     bool loaded(Cell zone) const { return zones.count(zone) != 0; }
@@ -76,8 +76,8 @@ class ZoneStates {
     // What play changed.
     void objectsChanged(Cell zone);     // zone +0xfa
     void groundItemsChanged(Cell zone); // zone +0xf9
-    // A block changed: appended to its zone's list (the zone is made empty if not in memory yet).
-    void addBlockChange(const BlockChange &change);
+    // Append history only, in order, to an existing loaded zone. No replay or dirty request.
+    bool appendBlockHistory(const BlockChange &change);
 
   private:
     nativesaves::WorldState *world;

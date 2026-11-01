@@ -611,7 +611,8 @@ void zoneStatesRoundTrip() {
         lists.staticObjects[chest][nativeinteract::OBJECT_STATE] = 0; // opened
         states.objectsChanged(zone);
         const ExtractedWorld::GameBlock was = ew.gameBlock(bx, by, bz);
-        states.addBlockChange(zonestates::blockChange(bx, by, bz, was, red));
+        FRONT_CHECK(ew.setGameBlock(bx, by, bz, red));
+        FRONT_CHECK(states.appendBlockHistory(zonestates::blockChange(bx, by, bz, was, red)));
         FRONT_CHECK(ew.gameBlock(bx, by, bz) == red && was != red);
         states.unload(zone, 0);
         FRONT_CHECK(!states.loaded(zone) && world.zones.count(zone) && (world.zones[zone].flags & nativesaves::ZoneState::STATIC_OBJECTS_SAVED));

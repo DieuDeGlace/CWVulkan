@@ -82,9 +82,10 @@ In particular, the received empty after-value from§1 selects0x91160:
 **below Z1 it writes water, not literal type0**, if the stored cell exists.
 The authority and receiving mirror therefore both use the water-preserving
 removal rule despite retaining an empty after-value in their histories.
-Saved-history replay uses the full setter0x31c1c0. Its broader extension,
-color and global-substitution behavior is not redefined by this supplement;
-this is not a completed saved-history restoration audit.
+Saved-history replay uses the full setter0x31c1c0. Its bounded extension,
+color/global-substitution and replay-ownership contract is now specified in
+[steam-full-block-setter.md](steam-full-block-setter.md); the full saved-state
+loading/eviction scheduler remains separate.
 
 The received-block path is **after** this frame's admitted World batch
 (0x2da6c0 calls at0xa7328/0xa734c) and drawn pass0x2b68e0 at0xa7e80.

@@ -41,54 +41,60 @@ void ClientGame::receive(uint32_t nowMs) {
 }
 
 void ClientGame::consumeWorldUpdates() {
-    const int64_t me = guestLink.localId();
-    for (const WorldEvents &e : received) {
-        // 1. Blocks, 2. zones answered, 3. ground items and 4. static objects by zone.
-        for (const BlockChangeRecord &b : e.blockChanges)
-            world.applyBlockChange(b);
-        for (const ZoneKey &zone : e.zonesAnswered)
-            world.zoneAnswered(zone);
-        for (const ZoneObjects &zone : e.groundItems)
-            world.replaceGroundItems(zone);
-        for (const ZoneObjects &zone : e.staticObjects)
-            world.replaceStaticObjects(zone);
-        // 5. Buffs, except one the local player gave itself (it has it already).
-        for (const BuffRecord &b : e.buffs)
-            if (!(field<int64_t>(b, buffnote::SOURCE) == me && field<int64_t>(b, BUFF_TARGET) == me))
-                world.giveBuff(b);
-        // 6. Aggro, 7. the world's own zone-change step, 8. the dead.
-        for (const AggroRecord &a : e.aggro)
-            world.setAggro(a);
-        world.zoneChangeStep();
-        for (const KillRecord &k : e.kills)
-            world.markDead(field<int64_t>(k, KILL_DEAD));
-        // 9. The lists the world's consumers play, show or act on.
-        world.keepEvents(e);
-        // 10. Feats of the local player.
-        for (const FeatRecord &f : e.feats)
-            if (field<int64_t>(f, FEAT_CREATURE) == me)
-                world.feat(f);
-        // 11. Hits: deaths seen, the local player's own hits taken, others' flashes.
-        for (const DamageRecord &d : e.damageNumbers) {
-            const int64_t target = field<int64_t>(d, DAMAGE_TARGET);
-            if (!world.hasCreature(target))
-                continue;
-            if (world.isDead(target))
-                world.deathSeen(target);
-            if (target == me)
-                world.hitLocalPlayer(d);
-            else if (field<float>(d, DAMAGE_AMOUNT) > 0.0f && field<int64_t>(d, damage::ATTACKER) != me)
-                world.flash(target);
-        }
-        // 12. Others' effect objects, 13. others' damage numbers to show.
-        for (const EffectRecord &x : e.effects)
-            if (field<int64_t>(x, effect::OWNER) != me)
-                world.addEffect(x);
-        for (const DamageRecord &d : e.damageNumbers)
-            if (field<int64_t>(d, damage::ATTACKER) != me)
-                world.showDamageNumber(d);
+    // Packet7 appends into per-list Game slots. Arrival boundaries do not interleave
+    // a later packet's blocks with an earlier packet's buffs/hits or other consumers.
+    WorldEvents events;
+    if (!received.empty()) {
+        events = std::move(received.front());
+        for (size_t i = 1; i < received.size(); ++i)
+            events.append(received[i]);
+        received.clear();
     }
-    received.clear();
+    const WorldEvents &e = events;
+    const int64_t me = guestLink.localId();
+    // 1. Blocks, 2. zones answered, 3. ground items and 4. static objects by zone.
+    world.applyBlockChanges(e.blockChanges);
+    for (const ZoneKey &zone : e.zonesAnswered)
+        world.zoneAnswered(zone);
+    for (const ZoneObjects &zone : e.groundItems)
+        world.replaceGroundItems(zone);
+    for (const ZoneObjects &zone : e.staticObjects)
+        world.replaceStaticObjects(zone);
+    // 5. Buffs, except one the local player gave itself (it has it already).
+    for (const BuffRecord &b : e.buffs)
+        if (!(field<int64_t>(b, buffnote::SOURCE) == me && field<int64_t>(b, BUFF_TARGET) == me))
+            world.giveBuff(b);
+    // 6. Aggro, 7. the world's own zone-change step, 8. the dead.
+    for (const AggroRecord &a : e.aggro)
+        world.setAggro(a);
+    world.zoneChangeStep(); // Once per admitted Game frame, including empty received slots.
+    for (const KillRecord &k : e.kills)
+        world.markDead(field<int64_t>(k, KILL_DEAD));
+    // 9. The lists the world's consumers play, show or act on.
+    world.keepEvents(e);
+    // 10. Feats of the local player.
+    for (const FeatRecord &f : e.feats)
+        if (field<int64_t>(f, FEAT_CREATURE) == me)
+            world.feat(f);
+    // 11. Hits: deaths seen, the local player's own hits taken, others' flashes.
+    for (const DamageRecord &d : e.damageNumbers) {
+        const int64_t target = field<int64_t>(d, DAMAGE_TARGET);
+        if (!world.hasCreature(target))
+            continue;
+        if (world.isDead(target))
+            world.deathSeen(target);
+        if (target == me)
+            world.hitLocalPlayer(d);
+        else if (field<float>(d, DAMAGE_AMOUNT) > 0.0f && field<int64_t>(d, damage::ATTACKER) != me)
+            world.flash(target);
+    }
+    // 12. Others' effect objects, 13. others' damage numbers to show.
+    for (const EffectRecord &x : e.effects)
+        if (field<int64_t>(x, effect::OWNER) != me)
+            world.addEffect(x);
+    for (const DamageRecord &d : e.damageNumbers)
+        if (field<int64_t>(d, damage::ATTACKER) != me)
+            world.showDamageNumber(d);
 }
 
 void ClientGame::send(uint32_t nowMs) {

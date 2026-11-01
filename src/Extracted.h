@@ -24,11 +24,14 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
 
 class ExtractedWorld {
+    struct Zone;
+
   public:
     ExtractedWorld();
     ~ExtractedWorld();
@@ -119,6 +122,31 @@ class ExtractedWorld {
     // default for a missing zone (grey stone, type 1) and `loaded` false.
     using GameBlock = std::array<uint8_t, 6>;
     GameBlock gameBlock(int64_t x, int64_t y, int z, bool *loaded = nullptr);
+    // Thread-local write batch. This thread sees its edits immediately; mesh readers
+    // keep the old immutable snapshots until the outer scope publishes one copy/zone.
+    class BlockEdits {
+      public:
+        ~BlockEdits();
+        BlockEdits(const BlockEdits &) = delete;
+        BlockEdits &operator=(const BlockEdits &) = delete;
+
+      private:
+        friend class ExtractedWorld;
+        explicit BlockEdits(ExtractedWorld &world);
+        ExtractedWorld &world;
+        BlockEdits *previous, *root;
+        std::map<std::pair<int, int>, std::shared_ptr<Zone>> replacements;
+    };
+    BlockEdits editBlocks() { return BlockEdits(*this); }
+    // Physical removal only (effect-objects §2.7.2): loaded, stored cells; water below Z1.
+    // No history append, column growth, model cleanup or render request is implied.
+    bool removeGameBlock(int32_t x, int32_t y, int32_t z);
+    bool setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block);
+    void rememberBlockChange(const nativesaves::BlockChange &change);
+    // Game-frame notice consumer: nine block samples at XY offsets -13/0/+13.
+    void invalidateGameBlock(int32_t x, int32_t y);
+    using BlockNotice = std::array<uint8_t, nativesaves::BLOCK_CHANGE_SIZE>;
+    void invalidateGameBlocks(std::span<const BlockNotice> changes);
     struct ZoneToken {
         uint64_t order; // Unsigned address of the stable loaded-zone identity.
         std::shared_ptr<const void> keepAlive;
@@ -153,13 +181,8 @@ class ExtractedWorld {
     size_t propNames() const { return environment.size() + buildingParts.size(); }
 
   private:
-    struct Block {
-        uint8_t r, g, b, field3, type, breakable;
-    };
-    struct Column {
-        int baseZ = 0;
-        std::vector<Block> blocks;
-    };
+    using Block = worldgen::Block;
+    using Column = worldgen::TerrainColumn;
     // One stored column as the light sees it (lightColumn).
     static bool columnLight(const Column &c, int z0, int count, uint8_t *out);
     struct ZoneIdentity {};
@@ -170,8 +193,10 @@ class ExtractedWorld {
         Column columns[4096];                                 // index = localX * 64 + localY (the game's order)
         std::shared_ptr<const worldgen::ZoneContents> things; // generated zones only: models, items, spawn points
         std::vector<worldgen::ZoneObject> objects;            // the generator's static objects (zone+0x60)
-        bool generated = false;                               // made by the generator rather than read
-        bool objectsMade = false;                             // objects made (for a read zone, once gameObjects asks)
+        std::shared_ptr<const std::vector<worldgen::ColourInputs>> recordedColours;
+        worldgen::SandOffsets recordedSand;
+        bool generated = false;   // made by the generator rather than read
+        bool objectsMade = false; // objects made (for a read zone, once gameObjects asks)
         struct ModelLightState {
             std::mutex mutex;
             std::set<int> waterModels; // flag8 is ORed, retained for this zone's lifetime
@@ -180,6 +205,11 @@ class ExtractedWorld {
         // Block edits copy the terrain snapshot; runtime model state stays shared.
         std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
     };
+    static bool writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t x, int32_t y, int32_t z, const GameBlock &block);
+    static thread_local BlockEdits *activeEdits;
+    BlockEdits *blockEdits() const;
+    std::shared_ptr<Zone> editedZone(int ax, int ay) const;
+    std::shared_ptr<Zone> writableZone(int ax, int ay);
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     using Key = std::pair<int, int>;

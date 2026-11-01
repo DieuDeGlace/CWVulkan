@@ -64,6 +64,12 @@ void HostSide::advance(uint32_t dtMs) {
 
 // --- The client world --------------------------------------------------------------------------
 
+void MirrorSide::applyBlockChanges(const std::vector<cwnet::BlockChangeRecord> &changes) {
+    auto edits = blocks.editBlocks();
+    for (const auto &change : changes)
+        world.applyBlockChange(change);
+}
+
 bool MirrorSide::localSnapshot(cwnet::CreatureSnapshot &out) {
     const uint8_t *record = world.localRecord();
     if (!record)

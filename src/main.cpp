@@ -5973,15 +5973,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             logLine("Death capture: " + deathShots.front().second);
             deathShots.erase(deathShots.begin());
         }
-        deathFx.update(dt, [&](float x, float y, float z, float &h) {
+        deathFx.update(
+            dt,
+            [&](float x, float y, float z, float &h) {
                 if (useExtracted)
                     return extractedWorld.floorAt(x, y, z, HEADROOM, h);
                 h = groundAt(x, y);
                 return true;
-            }, [&](glm::dvec3 at) {
-                return useExtracted ? extractedWorld.solidAt(at.x, at.y, at.z)
-                                    : at.z < groundAt((float)at.x, (float)at.y);
+            },
+            [&](glm::dvec3 at) {
+                return useExtracted ? extractedWorld.solidAt(at.x, at.y, at.z) : at.z < groundAt((float)at.x, (float)at.y);
             });
+        // Native Game-frame notice consumer requests meshes independently of mutation/history.
+        if (!serverMode)
+            extractedWorld.invalidateGameBlocks(spawned.events().blockChanges);
         // Zones whose blocks changed are meshed again.
         for (const auto &[ax, ay] : extractedWorld.takeChangedZones())
             world.refreshZone(ax - extractedWorld.originZoneX(), ay - extractedWorld.originZoneY());

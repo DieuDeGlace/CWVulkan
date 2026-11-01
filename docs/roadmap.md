@@ -267,7 +267,12 @@ individual feature documents.
   and drawn-position passes, while creature/clock reception stays earlier. The new
   [block lifecycle contract](specs/steam-block-change-lifecycle.md) resolves history,
   water-preserving removal and mesh-request phases; their full backend integration
-  and original-game peer acceptance remain open. The independently traced
+  and original-game peer acceptance remain open. Physical removal/full-setter,
+  batched immutable publication, loaded-only/repeated history and nine-block-sample
+  mesh requests are now wired and tested. Packet7 lists concatenate across arrivals,
+  with empty-frame zone-change processing retained. Generated cached materials and
+  owner CWM1 sidecars support downward fills; fresh material capture, model support
+  cleanup and full destructive-source integration remain open. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.
 - [x] Saved inventory loading preserves the stored tab count, including zero or

@@ -64,6 +64,18 @@ only that prose and engine code to move received event consumption after the Wor
 and drawn-position passes. Broader terrain/restoration behavior was not inferred
 from the limited helper trace.
 
+## Terrain mutation and cached inputs, 2026-11-01
+
+An independent native-only author supplied steam-full-block-setter.md and clarified
+netcode-roles.md's empty-frame/list-major consumer behavior without inspecting the
+engine, its tests or extractor. The implementer read only those contracts and the
+existing terrain/lifecycle prose plus engine sources. Shared setter logic, physical
+edit scopes, history ownership and mesh-request selection use that written scope.
+CWM1 is an engine-defined owner-data format: the extractor copies the six documented
+column material fields and world sand offsets; no artwork or captures are packaged.
+Synthetic files and loopback packets test the codec and behavior. No fresh original-
+game CWM1 capture or full model/particle/rendering parity is claimed by those checks.
+
 ## Capture-log cleanup, 2026-10-31
 
 Routine capture inspection exposed raw hexadecimal function bytes from an old

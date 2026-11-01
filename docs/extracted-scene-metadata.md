@@ -48,3 +48,28 @@ The captured record is a comparison oracle, not authority over later block edits
 Current camera/distance settings remain configurable; native adaptive range and
 camera-state integration are separate work. No fresh owner cached-box comparison
 is claimed by the synthetic codec/column/plane regression tests.
+
+## Cached column material inputs
+
+The optional `z_X_Y.cwm` sidecar accompanies a matching `CWZ1` block file.
+It contains owner data needed by the full block setter's downward interior fill.
+All values are little endian; the exact file length is 98,324 bytes:
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+|0|4 bytes|`CWM1`|
+|4|i32|Absolute zone X|
+|8|i32|Absolute zone Y|
+|12|i32|World sand-noise X offset|
+|16|i32|World sand-noise Y offset|
+|20|4096 records, 24 bytes each|Column inputs in local-X outer/local-Y inner order|
+
+Each column record contains six float32 values in order: highlands, warmth,
+dryness, lava-region weight, forest-region weight and kind27 weight. These are
+cached column values, not sampled colors or regenerated geometry. The independent
+field and setter facts are in [steam-full-block-setter.md](specs/steam-full-block-setter.md).
+Coordinates, exact length and finite inputs are validated before use. Missing
+sidecars remain compatible with block-only exports; downward fills requiring an
+interior gap cannot be faithfully supplied without their cached inputs. Generated
+worlds retain their own original material inputs and do not require sidecars.
+The file stays local to the owner and is excluded from source/runtime packages.

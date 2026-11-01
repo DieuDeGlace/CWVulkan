@@ -10,6 +10,31 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Physical terrain writes, history and mesh requests now have separate runtime
+  paths. Abilities and active effects use the guarded in-column removal helper;
+  full writes/restoration share the specified setter with generated terrain.
+  Batches publish one immutable copy per edited zone while same-thread physics
+  sees current edits, including nested resets. Background-reader tests cover
+  publication and memo invalidation. Loaded-zone history appends no longer replay
+  terrain or create missing-zone archives; every World substep records the entire
+  outstanding notice list, retaining native repeated entries.
+  Received packets concatenate per list before consumption; zone-change processing
+  runs once per admitted client frame even with no received lists. A two-packet
+  loopback regression reproduced the prior interleaved ordering before correction.
+  Notice-driven mesh requests use deduplicated XY block samples at -13/0/+13,
+  loaded zones only. Exact native mesh-publication timing remains an acceptance gap.
+  The full setter now preserves requested cells, canonical sea substitution and raw
+  upward gaps, and colors only downward interior gaps from cached materials.
+  Generated zones retain those inputs while releasing their larger temporary fields.
+  The extractor writes optional CWM1 material sidecars; readers validate exact size,
+  coordinates and finite values. Legacy block-only exports remain readable but
+  cannot supply missing downward-fill materials; DataCheck reports refresh needs.
+  All five targets build; focused snapshot/adapter/setter/network tests and the full
+  CPU/owner-data suite pass. A no-save loopback combat run exits0, captures a frame
+  and leaves the character database hash unchanged; the blue-lit scene/missing hair
+  remain visually unaccepted. Fresh native material-capture comparison, model support
+  cleanup and the first destructive race0x90 visit remain open.
+
 - Received packet7 world events now remain queued while the client world advances
   and smooths drawn positions, then are consumed before player actions. Creature
   and clock reception still precedes that World pass. This corrects the old early

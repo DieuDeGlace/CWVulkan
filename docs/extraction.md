@@ -139,3 +139,18 @@ ReShade's dxgi.dll were restored with all 58 original file hashes unchanged.
 Routine extractor startup no longer exports executable function-byte dumps, and
 unsupported hook prologues are reported by location without logging their bytes.
 Historical diagnostic files remain local; none belongs in an upload package.
+
+## Refreshing terrain edit materials
+
+The updated extractor also saves a `.cwm` material sidecar beside each zone's
+`.cwz` blocks, including generation-oracle exports. The live-zone capture holds
+its usual zone and mesh locks. These cached inputs let downward terrain edits use
+the owner's original materials rather than a guessed replacement color.
+
+DataCheck reports coverage as **Terrain edit materials**. If it reports older
+block-only captures, update the extractor with the original game closed, then
+refresh the relevant zones with F5 or the F11 sweep. Keep the sidecars beside the
+matching blocks and manifest. Old block files remain readable; generated worlds
+retain their own inputs. The new codec/reader and synthetic cases are verified;
+a fresh original-game sidecar capture/comparison is still an acceptance check.
+Exports remain owner-local and are not distributed in either package.

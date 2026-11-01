@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace worldgen {
@@ -44,6 +45,13 @@ struct TerrainColumn {
     bool empty() const { return blocks.empty(); }
 };
 
+// Direct setter XY admission uses signed low32 origins and upper bounds.
+std::optional<size_t> setterColumn(int32_t zx, int32_t zy, int32_t x, int32_t y);
+
+// Full setter (steam-full-block-setter.md): no history/events/cache side effects.
+// The retained material inputs are used only for a downward interior gap.
+bool storeColumn(TerrainColumn &column, int32_t x, int32_t y, int32_t z, Block block, const ColourInputs &colours, const SandOffsets &sand);
+
 // A light the cliff pass hangs in a tall overhang (a model in the zone's model list, zone+0x18;
 // its record is part B's: type 0x59, flags 2, tint 1, second float 1).
 struct OverhangLight {
@@ -56,8 +64,9 @@ struct ZoneTerrain {
     Place place;                       // the zone's place (its cell's, with no reach limit)
     Int2 placeCell;                    // that cell, evened when big
     Int2 anchor = NO_ANCHOR;           // the big structure's anchor
-    std::vector<ColumnField> field;    // ZONE_COLUMNS, index localX * 64 + localY
-    std::vector<TerrainColumn> columns; // likewise
+    std::vector<ColourInputs> retainedColours; // cached material inputs after construction
+    std::vector<ColumnField> field;            // ZONE_COLUMNS, index localX * 64 + localY
+    std::vector<TerrainColumn> columns;        // likewise
     std::vector<OverhangLight> lights;
     CrtRandom random;                  // the zone's rand() stream, for part B to continue
     std::vector<uint16_t> draws;       // every rand() value drawn, when asked for

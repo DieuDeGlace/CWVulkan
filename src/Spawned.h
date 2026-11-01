@@ -485,6 +485,7 @@ class SpawnedCreatures {
     void keepRecords(const std::vector<std::array<uint8_t, 0x30>> &sounds, const std::vector<std::array<uint8_t, 0x48>> &particles,
                      const std::vector<std::array<uint8_t, 0x48>> &numbers, const std::vector<std::array<uint8_t, 0x30>> &buffNotes);
     void keepBlockChanges(const std::vector<std::array<uint8_t, 0x20>> &changes);
+    void appendBlockHistory(ExtractedWorld &world, const cwnet::BlockChangeRecord &change);
     std::set<std::pair<int, int>> groundChanged, objectsChanged; // world+0x190, +0x1a0: zones changed this step
     std::set<std::pair<int, int>> replacedGround;                // zones whose ground items a host replaced
     std::function<void(const std::array<uint8_t, 0x48> &)> playerNumber;

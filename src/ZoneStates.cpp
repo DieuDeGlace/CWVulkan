@@ -172,19 +172,13 @@ void ZoneStates::groundItemsChanged(Cell zone) {
         lists->groundItemsChanged = true;
 }
 
-void ZoneStates::addBlockChange(const BlockChange &change) {
-    const std::array<int32_t, 3> at = change.block();
-    const Cell zone = zoneOfBlock(at[0], at[1]);
-    std::vector<BlockChange> *list = nullptr;
-    if (nativesaves::ZoneLists *lists = find(zone))
-        list = &lists->blockChanges;
-    else if (world && !serverMode)
-        list = &world->zones[zone].blockChanges; // (a zone not in memory keeps it in its stored state)
-    if (!list)
-        return;
-    list->push_back(change);
-    if (blocks)
-        blocks(zone, *list);
+bool ZoneStates::appendBlockHistory(const BlockChange &change) {
+    const auto at = change.block();
+    if (nativesaves::ZoneLists *lists = find(zoneOfBlock(at[0], at[1]))) {
+        lists->blockChanges.push_back(change);
+        return true;
+    }
+    return false;
 }
 
 } // namespace zonestates

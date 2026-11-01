@@ -77,6 +77,7 @@ class MirrorSide : public cwnet::MirrorWorld {
     void dayChange(int32_t newDay) override;
     void setClock(int32_t day, int32_t timeOfDayMs) override { world.setClock(day, (float)timeOfDayMs); }
     void applyBlockChange(const cwnet::BlockChangeRecord &change) override { world.applyBlockChange(change); }
+    void applyBlockChanges(const std::vector<cwnet::BlockChangeRecord> &changes) override;
     void zoneAnswered(const cwnet::ZoneKey &zone) override { world.zoneAnswered(zone); }
     void replaceGroundItems(const cwnet::ZoneObjects &zone) override { world.replaceGroundItems(blocks, zone); }
     void replaceStaticObjects(const cwnet::ZoneObjects &zone) override { world.replaceStaticObjects(blocks, zone); }

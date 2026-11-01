@@ -878,6 +878,7 @@ std::vector<std::pair<int, glm::vec3>> SpawnedCreatures::list(const ExtractedWor
 
 void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset) {
     lastWorld = &ew;
+    auto blockEdits = ew.editBlocks();
     // Gameplay-camera §7.2.3: ordinary frames retain double milliseconds. The host
     // supplies integer timeGetTime differences to its separate world through this same
     // splitter. Both consume the final float residual, including zero, without carry.
@@ -976,6 +977,12 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         return loaded;
     };
     a.rand = w.rand;
+    a.removeBlock = [&](int x, int y, int z) {
+        // Materialize this engine's loaded-zone state before the first live edit.
+        const auto zone = zonestates::zoneOfBlock(x, y);
+        zoneLists(ew, zone[0], zone[1]);
+        ew.removeGameBlock(x, y, z);
+    };
     a.ground = [](int x, int y) { return worldgen::groundHeight(x, y, 0); };
     a.elevation = [](int x, int y) { return worldgen::baseHeightWithPlace(x, y); };
     a.cellHeight = [](int cx, int cy) { return (int)worldgen::cellHeight(cx, cy); };
@@ -1019,6 +1026,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
     fw.zone = a.zone;
     fw.ground = [](int x, int y) { return worldgen::groundHeight(x, y, 0); };
     fw.rand = w.rand;
+    fw.removeBlock = a.removeBlock;
     fw.hit = a.hit;
     fw.apply = [&](const std::array<uint8_t, 0x48> &number) { nativehit::apply(hw, number); };
     // What each creature does with its interactions (0x2c3710): seats and doors, and what the
@@ -1196,6 +1204,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         elapsedWorldMs += dt; // native world time advances before the near-player pass
         u.time = elapsedWorldMs;
         w.time = elapsedWorldMs;
+        a.changeCount = fw.changeCount = uint32_t(dayCount);
         const std::set<nativesaves::Cell> noUsedCells;
         nativeobjects::World objectWorld;
         objectWorld.client = client;
@@ -1330,6 +1339,12 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         keep(w);
         nativeeffects::step(fw, effects, dt);
         keep(fw);
+        keepBlockChanges(a.blockChanges);
+        keepBlockChanges(fw.blockChanges);
+        // Every substep records the entire still-outstanding notice list, including
+        // earlier substeps' records. History never re-applies the physical mutation.
+        for (const auto &change : worldEvents.blockChanges)
+            appendBlockHistory(ew, change);
         // The client side of taming (0xa0750, loot-pickup.md §5.2): a tame's damage number to
         // the local player fills its pet slot; the inventory part is the caller's (takeTames).
         if (hasPlayer)
@@ -1368,15 +1383,6 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             zoneStates.groundItemsChanged({zx, zy});
             groundChanged.insert({zx, zy});
         }
-        // The blocks the abilities and effects broke (+0xc0) join their zones' change lists.
-        for (auto *changes : {&a.blockChanges, &fw.blockChanges})
-            for (const auto &change : *changes) {
-                nativesaves::BlockChange kept;
-                std::memcpy(kept.bytes.data(), change.data(), kept.bytes.size());
-                zoneStates.addBlockChange(kept);
-            }
-        keepBlockChanges(a.blockChanges);
-        keepBlockChanges(fw.blockChanges);
         worldEvents.sounds.insert(worldEvents.sounds.end(), iw.sounds.begin(), iw.sounds.end());
         keepSounds(iw.sounds);
         worldEvents.buffs.insert(worldEvents.buffs.end(), iw.buffNotes.begin(), iw.buffNotes.end());
@@ -1734,6 +1740,7 @@ std::optional<objectvisual::State> SpawnedCreatures::objectVisual(int zx, int zy
 
 void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool serverMode) {
     storedZones = world;
+    lastWorld = &ew;
     if (world && respawnSettings.mode != enemyrespawn::Mode::Permanent)
         for (auto &[zone, state] : world->zones)
             state.deadTracked = 0; // temporary deaths from an earlier instance have ended
@@ -1802,8 +1809,18 @@ void SpawnedCreatures::setObjectActive(int zx, int zy, size_t index, bool active
 }
 
 void SpawnedCreatures::changeBlock(ExtractedWorld &ew, int32_t x, int32_t y, int32_t z, const std::array<uint8_t, 6> &block) {
-    const ExtractedWorld::GameBlock was = ew.gameBlock(x, y, z);
-    zoneStates.addBlockChange(zonestates::blockChange(x, y, z, was, block));
+    const auto zone = zonestates::zoneOfBlock(x, y);
+    if (!zoneLists(ew, zone[0], zone[1]))
+        return;
+    auto edits = ew.editBlocks();
+    const auto was = ew.gameBlock(x, y, z);
+    if (!ew.setGameBlock(x, y, z, block))
+        return;
+    const auto change = zonestates::blockChange(x, y, z, was, block);
+    if (zoneStates.appendBlockHistory(change))
+        ew.rememberBlockChange(change);
+    // This engine extension owns its immediate render request; native helpers do not.
+    ew.invalidateGameBlock(x, y);
 }
 
 void SpawnedCreatures::recordAllZones() {
@@ -2543,12 +2560,31 @@ void SpawnedCreatures::replaceStaticObjects(ExtractedWorld &ew, const cwnet::Zon
     objectsChanged.insert({zone.key.x, zone.key.y}); // (queued for the object rebuild, world+0x1a0)
 }
 
-void SpawnedCreatures::applyBlockChange(const cwnet::BlockChangeRecord &change) {
-    // The change goes into its zone's change log, which puts its "now" block in (an empty "now"
-    // block, type and flags 0, is a block removed).
+void SpawnedCreatures::appendBlockHistory(ExtractedWorld &ew, const cwnet::BlockChangeRecord &change) {
     nativesaves::BlockChange kept;
     std::memcpy(kept.bytes.data(), change.data(), kept.bytes.size());
-    zoneStates.addBlockChange(kept);
+    const auto at = kept.block();
+    const auto zone = zonestates::zoneOfBlock(at[0], at[1]);
+    if (!ew.gameZoneLoaded(zone[0], zone[1]) || !zoneLists(ew, zone[0], zone[1]))
+        return;
+    if (zoneStates.appendBlockHistory(kept))
+        ew.rememberBlockChange(kept);
+}
+void SpawnedCreatures::applyBlockChange(const cwnet::BlockChangeRecord &change) {
+    if (!lastWorld)
+        return;
+    nativesaves::BlockChange kept;
+    std::memcpy(kept.bytes.data(), change.data(), kept.bytes.size());
+    const auto at = kept.block();
+    const auto zone = zonestates::zoneOfBlock(at[0], at[1]);
+    if (!lastWorld->gameZoneLoaded(zone[0], zone[1]) || !zoneLists(*lastWorld, zone[0], zone[1]))
+        return;
+    const auto after = kept.now();
+    if (after[4] == 0 && after[5] == 0)
+        lastWorld->removeGameBlock(at[0], at[1], at[2]);
+    else
+        lastWorld->setGameBlock(at[0], at[1], at[2], after);
+    appendBlockHistory(*lastWorld, change);
 }
 
 std::vector<cwnet::ZoneKey> SpawnedCreatures::zonesNeedingState(int64_t blockX, int64_t blockY) const {

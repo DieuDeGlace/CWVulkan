@@ -1,5 +1,6 @@
 // A zone's terrain, written from docs/specs/worldgen-terrain-zone.md (sections cited as §n).
 #include "worldgen/ZoneTerrain.h"
+#include <cstring>
 
 #include "worldgen/Height.h"
 
@@ -370,33 +371,47 @@ Block ZoneTerrain::read(int32_t x, int32_t y, int32_t z) const {
     return z > 0 ? AIR_BLOCK : SEA_WATER;
 }
 
-void ZoneTerrain::store(int32_t x, int32_t y, int32_t z, Block b) {
-    if (!contains(x, y))
-        return;
-    const int i = index(x - zx * ZONE_SIZE, y - zy * ZONE_SIZE);
-    TerrainColumn &c = columns[i];
-    // No empty block is kept above a column (nor starts one).
-    if (b.type == 0 && b.flags == 0 && (c.empty() || z >= c.top()))
-        return;
+std::optional<size_t> setterColumn(int32_t zx, int32_t zy, int32_t x, int32_t y) {
+    const auto signedBits = [](uint32_t bits) {
+        int32_t value;
+        std::memcpy(&value, &bits, sizeof value);
+        return value;
+    };
+    const int32_t x0 = signedBits(uint32_t(zx) * 64u), y0 = signedBits(uint32_t(zy) * 64u);
+    if (x < x0 || x >= signedBits(uint32_t(x0) + 64u) || y < y0 || y >= signedBits(uint32_t(y0) + 64u))
+        return std::nullopt;
+    return size_t(int64_t(x) - x0) * 64 + size_t(int64_t(y) - y0);
+}
+bool storeColumn(TerrainColumn &c, int32_t x, int32_t y, int32_t z, Block b, const ColourInputs &colours, const SandOffsets &sand) {
+    const int64_t top = int64_t(c.base) + int64_t(c.blocks.size());
+    if (b.type == 0 && b.flags == 0 && int64_t(z) >= top)
+        return false;
     if (c.empty())
         c.base = z;
-    if (z < 1 && b.type == blocktype::AIR && !(b.flags & FLAG_KEEP_AIR))
+    if (z <= 0 && b.type == blocktype::AIR && !(b.flags & FLAG_KEEP_AIR))
         b = SEA_WATER;
     if (z < c.base) {
-        // Grow down: the new block, then the buried colour up to the old base.
         std::vector<Block> below;
-        below.reserve((size_t)(c.base - z));
+        below.reserve(size_t(int64_t(c.base) - z));
         below.push_back(b);
-        for (int32_t k = z + 1; k < c.base; k++)
-            below.push_back(toBlock(buriedColour(x, y, k, field[i].colours, sand)));
+        for (int64_t height = int64_t(z) + 1; height < c.base; ++height)
+            below.push_back(toBlock(buriedColour(x, y, int32_t(height), colours, sand)));
         c.blocks.insert(c.blocks.begin(), below.begin(), below.end());
         c.base = z;
-        return;
+    } else {
+        const size_t index = size_t(int64_t(z) - c.base);
+        if (index >= c.blocks.size())
+            c.blocks.resize(index + 1, EMPTY_BLOCK);
+        c.blocks[index] = b;
     }
-    if (z >= c.top())
-        c.blocks.resize((size_t)(z - c.base), EMPTY_BLOCK), c.blocks.push_back(b);
-    else
-        c.blocks[(size_t)(z - c.base)] = b;
+    return true;
+}
+void ZoneTerrain::store(int32_t x, int32_t y, int32_t z, Block b) {
+    const auto i = setterColumn(zx, zy, x, y);
+    if (!i)
+        return;
+    const ColourInputs &colours = field.empty() ? retainedColours[*i] : field[*i].colours;
+    storeColumn(columns[*i], x, y, z, b, colours, sand);
 }
 
 ZoneTerrain zoneTerrain(const WorldValues &world, int32_t zx, int32_t zy, const TerrainOptions &options) {

@@ -876,6 +876,38 @@ DamageRecord damageNumber(int64_t attacker, int64_t target, float amount) {
     return d;
 }
 
+void receivedListOrder() {
+    struct OrderedMirror : FakeMirrorWorld {
+        std::vector<int> visits;
+        void applyBlockChange(const BlockChangeRecord &change) override { visits.push_back(field<int32_t>(change, 0)); }
+        void giveBuff(const BuffRecord &buff) override { visits.push_back(field<int32_t>(buff, 0)); }
+        void zoneChangeStep() override { visits.push_back(99); }
+    } mirror;
+    LoopbackNetwork network;
+    auto endpoint = network.endpoint(HOST_MACHINE);
+    ClientGame client(*endpoint, mirror);
+    WorldEvents first, second;
+    first.blockChanges.resize(1);
+    second.blockChanges.resize(1);
+    first.buffs.resize(1);
+    second.buffs.resize(1);
+    setField(first.blockChanges[0], 0, int32_t(1));
+    setField(second.blockChanges[0], 0, int32_t(2));
+    setField(first.buffs[0], 0, int32_t(3));
+    setField(second.buffs[0], 0, int32_t(4));
+    client.link().goHome(1000);
+    endpoint->send(HOST_MACHINE, Channel::ToClient, encode(WorldUpdate{first}, Direction::ToClient));
+    endpoint->send(HOST_MACHINE, Channel::ToClient, encode(WorldUpdate{second}, Direction::ToClient));
+    client.receive(1000);
+    NET_CHECK(mirror.visits.empty()); // Packet reception only queues the event lists.
+    client.consumeWorldUpdates();
+    NET_CHECK(mirror.visits == std::vector<int>({1, 2, 3, 4, 99}));
+    NET_CHECK(mirror.kept.blockChanges.size() == 2 && mirror.kept.buffs.size() == 2);
+    client.consumeWorldUpdates();
+    NET_CHECK(mirror.visits == std::vector<int>({1, 2, 3, 4, 99, 99}));
+    NET_CHECK(mirror.kept.blockChanges.size() == 2 && mirror.kept.buffs.size() == 2);
+}
+
 // Single player through the loopback, then a second machine joining: interest, removal by
 // omission, the event filters, zone answers, the guests' events, interactions and the clock.
 void hostAndClientGames() {
@@ -1053,6 +1085,7 @@ int netTests() {
     udpTransport();
     recordings();
     steamIds();
+    receivedListOrder();
     hostAndClientGames();
     mirrorInterpolation();
     return failures;

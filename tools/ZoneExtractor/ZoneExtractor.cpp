@@ -7,6 +7,7 @@
 // Output: <game>\Extract\seed_<seed>\
 //   manifest.txt           seed and the home position (blocks)
 //   z_<x>_<y>.cwz          one file per zone (format below)
+//   z_<x>_<y>.cwm          cached material inputs for terrain editing
 //
 // Native oracle: create <game>\Extract\oracle.request while in a world and the next tick
 // writes Extract\oracle\ (the creature tables and test samples; namespace oracle below).
@@ -787,6 +788,34 @@ static std::vector<unsigned char> serialise(cube::World *w, cube::Zone *zone) {
     return out;
 }
 
+// Cached material inputs used by the full setter's downward gap fill.
+// Field layout: independent steam-full-block-setter.md §4; world sand offsets:
+// worldgen-terrain-zone.md §1. These are owner data, never embedded in the engine.
+static std::vector<unsigned char> serialiseMaterials(cube::World *w, cube::Zone *zone) {
+    std::vector<unsigned char> out;
+    out.reserve(20 + 4096 * 24);
+    out.insert(out.end(), {'C', 'W', 'M', '1'});
+    const auto *rawZone = reinterpret_cast<const unsigned char *>(zone);
+    const auto *rawWorld = reinterpret_cast<const unsigned char *>(w);
+    for (size_t offset : {size_t(0x10), size_t(0x14)}) {
+        int32_t coordinate;
+        std::memcpy(&coordinate, rawZone + offset, sizeof coordinate);
+        put<int32_t>(out, coordinate);
+    }
+    for (size_t offset : {size_t(0x330), size_t(0x334)}) {
+        int32_t value;
+        std::memcpy(&value, rawWorld + offset, sizeof value);
+        put<int32_t>(out, value);
+    }
+    for (size_t i = 0; i < 4096; ++i)
+        for (size_t offset : {size_t(0x14), size_t(0x0c), size_t(0x10), size_t(0x18), size_t(0x1c), size_t(0x20)}) {
+            float value;
+            std::memcpy(&value, rawZone + 0x518 + i * 0x58 + offset, sizeof value);
+            put<float>(out, value);
+        }
+    return out;
+}
+
 // Saves every newly generated zone. Zones with chunk meshes are complete.
 static void saveZones(cube::World *w) {
     if (!TryEnterCriticalSection(&w->zones_critical_section))
@@ -803,13 +832,15 @@ static void saveZones(cube::World *w) {
         if (saved.count(id) || zone->chunk.chunkbuffers.empty())
             continue;
         std::string stem = folder + "\\z_" + std::to_string(id.first) + "_" + std::to_string(id.second);
-        Job blocks{stem + ".cwz", serialise(w, zone)}, records{stem + ".rec", serialiseRecords(zone, true)};
+        Job blocks{stem + ".cwz", serialise(w, zone)}, records{stem + ".rec", serialiseRecords(zone, true)},
+            materials{stem + ".cwm", serialiseMaterials(w, zone)};
         saved.insert(id);
         count++;
         {
             std::lock_guard lock(jobsMutex);
             jobs.push_back(std::move(blocks));
             jobs.push_back(std::move(records));
+            jobs.push_back(std::move(materials));
         }
         jobsReady.notify_one();
     }
@@ -6013,6 +6044,7 @@ static bool refreshOnce(unsigned char *zone) {
 // A zone's blocks, records, spawn points and the rand() calls just traced, at stem.*.
 static void writeZone(cube::World *w, unsigned char *zone, const std::string &stem) {
     writeFile(stem + ".cwz", extract::serialise(w, (cube::Zone *)zone));
+    writeFile(stem + ".cwm", extract::serialiseMaterials(w, (cube::Zone *)zone));
     writeFile(stem + ".rec", extract::serialiseRecords((cube::Zone *)zone));
     writeSpawns(zone, stem + ".spawns");
     std::vector<unsigned char> trace(traced.size() * 6);

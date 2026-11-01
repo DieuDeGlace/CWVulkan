@@ -235,11 +235,30 @@ Packet 7 only appends the received lists to the game's slots (game+0x1970 + 0x10
 path below is reached after the admitted client World batch and drawn-position
 pass, rather than before that batch; see
 [steam-block-change-lifecycle.md§3](steam-block-change-lifecycle.md).
+**Frame cadence and batching clarification:** the call to **0x2e30b0 at
+0xa8498** is outside the received-list nonempty guards and loops. It runs
+**once per admitted0xa5a50 frame call**, including when no packet7 arrived
+and every received list is empty. There is no aggregate "received update"
+gate around this phase. It follows the buff/aggro loops and precedes kill
+credits and the later list-copy work; it is not a per-World-substep call.
+
+In **0x3e450 case7**, each decoded list is appended at the end of its
+existing Game slot, rather than replacing that slot (the block-list append
+is **0x38e00 at0x3f0ed**). Thus multiple arrivals
+queued before consumption concatenate in receive-callback order within
+each list, preserving each packet's own list order. The frame visits the
+**entire accumulated block queue** before proceeding to answered-zone keys,
+items, objects, buffs and aggro. It does not process a complete packet's
+blocks and buffs before beginning the next packet. For example, two queued
+packets with one block and one buff each produce both block visits before
+either buff visit. This describes records already queued for this consumer,
+not a guarantee about a later arrival's frame assignment.
+
 The per-list actions are (a guest's own records came back filtered or not as in§4.2):
 
 1. **Block changes**: for each, if the "after" block's type byte (+0x16) and flag byte (+0x17)
    are both 0, remove the block (0x91160); otherwise set it to the six "after" bytes (+0x12,
-   0x1a37d0). Record the change in the zone's change log (zone at floor(x / 64), floor(y / 64);
+   0xa37d0). Record the change in the zone's change log (zone at floor(x / 64), floor(y / 64);
    0xa1680 into zone+0xd8). (Logged "CUBE CHANGES 1" … "4".)
 2. **Zone keys answered**: each loaded zone's "state needed" flag (zone+0xf8) = 0.
 3. **Ground items by zone**: each loaded zone's ground items (zone+0x30) are replaced by the

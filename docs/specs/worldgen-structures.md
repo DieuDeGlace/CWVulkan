@@ -167,9 +167,11 @@ routines read and write it:
 * **Store** 0x31c1c0 (x, y, z, block): ignored outside the zone. An air block (type 0) with
   flags 0 at or above the top is not stored. When the column has no blocks the base becomes z.
   At z ≤ 0 a type-0 block without flag 2 is replaced by sea water (255, 255, 255, 0, 2, 0). Below
-  the base the column grows down: the new block at z and every block between z + 1 and the old
-  base − 1 is the buried colour of that height (part A, 0x2a3140 with the column's values,
-  packed). Above the top the vector grows with zero blocks to z, and the block is set.
+  the base the column grows down: the requested block (after the sea-water rule) is written
+  at z; only the gap from z + 1 through the old base − 1 is filled with the buried colour of
+  each height (part A, 0x2a3140 with the column's values, packed). Above the top the vector
+  grows with zero blocks to z, and the block is set. Exact admission, growth/packing and
+  restoration side-effect ownership are in [steam-full-block-setter.md](steam-full-block-setter.md).
 
 Builders call these with world coordinates; most test "inside the zone" first, so a structure
 in a neighbouring cell writes only its part in this zone. Several builders refuse to overwrite a

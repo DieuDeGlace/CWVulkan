@@ -120,6 +120,10 @@ class MirrorWorld {
 
     // --- A world update's lists, consumed in the frame routine's order (§8) ---
     virtual void applyBlockChange(const BlockChangeRecord &) {}
+    virtual void applyBlockChanges(const std::vector<BlockChangeRecord> &changes) {
+        for (const auto &change : changes)
+            applyBlockChange(change);
+    }
     virtual void zoneAnswered(const ZoneKey &) {}
     virtual void replaceGroundItems(const ZoneObjects &) {}
     virtual void replaceStaticObjects(const ZoneObjects &) {}

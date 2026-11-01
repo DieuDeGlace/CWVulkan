@@ -146,6 +146,7 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
         if (progress) progress("Checking terrain and placement records: " + std::to_string(r.zones) + " zones...");
         std::vector<std::string> badZones, badPlacements;
         std::set<std::string> estimates, missingModels;
+        size_t materialZones = 0;
         size_t propsChecked = 0;
         size_t checked = 0;
         ec.clear();
@@ -154,6 +155,8 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
             if (!e.is_regular_file(ec) || !ExtractedWorld::zoneCoordinates(e.path(), x, y)) continue;
             if (progress && deep && ++checked % 500 == 0) progress("Terrain: " + std::to_string(checked) + "/" + std::to_string(r.zones));
             if (deep && !ExtractedWorld::validateZoneFile(e.path(), why)) badZones.push_back(utf8(e.path().filename()) + " (" + why + ")");
+            auto material = e.path(); material.replace_extension(".cwm");
+            materialZones += nonempty(material);
             auto rec = e.path(); rec.replace_extension(".rec");
             if (nonempty(rec)) {
                 r.placements++;
@@ -183,6 +186,9 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
             add(lightSnapshots == r.zones ? Status::Pass : Status::Warning, "Native lights",
                 std::to_string(lightSnapshots) + "/" + std::to_string(r.zones) + " zones have auxiliary light snapshots",
                 lightSnapshots == r.zones ? "" : "Update the extractor, restart the original game and press F5 in affected zones.");
+            add(materialZones == r.zones ? Status::Pass : Status::Warning, "Terrain edit materials",
+                std::to_string(materialZones) + "/" + std::to_string(r.zones) + " zones include original cached material inputs",
+                materialZones == r.zones ? "" : "Refresh terrain with the updated extractor; older captures cannot supply downward-fill materials.");
             r.estimatedObjectTypes.assign(estimates.begin(), estimates.end());
             add(missingModels.empty() ? Status::Pass : Status::Warning, "Placed sprites", std::to_string(propsChecked) +
                 " decoded placements; " + std::to_string(missingModels.size()) + " missing model files" +

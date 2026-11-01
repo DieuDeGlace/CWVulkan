@@ -155,8 +155,11 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
     const int32_t refreshDay = settings.refreshDay.load();
     if (refreshDay >= 0 && settings.tablesLoaded)
         refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
-    // The column values were the generator's working state; a kept zone has no use for them.
-    z.terrain.field = {};
+    // Live full-setter gap writes still need the original cached material inputs.
+    z.terrain.retainedColours.reserve(z.terrain.field.size());
+    for (const auto &column : z.terrain.field)
+        z.terrain.retainedColours.push_back(column.colours);
+    std::vector<ColumnField>().swap(z.terrain.field);
     auto made = std::make_shared<const ZoneContents>(std::move(z));
     std::lock_guard<std::mutex> hold(cacheLock);
     cache.push_front({zx, zy, version, options, original, made});

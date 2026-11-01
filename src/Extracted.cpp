@@ -1,5 +1,6 @@
 #include "Extracted.h"
 #include "SteamSceneRange.h"
+#include "GameMath.h"
 #include "AlphaLight.h"
 #include "AlphaLook.h"
 #include "worldgen/ZoneLight.h"
@@ -133,7 +134,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     const std::vector<worldgen::TerrainColumn> columns = worldgen::litZone(ax, ay);
     for (size_t i = 0; i < columns.size(); i++) {
         Column &c = zone->columns[i];
-        c.baseZ = columns[i].base;
+        c.base = columns[i].base;
         c.blocks.reserve(columns[i].blocks.size());
         for (const worldgen::Block &b : columns[i].blocks)
             c.blocks.push_back({b.r, b.g, b.b, b.glow, b.type, b.flags});
@@ -322,6 +323,147 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
     return nullptr;
 }
 
+thread_local ExtractedWorld::BlockEdits *ExtractedWorld::activeEdits = nullptr;
+
+ExtractedWorld::BlockEdits::BlockEdits(ExtractedWorld &owner) : world(owner), previous(activeEdits), root(owner.blockEdits()) {
+    if (!root)
+        root = this;
+    activeEdits = this;
+}
+ExtractedWorld::BlockEdits::~BlockEdits() {
+    if (root == this && !replacements.empty()) {
+        std::lock_guard lock(world.cacheMutex);
+        bool replaced = false;
+        for (auto &[key, zone] : world.cache) {
+            const auto draft = replacements.find(key);
+            // A draft belongs to one loaded-zone lifetime, never a replacement load.
+            if (draft != replacements.end() && zone && zone->identity == draft->second->identity) {
+                zone = draft->second;
+                replaced = true;
+            }
+        }
+        if (replaced)
+            world.cacheRevision = nextZoneCacheRevision();
+    }
+    activeEdits = previous;
+}
+ExtractedWorld::BlockEdits *ExtractedWorld::blockEdits() const {
+    for (BlockEdits *scope = activeEdits; scope; scope = scope->previous)
+        if (&scope->world == this)
+            return scope->root;
+    return nullptr;
+}
+std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::editedZone(int ax, int ay) const {
+    if (const BlockEdits *scope = blockEdits()) {
+        const auto found = scope->replacements.find({ax, ay});
+        if (found != scope->replacements.end())
+            return found->second;
+    }
+    return nullptr;
+}
+std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::writableZone(int ax, int ay) {
+    BlockEdits *scope = blockEdits();
+    if (!scope)
+        return nullptr;
+    if (auto draft = editedZone(ax, ay))
+        return draft;
+    const auto current = cached(ax, ay);
+    if (!current)
+        return nullptr;
+    auto draft = std::make_shared<Zone>(*current);
+    scope->replacements.emplace(Key{ax, ay}, draft);
+    return draft;
+}
+bool ExtractedWorld::removeGameBlock(int32_t x, int32_t y, int32_t z) {
+    if (!blockEdits()) {
+        auto batch = editBlocks();
+        return removeGameBlock(x, y, z);
+    }
+    const int ax = int(floorDiv(x, 64)), ay = int(floorDiv(y, 64));
+    auto current = editedZone(ax, ay);
+    if (!current)
+        current = cached(ax, ay);
+    if (!current)
+        return false;
+    const size_t column = size_t(int64_t(x) - int64_t(ax) * 64) * 64 + size_t(int64_t(y) - int64_t(ay) * 64);
+    const Column &before = current->columns[column];
+    const int64_t index = int64_t(z) - before.base;
+    if (index < 0 || index >= int64_t(before.blocks.size()))
+        return false;
+    const auto draft = writableZone(ax, ay);
+    draft->columns[column].blocks[size_t(index)] = {0xff, 0xff, 0xff, 0, uint8_t(z < 1 ? 2 : 0), 0};
+    return true;
+}
+bool ExtractedWorld::writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t x, int32_t y, int32_t z, const GameBlock &bytes) {
+    const auto index = worldgen::setterColumn(ax, ay, x, y);
+    if (!index)
+        return false;
+    const size_t i = *index;
+    Column &column = zone.columns[i];
+    const worldgen::ColourInputs *colours = nullptr;
+    worldgen::SandOffsets sand;
+    if (zone.things && i < zone.things->terrain.retainedColours.size()) {
+        colours = &zone.things->terrain.retainedColours[i];
+        sand = zone.things->terrain.sand;
+    } else if (zone.recordedColours && i < zone.recordedColours->size()) {
+        colours = &(*zone.recordedColours)[i];
+        sand = zone.recordedSand;
+    }
+    // Legacy block-only exports have no cached materials. Do not invent buried
+    // colors when a downward interior gap would need those missing inputs.
+    if (!colours && !column.blocks.empty() && int64_t(z) + 1 < column.base)
+        return false;
+    const worldgen::ColourInputs unused;
+    return worldgen::storeColumn(column, x, y, z, {bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]}, colours ? *colours : unused,
+                                 sand);
+}
+bool ExtractedWorld::setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block) {
+    if (!blockEdits()) {
+        auto batch = editBlocks();
+        return setGameBlock(x, y, z, block);
+    }
+    const int ax = int(floorDiv(x, 64)), ay = int(floorDiv(y, 64));
+    const auto draft = writableZone(ax, ay);
+    return draft && writeGameBlock(*draft, ax, ay, x, y, z, block);
+}
+void ExtractedWorld::rememberBlockChange(const nativesaves::BlockChange &change) {
+    const auto at = change.block();
+    std::lock_guard lock(changesMutex);
+    blockChanges[{int(floorDiv(at[0], 64)), int(floorDiv(at[1], 64))}].push_back(change);
+}
+void ExtractedWorld::invalidateGameBlock(int32_t x, int32_t y) {
+    BlockNotice notice{};
+    std::memcpy(notice.data(), &x, 4);
+    std::memcpy(notice.data() + 4, &y, 4);
+    invalidateGameBlocks(std::span(&notice, 1));
+}
+void ExtractedWorld::invalidateGameBlocks(std::span<const BlockNotice> changes) {
+    std::set<Key> affected;
+    const auto shifted = [](int32_t value, int offset) {
+        const uint32_t bits = uint32_t(value) + uint32_t(offset);
+        int32_t result;
+        std::memcpy(&result, &bits, sizeof result);
+        return result;
+    };
+    for (const auto &notice : changes) {
+        int32_t x, y;
+        std::memcpy(&x, notice.data(), 4);
+        std::memcpy(&y, notice.data() + 4, 4);
+        for (int dx : {-13, 0, 13})
+            for (int dy : {-13, 0, 13})
+                affected.emplace(int(floorDiv(shifted(x, dx), 64)), int(floorDiv(shifted(y, dy), 64)));
+    }
+    std::vector<Key> loaded;
+    {
+        std::lock_guard lock(cacheMutex);
+        for (const Key &key : affected)
+            if (std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == key && entry.second; }))
+                loaded.push_back(key);
+    }
+    std::lock_guard lock(changesMutex);
+    changedZones.insert(loaded.begin(), loaded.end());
+}
+
 std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
     for (const auto &[key, zone] : cache)
@@ -346,16 +488,18 @@ ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z,
         std::weak_ptr<Zone> zone;
     } memo[4];
     thread_local int next = 0;
-    std::shared_ptr<Zone> zone;
+    std::shared_ptr<Zone> zone = editedZone(ax, ay);
     const uint64_t revision = cacheRevision.load();
-    for (auto &m : memo)
-        if (m.world == this && m.ax == ax && m.ay == ay && m.revision == revision)
-            zone = m.zone.lock();
     if (!zone) {
-        zone = cached(ax, ay);
-        if (zone) {
-            memo[next] = {this, ax, ay, revision, zone};
-            next = (next + 1) % 4;
+        for (auto &m : memo)
+            if (m.world == this && m.ax == ax && m.ay == ay && m.revision == revision)
+                zone = m.zone.lock();
+        if (!zone) {
+            zone = cached(ax, ay);
+            if (zone) {
+                memo[next] = {this, ax, ay, revision, zone};
+                next = (next + 1) % 4;
+            }
         }
     }
     if (loaded)
@@ -363,13 +507,13 @@ ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z,
     if (!zone)
         return stone;
     const Column &c = zone->columns[(x - (int64_t)ax * 64) * 64 + (y - (int64_t)ay * 64)];
-    if (z < c.baseZ)
+    if (z < c.base)
         return stone;
-    const size_t i = (size_t)(z - c.baseZ);
+    const size_t i = (size_t)(z - c.base);
     if (i < c.blocks.size()) {
         const Block &b = c.blocks[i];
-        if (b.type != 0 || z > 0 || (b.breakable & 2))
-            return {b.r, b.g, b.b, b.field3, b.type, b.breakable};
+        if (b.type != 0 || z > 0 || (b.flags & 2))
+            return {b.r, b.g, b.b, b.glow, b.type, b.flags};
     } else if (z > 0) {
         return air;
     }
@@ -385,27 +529,9 @@ void ExtractedWorld::applyBlockChanges(int ax, int ay, Zone &zone) const {
             return;
         changes = it->second;
     }
-    static const Block STONE{0xc8, 0xc8, 0xc8, 0, 1, 0}, OPEN{0xff, 0xff, 0xff, 0, 0, 0};
-    for (const nativesaves::BlockChange &change : changes) {
-        const std::array<int32_t, 3> at = change.block();
-        const int64_t lx = at[0] - (int64_t)ax * 64, ly = at[1] - (int64_t)ay * 64;
-        if (lx < 0 || lx >= 64 || ly < 0 || ly >= 64)
-            continue; // (a change kept under another zone)
-        // The column grows as needed: stone below its base and open blocks above its top, as
-        // gameBlock reads past either end.
-        Column &c = zone.columns[lx * 64 + ly];
-        const int z = at[2];
-        if (c.blocks.empty())
-            c.baseZ = z;
-        if (z < c.baseZ) {
-            c.blocks.insert(c.blocks.begin(), (size_t)(c.baseZ - z), STONE);
-            c.baseZ = z;
-        }
-        const size_t i = (size_t)(z - c.baseZ);
-        if (i >= c.blocks.size())
-            c.blocks.resize(i + 1, OPEN);
-        const std::array<uint8_t, 6> now = change.now();
-        c.blocks[i] = {now[0], now[1], now[2], now[3], now[4], now[5]};
+    for (const auto &change : changes) {
+        const auto at = change.block();
+        writeGameBlock(zone, ax, ay, at[0], at[1], at[2], change.now());
     }
 }
 
@@ -422,29 +548,21 @@ void ExtractedWorld::undoBlockChanges(int ax, int ay) {
             for (int dy = -1; dy <= 1; dy++)
                 changedZones.insert({ax + dx, ay + dy});
     }
-    std::shared_ptr<Zone> old = cached(ax, ay);
-    if (!old)
+    auto edits = editBlocks();
+    auto fresh = writableZone(ax, ay);
+    if (!fresh)
         return;
-    // Each change's "was" block goes back, last change first, into a copy of the zone.
-    auto fresh = std::make_shared<Zone>(*old);
     for (auto change = changes.rbegin(); change != changes.rend(); ++change) {
         const std::array<int32_t, 3> at = change->block();
         const int64_t lx = at[0] - (int64_t)ax * 64, ly = at[1] - (int64_t)ay * 64;
         if (lx < 0 || lx >= 64 || ly < 0 || ly >= 64)
             continue;
         Column &c = fresh->columns[lx * 64 + ly];
-        const int64_t i = (int64_t)at[2] - c.baseZ;
+        const int64_t i = (int64_t)at[2] - c.base;
         if (c.blocks.empty() || i < 0 || i >= (int64_t)c.blocks.size())
             continue; // (outside the column: it holds what the change found there anyway)
         const std::array<uint8_t, 6> was = change->was();
         c.blocks[(size_t)i] = {was[0], was[1], was[2], was[3], was[4], was[5]};
-    }
-    {
-        std::lock_guard lock(cacheMutex);
-        for (auto &[key, zone] : cache)
-            if (key.first == ax && key.second == ay)
-                zone = fresh;
-        cacheRevision = nextZoneCacheRevision();
     }
 }
 
@@ -457,21 +575,9 @@ void ExtractedWorld::setBlockChanges(int ax, int ay, const std::vector<nativesav
             for (int dy = -1; dy <= 1; dy++)
                 changedZones.insert({ax + dx, ay + dy});
     }
-    // The zone in memory is replaced by a copy with the changes, so a thread reading the old
-    // copy is not disturbed. (Putting a change in twice gives the same block, so the copy takes
-    // the whole list again.)
-    std::shared_ptr<Zone> old = cached(ax, ay);
-    if (!old)
-        return;
-    auto fresh = std::make_shared<Zone>(*old);
-    applyBlockChanges(ax, ay, *fresh);
-    {
-        std::lock_guard lock(cacheMutex);
-        for (auto &[key, zone] : cache)
-            if (key.first == ax && key.second == ay)
-                zone = fresh;
-        cacheRevision = nextZoneCacheRevision();
-    }
+    auto edits = editBlocks();
+    if (auto fresh = writableZone(ax, ay))
+        applyBlockChanges(ax, ay, *fresh);
 }
 
 std::vector<std::pair<int, int>> ExtractedWorld::takeChangedZones() {
@@ -530,8 +636,9 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &f
             return fail("truncated column header");
         if (baseZ == INT32_MIN || baseZ > INT32_MAX - Z_OFFSET - 1)
             return fail("column height overflows engine coordinates");
-        if (runs > (data.size() - at) / 8) return fail("truncated column runs");
-        column.baseZ = baseZ;
+        if (runs > (data.size() - at) / 8)
+            return fail("truncated column runs");
+        column.base = baseZ;
         size_t columnBlocks = 0;
         for (uint32_t r = 0; r < runs; r++) {
             uint16_t count = 0;
@@ -547,7 +654,41 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &f
             if (decode) column.blocks.insert(column.blocks.end(), count, block);
         }
     }
-    if (at != data.size()) return fail("unexpected trailing zone data");
+    if (at != data.size())
+        return fail("unexpected trailing zone data");
+    fs::path materialFile = file;
+    materialFile.replace_extension(".cwm");
+    std::error_code materialError;
+    if (fs::exists(materialFile, materialError)) {
+        constexpr size_t expected = 20 + 4096 * 6 * sizeof(float);
+        if (fs::file_size(materialFile, materialError) != expected || materialError)
+            return fail("invalid column material file size");
+        std::ifstream material(materialFile, std::ios::binary);
+        std::array<char, 4> magic{};
+        std::array<int32_t, 4> header{};
+        material.read(magic.data(), magic.size());
+        material.read(reinterpret_cast<char *>(header.data()), sizeof header);
+        if (!material || magic != std::array<char, 4>{'C', 'W', 'M', '1'} || header[0] != ax || header[1] != ay)
+            return fail("invalid column material header");
+        auto colours = std::make_shared<std::vector<worldgen::ColourInputs>>(4096);
+        for (auto &colour : *colours) {
+            std::array<float, 6> values;
+            material.read(reinterpret_cast<char *>(values.data()), sizeof values);
+            if (!material || !std::all_of(values.begin(), values.end(), [](float v) { return std::isfinite(v); }))
+                return fail("invalid nonfinite column material input");
+            colour.highlands = values[0];
+            colour.warmth = values[1];
+            colour.dryness = values[2];
+            colour.lavaRegion = values[3];
+            colour.forestRegion = values[4];
+            colour.kind27 = values[5];
+        }
+        if (decode) {
+            zone->recordedColours = std::move(colours);
+            zone->recordedSand = {double(header[2]), double(header[3])};
+        }
+    } else if (materialError)
+        return fail("column material file could not be inspected");
     return zone;
 }
 
@@ -559,10 +700,10 @@ bool ExtractedWorld::surface(double x, double y, float &height) {
         return false;
     int lx = (int)(bx - floorDiv(bx, 64) * 64), ly = (int)(by - floorDiv(by, 64) * 64);
     const Column &c = zone->columns[lx * 64 + ly];
-    int top = c.baseZ - 1; // Filler below baseZ is solid.
+    int top = c.base - 1; // Filler below baseZ is solid.
     for (int i = (int)c.blocks.size() - 1; i >= 0; i--)
         if (solidType(c.blocks[i].type)) {
-            top = c.baseZ + i;
+            top = c.base + i;
             break;
         }
     height = float(std::max(top + 1, 1) + Z_OFFSET); // Stand on water at sea level.
@@ -629,14 +770,12 @@ std::optional<worldgen::MeshLightVolume> ExtractedWorld::lightsFor(int ax, int a
             const int index = (x - dx * 64) * 64 + y - dy * 64;
             const auto &source = around[dy + 1][dx + 1]->columns[index];
             auto &target = columns[dy + 1][dx + 1][index];
-            target.base = source.baseZ;
+            target.base = source.base;
             target.blocks.reserve(source.blocks.size());
             for (const auto &block : source.blocks)
-                target.blocks.push_back({block.r, block.g, block.b, block.field3, block.type, block.breakable});
+                target.blocks.push_back({block.r, block.g, block.b, block.glow, block.type, block.flags});
         }
-    return worldgen::meshZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & {
-        return columns[y - ay + 1][x - ax + 1];
-    });
+    return worldgen::meshZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & { return columns[y - ay + 1][x - ax + 1]; });
 }
 
 void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved) {
@@ -908,9 +1047,9 @@ bool ExtractedWorld::solidAt(double x, double y, double z) {
         return false;
     const Column &c = zone->columns[(bx - floorDiv(bx, 64) * 64) * 64 + (by - floorDiv(by, 64) * 64)];
     int gz = (int)std::floor(z) - Z_OFFSET;
-    if (gz < c.baseZ)
+    if (gz < c.base)
         return true;
-    size_t i = (size_t)(gz - c.baseZ);
+    size_t i = (size_t)(gz - c.base);
     return i < c.blocks.size() && solidType(c.blocks[i].type);
 }
 
@@ -921,13 +1060,13 @@ bool ExtractedWorld::waterAt(double x, double y, double z) {
         return false;
     const Column &c = zone->columns[(bx - floorDiv(bx, 64) * 64) * 64 + (by - floorDiv(by, 64) * 64)];
     int gz = (int)std::floor(z) - Z_OFFSET;
-    if (gz < c.baseZ)
+    if (gz < c.base)
         return false;
-    size_t i = (size_t)(gz - c.baseZ);
+    size_t i = (size_t)(gz - c.base);
     if (i >= c.blocks.size())
         return gz <= 0;
     const Block &b = c.blocks[i];
-    return b.type == WATER_TYPE || (b.type == AIR_TYPE && gz <= 0 && !(b.breakable & DRY_AIR));
+    return b.type == WATER_TYPE || (b.type == AIR_TYPE && gz <= 0 && !(b.flags & DRY_AIR));
 }
 
 bool ExtractedWorld::openToSky(double x, double y, double z) {
@@ -937,9 +1076,9 @@ bool ExtractedWorld::openToSky(double x, double y, double z) {
         return true;
     const Column &c = zone->columns[(bx - floorDiv(bx, 64) * 64) * 64 + (by - floorDiv(by, 64) * 64)];
     int gz = (int)std::floor(z) - Z_OFFSET;
-    if (gz < c.baseZ)
+    if (gz < c.base)
         return false;
-    for (size_t i = (size_t)(gz - c.baseZ); i < c.blocks.size(); i++)
+    for (size_t i = (size_t)(gz - c.base); i < c.blocks.size(); i++)
         if (solidType(c.blocks[i].type) || c.blocks[i].type == LAVA_TYPE)
             return false;
     return true;
@@ -977,9 +1116,9 @@ void ExtractedWorld::lightColumns(int x0, int y0, int width, int height, int z0,
 bool ExtractedWorld::columnLight(const Column &c, int z0, int count, uint8_t *out) {
     using alphalight::BlockKind;
     auto kindAt = [&](int gz) {
-        if (gz < c.baseZ) // filler below the stored blocks (none in an empty column)
+        if (gz < c.base) // filler below the stored blocks (none in an empty column)
             return c.blocks.empty() ? BlockKind::Open : BlockKind::Solid;
-        size_t i = (size_t)(gz - c.baseZ);
+        size_t i = (size_t)(gz - c.base);
         if (i >= c.blocks.size())
             return BlockKind::Open;
         uint8_t t = c.blocks[i].type;
@@ -988,10 +1127,10 @@ bool ExtractedWorld::columnLight(const Column &c, int z0, int count, uint8_t *ou
     const int g0 = z0 - Z_OFFSET;
     for (int k = 0; k < count; k++)
         out[k] = (uint8_t)kindAt(g0 + k);
-    for (int gz = std::max(g0 + count, c.baseZ); gz < c.baseZ + (int)c.blocks.size(); gz++)
+    for (int gz = std::max(g0 + count, c.base); gz < c.base + (int)c.blocks.size(); gz++)
         if (kindAt(gz) != BlockKind::Open)
             return false;
-    return g0 + count >= c.baseZ || c.blocks.empty();
+    return g0 + count >= c.base || c.blocks.empty();
 }
 
 bool ExtractedWorld::floorAt(double x, double y, double fromZ, int headroom, float &height) {
@@ -1004,12 +1143,12 @@ bool ExtractedWorld::floorAt(double x, double y, double fromZ, int headroom, flo
     for (size_t i = 0; i < types.size(); i++)
         types[i] = c.blocks[i].type;
     int start = (int)std::floor(fromZ) - Z_OFFSET;
-    for (int z = start; z >= std::min(start, c.baseZ) - 1; z--) {
-        if (!columnSolid(c.baseZ, types, z))
+    for (int z = start; z >= std::min(start, c.base) - 1; z--) {
+        if (!columnSolid(c.base, types, z))
             continue;
         bool open = true;
         for (int k = 1; k <= headroom && open; k++)
-            open = !columnSolid(c.baseZ, types, z + k);
+            open = !columnSolid(c.base, types, z + k);
         if (!open)
             continue;
         // Stand on the water surface where the floor is under the sea.
@@ -1037,19 +1176,20 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::boundsFor(int ax, int ay,
         const int dx = lx < 0 ? -1 : lx >= 64 ? 1 : 0, dy = ly < 0 ? -1 : ly >= 64 ? 1 : 0;
         return around[dy + 1][dx + 1]->columns[(lx - dx * 64) * 64 + ly - dy * 64];
     };
-    return scenevisibility::build(ax, ay,
+    return scenevisibility::build(
+        ax, ay,
         [&](int64_t x, int64_t y) -> std::optional<scenevisibility::Column> {
             const auto &c = column(x, y);
-            return scenevisibility::Column{c.baseZ, c.baseZ + (int)c.blocks.size()};
+            return scenevisibility::Column{c.base, c.base + (int)c.blocks.size()};
         },
         [&](int64_t x, int64_t y, int64_t z) -> uint8_t {
             const auto &c = column(x, y);
-            if (z < c.baseZ)
+            if (z < c.base)
                 return 1;
-            const uint64_t index = (uint64_t)(z - c.baseZ);
+            const uint64_t index = (uint64_t)(z - c.base);
             if (index < c.blocks.size()) {
                 const auto &b = c.blocks[(size_t)index];
-                if (b.type || z > 0 || (b.breakable & DRY_AIR))
+                if (b.type || z > 0 || (b.flags & DRY_AIR))
                     return b.type;
             } else if (z > 0)
                 return 0;
@@ -1109,7 +1249,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     // Block at game z for a column: filler below baseZ (coloured like the
     // column's lowest block), stored blocks, then air.
     auto blockAt = [&](const Column &c, int z, Block &out) {
-        if (z < c.baseZ) {
+        if (z < c.base) {
             if (c.blocks.empty())
                 return false;
             out = c.blocks.front();
@@ -1117,7 +1257,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 out.type = 1; // Solid filler.
             return true;
         }
-        size_t i = (size_t)(z - c.baseZ);
+        size_t i = (size_t)(z - c.base);
         if (i >= c.blocks.size())
             return false;
         out = c.blocks[i];
@@ -1125,16 +1265,16 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     };
     auto effectiveBlock = [&](int x, int y, int64_t z) -> Block {
         const auto &c = column(x, y);
-        if (z < c.baseZ)
+        if (z < c.base)
             return {200, 200, 200, 0, 1, 0};
-        const uint64_t index = (uint64_t)(z - c.baseZ);
+        const uint64_t index = (uint64_t)(z - c.base);
         if (index < c.blocks.size()) {
             auto block = c.blocks[(size_t)index];
             // Native2a3260 writes solved red onto target-zone stored air/water
             // before mesh queries. Overlay it on this immutable job snapshot.
             if (nativeEncoding && x >= 0 && y >= 0 && x < 64 && y < 64 && (block.type == 0 || block.type == 2))
                 block.r = solvedLight.at((int64_t)ax * 64 + x, (int64_t)ay * 64 + y, z);
-            if (block.type || z > 0 || (block.breakable & DRY_AIR))
+            if (block.type || z > 0 || (block.flags & DRY_AIR))
                 return block;
         } else if (z > 0)
             return {255, 255, 255, 0, 0, 0};
@@ -1151,8 +1291,8 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     for (int ly = -1; ly <= 64; ly++)
         for (int lx = -1; lx <= 64; lx++) {
             const Column &c = column(lx, ly);
-            lo = std::min(lo, c.baseZ - 1);
-            hi = std::max(hi, c.baseZ + (int)c.blocks.size());
+            lo = std::min(lo, c.base - 1);
+            hi = std::max(hi, c.base + (int)c.blocks.size());
         }
     if (lo > hi)
         return true;
@@ -1229,7 +1369,8 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             return effectiveBlock(x, y, z).type;
         Block block{};
         blockAt(column(x, y), z, block);
-        if (block.type == AIR_TYPE && z <= 0 && !(block.breakable & DRY_AIR)) return WATER_TYPE;
+        if (block.type == AIR_TYPE && z <= 0 && !(block.flags & DRY_AIR))
+            return WATER_TYPE;
         return block.type;
     };
     bool wholeWater = nativeEncoding && nativeBox && nativeBox->lowest < 1 && nativeBox->upper >= 0;
