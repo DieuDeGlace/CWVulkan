@@ -1,5 +1,6 @@
 #include "Spawned.h"
 #include "NativeWorldObjects.h"
+#include "NativeDeadCreatures.h"
 #include "SteamCreatureLights.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
@@ -1232,6 +1233,32 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             };
             for (auto &object : lists->staticObjects)
                 nativeobjects::step(objectWorld, object, dt);
+        }
+        nativedeath::World corpses;
+        corpses.client = client;
+        corpses.creatures = &a.creatures;
+        corpses.byId = u.byId;
+        corpses.markDead = [&](nativeai::Creature &source) {
+            int64_t id;
+            std::memcpy(&id, source.record + worldgen::creature::ID, sizeof id);
+            worldDead.insert(id);
+            const uint8_t kind = source.record[worldgen::creature::HOSTILITY];
+            if (!enemyrespawn::isEnemy(kind) || enemyDeaths.contains(id))
+                return;
+            for (const auto &[key, list] : zones)
+                for (const Creature &creature : list)
+                    if (get<int64_t>(creature.record, worldgen::creature::ID) == id) {
+                        rememberEnemyDeath(id, key, kind);
+                        return;
+                    }
+        };
+        const auto retired = nativedeath::step(corpses, dt);
+        if (!retired.empty()) {
+            // Deferred IDs survive both pending-birth settlement and vector compaction.
+            settle(born);
+            for (int64_t id : retired)
+                remove(id);
+            rebuildViews();
         }
         pets.creatures = sides;
         nativepet::step(pets);

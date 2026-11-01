@@ -1,6 +1,6 @@
 # Engine readiness checklist
 
-Audited against the source and tests on 2026-10-31. The checkboxes in the first
+Audited against the source and tests on 2026-11-01. The checkboxes in the first
 section mean implemented and exercised in the stated checks; they do not certify
 complete Steam or pixel parity. Older progress notes are in Git history and the
 individual feature documents.
@@ -253,7 +253,11 @@ individual feature documents.
   hit and outgoing queues with state-change/nested-hit/direct-impact ordering.
   The native World clock now reaches physics for timed lava damage. Actual-facade
   health/event, callback-route and no-replay checks pass with the full CPU suite.
-  The separate dead-area pass, other object families and broader listening/native
+  Ordinary nonplayer corpse retirement and owned-kind6 revival now run between
+  objects and pets, with deferred removal/view rebuilding and retained respawn
+  policy. Lifecycle thresholds, ownership exclusions and actual vector-backed
+  facade updates pass focused and full CPU checks. The special dead-area bursts,
+  terrain/hit/heal pass, other object families and broader listening/native
   comparisons remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.

@@ -10,6 +10,22 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary nonplayer corpse lifecycle now runs after the object pass. Authority
+  advances the float death clock and retires eligible actors at 1,000 ms in
+  registration order, clearing their aggro/damage references before deferred
+  vector removal and borrowed-view rebuilding. Owned kind6 actors instead revive
+  at 20,000 ms when their owner's HP is nonnegative; physical position and health
+  are restored while the specified clock, dead ID and other retained fields stay.
+  Missing/negative-health owners do not trigger ordinary corpse removal. Existing
+  timed/instanced enemy respawn policy remains in place. Synthetic cases and real
+  facade tests cover multiple removals, a subsequent substep and owned revival.
+  All five targets build without warnings; focused tests and the full CPU/owner-data
+  suite pass. Two no-save combat runs exit0 with the character database unchanged;
+  the stationary run produces a frame, while moving capture reaches its settle
+  timeout without one. The blue-lit scene and missing owner hair remain unaccepted.
+  The three special area-source races remain deferred: their first
+  burst, terrain changes, hits/healing and complete native-frame ordering are open.
+
 - The specified static-object trap tail now runs in World substeps, including
   zero-time calls. Collection clears state bits 0x2002 on every registered actor;
   kind0 players select only already-loaded zones, retained and visited in unsigned
@@ -33,7 +49,7 @@ older successful runs; none of these bounded changes establishes complete parity
   while the block lookup memo still invalidates its replaced storage.
   The independent [trap contract](specs/steam-world-traps.md) is implemented within
   that stated scope. The new [dead-area contract](specs/steam-world-death-area.md)
-  documents the next separate pass; it is not yet wired into the runtime. Other
+  documents the separate area pass; only its ordinary lifecycle is wired. Other
   object families, full prelude ordering and the complete native CRT stream remain
   open, as do the broader visual and gameplay release gates.
 

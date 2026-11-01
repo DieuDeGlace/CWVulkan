@@ -45,8 +45,10 @@ An independent native-only author wrote steam-world-traps.md and
 steam-world-death-area.md without inspecting the engine, tests or extractor.
 The implementer read only those contracts and existing independent prose plus
 CubeVulkan's own code. NativeWorldObjects implements the stated trap scope;
-the separate dead-area pass remains a written contract for subsequent work.
-Coordinate, state/hit/event and float-order checks use synthetic records and
+NativeDeadCreatures implements the ordinary lifecycle from sections 1 and 6 of
+the dead-area contract. Its special area sources remain deferred; no native
+particle alpha or other unresolved behavior was invented.
+Coordinate, state/hit/event, float-order and lifecycle checks use synthetic records and
 asset-free generated terrain fixtures. The runtime still loads the owner's
 content; no captured models, terrain, sounds or game exports enter either package.
 

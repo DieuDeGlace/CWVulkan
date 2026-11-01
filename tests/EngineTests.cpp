@@ -172,6 +172,7 @@ int npcSpeechTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests();    // tests/ObjectClockTests.cpp
 int worldObjectTests();    // tests/WorldObjectTests.cpp
+int deadCreatureTests();   // tests/DeadCreatureTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -9329,6 +9330,8 @@ int main(int argc, char **argv) {
         if (a.locate(""))
             worldgen::loadCreatureTables(spawnsDir(a.gameDir()));
     }
+    if (argc == 2 && std::string(argv[1]) == "deadcreatures")
+        return deadCreatureTests();
     if (argc == 2 && std::string(argv[1]) == "worldobjects")
         return worldObjectTests();
     if (argc == 2 && std::string(argv[1]) == "objectclocks")
@@ -10619,6 +10622,7 @@ int main(int argc, char **argv) {
     failures += npcSpeechTests();
     failures += objectClockTests(); // tests/ObjectClockTests.cpp
     failures += worldObjectTests();
+    failures += deadCreatureTests();
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }
