@@ -1,4 +1,5 @@
 #include "Spawned.h"
+#include "NativeWorldObjects.h"
 #include "SteamCreatureLights.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
@@ -1178,23 +1179,60 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         w.local = hasPlayer && nativePlayer ? player.record.data() : nullptr;
         pets.local = hasPlayer ? &player.side : nullptr;
     };
+    auto keepHitEvents = [&] {
+        keep(hw);
+        worldEvents.aggro.insert(worldEvents.aggro.end(), hw.aggroNotes.begin(), hw.aggroNotes.end());
+        hw.aggroNotes.clear();
+        for (const auto &[credited, dead] : hw.kills) { // (a kill credit: who is credited, then the dead)
+            cwnet::KillRecord k;
+            std::memcpy(k.data(), &credited, 8);
+            std::memcpy(k.data() + 8, &dead, 8);
+            worldEvents.kills.push_back(k);
+        }
+        hw.kills.clear();
+    };
     auto step = [&](float dt) {
         elapsedWorldMs += dt; // native world time advances before the near-player pass
         u.time = elapsedWorldMs;
-        std::vector<nativesaves::Cell> playerZones;
-        auto includePlayer = [&](const uint8_t *record) {
-            if (record[0x60] == 0) {
-                int64_t position[2];
-                std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
-                playerZones.push_back(zonestates::zoneOfBlock(position[0] >> 16, position[1] >> 16));
+        w.time = elapsedWorldMs;
+        const std::set<nativesaves::Cell> noUsedCells;
+        nativeobjects::World objectWorld;
+        objectWorld.client = client;
+        objectWorld.clockMs = elapsedWorldMs;
+        objectWorld.creatures = &a.creatures;
+        objectWorld.usedCells = hasPlayer ? (usedCells ? usedCells : &noUsedCells) : nullptr;
+        objectWorld.rand = w.rand;
+        objectWorld.sound = [&](const soundrules::RequestRecord &sound) {
+            sounds.push_back(sound);
+            worldEvents.sounds.push_back(sound);
+        };
+        objectWorld.hit = [&](nativeai::Creature &target, const nativeupkeep::Hit &hit) {
+            if (hasPlayer && &target == &player.side && !nativePlayer) {
+                if (playerHit)
+                    playerHit(hit, nullptr);
+            } else {
+                nativehit::hit(hw, &target, nullptr, hit);
+                keepHitEvents(); // Nested hit/death sounds precede the direct trap-impact draw.
             }
         };
-        for (const uint8_t *record : w.creatures)
-            includePlayer(record);
-        if (hasPlayer && !playerMoves)
-            includePlayer(player.record.data());
-        const std::set<nativesaves::Cell> noUsedCells;
-        zoneStates.advanceObjects(dt, playerZones, hasPlayer ? (usedCells ? usedCells : &noUsedCells) : nullptr);
+        std::vector<residentpass::Zone> selected;
+        nativeobjects::collectZones(objectWorld, [&](nativeobjects::Cell key) {
+            if (auto zone = ew.gameZoneToken(key[0], key[1]))
+                selected.push_back({zone->order, key, std::move(zone->keepAlive)});
+        });
+        residentpass::orderZones(selected);
+        for (const auto &visit : selected) {
+            nativesaves::ZoneLists *lists = zoneLists(ew, visit.key[0], visit.key[1]);
+            if (!lists)
+                continue;
+            objectWorld.objectsChanged = [&] {
+                zoneStates.objectsChanged(visit.key);
+                objectsChanged.insert({visit.key[0], visit.key[1]});
+                ++objectChanges;
+            };
+            for (auto &object : lists->staticObjects)
+                nativeobjects::step(objectWorld, object, dt);
+        }
         pets.creatures = sides;
         nativepet::step(pets);
         worldEvents.buffs.insert(worldEvents.buffs.end(), pets.buffNotes.begin(), pets.buffNotes.end());
@@ -1271,16 +1309,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         keepRecords(u.sounds, {}, u.numbers, u.buffNotes);
         keepSounds(u.sounds);
         u.numbers.clear(), u.buffNotes.clear(), u.hits.clear();
-        keep(hw);
-        worldEvents.aggro.insert(worldEvents.aggro.end(), hw.aggroNotes.begin(), hw.aggroNotes.end());
-        hw.aggroNotes.clear();
-        for (const auto &[credited, dead] : hw.kills) { // (a kill credit: who is credited, then the dead)
-            cwnet::KillRecord k;
-            std::memcpy(k.data(), &credited, 8);
-            std::memcpy(k.data() + 8, &dead, 8);
-            worldEvents.kills.push_back(k);
-        }
-        hw.kills.clear();
+        keepHitEvents();
         for (const auto &sound : iw.sounds) { // a door's swing, the heroic shout or a water bubble
             int32_t id;
             std::memcpy(&id, sound.data() + 0x18, 4);

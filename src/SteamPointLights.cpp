@@ -1,4 +1,5 @@
 #include "SteamPointLights.h"
+#include "GameMath.h"
 #include "worldgen/Noise.h"
 #include "SteamScenery.h"
 #include "worldgen/StructureTables.h"
@@ -28,18 +29,6 @@ float flicker(const Point &point, float clockMs) {
     const double x = (double)signedBits((uint64_t)point[0] * 10) * (1.0 / 65536.0);
     const double y = (double)signedBits((uint64_t)point[1] * 10) * (1.0 / 65536.0);
     return std::cos(10 * worldgen::simplex(x, y) + .01f * clockMs);
-}
-// Personal cells narrow to signed32 blocks before the negative exactness
-// correction and floor division (steam-scene-lighting.md section 3.5.1).
-int32_t personalCell(int64_t fixed) {
-    uint32_t bits = (uint32_t)(fixed / 65536);
-    int32_t block;
-    std::memcpy(&block, &bits, sizeof block);
-    if (fixed < 0 && (int64_t)block * 65536 != fixed) {
-        --bits;
-        std::memcpy(&block, &bits, sizeof block);
-    }
-    return block >= 0 ? block / 16 : (int32_t)(((int64_t)block - 15) / 16);
 }
 bool visible(const Frame &frame, const Point &point, float radius) {
     return frame.visible && frame.visible(point, radius, frame.range);
@@ -151,7 +140,7 @@ void collect(const ZoneSources &zone, const Frame &frame, std::vector<Light> &ou
         }
         if (dayGate && !(frame.daylight < .4000000059604645f))
             continue;
-        if (personal && (!frame.usedCell || !frame.usedCell(personalCell(base[0]), personalCell(base[1]))))
+        if (personal && (!frame.usedCell || !frame.usedCell(gamemath::floorFixedCell(base[0]), gamemath::floorFixedCell(base[1]))))
             continue;
         if (visible(frame, test, testRadius))
             out.push_back({position, radius, colour});

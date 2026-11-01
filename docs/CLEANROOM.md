@@ -39,6 +39,17 @@ and palette artwork are loaded from the owner's installation at runtime and stay
 out of source and runtime packages. The native character appearance format is
 unchanged, and the extra style currently applies only to the local player.
 
+## World object prelude, 2026-11-01
+
+An independent native-only author wrote steam-world-traps.md and
+steam-world-death-area.md without inspecting the engine, tests or extractor.
+The implementer read only those contracts and existing independent prose plus
+CubeVulkan's own code. NativeWorldObjects implements the stated trap scope;
+the separate dead-area pass remains a written contract for subsequent work.
+Coordinate, state/hit/event and float-order checks use synthetic records and
+asset-free generated terrain fixtures. The runtime still loads the owner's
+content; no captured models, terrain, sounds or game exports enter either package.
+
 ## Capture-log cleanup, 2026-10-31
 
 Routine capture inspection exposed raw hexadecimal function bytes from an old

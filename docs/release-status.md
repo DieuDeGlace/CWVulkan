@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-10-31
+# Source review checkpoint — 2026-11-01
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -9,6 +9,33 @@ checkpoint describe the intended setup and remaining limits.
 
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
+
+- The specified static-object trap tail now runs in World substeps, including
+  zero-time calls. Collection clears state bits 0x2002 on every registered actor;
+  kind0 players select only already-loaded zones, retained and visited in unsigned
+  stable-identity order. Each object's clock and personal reset precede its own
+  automatic state cycle and hit callbacks. Types 0x11/0x12/0x13 use the verified
+  strict ranges, float clock buckets, maxHP fractions, push and sound/RNG order.
+  The shared hit facade owns actual damage and notices; direct trap sounds follow
+  nested hit outputs and are delivered once locally while retained for distribution.
+  Physics also receives the current World clock, restoring timed lava damage.
+  Synthetic integration checks cover actual local health/events, a legacy callback
+  with player ID 77, rejected hits, callback births, zero-time repeat, float rounding,
+  clients and overflow coordinates. All five targets and the full CPU/owner-data
+  suite pass; a no-save gameplay run exits0 with the character fixture unchanged.
+  The inherited blue movement scene and missing owner hair remain visually unaccepted.
+
+- Personal-state cells now share the verified signed32 block narrowing before
+  floor-to-cell conversion across object state, lighting, lore, treasure receipts
+  and affected ability lookups. A regression first reproduced six failing object
+  cases; boundary checks include negative exact values and int64 minimum. Loaded
+  zone identities survive copy-on-write block edits/undo, preserving visit order
+  while the block lookup memo still invalidates its replaced storage.
+  The independent [trap contract](specs/steam-world-traps.md) is implemented within
+  that stated scope. The new [dead-area contract](specs/steam-world-death-area.md)
+  documents the next separate pass; it is not yet wired into the runtime. Other
+  object families, full prelude ordering and the complete native CRT stream remain
+  open, as do the broader visual and gameplay release gates.
 
 - A new isolated original-game capture resolves the two region-reference failures.
   Its provenance reports the supported build and zero other mod DLLs. All 3,823

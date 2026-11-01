@@ -1,4 +1,5 @@
 #include "ZoneStates.h"
+#include "Lore.h"
 #include "NativeInteract.h"
 #include "ObjectVisual.h"
 #include "LightBeam.h"
@@ -68,6 +69,38 @@ int objectClockTests() {
           "empty local personal set closes the reward object");
     states.advanceObjects(16, {{0, 0}});
     check(objectvisual::read(chest.data()).elapsedMs == 16, "no local player does not synchronize personal state");
+
+    // Native137e0 narrows to signed32 blocks before correcting negative inputs.
+    // Keep the fixture zone fixed to isolate its personal-state lookup from selection.
+    struct Conversion {
+        int64_t fixed;
+        int32_t cell, zone;
+    };
+    const std::array<Conversion, 7> conversions{{{-1, -1, -1},
+                                                 {-1048576, -1, -1},
+                                                 {-1048577, -2, -1},
+                                                 {140737488355328LL, -134217728, -33554432},
+                                                 {281474976710656LL, 0, 0},
+                                                 {-281474976710656LL, -1, -1},
+                                                 {INT64_MIN, -1, -1}}};
+    for (const auto &[fixed, cell, zone] : conversions) {
+        check(zonestates::zoneOfFixed(fixed, 0) == nativesaves::Cell{zone, 0}, "world object pass uses native narrowed player zones");
+        check(lore::cellOf(fixed, 0) == lore::Cell{cell, 0}, "lore and personal object state share native cell coordinates");
+        for (int type : {0, 0x16}) {
+            zonestates::ZoneStates personal;
+            worldgen::ZoneObject object;
+            object.type = type;
+            object.x = fixed;
+            object.y = 0;
+            object.active = true;
+            object.swing = 1000;
+            auto &record = personal.load({0, 0}, {}, {zonestates::staticObjectRecord(object)}).staticObjects[0];
+            const std::set<nativesaves::Cell> usedAt{{cell, 0}};
+            personal.advanceObjects(0, {{0, 0}}, &usedAt);
+            const auto state = objectvisual::read(record.data());
+            check(!state.closed && state.elapsedMs == 0, "personal object uses native signed32 block narrowing at zero elapsed time");
+        }
+    }
 
     lightbeam::Placement shaft{{147456, 229376, 1622016}, 20, 1}; // (2.25,3.5,24.75)
     auto quad = lightbeam::sample(shaft, {2.25f, 3.5f, 24.75f}, 0, 20, 1);

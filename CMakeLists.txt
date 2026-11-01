@@ -260,6 +260,7 @@ add_library(engine STATIC
     src/SoundRules.cpp
     src/TerrainRay.cpp
     src/CameraPosition.cpp
+    src/NativeWorldObjects.cpp
     src/ResidentEffects.cpp
     src/ResidentPass.cpp
     src/DrawnState.cpp
@@ -345,7 +346,7 @@ target_include_directories(HudExtract PRIVATE ${stb_SOURCE_DIR})
 set_target_properties(HudExtract PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
 target_sources(engine PRIVATE src/LightBeam.cpp)
-target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp)
+target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp tests/WorldObjectTests.cpp)
 target_sources(engine PRIVATE src/SteamScenery.cpp)
 target_sources(EngineTests PRIVATE tests/SceneCaptureTests.cpp)
 

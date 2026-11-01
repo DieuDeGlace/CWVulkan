@@ -27,6 +27,7 @@
 #include "Saves.h"
 #include "NativeProgress.h"
 #include "GameWorld.h"
+#include "ZoneStates.h"
 #include "TalkScripts.h"
 #include "TalkGen.h"
 #include "ItemNames.h"
@@ -169,7 +170,8 @@ int steamCreatureLightsTests();
 int dialogueChoicesTests();
 int npcSpeechTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
-int objectClockTests();   // tests/ObjectVisualTests.cpp
+int objectClockTests();    // tests/ObjectClockTests.cpp
+int worldObjectTests();    // tests/WorldObjectTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
 int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
@@ -656,6 +658,18 @@ static void extractedBlockCacheLifetime() {
     retained.reset();
     CHECK(oldZone.expired()); // A thread-local lookup must not own an unloaded zone.
 
+    { // Block edits replace immutable storage without re-registering the loaded zone.
+        const auto identity = reader->gameZoneToken(1, 0);
+        const auto original = reader->gameBlock(64, 0, 8);
+        auto changed = original;
+        changed[0] ^= 0x7f;
+        reader->setBlockChanges(1, 0, {zonestates::blockChange(64, 0, 8, original, changed)});
+        CHECK(reader->gameBlock(64, 0, 8) == changed);
+        CHECK(identity && reader->gameZoneToken(1, 0)->order == identity->order);
+        reader->undoBlockChanges(1, 0);
+        CHECK(reader->gameBlock(64, 0, 8) == original);
+        CHECK(identity && reader->gameZoneToken(1, 0)->order == identity->order);
+    }
     retained = reader->gameZoneToken(1, 0);
     CHECK(retained.has_value());
     auto *address = &*reader;
@@ -1768,6 +1782,9 @@ static void groundItemRules() {
         r = receive(keeper, treasure, sword, 1, 0, at, region, 0, true);
         CHECK(r.markCell && r.cell[0] == 0 && r.cell[1] == -1 && r.dialog.size() == 7 && r.dialog.back() == "you_received_the_item");
         CHECK(r.holdUpAbility == 0x7c);
+        const int64_t wrappedPosition[3] = {-281474976710656LL, 140737488355328LL, 0};
+        const Receipt wrapped = receive(keeper, treasure, sword, 1, 0, wrappedPosition, region, 0, true);
+        CHECK(wrapped.markCell && wrapped.cell[0] == -1 && wrapped.cell[1] == -134217728);
         // Vehicles have their own hold-up.
         Item boat{};
         boat[0] = type::VEHICLE, boat[4] = 1;
@@ -9312,6 +9329,10 @@ int main(int argc, char **argv) {
         if (a.locate(""))
             worldgen::loadCreatureTables(spawnsDir(a.gameDir()));
     }
+    if (argc == 2 && std::string(argv[1]) == "worldobjects")
+        return worldObjectTests();
+    if (argc == 2 && std::string(argv[1]) == "objectclocks")
+        return objectClockTests();
     if (argc == 2 && std::string(argv[1]) == "worldcache") {
         extractedBlockCacheLifetime();
         return failures ? 1 : 0;
@@ -10596,7 +10617,8 @@ int main(int argc, char **argv) {
     failures += steamCreatureLightsTests();
     failures += dialogueChoicesTests();
     failures += npcSpeechTests();
-    failures += objectClockTests();  // tests/ObjectVisualTests.cpp
+    failures += objectClockTests(); // tests/ObjectClockTests.cpp
+    failures += worldObjectTests();
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

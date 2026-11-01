@@ -37,7 +37,7 @@ bool isLoreBuilding(Cell cell);
 // Whether a static object offers "Examine" (spec 2.2): the lore objects 118..125, the keepers'
 // brazier 126 (once it holds its flame) and the tombstone 130.
 bool examinable(int objectType);
-// The 16-block cell of a position in 1/65536 blocks.
+// Native 16-block cell: fixed positions narrow to signed32 blocks before flooring.
 Cell cellOf(int64_t x, int64_t y);
 // The place (1024-block cell) a cell lies in, and that place's realm (spec 4.3).
 Cell placeOf(Cell cell);

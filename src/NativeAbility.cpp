@@ -7,6 +7,7 @@
 // Arithmetic is single precision in the order the specs give (it decides the last bit of
 // damage numbers and hit strengths); the few double-precision steps are marked.
 #include "NativeAbility.h"
+#include "GameMath.h"
 
 #include "GameMath.h"
 #include "NativeBuffs.h"
@@ -2121,10 +2122,9 @@ void Step::specialItem() {
     const bool useMoment = reaches(5000.0f);
     const Pos me = here();
     auto objectAt = [](const nativeai::Object &o) {
-        return Pos{get<int64_t>(o.data(), O_POSITION), get<int64_t>(o.data(), O_POSITION + 8),
-                   get<int64_t>(o.data(), O_POSITION + 16)};
+        return Pos{get<int64_t>(o.data(), O_POSITION), get<int64_t>(o.data(), O_POSITION + 8), get<int64_t>(o.data(), O_POSITION + 16)};
     };
-    auto cellOf = [](int64_t x) { return floorDiv(floorBlock(x), 16); };
+    auto cellOf = [](int64_t x) { return gamemath::floorFixedCell(x); };
 
     if (special && sub == 7 && useMoment) { // finds the way to the nearest cell object 0x3c
         nearZones([&](std::vector<nativeai::Object> &objects, int, int) {

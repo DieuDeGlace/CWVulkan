@@ -120,7 +120,7 @@ class ExtractedWorld {
     using GameBlock = std::array<uint8_t, 6>;
     GameBlock gameBlock(int64_t x, int64_t y, int z, bool *loaded = nullptr);
     struct ZoneToken {
-        uint64_t order; // Unsigned address of this runtime's loaded Zone object.
+        uint64_t order; // Unsigned address of the stable loaded-zone identity.
         std::shared_ptr<const void> keepAlive;
     };
     std::optional<ZoneToken> gameZoneToken(int32_t x, int32_t y) const; // Lookup only; retain the selected zone during a pass.
@@ -162,13 +162,16 @@ class ExtractedWorld {
     };
     // One stored column as the light sees it (lightColumn).
     static bool columnLight(const Column &c, int z0, int count, uint8_t *out);
+    struct ZoneIdentity {};
     struct Zone {
+        // Column replacements copy storage, not the loaded zone's lifetime/visit order.
+        std::shared_ptr<const ZoneIdentity> identity = std::make_shared<ZoneIdentity>();
         int region = 0;
-        Column columns[4096]; // index = localX * 64 + localY (the game's order)
+        Column columns[4096];                                 // index = localX * 64 + localY (the game's order)
         std::shared_ptr<const worldgen::ZoneContents> things; // generated zones only: models, items, spawn points
-        std::vector<worldgen::ZoneObject> objects;           // the generator's static objects (zone+0x60)
-        bool generated = false;     // made by the generator rather than read
-        bool objectsMade = false;   // objects made (for a read zone, once gameObjects asks)
+        std::vector<worldgen::ZoneObject> objects;            // the generator's static objects (zone+0x60)
+        bool generated = false;                               // made by the generator rather than read
+        bool objectsMade = false;                             // objects made (for a read zone, once gameObjects asks)
         struct ModelLightState {
             std::mutex mutex;
             std::set<int> waterModels; // flag8 is ORed, retained for this zone's lifetime

@@ -165,10 +165,13 @@ operand wins on equality it does not change the value.
 * Projectile hit routine 0x2dba40: the projectile's damage, doubled when
   rand / 32767 < 0x50d30(attacker, target, …) (the critical chance); spirit flag from the
   projectile; hit type from the projectile; ability 0; blockable 1.
-* 0x2a45e0: hit type 2, blockable 1.
+* 0x2a45e0: races0x90/0x119 use hit type1; race0x11d's hostile-owner route
+  uses type2; both are blockable1. The complete producer, healing alternative
+  and ordering are in [steam-world-death-area.md](steam-world-death-area.md).
 * Creature upkeep 0x2de4c0 (poison ticks): attacker = the poison buff's source creature,
   damage = the buff's strength, critical 0, spirit flag 0, hit type 6, blockable 0.
-* 0x2e3510: no attacker, hit type 1 when its ability is 0x11 else 0, blockable 1.
+* 0x2e3510: no attacker, hit type1 when the static object's type is0x11,
+  otherwise0, blockable1. See [steam-world-traps.md](steam-world-traps.md).
 
 ---
 

@@ -181,6 +181,12 @@ individual feature documents.
   and native comparisons remain. The [host CRT audit](specs/steam-host-crt-stream.md)
   separates generator and simulation threads; the latter's initial numeric state is
   still unverified.
+  The [object-trap prelude](specs/steam-world-traps.md) now runs per substep with
+  common state clearing, loaded-zone identity order, per-object state/hit/sound
+  ordering and native coordinate boundaries. Stable identities persist across
+  block-storage copies; synthetic facade and full CPU checks pass. The separate
+  [death-area/retirement pass](specs/steam-world-death-area.md) is specified but
+  not integrated. This does not close the other prelude and lifecycle work above.
   The specified resident kind9 request/producer and independent live/output lifetimes
   now have native numeric and lifecycle checks; its broader rendering remains open.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
@@ -243,7 +249,12 @@ individual feature documents.
   at GUI scales 1/1.5 keep the same 112x19 colored-glyph bounds; those UI-only early
   frames are not settled-world lighting or native-game pixel-parity evidence.
   No feat producer, award or descriptor meaning was invented.
-- [ ] Remaining sound-event wiring. The independently traced
+- [ ] Remaining sound-event wiring. The static-object trap tail now uses the shared
+  hit and outgoing queues with state-change/nested-hit/direct-impact ordering.
+  The native World clock now reaches physics for timed lava damage. Actual-facade
+  health/event, callback-route and no-replay checks pass with the full CPU suite.
+  The separate dead-area pass, other object families and broader listening/native
+  comparisons remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.
 - [x] Saved inventory loading preserves the stored tab count, including zero or

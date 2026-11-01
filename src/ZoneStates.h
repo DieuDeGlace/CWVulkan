@@ -38,6 +38,8 @@ bool holdsItem(const Record &groundItem);
 std::array<int64_t, 3> groundItemPosition(const Record &groundItem);
 // The zone of a block, of 64 blocks a side.
 Cell zoneOfBlock(int64_t x, int64_t y);
+// Native fixed-to-zone conversion, including signed32 block narrowing.
+Cell zoneOfFixed(int64_t x, int64_t y);
 // A block change entry (28 bytes, §5.3): the block, as it was and as it is now.
 BlockChange blockChange(int32_t x, int32_t y, int32_t z, const std::array<uint8_t, 6> &was, const std::array<uint8_t, 6> &now);
 

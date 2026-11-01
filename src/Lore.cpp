@@ -1,4 +1,5 @@
 #include "Lore.h"
+#include "GameMath.h"
 #include "TalkGen.h"
 #include "worldgen/Generator.h"
 
@@ -329,11 +330,7 @@ bool isLoreBuilding(Cell cell) {
 bool examinable(int objectType) { return (objectType >= 118 && objectType <= 126) || objectType == 130; }
 
 Cell cellOf(int64_t x, int64_t y) {
-    auto floorDiv = [](int64_t dots) { // dots to blocks, then blocks to cells, flooring both
-        const int64_t block = dots >= 0 ? dots / 65536 : -((-dots + 65535) / 65536);
-        return (int32_t)(block >= 0 ? block / 16 : -((-block + 15) / 16));
-    };
-    return {floorDiv(x), floorDiv(y)};
+    return {gamemath::floorFixedCell(x), gamemath::floorFixedCell(y)};
 }
 
 Cell placeOf(Cell cell) { return {worldgen::floorDiv(cell[0], 6), worldgen::floorDiv(cell[1], 6)}; }

@@ -1,7 +1,9 @@
 // The zones' stored states applied and recorded, from docs/specs/native-saves.md §5.2 and §5.3.
 #include "ZoneStates.h"
+#include "GameMath.h"
 
 #include "NativeInteract.h"
+#include "NativeWorldObjects.h"
 #include "NativePlayer.h"
 
 #include <cstring>
@@ -80,6 +82,10 @@ Cell zoneOfBlock(int64_t x, int64_t y) {
     return {zone(x), zone(y)};
 }
 
+Cell zoneOfFixed(int64_t x, int64_t y) {
+    return {gamemath::floorFixedZone(x), gamemath::floorFixedZone(y)};
+}
+
 BlockChange blockChange(int32_t x, int32_t y, int32_t z, const std::array<uint8_t, 6> &was, const std::array<uint8_t, 6> &now) {
     BlockChange c;
     put<int32_t>(c.bytes.data(), CHANGE_BLOCK, x);
@@ -120,20 +126,8 @@ void ZoneStates::advanceObjects(float milliseconds, const std::vector<Cell> &pla
             }
         if (!nearPlayer)
             continue;
-        for (Record &object : lists.staticObjects) {
-            auto *r = object.data();
-            put<float>(r, nativeinteract::OBJECT_SWING, get<float>(r, nativeinteract::OBJECT_SWING) + milliseconds);
-            const int type = get<int32_t>(r, OBJECT_TYPE);
-            if (usedCells && (type == 0 || type == 0x16)) {
-                const Cell cell{(int32_t)(get<int64_t>(r, OBJECT_POSITION) >> 20),
-                                (int32_t)(get<int64_t>(r, OBJECT_POSITION + 8) >> 20)};
-                const uint8_t state = usedCells->count(cell) ? 0 : 1;
-                if (r[nativeinteract::OBJECT_STATE] != state) {
-                    r[nativeinteract::OBJECT_STATE] = state;
-                    put<float>(r, nativeinteract::OBJECT_SWING, 0);
-                }
-            }
-        }
+        for (Record &object : lists.staticObjects)
+            nativeobjects::advanceClock(object, milliseconds, usedCells);
         // Clock and personal-state synchronization do not emit object-change notices.
     }
 }

@@ -56,6 +56,18 @@ inline int32_t floorFixedBlock(int64_t fixed) {
     return narrowed;
 }
 
+// Native137e0: floor the narrowed block to its 16-block personal-state cell.
+inline int32_t floorFixedCell(int64_t fixed) {
+    const int64_t block = floorFixedBlock(fixed);
+    return int32_t(block >= 0 ? block / 16 : (block - 15) / 16);
+}
+
+// The same native narrowed-block conversion for 64-block zones.
+inline int32_t floorFixedZone(int64_t fixed) {
+    const int64_t block = floorFixedBlock(fixed);
+    return int32_t(block >= 0 ? block / 64 : (block - 63) / 64);
+}
+
 // the frame blend's factor (0xa7a0): how far a value moves toward its target over a frame of
 // `ms` milliseconds at `rate`. The frame is cut into hundredths of a millisecond, each moving
 // the value toward that step's share of the frame by rate * 0.02.

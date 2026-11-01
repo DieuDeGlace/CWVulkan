@@ -326,7 +326,7 @@ std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x
     std::lock_guard lock(cacheMutex);
     for (const auto &[key, zone] : cache)
         if (key == Key{x, y} && zone)
-            return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone.get())), zone};
+            return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone};
     return std::nullopt;
 }
 

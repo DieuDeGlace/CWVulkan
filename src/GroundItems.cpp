@@ -1,6 +1,7 @@
 // Ground items, the drop hop, pick-up and receiving items, written from
 // docs/specs/loot-pickup.md. See GroundItems.h.
 #include "GroundItems.h"
+#include "GameMath.h"
 
 #include "NativeInteract.h"
 
@@ -127,7 +128,7 @@ Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int
     // 3.4: treasure marks its cell as used, as opening a chest does.
     if (noticeItem[TYPE] == type::TREASURE) {
         r.markCell = true;
-        r.cell = {(int32_t)(position[0] >> 20), (int32_t)(position[1] >> 20)}; // 16-block cells
+        r.cell = {gamemath::floorFixedCell(position[0]), gamemath::floorFixedCell(position[1])};
     }
     // 3.5: the receipt dialog and holding the item up.
     if (noticeItem[TYPE] == type::TREASURE || t == type::SPECIAL_17 || t == type::VEHICLE || t == type::TYPE_1D) {
