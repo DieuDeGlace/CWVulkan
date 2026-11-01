@@ -1851,7 +1851,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // are ground items (layCoins).
     DeathEffects deathFx;
     nativeparticles::System burstParticles;
-    int burstParticleModel = -1;
+    std::array<int, 2> burstParticleModels{-1, -1}; // cube.cub and note.cub, loaded from the owner's assets
     const int coinModel = world.loadModel("gold-coin");
     std::vector<char> wasDead(actors.count(), 0);
     uint32_t fragmentMeshId = 0;
@@ -6673,14 +6673,15 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!serverMode && useExtracted) {
             burstParticles.update(int32_t(gamemath::frameMilliseconds(frameMs)),
                                   [&](int32_t x, int32_t y, int32_t z) { return extractedWorld.gameBlock(x, y, z)[4]; });
-            if (!burstParticles.states().empty() && burstParticleModel < 0)
-                burstParticleModel = world.loadModel("cube");
-            if (const uint32_t mesh = world.modelMesh(burstParticleModel)) {
-                const glm::ivec3 dimensions(world.modelSize(burstParticleModel));
-                const std::array<int64_t, 2> offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
-                for (const auto &particle : burstParticles.states()) {
-                    if (!nativeparticles::supportedParticle(particle))
-                        continue;
+            const std::array<int64_t, 2> offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
+            for (const auto &particle : burstParticles.states()) {
+                if (!nativeparticles::supportedParticle(particle))
+                    continue;
+                int &model = burstParticleModels[particle.style == 7 ? 1 : 0];
+                if (model < 0)
+                    model = world.loadModel(particle.style == 7 ? "note" : "cube");
+                if (const uint32_t mesh = world.modelMesh(model)) {
+                    const glm::ivec3 dimensions(world.modelSize(model));
                     DrawItem draw;
                     draw.mesh = mesh;
                     draw.kind = DrawKind::Particle;
@@ -6691,7 +6692,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     draw.model = glm::translate(draw.model, glm::vec3(dimensions.x * .5f, dimensions.y * .5f, 0));
                     draw.nativeParticle = scenevisibility::Sphere{particle.position, particle.size};
                     draw.material = particle.colour;
-                    if (particle.style == 1 || particle.style == 2) {
+                    draw.nativeShininess = particle.style == 7;
+                    if (particle.style == 1 || particle.style == 2 || particle.style == 3 || particle.style == 7 || particle.style == 8) {
                         draw.flags = GLOW;
                         draw.material.a = 1;
                     } else {

@@ -40,7 +40,7 @@ struct BodyPart {
 class System {
   public:
     // Every style expands and consumes its shared draws before the live cap.
-    // Motion/draw covers1/2/5 and collision-on body0; other styles retain records.
+    // Styles0..8 share motion/draw; unknown styles retain their constructor state.
     void append(std::span<const Burst>, const Random &);
     // One prepared part, in native X/Y/Z sampling and randomized deque order.
     // Body and ordinary particles share the same later cap/update/draw lifetime.
@@ -48,7 +48,8 @@ class System {
     void update(int32_t milliseconds, const BlockType &);
     const std::vector<Particle> &states() const { return live; }
     void clear() { live.clear(); }
-    static void step(Particle &, int32_t milliseconds, const BlockType &);
+    // Returns a deferred removal request from descending style6.
+    static bool step(Particle &, int32_t milliseconds, const BlockType &);
 
   private:
     std::vector<Particle> live;

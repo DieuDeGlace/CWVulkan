@@ -292,7 +292,10 @@ individual feature documents.
   accessor; real CPU-mesh roof/sea/physical-edit cases and full CPU/GPU checks pass.
   Safe engine writer serialization retains immutable snapshots and lazy metadata.
   Combined host/client terrain caches still need separate World ownership.
-  Other style consumers are specified but not implemented; full native CRT and
+  Ordinary consumers0/3/4/6/7/8 now follow the independent style supplement:
+  gravity/angle/pass-set differences, descending6 contact retirement, still3,
+  owner note.cub7, separate geometry shrinking and per-draw shininess reset.
+  Unknown styles and independently untraced producers remain open; full native CRT and
   broader visual/peer acceptance remain open. Other object
   families and listening comparisons also remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;

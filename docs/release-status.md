@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary consumers0/3/4/6/7/8 now use the independent style contract alongside
+  existing1/2/5 and body records. Their gravity/angular differences, extra style4
+  pass types, descending6 full-XYZ contacts and deferred retirement are implemented.
+  Style3 stays still while aging; styles7/8 shrink geometry without changing the
+  stored culling radius or rejecting lifetime equality. Style7 loads the owner's
+  note.cub with its own full header, sets Glow/Shininess1 and resets shininess for
+  following draws. Other glowing styles keep shininess0; ordinary lit types retain
+  the common stored-block accessor. No new CRT draws or replacement geometry were
+  introduced. Synthetic motion/header/retirement and GPU ripple/reset tests cover
+  these bounded consumers. The first GPU expectation omitted the camera gradient
+  translation; an independent shader-contract calculation corrected that test
+  reference without changing rendering. Native duplicate-erasure recovery, unknown
+  style numbers, broader producers and native CRT/pixel acceptance remain open.
+  All five targets build without warnings; focused particle/body and full CPU/owner
+  checks pass, with48 shader,2 camera,20 GUI,6 map and shared-water/Alpha-scenery
+  image results. Steam and Alpha no-save combat runs both exit0 with viewed frames
+  and the character database unchanged. Those blue/cavity scenes and missing owner
+  hair remain unaccepted native visual comparisons.
+
 - Completed mesh-light solves now write target-zone stored air/water red back
   before model samples and terrain/GPU installation, in both rendering styles.
   Other block bytes, halo records, loaded-zone identity, history and dirty queues

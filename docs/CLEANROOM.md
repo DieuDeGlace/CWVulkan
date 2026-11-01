@@ -100,7 +100,8 @@ implementation, original instructions, reconstructed code or model bytes were re
 by the implementer. Synthetic CPU records and asset-free GPU triangles check the
 bounded1/2/5 rules. The World random provider remains the engine's legacy provider;
 its draw ordering is not asserted to close native CRT state/seed parity. Body
-particles and unknown later-style motion/draw are separate remaining work.
+particles and later-style consumers were implemented in subsequent checkpoints below;
+unknown style numbers and native CRT-state equality remain outside that result.
 
 ## Destructive terrain and model cleanup, 2026-11-01
 
@@ -467,3 +468,18 @@ Done so far with the full process:
   `src/NativeMenu.*` (the CWM1 replay and its third-party `shade()`) is retired with `tools/MenuProbe.cpp`,
   `tools/MenuCapture.cpp` and `tools/ConvertMenuCapture.py`: the title is now the ordinary world. Nothing of
   `shade()` was kept; the logo's overlay lighting is a stand-in until a spec covers it (`docs/menu.md`).
+
+
+## Remaining ordinary particle consumers, 2026-11-01
+
+The implementer read only steam-particle-style-consumers.md, its linked existing
+contracts and engine sources. The independent native-only author established the
+finite style0/3/4/6/7/8 consumers and note.cub catalog binding without implementation
+access. Shared motion/age/cap, descending contact retirement, owner note geometry,
+full-header lifetime scaling and explicit per-draw shininess follow that prose.
+The engine removes a retiring record once after all visits; undefined native
+duplicate-erasure recovery is not reproduced or claimed. No new random draws,
+model bytes, native instructions or reconstruction sources enter this change.
+Other producers, unknown style numbers, malformed input and full native CRT/pixel
+acceptance remain open. Synthetic motion and GPU material/state checks cover the
+bounded paths; owner geometry stays local at runtime.

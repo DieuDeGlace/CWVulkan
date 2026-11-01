@@ -56,7 +56,7 @@ std::array<int64_t, 3> fixedPoint(const glm::mat4 &transform, glm::vec3 point) {
 } // namespace
 
 bool supportedParticle(const Particle &p) {
-    return p.style == 1 || p.style == 2 || p.style == 5 || (p.style == 0 && p.collision);
+    return p.style >= 0 && p.style <= 8;
 }
 
 void System::append(std::span<const Burst> bursts, const Random &random) {
@@ -171,51 +171,70 @@ void System::prependBody(const BodyPart &part, const Random &random) {
     live.insert(live.begin(), temporary.rbegin(), temporary.rend());
 }
 
-void System::step(Particle &p, int32_t milliseconds, const BlockType &block) {
+bool System::step(Particle &p, int32_t milliseconds, const BlockType &block) {
     p.age = std::bit_cast<int32_t>(uint32_t(p.age) + uint32_t(milliseconds));
-    if (p.age < 0 || p.frozen || !supportedParticle(p))
-        return;
+    if (p.age < 0 || p.frozen || p.style == 3 || !supportedParticle(p))
+        return false;
     const float seconds = float(milliseconds) * 0.001f;
-    const float gravity = seconds * 30.0f;
-    p.velocity.z -= gravity;
-    turn(p, seconds);
+    if (p.style == 0 || p.style == 1 || p.style == 2 || p.style == 5 || p.style == 6) {
+        const float gravity = seconds * 30.0f;
+        p.velocity.z -= gravity;
+    }
+    if (p.style != 7)
+        turn(p, seconds);
     glm::vec3 displacement;
     for (int axis = 0; axis < 3; ++axis)
         displacement[axis] = p.velocity[axis] * seconds;
-    if (!p.collision) {
+    const bool descending = p.style == 6 && p.velocity.z < 0;
+    if (!p.collision && !descending) {
         for (int axis = 0; axis < 3; ++axis)
             p.position[axis] = gamemath::addFixed(p.position[axis], int64_t(displacement[axis] * 65536.0f));
         turn(p, seconds); // ordinary collision-off particles really advance twice
-        return;
+        return false;
     }
-    const float horizontal = displacement.x * displacement.x + displacement.y * displacement.y;
+    const float horizontal = descending ? displacement.y * displacement.y + displacement.x * displacement.x
+                                        : displacement.x * displacement.x + displacement.y * displacement.y;
     const float length = std::sqrt(horizontal + displacement.z * displacement.z);
     const int steps = std::min(10, int(length) + 1);
     const float fraction = 1.0f / float(steps);
     std::array<int64_t, 3> delta;
     for (int axis = 0; axis < 3; ++axis)
         delta[axis] = int64_t((displacement[axis] * fraction) * 65536.0f);
-    for (int i = 0; i < steps; ++i)
+    const auto typeAt = [&] {
+        return block ? block(gamemath::floorFixedBlock(p.position[0]), gamemath::floorFixedBlock(p.position[1]),
+                             gamemath::floorFixedBlock(p.position[2]))
+                     : uint8_t(1);
+    };
+    for (int i = 0; i < steps; ++i) {
+        if (descending) {
+            for (int axis = 0; axis < 3; ++axis)
+                p.position[axis] = gamemath::addFixed(p.position[axis], delta[axis]);
+            if (typeAt() != 0)
+                return true; // no rollback, freezing or second angular advance
+            continue;
+        }
         for (int axis = 0; axis < 3; ++axis) {
             p.position[axis] = gamemath::addFixed(p.position[axis], delta[axis]);
-            const uint8_t type = block ? block(gamemath::floorFixedBlock(p.position[0]), gamemath::floorFixedBlock(p.position[1]),
-                                               gamemath::floorFixedBlock(p.position[2]))
-                                       : 1;
-            if (type == 0 || type == 2)
+            const uint8_t type = typeAt();
+            if (type == 0 || type == 2 || (p.style == 4 && (type == 7 || type == 8 || type == 11)))
                 continue;
             p.position[axis] = gamemath::subtractFixed(p.position[axis], delta[axis]);
             p.velocity[axis] = 0;
             if (axis == 2)
                 p.velocity = p.spin = glm::vec3(0);
         }
+    }
+    return false;
 }
 
 void System::update(int32_t milliseconds, const BlockType &block) {
     if (live.size() > 1000)
         live.resize(1000); // newest tail, after every expansion draw was consumed
-    for (Particle &p : live)
-        step(p, milliseconds, block);
-    std::erase_if(live, [](const Particle &p) { return p.age > p.lifetime; });
+    std::array<bool, 1000> retire{};
+    for (size_t i = 0; i < live.size(); ++i)
+        retire[i] = step(live[i], milliseconds, block);
+    size_t index = 0;
+    std::erase_if(live, [&](const Particle &p) { return retire[index++] || p.age > p.lifetime; });
 }
 
 glm::mat4 matrix(const Particle &p, const std::array<int64_t, 2> &offset, glm::ivec3 dimensions) {
@@ -225,8 +244,16 @@ glm::mat4 matrix(const Particle &p, const std::array<int64_t, 2> &offset, glm::i
     result = rotated(result, p.angles.z, {0, 0, 1});
     result = rotated(result, p.angles.y, {0, 1, 0});
     result = rotated(result, p.angles.x, {1, 0, 0});
+    float size = p.size;
+    if (p.style == 7 || p.style == 8) {
+        const float ratio = float(p.age) / float(p.lifetime);
+        float factor = 1.0f - ratio;
+        if (p.style == 7)
+            factor *= .03f;
+        size = factor * p.size;
+    }
     for (int column = 0; column < 3; ++column)
-        result[column] *= p.size;
+        result[column] *= size;
     result = product(result, p.extra);
     // Full-header centering precedes the engine mesh's X/Y compensation.
     const glm::vec3 half = glm::vec3(dimensions) * -0.5f;

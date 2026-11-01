@@ -66,7 +66,7 @@ int particleTests() {
         });
         check(draws == 24 && system.states().size() == 2 && system.states()[0].style == 4 && system.states()[0].age == 0 &&
                   system.states()[0].lifetime == 4000,
-              "unimplemented later styles still retain shared expansion draws, order and constructor state");
+              "later styles retain shared expansion draws, order and constructor state");
     }
     {
         Particle p;
@@ -131,6 +131,126 @@ int particleTests() {
         const auto wrapped = matrix(p, {200, 0}, {0, 0, 0});
         check(wrapped[3].x == float(gamemath::addFixed(p.position[0], 200)) * (1.0f / 65536.0f),
               "scene offset wraps in fixed arithmetic before float conversion");
+    }
+    {
+        for (int style = 0; style <= 8; ++style) {
+            Particle p;
+            p.style = style;
+            p.velocity = {1, 2, 6};
+            p.spin = {10, 20, 30};
+            int queries = 0;
+            const bool retire = System::step(p, 100, [&](int32_t, int32_t, int32_t) {
+                ++queries;
+                return uint8_t(0);
+            });
+            const bool gravity = style == 0 || style == 1 || style == 2 || style == 5 || style == 6;
+            const glm::vec3 angles = style == 3 ? glm::vec3(0) : style == 7 ? glm::vec3(1, 2, 3) : glm::vec3(2, 4, 6);
+            const std::array<int64_t, 3> position =
+                style == 3 ? std::array<int64_t, 3>{0, 0, 0} : std::array<int64_t, 3>{6553, 13107, gravity ? 19660 : 39321};
+            check(!retire && queries == 0 && p.age == 100 && p.position == position && p.angles == angles &&
+                      p.velocity.z == (gravity ? 3 : 6),
+                  "all nine styles retain their distinct free-motion and angular routes");
+        }
+        Particle unknown;
+        unknown.style = 99;
+        unknown.velocity = {1, 2, 3};
+        check(!System::step(unknown, 100, air) && unknown.age == 100 && unknown.position == std::array<int64_t, 3>{} &&
+                  !supportedParticle(unknown),
+              "unknown styles age without invented motion or rendering");
+    }
+    {
+        for (const uint8_t type : {uint8_t(7), uint8_t(8), uint8_t(11), uint8_t(12)}) {
+            Particle p;
+            p.style = 4;
+            p.collision = true;
+            p.velocity = {1, 2, 3};
+            p.spin = {10, 20, 30};
+            int queries = 0;
+            System::step(p, 100, [&](int32_t, int32_t, int32_t) {
+                ++queries;
+                return type;
+            });
+            check(queries == 3 && p.angles == glm::vec3(1, 2, 3) &&
+                      (type == 12 ? p.position == std::array<int64_t, 3>{} && p.velocity == glm::vec3(0)
+                                  : p.position == std::array<int64_t, 3>{6553, 13107, 19660} && p.velocity == glm::vec3(1, 2, 3)),
+                  "style4 passes7/8/11 but rejects12, with one angular advance on collision");
+        }
+        Particle note;
+        note.style = 7;
+        note.collision = true;
+        note.spin = {10, 20, 30};
+        System::step(note, 100, air);
+        check(note.angles == glm::vec3(0), "collision-on note has neither angular advance");
+    }
+    {
+        for (const bool collision : {false, true}) {
+            Particle p;
+            p.style = 6;
+            p.collision = collision;
+            p.velocity = {1, 2, 0};
+            p.spin = {10, 20, 30};
+            int queries = 0;
+            const bool retire = System::step(p, 100, [&](int32_t x, int32_t y, int32_t z) {
+                ++queries;
+                check(x == 0 && y == 0 && z == -1, "descending query observes the full advanced XYZ");
+                return uint8_t(2);
+            });
+            check(retire && queries == 1 && p.position == std::array<int64_t, 3>{6553, 13107, -19660} &&
+                      p.velocity == glm::vec3(1, 2, -3) && p.spin == glm::vec3(10, 20, 30) && p.angles == glm::vec3(1, 2, 3) && !p.frozen,
+                  "descending6 retires in water regardless of collision without rollback or freezing");
+        }
+        Particle p;
+        p.style = 6;
+        p.velocity.z = -1;
+        int queries = 0;
+        check(System::step(p, 0,
+                           [&](int32_t, int32_t, int32_t) {
+                               ++queries;
+                               return uint8_t(2);
+                           }) &&
+                  queries == 1,
+              "descending zero-time6 still queries and retires");
+        p.velocity.z = -0.0f;
+        queries = 0;
+        check(!System::step(p, 0,
+                            [&](int32_t, int32_t, int32_t) {
+                                ++queries;
+                                return uint8_t(2);
+                            }) &&
+                  queries == 0,
+              "negative zero selects the ordinary free route");
+        p.velocity = {30, 0, -1};
+        p.spin = {10, 0, 0};
+        queries = 0;
+        check(!System::step(p, 100,
+                            [&](int32_t, int32_t, int32_t) {
+                                ++queries;
+                                return uint8_t(0);
+                            }) &&
+                  queries == 4 && p.position == std::array<int64_t, 3>{3 * 65536, 0, -26212} && p.angles.x == 1,
+              "descending air6 completes quantized joint steps with only one angular advance");
+        System system;
+        const std::array records{burst(6, 1), burst(3, 1)};
+        system.append(records, [] { return 0; });
+        system.update(100, [](int32_t, int32_t, int32_t) { return uint8_t(2); });
+        check(system.states().size() == 1 && system.states().front().style == 3 && system.states().front().age == 100,
+              "collision retirement is deferred until all shared-list records are visited");
+    }
+    {
+        for (const int style : {7, 8}) {
+            Particle p;
+            p.style = style;
+            p.size = .5f;
+            p.age = 2000;
+            const auto half = matrix(p, {}, {2, 4, 6});
+            const float scale = style == 7 ? .0075f : .25f;
+            check(half[0][0] == scale && glm::length(glm::vec3(half[3]) - glm::vec3(-scale, -2 * scale, -3 * scale)) < 1e-6f &&
+                      p.size == .5f,
+                  "notes and shrinking cubes scale geometry using their full header while retaining stored radius");
+            p.age = 4000;
+            check(supportedParticle(p) && matrix(p, {}, {2, 4, 6})[0][0] == 0,
+                  "lifetime equality retains a zero-scale draw rather than inventing an age rejection");
+        }
     }
     std::printf("Ordinary burst particles: %s\n", failures ? "FAIL" : "PASS");
     return failures;

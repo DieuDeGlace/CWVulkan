@@ -1568,6 +1568,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (!alphaLook && !menuSky && shading) {
             pc.params.x = (float)(item.flags | STEAM_WORLD);
             pc.look.y = item.flash;
+            pc.look.z = item.nativeShininess ? 1.f : 0.f;
             if (!particle) {
                 steampoints::ZoneKey key;
                 if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
@@ -1590,7 +1591,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             float standing = item.standingLight >= 0        ? item.standingLight
                              : item.kind == DrawKind::Model ? lightOfBlock(glm::vec3(item.model[3]) + glm::vec3(0, 0, .1f))
                                                             : 1.f;
-            pc.look = glm::vec4(standing, item.flash, item.shimmer ? 1.f : 0.f, 0);
+            pc.look = glm::vec4(standing, item.flash, (item.shimmer || item.nativeShininess) ? 1.f : 0.f, 0);
             if (!particle)
                 pc.lights = lightSetOf(item);
         }

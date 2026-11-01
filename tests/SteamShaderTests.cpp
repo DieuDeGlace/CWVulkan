@@ -149,6 +149,35 @@ int steamShaderTests() {
             std::cout << "Steam shader particle " << test << (matches ? " PASS\n" : " FAIL\n");
             failures += !matches;
         }
+        item.mesh = originalMesh;
+        item.flags = GLOW;
+        item.material = glm::vec4(1);
+        item.nativeShininess = true;
+        const auto shinyCapture = root / "particle-note-shininess.png";
+        renderer.capture(shinyCapture.string());
+        renderer.frame(camera, lighting, {0, 0, 0}, 0, {item}, {});
+        const auto shiny = centre(shinyCapture);
+        // Independent shader contract: X=1/128, screenY=-1/128, gradient=-1/3,
+        // viewNormal=(0,1). Apply its ripple, saturation and final grade to Glow RGB.
+        const std::array<int, 3> shinyExpected{91, 226, 67};
+        bool shinyMatches = shiny.has_value();
+        if (shiny)
+            for (int channel = 0; channel < 3; ++channel)
+                shinyMatches &= std::abs((*shiny)[channel] - shinyExpected[channel]) <= 2;
+        std::cout << "Steam shader particle note shininess" << (shinyMatches ? " PASS\n" : " FAIL\n");
+        failures += !shinyMatches;
+        DrawItem plain = item;
+        plain.nativeShininess = false;
+        const auto resetCapture = root / "particle-shininess-reset.png";
+        renderer.capture(resetCapture.string());
+        renderer.frame(camera, lighting, {0, 0, 0}, 0, {item, plain}, {});
+        const auto reset = centre(resetCapture);
+        bool resetMatches = reset.has_value();
+        if (reset)
+            for (int channel = 0; channel < 3; ++channel)
+                resetMatches &= std::abs((*reset)[channel] - std::array<int, 3>{82, 214, 60}[channel]) <= 2;
+        std::cout << "Steam shader particle shininess reset" << (resetMatches ? " PASS\n" : " FAIL\n");
+        failures += !resetMatches;
         item = saved;
         renderer.settings.fogDistance = 2;
     }

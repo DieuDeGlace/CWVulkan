@@ -104,6 +104,7 @@ struct DrawItem {
     std::optional<alphascenery::Placement> alphaScenery;
     float opacity = 1;                                     // independent from the baked sunlight/material factor
     glm::vec4 material{1};                                 // particle material; independent of vertex color and pixel opacity
+    bool nativeShininess = false;                          // explicit native WORLD control; independent of Alpha item shimmer
     std::optional<scenevisibility::Sphere> nativeParticle; // native +0x49c range, source anchor and size radius
     // A point light the object gives off in the Alpha look (lamps, torches, fires): its colour
     // at night, its reach in blocks (0 = none) and where it is.
