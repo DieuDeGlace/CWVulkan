@@ -983,6 +983,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         zoneLists(ew, zone[0], zone[1]);
         ew.removeGameBlock(x, y, z);
     };
+    a.rebuild = [&](int x0, int y0, int x1, int y1) { ew.removeUnsupportedModels(x0, y0, x1, y1); };
     a.ground = [](int x, int y) { return worldgen::groundHeight(x, y, 0); };
     a.elevation = [](int x, int y) { return worldgen::baseHeightWithPlace(x, y); };
     a.cellHeight = [](int cx, int cy) { return (int)worldgen::cellHeight(cx, cy); };
@@ -1027,6 +1028,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
     fw.ground = [](int x, int y) { return worldgen::groundHeight(x, y, 0); };
     fw.rand = w.rand;
     fw.removeBlock = a.removeBlock;
+    fw.rebuild = a.rebuild;
     fw.hit = a.hit;
     fw.apply = [&](const std::array<uint8_t, 0x48> &number) { nativehit::apply(hw, number); };
     // What each creature does with its interactions (0x2c3710): seats and doors, and what the
@@ -1248,6 +1250,21 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         corpses.creatures = &a.creatures;
         corpses.byId = u.byId;
         corpses.rand = w.rand;
+        corpses.day = uint32_t(dayCount);
+        corpses.block = a.block;
+        corpses.removeBlock = [&](int64_t x, int64_t y, int64_t z) {
+            a.removeBlock(gamemath::floorFixedBlock(x), gamemath::floorFixedBlock(y), gamemath::floorFixedBlock(z));
+        };
+        corpses.rebuild = a.rebuild;
+        corpses.blockChange = [&](const std::array<uint8_t, 0x20> &change) {
+            cwnet::BlockChangeRecord record;
+            std::copy_n(change.begin(), record.size(), record.begin());
+            worldEvents.blockChanges.push_back(record);
+        };
+        corpses.sound = [&](const std::array<uint8_t, 0x30> &sound) {
+            sounds.push_back(sound);
+            worldEvents.sounds.push_back(sound);
+        };
         corpses.burst = [&](const nativedeath::World::Record &burst) { worldEvents.particles.push_back(burst); };
         corpses.hit = [&](const nativeupkeep::Hit &hit) {
             a.hit(hit);

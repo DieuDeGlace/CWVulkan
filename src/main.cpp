@@ -5987,6 +5987,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // Native Game-frame notice consumer requests meshes independently of mutation/history.
         if (!serverMode)
             extractedWorld.invalidateGameBlocks(spawned.events().blockChanges);
+        for (const auto &[ax, ay] : extractedWorld.takeChangedModels())
+            world.refreshModels(ax - extractedWorld.originZoneX(), ay - extractedWorld.originZoneY());
         // Zones whose blocks changed are meshed again.
         for (const auto &[ax, ay] : extractedWorld.takeChangedZones())
             world.refreshZone(ax - extractedWorld.originZoneX(), ay - extractedWorld.originZoneY());

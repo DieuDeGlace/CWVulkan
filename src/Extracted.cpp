@@ -25,8 +25,15 @@ constexpr uint8_t LEAVES_TYPE = 8, SNOW_LEAVES_TYPE = 11, LAVA_TYPE = 17, POISON
 constexpr uint8_t DRY_AIR = 2; // breakable bit: air that does not become water below sea level.
 // A zone model record's flags (0x40-byte records, worldgen-structures.md §4.2).
 constexpr size_t MODEL_FLAGS = 0x38;
+template <class T> T modelField(const ExtractedWorld::ModelRecord &record, size_t offset) {
+    T value;
+    std::memcpy(&value, record.data() + offset, sizeof value);
+    return value;
+}
 
-bool solidType(uint8_t t) { return t != AIR_TYPE && t != WATER_TYPE && t != LAVA_TYPE && t != POISON_TYPE; }
+bool solidType(uint8_t t) {
+    return t != AIR_TYPE && t != WATER_TYPE && t != LAVA_TYPE && t != POISON_TYPE;
+}
 
 // Game region type -> CubeVulkan Biome.
 int biomeOf(int regionType) {
@@ -129,6 +136,25 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     zone->region = worldgen::regionBiome(r.x, r.y);
     zone->generated = true;
     zone->things = worldgen::zone(ax, ay);
+    auto models = std::make_shared<std::vector<ModelRecord>>();
+    models->reserve(zone->things->models.size());
+    for (const auto &model : zone->things->models) {
+        ModelRecord record{};
+        const auto put = [&](size_t offset, const auto &value) { std::memcpy(record.data() + offset, &value, sizeof value); };
+        put(0, model.type);
+        put(8, model.x);
+        put(16, model.y);
+        put(24, model.z);
+        put(32, model.size);
+        put(36, model.yaw);
+        put(40, -1.0f);
+        put(44, model.r);
+        put(48, model.g);
+        put(52, model.b);
+        put(56, model.flags);
+        models->push_back(record);
+    }
+    zone->models = std::move(models);
     zone->objects = worldgen::zoneObjects(ax, ay);
     zone->objectsMade = true;
     const std::vector<worldgen::TerrainColumn> columns = worldgen::litZone(ax, ay);
@@ -273,6 +299,10 @@ void ExtractedWorld::clearCache() {
     absent.clear();
     estimatedScale.clear();
     voxelWidths.clear();
+    {
+        std::lock_guard changesLock(changesMutex);
+        changedModels.clear();
+    }
     cacheRevision = nextZoneCacheRevision();
 }
 
@@ -464,6 +494,80 @@ void ExtractedWorld::invalidateGameBlocks(std::span<const BlockNotice> changes) 
     changedZones.insert(loaded.begin(), loaded.end());
 }
 
+std::shared_ptr<const std::vector<ExtractedWorld::ModelRecord>> ExtractedWorld::gameModels(int32_t x, int32_t y) {
+    auto zone = editedZone(x, y);
+    if (!zone)
+        zone = cached(x, y);
+    return zone ? zone->models : nullptr;
+}
+size_t ExtractedWorld::removeUnsupportedModels(int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
+    auto edits = editBlocks();
+    const int ax0 = std::max(0, x0) / 64, ay0 = std::max(0, y0) / 64;
+    const int ax1 = std::max(0, x1) / 64, ay1 = std::max(0, y1) / 64;
+    std::vector<Key> selected;
+    {
+        std::lock_guard lock(cacheMutex);
+        for (const auto &[key, zone] : cache)
+            if (zone && key.first >= ax0 && key.first <= ax1 && key.second >= ay0 && key.second <= ay1)
+                selected.push_back(key);
+    }
+    std::sort(selected.begin(), selected.end());
+    size_t removed = 0;
+    for (const auto &key : selected) {
+        const auto records = gameModels(key.first, key.second);
+        if (!records || records->empty())
+            continue;
+        std::vector<size_t> erase;
+        for (size_t i = records->size(); i-- > 0;) {
+            const auto &model = (*records)[i];
+            if (!(model[0x38] & 2))
+                continue;
+            std::array<int64_t, 3> position;
+            std::memcpy(position.data(), model.data() + 8, sizeof position);
+            position[2] = gamemath::subtractFixed(position[2], 65536);
+            if (gameBlock(gamemath::floorFixedBlock(position[0]), gamemath::floorFixedBlock(position[1]),
+                          gamemath::floorFixedBlock(position[2]))[4] == 0)
+                erase.push_back(i);
+        }
+        if (erase.empty())
+            continue;
+        auto draft = writableZone(key.first, key.second);
+        auto replacement = std::make_shared<std::vector<ModelRecord>>(*records);
+        auto state = std::make_shared<Zone::ModelLightState>();
+        {
+            std::lock_guard lock(draft->modelLights->mutex);
+            state->waterAuxiliary = draft->modelLights->waterAuxiliary;
+            for (size_t i = 0; i < replacement->size(); ++i) {
+                if (draft->modelLights->waterModels.count(int(i) + 1))
+                    (*replacement)[i][0x38] |= 8;
+                const auto light = draft->modelLights->lightSamples.find(int(i) + 1);
+                if (light != draft->modelLights->lightSamples.end())
+                    std::memcpy((*replacement)[i].data() + 0x28, &light->second, 4);
+            }
+        }
+        for (size_t index : erase) {
+            for (size_t next = index + 1; next < replacement->size(); ++next) {
+                // Native semantic fields move; destination padding is not assigned.
+                std::memcpy((*replacement)[next - 1].data(), (*replacement)[next].data(), 4);
+                std::memcpy((*replacement)[next - 1].data() + 8, (*replacement)[next].data() + 8, 52);
+            }
+            replacement->pop_back();
+        }
+        draft->models = std::move(replacement);
+        draft->modelLights = std::move(state);
+        removed += erase.size();
+        std::lock_guard lock(changesMutex);
+        changedModels.insert(key);
+    }
+    return removed;
+}
+std::vector<std::pair<int, int>> ExtractedWorld::takeChangedModels() {
+    std::lock_guard lock(changesMutex);
+    std::vector<Key> result(changedModels.begin(), changedModels.end());
+    changedModels.clear();
+    return result;
+}
+
 std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
     for (const auto &[key, zone] : cache)
@@ -599,6 +703,35 @@ bool ExtractedWorld::gameObjects(int ax, int ay, std::vector<worldgen::ZoneObjec
     return true;
 }
 
+std::shared_ptr<const std::vector<ExtractedWorld::ModelRecord>> ExtractedWorld::readModels(const fs::path &zoneFile) {
+    fs::path file = zoneFile;
+    file.replace_extension(".rec");
+    std::ifstream input(file, std::ios::binary | std::ios::ate);
+    auto result = std::make_shared<std::vector<ModelRecord>>();
+    if (!input || input.tellg() < 4 || input.tellg() > 128 * 1024 * 1024)
+        return result;
+    std::vector<uint8_t> bytes(size_t(input.tellg()));
+    input.seekg(0);
+    if (!input.read(reinterpret_cast<char *>(bytes.data()), bytes.size()) || std::memcmp(bytes.data(), "CWR1", 4))
+        return result;
+    for (size_t at = 4; at + 12 <= bytes.size();) {
+        uint32_t tag, stride, count;
+        std::memcpy(&tag, bytes.data() + at, 4);
+        std::memcpy(&stride, bytes.data() + at + 4, 4);
+        std::memcpy(&count, bytes.data() + at + 8, 4);
+        at += 12;
+        if (!stride || count > (bytes.size() - at) / stride)
+            break;
+        if (tag == 0x18 && stride == sizeof(ModelRecord)) {
+            const size_t first = result->size();
+            result->resize(first + count);
+            std::memcpy(result->data() + first, bytes.data() + at, size_t(count) * stride);
+        }
+        at += size_t(count) * stride;
+    }
+    return result;
+}
+
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &file, bool decode, std::string &error) {
     error.clear();
     auto fail = [&](const char *why) -> std::shared_ptr<Zone> { error = why; return nullptr; };
@@ -656,6 +789,8 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &f
     }
     if (at != data.size())
         return fail("unexpected trailing zone data");
+    if (decode)
+        zone->models = readModels(file);
     fs::path materialFile = file;
     materialFile.replace_extension(".cwm");
     std::error_code materialError;
@@ -800,7 +935,15 @@ void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery, 
     std::lock_guard modelLock(center.modelLights->mutex);
     for (Scenery &s : scenery)
         if (s.modelType >= 0) {
-            s.light = (float)solved->fixed(s.modelPosition) / 255.0f;
+            const float sample = float(solved->fixed(s.modelPosition));
+            s.light = sample / 255.0f;
+            // A model may have moved to another index since an older mesh job read
+            // its scenery. Such a job must not annotate the current vector's entry.
+            const size_t index = size_t(s.listPosition - 1);
+            if (!center.models || index >= center.models->size() || modelField<int32_t>((*center.models)[index], 0) != s.modelType ||
+                std::memcmp((*center.models)[index].data() + 8, s.modelPosition.data(), sizeof(int64_t) * 3) != 0)
+                continue;
+            center.modelLights->lightSamples[s.listPosition] = sample;
             const auto &p = s.modelPosition;
             if (gameBlock(p[0] >> 16, p[1] >> 16, (int32_t)(p[2] >> 16))[4] == WATER_TYPE)
                 center.modelLights->waterModels.insert(s.listPosition);
@@ -851,44 +994,68 @@ std::optional<scenecapture::MeshCache> ExtractedWorld::meshCapture(int zx, int z
     return captured;
 }
 
-std::vector<Scenery> ExtractedWorld::props(int zx, int zy) {
+std::vector<Scenery> ExtractedWorld::props(int zx, int zy, std::shared_ptr<const void> *modelSnapshot) {
     int64_t ax = (int64_t)zx + originX, ay = (int64_t)zy + originY;
-    if (ax < INT32_MIN || ax > INT32_MAX || ay < INT32_MIN || ay > INT32_MAX) return {};
-    return propsAbsolute((int)ax, (int)ay);
+    if (ax < INT32_MIN || ax > INT32_MAX || ay < INT32_MIN || ay > INT32_MAX)
+        return {};
+    return propsAbsolute((int)ax, (int)ay, modelSnapshot);
 }
 
-std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
+std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay, std::shared_ptr<const void> *modelSnapshot) {
     std::vector<Scenery> out;
-    if (auto zone = load(ax, ay); generatedMode || (zone && zone->generated)) { // the generator's models and objects, named as the records would be
-        if (!zone)
-            return out;
-        auto local = [&](int64_t x, int64_t y, int64_t z) {
-            const int64_t ox = (int64_t)originX * 64 * 65536, oy = (int64_t)originY * 64 * 65536;
-            return glm::vec3(float((double(x) - double(ox)) / 65536), float((double(y) - double(oy)) / 65536), float(double(z) / 65536 + Z_OFFSET));
-        };
-        int listPosition = 0; // (vegetation-wind.md §4.3: every record counts, from 1)
-        for (const worldgen::Model &m : zone->things->models) {
-            listPosition++;
-            if (m.type == 0x59 && std::isfinite(m.size) && std::isfinite(m.yaw)) {
+    auto zone = editedZone(ax, ay);
+    if (!zone)
+        zone = load(ax, ay);
+    if (!zone)
+        return out;
+    if (modelSnapshot)
+        *modelSnapshot = zone->models;
+    if (zone->models) {
+        std::lock_guard lock(zone->modelLights->mutex);
+        for (size_t index = 0; index < zone->models->size(); ++index) {
+            const auto &record = (*zone->models)[index];
+            const int32_t type = modelField<int32_t>(record, 0);
+            std::array<int64_t, 3> position;
+            std::memcpy(position.data(), record.data() + 8, sizeof position);
+            const float size = modelField<float>(record, 32), yaw = modelField<float>(record, 36);
+            const glm::vec3 point{float(double(gamemath::subtractFixed(position[0], originDotsX())) / 65536.0),
+                                  float(double(gamemath::subtractFixed(position[1], originDotsY())) / 65536.0),
+                                  float(double(position[2]) / 65536.0 + Z_OFFSET)};
+            if (type == 0x59 && std::isfinite(size) && std::isfinite(yaw)) {
                 Scenery shaft{};
-                const glm::vec3 point = local(m.x, m.y, m.z);
-                shaft.x = point.x, shaft.y = point.y, shaft.z = point.z;
-                shaft.beam = lightbeam::Placement{{m.x - (int64_t)originX * 64 * 65536,
-                                                   m.y - (int64_t)originY * 64 * 65536,
-                                                   m.z + (int64_t)Z_OFFSET * 65536}, m.size, m.yaw};
+                shaft.x = point.x;
+                shaft.y = point.y;
+                shaft.z = point.z;
+                shaft.beam = lightbeam::Placement{{gamemath::subtractFixed(position[0], originDotsX()),
+                                                   gamemath::subtractFixed(position[1], originDotsY()),
+                                                   gamemath::addFixed(position[2], int64_t(Z_OFFSET) * 65536)},
+                                                  size,
+                                                  yaw};
                 out.push_back(std::move(shaft));
                 continue;
             }
-            if (m.type < 0 || m.type >= (int)environment.size() || environment[m.type].empty() || !(m.size > 0) || !std::isfinite(m.size) ||
-                !std::isfinite(m.yaw))
+            if (type < 0 || type >= int(environment.size()) || environment[type].empty() || !(size > 0) || !std::isfinite(size) ||
+                !std::isfinite(yaw))
                 continue;
-            const std::string &name = environment[m.type];
-            const glm::vec3 p = local(m.x, m.y, m.z);
-            // Which models sway is the record's flag 4, never the name (vegetation-wind.md §3.1).
-            out.push_back({name, p.x, p.y, p.z, glm::radians(m.yaw), m.size, 0, false, m.flags, listPosition});
-            out.back().modelType = m.type;
-            out.back().modelPosition = {m.x, m.y, m.z};
+            Scenery model{
+                environment[type], point.x, point.y, point.z, glm::radians(yaw), size, 0, false, modelField<int32_t>(record, 0x38),
+                int(index) + 1};
+            model.modelType = type;
+            model.modelPosition = position;
+            if (zone->modelLights->waterModels.count(model.listPosition))
+                model.modelFlags |= 8;
+            const auto cached = zone->modelLights->lightSamples.find(model.listPosition);
+            const float sample = cached == zone->modelLights->lightSamples.end() ? modelField<float>(record, 0x28) : cached->second;
+            if (std::isfinite(sample) && sample >= 0 && sample <= 255)
+                model.light = sample / 255.0f;
+            out.push_back(std::move(model));
         }
+    }
+    if (generatedMode || zone->generated) {
+        const auto local = [&](int64_t x, int64_t y, int64_t z) {
+            const int64_t position[3]{x, y, z};
+            return toLocal(position);
+        };
         int objectIndex = 0;
         for (const worldgen::ZoneObject &o : zone->objects) {
             const int index = objectIndex++;
@@ -929,10 +1096,8 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
         // Unknown record layouts cannot be decoded using these field offsets.
         // Only the live model/object lists are scenery. Ground items, generation
         // backups, and derived light/emitter lists have separate consumers.
-        bool spriteLayout = stride == 0x40 && offset == worldgen::zonelist::MODELS;
-        bool objectLayout = stride == 0xe0 && offset == worldgen::zonelist::OBJECTS;
-        if (!spriteLayout && !objectLayout) {
-            at += (size_t)stride * count;
+        if (stride != 0xe0 || offset != worldgen::zonelist::OBJECTS) {
+            at += size_t(stride) * count;
             continue;
         }
         for (uint32_t i = 0; i < count; i++) {
@@ -942,37 +1107,7 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay) {
             float x, y, z;
             if (!local(r + 8, x, y, z))
                 continue;
-            if (stride == 0x40) {
-                // Sprite record: environment type, position, blocks per voxel, yaw in degrees.
-                float scale, degrees;
-                memcpy(&scale, r + 32, 4);
-                memcpy(&degrees, r + 36, 4);
-                if (id == 0x59 && std::isfinite(scale) && std::isfinite(degrees)) {
-                    int64_t position[3];
-                    std::memcpy(position, r + 8, sizeof position);
-                    Scenery shaft{};
-                    shaft.x = x, shaft.y = y, shaft.z = z;
-                    shaft.beam = lightbeam::Placement{{position[0] - (int64_t)originX * 64 * 65536,
-                                                       position[1] - (int64_t)originY * 64 * 65536,
-                                                       position[2] + (int64_t)Z_OFFSET * 65536}, scale, degrees};
-                    out.push_back(std::move(shaft));
-                    continue;
-                }
-                if (id < 0 || id >= (int)environment.size() || environment[id].empty() || !(scale > 0) || !std::isfinite(scale) || !std::isfinite(degrees))
-                    continue;
-                // The record's flags (+0x38) say whether it sways or shines; its place in the
-                // zone's model list (+0x18) phases the sway (vegetation-wind.md §3.1, §4.3).
-                int32_t flags = 0;
-                if (offset == 0x18)
-                    memcpy(&flags, r + MODEL_FLAGS, 4);
-                out.push_back({environment[id], x, y, z, glm::radians(degrees), scale, 0, false, flags, offset == 0x18 ? (int)i + 1 : 0});
-                out.back().modelType = id;
-                std::memcpy(out.back().modelPosition.data(), r + 8, sizeof(int64_t) * 3);
-                float baked;
-                std::memcpy(&baked, r + 0x28, sizeof baked);
-                if (std::isfinite(baked) && baked >= 0 && baked <= 255)
-                    out.back().light = baked / 255.0f;
-            } else if (stride == 0xe0 && offset == 0x60) {
+            {
                 // Object record: building part, position, quarter turns, scale.
                 // The array at 0x78 repeats these objects. Use the measured
                 // sprite size; expose the provisional fallback to DataCheck.

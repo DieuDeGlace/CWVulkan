@@ -402,6 +402,72 @@ int deadCreatureTests() {
                   "real shared apply heals once, capped by native maximum health");
         }
     }
-    std::printf("Dead-creature lifecycle and non-terrain areas: %s\n", failures ? "FAIL" : "PASS");
+    {
+        Actor source(1, 7, 0), target(2, 3, 1);
+        put(source.record.data(), 0x64, int32_t(0x90));
+        put(source.record.data(), 0x184, -5.0f);
+        for (size_t offset : {size_t(0x10), size_t(0x18), size_t(0x20)})
+            put(source.record.data(), offset, int64_t(16384));
+        Scene scene;
+        scene.actors = {&source.side, &target.side};
+        scene.world.hostile = [](const auto &, const auto &) { return true; };
+        scene.world.day = 55;
+        std::vector<int> order;
+        std::vector<std::array<int32_t, 3>> queries;
+        bool removed = false;
+        int draws = 0;
+        scene.world.block = [&](int x, int y, int z) {
+            queries.push_back({x, y, z});
+            return !removed && x == 0 && y == 0 && z == 0 ? nativeai::Block{255, 64, 128, 0, 1, 0x10} : nativeai::Block{};
+        };
+        scene.world.burst = [&](const auto &burst) {
+            const bool debris = get<int32_t>(burst.data(), 0x3c) == 5;
+            order.push_back(debris ? 2 : 1);
+            if (debris)
+                check(get<int64_t>(burst.data(), 0) == 49152 && get<float>(burst.data(), 0x24) == 1.9921875f &&
+                          get<float>(burst.data(), 0x28) == 0.5f && get<int32_t>(burst.data(), 0x38) == 3,
+                      "terrain debris uses raw fractional sample plus half-block and RGB/128 without clamping");
+        };
+        scene.world.removeBlock = [&](int64_t x, int64_t y, int64_t z) {
+            order.push_back(3);
+            removed = true;
+            check(x == 16384 && y == 16384 && z == 16384, "removal helper gets unshifted raw sample");
+        };
+        scene.world.blockChange = [&](const auto &change) {
+            order.push_back(4);
+            check(get<int32_t>(change.data(), 0) == 0 && change[0x0c] == 255 && change[0x11] == 0x10 && change[0x16] == 0 &&
+                      change[0x17] == 0 && get<uint32_t>(change.data(), 0x18) == 55,
+                  "terrain notice preserves before, advertises canonical empty, copies day");
+        };
+        scene.world.rand = [&] {
+            ++draws;
+            return draws == 1 ? 16383 : 0;
+        };
+        scene.world.sound = [&](const auto &sound) {
+            order.push_back(5);
+            check(draws == 1 && get<int32_t>(sound.data(), 0x18) == 1 && get<float>(sound.data(), 0x1c) > 0.69f &&
+                      get<float>(sound.data(), 0x1c) < 0.71f,
+                  "single accepted-block sound draws before targets");
+        };
+        scene.world.rebuild = [&](int x0, int y0, int x1, int y1) {
+            order.push_back(6);
+            check(x0 == -7 && y0 == -7 && x1 == 8 && y1 == 8, "cleanup producer truncates negative fractional edges instead of flooring");
+        };
+        scene.world.hit = [&](const auto &hit) {
+            order.push_back(7);
+            check(draws == 2 && hit.attacker == 1 && hit.target == 2 && hit.type == 1 && hit.damage == -10 && hit.flag == 1,
+                  "destructive source uses source attacker/type1 and critical draw after terrain");
+        };
+        nativedeath::step(scene.world, 0);
+        check(order == std::vector<int>({1, 2, 3, 4, 5, 6, 7}),
+              "first burst, terrain outputs, sound/cleanup and target hit keep native order");
+        check(std::find(queries.begin(), queries.end(), std::array<int32_t, 3>{8, 0, 0}) == queries.end() &&
+                  std::find(queries.begin(), queries.end(), std::array<int32_t, 3>{7, 0, 0}) != queries.end(),
+              "strict eight-block terrain sphere excludes boundary");
+        order.clear();
+        nativedeath::step(scene.world, 0);
+        check(order == std::vector<int>{1} && draws == 2, "zero repeat keeps first burst but no second debris/sound or remembered hit");
+    }
+    std::printf("Dead-creature lifecycle, areas and terrain: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

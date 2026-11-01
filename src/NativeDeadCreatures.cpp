@@ -44,6 +44,72 @@ void firstBurst(World &world, const nativeai::Creature &source, bool water) {
     if (world.burst)
         world.burst(burst);
 }
+void destroyTerrain(World &world, nativeai::Creature &source) {
+    std::array<int64_t, 3> center;
+    std::memcpy(center.data(), source.record + worldgen::creature::POSITION, sizeof center);
+    bool accepted = false;
+    for (int x = -8; x <= 8; ++x)
+        for (int y = -8; y <= 8; ++y)
+            for (int z = -8; z <= 8; ++z) {
+                const std::array<int64_t, 3> sample{gamemath::addFixed(center[0], int64_t(x) * 65536),
+                                                    gamemath::addFixed(center[1], int64_t(y) * 65536),
+                                                    gamemath::addFixed(center[2], int64_t(z) * 65536)};
+                const float dx = gamemath::fixedBlocksBetween(sample[0], center[0]),
+                            dy = gamemath::fixedBlocksBetween(sample[1], center[1]),
+                            dz = gamemath::fixedBlocksBetween(sample[2], center[2]);
+                const float horizontal = dx * dx + dy * dy;
+                if (!(horizontal + dz * dz < 64.0f))
+                    continue;
+                const std::array<int32_t, 3> at{gamemath::floorFixedBlock(sample[0]), gamemath::floorFixedBlock(sample[1]),
+                                                gamemath::floorFixedBlock(sample[2])};
+                const auto before = world.block(at[0], at[1], at[2]);
+                if (!(before[5] & 0x11))
+                    continue;
+                World::Record debris{};
+                for (int axis = 0; axis < 3; ++axis) {
+                    write(debris.data(), axis * 8, gamemath::addFixed(sample[axis], 32768));
+                    write(debris.data(), 0x24 + axis * 4, float(before[axis]) * (1.0f / 128.0f));
+                }
+                write(debris.data(), 0x20, 10.0f);
+                write(debris.data(), 0x30, 1.0f);
+                write(debris.data(), 0x34, 0.5f);
+                write<int32_t>(debris.data(), 0x38, 3);
+                write<int32_t>(debris.data(), 0x3c, 5);
+                write(debris.data(), 0x40, 3.0f);
+                if (world.burst)
+                    world.burst(debris);
+                world.removeBlock(sample[0], sample[1], sample[2]);
+                std::array<uint8_t, 0x20> change{};
+                std::memcpy(change.data(), at.data(), sizeof at);
+                std::memcpy(change.data() + 0x0c, before.data(), before.size());
+                const std::array<uint8_t, 6> empty{255, 255, 255, 0, 0, 0};
+                std::memcpy(change.data() + 0x12, empty.data(), empty.size());
+                write(change.data(), 0x18, world.day);
+                if (world.blockChange)
+                    world.blockChange(change);
+                accepted = true;
+            }
+    if (!accepted)
+        return;
+    std::memcpy(center.data(), source.record + worldgen::creature::POSITION, sizeof center);
+    float pitch = float(world.rand ? world.rand() : 0) * 0.4f;
+    pitch /= 32767.0f;
+    pitch += 0.5f;
+    std::array<uint8_t, 0x30> sound{};
+    std::memcpy(sound.data(), center.data(), sizeof center);
+    write<int32_t>(sound.data(), 0x18, 1);
+    write(sound.data(), 0x1c, pitch);
+    write(sound.data(), 0x20, 1.0f);
+    if (world.sound)
+        world.sound(sound);
+    const auto edge = [](int64_t fixed, int offset) {
+        const uint32_t bits = uint32_t(gamemath::addFixed(fixed, int64_t(offset) * 65536) / 65536);
+        int32_t value;
+        std::memcpy(&value, &bits, sizeof value);
+        return value;
+    };
+    world.rebuild(edge(center[0], -8), edge(center[1], -8), edge(center[0], 8), edge(center[1], 8));
+}
 bool areaPush(const uint8_t *source, const uint8_t *target, float (&push)[3]) {
     const auto difference = [&](int axis) {
         const size_t offset = worldgen::creature::POSITION + axis * 8;
@@ -78,8 +144,10 @@ bool areaPush(const uint8_t *source, const uint8_t *target, float (&push)[3]) {
     push[2] = 2.5f;
     return true;
 }
-void area(World &world, nativeai::Creature &source, bool water) {
+void area(World &world, nativeai::Creature &source, bool water, bool destructive = false) {
     firstBurst(world, source, water);
+    if (destructive)
+        destroyTerrain(world, source);
     for (size_t index = 0; index < world.creatures->size(); ++index) {
         nativeai::Creature *target = (*world.creatures)[index];
         if (!target || !target->record || target == &source || !hostile(world, source, *target) ||
@@ -151,11 +219,10 @@ std::vector<int64_t> step(World &world, float milliseconds) {
             world.markDead(*source);
         const int32_t race = read<int32_t>(record, RACE);
         const bool firstVisit = read<float>(record, CLOCK) == 0.0f;
-        // Only the first destructive visit needs the missing terrain/scenery helpers.
-        if (race == 0x90 && firstVisit)
+        if (race == 0x90 && firstVisit && (!world.block || !world.removeBlock || !world.rebuild))
             continue;
-        if ((race == 0x119 || race == 0x11d) && firstVisit)
-            area(world, *source, race == 0x11d);
+        if ((race == 0x90 || race == 0x119 || race == 0x11d) && firstVisit)
+            area(world, *source, race == 0x11d, race == 0x90);
         const float clock = read<float>(record, CLOCK) + milliseconds;
         write(record, CLOCK, clock);
         const int64_t ownerId = read<int64_t>(record, OWNER);

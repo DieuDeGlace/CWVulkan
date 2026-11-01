@@ -3,6 +3,7 @@
 #include "Spawned.h"
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <future>
 #include <limits>
@@ -217,6 +218,102 @@ int blockMutationTests() {
         actors.recordAllZones();
         check(stored.zones.size() == 1 && stored.zones.begin()->second.blockChanges.size() == 5,
               "unload persists exact repeated native history");
+    }
+    {
+        const auto modelDirectory = directory / "models";
+        fs::create_directory(modelDirectory);
+        fs::copy_file(directory / "manifest.txt", modelDirectory / "manifest.txt");
+        fixture(modelDirectory, 0, 0);
+        std::vector<ExtractedWorld::ModelRecord> models;
+        const auto addModel = [&](int32_t type, int64_t x, int64_t z, int32_t flags) {
+            ExtractedWorld::ModelRecord record{};
+            const auto put = [&](size_t offset, const auto &value) { std::memcpy(record.data() + offset, &value, sizeof value); };
+            put(0, type);
+            put(8, x * 65536);
+            put(24, z * 65536);
+            put(32, 99.0f);
+            put(36, 180.0f);
+            put(40, 123.5f);
+            put(56, flags);
+            record[4] = uint8_t(0xa0 + models.size());
+            record[60] = uint8_t(0xb0 + models.size());
+            models.push_back(record);
+        };
+        addModel(100, 0, 3, 2);
+        addModel(101, 1, 4, 2);
+        addModel(102, 2, 4, 0);
+        addModel(103, 3, 1, 2 | 8);
+        addModel(0x59, 4, 4, 2);
+        {
+            std::ofstream out(modelDirectory / "z_0_0.rec", std::ios::binary);
+            out.write("CWR1", 4);
+            field(out, uint32_t(0x18));
+            field(out, uint32_t(64));
+            field(out, uint32_t(models.size()));
+            out.write(reinterpret_cast<const char *>(models.data()), models.size() * 64);
+            field(out, uint32_t(0x90));
+            field(out, uint32_t(64));
+            field(out, uint32_t(1));
+            out.write(reinterpret_cast<const char *>(models[1].data()), 64);
+        }
+        ExtractedWorld terrain;
+        std::string error;
+        check(terrain.open(modelDirectory, error), "ordinary model fixture opens");
+        const auto before = terrain.gameModels(0, 0);
+        check(before && before->size() == 5, "all ordinary models retained before resource-name filtering");
+        terrain.removeGameBlock(3, 0, 0);
+        check(terrain.removeUnsupportedModels(0, 0, 0, 0) == 2,
+              "cleanup visits whole selected vector, removes unsupported flags2 models including shafts, retains water support");
+        const auto current = terrain.gameModels(0, 0);
+        const auto type = [](const auto &record) {
+            int32_t value;
+            std::memcpy(&value, record.data(), 4);
+            return value;
+        };
+        check(current && current->size() == 3 && type((*current)[0]) == 100 && type((*current)[1]) == 102 && type((*current)[2]) == 103,
+              "semantic model survivors keep relative order independent of missing assets, size and yaw");
+        check(before && before->size() == 5 && current && (*current)[1][4] == models[1][4] && (*current)[1][60] == models[1][60],
+              "old snapshot remains immutable and shifted records preserve destination padding");
+        check(current && ((*current)[2][56] & 8), "retained semantic flags survive vector erasure");
+        check(terrain.takeChangedZones().empty() && terrain.takeChangedModels() == std::vector<std::pair<int, int>>{{0, 0}},
+              "support cleanup requests internal scenery refresh without terrain notice or dirty request");
+        terrain.removeGameBlock(0, 0, 2);
+        check(terrain.removeUnsupportedModels(-1000, -1000, -100, -100) == 1 && terrain.gameModels(0, 0)->size() == 2,
+              "four negative bounds independently clamp to zone0");
+        check(!terrain.gameModels(1, 0), "missing model zone is not loaded");
+        ExtractedWorld reversed;
+        check(reversed.open(modelDirectory, error) && reversed.removeUnsupportedModels(63, 63, 1, 1) == 2,
+              "reversed block bounds still select the same zone when converted zone bounds agree");
+    }
+    {
+        ExtractedWorld terrain;
+        std::string error;
+        check(terrain.open(directory, error), "destructive-source adapter fixture opens");
+        nativesaves::WorldState stored;
+        SpawnedCreatures actors;
+        actors.setStoredZones(terrain, &stored, false);
+        actors.setClock(7, 5000);
+        bool made = false;
+        auto *source = actors.networkCreature(901, made);
+        source[0x60] = 7;
+        const auto put = [&](size_t offset, const auto &value) { std::memcpy(source + offset, &value, sizeof value); };
+        put(0x64, int32_t(0x90));
+        put(0x180, 0.0f);
+        put(0x6c, 0.0f);
+        actors.simulate(terrain, 0);
+        const size_t notices = actors.events().blockChanges.size();
+        check(notices > 0 && terrain.gameBlock(0, 0, 0)[4] == 2 && terrain.gameBlock(0, 0, 1)[4] == 0,
+              "real destructive source mutates loaded columns to water/empty before its notices");
+        if (notices) {
+            int32_t day;
+            std::memcpy(&day, actors.events().blockChanges[0].data() + 0x18, 4);
+            check(day == 7, "actual source notices carry World day");
+        }
+        actors.simulate(terrain, 0);
+        cwnet::ZoneAnswer answer;
+        check(actors.zoneAnswer(terrain, {0, 0}, answer) && answer.blockChanges.size() == notices * 2 &&
+                  actors.events().blockChanges.size() == notices,
+              "destructive-source zero repeat appends retained history without breaking blocks twice");
     }
     materials(directory, 0, 0, std::numeric_limits<float>::quiet_NaN());
     {

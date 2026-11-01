@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Destructive race0x90 first visits now emit debris, apply guarded terrain removal,
+  append day-stamped notices/sound, clean unsupported ordinary models and then visit
+  live area targets in the specified order. Zero-time repeats retain their native
+  history behavior without breaking blocks twice. Model cleanup selects loaded zones
+  from independently clamped bounds, retains water support, erases semantic fields
+  backward and preserves destination padding, cached light and sticky water state.
+  Auxiliary light/emitter lists remain unchanged. Renderer model refresh is separate
+  from terrain notices; immutable snapshots and stale-job checks prevent a completed
+  older mesh job from reinstalling deleted models or annotating reindexed entries.
+  Pure producer and actual facade/column/model regressions pass. All five targets
+  build, the full CPU/owner-data suite and Vulkan shader/camera/GUI/map/water/Alpha
+  image checks pass. A no-save combat run exits0 with a captured frame and unchanged
+  character database. The blue-lit scene/missing owner hair remain unaccepted;
+  native peer, material recapture, publication latency and full CRT parity stay open.
+  The independent [particle contract](specs/steam-particle-bursts.md) now specifies
+  ordinary styles1/2/5 and binds their geometry to owner cube.cub; its consumer is
+  the next implementation task, rather than a completed runtime feature.
+
 - Physical terrain writes, history and mesh requests now have separate runtime
   paths. Abilities and active effects use the guarded in-column removal helper;
   full writes/restoration share the specified setter with generated terrain.

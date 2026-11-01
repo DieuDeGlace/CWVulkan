@@ -555,12 +555,14 @@ static void extractedPlacements() {
         append(0x30, 0xe0, item);
         append(0x48, 0xe0, item);
     }
+    CHECK(ex.props(0, 0).size() == 4); // owner records remain an immutable loaded snapshot
+    CHECK(ex.open(seed, error));       // refresh owner records only on a new zone load
     const auto sceneProps = ex.props(0, 0);
     CHECK(sceneProps.size() == 5);
-    CHECK(sceneProps.back().model == "flower" && sceneProps.back().scale == 2.5f);
-    CHECK(sceneProps.back().modelFlags == 4 && sceneProps.back().listPosition == 1);
-    CHECK(sceneProps.back().modelType == 0 && std::abs(sceneProps.back().light - 21.0f / 255) < 1e-6f);
-    CHECK(sceneProps[0].objectKey.index == 0 && sceneProps[3].objectKey.index == 3);
+    CHECK(sceneProps.front().model == "flower" && sceneProps.front().scale == 2.5f);
+    CHECK(sceneProps.front().modelFlags == 4 && sceneProps.front().listPosition == 1);
+    CHECK(sceneProps.front().modelType == 0 && std::abs(sceneProps.front().light - 21.0f / 255) < 1e-6f);
+    CHECK(sceneProps[1].objectKey.index == 0 && sceneProps[4].objectKey.index == 3);
     {
         std::ofstream out(records, std::ios::binary | std::ios::app);
         std::array<uint8_t, 0x40> beam{};
@@ -575,11 +577,12 @@ static void extractedPlacements() {
         out.write((const char *)header, sizeof header);
         out.write((const char *)beam.data(), beam.size());
     }
+    CHECK(ex.open(seed, error));
     const auto shafts = ex.props(0, 0);
-    CHECK(shafts.size() == 6 && shafts.back().beam.has_value());
-    CHECK(shafts.back().beam->height == 20 && shafts.back().beam->width == 0.7f);
-    CHECK(shafts.back().beam->position[0] == 63LL * 65536);
-    CHECK(shafts.back().beam->position[2] == (8LL + ExtractedWorld::Z_OFFSET) * 65536);
+    CHECK(shafts.size() == 6 && shafts[1].beam.has_value());
+    CHECK(shafts[1].beam->height == 20 && shafts[1].beam->width == 0.7f);
+    CHECK(shafts[1].beam->position[0] == 63LL * 65536);
+    CHECK(shafts[1].beam->position[2] == (8LL + ExtractedWorld::Z_OFFSET) * 65536);
     // Complete mesh-neighbor input, then a water edit and its removal: baked light
     // uses current terrain, while the native runtime water flag remains ORed.
     for (int zx = -3; zx <= -1; ++zx)
@@ -600,21 +603,24 @@ static void extractedPlacements() {
     ex.setBlockChanges(-2, -1, {wet});
     auto wetModels = ex.props(0, 0);
     ex.lightModels(0, 0, wetModels);
-    CHECK(wetModels[4].light == 1 && (wetModels[4].modelFlags & 8));
+    CHECK(wetModels[0].light == 1 && (wetModels[0].modelFlags & 8));
     wet.bytes[0x12 + 4] = 0;
     ex.setBlockChanges(-2, -1, {wet});
     auto dryModels = ex.props(0, 0);
     ex.lightModels(0, 0, dryModels);
-    CHECK(dryModels[4].light == 1 && (dryModels[4].modelFlags & 8));
+    CHECK(dryModels[0].light == 1 && (dryModels[0].modelFlags & 8));
     for (int zx = -3; zx <= -1; ++zx)
         for (int zy = -2; zy <= 0; ++zy)
             if (zx != -2 || zy != -1)
                 fs::remove(seed / ("z_" + std::to_string(zx) + "_" + std::to_string(zy) + ".cwz"));
     writeRecords(0xe0, 5, payload); // Truncated payload.
+    CHECK(ex.open(seed, error));
     CHECK(ex.props(0, 0).empty());
     writeRecords(0, UINT32_MAX, {});
+    CHECK(ex.open(seed, error));
     CHECK(ex.props(0, 0).empty());
     writeRecords(4, 1, std::vector<uint8_t>(4)); // Unknown layout: no position field.
+    CHECK(ex.open(seed, error));
     CHECK(ex.props(0, 0).empty());
     fs::remove(records);
     fs::remove(seed / "manifest.txt");

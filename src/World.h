@@ -55,6 +55,7 @@ class World {
     int viewZoneCount() const { return viewZones; }
     // Zone (zx, zy)'s blocks changed: it is meshed again, the old mesh drawn until then.
     void refreshZone(int zx, int zy);
+    void refreshModels(int zx, int zy); // current model-vector change, independent of terrain mesh notices
     // The world's millisecond clock, advanced by each step's milliseconds; it starts at 0 with
     // the world and is not saved. The plants sway by it (vegetation-wind.md §2).
     void advanceClock(double ms) { clockMs += std::max(0.0, ms); }
@@ -105,6 +106,7 @@ class World {
         std::optional<scenevisibility::Bounds> nativeBounds;
         std::shared_ptr<const steampoints::ZoneSources> nativeLights;
         std::vector<Scenery> scenery;
+        std::shared_ptr<const void> modelSnapshot;
     };
     // A zone model whose matrix changes with the clock: it sways (flag 4) or, in the Steam
     // look, swings from its top (flags 0x10, 0x20).
@@ -132,7 +134,9 @@ class World {
         std::vector<DrawItem> scenery;
         std::vector<Moving> moving;
         std::vector<AnimatedObject> objects;
+        std::vector<Scenery> decorations;
     };
+    void buildScenery(Zone &zone, const std::vector<Scenery> &scenery);
     struct Instance {
         int model = -1;
         glm::vec3 position{0};
@@ -154,6 +158,7 @@ class World {
     std::map<Key, Zone> zones;
     std::map<Key, std::future<Generated>> jobs;
     std::map<Key, std::shared_ptr<scenerange::CachePublication>> pendingBounds;
+    std::set<Key> staleModels;
     std::set<Key> stale; // zones to mesh again
     std::vector<Instance> instances;
     DrawItem instanceDraw(const Instance &i) const;

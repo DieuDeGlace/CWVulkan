@@ -261,18 +261,21 @@ individual feature documents.
   critical/remembered-target ordering and two healing notices with one application.
   Actual health and event-queue checks pass. Nonzero-clock destructive corpses now
   retire without revisiting their terrain branch (regressions reproduce the old
-  retained-corpse failure). Destructive 0x90 first-visit terrain/scenery work,
-  local burst expansion/rendering, other object families and broader listening/native
-  comparisons remain. Received world-event consumption now follows the client World
-  and drawn-position passes, while creature/clock reception stays earlier. The new
-  [block lifecycle contract](specs/steam-block-change-lifecycle.md) resolves history,
-  water-preserving removal and mesh-request phases; their full backend integration
-  and original-game peer acceptance remain open. Physical removal/full-setter,
-  batched immutable publication, loaded-only/repeated history and nine-block-sample
-  mesh requests are now wired and tested. Packet7 lists concatenate across arrivals,
-  with empty-frame zone-change processing retained. Generated cached materials and
-  owner CWM1 sidecars support downward fills; fresh material capture, model support
-  cleanup and full destructive-source integration remain open. The independently traced
+  retained-corpse failure). Destructive 0x90 first visits now apply guarded terrain
+  removal, debris/notices/sound, unsupported-model cleanup and shared area hits in
+  the specified order. Ordinary model vectors retain semantic light/flags and their
+  immutable loaded snapshots; renderer-only refresh and stale-job guards preserve
+  removals without changing auxiliary light/emitter membership. Physical/full writes,
+  batched publication, loaded-only/repeated history and nine-block-sample mesh
+  requests are integrated. Packet7 lists concatenate across arrivals, empty-frame
+  zone-change processing remains, and event consumption follows the client World
+  and drawn-position passes. Cached generated materials and owner CWM1 sidecars
+  support downward fills. Focused and full CPU/owner-data checks, Vulkan image
+  suites and a no-save combat run pass. Fresh material capture, original-game peer
+  acceptance, exact publication latency and broader visual/CRT comparisons remain.
+  Local particle expansion/rendering is next from the independent styles1/2/5
+  [contract](specs/steam-particle-bursts.md); other object families and listening
+  comparisons remain open. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.
 - [x] Saved inventory loading preserves the stored tab count, including zero or

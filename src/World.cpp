@@ -493,6 +493,78 @@ void World::remove(int instance) {
         instances[instance].live = false;
 }
 
+void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
+    z.scenery.clear();
+    z.moving.clear();
+    z.objects.clear();
+    for (const auto &s : scenery) {
+        if (s.beam) {
+            DrawItem shaft;
+            shaft.mesh = beamMesh;
+            shaft.castShadow = false;
+            shaft.kind = DrawKind::LightBeam;
+            shaft.beam = *s.beam;
+            shaft.nativeZone = z.nativeBounds;
+            z.scenery.push_back(shaft);
+            continue;
+        }
+        int m = loadModel(s.model);
+        if (m < 0)
+            continue;
+        // Plants move by their model matrix (vegetation-wind.md §4), never per vertex. The
+        // old generator's scenery marks its plants SWAY instead of carrying record flags.
+        int32_t modelFlags = s.modelFlags;
+        if (s.flags & SWAY)
+            modelFlags |= vegetationwind::modelflag::SWAYS;
+        Instance i{m, {s.x, s.y, s.z}, s.yaw, s.scale, (uint32_t)(s.flags & ~SWAY), true};
+        z.scenery.push_back(instanceDraw(i));
+        DrawItem &d = z.scenery.back();
+        if (s.object.type >= 0) {
+            d.model = objectvisual::matrix(s.object, i.position, models[m].size);
+            z.objects.push_back({z.scenery.size() - 1, s.objectKey, s.object, i.position, models[m].size});
+        }
+        d.kind = DrawKind::Scenery;
+        if (s.modelType >= 0 && extracted) {
+            auto position = s.modelPosition;
+            position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
+            position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
+            // Native CPU culling keeps game Z; GPU placement alone has Z_OFFSET.
+            d.nativeScenery = steamscenery::bounds(position, models[m].size, s.scale, (uint32_t)modelFlags);
+            d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Model, d.nativeScenery->center};
+            d.nativeZone = z.nativeBounds;
+        }
+        if (s.object.type >= 0 && s.objectKey.type >= 0 && extracted) {
+            auto position = s.objectKey.position;
+            position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
+            position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
+            d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Object, position};
+        }
+        d.standingLight = (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT) ? 1.0f : s.light;
+        if (renderStyle() == RenderStyle::Steam && s.modelType >= 0 && (modelFlags & vegetationwind::modelflag::OWN_LIGHT))
+            d.flags |= GLOW; // Native record flag0x01 drives glow; flag0x02 does not.
+        using namespace vegetationwind::modelflag;
+        if (modelFlags & (SWAYS | SWINGS_Y | SWINGS_X)) {
+            vegetationwind::Placement p;
+            p.position = {s.x, s.y, s.z};
+            p.yawRadians = s.yaw;
+            p.size = s.scale;
+            p.heightVoxels = models[m].height;
+            p.flags = modelFlags;
+            p.listPosition = s.listPosition > 0 ? s.listPosition : (int)z.scenery.size();
+            z.moving.push_back({z.scenery.size() - 1, p});
+        }
+        glm::vec3 colour;
+        if (lightOf(s.model, colour)) { // shines from its top (10.1)
+            d.lightColour = colour;
+            d.lightRadius = 20;
+            d.lightPosition = glm::vec3(s.x, s.y, s.z + models[m].height * s.scale);
+        }
+        // Lily pads and stones are flat: let them receive but not cast.
+        if (s.model.rfind("water-lily", 0) == 0 || s.model.rfind("stone", 0) == 0)
+            z.scenery.back().castShadow = false;
+    }
+}
+
 void World::update(glm::vec3 focus) {
     int cx = (int)std::floor(focus.x / ZONE), cy = (int)std::floor(focus.y / ZONE);
     // Finish completed jobs, nearest first, a few per frame to keep frames smooth.
@@ -514,6 +586,15 @@ void World::update(glm::vec3 focus) {
             renderer.release(old->second.lava);
         }
         Zone z;
+        if (extracted) {
+            const auto current = extracted->gameModels(key.first + extracted->originZoneX(), key.second + extracted->originZoneY());
+            if (current && current != g.modelSnapshot) {
+                // An older mesh job must not reinstall a model erased after it read props.
+                g.scenery = extracted->props(key.first, key.second, &g.modelSnapshot);
+                if (renderStyle() == RenderStyle::Alpha)
+                    lightScenery(g.scenery);
+            }
+        }
         if (extracted && land.config().lilies) {
             const auto &settings = land.config();
             auto eligible = [&](glm::vec3 surface) {
@@ -530,6 +611,7 @@ void World::update(glm::vec3 focus) {
             if (renderStyle() == RenderStyle::Alpha)
                 lightScenery(pads);
             g.scenery.insert(g.scenery.end(), pads.begin(), pads.end());
+            z.decorations = std::move(pads);
         }
         z.opaque = renderer.upload(g.opaque);
         z.water = renderer.upload(g.water);
@@ -545,75 +627,22 @@ void World::update(glm::vec3 focus) {
             g.nativeBounds->meshed = z.opaque || z.water || z.lava; // actual published geometry, not planned bands
             z.nativeBounds = std::make_shared<const scenevisibility::Bounds>(*g.nativeBounds);
         }
-        for (auto &s : g.scenery) {
-            if (s.beam) {
-                DrawItem shaft;
-                shaft.mesh = beamMesh;
-                shaft.castShadow = false;
-                shaft.kind = DrawKind::LightBeam;
-                shaft.beam = *s.beam;
-                shaft.nativeZone = z.nativeBounds;
-                z.scenery.push_back(shaft);
-                continue;
-            }
-            int m = loadModel(s.model);
-            if (m < 0)
-                continue;
-            // Plants move by their model matrix (vegetation-wind.md §4), never per vertex. The
-            // old generator's scenery marks its plants SWAY instead of carrying record flags.
-            int32_t modelFlags = s.modelFlags;
-            if (s.flags & SWAY)
-                modelFlags |= vegetationwind::modelflag::SWAYS;
-            Instance i{m, {s.x, s.y, s.z}, s.yaw, s.scale, (uint32_t)(s.flags & ~SWAY), true};
-            z.scenery.push_back(instanceDraw(i));
-            DrawItem &d = z.scenery.back();
-            if (s.object.type >= 0) {
-                d.model = objectvisual::matrix(s.object, i.position, models[m].size);
-                z.objects.push_back({z.scenery.size() - 1, s.objectKey, s.object, i.position, models[m].size});
-            }
-            d.kind = DrawKind::Scenery;
-            if (s.modelType >= 0 && extracted) {
-                auto position = s.modelPosition;
-                position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
-                position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
-                // Native CPU culling keeps game Z; GPU placement alone has Z_OFFSET.
-                d.nativeScenery = steamscenery::bounds(position, models[m].size, s.scale, (uint32_t)modelFlags);
-                d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Model, d.nativeScenery->center};
-                d.nativeZone = z.nativeBounds;
-            }
-            if (s.object.type >= 0 && s.objectKey.type >= 0 && extracted) {
-                auto position = s.objectKey.position;
-                position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
-                position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
-                d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Object, position};
-            }
-            d.standingLight = (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT) ? 1.0f : s.light;
-            if (renderStyle() == RenderStyle::Steam && s.modelType >= 0 && (modelFlags & vegetationwind::modelflag::OWN_LIGHT))
-                d.flags |= GLOW; // Native record flag0x01 drives glow; flag0x02 does not.
-            using namespace vegetationwind::modelflag;
-            if (modelFlags & (SWAYS | SWINGS_Y | SWINGS_X)) {
-                vegetationwind::Placement p;
-                p.position = {s.x, s.y, s.z};
-                p.yawRadians = s.yaw;
-                p.size = s.scale;
-                p.heightVoxels = models[m].height;
-                p.flags = modelFlags;
-                p.listPosition = s.listPosition > 0 ? s.listPosition : (int)z.scenery.size();
-                z.moving.push_back({z.scenery.size() - 1, p});
-            }
-            glm::vec3 colour;
-            if (lightOf(s.model, colour)) { // shines from its top (10.1)
-                d.lightColour = colour;
-                d.lightRadius = 20;
-                d.lightPosition = glm::vec3(s.x, s.y, s.z + models[m].height * s.scale);
-            }
-            // Lily pads and stones are flat: let them receive but not cast.
-            if (s.model.rfind("water-lily", 0) == 0 || s.model.rfind("stone", 0) == 0)
-                z.scenery.back().castShadow = false;
-        }
+        buildScenery(z, g.scenery);
         zones[key] = std::move(z);
         integrated++;
     }
+    if (extracted)
+        for (const auto &key : staleModels) {
+            const auto found = zones.find(key);
+            if (found == zones.end())
+                continue;
+            auto scenery = extracted->props(key.first, key.second);
+            if (renderStyle() == RenderStyle::Alpha)
+                lightScenery(scenery);
+            scenery.insert(scenery.end(), found->second.decorations.begin(), found->second.decorations.end());
+            buildScenery(found->second, scenery);
+        }
+    staleModels.clear();
     // Drop zones out of range.
     for (auto it = zones.begin(); it != zones.end();) {
         if (std::max(std::abs(it->first.first - cx), std::abs(it->first.second - cy)) > viewZones + 1) {
@@ -685,10 +714,11 @@ void World::update(glm::vec3 focus) {
             jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook, publication] {
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
-                ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds,
-                         alphaLook ? nullptr : &nativeLight, &g.lava);
-                if (g.nativeBounds) publication->publish(*g.nativeBounds);
-                g.scenery = ex->props(k.first, k.second);
+                ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds, alphaLook ? nullptr : &nativeLight,
+                         &g.lava);
+                if (g.nativeBounds)
+                    publication->publish(*g.nativeBounds);
+                g.scenery = ex->props(k.first, k.second, &g.modelSnapshot);
                 if (alphaLook)
                     lightScenery(g.scenery);
                 else {
@@ -721,7 +751,12 @@ void World::update(glm::vec3 focus) {
     }
 }
 
-void World::refreshZone(int zx, int zy) { stale.insert({zx, zy}); }
+void World::refreshZone(int zx, int zy) {
+    stale.insert({zx, zy});
+}
+void World::refreshModels(int zx, int zy) {
+    staleModels.insert({zx, zy});
+}
 
 void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const {
     const bool steamLook = renderStyle() == RenderStyle::Steam;

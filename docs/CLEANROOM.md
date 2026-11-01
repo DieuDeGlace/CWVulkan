@@ -64,6 +64,19 @@ only that prose and engine code to move received event consumption after the Wor
 and drawn-position passes. Broader terrain/restoration behavior was not inferred
 from the limited helper trace.
 
+## Destructive terrain and model cleanup, 2026-11-01
+
+The same independent native-only author supplied the complete bounded destructive
+race0x90 producer and ordinary-model cleanup contracts in steam-world-death-area.md
+and effect-objects.md. The implementer read those prose contracts and engine/tests
+only. NativeDeadCreatures now emits the ordered terrain work; ExtractedWorld owns
+immutable model vectors and semantic deletion, with an engine renderer refresh that
+is deliberately separate from native block notices and auxiliary lists. Synthetic
+producer, actual facade, material and loaded-model tests exercise this scope.
+The author also wrote steam-particle-bursts.md, including file-backed cube.cub
+identity and resource data facts, without accessing engine/tests/extractor sources.
+Its bounded particle implementation follows separately. Owner content stays local.
+
 ## Terrain mutation and cached inputs, 2026-11-01
 
 An independent native-only author supplied steam-full-block-setter.md and clarified

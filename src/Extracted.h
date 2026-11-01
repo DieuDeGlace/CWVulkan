@@ -114,7 +114,7 @@ class ExtractedWorld {
     // The zone's placed sprites (grass, flowers, lanterns, signs...) and
     // objects (doors, windows, furniture, statues), from its .rec file and the
     // game's own sprite tables (Extract/sprite-groups.txt).
-    std::vector<Scenery> props(int zx, int zy);
+    std::vector<Scenery> props(int zx, int zy, std::shared_ptr<const void> *modelSnapshot = nullptr);
     // Bake native model light from current neighboring terrain, when all nine zones exist.
     void lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved = nullptr);
     // The block the game's lookup (0xe9a0, 0xeb90) gives at absolute game block (x, y, z):
@@ -147,6 +147,10 @@ class ExtractedWorld {
     void invalidateGameBlock(int32_t x, int32_t y);
     using BlockNotice = std::array<uint8_t, nativesaves::BLOCK_CHANGE_SIZE>;
     void invalidateGameBlocks(std::span<const BlockNotice> changes);
+    using ModelRecord = std::array<uint8_t, 0x40>;
+    std::shared_ptr<const std::vector<ModelRecord>> gameModels(int32_t x, int32_t y);
+    size_t removeUnsupportedModels(int32_t x0, int32_t y0, int32_t x1, int32_t y1);
+    std::vector<std::pair<int, int>> takeChangedModels(); // internal scenery-cache refresh, not a terrain notice
     struct ZoneToken {
         uint64_t order; // Unsigned address of the stable loaded-zone identity.
         std::shared_ptr<const void> keepAlive;
@@ -177,7 +181,7 @@ class ExtractedWorld {
     // from its .rec file; empty when the extraction did not record that list.
     std::vector<soundrules::Emitter> soundEmitters(int ax, int ay) const;
     // Inspector/importer access using native zone coordinates, without a float round trip.
-    std::vector<Scenery> propsAbsolute(int ax, int ay);
+    std::vector<Scenery> propsAbsolute(int ax, int ay, std::shared_ptr<const void> *modelSnapshot = nullptr);
     size_t propNames() const { return environment.size() + buildingParts.size(); }
 
   private:
@@ -190,17 +194,19 @@ class ExtractedWorld {
         // Column replacements copy storage, not the loaded zone's lifetime/visit order.
         std::shared_ptr<const ZoneIdentity> identity = std::make_shared<ZoneIdentity>();
         int region = 0;
-        Column columns[4096];                                 // index = localX * 64 + localY (the game's order)
-        std::shared_ptr<const worldgen::ZoneContents> things; // generated zones only: models, items, spawn points
-        std::vector<worldgen::ZoneObject> objects;            // the generator's static objects (zone+0x60)
+        Column columns[4096];                                   // index = localX * 64 + localY (the game's order)
+        std::shared_ptr<const worldgen::ZoneContents> things;   // generated zones only: models, items, spawn points
+        std::shared_ptr<const std::vector<ModelRecord>> models; // current ordinary list; auxiliary lists stay separate
+        std::vector<worldgen::ZoneObject> objects;              // the generator's static objects (zone+0x60)
         std::shared_ptr<const std::vector<worldgen::ColourInputs>> recordedColours;
         worldgen::SandOffsets recordedSand;
         bool generated = false;   // made by the generator rather than read
         bool objectsMade = false; // objects made (for a read zone, once gameObjects asks)
         struct ModelLightState {
             std::mutex mutex;
-            std::set<int> waterModels; // flag8 is ORed, retained for this zone's lifetime
-            std::set<size_t> waterAuxiliary; // +0x90 is a separate model copy/list
+            std::map<int, float> lightSamples; // native cached +0x28, indexed with the current ordinary vector
+            std::set<int> waterModels;         // flag8 is ORed, retained for this zone's lifetime
+            std::set<size_t> waterAuxiliary;   // +0x90 is a separate model copy/list
         };
         // Block edits copy the terrain snapshot; runtime model state stays shared.
         std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
@@ -247,12 +253,14 @@ class ExtractedWorld {
     // The block changes by absolute zone, put on every copy of the zone read or made.
     mutable std::mutex changesMutex;
     std::map<Key, std::vector<nativesaves::BlockChange>> blockChanges; // guarded by changesMutex
-    std::set<Key> changedZones;                                        // guarded by changesMutex
+    std::set<Key> changedModels;
+    std::set<Key> changedZones; // guarded by changesMutex
     // Unique across reader lifetimes; changed on cache membership and block replacement.
     std::atomic<uint64_t> cacheRevision{0};
     void clearCache(); // joins this reader's prefetch before resetting the source
     void applyBlockChanges(int ax, int ay, Zone &zone) const;
     std::shared_ptr<Zone> cached(int ax, int ay); // as load, but only from the cache
+    static std::shared_ptr<const std::vector<ModelRecord>> readModels(const std::filesystem::path &file);
     static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error);
     static std::shared_ptr<Zone> generateZone(int ax, int ay);
 };
