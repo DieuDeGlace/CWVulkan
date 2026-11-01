@@ -89,7 +89,13 @@ individual feature documents.
 - [ ] Strict Steam world/dungeon parity is a release requirement: region/theme
   generation, dungeon/building layouts and object placement/transforms must match
   the owner's reference inputs. Implemented generation is not a certification of
-  every region or seed. The expanded 2026-10-29 audit covers 789 zone snapshots
+  every region or seed. The isolated 2026-10-31 recapture matches all 3,823 sampled
+  points across 25 terrain fields, 4,847 block samples and 60,000 cell objects. It
+  resolves the two modified-reference failures without changing generation; the
+  full CPU/owner-data suite passes. Its 17 nonempty zones match 8 model and 11 static
+  light records with complete neighborhoods. These samples do not close the broader
+  placement/theme and runtime comparisons below.
+  The expanded 2026-10-29 audit covers 789 zone snapshots
   across four overlapping seed-123 sets; it still finds object-record differences.
   `WC_STRICT_RECORDS=1 EngineTests wgcreatures 10000` now fails on object keys,
   model counts/positions or item keys/angles that differ, and on absent zone fixtures.

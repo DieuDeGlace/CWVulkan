@@ -39,6 +39,15 @@ and palette artwork are loaded from the owner's installation at runtime and stay
 out of source and runtime packages. The native character appearance format is
 unchanged, and the extra style currently applies only to the local player.
 
+## Capture-log cleanup, 2026-10-31
+
+Routine capture inspection exposed raw hexadecimal function bytes from an old
+extractor diagnostic. They were not decoded, analyzed or used to implement engine
+behavior. The extractor's startup function scan/export and prologue-byte error
+printing have been removed; asset and behavioral-data capture are unchanged.
+Historical raw diagnostic files remain local and outside source/runtime packages.
+Subsequent routine log inspection filters to data and provenance messages.
+
 ## Audit, 2026-10-27
 
 - Comments and docs no longer use names that a third-party reconstruction invented for the

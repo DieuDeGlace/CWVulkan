@@ -130,3 +130,12 @@ light records in 15 nonempty zones matched. The same vanilla run resolved both
 region-oracle failures: all 3,823 sampled points across 25 terrain fields and 4,847
 block samples matched. The earlier region reference came from a BigRegions-modified
 session. No generator or expected-value changes were needed.
+
+The 2026-10-31 repeat isolated capture refreshed 1,596 zone records. Its 17 nonempty
+zones matched 8 model and 11 static light records, with no mismatches or incomplete
+neighborhoods. All 3,823 terrain points across 25 fields, 4,847 block samples and 60,000
+cell-object samples matched; the full CPU/owner-data suite passed. Save, Mods and
+ReShade's dxgi.dll were restored with all 58 original file hashes unchanged.
+Routine extractor startup no longer exports executable function-byte dumps, and
+unsupported hook prologues are reported by location without logging their bytes.
+Historical diagnostic files remain local; none belongs in an upload package.

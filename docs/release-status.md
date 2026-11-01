@@ -10,6 +10,21 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- A new isolated original-game capture resolves the two region-reference failures.
+  Its provenance reports the supported build and zero other mod DLLs. All 3,823
+  sampled points across 25 terrain fields, 4,847 block samples and 60,000 cell-object
+  samples match without generator or expected-value changes. The refreshed 1,596
+  zone records include 17 nonempty lighting zones: 8 model and 11 static light records
+  match, with zero incomplete neighborhoods. The full CPU/owner-data suite now
+  passes; all five targets build. This sampled coverage does not establish every
+  region, dungeon, runtime path or pixel comparison.
+  The journaled capture restored Save, Mods and ReShade's dxgi.dll; all 58 original
+  file hashes match and the journal is closed. The old EngineTests access violation
+  came from the already-corrected native-player test setup; its focused rerun passes.
+  Extractor startup no longer scans/exports executable function bytes, and hook
+  errors identify their location without printing prologue bytes. The engine
+  behavior and asset/data capture paths were not changed by that diagnostic cleanup.
+
 - Loaded-only terrain block lookups now distinguish reader lifetimes and invalidate
   their memo when zones are loaded, evicted or replaced. Weak references avoid
   retaining unloaded terrain. Source resets join the reader's prefetch worker before
@@ -652,8 +667,9 @@ directory using cached dependency sources, and its full EngineTests run passed.
 It contains no dependency build products or game exports. This is a source-completeness
 check on the development machine, not a fresh-machine installation test.
 
-No original-game session, native save edit or mod installation was needed for this
-checkpoint. Captures are private and excluded from the source archive.
+The latest isolated original-game recapture refreshed generation and lighting
+references. Its journaled restoration was verified against the original Save, Mods
+and ReShade DLL file hashes. Captures remain private and excluded from the source archive.
 
 ## Work still open
 

@@ -1519,36 +1519,6 @@ static void classRules(cube::Creature *p) {
     extract::log("Class rules written to Extract\\class-rules.txt");
 }
 
-// Bytes at the start of the item functions CWSDK names, to check their roles.
-static void dumpFunctions() {
-    static bool done = false;
-    if (done)
-        return;
-    done = true;
-    // Every function start (after int3 padding) around the item functions, to
-    // find the game's class check among them (Extractitem-functions.txt).
-    FILE *f = nullptr;
-    if (fopen_s(&f, "Extract\\item-functions.txt", "w") == 0 && f) {
-        const unsigned char *code = (const unsigned char *)base();
-        for (uintptr_t rva = 0x106000; rva < 0x10C000; rva++)
-            if (code[rva - 1] == 0xcc && code[rva] != 0xcc) {
-                fprintf(f, "%llx", (unsigned long long)rva);
-                for (int i = 0; i < 160; i++)
-                    fprintf(f, "%s%02x", i ? "" : " ", code[rva + i]);
-                fprintf(f, "\n");
-            }
-        fclose(f);
-    }
-    for (uintptr_t rva : {ITEM_ARMOR, ITEM_HP, ITEM_PRICE, (uintptr_t)0x109720}) {
-        std::string line = "Item function " + std::to_string(rva) + ":";
-        char b[4];
-        for (int i = 0; i < 96; i++) {
-            sprintf_s(b, "%02x", ((unsigned char *)base() + rva)[i]);
-            line += b;
-        }
-        extract::log(line);
-    }
-}
 } // namespace gear
 
 namespace combat {
@@ -5475,10 +5445,8 @@ static void *detour(uintptr_t rva, void *to, const char *what) {
     while (length < 5) {
         const size_t n = prologueInstructionLength(entry + length);
         if (n == 0 || length + n > 24) {
-            char bytes[64];
-            snprintf(bytes, sizeof bytes, "%02x %02x %02x %02x %02x %02x %02x %02x", entry[0], entry[1], entry[2],
-                     entry[3], entry[4], entry[5], entry[6], entry[7]);
-            extract::log(std::string("Packet recorder: cannot hook ") + what + " (starts " + bytes + ")");
+            extract::log(std::string("Packet recorder: cannot hook ") + what + " (unsupported prologue at RVA " +
+                         std::to_string(rva) + ")");
             return nullptr;
         }
         length += n;
@@ -6631,7 +6599,6 @@ static void tick(cube::Game *g) {
         }
         aitrace::approach(g->world);
         deathprobe::tick(g);
-        gear::dumpFunctions();
         static bool f8 = false;
         bool down8 = extract::hotkeyDown(VK_F8);
         if (down8 && !f8) {
