@@ -66,11 +66,65 @@ that field. The insertion helper writes an iterator pointer and a byte
 success flag, not those padding bytes. No writer to this source float exists
 in the function. Record padding **+0x44..+0x47** is likewise not initialized.
 Do not compare these as deterministic initialized producer data, claim
-alpha=1, or declare alpha unused from this producer trace. Its downstream
-render significance is a separate consumer question.
+alpha=1, or declare alpha unused from this producer trace. The bounded
+ordinary consumer's storage and draw behavior are now established in§2.1.
 
 This burst construction has no direct CRT random draw. Expansion of a burst
 by later particle consumers is a separate phase.
+
+### 2.1 Native consumer: stored alpha versus submitted color
+
+The ordinary Game-frame burst expander in **0xa5a50** copies each World+0xb0
+record through **0x7fb50 at0xaa1fb**. It then copies **all four color floats**,
+burst offsets **+0x24/+0x28/+0x2c/+0x30**, into a newly constructed live
+particle's **+0x44/+0x48/+0x4c/+0x50**, through **0x17170 at0xaa460**.
+The copy helper is16 bytes, not a three-component RGB copy. Queue insertion
+through **0xa21a0 at0xaa505**, **0x6e710** and **0x7f9e0** preserves that
+live-particle color. Thus the burst's undefined fourth component can reach
+stored particle state; it is not initialized by the copy or queue.
+
+For **style1**, expansion subsequently replaces the entire color through
+**0x16ff0 at0xaa493**, then **0x17170 at0xaa4a2**. The replacement's fourth
+color input is **float1**, supplied at **0xaa47d** as the fifth ABI argument
+(including the destination pointer); its source is
+the float1 constant at0x4ac980, loaded at0xa7076. Consequently the first
+bursts of races0x90/0x119 do not retain their undefined burst alpha even in
+the final queued particle color. This is a native style-specific replacement,
+not permission to initialize the outgoing burst field to1.
+
+For **style2**, used by race0x11d's first burst, that replacement is skipped:
+the stored live-particle alpha remains the copied indeterminate value.
+The reached particle updater **0xb37f0**, called at **0xaaed9**, uses particle
+style, age, lifetime, motion, collision and related flags; it does not read
+that color-alpha field for those decisions or transfer it into geometry,
+RGB, lifetime or another control. It does not turn these particles into
+another style. This updater therefore introduces no visible dependency on
+the indeterminate fourth component.
+
+The ordinary world render entry **0xe2e00 calls0xe6840 at0xe3ca7** with the
+live particle collection. A particle's node includes a16-byte list header,
+so live color-alpha **+0x50** is node offset **+0x60** in this draw routine.
+At **0xe69b3–0xe6a27**, the draw initially reads it and computes a candidate
+fourth material component using frame color/light factors. However,
+**0xe6a2c–0xe6a38 explicitly replaces that result with float1 for both
+style1 and style2**, before color submission through virtual slot+0x98 at
+**0xe6b1b**. Its RGB equations are independent component products; the
+fourth component is not mixed into RGB. Admission, resource selection and
+geometry likewise do not use that stored color-alpha field.
+
+Therefore the normal reached draw of these actual first-burst styles submits
+**material fourth component exactly1**, independently of the outgoing
+burst's indeterminate alpha. Style2's raw stored alpha remains unconstrained,
+but it does not determine visible particle color/opacity or geometry on this
+consumer route. The initial read/multiply still exists; this is a replacement
+before submission, not a claim that native execution never reads the bytes.
+
+Do not generalize this result to every particle style: the same draw predicate
+retains its computed fourth component for **styles0,4,5,6**. The verified
+comparison distinction is between an **uninitialized outgoing burst field**,
+the **style-specific stored particle field**, and the **exact1 submitted
+component for styles1/2**. No deterministic producer alpha or generic
+all-particle alpha fallback follows from this trace.
 
 ## 3. Race0x90 terrain destruction
 
@@ -273,8 +327,8 @@ is specified in [steam-world-daily-reset.md](steam-world-daily-reset.md).
 
 This closes the bounded finite ordinary body and its direct writes. It does
 not specify new race/clock/damage-field producers, revise the independently
-specified hostility/hit/heal/terrain-helper internals, establish a stable
-value for first-burst alpha, or authorize replacing deletion with HP-only
+specified hostility/hit/heal/terrain-helper internals, establish an initialized
+value for first-burst alpha (distinct from§2.1's draw replacement), or authorize replacing deletion with HP-only
 filtering. Standalone invocation under a remote-client World, exceptional
 allocation failures and mutations by untraced external callbacks are outside
 this ordinary authority contract.

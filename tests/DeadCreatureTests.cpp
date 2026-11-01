@@ -1,11 +1,13 @@
 #include "NativeDeadCreatures.h"
+#include "Extracted.h"
 #include "NativePose.h"
 #include "Spawned.h"
-#include "Extracted.h"
 #include "worldgen/Residents.h"
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <map>
 #include <set>
 
@@ -128,10 +130,11 @@ int deadCreatureTests() {
         put(bomb.record.data(), 0x64, int32_t(0x90));
         put(blast.record.data(), 0x64, int32_t(0x119));
         put(bubble.record.data(), 0x64, int32_t(0x11d));
-        check(nativedeath::step(scene.world, 5000).empty() && scene.dead.size() == 3,
-              "special area sources enter dead IDs but await their separate burst/area implementation");
-        for (auto *actor : scene.actors)
-            check(get<float>(actor->record, 0x6c) == 0, "pending first-clock-zero area input is not consumed by lifecycle-only pass");
+        check(nativedeath::step(scene.world, 5000) == std::vector<int64_t>{3, 4} && scene.dead.size() == 3,
+              "non-terrain area sources complete lifecycle; destructive source stays deferred");
+        check(get<float>(bomb.record.data(), 0x6c) == 0 && get<float>(blast.record.data(), 0x6c) == 5000 &&
+                  get<float>(bubble.record.data(), 0x6c) == 5000,
+              "only pending terrain-source first-clock-zero input is preserved");
     }
     {
         Scene scene;
@@ -196,6 +199,191 @@ int deadCreatureTests() {
               "actual facade revives owned actor with dead-but-nonnegative owner at zero interval");
         check(actors.persistentDeadSet().count(10) != 0, "facade revival retains native dead ID");
     }
-    std::printf("Ordinary corpse retirement and owned-kind6 revival: %s\n", failures ? "FAIL" : "PASS");
+    {
+        Actor source(1, 1, 0), edge(2, 3, 1), near(3, 3, 1), high(4, 3, 1), rejected(5, 8, 1), faded(6, 3, 1);
+        put(source.record.data(), 0x64, int32_t(0x119));
+        put(source.record.data(), 0x184, -5.0f);
+        put(edge.record.data(), 0x10, int64_t(8 * 65536));
+        put(near.record.data(), 0x10, int64_t(3277));
+        put(high.record.data(), 0x20, int64_t(8 * 65536));
+        put(faded.record.data(), 0x12c, std::numeric_limits<float>::quiet_NaN());
+        Scene scene;
+        scene.actors = {&source.side, &edge.side, &near.side, &high.side, &rejected.side, &faded.side};
+        scene.world.hostile = [](const auto &, const auto &) { return true; };
+        int draws = 0;
+        scene.world.rand = [&] {
+            ++draws;
+            return 0;
+        };
+        std::vector<nativeupkeep::Hit> hits;
+        std::vector<nativedeath::World::Record> bursts;
+        scene.world.hit = [&](const auto &hit) { hits.push_back(hit); };
+        scene.world.burst = [&](const auto &burst) { bursts.push_back(burst); };
+        nativedeath::step(scene.world, 0);
+        check(hits.size() == 2 && hits[0].target == 2 && hits[1].target == 3 && draws == 3,
+              "horizontal equality admitted, vertical equality/NaN fade excluded; kind8 draws then rejects");
+        check(source.side.counted == std::set<int64_t>{2, 3, 5}, "remembered targets include late-rejected kind8");
+        if (hits.size() == 2) {
+            check(hits[0].attacker == 1 && hits[0].damage == -10 && hits[0].critical == 1 && hits[0].type == 1 && hits[0].flag == 1 &&
+                      hits[0].last == 1 && hits[0].charge == 0 && hits[0].ability == 0,
+                  "blast passes critical self-add, negative damage and exact shared-hit arguments");
+            check(hits[0].push[0] == 10 && hits[0].push[2] == 2.5f && hits[1].push[0] == (3277.0f / 65536.0f) * 10.0f,
+                  "large push normalized; small nonzero push deliberately retains its magnitude");
+        }
+        check(bursts.size() == 1 && get<int32_t>(bursts[0].data(), 0x38) == 20 && get<int32_t>(bursts[0].data(), 0x3c) == 1 &&
+                  get<float>(bursts[0].data(), 0x20) == 20 && get<float>(bursts[0].data(), 0x24) == 1 &&
+                  get<float>(bursts[0].data(), 0x28) == 0.2f && get<float>(bursts[0].data(), 0x34) == 0.25f &&
+                  get<float>(bursts[0].data(), 0x40) == 3,
+              "first blast burst carries specified initialized fields; native alpha/padding not oracle data");
+        nativedeath::step(scene.world, 0);
+        check(bursts.size() == 2 && hits.size() == 2 && draws == 3, "zero step repeats burst while remembered targets suppress redraw/hit");
+    }
+    {
+        Actor source(1, 1, 0), target(2, 3, 1);
+        put(source.record.data(), 0x64, int32_t(0x119));
+        put(source.record.data(), 0x10, std::numeric_limits<int64_t>::max() - 32768);
+        put(target.record.data(), 0x10, std::numeric_limits<int64_t>::min() + 32767);
+        Scene scene;
+        scene.actors = {&source.side, &target.side};
+        scene.world.hostile = [](const auto &, const auto &) { return true; };
+        bool hit = false;
+        scene.world.hit = [&](const auto &h) { hit = h.target == 2 && h.push[0] == 10; };
+        nativedeath::step(scene.world, 1);
+        check(hit, "area distances preserve wrapped low64 subtraction before widening");
+    }
+    {
+        Actor source(1, 1, 0), victim(2, 3, 1), chain(3, 1, 1), born(4, 3, 1);
+        put(source.record.data(), 0x64, int32_t(0x119));
+        put(chain.record.data(), 0x64, int32_t(0x119));
+        Scene scene;
+        scene.actors = {&source.side, &victim.side, &chain.side};
+        scene.world.hostile = [](const auto &, const auto &) { return true; };
+        std::vector<std::pair<int64_t, int64_t>> hits;
+        int bursts = 0;
+        scene.world.burst = [&](const auto &) { ++bursts; };
+        scene.world.hit = [&](const auto &h) {
+            hits.emplace_back(h.attacker, h.target);
+            if (h.target == 2) {
+                put(victim.record.data(), 0x180, 0.0f);
+                put(chain.record.data(), 0x180, 0.0f);
+                scene.actors.push_back(&born.side);
+            }
+        };
+        nativedeath::step(scene.world, 1);
+        check(hits == std::vector<std::pair<int64_t, int64_t>>{{1, 2}, {1, 4}, {3, 4}} && bursts == 2 && scene.dead.count(3),
+              "live source/target walks include callback births and later actors killed earlier in this pass");
+    }
+    {
+        Actor owner(1, 0, 100), source(2, 1, 0), friendActor(3, 6, 10), kind7(4, 7, 10), kind8(5, 8, 10), orphanTarget(6, 6, 10);
+        put(owner.record.data(), 0x10, int64_t(100 * 65536));
+        put(source.record.data(), 0x64, int32_t(0x11d));
+        put(source.record.data(), 0x184, 10.0f);
+        put(source.record.data(), 0x188, 2.0f);
+        put(source.record.data(), 0x1a0, int64_t(1));
+        Scene scene;
+        scene.actors = {&owner.side, &source.side, &friendActor.side, &kind7.side, &kind8.side};
+        scene.world.hostile = [&](const auto &a, const auto &) { return &a == &source.side; };
+        int draws = 0, applies = 0, bursts = 0;
+        scene.world.rand = [&] {
+            ++draws;
+            return 0;
+        };
+        std::vector<nativedeath::World::Record> numbers;
+        scene.world.number = [&](const auto &number) { numbers.push_back(number); };
+        scene.world.burst = [&](const auto &burst) {
+            ++bursts;
+            check(get<int32_t>(burst.data(), 0x3c) == 2 && get<float>(burst.data(), 0x28) == 0.5f, "water burst style/RGB");
+        };
+        scene.world.apply = [&](const auto &number) {
+            ++applies;
+            check(numbers.size() == 2 && numbers[0] == number && numbers[1] == number,
+                  "both identical healing appends precede the single apply");
+            check(get<int64_t>(number.data(), 0) == 1 && get<int64_t>(number.data(), 8) == 3 && get<float>(number.data(), 0x10) == -40 &&
+                      number[0x14] == 1 && number[0x44] == 0 && number[0x45] == 0,
+                  "healing notice uses owner, critical-adjusted negative damage and ordinary number bytes");
+            put(friendActor.record.data(), 0x180, get<float>(friendActor.record.data(), 0x180) - get<float>(number.data(), 0x10));
+        };
+        nativedeath::step(scene.world, 0);
+        check(applies == 1 && draws == 3 && source.side.counted == std::set<int64_t>{3, 4, 5},
+              "friendly kind7 and kind8 consume critical/remember before rejecting");
+        nativedeath::step(scene.world, 0);
+        check(applies == 1 && draws == 3 && bursts == 2 && get<float>(friendActor.record.data(), 0x180) == 50,
+              "repeat zero-time water burst does not heal remembered targets twice");
+        put(source.record.data(), 0x1a0, int64_t(99));
+        scene.actors.push_back(&orphanTarget.side);
+        nativedeath::step(scene.world, 0);
+        check(source.side.counted.contains(6) && draws == 4 && applies == 1, "missing water owner rejects only after draw/remember");
+        put(source.record.data(), 0x1a0, int64_t(1));
+        source.side.counted.erase(6);
+        scene.world.hostile = [](const auto &, const auto &) { return true; };
+        put(owner.record.data(), 0x180, -1.0f); // Area owner lookup has no lifecycle-style HP gate.
+        nativeupkeep::Hit hit;
+        scene.world.hit = [&](const auto &h) { hit = h; };
+        nativedeath::step(scene.world, 0);
+        check(hit.target == 6 && hit.attacker == 1 && hit.type == 2 && hit.damage == 40 && hit.flag == 1 && hit.last == 1,
+              "hostile water target uses resolved negative-HP owner and hit type2");
+        hit = {};
+        source.side.counted.erase(6);
+        put(source.record.data(), 0x188, 0.0f);
+        const int before = draws;
+        nativedeath::step(scene.world, 0);
+        check(hit.target == 0 && source.side.counted.contains(6) && draws == before + 1,
+              "nonpositive water damage rejects after critical draw and remembered insertion");
+    }
+    {
+        ExtractedWorld terrain;
+        SpawnedCreatures actors;
+        bool made = false;
+        uint8_t *source = actors.networkCreature(101, made);
+        source[0x60] = 1;
+        put(source, 0x64, int32_t(0x119));
+        put(source, 0x180, 0.0f);
+        put(source, 0x6c, 0.0f);
+        put(source, 0x184, 20.0f);
+        uint8_t *target = actors.networkCreature(102, made);
+        target[0x60] = 3;
+        put(target, 0x180, 100.0f);
+        put(target, 0x12c, 0.0f);
+        actors.simulate(terrain, 0);
+        const uint8_t *after = actors.record(102);
+        check(after && get<float>(after, 0x180) < 100 && !actors.events().damageNumbers.empty() && !actors.events().particles.empty(),
+              "actual facade area uses shared hit health and outgoing number/burst queues");
+        if (!actors.events().particles.empty())
+            check(get<int32_t>(actors.events().particles.front().data(), 0x38) == 20 &&
+                      get<int32_t>(actors.events().particles.front().data(), 0x3c) == 1,
+                  "area burst precedes nested shared-hit particle output in common queue");
+    }
+    {
+        ExtractedWorld terrain;
+        SpawnedCreatures actors;
+        bool made = false;
+        uint8_t *owner = actors.networkCreature(200, made);
+        owner[0x60] = 0;
+        put(owner, 0x180, 100.0f);
+        put(owner, 0x10, int64_t(100 * 65536));
+        uint8_t *source = actors.networkCreature(201, made);
+        source[0x60] = 1;
+        put(source, 0x64, int32_t(0x11d));
+        put(source, 0x180, 0.0f);
+        put(source, 0x6c, 0.0f);
+        put(source, 0x184, 10.0f);
+        put(source, 0x188, 1.0f);
+        put(source, 0x1a0, int64_t(200));
+        uint8_t *target = actors.networkCreature(202, made);
+        target[0x60] = 3;
+        put(target, 0x180, 10.0f);
+        put(target, 0x12c, 0.0f);
+        const float maximum = nativerules::maxHealth(target);
+        actors.simulate(terrain, 0);
+        const auto &numbers = actors.events().damageNumbers;
+        const uint8_t *after = actors.record(202);
+        check(numbers.size() == 2 && numbers[0] == numbers[1], "facade retains both native water healing notices");
+        if (numbers.size() == 2 && after) {
+            const float healing = -get<float>(numbers[0].data(), 0x10);
+            check(healing > 0 && get<float>(after, 0x180) == std::min(10.0f + healing, maximum),
+                  "real shared apply heals once, capped by native maximum health");
+        }
+    }
+    std::printf("Dead-creature lifecycle and non-terrain areas: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

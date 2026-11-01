@@ -45,9 +45,13 @@ An independent native-only author wrote steam-world-traps.md and
 steam-world-death-area.md without inspecting the engine, tests or extractor.
 The implementer read only those contracts and existing independent prose plus
 CubeVulkan's own code. NativeWorldObjects implements the stated trap scope;
-NativeDeadCreatures implements the ordinary lifecycle from sections 1 and 6 of
-the dead-area contract. Its special area sources remain deferred; no native
-particle alpha or other unresolved behavior was invented.
+NativeDeadCreatures implements ordinary lifecycle and the non-terrain 0x119/0x11d
+areas from the dead-area contract. The native-only author separately traced the
+first-burst consumer in section 2.1, without engine implementation access.
+Native outgoing alpha remains unspecified; defined engine storage is not treated
+as native oracle data. The traced draw's style-specific opacity does not establish
+a producer alpha1 or a generic particle rule. Destructive race0x90 and shared
+terrain/scenery mutations remain deferred.
 Coordinate, state/hit/event, float-order and lifecycle checks use synthetic records and
 asset-free generated terrain fixtures. The runtime still loads the owner's
 content; no captured models, terrain, sounds or game exports enter either package.

@@ -10,6 +10,23 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Non-terrain dead-source areas (races 0x119/0x11d) now execute before their
+  death-clock advance. They visit the live registration list with the specified
+  double-horizontal/float-vertical bounds, small-distance push, critical draw and
+  remembered-target ordering. Blast hits use type1; hostile water hits use the
+  resolved owner and type2. Friendly water queues two identical negative-damage
+  notices before applying healing once through the shared native hit facade.
+  First-burst initialized fields enter the common particle queue before nested
+  hit output. Native producer alpha/padding are unspecified; the engine uses
+  defined storage without asserting a deterministic native value. The independent
+  consumer trace establishes opaque material submission for these styles, rather
+  than a native outgoing alpha1. Tests cover wrapping, boundaries, late rejection,
+  zero-time repeat, callback births, same-pass deaths and actual facade damage/heal.
+  All five targets build without warnings; focused and full CPU/owner-data checks
+  pass. A no-save combat run exits0 with the character database unchanged and a
+  captured frame. The destructive 0x90 source, shared terrain/scenery mutations,
+  local burst expansion/rendering and broader visual/CRT parity remain open.
+
 - Ordinary nonplayer corpse lifecycle now runs after the object pass. Authority
   advances the float death clock and retires eligible actors at 1,000 ms in
   registration order, clearing their aggro/damage references before deferred
@@ -23,8 +40,8 @@ older successful runs; none of these bounded changes establishes complete parity
   suite pass. Two no-save combat runs exit0 with the character database unchanged;
   the stationary run produces a frame, while moving capture reaches its settle
   timeout without one. The blue-lit scene and missing owner hair remain unaccepted.
-  The three special area-source races remain deferred: their first
-  burst, terrain changes, hits/healing and complete native-frame ordering are open.
+  This lifecycle checkpoint deferred all three area-source races; the newer area
+  checkpoint above adds two. Destructive terrain and complete frame ordering stay open.
 
 - The specified static-object trap tail now runs in World substeps, including
   zero-time calls. Collection clears state bits 0x2002 on every registered actor;

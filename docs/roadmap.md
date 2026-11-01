@@ -256,8 +256,11 @@ individual feature documents.
   Ordinary nonplayer corpse retirement and owned-kind6 revival now run between
   objects and pets, with deferred removal/view rebuilding and retained respawn
   policy. Lifecycle thresholds, ownership exclusions and actual vector-backed
-  facade updates pass focused and full CPU checks. The special dead-area bursts,
-  terrain/hit/heal pass, other object families and broader listening/native
+  facade updates pass focused and full CPU checks. The non-terrain 0x119/0x11d
+  first-visit areas now produce burst records and shared hits/healing, retaining
+  critical/remembered-target ordering and two healing notices with one application.
+  Actual health and event-queue checks pass. Destructive 0x90 terrain/scenery work,
+  local burst expansion/rendering, other object families and broader listening/native
   comparisons remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.

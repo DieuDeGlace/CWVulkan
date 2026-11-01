@@ -1238,6 +1238,20 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         corpses.client = client;
         corpses.creatures = &a.creatures;
         corpses.byId = u.byId;
+        corpses.rand = w.rand;
+        corpses.burst = [&](const nativedeath::World::Record &burst) { worldEvents.particles.push_back(burst); };
+        corpses.hit = [&](const nativeupkeep::Hit &hit) {
+            a.hit(hit);
+            keepHitEvents();
+        };
+        corpses.number = [&](const nativedeath::World::Record &number) {
+            worldEvents.damageNumbers.push_back(number);
+            notifyHitVisual(number);
+        };
+        corpses.apply = [&](const nativedeath::World::Record &number) {
+            nativehit::apply(hw, number);
+            keepHitEvents();
+        };
         corpses.markDead = [&](nativeai::Creature &source) {
             int64_t id;
             std::memcpy(&id, source.record + worldgen::creature::ID, sizeof id);
