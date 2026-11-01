@@ -231,8 +231,11 @@ the creature whose id it was given".
 ## 8. What a client does with a world update (0xa5a50)
 
 Packet 7 only appends the received lists to the game's slots (game+0x1970 + 0x10 × slot,
-`netcode-packets.md` §2.7). The game frame 0xa5a50 consumes them, before the client world's
-step, in this order (a guest's own records came back filtered or not as in §4.2):
+`netcode-packets.md` §2.7). The game frame0xa5a50 consumes them. Its block-change
+path below is reached after the admitted client World batch and drawn-position
+pass, rather than before that batch; see
+[steam-block-change-lifecycle.md§3](steam-block-change-lifecycle.md).
+The per-list actions are (a guest's own records came back filtered or not as in§4.2):
 
 1. **Block changes**: for each, if the "after" block's type byte (+0x16) and flag byte (+0x17)
    are both 0, remove the block (0x91160); otherwise set it to the six "after" bytes (+0x12,

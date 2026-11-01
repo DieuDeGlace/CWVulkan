@@ -259,9 +259,15 @@ individual feature documents.
   facade updates pass focused and full CPU checks. The non-terrain 0x119/0x11d
   first-visit areas now produce burst records and shared hits/healing, retaining
   critical/remembered-target ordering and two healing notices with one application.
-  Actual health and event-queue checks pass. Destructive 0x90 terrain/scenery work,
+  Actual health and event-queue checks pass. Nonzero-clock destructive corpses now
+  retire without revisiting their terrain branch (regressions reproduce the old
+  retained-corpse failure). Destructive 0x90 first-visit terrain/scenery work,
   local burst expansion/rendering, other object families and broader listening/native
-  comparisons remain. The independently traced
+  comparisons remain. Received world-event consumption now follows the client World
+  and drawn-position passes, while creature/clock reception stays earlier. The new
+  [block lifecycle contract](specs/steam-block-change-lifecycle.md) resolves history,
+  water-preserving removal and mesh-request phases; their full backend integration
+  and original-game peer acceptance remain open. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.
 - [x] Saved inventory loading preserves the stored tab count, including zero or

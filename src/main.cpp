@@ -3735,13 +3735,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         const uint32_t nowMs = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(worldFrameNow.time_since_epoch()).count();
         if (spawnedReady) {
             const double ms = gamemath::frameMilliseconds(frameMs);
-            // The network first: the host's tick (unless this player is a guest elsewhere), what the
-            // client's host sent, and its world updates, before the client world's step.
+            // Receive creature/clock packets before the client world; packet7 event lists
+            // stay queued until after its drawn-position pass (block-change lifecycle §3).
             if (session.started()) {
                 if (HostSide *host = session.hostSide())
                     host->standIn = player.position;
                 session.beginFrame(nowMs);
-                session.consume();
                 SpawnedCreatures &clock = serverMode ? hostWorld : spawned; // (the host's, by packet 8)
                 hour = clock.timeOfDay() / 3600000.0f;
                 day = clock.day();
@@ -3763,6 +3762,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             spawned.think(extractedWorld, ms, hour);
             spawned.simulate(extractedWorld, ms);
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
+            if (session.started())
+                session.consume();
         }
         useprompt::Scene nativeUseScene;
         useprompt::CreatureTargets nativeCreatureTargets;

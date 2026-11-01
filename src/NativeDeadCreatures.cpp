@@ -150,10 +150,11 @@ std::vector<int64_t> step(World &world, float milliseconds) {
         if (world.markDead)
             world.markDead(*source);
         const int32_t race = read<int32_t>(record, RACE);
-        // The destructive source still needs the shared terrain/scenery helpers.
-        if (race == 0x90)
+        const bool firstVisit = read<float>(record, CLOCK) == 0.0f;
+        // Only the first destructive visit needs the missing terrain/scenery helpers.
+        if (race == 0x90 && firstVisit)
             continue;
-        if ((race == 0x119 || race == 0x11d) && read<float>(record, CLOCK) == 0.0f)
+        if ((race == 0x119 || race == 0x11d) && firstVisit)
             area(world, *source, race == 0x11d);
         const float clock = read<float>(record, CLOCK) + milliseconds;
         write(record, CLOCK, clock);

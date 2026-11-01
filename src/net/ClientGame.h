@@ -8,8 +8,9 @@
 //   receive()             the host's packets: creatures made, changed and removed (3, 6), the
 //                         player's id (4), the clock (8, a new day running the day change), chat;
 //                         the world updates (7) are kept for...
-//   consumeWorldUpdates() ...the frame routine's pass over them, in the game's order, before the
-//                         client world's step: blocks, zone states, buffs, aggro, kill credits,
+//   ... the client world steps and advances drawn positions ...
+//   consumeWorldUpdates() ...the frame routine's later pass, in the game's order:
+//                         blocks, zone states, buffs, aggro, kill credits,
 //                         the lists the world's consumers play, damage numbers (a monster's hit
 //                         on the local player is applied here, by its own client), effects;
 //   send()                at the end of the frame: what the local player caused this frame is

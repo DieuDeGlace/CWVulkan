@@ -50,11 +50,19 @@ areas from the dead-area contract. The native-only author separately traced the
 first-burst consumer in section 2.1, without engine implementation access.
 Native outgoing alpha remains unspecified; defined engine storage is not treated
 as native oracle data. The traced draw's style-specific opacity does not establish
-a producer alpha1 or a generic particle rule. Destructive race0x90 and shared
-terrain/scenery mutations remain deferred.
+a producer alpha1 or a generic particle rule. Only destructive race0x90's first
+visit and shared terrain/scenery mutations remain deferred; its nonzero-clock
+lifecycle follows the same independently specified retirement rules.
 Coordinate, state/hit/event, float-order and lifecycle checks use synthetic records and
 asset-free generated terrain fixtures. The runtime still loads the owner's
 content; no captured models, terrain, sounds or game exports enter either package.
+
+The same native-only author separately clarified effect-objects.md sections 2.7.1–2.7.2
+and wrote steam-block-change-lifecycle.md, resolving model-list identity and the
+physical-write/history/received-queue/mesh-request cut points. The implementer used
+only that prose and engine code to move received event consumption after the World
+and drawn-position passes. Broader terrain/restoration behavior was not inferred
+from the limited helper trace.
 
 ## Capture-log cleanup, 2026-10-31
 

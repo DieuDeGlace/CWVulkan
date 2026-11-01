@@ -423,8 +423,10 @@ purpose; the user's real saves are never needed.
    quit; then decode `state` and see whether that zone's record is present with bit 1.
 4. **Health on load.** Health (+0x180) is saved and restored as is; whether a character saved at
    0 health loads dead. Oracle: test character, die, quit during the death screen, reload.
-5. **Who fills the block change list** (zone +0xd8) in Steam play, if anything does. Oracle:
-   ZoneExtractor dump of zone +0xd8/+0xe0 after explosions and other block-breaking abilities.
+5. **Resolved:** the late World-step notice loop and the separate received-notice
+   Game path append to Zone+0xd8. Their physical-write, repeated-history and
+   cache-invalidation distinctions are specified in
+   [steam-block-change-lifecycle.md](steam-block-change-lifecycle.md).
 6. **Star key truncation.** The reader groups star entries by x ÷ 4096 truncated toward zero; if
    the game inserts them with floor division, stars at negative coordinates move to another
    group after a reload. Oracle: dump player data +0x108 before quitting and after reloading a

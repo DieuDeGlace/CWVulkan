@@ -1,6 +1,6 @@
 #pragma once
 // Dead-creature lifecycle and non-terrain areas from steam-world-death-area.md.
-// Race0x90 remains deferred until the shared terrain/scenery mutation helpers are wired.
+// Race0x90 first visits stay deferred until the shared terrain/scenery helpers are wired.
 #include "NativeAI.h"
 #include "NativeUpkeep.h"
 #include <array>

@@ -137,6 +137,17 @@ int deadCreatureTests() {
               "only pending terrain-source first-clock-zero input is preserved");
     }
     {
+        Actor spent(2, 8, 0, 999.75f);
+        put(spent.record.data(), 0x64, int32_t(0x90));
+        Scene scene;
+        scene.actors = {&spent.side};
+        int bursts = 0;
+        scene.world.burst = [&](const auto &) { ++bursts; };
+        check(nativedeath::step(scene.world, 0.25f) == std::vector<int64_t>{2} && bursts == 0 &&
+                  get<float>(spent.record.data(), 0x6c) == 1000,
+              "nonzero destructive-source clock skips first-visit branch and advances to retirement");
+    }
+    {
         Scene scene;
         Actor corpse(2, 2, 0, 1000);
         scene.actors = {&corpse.side};
@@ -163,7 +174,14 @@ int deadCreatureTests() {
             put(record, 0x180, hp);
             put(record, 0x6c, clock);
         }
+        bool made = false;
+        uint8_t *spent = actors.networkCreature(91, made);
+        spent[0x60] = 2;
+        put(spent, 0x64, int32_t(0x90));
+        put(spent, 0x180, 0.0f);
+        put(spent, 0x6c, 1000.0f);
         actors.simulate(terrain, 0);
+        check(actors.record(91) == nullptr, "spent destructive source reaches ordinary retirement without revisiting terrain");
         check(actors.record(90) == nullptr && actors.record(3) == nullptr && actors.record(7) && actors.record(8),
               "facade defers multiple erasures and retains shifted surviving actors");
         actors.simulate(terrain, 0.25);

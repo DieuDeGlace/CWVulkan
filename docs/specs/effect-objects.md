@@ -701,12 +701,107 @@ double); result = acc rounded to float.
 * **0x2a59f0 (world, position):** floor-block coordinates; 0x91160 writes, if the zone exists
   and z lies inside the column's stored range, the block at 0x5514d0 (ff ff ff 00 02 00, water)
   when z < 1, else the block at 0x5514c8 (ff ff ff 00 00 00, empty). Both are set at start-up.
+  This path neither extends the column nor emits a change notice/dirty write; see§2.7.2.
 * **0x2e0710 (world, x0, y0, x1, y1)** (block coordinates): each value below 0 becomes 0; zone
   range = floor(x0/64)…floor(x1/64) × floor(y0/64)…floor(y1/64). For each existing zone, its
-  list of 0x40-byte static entries is walked from last to first; an entry whose byte +0x38 has
+  **ordinary model vector at zone+0x18**, stride0x40, is walked from last to first;
+  an entry whose byte +0x38 has
   bit 1 set, and whose block one unit below its position (floor-block of x, y and z − 65536,
-  read with 0xe9a0) has type 0, is erased (later entries shift down). This drops objects left
-  floating by destroyed blocks.
+  read with 0xe9a0) has type 0, is erased (later entries shift down). This is support-based
+  **model** removal, not the zone's ground-item or interactive-object vector; see§2.7.1.
+
+#### 2.7.1 Resolved support-cleanup list and exact scope
+
+The native owning-vector reads at **0x2e0936–0x2e0964** establish identity:
+begin=**Zone+0x18**, end=**Zone+0x20**, stride=**0x40**. These are precisely
+the ordinary model records independently specified in
+[worldgen-structures.md§4.2](worldgen-structures.md). They are not ground
+items(+0x30), interactive objects(+0x60), or the auxiliary light list(+0x90).
+No model catalog, resource availability or cross-edition ID correspondence
+is required to identify this vector or admit its entries.
+
+The four inputs are signed32 block coordinates. Native instructions
+**0x2e0737–0x2e0755** replace each negative input independently with0,
+before the64-block zone divisions. They do not preserve negative zones or
+reorder reversed bounds. Traverse inclusive resulting zone X ascending
+outside, zone Y ascending inside. Only existing nonnull entries in
+**World+0x460's loaded-zone map** are visited; missing zones are not loaded.
+The original rectangle is not tested against individual model positions:
+the entire model vector of each selected zone is eligible. Converted zone
+bounds, rather than original argument ordering, determine emptiness.
+For example, X arguments63 and1 still select zone X0; four negative
+arguments become all0 and still select zone(0,0), if loaded.
+
+For a nonempty vector, start at its final physical record and decrement
+the physical index after every visit. Test only **record+0x38 low-byte
+bit0x02**, at **0x2e0964**. The flags field is the model's signed32+0x38;
+the test reads its low byte. Type+0, size+0x20, yaw+0x24, tint, cached light,
+and the presence/absence of a model resource supply no additional gate.
+
+The support sample is the record's **global signed64 fixed X/Y/Z at
++0x08/+0x10/+0x18**, with **65536 subtracted from Z in low64 arithmetic
+before conversion**. There is no owner-zone origin addition, pivot,
+rotation or size-derived support point. Convert each fixed coordinate to
+signed32 blocks by the verified narrowing/negative-reconstruction rule in
+[steam-world-traps.md§2](steam-world-traps.md#2-verified-coordinate-conversion-including-out-of-range-negative-inputs),
+without its final cell/zone division. Query **0xe9a0 at0x2e0a35**.
+
+Erase only when the returned **type byte4 equals0**, checked at
+**0x2e0a3a**. Water(type2) or any other nonzero type retains the model;
+neither sight/collision flags nor the block's destruction flag replace
+this type test. The normal missing-zone solid default also retains it.
+
+Erasure shifts all later surviving model records down one slot, preserving
+their relative order, then decreases **Zone+0x20 by0x40 at0x2e0ab3**.
+The field assignments copy type+0 and the individual fields+0x08 through+0x38;
+padding+0x04..+0x07 and+0x3c..+0x3f is not copied. Capacity/Zone+0x28 is
+not reduced and the abandoned last slot is not cleared. Reverse visitation
+means already examined later records are not re-examined after they shift.
+An empty vector performs no support query.
+
+This helper itself emits no model-removal packet, block-change record,
+sound or particle; it writes no dirty/readiness flag and does not rebuild
+cached mesh bounds or the auxiliary +0x90 light/+0xa8 sound vectors.
+When another stage rebuilds those consumers is not established by this
+helper trace. It has no internal authority/HP/player admission or RNG draw.
+
+#### 2.7.2 In-column block removal and notification ownership
+
+**0x2a59f0** converts raw signed64 fixed XYZ by the same signed32 block
+narrowing/negative-reconstruction rule above, then reaches **0x91160**
+at **0x2a5a8d or0x2a5aab**. There is no final16-block cell conversion and
+no below-zero X/Y clamp in this path. The below-zero clamp belongs only
+to the separate0x2e0710 rectangle helper.
+
+**0x91160 calls0x935e0 at0x91169** to resolve the existing loaded zone and
+column for block X/Y. The lookup verifies the zone's coordinate extents;
+missing/null zones, XY outside those extents, or an empty stored column
+yield no write. For a resolved column, base Z is signed32 **Column+0x3c**,
+and stored count comes from **(end pointer at+0x48 minus begin pointer
+at+0x40)/6**, narrowed to signed32 for the range check. Require
+**base<=block Z<base+count**. It does not admit implicit air above the
+stored end or implicit solid below the base.
+
+Only then choose the global six-byte water value at0x5514d0 for block Z<1,
+otherwise the empty value at0x5514c8, and call the column assignment helper
+**0xa36e0 at0x911bd/0x911d3**, using relative index block Z−base.
+Although0xa36e0 can resize for other callers, the preceding range guard
+prevents either resize branch here. This reached path overwrites exactly
+six existing bytes. It does not change base, stored count/capacity, trim
+trailing air, or recompute column/zone height or lighting caches.
+
+Neither0x2a59f0,0x91160 nor this reached0xa36e0 assignment appends a
+**World+0xc0 block-change record**, updates the stored-change archive, or
+sets a zone/neighbor mesh/light dirty flag. Those operations must not be
+invented as hidden helper side effects. A known producer explicitly does
+its own notification: the race0x90 area calls0x2a59f0 at0x2a4afe, then
+appends its separate before/after/day record at **0x2a4c14**, as specified
+in [steam-world-death-area.md§3](steam-world-death-area.md).
+That producer later calls0x2e0710 once for its affected rectangle.
+This resolves helper ownership; a complete downstream mesh/light dirty
+propagation audit of every caller/notice consumer remains outside this
+bounded trace. No general guarantee that every direct helper caller
+performs notification or cache invalidation is asserted.
 
 ### 2.8 Terrain height 0x35ea0 (world, block x, block y, flag)
 
@@ -1001,8 +1096,10 @@ sub-step; a mismatch only in a status-area sound id points at the stale id of §
    step, hit type 5 behaves like any non-zero hit type (§1.7).
 7. **Block flags.** Byte 5 bit 0 ("destroyed by effects") and bit 6 ("blocks sight rays") are
    named from their use only.
-8. **0x2e0710's entries** (0x40-byte static entries with flag bit 1 at +0x38) are not identified
-   (probably loose objects or ground items); the routine is summarised.
+8. **Resolved:** 0x2e0710 uses the ordinary model vector at Zone+0x18,
+   not loose items or interactive objects. Exact support/erasure behavior,
+   negative-argument clamping and mutation/notification ownership are now
+   specified in§2.7.1–§2.7.2. Downstream cache invalidation remains explicitly bounded there.
 9. **Remote asymmetry.** The contact hit skips other players' effects on every world, but the
    area pass only stops for them on a non-remote world; on a remote client another player's
    burst damages creatures locally. This follows the code; whether the recordings contain such

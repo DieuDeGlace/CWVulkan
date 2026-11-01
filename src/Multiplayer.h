@@ -12,8 +12,9 @@
 //
 //   session.beginFrame(now);    // the host's tick (about every 32 ms, unless the player is a guest
 //                               // elsewhere), then what the client's host sent
-//   session.consume();          // the world updates, before the client world's step
-//   ... the client world steps, the player plays ...
+//   ... the client world steps and smooths its drawn positions ...
+//   session.consume();          // queued world updates, after that world/drawn-position pass
+//   ... the player plays ...
 //   session.endFrame(now);      // what the player caused, and the client's packets
 //
 // How players reach each other:

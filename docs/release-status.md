@@ -10,6 +10,31 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Received packet7 world events now remain queued while the client world advances
+  and smooths drawn positions, then are consumed before player actions. Creature
+  and clock reception still precedes that World pass. This corrects the old early
+  application of blocks, buffs, hits and effects against the independently verified
+  callsite order; the session/client API comments now state the same cut points.
+  All five targets build without warnings and the full CPU/owner-data suite passes.
+  A no-save loopback combat run exits0 and captures a frame; the character database
+  hash stays unchanged. Its blue-lit scene and missing owner hair remain unaccepted.
+  Original-game peer and wider gameplay acceptance remain separate open checks.
+
+- Independent terrain contracts now identify ordinary-model support cleanup,
+  in-column physical removal, authority/received history appends and the later
+  asynchronous mesh request. The [block lifecycle contract](specs/steam-block-change-lifecycle.md)
+  records received empty-to-water handling and retained-notice history duplication;
+  these facts are not a claim that all terrain/cache wiring is implemented. Full
+  saved-history setter behavior, auxiliary-list membership refresh and exact mesh
+  publication latency remain outside that bounded trace.
+
+- Destructive-source deferral now applies only to its first-clock-zero terrain
+  branch. A nonzero-clock race0x90 corpse advances and retires normally without
+  repeating that branch. New pure and vector-backed facade regressions reproduced
+  the previous retained-corpse failure before the correction. All five targets
+  build without warnings; focused and full CPU/owner-data suites pass afterward.
+  The first explosion's terrain/scenery implementation remains open.
+
 - Non-terrain dead-source areas (races 0x119/0x11d) now execute before their
   death-clock advance. They visit the live registration list with the specified
   double-horizontal/float-vertical bounds, small-distance push, critical draw and
@@ -24,7 +49,7 @@ older successful runs; none of these bounded changes establishes complete parity
   zero-time repeat, callback births, same-pass deaths and actual facade damage/heal.
   All five targets build without warnings; focused and full CPU/owner-data checks
   pass. A no-save combat run exits0 with the character database unchanged and a
-  captured frame. The destructive 0x90 source, shared terrain/scenery mutations,
+  captured frame. The destructive 0x90 first visit, shared terrain/scenery mutations,
   local burst expansion/rendering and broader visual/CRT parity remain open.
 
 - Ordinary nonplayer corpse lifecycle now runs after the object pass. Authority
