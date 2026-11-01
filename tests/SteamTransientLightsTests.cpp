@@ -83,6 +83,16 @@ int steamTransientLightsTests() {
     mirror.showDamageNumber(number);
     check(observed.size() == 2 && shown == 2, "headless worlds need no visual observer");
 
+    bool fresh = false;
+    observedWorld.networkCreature(42, fresh);
+    mirror.deathSeen(42);
+    mirror.deathSeen(42);
+    const auto firstVisual = observedWorld.takeDeathVisuals();
+    check(firstVisual.size() == 1 && observedWorld.takeDeathVisuals().empty() && observedWorld.persistentDeadSet().empty(),
+          "actual mirror death candidates deduplicate for one frame without permanent death policy");
+    mirror.deathSeen(42);
+    check(observedWorld.takeDeathVisuals().size() == 1, "a later frame may collect the same corpse again");
+
     auto deathRecord = target;
     int32_t race = 0x90;
     const float body[3] = {2,6,4};
@@ -108,7 +118,13 @@ int steamTransientLightsTests() {
     Point secondPosition = position;
     secondPosition[0] += 123;
     std::memcpy(secondDeath.data() + 0xb10, secondPosition.data(), sizeof secondPosition);
-    deathFlashes.deaths({{20,deathRecord.data()}, {10,secondDeath.data()}, {20,deathRecord.data()}}, deathVisible);
+    std::vector<uintptr_t> bodyOrder;
+    deathFlashes.deaths(
+        {{20, deathRecord.data()}, {10, secondDeath.data()}, {20, deathRecord.data()}}, deathVisible, [&](const DeathCandidate &candidate) {
+            check(deathFlashes.values().size() == bodyOrder.size(), "body producer precedes that candidate's explicit light");
+            bodyOrder.push_back(candidate.identity);
+        });
+    check(bodyOrder == std::vector<uintptr_t>{10, 20}, "body callbacks share prepared admission, deduplication and unsigned source order");
     check(deathFlashes.values().size() == 2, "death identities deduplicate before unsigned pointer-order traversal");
     if (deathFlashes.values().size() == 2) {
         check(deathFlashes.values()[0].position == secondPosition && deathFlashes.values()[1].position == position &&
@@ -121,8 +137,9 @@ int steamTransientLightsTests() {
     check(deathFlashes.values().empty(), "death flashes expire strictly after800ms");
     race = 0x91;
     std::memcpy(deathRecord.data() + 0x64, &race, 4);
-    deathFlashes.deaths({{1,deathRecord.data()}}, deathVisible);
-    check(deathFlashes.values().empty(), "other races produce no explicit death light");
+    int otherBody = 0;
+    deathFlashes.deaths({{1, deathRecord.data()}}, deathVisible, [&](const auto &) { ++otherBody; });
+    check(deathFlashes.values().empty() && otherBody == 1, "ordinary body production does not require the race90 light branch");
 
     sources.advance(16.9);
     sources.advance(.9);

@@ -73,6 +73,8 @@ class World {
     // Renderer mesh of a loaded model (centred on x/y, base at z = 0) and its voxel size.
     uint32_t modelMesh(int model) const { return model >= 0 && model < (int)models.size() ? models[model].mesh : 0; }
     glm::vec3 modelSize(int model) const { return model >= 0 && model < (int)models.size() ? models[model].size : glm::vec3(0); }
+    // Raw owner data for body effects; this does not require a ready GPU mesh.
+    bool readModelVolume(const std::string &, CubModel &, steamvoxel::CubEncoding &) const;
     // Exposed voxel origins for native death bursts, in mesh units (centred on
     // x/y, base at z = 0), with colours as drawn. Read from the .cub on first use.
     struct Voxel {
@@ -153,7 +155,6 @@ class World {
     uint32_t beamMesh = 0;
     std::vector<Model> models;
     std::unique_ptr<proceduralitem::OwnerCache> proceduralModels;
-    bool readModelVolume(const std::string &, CubModel &, steamvoxel::CubEncoding &) const;
     std::unordered_map<std::string, int> modelIndex;
     std::map<Key, Zone> zones;
     std::map<Key, std::future<Generated>> jobs;

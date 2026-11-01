@@ -131,14 +131,17 @@ int steamShaderTests() {
         item.flags = GLOW;
         item.flash = 0;
         item.castShadow = false;
-        for (int test = 0; test < 3; ++test) {
+        for (int test = 0; test < 4; ++test) {
             item.mesh = test == 1 ? backMesh : originalMesh;
-            item.material = test == 2 ? glm::vec4(0) : glm::vec4(1, 1, 1, 0);
+            item.material = test == 2 ? glm::vec4(0) : test == 3 ? glm::vec4(1) : glm::vec4(1, 1, 1, 0);
+            item.flags = test == 3 ? 0 : GLOW;
             const auto capture = root / ("particle-" + std::to_string(test) + ".png");
             renderer.capture(capture.string());
             renderer.frame(camera, lighting, {0, 0, 0}, 0, {item}, {});
             const auto pixel = centre(capture);
-            const std::array<int, 3> expected = test == 2 ? std::array<int, 3>{0, 0, 0} : std::array<int, 3>{82, 214, 60};
+            const std::array<int, 3> expected = test == 2   ? std::array<int, 3>{0, 0, 0}
+                                                : test == 3 ? std::array<int, 3>{7, 52, 5}
+                                                            : std::array<int, 3>{82, 214, 60};
             bool matches = pixel.has_value();
             if (pixel)
                 for (int c = 0; c < 3; ++c)

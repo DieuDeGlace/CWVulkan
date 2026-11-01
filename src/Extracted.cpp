@@ -415,8 +415,8 @@ int ExtractedWorld::gameBlockLight(int32_t x, int32_t y, int32_t z) {
         block = gameBlock(x, y, z);
     }
     if (block[4] == 0 || block[4] == 2)
-        return std::max<int>(block[0] < 5 ? 5 : block[0], block[5]);
-    return block[5];
+        return std::max<int>(block[0] < 5 ? 5 : block[0], block[3]);
+    return block[3];
 }
 bool ExtractedWorld::removeGameBlock(int32_t x, int32_t y, int32_t z) {
     if (!blockEdits()) {

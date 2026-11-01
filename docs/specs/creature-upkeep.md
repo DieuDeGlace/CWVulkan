@@ -598,8 +598,10 @@ equal.
 * **Light (0xdab20 → 0xda830, channel 0):** if C's zone is missing or null, 255. Otherwise
   read the block; while its type is 10, 12 or 19, move one block up (+1 in z) and read
   again (a missing zone there gives the default block). Then if the type is 0 or 2: let *c*
-  = byte 0 of the block and *e* = byte 5; the light is max(5, *e*) if *c* < 5, else
-  max(*c*, *e*). For any other type the light is byte 5.
+  = byte 0 of the block and *e* = **byte 3**; the light is max(5, *e*) if *c* < 5, else
+  max(*c*, *e*). For any other type the light is **byte 3**. This corrects the older
+  byte5 identification: byte5 is flags. Stored-red publication and effective-column
+  defaults are specified in [block-light publication](steam-block-light-publication.md).
 
 ### 4.8 Mount offsets (0x65040), by the carrier's race
 (x, y, z) is (0, 0, *z*) with *z* from this table, except race 0xd2: (0, −0.3, −0.3).

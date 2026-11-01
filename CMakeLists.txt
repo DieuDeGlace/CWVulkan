@@ -406,3 +406,5 @@ target_sources(engine PRIVATE src/NpcSpeech.cpp)
 target_sources(EngineTests PRIVATE tests/NpcSpeechTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/ParticleTests.cpp)
+
+target_sources(EngineTests PRIVATE tests/BodyParticleTests.cpp)

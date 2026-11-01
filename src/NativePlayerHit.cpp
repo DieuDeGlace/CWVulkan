@@ -69,6 +69,7 @@ Result apply(nativeai::Creature &player, const nativehit::Number &number) {
             write(record, STUN, std::max(read<float>(record, STUN), (float)stun));
         float health = read<float>(record, HEALTH) - damage;
         if (health < 0) {
+            result.deathEffect = true;
             health = 0;
             soundrules::Request sound;
             std::memcpy(sound.position, record + worldgen::creature::POSITION, sizeof sound.position);

@@ -7,6 +7,7 @@
 
 namespace nativeplayerhit {
 struct Result {
+    bool deathEffect = false; // strictly negative ordinary subtraction, not exact zero
     std::vector<std::array<uint8_t, 0x30>> buffNotices;
     std::vector<soundrules::RequestRecord> sounds;
 };

@@ -355,16 +355,17 @@ struct Sprites {
 };
 
 class Poser {
-public:
-    Poser(uint8_t *creature, const Call &call, const Models &models, std::vector<Draw> *draws)
-        : c(creature), a(creature + ANIM), call(call), models(models), draws(draws) {}
+  public:
+    Poser(uint8_t *creature, const Call &call, const Models &models, std::vector<Draw> *draws, PreparedSprites *prepared)
+        : c(creature), a(creature + ANIM), call(call), models(models), draws(draws), prepared(prepared) {}
     void run();
 
-private:
+  private:
     uint8_t *c, *a; // the creature record and its animation state
     const Call &call;
     const Models &models;
     std::vector<Draw> *draws;
+    PreparedSprites *prepared;
 
     // The rules' values (creature-pose.md 1.2).
     int T = 0, d1 = 0, d2 = 0, d3 = 0, U = 0;
@@ -1733,16 +1734,21 @@ void Poser::run() {
     drawShield();
     moveTrails();
     handsAndFeet();
+    if (prepared)
+        *prepared = {sprite.head, sprite.hair, sprite.chest,       sprite.armPart,    sprite.hands,     sprite.wings,
+                     sprite.tail, sprite.feet, sprite.rightWeapon, sprite.leftWeapon, sprite.shoulders, sprite.neck};
 }
 
 #include "NativePoseTables.inc"
 
 } // namespace
 
-float ease(double dt, float rate) { return gamemath::blendFactor(dt, rate); }
+float ease(double dt, float rate) {
+    return gamemath::blendFactor(dt, rate);
+}
 
-void pose(uint8_t *creature, const Call &call, const Models &models, std::vector<Draw> *draws) {
-    Poser(creature, call, models, draws).run();
+void pose(uint8_t *creature, const Call &call, const Models &models, std::vector<Draw> *draws, PreparedSprites *prepared) {
+    Poser(creature, call, models, draws, prepared).run();
 }
 
 } // namespace nativepose

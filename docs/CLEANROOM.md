@@ -64,6 +64,20 @@ only that prose and engine code to move received event consumption after the Wor
 and drawn-position passes. Broader terrain/restoration behavior was not inferred
 from the limited helper trace.
 
+## Shared body particles and death candidates, 2026-11-01
+
+The implementer read steam-body-voxel-particles.md, the linked death-candidate and
+local-hit contracts, creature-pose.md's prepared bindings/math and engine code only.
+The independent native-only author wrote the new body contract without implementation
+or capture access. Cached bindings, frame-local candidate delivery and the shared
+body/burst producer/update/draw now use that bounded prose. No native code, original
+instructions or third-party reconstruction was read or copied. Raw source CUBs and
+the drawn cube remain owner data; asset-free RGB arrays/triangles and existing relative
+numeric samples provide tests. The same author corrected channel0's auxiliary source
+to byte3 and wrote steam-block-light-publication.md, plus the remaining style-consumer
+supplement. Publication and other-style integration follow separately; no native
+concurrency or CRT seed equality is inferred from these behavioral contracts.
+
 ## Ordinary burst particle consumer, 2026-11-01
 
 NativeParticles, the main-loop adapter and the dedicated WORLD particle pass were

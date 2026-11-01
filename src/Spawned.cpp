@@ -121,7 +121,7 @@ void SpawnedCreatures::releaseDeaths(const std::vector<int64_t> &ids) {
         worldDead.erase(id);
         dead.erase(id);
         seenAlive.erase(id);
-        toBurst.erase(id);
+
         lastAbility.erase(id);
         trips.erase(id);
         // A resident is rebuilt from its original spawn point on the next update.
@@ -813,7 +813,7 @@ std::vector<SpawnedCreatures::Death> SpawnedCreatures::takeDeaths(const Extracte
             dead.insert(id);
             worldDead.insert(id); // (the world's: its zone does not make it again)
             rememberEnemyDeath(id, zone, cr.record[worldgen::creature::HOSTILITY]);
-            toBurst.insert(id);
+
             out.push_back({id, get<int64_t>(cr.record, 0x9e0),
                            ew.toLocal(reinterpret_cast<const int64_t *>(&cr.record[worldgen::creature::POSITION])),
                            get<int32_t>(cr.record, worldgen::creature::RACE), get<int32_t>(cr.record, worldgen::creature::LEVEL), cr.record,
@@ -2178,8 +2178,7 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
                 return;
             // A dead creature is not drawn; as it dies its parts burst into voxels (main.cpp).
             const int64_t id = get<int64_t>(r, worldgen::creature::ID);
-            const bool bursting = !isPlayer && toBurst.erase(id) > 0;
-            if (!bursting && !(get<float>(r, worldgen::creature::HEALTH) > 0.0f))
+            if (!(get<float>(r, worldgen::creature::HEALTH) > 0.0f))
                 return;
             // Drawn position/orientation were prepared before input for the whole World.
             // Visibility and mesh drawing do not rerun that interpolation phase.
@@ -2203,7 +2202,10 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             // posing a creature it draws (creature-pose.md §12); one culled above keeps them.
             if (get<float>(r, worldgen::creature::HEALTH) > 0.0f)
                 nativepose::setPoseState(r.data());
-            nativepose::pose(r.data(), call, lookup, &draws);
+            nativepose::PreparedSprites prepared{};
+            nativepose::pose(r.data(), call, lookup, &draws, &prepared);
+            for (size_t slot = 0; slot < prepared.size(); ++slot)
+                cr.preparedModels[slot] = prepared[slot] ? int(reinterpret_cast<intptr_t>(prepared[slot]->user)) : -1;
             // A weapon's effect (0xeec50) stands for the spirit cubes set into the weapon
             // (creature-pose-items.md §9.1): plain cube draws, none for a weapon without spirits.
             const size_t posed = draws.size();
@@ -2228,10 +2230,7 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
                 const glm::vec3 size = world.modelSize(m);
                 glm::mat4 place = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
                                   glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
-                if (bursting)
-                    bursts.push_back({m, place});
-                else
-                    out.push_back({mesh, place, 0, 0, true});
+                out.push_back({mesh, place, 0, 0, true});
                 playerPartsDrawn += isPlayer;
             }
             drawn += !isPlayer;
@@ -2287,7 +2286,7 @@ void SpawnedCreatures::receivedUpdate(int64_t id, bool fresh) {
         fresh = true;
         dead.erase(id);
         worldDead.erase(id);
-        toBurst.erase(id);
+
         seenAlive.insert(id);
         cr->side.buffs.clear();
         cr->sparks = {};
@@ -2467,6 +2466,8 @@ void SpawnedCreatures::hitPlayer(const std::array<uint8_t, 0x48> &number) {
     }
     player.side.record = player.record.data();
     const auto applied = nativeplayerhit::apply(player.side, number);
+    if (applied.deathEffect)
+        noticeDeathVisual(localId);
     worldEvents.buffs.insert(worldEvents.buffs.end(), applied.buffNotices.begin(), applied.buffNotices.end());
     worldEvents.sounds.insert(worldEvents.sounds.end(), applied.sounds.begin(), applied.sounds.end());
     sounds.insert(sounds.end(), applied.sounds.begin(), applied.sounds.end());
@@ -2711,4 +2712,36 @@ int SpawnedCreatures::drawWorldRandom() {
     randState ^= randState >> 17;
     randState ^= randState << 5;
     return int(randState & 0x7fff);
+}
+
+void SpawnedCreatures::noticeDeathVisual(int64_t id) {
+    if (const Creature *creature = find(id))
+        visualDeaths.emplace(id, creature->registration);
+}
+
+std::vector<SpawnedCreatures::DeathVisual> SpawnedCreatures::takeDeathVisuals() {
+    std::vector<DeathVisual> result;
+    // Cached model slots and record matrices are independent of draw-list order.
+    constexpr int slots[]{0, 1, 2, 4, 4, 3, 3, 7, 7, 8};
+    constexpr size_t matrices[]{0xe30, 0xe30, 0xdf0, 0xfb0, 0xff0, 0xeb0, 0xef0, 0x1130, 0x1170, 0xf30};
+    for (const auto &[id, registration] : std::exchange(visualDeaths, {})) {
+        const Creature *creature = find(id);
+        if (!creature || creature->registration != registration)
+            continue;
+        auto &visual = result.emplace_back();
+        visual.identity = reinterpret_cast<uintptr_t>(creature);
+        visual.record.assign(creature->record.begin(), creature->record.end());
+        for (size_t part = 0; part < visual.parts.size(); ++part) {
+            auto &prepared = visual.parts[part];
+            prepared.catalogId = creature->preparedModels[slots[part]];
+            std::memcpy(&prepared.transform[0][0], creature->record.data() + matrices[part], sizeof(glm::mat4));
+            if (part == 1) {
+                if (get<uint32_t>(creature->record, 0x80) & 0x400)
+                    prepared.catalogId = -1;
+                for (int channel = 0; channel < 3; ++channel)
+                    prepared.tint[channel] = float(creature->record[0x7a + channel]) / 255.0f;
+            }
+        }
+    }
+    return result;
 }

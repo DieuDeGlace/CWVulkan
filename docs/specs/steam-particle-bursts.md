@@ -370,8 +370,10 @@ and the scene render target/depth remain the ordinary inherited inputs.
 This closes the finite ordinary burst-generated1/2/5 slice with valid
 catalog/resource data and representable motion/step counts. It does not
 specify independent producers of other live-particle records, recover from
-nonfinite data/overflow or a missing resource, or make styles0/3/4/6/7/8
-complete. Their gravity, collision, geometry, material and lifetime branches
-must not be inferred from1/2/5. Catalog0xa46 is now identified as cube.cub
+nonfinite data/overflow or a missing resource. The remaining0/3/4/6/7/8
+consumer contracts are now independently specified in
+[particle style consumers](steam-particle-style-consumers.md), including
+style7's separate note.cub resource. Their branches must not be inferred
+from1/2/5. Catalog0xa46 is identified as cube.cub
 in§7.1; its actual dimensions/RGB remain owner data, and the outer asset-root/
 container configuration remains outside this bounded particle contract.

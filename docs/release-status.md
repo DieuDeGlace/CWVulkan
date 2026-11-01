@@ -10,6 +10,32 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Native body fragments now share the ordinary particle list, update, owner cube
+  draw and1000-entry tail cap. Prepared sprite IDs and the exact ten cached part
+  matrices are retained by value; death visuals no longer recompute a corpse pose
+  or fragment an arbitrary draw list. Raw owner CUB data is read without requiring a
+  ready source GPU mesh, and policy0 surface/marker checks precede the X/Y/Z sampling.
+  Producer draws, quantized homogeneous positions/center velocities, tint, negative
+  delay, retained reflected basis and randomized temporary/head insertion follow the
+  independent body contract. Body and burst cap/order, the existing relative falling
+  sample, cached pose slots and matrix/header behavior have focused regressions.
+  Received death notifications now collect frame-local actor-instance candidates;
+  strict-negative local-player damage collects one too, while exact-zero subtraction
+  does not. Deduplication, prepared/retained-renderer admission and unsigned identity
+  order are shared by body production and its following race90 light. Births run
+  after received events and before control/revival/current-frame pose preparation.
+  Progression/persistent deaths remain separate; later frame notifications may
+  collect the same corpse again. Recorded-only DeathEffects remains compatibility code.
+  The independent light query correction now reads auxiliary byte3, not flags byte5;
+  tests deliberately distinguish those bytes. Stored-red publication/upkeep binding
+  is the next integration from its newly written contract.
+  All five targets build without warnings. Focused particle/body and full CPU/owner
+  suites pass, along with46 shader,2 camera,20 GUI,6 map and shared-water/Alpha-scenery
+  image checks. A final main-phase build and no-save combat run exit0 with a viewed
+  frame and unchanged character database. This is stability evidence; native body
+  pixel/CRT acceptance and the blue scene/missing owner hair remain open. Remaining
+  ordinary-style consumer prose is now available; its implementation follows.
+
 - Particle admission now uses native renderer+0x49c, the shorter ordinary-model
   radius, rather than the wider adaptive+0x4a4 scene/fog radius. A Vulkan regression
   reproduced the prior erroneous admission between those radii; both admitted and

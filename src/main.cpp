@@ -3767,6 +3767,41 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
             if (session.started())
                 session.consume();
+            // Consume death visuals against retained prepared parts/renderer state,
+            // before local controls, revival and this frame's actor preparation.
+            if (!serverMode) {
+                const auto visualDeaths = spawned.takeDeathVisuals();
+                std::vector<steampoints::DeathCandidate> deathLights;
+                std::map<uintptr_t, const SpawnedCreatures::DeathVisual *> bodySources;
+                std::map<std::string, CubModel> bodyVolumes;
+                for (const auto &visual : visualDeaths) {
+                    deathLights.push_back({visual.identity, visual.record.data()});
+                    bodySources.emplace(visual.identity, &visual);
+                }
+                transientLights.deaths(
+                    std::move(deathLights),
+                    [&](const auto &position, float radius, float range) { return renderer.steamSphereVisible(position, radius, range); },
+                    [&](const steampoints::DeathCandidate &candidate) {
+                        for (const auto &part : bodySources.at(candidate.identity)->parts) {
+                            const std::string name = spawned.spriteName(part.catalogId);
+                            if (name.empty())
+                                continue;
+                            auto [found, added] = bodyVolumes.try_emplace(name);
+                            if (added) {
+                                steamvoxel::CubEncoding encoding;
+                                world.readModelVolume(name, found->second, encoding);
+                            }
+                            const CubModel &volume = found->second;
+                            nativeparticles::BodyPart source;
+                            source.dimensions = {volume.sx, volume.sy, volume.sz};
+                            source.rgb = volume.rgb;
+                            source.transform = part.transform;
+                            source.tint = part.tint;
+                            source.gameOffset = {-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
+                            burstParticles.prependBody(source, [&] { return spawned.drawWorldRandom(); });
+                        }
+                    });
+            }
         }
         useprompt::Scene nativeUseScene;
         useprompt::CreatureTargets nativeCreatureTargets;
@@ -6518,12 +6553,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 logLine("Opened a chest: " + itemName(got));
             }
             const auto deaths = spawned.takeDeaths(extractedWorld);
-            std::vector<steampoints::DeathCandidate> deathLights;
-            for (const auto &d : deaths)
-                if (d.record.size() > 0x1500) deathLights.push_back({d.identity, d.record.data()});
-            transientLights.deaths(std::move(deathLights), [&](const auto &position, float radius, float range) {
-                return renderer.steamSphereVisible(position, radius, range);
-            });
             for (const SpawnedCreatures::Death &d : deaths) {
                 events.death(d.id);
                 if (std::find(saveGame.killed.begin(), saveGame.killed.end(), d.id) == saveGame.killed.end())
@@ -6593,17 +6622,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     logLine("Events: " + reply);
                 }
             }
-            for (const SpawnedCreatures::Part &part : spawned.takeBursts()) {
-                const glm::mat4 &m = part.place;
-                const float voxel = glm::length(glm::vec3(m[0]));
-                if (voxel <= 0)
-                    continue;
-                std::vector<DeathEffects::Piece> pieces;
-                for (auto &v : world.voxels(part.model))
-                    pieces.push_back({glm::vec3(m * glm::vec4(v.at, 1)), v.color, voxel, glm::mat3(m) / voxel});
-                const glm::vec3 size = world.modelSize(part.model);
-                deathFx.burst(pieces, glm::vec3(m * glm::vec4(size.x * .5f, size.y * .5f, size.z * .5f, 1)));
-            }
             // The end of the frame: what this player caused goes to its host (with its record,
             // at most every 32 ms), and the client world's lists start empty again.
             if (!serverMode)
@@ -6661,7 +6679,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 const glm::ivec3 dimensions(world.modelSize(burstParticleModel));
                 const std::array<int64_t, 2> offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
                 for (const auto &particle : burstParticles.states()) {
-                    if (!nativeparticles::supportedStyle(particle.style))
+                    if (!nativeparticles::supportedParticle(particle))
                         continue;
                     DrawItem draw;
                     draw.mesh = mesh;

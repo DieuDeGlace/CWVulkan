@@ -185,8 +185,10 @@ individual feature documents.
   common state clearing, loaded-zone identity order, per-object state/hit/sound
   ordering and native coordinate boundaries. Stable identities persist across
   block-storage copies; synthetic facade and full CPU checks pass. The separate
-  [death-area/retirement pass](specs/steam-world-death-area.md) is specified but
-  not integrated. This does not close the other prelude and lifecycle work above.
+  [death-area/retirement pass](specs/steam-world-death-area.md) now integrates
+  ordinary corpse retirement, owned-kind6 revival, water/blast areas and destructive
+  terrain/model work. Bounded facade/lifecycle checks pass; broader prelude and
+  native comparisons above remain open.
   The specified resident kind9 request/producer and independent live/output lifetimes
   now have native numeric and lifecycle checks; its broader rendering remains open.
 - [ ] Finish controller GUI coverage and aim tracking. Navigation ranking, cursor
@@ -279,8 +281,14 @@ individual feature documents.
   full-header matrices and opaque/no-cull material rendering have CPU/GPU checks.
   Particle admission uses native+0x49c; distinct shorter/wider-range GPU fixtures
   reproduced and corrected an initial+0x4a4 binding mistake.
-  Body fragments still use a separate simulation/cap, other styles lack motion/draw
-  rules, and full native CRT/block-light publication remain open. Other object
+  Native body fragments now use the same live cap/update and owner cube pass;
+  cached ten-part bindings, surface-policy sampling, producer draw/deque ordering,
+  negative age, retained matrices and mixed body/burst capacity have regressions.
+  Frame-local received/strict-negative player death candidates replace the old
+  persistent-death-driven fragment trigger; birth runs before current-frame pose.
+  The corrected stored-block accessor reads auxiliary byte3, independently of flags.
+  Other style consumers are specified but not implemented; full native CRT,
+  completed stored-red publication/upkeep binding and visual acceptance remain open. Other object
   families and listening comparisons also remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
   their actual runtime wiring and broader listening checks still remain.

@@ -4,7 +4,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
-#include <glm/gtc/matrix_transform.hpp>
+#include <deque>
 
 namespace nativeparticles {
 namespace {
@@ -19,10 +19,44 @@ void turn(Particle &p, float seconds) {
         p.angles[axis] += delta;
     }
 }
+glm::mat4 product(const glm::mat4 &left, const glm::mat4 &right) {
+    glm::mat4 result;
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row) {
+            const float xy = left[0][row] * right[column][0] + left[1][row] * right[column][1];
+            const float xyz = xy + left[2][row] * right[column][2];
+            result[column][row] = xyz + left[3][row] * right[column][3];
+        }
+    return result;
+}
+glm::mat4 rotated(const glm::mat4 &source, float degrees, glm::vec3 axis) {
+    constexpr float radians = 0.01745329238474369f;
+    const float angle = degrees * radians, c = std::cos(angle), s = std::sin(angle), k = 1 - c;
+    glm::mat4 rotation(1);
+    rotation[0] = {(axis.x * axis.x) * k + c, (axis.x * axis.y) * k + s * axis.z, (axis.x * axis.z) * k - s * axis.y, 0};
+    rotation[1] = {(axis.x * axis.y) * k - s * axis.z, (axis.y * axis.y) * k + c, (axis.y * axis.z) * k + s * axis.x, 0};
+    rotation[2] = {(axis.x * axis.z) * k + s * axis.y, (axis.y * axis.z) * k - s * axis.x, (axis.z * axis.z) * k + c, 0};
+    return product(source, rotation); // positive unit axes, even for angle0
+}
+std::array<int64_t, 3> fixedPoint(const glm::mat4 &transform, glm::vec3 point) {
+    glm::vec4 projected;
+    for (int row = 0; row < 4; ++row) {
+        const float xy = point.x * transform[0][row] + point.y * transform[1][row];
+        const float xyz = xy + point.z * transform[2][row];
+        projected[row] = xyz + transform[3][row];
+    }
+    const float reciprocal = 1.0f / projected.w;
+    std::array<int64_t, 3> result;
+    for (int axis = 0; axis < 3; ++axis) {
+        const float normalized = projected[axis] * reciprocal;
+        result[axis] = int64_t(normalized * 65536.0f);
+    }
+    return result;
+}
 } // namespace
 
-bool supportedStyle(int32_t style) {
-    return style == 1 || style == 2 || style == 5;
+bool supportedParticle(const Particle &p) {
+    return p.style == 1 || p.style == 2 || p.style == 5 || (p.style == 0 && p.collision);
 }
 
 void System::append(std::span<const Burst> bursts, const Random &random) {
@@ -69,9 +103,77 @@ void System::append(std::span<const Burst> bursts, const Random &random) {
     }
 }
 
+void System::prependBody(const BodyPart &part, const Random &random) {
+    const auto dimensions = part.dimensions;
+    if (dimensions.x <= 0 || dimensions.y <= 0 || dimensions.z <= 0)
+        return;
+    const size_t xy = size_t(dimensions.x) * size_t(dimensions.y);
+    if (xy > part.rgb.size() / 3 || size_t(dimensions.z) > part.rgb.size() / 3 / xy)
+        return; // caller must supply a complete owner allocation
+    const auto occupied = [&](glm::ivec3 at) {
+        if (glm::any(glm::lessThan(at, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(at, dimensions)))
+            return false;
+        const size_t index = 3 * ((size_t(at.z) * dimensions.y + at.y) * dimensions.x + at.x);
+        const uint8_t r = part.rgb[index], g = part.rgb[index + 1], b = part.rgb[index + 2];
+        return (r || g || b) && !(r == 255 && !g && !b) && !(!r && g == 255 && !b) && !(!r && !g && b == 255);
+    };
+    const std::array<glm::ivec3, 6> neighbors{{{-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}}};
+    const auto center = fixedPoint(part.transform, glm::vec3(dimensions) * .5f);
+    const auto draw = [&] { return random ? random() : 0; };
+    std::deque<Particle> temporary;
+    for (int x = 0; x < dimensions.x; ++x)
+        for (int y = 0; y < dimensions.y; ++y)
+            for (int z = 0; z < dimensions.z; ++z) {
+                const glm::ivec3 voxel{x, y, z};
+                if (!occupied(voxel))
+                    continue;
+                bool exposed = false;
+                for (const auto &neighbor : neighbors)
+                    if (!occupied(voxel + neighbor)) {
+                        exposed = true;
+                        break;
+                    }
+                if (!exposed || draw() % 2)
+                    continue;
+                Particle p;
+                p.style = 0;
+                p.age = -(draw() % 1000);
+                const auto point = fixedPoint(part.transform, glm::vec3(voxel));
+                p.position = point;
+                for (int axis = 0; axis < 2; ++axis)
+                    p.position[axis] = gamemath::subtractFixed(point[axis], part.gameOffset[axis]);
+                p.birthPosition = p.position;
+                for (int axis = 0; axis < 3; ++axis) {
+                    const int64_t difference = gamemath::subtractFixed(point[axis], center[axis]);
+                    const int64_t doubled = gamemath::multiplyFixed(difference, 131072) / 65536;
+                    p.velocity[axis] = float(doubled) * (1.0f / 65536.0f);
+                }
+                for (int axis = 2; axis >= 0; --axis) {
+                    const float centered = float(draw()) / 32767.0f - .5f;
+                    p.spin[axis] = centered * 100.0f;
+                }
+                const size_t index = 3 * ((size_t(z) * dimensions.y + y) * dimensions.x + x);
+                for (int channel = 0; channel < 3; ++channel) {
+                    const float color = float(part.rgb[index + channel]) / 255.0f;
+                    p.colour[channel] = color * part.tint[channel];
+                }
+                p.colour.a = part.tint.a * 1.0f;
+                p.extra = part.transform;
+                p.extra[3].x = p.extra[3].y = p.extra[3].z = 0;
+                p.size = 1;
+                p.collision = true;
+                p.lifetime = 5000;
+                if (draw() % 2)
+                    temporary.push_front(p);
+                else
+                    temporary.push_back(p);
+            }
+    live.insert(live.begin(), temporary.rbegin(), temporary.rend());
+}
+
 void System::step(Particle &p, int32_t milliseconds, const BlockType &block) {
     p.age = std::bit_cast<int32_t>(uint32_t(p.age) + uint32_t(milliseconds));
-    if (p.age < 0 || p.frozen || !supportedStyle(p.style))
+    if (p.age < 0 || p.frozen || !supportedParticle(p))
         return;
     const float seconds = float(milliseconds) * 0.001f;
     const float gravity = seconds * 30.0f;
@@ -120,14 +222,13 @@ glm::mat4 matrix(const Particle &p, const std::array<int64_t, 2> &offset, glm::i
     glm::mat4 result(1);
     result[3] = {float(gamemath::addFixed(p.position[0], offset[0])) * (1.0f / 65536.0f),
                  float(gamemath::addFixed(p.position[1], offset[1])) * (1.0f / 65536.0f), float(p.position[2]) * (1.0f / 65536.0f), 1.0f};
-    constexpr float radians = 0.01745329238474369f;
-    result = glm::rotate(result, p.angles.z * radians, glm::vec3(0, 0, 1));
-    result = glm::rotate(result, p.angles.y * radians, glm::vec3(0, 1, 0));
-    result = glm::rotate(result, p.angles.x * radians, glm::vec3(1, 0, 0));
+    result = rotated(result, p.angles.z, {0, 0, 1});
+    result = rotated(result, p.angles.y, {0, 1, 0});
+    result = rotated(result, p.angles.x, {1, 0, 0});
     for (int column = 0; column < 3; ++column)
         result[column] *= p.size;
-    // Burst expansion supplies identity for the extra matrix. Keep full-header
-    // centering separate from the engine mesh's later X/Y centering compensation.
+    result = product(result, p.extra);
+    // Full-header centering precedes the engine mesh's X/Y compensation.
     const glm::vec3 half = glm::vec3(dimensions) * -0.5f;
     for (int row = 0; row < 4; ++row) {
         const float x = result[0][row] * half.x, y = result[1][row] * half.y, z = result[2][row] * half.z;

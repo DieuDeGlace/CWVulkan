@@ -106,13 +106,14 @@ void ordinary() {
     nativeplayerhit::apply(player.side, hit(3, -10000));
     CHECK_HIT(player.value(0x180) == maximum);
     Player exact;
-    CHECK_HIT(nativeplayerhit::apply(exact.side, hit(0, 30)).sounds.empty());
+    const auto exactResult = nativeplayerhit::apply(exact.side, hit(0, 30));
+    CHECK_HIT(exactResult.sounds.empty() && !exactResult.deathEffect);
     CHECK_HIT(exact.value(0x180) == 0);
     nativeplayerhit::apply(exact.side, hit(0, -10));
     CHECK_HIT(exact.value(0x180) == 0); // healing does not revive a dead local player
     Player lethal;
     const auto result = nativeplayerhit::apply(lethal.side, hit(0, 31));
-    CHECK_HIT(lethal.value(0x180) == 0 && result.sounds.size() == 1);
+    CHECK_HIT(lethal.value(0x180) == 0 && result.sounds.size() == 1 && result.deathEffect);
     if (!result.sounds.empty()) {
         const auto sound = soundrules::readRequest(result.sounds[0]);
         CHECK_HIT(sound.number == 0x1b && sound.owner == 7 && sound.pitch == 1);

@@ -145,9 +145,12 @@ emitting creature's id; +0x24 is never written.
 | +0x18 | the world's i32 at +0x08 |
 | +0x1c..+0x1f | not written |
 
-A block is six bytes: red, green, blue, an unused byte, the type (byte 4: 0 empty, 2 water,
+A block is six bytes: red, green, blue, an auxiliary light byte, the type (byte 4: 0 empty, 2 water,
 anything else solid) and a flag byte (byte 5). Byte 5 bit 0 marks a block that effects destroy;
 byte 5 bit 6 marks a block that line-of-sight rays treat as solid.
+
+Byte3 is read by channel0 light accessor0xda830; it is not globally unused.
+See [stored block-light publication](steam-block-light-publication.md).
 
 ### 0.6 Numeric conventions
 

@@ -405,13 +405,19 @@ class SpawnedCreatures {
     // Tames of the local player's pet food since the last call (GroundItems.h): the pet slot is
     // filled already; the old pet goes to the inventory and one pet food leaves it.
     std::vector<grounditems::Tamed> takeTames() { return std::exchange(tames, {}); }
-    // Each dying creature's parts as last drawn (world model and placement), once, for the
-    // burst into voxels; a dead creature is not drawn after.
-    struct Part {
-        int model = -1;
-        glm::mat4 place{1};
+    struct PreparedBodyPart {
+        int catalogId = -1;
+        glm::mat4 transform{1};
+        glm::vec4 tint{1};
     };
-    std::vector<Part> takeBursts() { return std::exchange(bursts, {}); }
+    struct DeathVisual {
+        uintptr_t identity = 0;
+        std::vector<uint8_t> record;
+        std::array<PreparedBodyPart, 10> parts;
+    };
+    // Frame-local hit/death candidates, separate from saved deaths/respawn policy.
+    void noticeDeathVisual(int64_t id);
+    std::vector<DeathVisual> takeDeathVisuals();
     // How many creatures other creatures have killed.
     size_t killed() const { return kills; }
     // For the log: how many times creatures took up a zone object (a seat, a door) and how
@@ -468,6 +474,7 @@ class SpawnedCreatures {
         worldgen::CreatureRecord record;
         nativeai::Creature side;   // what the game keeps beside the record: buffs, group, ...
         nativepose::Sparks sparks; // pose state 0x61's sparks, kept between pose calls
+        std::array<int, 12> preparedModels{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
         uint64_t registration = 0; // world membership, retained across storage moves
     };
     uint64_t nextRegistration = 1;
@@ -571,10 +578,9 @@ class SpawnedCreatures {
     std::map<std::pair<int, int>, std::map<int, std::array<uint8_t, worldgen::creature::ITEM_SIZE>>> zoneChests;
     worldgen::ResidentWorld residentWorld(const residentpass::Collection &participants) const; // what the resident pass asks (0x2e17d0)
     void arenaStage(worldgen::CreatureRecord &master);                                         // 0x2e3510's arena master
-    std::set<int64_t> seenAlive; // creatures seen alive (only their deaths are reported)
-    std::set<int64_t> toBurst;   // ... and whose body has yet to burst
-    std::vector<Part> bursts;
-    int64_t nextMade = 1ll << 62; // ids of the creatures made in play, apart from the spawn points' (0x119530)
+    std::set<int64_t> seenAlive;                         // creatures seen alive (only their deaths are reported)
+    std::set<std::pair<int64_t, uint64_t>> visualDeaths; // id and actor-instance registration
+    int64_t nextMade = 1ll << 62;                        // ids of the creatures made in play, apart from the spawn points' (0x119530)
     std::vector<Dropped> drops;
     std::vector<int32_t> specials;                        // world+0x360
     std::map<int32_t, std::vector<int32_t>> specialsBy;   // world+0x378

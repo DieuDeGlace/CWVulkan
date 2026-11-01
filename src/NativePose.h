@@ -65,9 +65,13 @@ struct Call {
     Sparks *sparks = nullptr;         // the creature's sparks (none: no sparks)
 };
 
+// The12 prepared sprite slots, in animation-state pointer order. Callers copy
+// their own identifiers immediately; these borrowed model pointers need not persist.
+using PreparedSprites = std::array<const Model *, 12>;
+
 // Poses the creature record `creature` (CREATURE_SIZE bytes, game layout) as 0x17ab0 does;
 // the draws go to `draws` when given.
-void pose(uint8_t *creature, const Call &call, const Models &models, std::vector<Draw> *draws);
+void pose(uint8_t *creature, const Call &call, const Models &models, std::vector<Draw> *draws, PreparedSprites *prepared = nullptr);
 
 // The easing factor of 0xa7a0: how far a value moves toward its target over a frame of `dt`
 // ms at `rate` (gamemath::blendFactor).

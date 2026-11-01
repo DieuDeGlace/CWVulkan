@@ -48,11 +48,11 @@ void TransientLights::hit(const std::array<uint8_t, 0x48> &number, const Lookup 
         append({position, {.3f,.3f,.5f}, 16, 0, 400});
 }
 
-void TransientLights::deaths(std::vector<DeathCandidate> candidates,
-                              const std::function<bool(const Point &, float, float)> &visible) {
+void TransientLights::deaths(std::vector<DeathCandidate> candidates, const std::function<bool(const Point &, float, float)> &visible,
+                             const std::function<void(const DeathCandidate &)> &bodyParticles) {
     std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b) { return a.identity < b.identity; });
-    const auto end = std::unique(candidates.begin(), candidates.end(),
-                                 [](const auto &a, const auto &b) { return a.identity == b.identity; });
+    const auto end =
+        std::unique(candidates.begin(), candidates.end(), [](const auto &a, const auto &b) { return a.identity == b.identity; });
     for (auto it = candidates.begin(); it != end; ++it) {
         const uint8_t *record = it->record;
         if (!record || !record[0x1500] || !visible) continue;
@@ -63,8 +63,12 @@ void TransientLights::deaths(std::vector<DeathCandidate> candidates,
         std::memcpy(body, record + 0x84, sizeof body);
         std::memcpy(&race, record + 0x64, sizeof race);
         const float radius = .5f * std::max({body[0], body[1], body[2]});
-        if (visible(position, radius, 100) && race == 0x90)
-            append({position, {1,.8f,.5f}, 16, 0, 800});
+        if (!visible(position, radius, 100))
+            continue;
+        if (bodyParticles)
+            bodyParticles(*it);
+        if (race == 0x90)
+            append({position, {1, .8f, .5f}, 16, 0, 800});
     }
 }
 

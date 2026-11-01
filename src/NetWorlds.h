@@ -92,6 +92,7 @@ class MirrorSide : public cwnet::MirrorWorld {
     }
     bool hasCreature(int64_t id) override { return world.hasCreature(id); }
     bool isDead(int64_t id) override { return world.isDead(id); }
+    void deathSeen(int64_t id) override { world.noticeDeathVisual(id); }
     void hitLocalPlayer(const cwnet::DamageRecord &number) override {
         world.hitPlayer(number);
         hitsTaken++;
