@@ -10,6 +10,26 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Combined sessions now own a separate host terrain reader, following the native
+  allocation/local-byte-delivery ownership contract. Source metadata is copied;
+  loaded identities, columns, model/light caches, history, queues and worker
+  lifetimes are not inherited from the client. Host saved-zone callbacks, travel
+  events and item placement use the authority reader; the client retains its own.
+  A dedicated host keeps its supplied reader. Synthetic roof/sea tests exercise
+  source metadata, fresh base loading, client solve versus host light, independent
+  physical/history changes, copied protocol-notice application, client history undo
+  and source reload without resetting the host lifetime. Generated rebasing and
+  dedicated reuse have coverage. No host raw-light reset or guessed solver schedule
+  is introduced; full host scheduling and original-peer/native image acceptance
+  remain separate gates. The audited ordinary mesh worker is client-World-bound.
+  Owner captures may already contain solved light bytes; forks preserve source data,
+  without asserting that those snapshots reproduce every native host initial value.
+  All five targets build without warnings. Focused storage/network/cache and full
+  CPU/owner suites pass, alongside48 shader,2 camera,20 GUI,6 map and shared-water/
+  Alpha-scenery image checks. Both no-save combat runs exit0 with viewed frames and
+  unchanged character data. These short runs are stability checks, not performance
+  benchmarks or acceptance of the known blue/cavity scene and missing owner hair.
+
 - Ordinary consumers0/3/4/6/7/8 now use the independent style contract alongside
   existing1/2/5 and body records. Their gravity/angular differences, extra style4
   pass types, descending6 full-XYZ contacts and deferred retirement are implemented.

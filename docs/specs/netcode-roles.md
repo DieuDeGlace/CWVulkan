@@ -13,6 +13,10 @@ Every running game owns a **host** (game+0x6e8, its own world at host+0x08, run 
 thread 0x83e60) and a **client** (game+0xd18, using the game's main world, game+0x08). The two
 worlds are separate objects in the same process.
 
+The allocation, column ownership and actual local byte-delivery evidence,
+including shared catalog versus per-World mesh lighting, is specified in
+[local World/Zone ownership](steam-local-world-zone-ownership.md).
+
 * The **host world** is authoritative: its remote-client flag (world+0x358) is clear. The
   creature specs call this "authoritative" (`creature-abilities.md` §0, `creature-physics.md`
   §0). The host world has no local player of its own (only the game constructor 0x7ea80 sets a

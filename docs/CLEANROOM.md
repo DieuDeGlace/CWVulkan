@@ -483,3 +483,19 @@ model bytes, native instructions or reconstruction sources enter this change.
 Other producers, unknown style numbers, malformed input and full native CRT/pixel
 acceptance remain open. Synthetic motion and GPU material/state checks cover the
 bounded paths; owner geometry stays local at runtime.
+
+
+## Local World terrain ownership, 2026-11-01
+
+The implementer read the independent steam-local-world-zone-ownership.md allocation,
+column lifetime, local byte-delivery and received-record contracts, plus engine
+sources only. The authorized native-only author inspected native ownership and the
+actual local connection without engine/test/capture access. ExtractedWorld forks
+source settings while loaded zones, edit history, lighting and prefetch lifetimes
+remain per reader. Combined sessions route host gameplay to their owned reader;
+client consumers retain their reader and apply copied notice records. Dedicated
+hosts reuse their one supplied reader. Shared source configuration does not assert
+that every catalog cache or generator helper is immutable. Full native host light
+scheduling and original-peer/image acceptance remain separate audits; no raw-light
+reset or guessed native solve is introduced by this ownership change. Synthetic
+roof/sea records cover both styles without adding owner data to either package.

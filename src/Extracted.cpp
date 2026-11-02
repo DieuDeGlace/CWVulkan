@@ -168,6 +168,22 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     return zone;
 }
 
+std::unique_ptr<ExtractedWorld> ExtractedWorld::forkSource() const {
+    auto result = std::make_unique<ExtractedWorld>();
+    result->folder = folder;
+    result->environment = environment;
+    result->buildingParts = buildingParts;
+    result->measuredScale = measuredScale;
+    result->spriteFolder = spriteFolder;
+    result->zones = zones;
+    result->originX = originX;
+    result->originY = originY;
+    result->seedValue = seedValue;
+    result->generatedMode = generatedMode;
+    result->homeLocal = homeLocal;
+    return result;
+}
+
 bool ExtractedWorld::open(const fs::path &dir, std::string &error) {
     clearCache();
     error.clear();

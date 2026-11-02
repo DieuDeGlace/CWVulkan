@@ -45,6 +45,9 @@ class ExtractedWorld {
     // models. The models and objects are named from the game's sprite tables in
     // `spriteDir` (Extract, where sprite-groups.txt is), when the owner extracted them.
     void openGenerated(int homeX, int homeY, const std::filesystem::path &spriteDir = {});
+    // Same source/settings, independent loaded zones, histories and worker lifetime.
+    // Source settings are fixed during play; no runtime cache or edit is inherited.
+    std::unique_ptr<ExtractedWorld> forkSource() const;
     bool generated() const { return generatedMode; }
     // Newest seed folder under <game>/Extract, or empty.
     static std::filesystem::path find(const std::filesystem::path &gameDir);

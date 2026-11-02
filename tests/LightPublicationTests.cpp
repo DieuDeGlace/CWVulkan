@@ -1,6 +1,8 @@
 #include "Extracted.h"
 #include "AlphaLook.h"
 #include "NativeUpkeep.h"
+#include "Multiplayer.h"
+#include "ZoneStates.h"
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -88,8 +90,73 @@ int lightPublicationTests() {
         water = {};
         check(world.mesh(0, 0, opaque, water) && world.gameBlockLight(34, 32, 1) == 21 && world.takeChangedZones().empty(),
               "later solve replaces retained red without generating another dirty request");
+        {
+            SpawnedCreatures authority, mirror;
+            nativesaves::WorldState stored;
+            Multiplayer session;
+            Multiplayer::Setup setup;
+            setup.hostWorld = &authority;
+            setup.clientWorld = &mirror;
+            setup.blocks = &world;
+            check(session.start(setup, error), "combined local session starts");
+            auto *host = session.hostBlocks();
+            check(host && host != &world, "combined session owns an independent host terrain reader");
+            if (host && host != &world) {
+                check(host->directory() == world.directory() && host->seed() == world.seed() && host->zoneCount() == world.zoneCount() &&
+                          host->home() == world.home() && host->originDotsX() == world.originDotsX() &&
+                          host->originDotsY() == world.originDotsY(),
+                      "source fork retains source metadata and coordinate rebasing");
+                check(!host->gameZoneLoaded(0, 0), "source fork does not inherit another World's loaded lifetime");
+                host->propsAbsolute(0, 0);
+                authority.setStoredZones(*host, &stored, false);
+                mirror.setStoredZones(world, nullptr, false);
+                const auto hostIdentity = host->gameZoneToken(0, 0);
+                check(hostIdentity && hostIdentity->order != world.gameZoneToken(0, 0)->order &&
+                          host->gameBlock(32, 32, 1) == ExtractedWorld::GameBlock{100, 90, 80, 0, 1, 0},
+                      "host loads its own base records rather than inheriting client physical edits or solved red");
+                host->setGameBlock(32, 32, 1, {255, 23, 45, 17, 0, 2});
+                opaque = {};
+                water = {};
+                check(world.mesh(0, 0, opaque, water) && world.gameBlockLight(32, 32, 1) == 21 && host->gameBlockLight(32, 32, 1) == 255,
+                      "client mesh-light publication cannot overwrite host gameplay light");
+                const auto before = host->gameBlock(33, 32, 1);
+                const ExtractedWorld::GameBlock changed{88, 4, 5, 0, 0, 2};
+                const auto change = zonestates::blockChange(33, 32, 1, before, changed);
+                host->setBlockChanges(0, 0, {change});
+                check(host->gameBlock(33, 32, 1) == changed && world.gameBlock(33, 32, 1) == before,
+                      "host physical/history writes leave the client unchanged before a notice");
+                cwnet::BlockChangeRecord notice{};
+                std::memcpy(notice.data(), change.bytes.data(), notice.size());
+                session.mirrorSide()->applyBlockChanges({notice});
+                session.mirrorSide()->zoneChangeStep();
+                check(world.gameBlock(33, 32, 1) == changed, "copied protocol notices update the client's own loaded record");
+                world.undoBlockChanges(0, 0);
+                check(world.gameBlock(33, 32, 1) == before && host->gameBlock(33, 32, 1) == changed,
+                      "client history undo cannot restore host physical data");
+                check(world.open(directory, error) && host->gameBlockLight(32, 32, 1) == 255 && host->gameBlock(33, 32, 1) == changed &&
+                          hostIdentity && host->gameZoneToken(0, 0)->order == hostIdentity->order,
+                      "client source reload preserves the host's independent data and loaded lifetime");
+            }
+        }
+        {
+            SpawnedCreatures authority;
+            Multiplayer session;
+            Multiplayer::Setup setup;
+            setup.hostWorld = &authority;
+            setup.blocks = &world;
+            check(session.start(setup, error) && session.dedicated() && session.hostBlocks() == &world,
+                  "dedicated host uses its provided reader without an unnecessary fork");
+        }
     }
     setRenderStyle(oldStyle);
+    {
+        ExtractedWorld generated;
+        generated.openGenerated(129, -130);
+        auto other = generated.forkSource();
+        check(other->generated() && other->home() == generated.home() && other->originZoneX() == 2 && other->originZoneY() == -3 &&
+                  other->has(99, -99) && !other->gameZoneLoaded(2, -3),
+              "generated source forks retain generation and negative-coordinate rebasing without loading a zone");
+    }
     {
         std::array<uint8_t, 0x15f8> record{};
         const auto put = [&](size_t offset, const auto &value) { std::memcpy(record.data() + offset, &value, sizeof value); };

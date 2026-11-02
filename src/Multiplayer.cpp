@@ -55,7 +55,12 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
         break;
     }
     if (setup.hostWorld && setup.blocks) {
-        hostWorld = std::make_unique<HostSide>(*setup.hostWorld, *setup.blocks);
+        authorityBlocks = setup.blocks;
+        if (setup.clientWorld) {
+            ownedHostBlocks = setup.blocks->forkSource();
+            authorityBlocks = ownedHostBlocks.get();
+        }
+        hostWorld = std::make_unique<HostSide>(*setup.hostWorld, *authorityBlocks);
         hostWorld->playerObserved = [this, state = setup.hostWorld](const uint8_t *record) {
             if (!sharedRegions)
                 return;

@@ -8,8 +8,8 @@
 //     player. It is drawn, played and heard; its creatures, zone states and clock come from
 //     whichever host it is connected to.
 //
-// Both stand in the same block store (ExtractedWorld): the terrain is the same generator's on
-// every machine, and block changes are put in by whichever world's zone log changes them.
+// Each World has its own ExtractedWorld reader. Base content uses the same source/settings;
+// physical changes and stored light cross worlds only as copied protocol data, not shared caches.
 //
 // What the game frame does with what arrives (shown hits, pick-ups, kill credits, feats, a new
 // day) is left to the caller through the hooks, so the engine's own systems (the interface,

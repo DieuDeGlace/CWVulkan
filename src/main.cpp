@@ -649,6 +649,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     SpawnedCreatures hostWorld; // the host world
     // Multiplayer (Multiplayer.h), set up below once the character is known.
     Multiplayer session;
+    auto authorityTerrain = [&]() -> ExtractedWorld & {
+        if (auto *blocks = session.hostBlocks())
+            return *blocks;
+        return extractedWorld;
+    };
     session.log = [](const std::string &line) { logLine(line); };
     const enemyrespawn::Settings enemyRespawns = enemyrespawn::Settings::read(config);
     spawned.setEnemyRespawn(enemyRespawns);
@@ -2375,10 +2380,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             int32_t id, region[2];
             uint32_t modifier;
             std::memcpy(&id, b.data() + 4, 4), std::memcpy(&modifier, b.data() + 8, 4), std::memcpy(region, b.data() + 0xc, 8);
-            return a.category == b[0] && a.id == id && a.material == b[0x1c] && a.rarity == (int)(int8_t)b[0x14] && a.modifier == modifier &&
-                   a.region[0] == region[0] && a.region[1] == region[1];
+            return a.category == b[0] && a.id == id && a.material == b[0x1c] && a.rarity == (int)(int8_t)b[0x14] &&
+                   a.modifier == modifier && a.region[0] == region[0] && a.region[1] == region[1];
         };
-        OverworldEvents::World w{spawnedReady ? hostWorld : spawned, extractedWorld}; // (the world that decides)
+        OverworldEvents::World w{spawnedReady ? hostWorld : spawned, authorityTerrain()}; // (the world that decides)
         w.player = {(int64_t)std::floor(player.position.x) + (extractedWorld.originDotsX() >> 16),
                     (int64_t)std::floor(player.position.y) + (extractedWorld.originDotsY() >> 16)};
         w.playerLevel = playerLevel;
@@ -2820,7 +2825,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     if (spawnedReady) {
         // The host world takes the stored zone states and the world's clock; the client world is
         // a mirror from now on.
-        hostWorld.setStoredZones(extractedWorld, &saves.world(), false);
         hostWorld.setClock(day, hour * 3600000.0f);
         hostWorld.setClockRate(minutesPerSecond * 60.0); // ([Time] MinutesPerSecond: game ms a real ms)
         spawned.setStoredZones(extractedWorld, nullptr, false);
@@ -2846,6 +2850,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             setup.way = Multiplayer::Way::Local;
             session.start(setup, why);
         }
+        hostWorld.setStoredZones(authorityTerrain(), &saves.world(), false);
         switch (session.way()) {
         case Multiplayer::Way::Steam:
             logLine("Multiplayer: through Steam as " + steam.personaName() + "; friends invite and join with the multiplayer menu");
@@ -6174,10 +6179,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 const nativesaves::Item coin = nativesaves::makeItem(grounditems::type::COIN, 0, grounditems::COIN_MATERIAL);
                 int64_t at[3];
                 playerUnits(at);
-                hostWorld.layItem(extractedWorld, coin.data(), at, 1);
+                hostWorld.layItem(authorityTerrain(), coin.data(), at, 1);
                 for (int k = 1; k < 5; k++) {
                     const int64_t spot[3] = {at[0] + k * 20000, at[1], at[2]};
-                    hostWorld.layItem(extractedWorld, coin.data(), spot, 1);
+                    hostWorld.layItem(authorityTerrain(), coin.data(), spot, 1);
                 }
                 logLine("Test coins: five laid by the host");
             }

@@ -291,7 +291,11 @@ individual feature documents.
   without history/dirty/halo changes. Upkeep and particles share the corrected
   accessor; real CPU-mesh roof/sea/physical-edit cases and full CPU/GPU checks pass.
   Safe engine writer serialization retains immutable snapshots and lazy metadata.
-  Combined host/client terrain caches still need separate World ownership.
+  Combined sessions now fork independent host terrain readers with the same source
+  configuration. Client solves, physical/history edits and loaded lifetimes do not
+  mutate host storage; copied notices still update the client. Dedicated hosts reuse
+  their supplied reader. The audited ordinary mesh worker is client-bound;
+  indirect host-light writers remain outside that trace.
   Ordinary consumers0/3/4/6/7/8 now follow the independent style supplement:
   gravity/angle/pass-set differences, descending6 contact retirement, still3,
   owner note.cub7, separate geometry shrinking and per-draw shininess reset.

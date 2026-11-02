@@ -52,6 +52,8 @@ class Multiplayer {
         // client world (null: a dedicated server).
         SpawnedCreatures *hostWorld = nullptr;
         SpawnedCreatures *clientWorld = nullptr;
+        // Client terrain/source; a combined session creates an independent host reader.
+        // A dedicated host uses this reader directly.
         ExtractedWorld *blocks = nullptr;
     };
 
@@ -82,6 +84,7 @@ class Multiplayer {
 
     // The pieces, for the game frame's hooks and for mods.
     HostSide *hostSide() { return hostWorld.get(); }
+    ExtractedWorld *hostBlocks() { return hostWorld ? authorityBlocks : nullptr; }
     MirrorSide *mirrorSide() { return mirrorWorld.get(); }
     cwnet::HostGame *host() { return hostGame.get(); }
     cwnet::ClientGame *clientGame() { return client.get(); }
@@ -135,6 +138,8 @@ class Multiplayer {
     SteamSession *steam = nullptr;
     std::unique_ptr<cwnet::LoopbackNetwork> loopback;
     std::unique_ptr<cwnet::Transport> transport;
+    std::unique_ptr<ExtractedWorld> ownedHostBlocks; // outlives the host adapter and protocol end
+    ExtractedWorld *authorityBlocks = nullptr;
     std::unique_ptr<HostSide> hostWorld;
     std::unique_ptr<MirrorSide> mirrorWorld;
     std::unique_ptr<cwnet::HostGame> hostGame;
