@@ -657,8 +657,11 @@ individual feature documents.
   directly. Mouse scaling rounds to float before the double target update, with
   the native sensitivity/invert/clamp rules; pad and assistance retain double
   targets. Sub-float displacement/smoothing and no-shortest-wrap tests cover this.
-  Legacy saved-angle/startup adapters, exact event delivery and full frontend
-  camera-state handoff/reset parity remain open. The newly documented
+  Frontend Play now transfers both displayed/target angles and both distances;
+  Continue retains angles and resets distances to8, while Select resets90/0/180.
+  Saved-angle compatibility cannot overwrite this entry state or snap it to targets.
+  Full fixed eye/look-at handoff, direct-launch startup adapters and exact event
+  delivery still need parity work. The newly documented
   [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
   split early/late input phases. The live client now completes World stepping and
   one full-frame drawn-position pass before creature targeting/local control, and

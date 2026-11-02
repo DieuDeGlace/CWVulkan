@@ -1183,14 +1183,23 @@ void Session::handleClick(bool inGame) {
         const glm::vec2 m = mouse - rootMenuPosition(window);
         const bool continueShown = selectedSlot >= 0 && selectedSlot < (int)listed.size();
         switch (hoveredLine(rootLines(continueShown), m, ROOT_MENU_SIZE.x)) {
-        case START_GAME: titleShown = false, charactersShown = true; break;
-        case OPTIONS: openOptions(); break;
-        case EXIT: decide(Result::Quit); break;
-        case CONTINUE:
-            if (listed[(size_t)selectedSlot].playable)
-                decide(Result::Play, selectedSlot);
+        case START_GAME:
+            titleShown = false, charactersShown = true;
             break;
-        default: break;
+        case OPTIONS:
+            openOptions();
+            break;
+        case EXIT:
+            decide(Result::Quit);
+            break;
+        case CONTINUE:
+            if (listed[(size_t)selectedSlot].playable) {
+                camera.continueFromTitle();
+                decide(Result::Play, selectedSlot);
+            }
+            break;
+        default:
+            break;
         }
         return;
     }
@@ -1222,6 +1231,7 @@ void Session::handleClick(bool inGame) {
                 startCreation();
             else if (listed[(size_t)cursor].playable) { // Select (frontend-characters.md §3)
                 charactersShown = false;
+                camera.set(90, 0, 180, 8);
                 selectedSlot = cursor;
                 if (!req.readOnly)
                     s.store->setSlot(cursor);
@@ -1871,6 +1881,7 @@ Result Session::runTitle() {
     if (outcome.action == Result::Play) {
         playSound(SOUND_MENU_CLOSE);
         enterWorld();
+        outcome.camera = camera;
     }
     return outcome;
 }

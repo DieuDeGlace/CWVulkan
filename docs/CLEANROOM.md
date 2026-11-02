@@ -1232,3 +1232,19 @@ work; this change does not claim all camera parity. Tests use known native mouse
 increments, full pitch bounds, float-before-double staging, sub-float degree
 displacement/smoothing and non-wrapped yaw. No original source, native instruction
 bytes, owner artwork or extracted data enters the publication packages.
+
+## Frontend camera angle/distance handoff, 2026-11-02
+
+Using only the already independent gameplay-camera3.4, frontend-character8 and
+engine-owned sources, the implementer connected the frontend Play result's value
+snapshot to gameplay. Continue keeps all displayed/target angles and sets both
+distances to8; selecting an existing character assigns90/0/180 and8. Selection of
+New Character retains its existing90/0/0 assignment. The separate never-shown
+Create World handler in the specification is not treated as Create Character.
+
+Gameplay installs the snapshot after compatibility save restoration and preserves
+different displayed and target values through startup. It does not claim the full
+fixed camera eye/look-at state has been transferred; that remains separate work.
+Direct diagnostic launches keep their explicit compatibility initialization.
+The Continue regression seeds unequal, nontrivial displayed/target values and
+checks only distances change. No original code or owner assets are distributed.

@@ -889,6 +889,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     front.recorded = &recordedOnly;
     std::optional<hair::Style> createdHairStyle;
     std::optional<glm::vec3> enteredAt; // where the front screens put the player (frontend-title.md §6.1)
+    std::optional<frontend::OrbitCamera> enteredCamera;
     if (launchMenu) {
         frontend::Request request;
         request.page = menuPage;
@@ -909,6 +910,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (result.placed)
             enteredAt = result.feet;
         createdHairStyle = result.createdHairStyle;
+        enteredCamera = result.camera;
         characters = everyCharacter(); // (creation may have made one)
         chosen = nullptr;
         for (const CharacterEntry &c : characters)
@@ -1017,6 +1019,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         player.position = enteredAt ? *enteredAt : saveGame.position;
         player.setYawRadians(saveGame.yaw);
         logLine("Save: resuming at " + std::to_string(player.position.x) + ", " + std::to_string(player.position.y));
+    }
+    if (enteredCamera) {
+        player.orbit = *enteredCamera;
+        logLine("Camera: retained frontend displayed/target angles and orbit distance");
     }
     // The world's clock carries on from the save, as the game keeps day and time in
     // its world state (unless --hour was given).
@@ -3236,7 +3242,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     GameInput gameInput;
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
-    player.orbit.set(player.orbit.targetPitch, player.orbit.targetRoll, player.orbit.targetYaw, player.orbit.targetDistance);
+    if (!enteredCamera)
+        player.orbit.set(player.orbit.targetPitch, player.orbit.targetRoll, player.orbit.targetYaw, player.orbit.targetDistance);
     float &viewZoom = player.orbit.distance;
     const auto displayedYawRadians = [&] { return float((player.orbit.yaw + 90.0) * Player::RADIANS_PER_DEGREE); };
     const auto displayedPitchRadians = [&] { return float((player.orbit.pitch - 90.0) * Player::RADIANS_PER_DEGREE); };

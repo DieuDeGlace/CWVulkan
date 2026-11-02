@@ -55,6 +55,16 @@ void titleCamera() {
     OrbitCamera slow = c, quick = c;
     slow.smooth(16, 100), quick.smooth(16, 0);
     FRONT_CHECK(slow.yaw > 180 && slow.yaw < quick.yaw && quick.yaw < 183 && slow.distance > 8 && slow.distance < 12);
+    // Continue is not a character-selection reset or a snap to the riding targets.
+    c.set(113.25, 7.5, 721.125, 3);
+    c.targetPitch = 127.75;
+    c.targetRoll = -4.25;
+    c.targetYaw = 725.5;
+    c.targetDistance = 12;
+    c.continueFromTitle();
+    FRONT_CHECK(c.pitch == 113.25 && c.roll == 7.5 && c.yaw == 721.125);
+    FRONT_CHECK(c.targetPitch == 127.75 && c.targetRoll == -4.25 && c.targetYaw == 725.5);
+    FRONT_CHECK(c.distance == 8 && c.targetDistance == 8);
 }
 
 void logo() {

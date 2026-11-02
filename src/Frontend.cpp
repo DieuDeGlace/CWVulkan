@@ -36,6 +36,10 @@ void OrbitCamera::titleTargets(double dtMs) {
     targetDistance = TITLE_DISTANCE;
 }
 
+void OrbitCamera::continueFromTitle() {
+    distance = targetDistance = 8;
+}
+
 void OrbitCamera::smooth(double dtMs, int cameraSmoothness) {
     const float rate = cameramotion::angleRate(cameraSmoothness);
     const double s = gamemath::blendFactor(gamemath::frameMilliseconds(dtMs), rate);

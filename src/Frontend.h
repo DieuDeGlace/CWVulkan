@@ -88,6 +88,8 @@ struct OrbitCamera {
     // While riding: the yaw target turns 3 degrees a second (never wrapped), the pitch target is
     // 110 and the distance target 12.
     void titleTargets(double dtMs);
+    // Continue preserves displayed/target angles and restores both distances to eight.
+    void continueFromTitle();
     // Angles use the smoothness option; distance has its own native rate 0.004.
     void smooth(double dtMs, int cameraSmoothness);
     // The forward vector f of the current angles.
@@ -376,6 +378,7 @@ struct Result {
     int slot = -1;        // the character to play
     bool created = false; // made in character creation (its help sheet was shown)
     std::optional<hair::Style> createdHairStyle;
+    std::optional<OrbitCamera> camera; // Play keeps both displayed and target values.
     // Play: the player was rebuilt from the save and stands at `feet` (local blocks, CubeVulkan's
     // feet a block under the record), facing yaw 0 (frontend-title.md §6.1). The game starts
     // there, without searching for ground.
