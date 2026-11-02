@@ -1116,6 +1116,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     std::vector<glm::mat4> actorPose;
     // The game's interface (bars, plates over monsters, damage numbers).
     Hud hud;
+    hudcoin::Coin hudCoin; // GPU handles live only as long as this session's renderer
     bool hudReady = false;
     {
         std::string why;
@@ -8097,17 +8098,22 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             if (menusReady && !menus.interfaceShown()) // F4: the whole interface hidden
                 hudVertices.clear();
-            else if (hs.gold >= 0 && hud.hasInterface()) { // the money's turning coin (hud-money.md §2)
-                static hudcoin::Coin hudCoin;
-                const VkExtent2D px = renderer.screenSize();
-                hudCoin.draw(renderer, assets, opaque, (float)px.width, (float)px.height, hud.interfaceScale(), worldClockMs);
-            }
             if (menusReady)
                 menus.draw(hudVertices);
             if (menusReady && !menus.interfaceShown())
                 renderer.overlay(hudVertices);
-            else
-                renderer.overlay(hudVertices, hud.itemDraws(), hud.clipDraws());
+            else {
+                std::vector<guiitem::Request> items;
+                if (hud.hasInterface()) {
+                    hudCoin.queue(renderer, assets, items, float(renderer.screenSize().height), hud.interfaceScale(), worldClockMs);
+                }
+                auto layers = hud.clipDraws();
+                for (auto &layer : layers)
+                    layer.before.items += items.size(); // queued overlays precede every Plasma callback/copy
+                const auto &widgets = hud.itemDraws();
+                items.insert(items.end(), widgets.begin(), widgets.end());
+                renderer.overlay(std::move(hudVertices), std::move(items), std::move(layers));
+            }
         }
         if (serverMode) {
             // A dedicated server draws nothing: it keeps the world running at about

@@ -181,45 +181,55 @@ void weaponSpirits() {
 
 // hud-money.md §2 and §3.
 void hudCoin() {
-    POSE_CHECK(hudcoin::turnDegrees(0) == 0.0f);
-    POSE_CHECK(std::fabs(hudcoin::turnDegrees(2500) - 90.0f) < 1e-4f);
-    POSE_CHECK(hudcoin::turnDegrees(10000) == 0.0f);
-    POSE_CHECK(std::fabs(hudcoin::turnDegrees(12500.9) - 90.0f) < 1e-4f);
+    POSE_CHECK(hudcoin::turnDegrees(0) == 0.f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(2500) - 90.f) < 1e-4f);
+    POSE_CHECK(hudcoin::turnDegrees(10000) == 0.f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(12500.9) - 90.f) < 1e-4f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(-2500.9) + 90.f) < 1e-4f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(4294967296.0) + 131.328f) < 1e-4f);
     const float W = 1280, H = 1024, g = 1.25f;
-    const std::vector<hudcoin::OverlayDraw> draws = hudcoin::coinDraws(g, H, 0);
+    const glm::ivec3 allocation(8, 8, 2);
+    const auto requests = hudcoin::coinRequests(17, allocation, 960, g, H, 0);
+    POSE_CHECK(requests.size() == 2);
+    if (requests.size() != 2)
+        return;
+    POSE_CHECK(hudcoin::coinRequests(0, allocation, 960, g, H, 0).empty());
+    POSE_CHECK(hudcoin::coinRequests(17, allocation, 960, g, 0, 0).empty());
+    POSE_CHECK(hudcoin::coinRequests(17, {}, 960, g, H, 0).empty());
+    const auto &shadow = requests[0], &coin = requests[1];
+    POSE_CHECK(shadow.material == glm::vec4(0, 0, 0, 1) && shadow.depthOffset == -.5f);
+    POSE_CHECK(shadow.at.screen == glm::vec2(62.5f, 71.25f));
+    POSE_CHECK(coin.material == glm::vec4(1) && coin.depthOffset == 0 && coin.at.screen == glm::vec2(56.25f, 65));
+    POSE_CHECK(coin.kind == guiitem::Request::Kind::QueuedModel && coin.mesh == shadow.mesh && coin.mesh == 17);
+    POSE_CHECK(coin.beforeVertex == 0 && shadow.beforeVertex == 0 && coin.farPlane == 960);
+    POSE_CHECK(coin.at.euler == glm::vec3(-30, 0, 0) && std::fabs(coin.at.size - g * .004f) < 1e-7f);
+    auto retained = guiitem::characterState(); // earlier character setup must not leak into the coin
+    std::vector<guiitem::Draw> draws;
+    for (const auto &request : requests)
+        guiitem::appendDraws(request, {int(W), int(H)}, retained, draws);
     POSE_CHECK(draws.size() == 2);
     if (draws.size() != 2)
         return;
-    const hudcoin::OverlayDraw &shadow = draws[0], &coin = draws[1];
-    POSE_CHECK(shadow.colour == glm::vec4(0, 0, 0, 1) && shadow.depth == -0.5f && shadow.screen == glm::vec2(62.5f, 71.25f));
-    POSE_CHECK(coin.colour == glm::vec4(1) && coin.depth == 0 && coin.screen == glm::vec2(56.25f, 65.0f));
-    POSE_CHECK(coin.glow == 1 && coin.angles == glm::vec3(-30, 0, 0) && std::fabs(coin.scale - g * 0.004f) < 1e-7f);
-    const glm::vec3 size(8, 8, 2);
-    auto pixel = [&](const hudcoin::OverlayDraw &d, glm::vec3 voxel) {
-        const glm::vec4 clip = hudcoin::entryClip(d, size, W, H) * glm::vec4(voxel, 1);
-        return glm::vec3((clip.x / clip.w + 1) * 0.5f * W, (clip.y / clip.w + 1) * 0.5f * H, clip.z / clip.w);
+    for (const auto &draw : draws) {
+        POSE_CHECK(draw.state.glow == 1 && draw.state.white == 0 && draw.state.shininess == 0 && !draw.state.whiteSky);
+        POSE_CHECK(draw.state.front == glm::vec4(.7f, .7f, .2f, 1) && draw.opacity == 1);
+    }
+    auto pixel = [&](const guiitem::Draw &draw, glm::vec3 voxel) {
+        auto clip = draw.projection * draw.model * glm::vec4(voxel, 1);
+        clip.z -= draw.depthOffset;
+        return glm::vec3((clip.x / clip.w + 1) * .5f * W, (1 - clip.y / clip.w) * .5f * H, clip.z / clip.w);
     };
-    // The middle lands on the screen point (y down), the shadow behind the coin.
-    const glm::vec3 middle = pixel(coin, size * 0.5f), shadowMiddle = pixel(shadow, size * 0.5f);
-    POSE_CHECK(std::fabs(middle.x - 56.25f) < 1e-3f && std::fabs(middle.y - 65.0f) < 1e-3f);
+    const glm::vec3 middle = pixel(draws[1], glm::vec3(allocation) * .5f);
+    const glm::vec3 shadowMiddle = pixel(draws[0], glm::vec3(allocation) * .5f);
+    POSE_CHECK(std::fabs(middle.x - 56.25f) < 1e-3f && std::fabs(middle.y - 65.f) < 1e-3f);
     POSE_CHECK(middle.z > 0 && middle.z < shadowMiddle.z && shadowMiddle.z < 1);
-    // Facing the camera, its 8 voxels are about 35.1 x g pixels across, mirrored in x.
-    const glm::vec3 left = pixel(coin, {0, 4, 1}), right = pixel(coin, {8, 4, 1});
-    POSE_CHECK(std::fabs((left.x - right.x) - 35.13f * g) < 0.05f * g);
-    // The tilt of 30 degrees about x foreshortens the coin's height.
-    const glm::vec3 top = pixel(coin, {4, 8, 1}), bottom = pixel(coin, {4, 0, 1});
-    POSE_CHECK(std::fabs(top.y - bottom.y) < 35.13f * g && std::fabs(top.y - bottom.y) > 25.0f * g);
-    // Glowing (glow 1), every face shows the same unlit colour; without glow the faces differ
-    // by the light's direction.
-    const glm::mat4 m = hudcoin::modelMatrix(coin, size);
-    const glm::vec4 gold(0.5f, 0.4f, 0.05f, 1.0f);
-    POSE_CHECK(hudcoin::faceColour(gold, {0, 0, -1}, m, coin) == hudcoin::faceColour(gold, {0, 0, 1}, m, coin));
-    hudcoin::OverlayDraw lit = coin;
-    lit.glow = 0;
-    const glm::vec3 toward = hudcoin::faceColour(gold, {1, 0, 0}, hudcoin::modelMatrix(lit, size), lit);
-    const glm::vec3 away = hudcoin::faceColour(gold, {-1, 0, 0}, hudcoin::modelMatrix(lit, size), lit);
-    POSE_CHECK(toward.r > away.r); // the light comes from +x (the screen's left: the lens mirrors x)
-    POSE_CHECK(hudcoin::faceColour(gold, {0, 0, 1}, m, shadow) == glm::vec3(0));
+    const auto left = pixel(draws[1], {0, 4, 1}), right = pixel(draws[1], {8, 4, 1});
+    POSE_CHECK(std::fabs((left.x - right.x) - 35.13f * g) < .05f * g);
+    const auto top = pixel(draws[1], {4, 8, 1}), bottom = pixel(draws[1], {4, 0, 1});
+    POSE_CHECK(std::fabs(top.y - bottom.y) < 35.13f * g && std::fabs(top.y - bottom.y) > 25.f * g);
+    const auto smallerWindow = hudcoin::coinRequests(17, allocation, 1280, g, H * .5f, 2500);
+    POSE_CHECK(smallerWindow[1].at.size == coin.at.size * 2 && smallerWindow[1].farPlane == 1280);
+    POSE_CHECK(smallerWindow[1].at.euler.y == 90);
 }
 
 // The creature bytes of each record of a pose recording (creature-pose.md §11): a record is

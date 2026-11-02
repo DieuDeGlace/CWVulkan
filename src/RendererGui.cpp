@@ -125,9 +125,9 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
     auto retained = guiitem::overlayState();
     for (const auto &request : guiRequests) {
         // Character requests include an admitted setup-only entry for empty poses.
-        // Queued Ring/Logo descriptors were prepared by the earlier overlay pass, before the map.
+        // Queued Ring/QueuedModel descriptors were prepared by the earlier overlay pass, before the map.
         const bool characterSetup = request.kind == guiitem::Request::Kind::Character;
-        const bool queued = request.kind == guiitem::Request::Kind::Ring || request.kind == guiitem::Request::Kind::Logo;
+        const bool queued = request.kind == guiitem::Request::Kind::Ring || request.kind == guiitem::Request::Kind::QueuedModel;
         if (characterSetup || (request.mesh && !queued))
             steamFog.setDistance(10000);
         guiitem::appendDraws(request, {(int)extent.width, (int)extent.height}, retained, guiDraws);

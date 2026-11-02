@@ -282,7 +282,10 @@ The full native widget refresh/scrollbar lifecycle remains a roadmap item.
 
 ## Placed by CubeVulkan where the specs leave it open
 
-These are stand-ins, to be replaced when the specs or a capture give them:
+The following older placement/fallback notes still need native comparison.
+Resolved logo, live character-card, button sizing and highlight-layer behavior
+is described above and in the roadmap; the old stand-in descriptions for those
+features have been removed.
 
 - **Positions:**
   - the Back button at (20, 20);
@@ -291,15 +294,9 @@ These are stand-ins, to be replaced when the specs or a capture give them:
   - the Apply/OK/Cancel and Defaults/OK/Cancel buttons along the widget's bottom;
   - the name field and Create Character counting their negative y from the bottom (the spec's open
     question 4).
-- **Templates.** Buttons do not shrink below their `gui.plx` design size, so the spec's 110 × 15 and
-  140 × 15 buttons draw larger. A button's clipped highlight is left out: the overlay has no clipping layers.
 - **Backgrounds.** The options, controls, look panel and help sheet use `blackwidget`; the list entries use a
   dark square. The spec does not name their templates.
 - **The help sheet's layout.** It lists the bindings in two columns.
-- **The logo's overlay projection and lighting.** These are the spec's open question 1. The scale is taken as
-  clip units of the window height, so the logo is 0.011 × 1024 / 2 pixels a voxel, about 370 pixels wide at any
-  window size. The screen x runs right to left (Direct3D's view), because drawn the other way the logo reads
-  mirrored. A fixed front light shades it.
 - **The start spot.** The spec's search (frontend-characters.md §4.2): an angle and a radius of 100,000 to
   132,767 cells drawn with `rand()`, then x walked a cell at a time, each area's landmark cell tested: object
   0x35, the ground at (16 x + 8, 16 y + 40) not below 0, the region's biome 0, 2 or 7, the cell's place a town
@@ -307,10 +304,6 @@ These are stand-ins, to be replaced when the specs or a capture give them:
   (open question 3) are not tested. A world kept as extracted zones has ground only around its home: there the
   search starts at the home with no radius and takes only extracted cells; when none passes, the home's cell
   stands in.
-- **The list's creatures**: the scale (80 interface units a block), the ease rate toward the walk and back,
-  the walking speed (the intent's 8 blocks a second) and the entry's dark square (behind the text only, so the
-  creature is not darkened) are CubeVulkan's.
-- **The logo's projection and lighting** (above) are the spec's open question 1.
 - **Escape** goes back (it also opens the system menu in play). The game's own Escape flag is open
   question 4.
 - **Camera speed's scale** (cameraSpeed / 50) and the Zoom In / Zoom Out rate (twice as near or far a second)
@@ -347,3 +340,15 @@ ChatWidget defaults; generic cached-node traversal, altered cache scalars, neste
 cache/clip projections and complete native sampler/binding state remain separate.
 See `docs/specs/steam-chat-cache-lifecycle.md`, `steam-plasma-surface-caches.md`
 and the cache invalidation/startup/caller supplements.
+
+## Turning HUD coin
+
+The owner's `sprites/gold-coin.cub` shares the logo's queued WORLD model path.
+Its black shadow precedes the white coin, offset five GUI units right/down with
+shader DepthOffset−0.5. Both have Glow1 and retain WORLD pixel grading and the
+frame's sky/fog inputs. The50-degree camera uses the configured zone-window far
+plane; its own NDC depth translation is separate from each shader offset.
+The world clock controls the10-second turn. Missing owner content stays absent;
+no replacement artwork is generated. All queued coin requests precede Plasma
+and its layer/cache boundaries. Original-game visual comparison and the remaining
+compass/context-model paths are tracked separately from this bounded conversion.

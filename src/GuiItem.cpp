@@ -109,7 +109,7 @@ Placement ringPlacement(size_t index, size_t count, glm::ivec3 allocation, glm::
     return at;
 }
 
-std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &at, float farPlane) {
+std::optional<Geometry> queuedGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &at, float farPlane) {
     if (viewport.x <= 0 || viewport.y <= 0 || allocation.x <= 0 || allocation.y <= 0 || allocation.z <= 0 || farPlane <= 0.05f)
         return std::nullopt;
     Geometry out;
@@ -290,8 +290,8 @@ void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retai
         out.push_back(draw);
         return;
     }
-    if (request.kind == Request::Kind::Ring || request.kind == Request::Kind::Logo) {
-        const auto transform = ringGeometry(request.allocation, viewport, request.at, request.farPlane);
+    if (request.kind == Request::Kind::Ring || request.kind == Request::Kind::QueuedModel) {
+        const auto transform = queuedGeometry(request.allocation, viewport, request.at, request.farPlane);
         if (!transform)
             return;
         const bool sky = retained.whiteSky;
@@ -299,12 +299,16 @@ void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retai
         if (request.kind == Request::Kind::Ring) {
             retained.whiteSky = sky;
             retained.shininess = shininess(request.item);
-        } // Logo retains the frame's sky, with white material and all effects zero.
+        } else if (request.state)
+            retained = *request.state;
         Draw draw;
         draw.mesh = request.mesh;
         draw.model = transform->model;
         draw.projection = transform->projection;
         draw.state = retained;
+        draw.material = request.material;
+        draw.opacity = request.opacity;
+        draw.depthOffset = request.depthOffset;
         out.push_back(draw); // queued models have no black duplicate or spirit-cube pass
         return;
     }

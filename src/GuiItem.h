@@ -24,7 +24,7 @@ struct Geometry {
 std::optional<Geometry> geometry(int category, glm::ivec3 allocation, glm::ivec2 viewport, const Placement &);
 Placement ringPlacement(size_t index, size_t count, glm::ivec3 allocation, glm::ivec2 viewport, float radius, float angle, float guiScale,
                         float worldMilliseconds);
-std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &, float farPlane);
+std::optional<Geometry> queuedGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &, float farPlane);
 std::optional<glm::mat4> screenProjection(glm::ivec2 viewport, glm::vec2 screen, float farPlane, float depth);
 float phase(int32_t guiClockMs);
 Placement spritePlacement(glm::vec2 frameOrigin, glm::vec2 frameSize, int32_t guiClockMs);
@@ -60,8 +60,8 @@ struct Request {
     nativesaves::Item item{};
     Placement at;
     // A mesh0 Character entry carries the admitted nonnull card's setup without geometry.
-    enum class Kind { Widget, Ring, Logo, RawEdit, Character } kind = Kind::Widget;
-    float farPlane = 960;                       // Ring/Logo use the ordinary screen-overlay lens
+    enum class Kind { Widget, Ring, QueuedModel, RawEdit, Character } kind = Kind::Widget;
+    float farPlane = 960;                       // Ring/QueuedModel use the ordinary screen-overlay lens
     glm::mat4 model{1}, view{1}, projection{1}; // RawEdit accepts the caller's matrices without normalization
     glm::vec4 material{1};
     std::optional<ShaderState> state;

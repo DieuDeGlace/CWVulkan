@@ -327,7 +327,7 @@ int guiItemTests() {
     GUI_CHECK(near(ringAt.size, ((1024.0f / 1001.0f) * .09f) / 8) && !ringAt.darkPass);
     const auto selectedAt = ringPlacement(1, 4, {2, 4, 8}, {1001, 1001}, 200, -90, 1, 0);
     GUI_CHECK(selectedAt.screen == ringAt.screen);
-    const auto ringTransform = ringGeometry({2, 4, 8}, {1001, 1001}, ringAt, 960);
+    const auto ringTransform = queuedGeometry({2, 4, 8}, {1001, 1001}, ringAt, 960);
     GUI_CHECK(ringTransform);
     if (ringTransform) {
         const auto middle = ringTransform->model * glm::vec4(1, 2, 4, 1);

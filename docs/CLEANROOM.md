@@ -1087,3 +1087,19 @@ destinations and restored main-depth attachment. Actual HUD emission tests initi
 and post-allocation repaint, skipped callbacks and repeated editing invalidation.
 Only local owner faces/atlas cells are loaded; no artwork or reference pixels enter
 test source. No owner assets, native instructions or original-game binaries ship.
+
+## Queued HUD coin, 2026-11-02
+
+The implementer used independent hud-money.md section2, WORLD pass controls
+section4 and the shared vertex/output contracts plus engine sources only. No
+additional native-code investigation or access to original implementations was
+used. The native-only author remains separate. A common queued-model request
+now serves the logo and coin; the coin loads the owner's CUB once and supplies
+its own material, Glow and shader DepthOffset. Full header allocation and the
+configured screen camera replace the baked-color approximation. The earlier
+CPU map-color helpers are no longer used by this runtime coin path; existing
+independent CPU test references still use them. Synthetic solid CUBs exercise
+actual renderer uploads and pixels in both world appearance styles. No coin
+artwork, original binaries, extracted files or captures enter either package.
+These checks do not establish complete original-game visual parity or general
+resource grouping across all queued overlay producers.

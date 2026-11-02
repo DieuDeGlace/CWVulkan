@@ -67,7 +67,7 @@ void logo() {
     FRONT_CHECK(near(half.centre.y, 1080 * 0.2, 1e-2) && near(half.tiltDegrees, 25, 1e-3) && near(again.centre.y, p.centre.y, 1e-3));
     // The queued lens is native Y-up; RendererGui alone performs the Vulkan Y adaptation.
     auto request = logoRequest(p, {66, 31, 8}, 7, 960);
-    FRONT_CHECK(request.kind == guiitem::Request::Kind::Logo && request.beforeVertex == 0);
+    FRONT_CHECK(request.kind == guiitem::Request::Kind::QueuedModel && request.beforeVertex == 0);
     auto state = guiitem::characterState(); // a previous portrait must not whiten this logo's sky
     std::vector<guiitem::Draw> draws;
     guiitem::appendDraws(request, {1920, 1080}, state, draws);

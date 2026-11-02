@@ -1,5 +1,6 @@
 // Actual Vulkan integration: synthetic geometry and optional owner-atlas HUD emission.
 #include "Renderer.h"
+#include "HudCoin.h"
 #include "Frontend.h"
 #include "ChatLine.h"
 #include "Assets.h"
@@ -210,6 +211,26 @@ int guiRenderTests() {
         check((prefix + "world-colour").c_str(), {}, {logo}, {}, {64, 64}, {128, 128, 128});
         check((prefix + "before-plasma").c_str(), background, {logo}, {}, {64, 64}, {0, 0, 255});
         check((prefix + "retained-scene-depth").c_str(), {}, {logo}, {preceding}, {64, 64}, {255, 0, 0});
+    }
+    // An asset-free solid CUB exercises the same producer as the owner's coin.
+    CubModel coinCub;
+    coinCub.sx = coinCub.sy = 8;
+    coinCub.sz = 2;
+    coinCub.rgb.assign(8 * 8 * 2 * 3, 128);
+    const auto coinMesh = renderer.upload(guiitem::voxelMesh(coinCub));
+    const auto coins = hudcoin::coinRequests(coinMesh, {8, 8, 2}, 960, 1, 128, 0);
+    auto overBackground = coins;
+    for (auto &request : overBackground)
+        request.beforeVertex = background.size();
+    for (auto style : {RenderStyle::Steam, RenderStyle::Alpha}) {
+        settings.style = style;
+        renderer.settings = settings;
+        const std::string prefix = style == RenderStyle::Steam ? "steam-coin-" : "alpha-coin-";
+        check((prefix + "world-colour").c_str(), background, overBackground, {}, {45, 52}, {128, 128, 128});
+        check((prefix + "offset-shadow").c_str(), background, overBackground, {}, {64, 68}, {0, 0, 0});
+        check((prefix + "shadow-only").c_str(), background, {overBackground[0]}, {}, {50, 57}, {0, 0, 0});
+        check((prefix + "before-plasma").c_str(), background, coins, {}, {45, 52}, {0, 0, 255});
+        check((prefix + "retained-scene-depth").c_str(), {}, coins, {preceding}, {45, 52}, {255, 0, 0});
     }
     guiitem::Request raw;
     raw.kind = guiitem::Request::Kind::RawEdit;

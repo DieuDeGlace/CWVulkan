@@ -67,7 +67,7 @@ LogoPlacement logoPlacement(float width, float height, float guiScale, uint32_t 
 
 guiitem::Request logoRequest(const LogoPlacement &p, glm::ivec3 allocation, uint32_t mesh, float farPlane) {
     guiitem::Request request;
-    request.kind = guiitem::Request::Kind::Logo;
+    request.kind = guiitem::Request::Kind::QueuedModel;
     request.mesh = mesh;
     request.allocation = allocation;
     request.at.screen = p.centre;

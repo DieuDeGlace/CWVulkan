@@ -54,7 +54,7 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.73 local GUI image cases (58
+  targets; the owner button shine is enabled.83 local GUI image cases (68
   asset-free,15 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
@@ -105,7 +105,15 @@ individual feature documents.
 - [x] Owner setup wizard, data validation, journal/restore and interrupted-run
   tests against a simulated installation. The real-install checks remain below.
 - [x] Alpha/Steam sky styles, clouds, stars, plant sway, map rendering, HUD coin,
-  sound-table import and native GUI/font loading from owner data.
+  sound-table import and native GUI/font loading from owner data. The owner-backed
+  coin and its black shadow now use the queued WORLD shader, full CUB header
+  centering,50-degree lens and configured zone-window far plane. World-clock
+  rotation, Glow1, separate shader depth offsets and placement are preserved;
+  CPU-baked colors and per-turn mesh variants are removed. Mesh handles are
+  scoped to the play session rather than retained across renderer recreation.
+  Ten asset-free image
+  cases cover both appearance styles, source-mesh admission, the offset shadow,
+  Plasma ordering and retained scene depth. Wider native HUD comparisons remain.
 - [x] Water surface/mesh/depth changes and render-only lilies; HP initialization
   capped at the native maximum; statue slab compared with exported blocks.
   See [water progress](water-progress.md) for the remaining rendering limits.
