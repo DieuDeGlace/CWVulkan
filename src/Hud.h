@@ -164,7 +164,7 @@ class Hud {
             std::vector<Item> items;
             float worldMilliseconds = 0, farPlane = 960;
         } modelRow;
-        int gold = -1; // top left, with the game's coin (-1 = hidden)
+        std::optional<int32_t> gold; // absence hides the counter; every supplied signed value is displayed
         // The quick buttons (the game's frame update): the key's short name, the line under it (the
         // item's or skill's name, a cooldown, the use key's prompt) and a count.
         struct Quick {

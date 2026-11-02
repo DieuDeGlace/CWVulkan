@@ -70,6 +70,9 @@ struct Request {
 };
 std::vector<Request> hudItemRequests(uint32_t mesh, glm::ivec3 allocation, const nativesaves::Item &, int x, glm::ivec2 viewport,
                                      float guiScale, float worldMilliseconds, float farPlane);
+// Root opaque screen models share one resource order; equal handles keep FIFO.
+// A layer cut within that prefix leaves the caller's explicit stream untouched.
+void orderScreenQueue(std::vector<Request> &, size_t firstLayerItem);
 struct Draw {
     uint32_t mesh = 0;
     glm::mat4 model{1}, view{1}, projection{1};

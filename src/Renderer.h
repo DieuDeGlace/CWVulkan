@@ -263,11 +263,16 @@ class Renderer {
     // Interface: an RGBA atlas (uploaded once, replaced on a later call) and the
     // triangles to draw over the next frame (3 vertices each, atlas texels as uv).
     bool setOverlayAtlas(uint32_t width, uint32_t height, const uint8_t *rgba);
-    void overlay(std::vector<OverlayVertex> triangles, const std::vector<guiitem::Request> &items = {},
-                 const std::vector<plasma::LayerCommand> &layers = {}) {
+    void overlay(std::vector<OverlayVertex> triangles, std::vector<guiitem::Request> items = {},
+                 std::vector<plasma::LayerCommand> layers = {}) {
+        size_t firstLayerItem = items.size();
+        for (const auto &layer : layers)
+            if (layer.before.items < firstLayerItem)
+                firstLayerItem = layer.before.items;
+        guiitem::orderScreenQueue(items, firstLayerItem);
         overlayVertices = std::move(triangles);
-        guiRequests = items;
-        overlayLayers = layers;
+        guiRequests = std::move(items);
+        overlayLayers = std::move(layers);
     }
     VkExtent2D screenSize() const { return extent; }
 

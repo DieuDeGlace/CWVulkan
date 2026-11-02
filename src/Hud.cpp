@@ -1082,13 +1082,13 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     } else if (auto it = bars.find("xp"); it != bars.end() && !guiLoaded)
         bar(out, it->second, state.showXp ? (float)state.xp / std::max(1, state.xpMax) : 0,
             state.showXp ? std::to_string(state.xp) + "/" + std::to_string(state.xpMax) : "");
-    if (state.gold >= 0 && guiLoaded) { // The game's money (hud-money.md): the "gold" text; its turning coin is a 3D model (src/HudCoin.*)
-        plasmaLabel(out, std::to_wstring(state.gold), {0, 0}, {85, 60}, 24, 5);
-    } else if (state.gold >= 0) { // The game's money counter, top left.
+    if (state.gold && guiLoaded) { // The game's money (hud-money.md): the "gold" text; its turning coin is a 3D model (src/HudCoin.*)
+        plasmaLabel(out, std::to_wstring(*state.gold), {0, 0}, {85, 60}, 24, 5);
+    } else if (state.gold) { // The game's money counter, top left.
         if (auto it = icons.find("gold-coin"); it != icons.end())
             image(out, it->second.atlas, {it->second.w, it->second.h}, std::round(offsetX + 28 * scale), std::round(26 * scale),
                   52 * scale / it->second.w);
-        text(out, damageFont, std::to_string(state.gold), std::round(offsetX + 112 * scale), std::round(66 * scale - damageFont.ascent),
+        text(out, damageFont, std::to_string(*state.gold), std::round(offsetX + 112 * scale), std::round(66 * scale - damageFont.ascent),
              {255, 255, 255, 255}, BLACK, std::max(1.f, 2 * scale));
     }
     const auto contextText = hudcontext::countText(state.contextCount);

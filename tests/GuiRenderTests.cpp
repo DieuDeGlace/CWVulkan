@@ -213,6 +213,19 @@ int guiRenderTests() {
         check((prefix + "before-plasma").c_str(), background, {logo}, {}, {64, 64}, {0, 0, 255});
         check((prefix + "retained-scene-depth").c_str(), {}, {logo}, {preceding}, {64, 64}, {255, 0, 0});
     }
+    auto brightLogoCub = logoCub;
+    brightLogoCub.rgb = {192, 192, 192};
+    auto highResource = logo;
+    highResource.mesh = renderer.upload(guiitem::voxelMesh(brightLogoCub));
+    for (auto style : {RenderStyle::Steam, RenderStyle::Alpha}) {
+        settings.style = style;
+        renderer.settings = settings;
+        const std::string prefix = style == RenderStyle::Steam ? "steam-queue-" : "alpha-queue-";
+        check((prefix + "resource-order").c_str(), {}, {highResource, logo}, {}, {64, 64}, {216, 216, 216});
+        auto black = logo;
+        black.material = {0, 0, 0, 1};
+        check((prefix + "same-resource-fifo").c_str(), {}, {logo, black}, {}, {64, 64}, {0, 0, 0});
+    }
     // An asset-free solid CUB exercises the same producer as the owner's coin.
     CubModel coinCub;
     coinCub.sx = coinCub.sy = 8;
@@ -461,6 +474,18 @@ int guiRenderTests() {
             hud.draw(rowState, amountZero);
             if (amountTwo.size() <= amountOne.size() || amountOne.size() != amountZero.size()) {
                 std::cerr << "FAIL actual HUD context count threshold/font emission\n";
+                ++failures;
+            }
+            rowState.modelRow.items.clear();
+            rowState.gold.reset();
+            std::vector<OverlayVertex> absentGold, positiveGold, negativeGold;
+            hud.draw(rowState, absentGold);
+            rowState.gold = 1;
+            hud.draw(rowState, positiveGold);
+            rowState.gold = -1;
+            hud.draw(rowState, negativeGold);
+            if (positiveGold.size() <= absentGold.size() || negativeGold.size() <= positiveGold.size()) {
+                std::cerr << "FAIL actual HUD signed gold/absence separation\n";
                 ++failures;
             }
             ChatLine cachedChat;

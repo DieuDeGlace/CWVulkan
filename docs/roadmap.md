@@ -54,7 +54,7 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.98 local GUI image cases (82
+  targets; the owner button shine is enabled.102 local GUI image cases (86
   asset-free,16 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
@@ -131,7 +131,16 @@ individual feature documents.
   native scale/clock, typed effects and the shared queued WORLD path. Synthetic
   lifecycle/selection checks, actual World zero-step integration, eight row image
   cases and actual HUD resource/count emission pass. Full native pixel comparisons,
-  global cross-producer resource ordering and general cached text lifetimes remain open.
+  original-resource identity/alias comparisons and general cached text lifetimes remain open.
+- [x] Shared root HUD screen-queue grouping by engine resource identity, FIFO for
+  equal resources, before Plasma callbacks. Interior layer/cache cuts and later
+  widget/faded streams retain their explicit order. CPU boundaries and four
+  overlapping-model GPU cases pass in both appearance styles. Renderer overlay
+  vectors now accept ownership from callers that move their prepared streams.
+  Native pointer-number/alias correspondence still requires wider comparison.
+  Gold display now distinguishes absent data from signed values; runtime negative
+  amounts render normally, with the native save-reader quirk unchanged. Actual
+  owner-HUD glyph emission checks positive/negative/absent values.
 - [x] Water surface/mesh/depth changes and render-only lilies; HP initialization
   capped at the native maximum; statue slab compared with exported blocks.
   See [water progress](water-progress.md) for the remaining rendering limits.

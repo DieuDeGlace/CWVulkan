@@ -468,6 +468,24 @@ int guiItemTests() {
     request.kind = Request::Kind::Widget;
     appendDraws(request, {1600, 1024}, state, draws);
     GUI_CHECK(draws.empty() && state.whiteSky && state.front == glm::vec4(1)); // null item resource skips setup
+    Request first, second, third, widget;
+    first.kind = third.kind = Request::Kind::QueuedModel;
+    second.kind = Request::Kind::Ring;
+    first.mesh = third.mesh = 9;
+    second.mesh = 3;
+    first.material.x = .25f;
+    third.material.x = .75f;
+    std::vector<Request> queue{first, second, third, widget, second};
+    orderScreenQueue(queue, 3);
+    GUI_CHECK(queue[0].mesh == 3 && queue[1].mesh == 9 && queue[1].material.x == .25f && queue[2].material.x == .75f);
+    GUI_CHECK(queue[3].kind == Request::Kind::Widget && queue[4].mesh == 3); // later callbacks retain their stream order
+    queue = {first, second, third};
+    orderScreenQueue(queue, 1);
+    GUI_CHECK(queue[0].mesh == 9 && queue[1].mesh == 3); // a clip/cache cut inside the prefix prevents reordering
+    second.beforeVertex = 6;
+    queue = {first, second, third};
+    orderScreenQueue(queue, 3);
+    GUI_CHECK(queue[0].mesh == 9 && queue[1].mesh == 3); // queued-looking callbacks after Plasma are not scene submissions
     const auto light = lightDirection();
     GUI_CHECK(near(glm::length(light), 1) && near(light.y / light.x, 0.4f) && near(light.z, -light.x));
     std::printf("GUI item transforms: %s\n", failures ? "FAILED" : "PASS");

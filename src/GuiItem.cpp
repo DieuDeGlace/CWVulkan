@@ -289,6 +289,16 @@ std::vector<Request> hudItemRequests(uint32_t mesh, glm::ivec3 allocation, const
     return {shadow, body};
 }
 
+void orderScreenQueue(std::vector<Request> &requests, size_t firstLayerItem) {
+    const auto end = std::find_if_not(requests.begin(), requests.end(), [](const Request &request) {
+        const bool screen = request.kind == Request::Kind::Ring || request.kind == Request::Kind::QueuedModel;
+        return screen && request.beforeVertex == 0 && request.opacity == 1 && request.material.a >= 1 && !request.mirrored;
+    });
+    if (size_t(end - requests.begin()) > firstLayerItem)
+        return;
+    std::stable_sort(requests.begin(), end, [](const Request &a, const Request &b) { return a.mesh < b.mesh; });
+}
+
 void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &out) {
     if (!request.mesh) {
         if (request.kind == Request::Kind::Character)

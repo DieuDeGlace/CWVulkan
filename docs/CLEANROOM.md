@@ -1151,3 +1151,21 @@ The lit row pixel reference comes from the independent fixed-palette equations,
 not an owner screenshot or retuning the shader to a sampled color. Invalid resource
 skip is an engine admission policy, not a newly asserted native completed branch.
 No original code, native instructions, owner artwork or extracted data is packaged.
+
+## Root HUD queue identity and signed money, 2026-11-02
+
+The implementer used the already independently authored/read HUD-model-overlays
+section6, Ring-rendering resource order and HUD-money section4, plus engine sources
+only. No new native tracing or access to original implementations was used. The
+renderer orders its admitted root opaque screen prefix by its own resource handles
+and keeps FIFO within one handle. It leaves explicit interior layer/cache cuts,
+later callbacks and faded/opposite streams intact. This is an engine identity
+mapping, not a claim that handles numerically reproduce another process's resource
+pointers or establish every owner-resource alias. Existing native numeric/visual
+comparison gates therefore remain.
+
+Synthetic overlapping CUBs verify resource order and same-resource FIFO in both
+appearance modes. Actual local-font HUD emission verifies signed gold separately
+from missing display data. Original native-save gold decoding remains unchanged.
+Only engine-owned shader/geometry and local owner font inputs are used; no owner
+artwork, native instructions or original-game files enter the source/runtime packages.

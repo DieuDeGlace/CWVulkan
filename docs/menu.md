@@ -351,7 +351,7 @@ plane; its own NDC depth translation is separate from each shader offset.
 The canonical float simulation clock controls the10-second turn. Missing owner content stays absent;
 no replacement artwork is generated. All queued coin requests precede Plasma
 and its layer/cache boundaries. Original-game visual comparison and global
-cross-producer resource ordering remain separate from this bounded conversion.
+original-resource identity comparisons remain separate from this bounded conversion.
 
 ## HUD compass and typed effects
 
@@ -390,3 +390,17 @@ is added. Missing resources preserve assigned positions and draw nothing.
 See [context state](specs/steam-hud-context-item-lifecycle.md) and
 [HUD models](specs/steam-hud-model-overlays.md). Broader native visual/resource-order
 checks and generic persistent text/cache behavior remain roadmap work.
+
+## Root screen-model queue and money values
+
+The ordinary root opaque screen-model prefix groups by engine resource handle,
+keeping submission order within a shared resource. A clip/cache boundary inside
+that prefix prevents reordering; direct Widget callbacks and faded/opposite
+requests retain their supplied stream. Engine handles are the local identity
+mapping, rather than a promise of equal original-process pointer numbers/aliases.
+
+HUD money uses optional signed data: absence hides the counter, while any supplied
+int32 amount, including zero and negative values, is rendered as decimal text.
+This removes the former negative-value visibility sentinel. Native character-save
+gold conversion is unchanged. Prepared overlay vectors transfer into the renderer
+when callers move them, avoiding their former extra copy through const references.
