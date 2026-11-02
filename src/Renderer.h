@@ -96,6 +96,7 @@ constexpr uint32_t GUI_WORLD = 1u << 10;    // immediate owner-item WORLD shader
 constexpr uint32_t STEAM_WORLD = 1u << 9;   // ordinary world/water pass; excludes sky and menu art
 constexpr uint32_t ORIGIN_WORLD = 1u << 11; // model uses the native fixed look-at origin
 constexpr uint32_t QUEUED_WORLD = 1u << 12; // explicit ordinary material/effect controls
+constexpr uint32_t WORLD_DEPTH_OFFSET = 1u << 13; // clip offset without changing material/effect interpretation
 
 struct DrawItem {
     uint32_t mesh = 0;

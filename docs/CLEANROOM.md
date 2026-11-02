@@ -796,3 +796,17 @@ Synthetic nodes test signed order, sentinel behavior, full item bytes and visibl
 changing/unavailable data. These checks do not prove a native lock or atomic snapshot;
 the bounded ABI assumes a valid quiescent map. Real-install capture acceptance is
 separate. Owner items, models and exports stay out of source/runtime packages.
+
+## Retained water/particle state and point lifetime, 2026-11-02
+
+The implementer read steam-world-pass-controls section3, steam-particle-bursts
+section6, the independent point-table-state-lifetime supplement and engine sources
+only. The native-only author traced construction, early sky, late overlays and
+shared GUI point setters without implementation access. Uninitialized native
+sky-table inputs do not define a numeric oracle: the engine deliberately uses
+an empty fallback until a scene consumer binds a table. It does not simulate
+uninitialized memory, retain a selected-zone key or infer an origin rebase.
+
+Particle and water clip offsets retain preceding WORLD state; water's depth and
+color phases remain distinct. Asset-free Vulkan triangles exercise a failed
+faded-resource setter followed by each consumer, without native model bytes.

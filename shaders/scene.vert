@@ -55,7 +55,7 @@ void main() {
         gl_Position = f.projection * viewPoint;
     else
         gl_Position = f.viewProj * vec4(world, 1);
-    if ((flags & (GUI_WORLD | QUEUED_WORLD)) != 0u)
+    if ((flags & (GUI_WORLD | QUEUED_WORLD | WORLD_DEPTH_OFFSET)) != 0u)
         gl_Position.z -= pc.params.z; // native shader DepthOffset, not NDC translation
     // Preserve homogeneous coordinates for division after raster interpolation.
     vClip = vec4(gl_Position.x, -gl_Position.y, gl_Position.zw);

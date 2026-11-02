@@ -1624,12 +1624,17 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         set.w = count;
         return set;
     };
+    // Defined engine fallback: native construction/early-sky inputs do not establish
+    // numeric points before a consumer binds them (steam-point-table-state-lifetime.md).
     glm::uvec4 inheritedWorldLights(0);
     float inheritedWorldOpacity = 1;
     float inheritedWorldShininess = 0, inheritedWorldDepthOffset = 0;
+    enum class WorldPass { Colour, FadedDepth, WaterDepth, WaterColour };
     // shading: false for the shadow maps, which need no light.
     auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true, std::optional<float> opacity = {},
-                           bool depthOnly = false) {
+                           WorldPass pass = WorldPass::Colour) {
+        const bool depthOnly = pass == WorldPass::FadedDepth;
+        const bool nativeWater = !alphaLook && !menuSky && (pass == WorldPass::WaterDepth || pass == WorldPass::WaterColour);
         const GpuMesh &m = meshes[item.mesh];
         PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, opacity.value_or(item.opacity)),
                          glm::vec4(1, 0, 0, 0), glm::uvec4(0)};
@@ -1659,7 +1664,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 pc.params.z = controls.depthOffset;
                 pc.look = {1, controls.white, controls.shininess, controls.glow};
             }
-            if (!particle && !ownedCube && !depthOnly) {
+            if (!particle && !ownedCube && !depthOnly && pass != WorldPass::WaterDepth) {
                 steampoints::ZoneKey key;
                 if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
                     key = item.nativeLights->key;
@@ -1706,6 +1711,20 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             } else if (particle) {
                 pc.lights = inheritedWorldLights;
                 pc.params.w = inheritedWorldOpacity;
+                if (!alphaLook && !menuSky) {
+                    pc.params.x = float(uint32_t(pc.params.x) | WORLD_DEPTH_OFFSET);
+                    pc.params.z = inheritedWorldDepthOffset;
+                    pc.look.y = 0;
+                    inheritedWorldShininess = pc.look.z; // each admitted particle submits its own value
+                }
+            } else if (nativeWater) {
+                // Water resets White/Glow/Opacity, but retains the preceding depth offset
+                // and shininess. Only its color pass selects a new zone point table.
+                pc.params.x = float(uint32_t(pc.params.x) | WORLD_DEPTH_OFFSET);
+                pc.params.z = inheritedWorldDepthOffset;
+                pc.params.w = 1;
+                pc.look = {1, 0, inheritedWorldShininess, 0};
+                inheritedWorldLights = pc.lights;
             } else {
                 inheritedWorldLights = pc.lights;
                 inheritedWorldOpacity = pc.params.w;
@@ -2040,7 +2059,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                         bound = pipeline;
                     }
-                    bindAndDraw(item, 0, true, {}, faded && pass == 0);
+                    bindAndDraw(item, 0, true, {}, faded && pass == 0 ? WorldPass::FadedDepth : WorldPass::Colour);
                 }
     };
     drawSceneryQueue(steamscenery::Queue::OrdinaryOpaque, false);
@@ -2116,22 +2135,27 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         vkCmdBeginRendering(cmd, &ri);
         vkCmdSetViewport(cmd, 0, 1, &vp);
         vkCmdSetScissor(cmd, 0, 1, &sc);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterLayout, 1, 1,
-                                &waterFrames[frameIndex].set, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterLayout, 1, 1, &waterFrames[frameIndex].set, 0, nullptr);
+    }
+    if (!alphaLook && !menuSky) {
+        // The native water prologue clears points even when no water group draws.
+        inheritedWorldLights = glm::uvec4(0);
+        inheritedWorldOpacity = 1; // the native stored water opacity remains exactly1
     }
     // Native Steam water keeps its no-color nearest-depth pass. Shared water
     // composites the already rendered scene and writes only its nearest surface.
     if (!sharedWater && !alphaLook) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterDepthPipeline);
         for (auto &item : water)
-            if (visible(item)) bindAndDraw(item, 0);
+            if (visible(item))
+                bindAndDraw(item, 0, true, {}, WorldPass::WaterDepth);
     }
-    const auto surfacePipeline = sharedWater ? (alphaLook ? omegaAlphaWaterPipeline : omegaWaterPipeline)
-                                              : (alphaLook ? alphaWaterPipeline : waterPipeline);
+    const auto surfacePipeline =
+        sharedWater ? (alphaLook ? omegaAlphaWaterPipeline : omegaWaterPipeline) : (alphaLook ? alphaWaterPipeline : waterPipeline);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, surfacePipeline);
     for (auto &item : water)
         if (visible(item))
-            bindAndDraw(item, 0);
+            bindAndDraw(item, 0, true, {}, WorldPass::WaterColour);
     if (alphaLook) {
         if (!sharedWater)
             drawAlphaFar();

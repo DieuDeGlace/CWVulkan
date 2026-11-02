@@ -34,7 +34,8 @@ The meaningful main ordering in0xe2e00 is:
 
 1. Normal scene constants and sky preparation.
 2.0xd3170 prepares living actors, ordinary scenery descriptors and effects;
- 0xce5f0 collects/binds the current light tables.
+ 0xce5f0 collects/recalculates the current CPU zone light tables; the
+ subsequent consumers perform shader binding/upload.
 3. Terrain0xe5070, then opaque ordinary descriptor list **renderer+0x138**,
  opaque second list **+0x1d0**, and its faded consumer0xe7980.
 4. Batched effect consumers0xe6270 and, when enabled,0xe6840.

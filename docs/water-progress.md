@@ -11,6 +11,17 @@ The owner's local `water lillies.PNG` and `underwater shader.PNG` are the refere
 They remain outside the repository and distribution packages. The older Alpha-water
 pictures do not supersede this choice.
 
+## Retained WORLD depth state — 2026-11-02
+
+Steam's native water depth/color passes and the shared surface now retain the
+preceding WORLD clip offset. The water prologue clears point tables; only color
+passes select water-zone tables. Opacity remains the independently verified1.
+Particle draws likewise retain depth while keeping their separate material and
+shininess rules. Synthetic Vulkan cases exercise an unavailable faded resource
+whose setters still run, followed by particles, native water or shared water.
+Both original failing cases now pass, as does the shared-water regression. No
+water mesh, appearance reference or game asset is added to either package.
+
 ## Shared style implementation — 2026-10-30
 
 `[Water] Style=Omega` is the default independently of the Alpha/Steam lighting

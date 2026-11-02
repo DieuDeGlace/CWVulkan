@@ -695,6 +695,11 @@ transformed center location; missing-zone fallback tables are zero. The shader
 radial/normal attenuation remains `worldgen-parity-gaps.md` §9.3. Helper
 **0xce580** binds all-zero tables for draw paths that explicitly request it.
 
+Collection/recalculation is separate from shader upload. Construction, the
+early sky-table side effect, the mandatory late overlay clear, shared GUI
+state and origin-change retention are
+[point-table lifetime §§1–5](steam-point-table-state-lifetime.md).
+
 ### 3.2.1 Exact per-draw sprite center and zone-table binding
 
 Sources: opaque draw consumer **0xe6e60**, including the center/conversion

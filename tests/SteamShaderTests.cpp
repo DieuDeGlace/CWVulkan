@@ -735,10 +735,11 @@ int steamShaderTests() {
         nearby.target = {0, 0, 1};
         Lighting steady;
         steady.timeMs = 0;
-        const auto captureGround = [&](const char *name, const std::vector<DrawItem> &draws) {
+        const auto captureGround = [&](const char *name, const std::vector<DrawItem> &draws,
+                                       const std::vector<DrawItem> &waterDraws = std::vector<DrawItem>{}) {
             const auto path = root / (std::string(name) + ".png");
             renderer.capture(path.string());
-            renderer.frame(nearby, steady, {}, 0, draws, {});
+            renderer.frame(nearby, steady, {}, 0, draws, waterDraws);
             return centre(path);
         };
         const auto sky = captureGround("ground-order-sky", {});
@@ -844,6 +845,29 @@ int steamShaderTests() {
             sky && readyState && failedState && cubeOnly && *cubeOnly != *sky && *readyState == *sky && *failedState == *sky;
         std::cout << "Steam shader queued-unready-faded" << (inheritedFailure ? " PASS\n" : " FAIL\n");
         failures += !inheritedFailure;
+        // Both consumers retain DepthOffset, even when the preceding faded setter
+        // belonged to a resource whose GPU draw failed. Their native passes do not reset it.
+        const auto particleBase = captureGround("particle-retained-depth-baseline", {particle});
+        const auto clippedParticle = captureGround("particle-retained-depth", {unavailable, particle});
+        const bool particleDepth = sky && particleBase && clippedParticle && *particleBase != *sky && *clippedParticle == *sky;
+        std::cout << "Steam shader particle retained depth" << (particleDepth ? " PASS\n" : " FAIL\n");
+        failures += !particleDepth;
+        DrawItem surface;
+        surface.mesh = item.mesh;
+        surface.kind = DrawKind::Terrain;
+        surface.castShadow = false;
+        const auto waterBase = captureGround("water-retained-depth-baseline", {}, {surface});
+        const auto clippedWater = captureGround("water-retained-depth", {unavailable}, {surface});
+        const bool waterDepth = sky && waterBase && clippedWater && *waterBase != *sky && *clippedWater == *sky;
+        std::cout << "Steam shader water retained depth" << (waterDepth ? " PASS\n" : " FAIL\n");
+        failures += !waterDepth;
+        renderer.settings.water.style = waterlook::Style::Omega;
+        const auto sharedBase = captureGround("shared-water-retained-depth-baseline", {}, {surface});
+        const auto clippedShared = captureGround("shared-water-retained-depth", {unavailable}, {surface});
+        const bool sharedDepth = sky && sharedBase && clippedShared && *sharedBase != *sky && *clippedShared == *sky;
+        std::cout << "Steam shader shared water retained depth" << (sharedDepth ? " PASS\n" : " FAIL\n");
+        failures += !sharedDepth;
+        renderer.settings.water.style = waterlook::Style::Native;
         unavailable.nativeScenery->water = false; // ordinary faded context is consumed after water/effects
         checkCube("queued-ordinary-faded-after-effects", captureGround("queued-ordinary-faded-after-effects", {unavailable, cube}),
                   cubeOnly);

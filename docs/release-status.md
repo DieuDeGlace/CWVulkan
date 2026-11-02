@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary particles and water now retain the preceding WORLD clip depth offset.
+  Water depth/color phases have explicit state, its depth phase leaves points zero,
+  and only color draws bind zone tables. The water prologue clears points even for
+  an empty list; particles retain their material interpretation while submitting
+  their own shininess. Two new Vulkan cases failed before the correction and pass
+  afterward; a third covers the shared Omega-inspired water path. All five targets
+  build warning-free, the full CPU/owner suite and80 shader,2 camera,24 GUI,6 map,
+  shared-water/Alpha-scenery checks pass. Five no-save captures exit0 and were
+  reviewed, with the save database unchanged. These remain stability/regression
+  checks, not original-game visual acceptance.
+
+  The independent point-table lifetime audit now separates CPU collection from
+  uploads, identifies late overlay/GUI clears and establishes that construction
+  and the early sky path supply no valid numeric initial oracle. The engine's
+  empty no-binding fallback is explicit policy, not a native zero claim. Changing
+  origin does not imply rebasing a retained GPU table or refreshing a zone key.
+  Broader effect callers and native visual comparisons remain open.
+
 - Interaction targets and mission object checks now consume current loaded object
   vectors, including moved/resized footprints, canonical indices, current state,
   full required items and unsigned counts. Generation-time placement recovery and

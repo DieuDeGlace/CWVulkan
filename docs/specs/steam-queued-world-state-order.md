@@ -101,8 +101,11 @@ it binds each traversed zone's+0x240/+0x340 point tables when that zone's
 mesh-group count+0x1d0 is nonzero, before its group draws. If that is the last
 point binding, those tables survive through empty/skipped model consumers.
 If no such binding occurred, these model consumers retain their incoming
-point-table state; this supplement does not assign it a new numeric-zero
-default or audit shader construction to establish one.
+point-table state. Its construction, the early sky path's indeterminate
+table submission, and the later mandatory overlay clear are now bounded in
+[point-table lifetime §§1–5](steam-point-table-state-lifetime.md).
+Neither a new numeric-zero scene default nor a previous-zone-key refresh
+follows from empty model queues.
 
 Distinguish this pre-call snapshot from the batch prologue:0xe6270 immediately
 selects **state0**, sets **White0** and **Glow1**. It does **not** set Opacity,
