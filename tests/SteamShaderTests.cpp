@@ -1,5 +1,6 @@
 #include "SteamCreatureLights.h"
 #include "NativePose.h"
+#include "ParticleScene.h"
 #include "worldgen/Residents.h"
 #include "SteamTransientLights.h"
 // Explicit GPU integration check. No game assets or Steam process are needed.
@@ -959,6 +960,38 @@ int steamShaderTests() {
         stbi_image_free(pixels);
         std::cout << "Steam shader fixed-origin point-light binding" << (sameLight ? " PASS\n" : " FAIL\n");
         failures += !sameLight;
+        const auto particleMask = [&](const char *name, int64_t origin, float fraction, bool installed) {
+            Camera fixedCamera;
+            fixedCamera.eye = {float(origin), -2, 1};
+            fixedCamera.target = {float(origin), 0, 1};
+            fixedCamera.nativeFixedEye = steampoints::Point{origin * 65536, -2 * 65536, 65536};
+            fixedCamera.nativeFixedLookAt = steampoints::Point{origin * 65536, 0, 65536};
+            renderer.prepareScene(fixedCamera, steady, 0);
+            nativeparticles::Particle particle;
+            particle.position = {origin * 65536 + int64_t(fraction * 65536), 0, 65536};
+            particle.style = 1;
+            particle.size = 1;
+            particle.colour = {100, 100, 100, 1}; // saturated synthetic geometry mask
+            particlescene::Coordinates coordinates;
+            if (installed)
+                coordinates.renderOffset = renderer.steamRenderOffset();
+            auto draw = particlescene::draw(particle, actor.mesh, {1, 1, 2}, coordinates);
+            draw.flags = GLOW;
+            const auto path = root / (std::string(name) + ".png");
+            renderer.capture(path.string());
+            renderer.frame(fixedCamera, steady, {}, 0, {draw}, {});
+            return mask(path);
+        };
+        const auto particleIntegral = particleMask("particle-origin-integral", 0, 0, true);
+        const auto particleReference = particleMask("particle-origin-reference", 0, .25f, true);
+        const auto particleDistant = particleMask("particle-origin-distant", farBlock, .25f, true);
+        const auto preRounded = particleMask("particle-origin-home-control", farBlock, .25f, false);
+        const bool particleVisible = !particleReference.empty() &&
+                                     std::count(particleReference.begin(), particleReference.end(), uint8_t(1)) > 0 &&
+                                     particleReference != particleIntegral;
+        const bool particleOrigin = particleVisible && particleReference == particleDistant && preRounded == particleIntegral;
+        std::cout << "Steam shader particle fixed-origin coverage" << (particleOrigin ? " PASS\n" : " FAIL\n");
+        failures += !particleOrigin;
     }
     {
         renderer.setWorldProbe({});

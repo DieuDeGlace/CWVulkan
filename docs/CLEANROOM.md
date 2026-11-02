@@ -874,3 +874,15 @@ Synthetic finite matrix inputs test actual Vulkan coverage and retained occlusio
 the corrected winding/visible controls demonstrate three old-shader failures and
 new-shader passes, without asserting a native numeric or cross-GPU rounding oracle.
 No native code, shader instructions, reconstruction or owner assets were copied.
+
+## Particle scene-coordinate binding, 2026-11-02
+
+The implementer read existing independent particle-bursts section7.2, the shared
+style-consumer transform statement and WORLD-coordinate prose plus engine sources.
+No new native-code investigation or original implementation access was used.
+ParticleScene adapts the existing strict matrix builder to the installed scene
+origin while retaining the source-home Alpha path. Owner cube/note geometry stays
+in the local asset loader. Synthetic CPU inputs check header/Z/fraction behavior;
+a Vulkan triangle fixture compares near/distant coverage and a deliberately
+pre-rounded home-space control. It is not an original-game capture or a general
+last-bit GPU oracle. No models, captures, recordings or owner bytes are packaged.

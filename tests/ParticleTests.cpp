@@ -1,4 +1,6 @@
 #include "NativeParticles.h"
+#include "ParticleScene.h"
+#include "Renderer.h"
 #include "GameMath.h"
 #include "NativeCrt.h"
 #include "NativePose.h"
@@ -130,6 +132,20 @@ int particleTests() {
         const auto m = matrix(p, {-65536, -2 * 65536}, {3, 5, 7});
         check(glm::vec3(m[3]) == glm::vec3(-.75f, -1.25f, 1.25f) && m[0][0] == .5f,
               "full allocation centering preserves unequal header dimensions and scene offsets");
+        const int64_t origin = int64_t(1) << 40;
+        p.position = {origin + 16384, -origin - 32768, 3 * 65536};
+        particlescene::Coordinates coordinates;
+        coordinates.homeZ = 128;
+        coordinates.renderOffset = std::array<int64_t, 2>{-origin, origin};
+        const auto placed = particlescene::draw(p, 7, {3, 5, 7}, coordinates);
+        check(placed.nativeModel && glm::vec3((*placed.nativeModel)[3]) == glm::vec3(.25f, -.5f, 1.25f),
+              "particle scene keeps fixed-origin fractions and unshifted native Z");
+        check(placed.model[3].z == 129.25f && placed.mesh == 7 && !placed.castShadow && placed.kind == DrawKind::Particle &&
+                  placed.nativeParticle->centre == p.position,
+              "source-home Z and producer sphere stay independent of native WORLD placement");
+        coordinates.renderOffset.reset();
+        const auto alpha = particlescene::draw(p, 7, {3, 5, 7}, coordinates);
+        check(!alpha.nativeModel && alpha.model == placed.model, "Alpha keeps its source-home placement without unused native matrices");
         p.position[0] = std::numeric_limits<int64_t>::max() - 100;
         const auto wrapped = matrix(p, {200, 0}, {0, 0, 0});
         check(wrapped[3].x == float(gamemath::addFixed(p.position[0], 200)) * (1.0f / 65536.0f),

@@ -263,6 +263,7 @@ add_library(engine STATIC
     src/CameraPosition.cpp
     src/NativeDeadCreatures.cpp
     src/NativeParticles.cpp
+    src/ParticleScene.cpp
     src/NativeWorldObjects.cpp
     src/ResidentEffects.cpp
     src/ResidentPass.cpp

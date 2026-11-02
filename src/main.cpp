@@ -17,6 +17,7 @@
 #include "Body.h"
 #include "DeathEffects.h"
 #include "NativeParticles.h"
+#include "ParticleScene.h"
 #include "Speech.h"
 #include "DialogueChoices.h"
 #include "DialoguePanel.h"
@@ -6685,42 +6686,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             transientLights.hit(number, [&spawned](int64_t id) { return spawned.record(id); });
         transientLights.advance(frameMs); // births age before their first scene collection
 
-        if (!serverMode && useExtracted) {
-            const std::array<int64_t, 2> offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
-            for (const auto &particle : burstParticles.states()) {
-                if (!nativeparticles::supportedParticle(particle))
-                    continue;
-                int &model = burstParticleModels[particle.style == 7 ? 1 : 0];
-                if (model < 0)
-                    model = world.loadModel(particle.style == 7 ? "note" : "cube");
-                if (const uint32_t mesh = world.modelMesh(model)) {
-                    const glm::ivec3 dimensions(world.modelSize(model));
-                    DrawItem draw;
-                    draw.mesh = mesh;
-                    draw.kind = DrawKind::Particle;
-                    draw.castShadow = false;
-                    draw.model = nativeparticles::matrix(particle, offset, dimensions);
-                    draw.model[3].z += ExtractedWorld::Z_OFFSET;
-                    // Owner meshes are X/Y-centered; native matrices address voxel corners.
-                    draw.model = glm::translate(draw.model, glm::vec3(dimensions.x * .5f, dimensions.y * .5f, 0));
-                    draw.nativeParticle = scenevisibility::Sphere{particle.position, particle.size};
-                    draw.material = particle.colour;
-                    draw.nativeShininess = particle.style == 7;
-                    if (particle.style == 1 || particle.style == 2 || particle.style == 3 || particle.style == 7 || particle.style == 8) {
-                        draw.flags = GLOW;
-                        draw.material.a = 1;
-                    } else {
-                        const auto &p = particle.position;
-                        const float light =
-                            float(extractedWorld.gameBlockLight(gamemath::floorFixedBlock(p[0]), gamemath::floorFixedBlock(p[1]),
-                                                                gamemath::floorFixedBlock(p[2]))) /
-                            255.0f;
-                        draw.standingLight = std::max(.2f, light);
-                    }
-                    opaque.push_back(std::move(draw));
-                }
-            }
-        }
         // Death fragments (one mesh, rebuilt each frame).
         if (fragmentMeshId)
             renderer.release(fragmentMeshId), fragmentMeshId = 0;
@@ -6813,6 +6778,38 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         if (!serverMode) {
             renderer.prepareScene(camera, lighting, time);
+            if (useExtracted) {
+                particlescene::Coordinates coordinates;
+                coordinates.homeOffset = {-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
+                coordinates.homeZ = ExtractedWorld::Z_OFFSET;
+                if (renderSettings.style == RenderStyle::Steam)
+                    coordinates.renderOffset = renderer.steamRenderOffset();
+                for (const auto &particle : burstParticles.states()) {
+                    if (!nativeparticles::supportedParticle(particle))
+                        continue;
+                    int &model = burstParticleModels[particle.style == 7 ? 1 : 0];
+                    if (model < 0)
+                        model = world.loadModel(particle.style == 7 ? "note" : "cube");
+                    if (const uint32_t mesh = world.modelMesh(model)) {
+                        const glm::ivec3 dimensions(world.modelSize(model));
+                        DrawItem draw = particlescene::draw(particle, mesh, dimensions, coordinates);
+                        draw.nativeShininess = particle.style == 7;
+                        if (particle.style == 1 || particle.style == 2 || particle.style == 3 || particle.style == 7 ||
+                            particle.style == 8) {
+                            draw.flags = GLOW;
+                            draw.material.a = 1;
+                        } else {
+                            const auto &p = particle.position;
+                            const float light =
+                                float(extractedWorld.gameBlockLight(gamemath::floorFixedBlock(p[0]), gamemath::floorFixedBlock(p[1]),
+                                                                    gamemath::floorFixedBlock(p[2]))) /
+                                255.0f;
+                            draw.standingLight = std::max(.2f, light);
+                        }
+                        opaque.push_back(std::move(draw));
+                    }
+                }
+            }
             if (nativeGroundScene) {
                 const auto *local = spawned.playerRecord();
                 steampoints::Point physical;

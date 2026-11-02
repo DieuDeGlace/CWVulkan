@@ -10,6 +10,22 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Shared body/burst particle draws now build Steam WORLD matrices using the
+  current installed scene's fixed negative-look-at offset before float conversion.
+  Collection follows camera preparation, avoiding a preceding-frame origin.
+  A small ParticleScene adapter keeps the source-home transform/Z shift for Alpha
+  separate from native unshifted Z and the fixed producer sphere. Alpha avoids
+  computing an unused native matrix. Simulation, producer order, material/style
+  choices and the actual effect draw-pass order retain their existing contracts.
+
+  CPU cases check fixed fractions, unequal header dimensions, source-home Z and
+  the Alpha path. An actual Vulkan coverage case preserves a quarter block at
+  block2^24 and matches the near scene; its old home-rounding negative control
+  loses that offset. All five targets build warning-free. Full CPU/owner and89
+  shader,2 camera,28 GUI,17 map/shared-water/Alpha-scenery checks pass. Five no-save
+  captures exit0 and are reviewed, with the save database unchanged. This closes
+  the specified particle-coordinate binding, not all producer/CRT/visual parity.
+
 - Ordinary WORLD now composes its independent float matrices on the GPU before
   evaluating local vertices. Terrain/model, native water depth/color and direct
   GUI paths share that vertex stage, as established by the independent binding

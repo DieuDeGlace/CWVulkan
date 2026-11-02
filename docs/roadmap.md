@@ -355,9 +355,11 @@ individual feature documents.
   Source scan order, physical corner colors, face costs and native zone admission
   have CPU/GPU checks; retired band resources follow zone lifetime. Ordinary
   static/environment adapters also retain fixed anchors and local native matrices,
-  separately from source-home shadow/Alpha transforms. Particle submission still
-  needs that installed-scene origin binding; broader original visual acceptance
-  remains open.
+  separately from source-home shadow/Alpha transforms. Shared body/burst particles
+  now also bind the current installed scene's fixed origin before float conversion;
+  collection follows camera preparation. CPU Z/fraction/Alpha cases and actual
+  Vulkan quarter-block coverage pass, including an old home-rounding negative
+  control. Broader original visual and producer/CRT acceptance remains open.
   The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
   establishes a version-qualified fresh context default1 and startup/reset gates;
   it does not establish native first-frame state or change the engine's initial seed.
