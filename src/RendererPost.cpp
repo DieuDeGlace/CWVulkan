@@ -284,12 +284,7 @@ void Renderer::drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t co
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layer ? layerOverlayPipeline : depth ? guiOverlayPipeline : overlayPipeline);
     const VkDescriptorSet set = mask ? mask : overlaySet;
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayLayout, 0, 1, &set, 0, nullptr);
-    struct Screen {
-        glm::vec2 size;
-        int32_t mode;
-        float bias;
-    };
-    const Screen screen{{(float)extent.width, (float)extent.height}, int32_t(mode), mode ? .13500000536441803f : 0.f};
+    const auto screen = overlayPush(mode);
     vkCmdPushConstants(cmd, overlayLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(screen), &screen);
     VkDeviceSize zero = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &overlayBuffers[frameIndex].buffer, &zero);

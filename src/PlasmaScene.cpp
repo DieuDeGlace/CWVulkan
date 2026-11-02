@@ -459,7 +459,11 @@ glm::vec2 Scene::widgetPointer(const SceneNode &n, glm::vec2 point) const {
 
 void Scene::setPosition(SceneNode &n, glm::vec2 point, glm::vec2 offset) {
     const glm::mat4 parentWorld = n.parent ? matrix(*n.parent) : glm::mat4(1);
-    n.transform.translation = apply(glm::inverse(parentWorld), point) + offset - n.transform.pivot;
+    const auto translation = apply(glm::inverse(parentWorld), point) + offset - n.transform.pivot;
+    if (translation != n.transform.translation) {
+        n.transform.translation = translation;
+        n.placementChanged = true;
+    }
 }
 
 const ShapeDrawing *Scene::drawing(const SceneNode &n) const {

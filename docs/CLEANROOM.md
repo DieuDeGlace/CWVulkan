@@ -1050,3 +1050,40 @@ The independent cache-startup supplement sections1–3 was also read. It establi
 the ordinary engine byte's initial0 and reached teardown1, distinct Widget cache
 scalar defaults/copy/attachment and explicit destruction bounds. It supplies a
 future cache consumer contract; it is not a completed persistent-cache feature.
+
+## Retained ChatWidget target and explicit invalidation, 2026-11-02
+
+The implementer read cache invalidation sections1–6, cache callers sections1–3,
+ChatWidget lifecycle sections1–5 and the existing surface/clip rectangle contracts.
+The independent native-only author inspected no engine/tests/exporter, owner data
+or captures and executed no game. ChatWidget is a proved ordinary game requester;
+base constructors/options alone do not enable caching on every object. No broad
+absence of other callers is inferred from a bounded search.
+
+CubeVulkan's renderer keeps Widget targets separate from its fullscreen clip pool.
+The admitted root ChatWidget stream records redraw/restore/copy cuts, uses rounded
+physical dimensions and a local GUI projection, preserves main depth, and copies
+the retained RGBA8 image through the ordinary surface blend. Explicit clamp/linear
+surface sampling is the engine baseline, not an unmodified native binding oracle.
+Weak owner keys release expired resources safely after in-flight work; unchanged
+targets/descriptors are reused without a per-frame device wait. Resize and disposal
+wait before replacing resources. Source image dimensions remain separate from a
+fresh final destination query. Rectangle copies do not consume a shape-depth entry.
+
+Chat notifications come from append, short-key and Enter-close paths; character
+insertion and direct editor-byte clearing do not acquire invented dirty writes.
+The interface adapter marks editing before drawing; the own hook has no generic
+time rule. A point-placement equality guard preserves its pending indication.
+Cache creation/resize dirties after clearing, and a cache hit suppresses manual
+drawing/pruning/caret work. This is the concrete leaf ChatWidget adapter, not a
+complete replacement for shared keyable49/4a traversal on arbitrary scene graphs.
+General node caches, nested cache/clip projections, nondefault cache scalar
+setters, arbitrary custom callbacks and full GPU binding-state replay remain open.
+
+CPU tests exercise signed rounding, stream admission, equal placement, no-op keys,
+empty append/close and no extra row-prune notification. Synthetic Vulkan tests
+distinguish retained RGBA8 composition from direct alpha, cross-frame reuse, moved
+destinations and restored main-depth attachment. Actual HUD emission tests initial
+and post-allocation repaint, skipped callbacks and repeated editing invalidation.
+Only local owner faces/atlas cells are loaded; no artwork or reference pixels enter
+test source. No owner assets, native instructions or original-game binaries ship.

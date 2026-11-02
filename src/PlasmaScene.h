@@ -161,6 +161,7 @@ struct SceneNode {
     uint32_t flags = 0;                 // node flags (plx::NODE_...)
     Transformation transform;
     std::optional<glm::mat4> local;     // replaces the transformation's matrix (an icon fitted to its place)
+    bool placementChanged = false;      // point-placement recompute indication, consumed by the chat step adapter
     bool visible = true, clips = false; // the display's values
     glm::vec4 fill{1};
     int displayFlags = 0;

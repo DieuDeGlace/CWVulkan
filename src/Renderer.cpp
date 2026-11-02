@@ -680,7 +680,7 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     dai.descriptorSetCount = 1;
     dai.pSetLayouts = &overlaySetLayout;
     vkAllocateDescriptorSets(device, &dai, &overlaySet);
-    VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16};
+    VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(OverlayPush)};
     VkPipelineLayoutCreateInfo pli{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     pli.setLayoutCount = 1;
     pli.pSetLayouts = &overlaySetLayout;

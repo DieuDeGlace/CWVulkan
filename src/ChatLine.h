@@ -21,6 +21,7 @@ class ChatLine {
     using Row = std::vector<Word>;
     enum class Key { Left, Right, Home, End, Delete, Backspace };
     bool typing() const { return open; }
+    uint64_t drawingRevision() const { return redrawRevision; }
     std::optional<std::u16string> enter();
     // Mouse-down retains text and selection; Escape belongs to the outer menu.
     void stopEditing() { open = false; }
@@ -44,6 +45,7 @@ class ChatLine {
     void clampSelection();
     void eraseSelection();
     bool open = false;
+    uint64_t redrawRevision = 0; // explicit native append/key/Enter-close notifications, not content snapshots
     std::u16string line;
     int caret = 0, selection = 0;
     std::deque<Row> history;

@@ -59,6 +59,7 @@ struct Packer {
 
 bool Hud::loadMenu(const fs::path &gameDir, std::string &error) {
     error.clear();
+    chatCache = {};
     plasmaFonts.reset(gameDir);
     fontBindings.clear();
     hudFont = readFile(gameDir / "resource1.dat");

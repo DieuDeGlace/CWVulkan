@@ -8,6 +8,7 @@ std::optional<std::u16string> ChatLine::enter() {
         open = true;
         return std::nullopt;
     }
+    ++redrawRevision;
     open = false;
     auto sent = std::exchange(line, {});
     caret = selection = 0;
@@ -49,9 +50,10 @@ void ChatLine::type(const std::string &lowBytes) {
 }
 
 void ChatLine::key(Key key, bool shift) {
+    clampSelection();
+    ++redrawRevision;
     if (!open)
         return;
-    clampSelection();
     if (key == Key::Delete || key == Key::Backspace) {
         if (selection)
             eraseSelection();
@@ -130,6 +132,7 @@ void ChatLine::append(const std::u16string &text, Colour colour, float frameWidt
     }
     if (!token.empty())
         appendToken(std::move(token));
+    ++redrawRevision; // Successful empty append still invalidates the retained Widget surface.
 }
 
 void ChatLine::trim(float frameHeight) {

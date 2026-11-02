@@ -1,6 +1,7 @@
 // Actual Vulkan integration: synthetic geometry and optional owner-atlas HUD emission.
 #include "Renderer.h"
 #include "Frontend.h"
+#include "ChatLine.h"
 #include "Assets.h"
 #include "Hud.h"
 #include "VoxelEdit.h"
@@ -111,6 +112,30 @@ int guiRenderTests() {
         failures += !pass;
         checks++;
     };
+    auto retainedSurface = std::make_shared<plasma::RetainedSurface>();
+    auto cachedText = background;
+    for (auto &vertex : cachedText) {
+        vertex.x = 20 + vertex.x * .3125f;
+        vertex.y = 20 + vertex.y * .3125f;
+        vertex.r = 255;
+        vertex.g = vertex.b = 0;
+        vertex.a = 128;
+    }
+    auto cacheInput = background;
+    cacheInput.insert(cacheInput.end(), cachedText.begin(), cachedText.end());
+    const std::vector<plasma::LayerCommand> cacheFill{
+        {plasma::LayerCommand::Kind::CacheBegin, {6, 0}, 0, retainedSurface, {20, 20, 40, 40}},
+        {plasma::LayerCommand::Kind::CacheEnd, {12, 0}, 0, retainedSurface},
+        {plasma::LayerCommand::Kind::CacheCopy, {12, 0}, 0, retainedSurface, {20, 20, 40, 40}}};
+    check("cached-surface-rgba-composition", cacheInput, {}, {}, {40, 40}, {64, 0, 127}, 2, 255, cacheFill);
+    const std::vector<plasma::LayerCommand> cacheHit{{plasma::LayerCommand::Kind::CacheCopy, {6, 0}, 0, retainedSurface, {20, 20, 40, 40}}};
+    check("cached-surface-next-frame-reuse", background, {}, {}, {40, 40}, {64, 0, 127}, 2, 255, cacheHit);
+    auto movedCopy = cacheHit;
+    movedCopy[0].rectangle.x = 60;
+    check("cached-surface-live-destination", background, {}, {}, {80, 40}, {64, 0, 127}, 2, 255, movedCopy);
+    auto awayFromCache = icon;
+    awayFromCache.at.screen = {105, 105};
+    check("cached-surface-keeps-world-depth-attachment", background, {awayFromCache}, {}, {40, 40}, {64, 0, 127}, 2, 255, cacheHit);
     auto fractional = background;
     for (auto &vertex : fractional) {
         vertex.r = .75f;
@@ -354,6 +379,51 @@ int guiRenderTests() {
         } else {
             hud.setGuiScale(1);
             hud.layout(renderer, {128, 128});
+            Hud::ScreenItem backdrop;
+            backdrop.kind = Hud::ScreenItem::Square;
+            backdrop.size = {128, 128};
+            backdrop.color = {0, 0, 1, 1};
+            std::vector<OverlayVertex> ownerBackground;
+            hud.drawScreen({backdrop}, ownerBackground);
+            ChatLine cachedChat;
+            hud.appendChat(cachedChat, u"Cache", {255, 255, 255});
+            const auto emitChat = [&] {
+                hud.clearItemDraws();
+                std::vector<OverlayVertex> text;
+                hud.drawChat(cachedChat, 0, text);
+                return text;
+            };
+            const auto chatFrame = [&](const char *name, bool repaint) {
+                auto text = emitChat();
+                auto commands = hud.clipDraws();
+                const bool begins = !commands.empty() && commands.front().kind == plasma::LayerCommand::Kind::CacheBegin;
+                if (begins != repaint || (!repaint && (!text.empty() || commands.size() != 1))) {
+                    std::cerr << "FAIL actual HUD retained-chat callback admission\n";
+                    ++failures;
+                }
+                auto frame = ownerBackground;
+                frame.insert(frame.end(), text.begin(), text.end());
+                for (auto &command : commands)
+                    command.before.vertices += ownerBackground.size();
+                check(name, frame, {}, {}, {5, 5}, {0, 0, 255}, 2, 255, commands);
+            };
+            chatFrame("owner-chat-first-surface", true);
+            chatFrame("owner-chat-post-creation-dirty", true);
+            chatFrame("owner-chat-retained-callback-suppression", false);
+            const auto assertRepaint = [&] {
+                const auto text = emitChat();
+                if (hud.clipDraws().empty() || hud.clipDraws().front().kind != plasma::LayerCommand::Kind::CacheBegin) {
+                    std::cerr << "FAIL actual HUD chat invalidation\n";
+                    ++failures;
+                }
+            };
+            hud.appendChat(cachedChat, u"", {255, 255, 255});
+            assertRepaint();
+            cachedChat.enter();
+            hud.updateChat(cachedChat);
+            assertRepaint(); // An equal text/blink editing update still marks the Widget.
+            hud.updateChat(cachedChat);
+            assertRepaint();
             maphistory::History history({{0, 0}});
             history.show(true);
             hud.bindMapHistory(history.view(), "", true);

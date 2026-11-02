@@ -378,6 +378,9 @@ class Renderer {
     bool prepareGui(size_t draws);
     bool prepareClipLayers(size_t depth);
     void destroyClipLayers();
+    bool prepareCachedLayers();
+    void destroyCachedLayers();
+    void drawCachedLayer(VkCommandBuffer, const plasma::LayerCommand &, bool layer, bool depth);
     void recordGui(VkCommandBuffer cmd, uint32_t imageIndex);
     void destroyGui();
     // Shared water samples an immutable copy of the opaque scene, never a live attachment.
@@ -468,6 +471,22 @@ class Renderer {
     };
     std::vector<ClipLayer> clipLayers;
     VkImageView clipAtlas = VK_NULL_HANDLE;
+    struct CachedLayer {
+        ClipLayer target;
+        VkExtent2D extent{};
+    };
+    using CacheKey = std::weak_ptr<plasma::RetainedSurface>;
+    std::map<CacheKey, CachedLayer, std::owner_less<CacheKey>> cachedLayers;
+    Buffer cachedQuad;
+    glm::vec4 guiTargetRectangle{0};
+    struct OverlayPush {
+        glm::vec2 size{0};
+        int32_t mode = 0;
+        float bias = 0;
+        glm::vec4 target{0}, rectangle{0}, uv{0};
+        glm::ivec4 drawKind{0};
+    };
+    OverlayPush overlayPush(uint32_t mode = 0) const;
     VkPipeline guiModelPipeline = VK_NULL_HANDLE, guiMirroredModelPipeline = VK_NULL_HANDLE;
     Image guiDepth;
     bool guiDepthFresh = true;

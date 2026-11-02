@@ -135,7 +135,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
     }
     const bool models = !guiDraws.empty() && prepareGui(guiDraws.size());
     const auto maximum = plasma::layerDepth(overlayLayers, {overlayVertices.size(), guiRequests.size()});
-    if (!maximum || !prepareClipLayers(*maximum))
+    if (!maximum || !prepareClipLayers(*maximum) || !prepareCachedLayers())
         return; // defined engine failure policy: leave the resolved scene intact
     for (const auto &command : overlayLayers) {
         const auto at = command.before;
@@ -219,15 +219,25 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
     VkViewport viewport{0, 0, (float)extent.width, (float)extent.height, 0, 1};
     VkRect2D scissor{{0, 0}, extent};
     size_t target = 0, maskSource = 0;
+    CachedLayer *cacheTarget = nullptr;
     uint32_t maskMode = 0;
     const auto beginTarget = [&](bool clear) {
-        const bool layer = target != 0;
-        colour.imageView = layer ? clipLayers[target - 1].colour.view : swapViews[imageIndex];
+        const bool layer = target != 0 || cacheTarget;
+        const VkExtent2D dimensions = !target && cacheTarget ? cacheTarget->extent : extent;
+        rendering.renderArea.extent = dimensions;
+        viewport.width = (float)dimensions.width;
+        viewport.height = (float)dimensions.height;
+        scissor.extent = dimensions;
+        colour.imageView = target        ? clipLayers[target - 1].colour.view
+                           : cacheTarget ? cacheTarget->target.colour.view
+                                         : swapViews[imageIndex];
         colour.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
         colour.clearValue.color = {{0, 0, 0, 0}};
         rendering.pDepthAttachment = !layer && models ? &depth : nullptr;
         if (!clear) {
-            const VkImage image = layer ? clipLayers[target - 1].colour.image : swapImages[imageIndex];
+            const VkImage image = target        ? clipLayers[target - 1].colour.image
+                                  : cacheTarget ? cacheTarget->target.colour.image
+                                                : swapImages[imageIndex];
             barriers(cmd, {imageBarrier(image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -251,7 +261,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
     const auto trianglesTo = [&](size_t end) {
         end = std::max(vertex, end);
         if (text)
-            drawOverlayRange(cmd, uint32_t(vertex), uint32_t(end - vertex), models && !target, target != 0,
+            drawOverlayRange(cmd, uint32_t(vertex), uint32_t(end - vertex), models && !target && !cacheTarget, target != 0 || cacheTarget,
                              maskMode ? clipLayers[maskSource].set : VK_NULL_HANDLE, maskMode);
         vertex = end;
     };
@@ -264,8 +274,8 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
                 if (!draw.mesh || draw.mesh >= meshes.size() || !meshes[draw.mesh].live || !meshes[draw.mesh].indexCount)
                     continue;
                 const auto &mesh = meshes[draw.mesh];
-                const VkPipeline pipeline = target ? (draw.mirrored ? layerMirroredModelPipeline : layerModelPipeline)
-                                                   : (draw.mirrored ? guiMirroredModelPipeline : guiModelPipeline);
+                const VkPipeline pipeline = (target || cacheTarget) ? (draw.mirrored ? layerMirroredModelPipeline : layerModelPipeline)
+                                                                    : (draw.mirrored ? guiMirroredModelPipeline : guiModelPipeline);
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                 const auto set = guiFrames[frameIndex].sets[drawIndex];
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &set, 0, nullptr);
@@ -286,9 +296,36 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             maskMode = command.mode;
             continue;
         }
+        if (command.kind == plasma::LayerCommand::Kind::CacheCopy) {
+            maskMode = 0;
+            drawCachedLayer(cmd, command, target != 0, models && !target);
+            continue;
+        }
         vkCmdEndRendering(cmd);
         maskMode = 0;
-        if (command.kind == plasma::LayerCommand::Kind::Push) {
+        if (command.kind == plasma::LayerCommand::Kind::CacheBegin) {
+            cacheTarget = &cachedLayers.at(CacheKey(command.surface));
+            guiTargetRectangle = glm::vec4(command.rectangle);
+            auto &layer = cacheTarget->target;
+            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
+                                        layer.sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        layer.sampled ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
+                                        layer.sampled ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : 0,
+                                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)});
+            beginTarget(true);
+        } else if (command.kind == plasma::LayerCommand::Kind::CacheEnd) {
+            auto &layer = cacheTarget->target;
+            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT)});
+            layer.sampled = true;
+            command.surface->painted = true;
+            cacheTarget = nullptr;
+            guiTargetRectangle = {};
+            beginTarget(false);
+        } else if (command.kind == plasma::LayerCommand::Kind::Push) {
             auto &layer = clipLayers[target++];
             barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
                                         layer.sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
@@ -314,6 +351,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
 
 void Renderer::destroyGui() {
     destroyClipLayers();
+    destroyCachedLayers();
     destroyImage(guiDepth);
     guiDepthFresh = true;
     destroyBuffer(guiZeroPoints);

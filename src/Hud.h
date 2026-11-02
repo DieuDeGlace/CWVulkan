@@ -485,6 +485,13 @@ class Hud {
     mutable plasma::FontCatalog plasmaFonts;
     mutable std::map<std::pair<std::string, bool>, int> fontBindings;
     std::set<wchar_t> additionalGlyphs;
+    struct ChatCache {
+        std::shared_ptr<plasma::RetainedSurface> surface = std::make_shared<plasma::RetainedSurface>();
+        glm::ivec2 allocation{0};
+        uint64_t revision = 0;
+    };
+    mutable ChatCache chatCache;
+    void paintChat(ChatLine &, int32_t guiClock, std::vector<OverlayVertex> &) const;
     struct TextGlyph {
         glm::ivec2 atlas{0}, size{0}; // the glyph's texture in the atlas
         glm::vec2 offset{0}, extent{0};

@@ -54,8 +54,8 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.66 local GUI image cases (54
-  asset-free,12 with the owner's atlas) and owner callback
+  targets; the owner button shine is enabled.73 local GUI image cases (58
+  asset-free,15 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
   preserving independent placement/fill overrides and disabled-node admission.
@@ -72,7 +72,7 @@ individual feature documents.
   The current clamp-sampler renderer omits pixel-dead intermediate/final copies;
   this does not replay inherited native pipeline state or certify altered samplers.
   Default Plasma depth testing is disabled and optional depth-stack mask0x08 starts
-  off, per the independent depth contract. Widget/node caches, broader blur/callback
+  off, per the independent depth contract. General Widget/node caches, broader blur/callback
   state comparisons, optional depth-stack behavior and frontend pixel parity remain open.
   The title logo now uses the independently specified finite50-degree queued projection,
   full-allocation centering, exact clock/scale staging and normal WORLD overlay lighting.
@@ -89,7 +89,14 @@ individual feature documents.
   isolation and parser timing; no font bytes enter the test source. Named-memory
   sources and nested vector-font documents remain outside this bounded implementation.
   The independent cache-startup supplement also establishes the ordinary engine-byte
-  constructor/teardown gates; persistent UI surface caching still needs implementation.
+  constructor/teardown gates. The concrete cached ChatWidget now has a retained RGBA8
+  target, rounded live frame queries, null-depth redraw and ordinary surface-copy
+  composition. Explicit append/key/Enter-close notifications and interface editing
+  updates control repaint; stable inactive text skips its drawing callback. Surface
+  creation/resize retains its separate next-step dirty indication. Synthetic Vulkan
+  cases cover quantized alpha, cross-frame reuse, moved copies and depth attachment;
+  actual owner-HUD cases cover initial/extra repaint, callback suppression and input
+  invalidation. General node caching and arbitrary cache/clip nesting remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

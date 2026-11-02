@@ -28,8 +28,12 @@ float Hud::chatWordWidth(const std::wstring &word) const {
 }
 
 void Hud::updateChat(ChatLine &chat, const std::function<std::optional<std::u16string>(int64_t)> &name) const {
-    if (auto *node = placeChat())
+    if (auto *node = placeChat()) {
+        // Interface1033ff supplies editing invalidation before the ordinary GUI step.
+        if (chat.typing() && node->widget)
+            node->widget->dirty = true;
         chat.consumeIncoming(scene->contentSize(*node).x, [this](const auto &word) { return chatWordWidth(word); }, name);
+    }
 }
 
 void Hud::appendChat(ChatLine &chat, const std::u16string &text, std::array<uint8_t, 3> colour) const {
@@ -38,6 +42,41 @@ void Hud::appendChat(ChatLine &chat, const std::u16string &text, std::array<uint
 }
 
 void Hud::drawChat(ChatLine &chat, int32_t guiClock, std::vector<OverlayVertex> &out) const {
+    auto *node = placeChat();
+    if (!node || !node->widget || !node->visible || (node->flags & plx::NODE_DISABLED))
+        return;
+    if (!(node->widget->flags & plasma::WIDGET_OWN_SURFACE)) {
+        paintChat(chat, guiClock, out);
+        return;
+    }
+    const auto region = [&] { return plasma::cacheRectangle(scene->contentPosition(*node), scene->screenSize(*node)); };
+    const auto before = region();
+    if (!before)
+        return; // Invalid/nonallocatable rectangles are outside the finite native contract.
+    bool redraw = node->widget->dirty || node->placementChanged || chatCache.revision != chat.drawingRevision();
+    node->widget->dirty = false;
+    node->placementChanged = false;
+    const glm::ivec2 size(before->z, before->w);
+    if (!chatCache.surface->painted || chatCache.allocation != size) {
+        chatCache.allocation = size;
+        node->widget->dirty = true; // Surface creation/resize occurs after the step's clearing pass.
+        redraw = true;
+    }
+    const auto command = [&](plasma::LayerCommand::Kind kind, glm::ivec4 rectangle = {}) {
+        layerCommands.push_back({kind, {out.size(), itemRequests.size()}, 0, chatCache.surface, rectangle});
+    };
+    if (redraw) {
+        command(plasma::LayerCommand::Kind::CacheBegin, *before);
+        paintChat(chat, guiClock, out);
+        command(plasma::LayerCommand::Kind::CacheEnd);
+        chatCache.revision = chat.drawingRevision();
+    }
+    // Final composition uses a fresh frame query, not the allocation snapshot.
+    if (const auto after = region())
+        command(plasma::LayerCommand::Kind::CacheCopy, *after);
+}
+
+void Hud::paintChat(ChatLine &chat, int32_t guiClock, std::vector<OverlayVertex> &out) const {
     auto *node = placeChat();
     if (!node)
         return;

@@ -329,3 +329,21 @@ In play, `--open-map Z` starts the ordinary full map at zoom Z; `--open-shrines 
 its restricted shrine-choice mode for captures. Use `--capture FILE.png --run-seconds N`
 and an explicit `--save-folder DIR --character slot-0` to load character0 from that test save read-only. Marker selection still
 requires the character's actual known shrine cells; the capture option adds no discoveries.
+
+## Retained chat surface
+
+The ordinary ChatWidget uses a retained color target rather than repainting
+unchanged inactive history directly onto the world. Frame origin/size use the
+native float-add0.5/signed-truncate rounding, independently for allocation and
+final copy. The target has no depth attachment. Its RGBA8 contents are copied
+with the ordinary GUI surface blend, including its color/alpha quantization.
+
+Appending history (including an empty append), a reached short-key operation and
+Enter closing request repaint. The interface marks editing chat on each update;
+the draw hook itself supplies no elapsed-time invalidation. On reuse the manual
+draw, row pruning and caret work are skipped. Surface creation/resize can retain
+a separate pending indication for the next step. This path covers the native
+ChatWidget defaults; generic cached-node traversal, altered cache scalars, nested
+cache/clip projections and complete native sampler/binding state remain separate.
+See `docs/specs/steam-chat-cache-lifecycle.md`, `steam-plasma-surface-caches.md`
+and the cache invalidation/startup/caller supplements.

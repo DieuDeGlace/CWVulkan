@@ -2,7 +2,15 @@
 // The interface atlas (the game's HUD art and font glyphs), tinted per vertex.
 layout(set = 0, binding = 0) uniform sampler2D atlas;
 layout(set = 0, binding = 1) uniform sampler2D layerMask;
-layout(push_constant) uniform Screen { vec2 size; int maskMode; float maskBias; } screen;
+layout(push_constant) uniform Screen {
+    vec2 size;
+    int maskMode;
+    float maskBias;
+    vec4 target;
+    vec4 rectangle;
+    vec4 uv;
+    ivec4 drawKind;
+} screen;
 layout(location = 0) in vec2 vUv;
 layout(location = 1) in vec4 vColor;
 layout(location = 2) in vec2 vMask;

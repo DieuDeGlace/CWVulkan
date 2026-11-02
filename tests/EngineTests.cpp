@@ -124,6 +124,7 @@ int plasmaNodeAnimationTests();
 int plasmaInputTests();
 int plasmaLayoutTests();
 int fontCatalogTests();
+int chatCacheTests();
 int cameraMotionTests();
 int controlPhaseTests();
 int residentPassTests();
@@ -9306,6 +9307,8 @@ int main(int argc, char **argv) {
         return cameraRenderTests();
     if (argc == 2 && std::string(argv[1]) == "cameramotion")
         return cameraMotionTests();
+    if (argc == 2 && std::string(argv[1]) == "chatcache")
+        return chatCacheTests();
     if (argc == 2 && std::string(argv[1]) == "fontcatalog")
         return fontCatalogTests();
     if (argc == 2 && std::string(argv[1]) == "guilayout")
@@ -10675,6 +10678,7 @@ int main(int argc, char **argv) {
     failures += plasmaInputTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();
+    failures += chatCacheTests();
     failures += cameraMotionTests();
     failures += residentEffectsTests();
     failures += residentPassTests();
