@@ -57,7 +57,7 @@ layout(push_constant) uniform Push {
 } pc;
 
 const uint SWAY = 1u, GLOW = 2u, WATER = 4u, STEAM_VERTEX = 128u, LAVA_LIGHTING = 256u, STEAM_WORLD = 512u, GUI_WORLD = 1024u;
-const uint ORIGIN_WORLD = 2048u;
+const uint ORIGIN_WORLD = 2048u, QUEUED_WORLD = 4096u;
 
 // Vanilla's colour stages (Steam world pixel shader, as re-expressed in
 // SteamShadows' InlineTerrain.h). Lit surface colours get a saturation boost

@@ -68,8 +68,8 @@ class World {
     using HairLook = hair::Style;
     // Colours a hair sprite as the game does (look: DualHair second colour, or null).
     static void tintHair(struct CubModel &cub, glm::u8vec3 tint, const HairLook *look);
-    int loadModel(const std::string &name, glm::u8vec3 tint = glm::u8vec3(255), bool hair = false,
-                  const HairLook *look = nullptr);
+    int loadModel(const std::string &name, glm::u8vec3 tint = glm::u8vec3(255), bool hair = false, const HairLook *look = nullptr,
+                  bool hideAttachmentMarkers = false);
     // Renderer mesh of a loaded model (centred on x/y, base at z = 0) and its voxel size.
     uint32_t modelMesh(int model) const { return model >= 0 && model < (int)models.size() ? models[model].mesh : 0; }
     glm::vec3 modelSize(int model) const { return model >= 0 && model < (int)models.size() ? models[model].size : glm::vec3(0); }
@@ -100,6 +100,7 @@ class World {
         std::string name;  // to read its voxels again (voxels())
         glm::u8vec3 tint{255};
         bool tinted = false;
+        bool hideAttachmentMarkers = false;
         mutable std::vector<Voxel> voxels;
         mutable bool voxelsRead = false;
     };

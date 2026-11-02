@@ -61,8 +61,19 @@ bool CubModel::exposed(int x, int y, int z) const {
     return false;
 }
 
-Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncoding encoding) const {
+bool CubModel::attachmentMarker(int x, int y, int z) const {
+    const auto c = color(x, y, z);
+    return (c.r == 255 && c.g == 0 && c.b == 0) || (c.r == 0 && c.g == 255 && c.b == 0) || (c.r == 0 && c.g == 0 && c.b == 255);
+}
+
+Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncoding encoding, bool hideAttachmentMarkers) const {
     Mesh m;
+    // Hidden markers retain their raw occupancy for neighbors and corner shading.
+    // Route only their owned faces away from the returned geometry.
+    Mesh markerGeometry;
+    const MeshSelector geometry =
+        hideAttachmentMarkers ? MeshSelector([&](int x, int y, int z) -> Mesh & { return attachmentMarker(x, y, z) ? markerGeometry : m; })
+                              : MeshSelector{};
     m.nativeCentre = glm::vec3(0, 0, (float)sz * .5f); // x/y are already centered in emitted vertices
     auto isSolid = [&](int x, int y, int z) { return solid(x, y, z); };
     const bool alphaUnhalved = renderStyle() == RenderStyle::Alpha && encoding == steamvoxel::CubEncoding::Unhalved;
@@ -87,11 +98,9 @@ Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncod
             auto channel = [&](uint8_t v, float shut) { return alphalight::toByte(v / 255.f * open + (1 - open) * shut); };
             return CornerShade{channel(c.r, closed.r), channel(c.g, closed.g), channel(c.b, closed.b), 255};
         };
-        meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, colour, shade, m, 1.f, offset);
+        meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, colour, shade, m, 1.f, offset, VoxelLayout::Classic, geometry);
     } else {
-        const steamvoxel::Probe probe = [&](steamvoxel::Point p) {
-            return steamvoxel::Sample{!solid((int)p.x, (int)p.y, (int)p.z), 0};
-        };
+        const steamvoxel::Probe probe = [&](steamvoxel::Point p) { return steamvoxel::Sample{!solid((int)p.x, (int)p.y, (int)p.z), 0}; };
         auto nativeColour = [&](int x, int y, int z) {
             auto c = colour(x, y, z);
             c.flags |= STEAM_VERTEX;
@@ -103,7 +112,7 @@ Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncod
                 steamvoxel::cubCorner({c.r, c.g, c.b}, {x + corner[0], y + corner[1], z + corner[2]}, face, probe, {}, encoding);
             return CornerShade{encoded.r, encoded.g, encoded.b, encoded.a};
         };
-        meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, nativeColour, shade, m, 1.f, offset, VoxelLayout::SteamCub);
+        meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, nativeColour, shade, m, 1.f, offset, VoxelLayout::SteamCub, geometry);
     }
     return m;
 }

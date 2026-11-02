@@ -713,3 +713,29 @@ despite its containing zone's failed environment-mesh bounds. Full engine and im
 checks pass. The renderer test does not establish complete loaded-but-unmeshed zone
 production, ground-item ordering or native pixel acceptance; those remain separate
 integration work. No owner assets or captured records enter either package.
+
+## Ordinary pose materials and playable-hair geometry, 2026-11-02
+
+The implementer used the independent WORLD-controls, pose-items, pose-material
+preparation and pose-sprite-marker contracts, their cross-links and engine code
+only. The separate native-only author verified caller light/material/buff/fade
+bindings and the105 playable-hair catalog entries without engine, tests, extractor
+or owner-data access. The implementer read both complete stable supplements and
+their links before implementing the corresponding behavior.
+
+WorldModelControls separates physical light coordinates, base material, buff
+factors, pixel opacity and descriptor controls. The renderer shares the prepared
+frame material with gameplay/title poses; the queued shader does not apply it
+twice. Pose resources retain source RGB instead of baking native tint into voxels.
+CubModel's marker policy suppresses owned geometry while preserving raw occupancy
+for adjacent faces and corner shading. Alpha's existing path and the deliberate
+dual-tone hair extension remain separate from this native contract.
+
+Synthetic records, tiny asset-free RGB volumes and GPU triangles verify light
+offset/narrowing, ordered factors, fade/opacity, material/control delivery, negative
+Glow, explicit winding, clip-depth changes and once-only underwater material.
+Marker tests distinguish exact colors, neighboring-face blockage and unchanged
+packed colors of surviving vertices. Full engine/image checks and five no-save
+owner-model smoke captures pass; these do not establish complete native pixel
+acceptance, all resource factories or unavailable-resource retained-state timing.
+No native implementation or owner asset/capture bytes are published.

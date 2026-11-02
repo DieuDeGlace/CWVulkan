@@ -321,8 +321,7 @@ class SpawnedCreatures {
         return true;
     }
     // Pose admitted entries in registration order, preserving culled caches (dt in ms).
-    void draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
-              std::vector<DrawItem> &out);
+    void draw(ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view, std::vector<DrawItem> &out);
     size_t count() const;
     // How many creatures stand on the ground (+0x5c bit 0), are in water (bit 1), and in all.
     void contacts(size_t &ground, size_t &water, size_t &all) const;

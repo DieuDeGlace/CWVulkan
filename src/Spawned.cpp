@@ -2142,9 +2142,12 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
 }
 
 std::optional<SpawnedCreatures::SpriteAsset> SpawnedCreatures::spriteAsset(World &world, int catalogId) {
-    const float white[4] = {1,1,1,1};
-    const int model = worldModel(world, catalogId, white, false);
-    if (model < 0 || !world.modelMesh(model)) return {};
+    if (catalogId < 0 || size_t(catalogId) >= sprites.size() || sprites[catalogId].name.empty())
+        return {};
+    const int model =
+        world.loadModel(sprites[catalogId].name, glm::u8vec3(255), false, nullptr, worldmodel::hidesAttachmentMarkers(catalogId));
+    if (model < 0 || !world.modelMesh(model))
+        return {};
     return SpriteAsset{model, glm::ivec3(world.modelSize(model))};
 }
 
@@ -2176,9 +2179,10 @@ nativepose::Models SpawnedCreatures::poseModels() const {
     return lookup;
 }
 
-void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
+void SpawnedCreatures::draw(ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
                             std::vector<DrawItem> &out) {
     const auto lookup = poseModels();
+    const bool nativeWorld = renderStyle() == RenderStyle::Steam;
     const steampoints::Point renderOrigin{gamemath::subtractFixed(0, view.renderOffset[0]),
                                           gamemath::subtractFixed(0, view.renderOffset[1]), 0};
     const glm::vec3 renderShift{float(gamemath::subtractFixed(renderOrigin[0], ew.originDotsX())) * (1.f / 65536.f),
@@ -2189,7 +2193,8 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
     playerPartsDrawn = 0;
     auto drawOne = [&](Creature &cr, bool isPlayer) {
         worldgen::CreatureRecord &r = cr.record;
-        const auto admitted = creaturescene::admit(creaturescene::actor(r.data()), isPlayer, view);
+        const auto actor = creaturescene::actor(r.data());
+        const auto admitted = creaturescene::admit(actor, isPlayer, view);
         if (!admitted)
             return;
         // Drawn position/orientation were prepared before input for the whole World.
@@ -2208,6 +2213,17 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             return false;
         };
         call.hasBuff = has;
+        if (nativeWorld) {
+            const auto block = worldmodel::lightBlock(actor.physical);
+            glm::vec4 material = worldmodel::baseMaterial(view.pose.material, ew.gameBlockLight(block[0], block[1], block[2]), actor.race);
+            const uint32_t looks = get<uint32_t>(r, 0x80);
+            for (const auto &buff : cr.side.buffs)
+                material *= worldmodel::buffFactor(buff[0]);
+            if (looks & 0x04000000u)
+                material *= worldmodel::buffFactor(1);
+            std::memcpy(call.tint, &material[0], sizeof call.tint);
+            call.alpha = worldmodel::opacity(view.pose, actor.drawn, get<float>(r, 0x18c), (looks & 0x00100000u) || has(0x13), actor.race);
+        }
         call.sparks = &cr.sparks;
         draws.clear();
         // The world's draw sets the pose state and its clock from the ability right before
@@ -2224,15 +2240,22 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             if (draws[k].kind == nativepose::WEAPON_EFFECT_DRAW)
                 nativepose::spiritDraws(draws[k], draws);
         const int hairModel = get<int16_t>(r, 0x92); // the appearance's hair (+0x1a)
+        const float hairTint[4]{float(r[0x7a]) / 255.f, float(r[0x7b]) / 255.f, float(r[0x7c]) / 255.f, 1};
         for (const nativepose::Draw &d : draws) {
             if (!d.model || d.kind == nativepose::WEAPON_EFFECT_DRAW)
                 continue;
             const int id = (int)reinterpret_cast<intptr_t>(d.model->user);
-            // The hair takes the appearance's colour, a spirit cube (the white cube.cub) its
-            // material's: both are the model recoloured by the draw's tint.
             const bool recoloured = id == hairModel || id == SPIRIT_CUBE_MODEL;
             const auto *look = isPlayer && id == hairModel && playerHairStyle.dual ? &playerHairStyle : nullptr;
-            const int m = worldModel(world, id, d.tint, recoloured, look);
+            // Native tint is a shader material. The user-requested dual hair style
+            // is the sole Steam path that deliberately bakes a color gradient.
+            int m;
+            if (nativeWorld && !look) {
+                const auto asset = spriteAsset(world, id);
+                m = asset ? asset->model : -1;
+            } else {
+                m = worldModel(world, id, nativeWorld && look ? hairTint : d.tint, recoloured, look);
+            }
             const uint32_t mesh = world.modelMesh(m);
             if (!mesh)
                 continue;
@@ -2242,6 +2265,12 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             glm::mat4 place =
                 glm::translate(glm::mat4(1), renderShift) * game * glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
             DrawItem item{mesh, place, 0, 0, true};
+            if (nativeWorld) {
+                if (!worldmodel::applyPose(item, d))
+                    continue;
+                if (look)
+                    item.material = {call.tint[0], call.tint[1], call.tint[2], item.material.a};
+            }
             item.nativeModel = game * glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
             item.nativeActor = *admitted;
             item.nativeLightZone =

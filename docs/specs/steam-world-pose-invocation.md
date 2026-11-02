@@ -84,6 +84,9 @@ separate as specified in [NPC speech §10](steam-npc-speech-rendering.md).
 
 ## 3. Exact normal pose admission and sphere inputs
 
+The admitted call's frame/light/buff material and separate pixel-opacity inputs
+are [ordinary WORLD pose material preparation](steam-world-pose-material-preparation.md).
+
 For each registered entry, the normal pose route requires, in order:
 
 1. Draw bit0x01 does not exclude this entry as the local-player pointer;

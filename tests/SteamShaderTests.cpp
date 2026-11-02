@@ -1,4 +1,5 @@
 #include "SteamCreatureLights.h"
+#include "NativePose.h"
 #include "worldgen/Residents.h"
 #include "SteamTransientLights.h"
 // Explicit GPU integration check. No game assets or Steam process are needed.
@@ -602,6 +603,127 @@ int steamShaderTests() {
         const bool admitted = pixel && std::abs((*pixel)[0] - 7) <= 2 && std::abs((*pixel)[1] - 52) <= 2 && std::abs((*pixel)[2] - 5) <= 2;
         std::cout << "Steam shader static-object independent zone admission" << (admitted ? " PASS\n" : " FAIL\n");
         failures += !admitted;
+    }
+    {
+        // Exercise the ordinary pose adapter through the actual queued GPU consumer.
+        renderer.setWorldProbe({});
+        renderer.settings.fogDistance = renderer.settings.sceneryDistance = 1000000;
+        Camera nearby;
+        nearby.eye = {0, -2, 1};
+        nearby.target = {0, 0, 1};
+        Lighting steady;
+        steady.timeMs = 0;
+        DrawItem posed;
+        posed.mesh = item.mesh;
+        posed.kind = DrawKind::Scenery;
+        posed.standingLight = .5f;
+        nativepose::Draw descriptor{};
+        std::fill(std::begin(descriptor.tint), std::end(descriptor.tint), 1.f);
+        descriptor.opacity = 1;
+        descriptor.glow = 1;
+        const auto captureDraws = [&](const std::string &name, const std::vector<DrawItem> &draws) {
+            const auto capture = root / (name + ".png");
+            renderer.capture(capture.string());
+            renderer.frame(nearby, steady, {}, 0, draws, {});
+            return centre(capture);
+        };
+        const auto expect = [&](const char *name, const auto &pixel, std::array<int, 3> expected) {
+            bool ok = pixel.has_value();
+            if (pixel)
+                for (int c = 0; c < 3; ++c)
+                    ok &= std::abs((*pixel)[c] - expected[c]) <= 2;
+            std::cout << "Steam shader " << name << (ok ? " PASS\n" : " FAIL\n");
+            failures += !ok;
+        };
+        worldmodel::applyPose(posed, descriptor);
+        expect("queued-pose-glow", captureDraws("queued-pose-glow", {posed}), {82, 214, 60});
+        descriptor.tint[3] = 0;
+        worldmodel::applyPose(posed, descriptor);
+        expect("queued-pose-material-alpha", captureDraws("queued-pose-material-alpha", {posed}), {82, 214, 60});
+        descriptor.tint[0] = descriptor.tint[1] = descriptor.tint[2] = 0;
+        worldmodel::applyPose(posed, descriptor);
+        expect("queued-pose-material-rgb", captureDraws("queued-pose-material-rgb", {posed}), {0, 0, 0});
+        descriptor.tint[0] = descriptor.tint[1] = descriptor.tint[2] = 1;
+        descriptor.shininess = .25f;
+        worldmodel::applyPose(posed, descriptor);
+        DrawItem shinyReference = posed;
+        shinyReference.nativeControls.reset();
+        shinyReference.flags = GLOW;
+        shinyReference.nativeShininess = true;
+        const auto shiny = captureDraws("queued-pose-shininess-reference", {shinyReference});
+        if (shiny)
+            expect("queued-pose-shininess", captureDraws("queued-pose-shininess", {posed}), *shiny);
+        else
+            ++failures;
+        descriptor.shininess = 0;
+        descriptor.glow = -1;
+        worldmodel::applyPose(posed, descriptor);
+        const auto negative = captureDraws("queued-pose-negative-glow", {posed});
+        Mesh equalLuminance = mesh;
+        for (auto &v : equalLuminance.vertices) {
+            v.r = 55;
+            v.g = 92;
+            v.b = 66;
+        }
+        posed.mesh = renderer.upload(equalLuminance);
+        descriptor.glow = -2;
+        worldmodel::applyPose(posed, descriptor);
+        if (negative)
+            expect("queued-pose-negative-glow", captureDraws("queued-pose-equal-luminance", {posed}), *negative);
+        else
+            ++failures;
+        posed.mesh = item.mesh;
+        descriptor.glow = 1;
+        descriptor.white = 1;
+        worldmodel::applyPose(posed, descriptor);
+        expect("queued-pose-white", captureDraws("queued-pose-white", {posed}), {255, 255, 255});
+        descriptor.white = 0;
+        descriptor.tint[3] = 1;
+        descriptor.opacity = .5f;
+        worldmodel::applyPose(posed, descriptor);
+        const auto sky = captureDraws("queued-pose-sky", {});
+        if (sky) {
+            std::array<int, 3> half;
+            for (int c = 0; c < 3; ++c)
+                half[c] = (std::array<int, 3>{82, 214, 60}[c] + (*sky)[c] + 1) / 2;
+            expect("queued-pose-faded", captureDraws("queued-pose-faded", {posed}), half);
+            Mesh opposite = mesh;
+            std::swap(opposite.indices[1], opposite.indices[2]);
+            posed.mesh = renderer.upload(opposite);
+            descriptor.kind = nativepose::MIRRORED_DRAW;
+            worldmodel::applyPose(posed, descriptor);
+            expect("queued-pose-explicit-opposite", captureDraws("queued-pose-explicit-opposite", {posed}), half);
+        } else {
+            ++failures;
+        }
+        posed.mesh = item.mesh;
+        descriptor.kind = 0;
+        descriptor.opacity = 1;
+        worldmodel::applyPose(posed, descriptor);
+        DrawItem blocker = posed;
+        blocker.model = glm::translate(glm::mat4(1), glm::vec3(0, -.1f, 0));
+        blocker.nativeControls->white = 1;
+        expect("queued-pose-depth-baseline", captureDraws("queued-pose-depth-baseline", {blocker, posed}), {255, 255, 255});
+        descriptor.depthOffset = .1f;
+        worldmodel::applyPose(posed, descriptor);
+        expect("queued-pose-depth-offset", captureDraws("queued-pose-depth-offset", {blocker, posed}), {82, 214, 60});
+        WorldProbe submergedProbe;
+        submergedProbe.water = [](glm::vec3) { return true; };
+        renderer.setWorldProbe(submergedProbe);
+        DrawItem frameReference = posed;
+        frameReference.nativeControls.reset();
+        frameReference.flags = GLOW;
+        frameReference.material = glm::vec4(1);
+        const auto framePixel = captureDraws("queued-frame-material-reference", {frameReference});
+        const auto poseFrame = renderer.steamPoseFrame();
+        std::memcpy(descriptor.tint, &poseFrame.material[0], sizeof descriptor.tint);
+        descriptor.depthOffset = 0;
+        worldmodel::applyPose(posed, descriptor);
+        if (framePixel)
+            expect("queued-frame-material-once", captureDraws("queued-frame-material-once", {posed}), *framePixel);
+        else
+            ++failures;
+        renderer.setWorldProbe({});
     }
     {
         // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.

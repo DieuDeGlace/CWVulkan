@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-11-01
+# Source review checkpoint — 2026-11-02
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -9,6 +9,26 @@ checkpoint describe the intended setup and remaining limits.
 
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
+
+- Ordinary Steam creature poses now receive the prepared scene's frame material,
+  effective channel0 physical-position light, ordered buff tint factors and separate
+  raw-drawn-position fade/visibility opacity. The descriptor bridge retains RGBA,
+  all five scalar controls and the producer's explicit normal/opposite winding.
+  The WORLD shader consumes already combined material once, including underwater
+  frames, supports negative Glow luminance, and applies clip DepthOffset. Faded
+  descriptors use normal/opposite depth then normal/opposite color passes.
+  The105 independently verified playable-hair resources retain raw RGB and hide
+  only marker-owned faces, preserving raw neighbor and corner-occlusion occupancy.
+  Owner models remain required; optional dual-tone hair and Alpha retain their
+  separate policies. Full CPU/owner checks and68 shader,2 camera,24 GUI,6 map,
+  shared-water/Alpha-scenery image checks pass. Five no-save gameplay/menu runs
+  exit0, with all captures viewed and the save database unchanged. The final
+  catalog-table readability cleanup was rebuilt and its focused checks rerun.
+  These checks cover the specified finite inputs and available resources;
+  complete catalog/factory policy, unavailable-resource retained state, exact
+  resource-group ordering, alternate callers and native visual acceptance remain
+  open. The blue/indoor gameplay fixture and sky-only menu background are not
+  accepted as a finished native appearance.
 
 - Ordinary Steam static objects now use their own admission path, independently of
   the environment model's cached terrain-box gate. Available scene records retain

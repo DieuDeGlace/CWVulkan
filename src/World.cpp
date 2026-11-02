@@ -406,10 +406,12 @@ bool World::readModelVolume(const std::string &name, CubModel &cub, steamvoxel::
     return path && cub.load(*path);
 }
 
-int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const HairLook *look) {
+int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const HairLook *look, bool hideAttachmentMarkers) {
     bool tinted = hair;
     bool dual = hair && look && look->dual;
     std::string key = name;
+    if (hideAttachmentMarkers)
+        key += "#attachment-markers";
     if (tinted)
         key += "#" + std::to_string(tint.r) + "," + std::to_string(tint.g) + "," + std::to_string(tint.b);
     if (dual)
@@ -423,7 +425,7 @@ int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const
     if (readModelVolume(name, cub, encoding)) {
         if (tinted)
             tintHair(cub, tint, dual ? look : nullptr);
-        Mesh mesh = cub.mesh(0, {}, encoding);
+        Mesh mesh = cub.mesh(0, {}, encoding, hideAttachmentMarkers);
         Model model;
         model.mesh = renderer.upload(mesh);
         model.height = mesh.max.z;
@@ -431,6 +433,7 @@ int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const
         model.name = name;
         model.tint = tint;
         model.tinted = tinted;
+        model.hideAttachmentMarkers = hideAttachmentMarkers;
         if (model.mesh) {
             index = int(models.size());
             models.push_back(std::move(model));
@@ -457,7 +460,7 @@ const std::vector<World::Voxel> &World::voxels(int model) const {
             for (int z = 0; z < cub.sz; z++)
                 for (int y = 0; y < cub.sy; y++)
                     for (int x = 0; x < cub.sx; x++)
-                        if (cub.exposed(x, y, z)) {
+                        if (cub.exposed(x, y, z) && !(m.hideAttachmentMarkers && cub.attachmentMarker(x, y, z))) {
                             VoxelColor c = cub.color(x, y, z);
                             if (encoding == steamvoxel::CubEncoding::Unhalved) {
                                 c.r = uint8_t(std::min(255, int(c.r) * 2));

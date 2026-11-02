@@ -63,6 +63,11 @@ the raw triplet(0,0,0). Some load modes suppress pure RGB attachment-marker
 voxels from geometry; that separate+0x99 policy does not turn the color scale
 into a gamma rule.
 
+The reached playable hair load modes, exact RGB marker vectors and their
+separate geometry-owner, adjacent-face and corner-occlusion policies are
+[pose-sprite markers §§1–3](steam-pose-sprite-markers.md). That bounded
+preprocessing contract does not substitute a hair-color palette for raw RGB.
+
 For a corner with face normal n,0x171db0 samples the layer immediately in
 front of the face. Its integer sampling radius is sprite+0x9c, initialized
 to **3**. Along a zero-normal axis, offsets are **−N through N−1**; along

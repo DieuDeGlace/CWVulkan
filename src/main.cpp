@@ -6813,6 +6813,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             renderer.prepareScene(camera, lighting, time);
             if (nativeActorsAt) {
                 creaturescene::View view;
+                view.pose = renderer.steamPoseFrame();
                 view.flags = mapOpen ? 2 : 0;
                 view.renderOffset = renderer.steamRenderOffset();
                 view.visible = [&](const auto &sphere) { return renderer.steamActorVisible(sphere); };

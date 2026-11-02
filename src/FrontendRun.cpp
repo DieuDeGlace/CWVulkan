@@ -1352,6 +1352,7 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
     if (p) {
         s.renderer->prepareScene(cam, light, seconds);
         creaturescene::View view;
+        view.pose = s.renderer->steamPoseFrame();
         view.flags = titleShown ? 0x60 : 0x20;
         view.renderOffset = s.renderer->steamRenderOffset();
         view.visible = [&](const auto &sphere) { return s.renderer->steamActorVisible(sphere); };

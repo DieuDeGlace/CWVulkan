@@ -1116,6 +1116,10 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
                    steampoints::abilityRange(settings.fogDistance, settings.nativeZoneRadius)};
     nativeRangeActive = false;
     const bool menuSky = lighting.menuSky[5].w > 0;
+    const bool submerged = !menuSky && worldProbe.water && worldProbe.water(camera.eye);
+    next.material = steamlighting::material(submerged);
+    if (submerged && settings.water.style == waterlook::Style::Omega)
+        next.material = glm::vec4(waterlook::submerged(alpha::sunlight(double(lighting.timeMs))).material, next.material.a);
     if (settings.style == RenderStyle::Steam && !menuSky && worldProbe.sceneZone) {
         scenerange::Frame range;
         range.camera = next.visibility.eye;
@@ -1142,6 +1146,11 @@ std::array<int64_t, 2> Renderer::steamRenderOffset() const {
 
 bool Renderer::steamActorVisible(const scenevisibility::Sphere &sphere) const {
     return sceneFrame && sceneFrame->visibility.visible(sphere, sceneFrame->ranges.abilities);
+}
+
+worldmodel::Frame Renderer::steamPoseFrame() const {
+    return sceneFrame ? worldmodel::Frame{sceneFrame->material, sceneFrame->visibility.eye, sceneFrame->ranges.abilities}
+                      : worldmodel::Frame{};
 }
 
 void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time, const std::vector<DrawItem> &opaque,
@@ -1446,9 +1455,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.back = glm::vec4(glm::vec3(native.back) + lighting.moonBack, settings.fadeStart);
         u.ambient = glm::vec4(glm::vec3(native.ambient), settings.cameraFade ? 1.f : 0.f);
         u.steamSun = glm::vec4(glm::normalize(steamlighting::sunDirection(lighting.timeMs)), native.ambient.a);
-        u.steamMaterial = steamlighting::material(underwater);
-        if (sharedWater && underwater)
-            u.steamMaterial = glm::vec4(waterlook::submerged(S).material, u.steamMaterial.a);
+        u.steamMaterial = sceneFrame->material;
     }
     u.alphaView.w = sharedWater && underwater ? 1.f : 0.f; // shared world-fragment tint, never interface pixels
     u.fog = glm::vec4(mapFog, sharedWater && underwater ? std::min(sceneDistance, settings.water.underwaterVisibility) : sceneDistance);
@@ -1632,6 +1639,12 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             }
             pc.look.y = item.flash;
             pc.look.z = item.nativeShininess ? 1.f : 0.f;
+            if (item.nativeControls) {
+                const auto &controls = *item.nativeControls;
+                pc.params.x = float(uint32_t(pc.params.x) | QUEUED_WORLD);
+                pc.params.z = controls.depthOffset;
+                pc.look = {1, controls.white, controls.shininess, controls.glow};
+            }
             if (!particle) {
                 steampoints::ZoneKey key;
                 if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
@@ -1888,7 +1901,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             // Shared refraction needs actors in the opaque scene snapshot. The
             // native Alpha path retains its separate post-water actor pass.
             const bool late = alphaLook && !sharedWater && item.kind == DrawKind::Model;
-            if ((!alphaLook && (item.nativeScenery || item.nativeObject)) || item.kind == DrawKind::LightBeam ||
+            if ((!alphaLook && (item.nativeScenery || item.nativeObject || item.nativeControls)) || item.kind == DrawKind::LightBeam ||
                 item.kind == DrawKind::Particle || late != afterWater || (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
             std::optional<float> opacity;
@@ -1914,6 +1927,15 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     std::array<std::vector<DrawItem>, 5> sceneryQueues;
     if (!alphaLook)
         for (const DrawItem &item : opaque) {
+            if (item.nativeControls) {
+                const auto queue = worldmodel::queue(item.opacity);
+                if (queue != worldmodel::Queue::Hidden && !(item.flags & (NATIVE_MENU | WORLD_MAP)) && visible(item)) {
+                    const auto destination =
+                        queue == worldmodel::Queue::Opaque ? steamscenery::Queue::OrdinaryOpaque : steamscenery::Queue::OrdinaryFaded;
+                    sceneryQueues[size_t(destination)].push_back(item);
+                }
+                continue;
+            }
             if (!item.nativeScenery && !item.nativeObject)
                 continue;
             steamscenery::Bounds bounds;
@@ -1942,18 +1964,21 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         // color at LEQUAL with depth writes still enabled. Both are world shaders.
         VkPipeline bound = VK_NULL_HANDLE;
         for (int pass = faded ? 0 : 1; pass < 2; ++pass)
-            for (const DrawItem &item : items) {
-                const bool mirrored = item.mirrored();
-                VkPipeline pipeline = mirrored ? mirroredScenePipeline : scenePipeline;
-                if (faded)
-                    pipeline = pass == 0 ? (mirrored ? sceneryMirroredDepthPipeline : sceneryDepthPipeline)
-                                         : (mirrored ? sceneryMirroredFadePipeline : sceneryFadePipeline);
-                if (pipeline != bound) {
-                    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-                    bound = pipeline;
+            for (bool opposite : {false, true})
+                for (const DrawItem &item : items) {
+                    const bool mirrored = item.nativeControls ? item.nativeControls->opposite : item.mirrored();
+                    if (mirrored != opposite)
+                        continue;
+                    VkPipeline pipeline = mirrored ? mirroredScenePipeline : scenePipeline;
+                    if (faded)
+                        pipeline = pass == 0 ? (mirrored ? sceneryMirroredDepthPipeline : sceneryDepthPipeline)
+                                             : (mirrored ? sceneryMirroredFadePipeline : sceneryFadePipeline);
+                    if (pipeline != bound) {
+                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                        bound = pipeline;
+                    }
+                    bindAndDraw(item, 0);
                 }
-                bindAndDraw(item, 0);
-            }
     };
     drawSceneryQueue(steamscenery::Queue::OrdinaryOpaque, false);
     drawSceneryQueue(steamscenery::Queue::WaterOpaque, false);

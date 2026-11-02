@@ -1,4 +1,5 @@
 #pragma once
+#include "WorldModelControls.h"
 #include "SteamPointLights.h"
 #include "GuiItem.h"
 // Vulkan 1.3 renderer: sky, voxel scene, water, and two directional shadow
@@ -94,6 +95,7 @@ constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte
 constexpr uint32_t GUI_WORLD = 1u << 10;    // immediate owner-item WORLD shader; no scene culling/shadow/tint extensions
 constexpr uint32_t STEAM_WORLD = 1u << 9;   // ordinary world/water pass; excludes sky and menu art
 constexpr uint32_t ORIGIN_WORLD = 1u << 11; // model uses the native fixed look-at origin
+constexpr uint32_t QUEUED_WORLD = 1u << 12; // explicit ordinary material/effect controls
 
 struct DrawItem {
     uint32_t mesh = 0;
@@ -139,6 +141,7 @@ struct DrawItem {
     std::optional<glm::mat4> nativeModel;                // origin-relative WORLD; model retains the source-home transform
     std::optional<steampoints::Point> nativePosition;    // fixed anchor when nativeModel contains only the local transform
     std::optional<scenevisibility::Sphere> nativeObject; // independent static-object route and49c fade
+    std::optional<worldmodel::Controls> nativeControls;
     bool mirrored() const { return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0; }
 };
 
@@ -225,6 +228,7 @@ class Renderer {
     void prepareScene(const Camera &, const Lighting &, double time);
     bool steamActorVisible(const scenevisibility::Sphere &) const;
     std::array<int64_t, 2> steamRenderOffset() const; // negative look-at XY of the installed scene
+    worldmodel::Frame steamPoseFrame() const;
     // Early death/use queries read the retained CPU scene state.
     bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
     // Saves the next presented frame as a PNG (for screenshots and tests).
@@ -281,6 +285,7 @@ class Renderer {
     GLFWwindow *window = nullptr;
     std::string gpuName;
     struct SceneFrame {
+        glm::vec4 material{1};
         scenevisibility::View visibility;
         scenevisibility::Projection projection;
         scenerange::Ranges ranges;
