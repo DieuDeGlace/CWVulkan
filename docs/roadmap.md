@@ -660,8 +660,12 @@ individual feature documents.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.
-  Full fixed eye/look-at handoff, direct-launch startup adapters and exact event
-  delivery still need parity work. The newly documented
+  The canonical frontend now also uses the shared physical-posture/fixed-anchor
+  camera and eight-corner terrain obstruction, with native view rotation/fixed
+  coordinates. Its completed eye/look-at state survives Play; the prior negative
+  look-at render origin is restored separately from the eye. Direct-launch startup,
+  first/pre-camera matrix lifetime and exact event delivery still need parity work.
+  The newly documented
   [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
   split early/late input phases. The live client now completes World stepping and
   one full-frame drawn-position pass before creature targeting/local control, and

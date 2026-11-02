@@ -8,6 +8,7 @@
 // The first half of this header is the screens' rules and layout, which need no window (the
 // tests check them); the second half runs them with the world, the renderer and the interface.
 #include "DayNight.h"
+#include "CameraPosition.h"
 #include "GameOptions.h"
 #include "GamepadUi.h"
 #include "Hud.h"
@@ -378,7 +379,8 @@ struct Result {
     int slot = -1;        // the character to play
     bool created = false; // made in character creation (its help sheet was shown)
     std::optional<hair::Style> createdHairStyle;
-    std::optional<OrbitCamera> camera; // Play keeps both displayed and target values.
+    std::optional<OrbitCamera> camera;                   // Play keeps both displayed and target values.
+    std::optional<cameraposition::State> cameraPosition; // Completed fixed eye/look-at; no transition priming.
     // Play: the player was rebuilt from the save and stands at `feet` (local blocks, CubeVulkan's
     // feet a block under the record), facing yaw 0 (frontend-title.md §6.1). The game starts
     // there, without searching for ground.

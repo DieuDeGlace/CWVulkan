@@ -1248,3 +1248,30 @@ fixed camera eye/look-at state has been transferred; that remains separate work.
 Direct diagnostic launches keep their explicit compatibility initialization.
 The Continue regression seeds unequal, nontrivial displayed/target values and
 checks only distances change. No original code or owner assets are distributed.
+
+## Canonical fixed frontend camera and retained position, 2026-11-02
+
+The existing isolated native-only author supplied camera-position-lifetime1–4,
+then held all tracing/writes. The implementer fully read that independent prose,
+gameplay-camera5–6.2 and the existing engine-owned position/terrain components.
+Native construction explicitly zeros all eight fixed position/origin components;
+ordinary frontend transitions retain anchors, and the normal update has no special
+first-call or zero-time priming gate. Alternate callbacks/recovery and initial GPU
+matrix contents remain outside the established result.
+
+A shared creature-facade reader supplies physical position, posture, velocity,
+ability, creation visibility and resolved mount metadata to both cameras. The
+canonical frontend now runs the existing fixed-point follow/orbit/eight-corner
+terrain checks rather than its compatibility stand-in sweep. Its retained zero-
+initialized position state advances ordinarily and transfers on Play without
+reconstruction from float local coordinates. Transition distance resets update
+the snapshot's distance without rebuilding its retained eye/look-at. Gameplay
+restores the completed negative look-at XY origin separately; eye is not the origin.
+Compatibility launches and stand-in views remain explicitly bounded alternatives.
+
+Actual-facade checks distinguish physical position from a deliberately different
+drawn record and verify creation-layer input. Existing independent posture,
+fixed-weight follow, strict safety-distance and terrain tests cover the reused
+algorithm. Entry capture runs verify both angle and fixed-state handoff markers.
+This does not close first/pre-camera matrix lifetime or full live pixel parity.
+No original implementation, instruction bytes or owner artwork is distributed.

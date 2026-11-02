@@ -4,6 +4,7 @@
 // frontend-characters.md and frontend-options.md.
 #include "Frontend.h"
 #include "CharacterCard.h"
+#include "CameraMotion.h"
 
 #include "Assets.h"
 #include "Audio.h"
@@ -279,6 +280,9 @@ class Session {
     bool stageHasLooks = false;
     glm::vec3 riderFeet{0}; // local blocks (the stand-in's)
     OrbitCamera camera;
+    cameraposition::State cameraPosition; // Native Game construction starts all fixed anchors at zero.
+    terrainray::World cameraTerrain;
+    bool cameraPositionValid = false;
     float hour = 10; // set from Services::startHour when the session starts
 
     // Character creation.
@@ -397,6 +401,13 @@ class Session {
 };
 
 bool Session::start(std::string &error) {
+    if (s.extracted) {
+        cameraTerrain.hasZone = [this](int32_t x, int32_t y) { return s.extracted->gameZoneLoaded(x, y); };
+        cameraTerrain.block = [this](int32_t x, int32_t y, int32_t z) {
+            const auto block = s.extracted->gameBlock(x, y, z);
+            return terrainray::Cell{block[4], block[5]};
+        };
+    }
     if (!hud.load(s.assets->gameDir(), error))
         return false;
     hud.setGuiScale(s.options ? std::clamp(s.options->guiScale, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX) : 1.0f);
@@ -1349,17 +1360,38 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
     if (riding())
         camera.titleTargets(dtMs);
     camera.smooth(dtMs, s.options ? s.options->cameraSmoothness : 80);
-    glm::vec3 eye = glm::vec3(camera.eye(glm::dvec3(lookAt)));
-    if (s.extracted) { // kept out of the terrain
-        const glm::vec3 toEye = eye - lookAt;
-        const float length = glm::length(toEye);
-        for (float t = 0.3f; t < length; t += 0.2f)
-            if (s.extracted->solidAt(lookAt.x + toEye.x * t / length, lookAt.y + toEye.y * t / length, lookAt.z + toEye.z * t / length)) {
-                eye = lookAt + toEye * (std::max(0.3f, t - 0.3f) / length);
-                break;
-            }
+    glm::vec3 eye;
+    auto subject = s.spawned ? s.spawned->cameraSubject(creationShown) : std::nullopt;
+    const bool nativeCamera = p && s.extracted && subject.has_value();
+    if (nativeCamera) {
+        const auto forward = camera.forward();
+        cameraPosition.distance = camera.distance;
+        cameraposition::update(cameraPosition, *subject, {float(forward.x), float(forward.y), float(forward.z)}, dtMs, cameraTerrain);
+        p->record[ABILITY] = subject->ability;
+        camera.distance = cameraPosition.distance;
+        lookAt = s.extracted->toLocal(cameraPosition.lookAt.data());
+        eye = s.extracted->toLocal(cameraPosition.eye.data());
+        cameraPositionValid = true;
+    } else {
+        eye = glm::vec3(camera.eye(glm::dvec3(lookAt)));
+        if (s.extracted) { // Compatibility stand-in camera, without canonical creature inputs.
+            const glm::vec3 toEye = eye - lookAt;
+            const float length = glm::length(toEye);
+            for (float t = 0.3f; t < length; t += 0.2f)
+                if (s.extracted->solidAt(lookAt.x + toEye.x * t / length, lookAt.y + toEye.y * t / length,
+                                         lookAt.z + toEye.z * t / length)) {
+                    eye = lookAt + toEye * (std::max(0.3f, t - 0.3f) / length);
+                    break;
+                }
+        }
     }
     cam = Camera{eye, lookAt};
+    if (nativeCamera) {
+        cam.nativeViewRotation = cameramotion::viewRotation(camera.pitch, camera.roll, camera.yaw);
+        cam.displayedYawDegrees = float(camera.yaw);
+        cam.nativeFixedEye = cameraPosition.eye;
+        cam.nativeFixedLookAt = cameraPosition.lookAt;
+    }
     focus = lookAt;
     light = lightingAt(hour, s.dayNight);
     s.world->update(focus);
@@ -1882,6 +1914,11 @@ Result Session::runTitle() {
         playSound(SOUND_MENU_CLOSE);
         enterWorld();
         outcome.camera = camera;
+        if (cameraPositionValid) {
+            outcome.cameraPosition = cameraPosition;
+            // Entry may reset distance without rebuilding the retained eye/look-at.
+            outcome.cameraPosition->distance = camera.distance;
+        }
     }
     return outcome;
 }

@@ -1694,12 +1694,50 @@ void SpawnedCreatures::control(const nativecontrol::Input &in, double dtMs) {
     finishControl(in);
 }
 
-float SpawnedCreatures::playerMana() const { return hasPlayer ? get<float>(player.record, 0x188) : 0.0f; }
-uint32_t SpawnedCreatures::playerToggles() const { return hasPlayer ? get<uint16_t>(player.record, 0x128) : 0u; }
+std::optional<cameraposition::Subject> SpawnedCreatures::cameraSubject(bool creationLayerShown) const {
+    const auto *record = playerRecord();
+    if (!record)
+        return {};
+    cameraposition::Subject subject;
+    std::memcpy(subject.physical.data(), record + worldgen::creature::POSITION, sizeof subject.physical);
+    std::memcpy(subject.size.data(), record + 0x84, sizeof subject.size);
+    std::memcpy(subject.velocity.data(), record + 0x34, sizeof subject.velocity);
+    std::memcpy(&subject.stepOffset, record + 0x990, sizeof subject.stepOffset);
+    subject.ability = record[worldgen::creature::ABILITY];
+    subject.creationLayerShown = creationLayerShown;
+    if (subject.ability == 0x76) {
+        int64_t mountId;
+        std::memcpy(&mountId, record + 0x9d8, sizeof mountId);
+        const auto *mount = mountId == playerId() ? playerRecord() : this->record(mountId);
+        if (mount) {
+            cameraposition::Mount seat;
+            float health;
+            int32_t race;
+            std::memcpy(&seat.height, mount + 0x8c, sizeof seat.height);
+            std::memcpy(&health, mount + worldgen::creature::HEALTH, sizeof health);
+            std::memcpy(&race, mount + worldgen::creature::RACE, sizeof race);
+            seat.alive = health > 0;
+            seat.offsetZ = nativeupkeep::ridingOffsetZ(race);
+            subject.mount = seat;
+        }
+    }
+    return subject;
+}
 
-float SpawnedCreatures::playerStamina() const { return hasPlayer ? get<float>(player.record, 0x9a0) : 0.0f; }
+float SpawnedCreatures::playerMana() const {
+    return hasPlayer ? get<float>(player.record, 0x188) : 0.0f;
+}
+uint32_t SpawnedCreatures::playerToggles() const {
+    return hasPlayer ? get<uint16_t>(player.record, 0x128) : 0u;
+}
 
-float SpawnedCreatures::playerHealth() const { return hasPlayer ? get<float>(player.record, worldgen::creature::HEALTH) : 0.0f; }
+float SpawnedCreatures::playerStamina() const {
+    return hasPlayer ? get<float>(player.record, 0x9a0) : 0.0f;
+}
+
+float SpawnedCreatures::playerHealth() const {
+    return hasPlayer ? get<float>(player.record, worldgen::creature::HEALTH) : 0.0f;
+}
 
 float SpawnedCreatures::playerMaxHealth() const {
     if (!hasPlayer)

@@ -7,6 +7,7 @@
 #include "CreatureScene.h"
 #include "NativeAI.h"
 #include "NativeUpkeep.h"
+#include "CameraPosition.h"
 #include "NativeAbility.h"
 #include "NativeHit.h"
 #include "NativeEffects.h"
@@ -291,6 +292,8 @@ class SpawnedCreatures {
     Sheet sheet() const;
     // The native player's record (the creature item stats are computed for), null before it exists.
     const uint8_t *playerRecord() const { return nativePlayer && hasPlayer ? player.record.data() : nullptr; }
+    // Canonical physical camera inputs, including the resolved mount; no actor mutation.
+    std::optional<cameraposition::Subject> cameraSubject(bool creationLayerShown = false) const;
     // The class's special skill (0 for none) and the ms of its cooldown left.
     int specialSkill(float &cooldownMs) const;
     // Which special items (category 24) the player carries for the region it is in

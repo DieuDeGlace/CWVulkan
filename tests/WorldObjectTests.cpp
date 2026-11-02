@@ -294,9 +294,19 @@ int worldObjectTests() {
             std::string why;
             check(terrain.open(root, why), "facade fixture opens");
             SpawnedCreatures actors;
+            check(!actors.cameraSubject(), "camera source is absent before a canonical local player exists");
             actors.setNativePlayer(true);
             actors.setPlayer(terrain, {1, 1, ExtractedWorld::Z_OFFSET + 1}, 0, {}, 100, 1, true);
             actors.setPlayerHealth(actors.playerMaxHealth());
+            auto *cameraRecord = actors.localPlayer()->record;
+            int64_t previousDrawnX;
+            std::memcpy(&previousDrawnX, cameraRecord + 0xb10, 8);
+            const int64_t otherDrawnX = 1234LL * 65536;
+            std::memcpy(cameraRecord + 0xb10, &otherDrawnX, 8);
+            const auto camera = actors.cameraSubject(true);
+            check(camera && camera->physical[0] == 65536 && camera->physical[1] == 65536 && camera->creationLayerShown,
+                  "camera facade selects physical coordinates rather than a different drawn pose and carries creation visibility");
+            std::memcpy(cameraRecord + 0xb10, &previousDrawnX, 8);
             const float before = actors.playerHealth();
             auto trap = object(0x13, 1, 0);
             std::memcpy(trap.data() + 8, actors.localRecord() + 0x10, 24);

@@ -890,6 +890,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     std::optional<hair::Style> createdHairStyle;
     std::optional<glm::vec3> enteredAt; // where the front screens put the player (frontend-title.md §6.1)
     std::optional<frontend::OrbitCamera> enteredCamera;
+    std::optional<cameraposition::State> enteredCameraPosition;
     if (launchMenu) {
         frontend::Request request;
         request.page = menuPage;
@@ -911,6 +912,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             enteredAt = result.feet;
         createdHairStyle = result.createdHairStyle;
         enteredCamera = result.camera;
+        enteredCameraPosition = result.cameraPosition;
         characters = everyCharacter(); // (creation may have made one)
         chosen = nullptr;
         for (const CharacterEntry &c : characters)
@@ -3271,15 +3273,25 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         toUnits(eye, useCamera.fixedEye->data());
         toUnits(target, useCamera.fixedRayOrigin->data());
     };
-    // Startup bridge until the frontend and gameplay share the full fixed camera state.
-    const glm::vec3 initialFocus = player.position + glm::vec3(0, 0, 1.6f);
-    retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(displayedYawRadians()) * std::cos(displayedPitchRadians()),
-                                                        std::sin(displayedYawRadians()) * std::cos(displayedPitchRadians()),
-                                                        std::sin(displayedPitchRadians())),
-                    initialFocus);
-    cameraPosition.eye = *useCamera.fixedEye;
-    cameraPosition.lookAt = *useCamera.fixedRayOrigin;
-    cameraPosition.distance = viewZoom;
+    if (enteredCameraPosition && useExtracted) {
+        cameraPosition = *enteredCameraPosition;
+        retainUseCamera(extractedWorld.toLocal(cameraPosition.eye.data()), extractedWorld.toLocal(cameraPosition.lookAt.data()));
+        useCamera.fixedEye = cameraPosition.eye;
+        useCamera.fixedRayOrigin = cameraPosition.lookAt;
+        for (int axis = 0; axis < 2; ++axis)
+            gameRenderOffset[axis] = gamemath::subtractFixed(0, cameraPosition.lookAt[axis]);
+        logLine("Camera: retained frontend fixed eye/look-at and render origin");
+    } else {
+        // Direct diagnostic launches retain their legacy camera initialization.
+        const glm::vec3 initialFocus = player.position + glm::vec3(0, 0, 1.6f);
+        retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(displayedYawRadians()) * std::cos(displayedPitchRadians()),
+                                                            std::sin(displayedYawRadians()) * std::cos(displayedPitchRadians()),
+                                                            std::sin(displayedPitchRadians())),
+                        initialFocus);
+        cameraPosition.eye = *useCamera.fixedEye;
+        cameraPosition.lookAt = *useCamera.fixedRayOrigin;
+        cameraPosition.distance = viewZoom;
+    }
 
     auto submitChat = [&](const std::u16string &line) {
         const auto command = chatcommand::parse(line);
@@ -6128,35 +6140,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         glm::vec3 target, eye;
         std::optional<glm::mat3> cameraRotation;
         auto *cameraPlayer = nativePlayer ? spawned.localPlayer() : nullptr;
-        if (useExtracted && cameraPlayer && cameraPlayer->record) {
+        auto cameraSubject = spawned.cameraSubject();
+        if (useExtracted && cameraPlayer && cameraPlayer->record && cameraSubject) {
             auto *record = cameraPlayer->record;
-            cameraposition::Subject subject;
-            std::memcpy(subject.physical.data(), record + worldgen::creature::POSITION, sizeof subject.physical);
-            std::memcpy(subject.size.data(), record + 0x84, sizeof subject.size);
-            std::memcpy(subject.velocity.data(), record + 0x34, sizeof subject.velocity);
-            std::memcpy(&subject.stepOffset, record + 0x990, sizeof subject.stepOffset);
-            subject.ability = record[worldgen::creature::ABILITY];
-            if (subject.ability == 0x76) {
-                int64_t mountId;
-                std::memcpy(&mountId, record + 0x9d8, sizeof mountId);
-                const auto *mount = mountId == spawned.playerId() ? spawned.playerRecord() : spawned.record(mountId);
-                if (mount) {
-                    cameraposition::Mount seat;
-                    float health;
-                    int32_t race;
-                    std::memcpy(&seat.height, mount + 0x8c, sizeof seat.height);
-                    std::memcpy(&health, mount + worldgen::creature::HEALTH, sizeof health);
-                    std::memcpy(&race, mount + worldgen::creature::RACE, sizeof race);
-                    seat.alive = health > 0;
-                    seat.offsetZ = nativeupkeep::ridingOffsetZ(race);
-                    subject.mount = seat;
-                }
-            }
             const double pitch = player.orbit.pitch, yaw = player.orbit.yaw;
             const auto forward = cameramotion::basis(pitch, player.orbit.roll, yaw)[2];
             cameraPosition.distance = viewZoom;
-            cameraposition::update(cameraPosition, subject, {forward.x, forward.y, forward.z}, frameMs, nativeTerrain);
-            record[worldgen::creature::ABILITY] = subject.ability;
+            cameraposition::update(cameraPosition, *cameraSubject, {forward.x, forward.y, forward.z}, frameMs, nativeTerrain);
+            record[worldgen::creature::ABILITY] = cameraSubject->ability;
             viewZoom = cameraPosition.distance;
             target = extractedWorld.toLocal(cameraPosition.lookAt.data());
             eye = extractedWorld.toLocal(cameraPosition.eye.data());
