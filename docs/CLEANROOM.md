@@ -467,7 +467,8 @@ Done so far with the full process:
   `src/HudFrontend.cpp`, from `frontend-title.md`, `frontend-characters.md`, `frontend-options.md`).
   `src/NativeMenu.*` (the CWM1 replay and its third-party `shade()`) is retired with `tools/MenuProbe.cpp`,
   `tools/MenuCapture.cpp` and `tools/ConvertMenuCapture.py`: the title is now the ordinary world. Nothing of
-  `shade()` was kept; the logo's overlay lighting is a stand-in until a spec covers it (`docs/menu.md`).
+  `shade()` was kept. The former logo lighting stand-in is replaced by the independently specified
+  queued WORLD path described below and in `docs/menu.md`.
 
 
 ## Remaining ordinary particle consumers, 2026-11-01
@@ -993,3 +994,27 @@ Omitting the rebind clear fails exactly the two plain retained-mask cases; the
 correct source is restored and rebuilt before full checks. CPU callback/cut tests
 cover two GUI scales. Point queries avoid building the drawing-only inverse matrix.
 No native code, instructions, reconstruction or owner assets are packaged.
+
+## Queued title logo and native GUI voxel admission, 2026-11-02
+
+The implementer used the independent frontend font/logo contract sections1–5,
+the Ring queued transform/consumer and WORLD controls section4. The native-only
+author read no engine, tests, exporter, owner data/captures or game execution.
+The replacement removes the guessed60-degree constant-magnification logo camera
+and face-baked lighting. It shares the ordinary finite queued lens, appends the
+native model transforms around the full allocation and renders before Plasma,
+retaining frame sky/fog/sun inputs and scene depth. Layer item cuts advance past
+the inserted logo; no private depth clear or missing-resource substitute is added.
+
+The engine's own GPU checks exposed an untagged-CUB path into its generic shader.
+The shared GUI CUB producer now retains packed RGB/V admission for logo and item
+resources. The synthetic real-producer cases cover both world styles, queue order
+and inherited depth; an untagged-face control fails the two WORLD color assertions.
+CPU checks cover the finite perspective, header center and fixed effect/palette
+reset. Local no-save captures are stability checks, not original-game pixel oracles.
+
+The immediate font request remains resource1.dat as established by the native
+constructors. Named-memory and basename cache precedence do not prove the effective
+font bytes in every running installation. No resource2 switch, glyph-case claim or
+font artwork is inferred from old modded screenshots. Source/runtime packages
+contain no owner models/fonts, native instructions, native binaries or captures.

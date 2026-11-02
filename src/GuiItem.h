@@ -2,11 +2,14 @@
 // Shared native GUI item transforms and shader inputs (steam-gui-item-icons.md).
 // Sprite selection/voxel buffers belong to the owner-asset loader, not this geometry.
 #include "NativeSaves.h"
+#include "CubModel.h"
 #include <glm/glm.hpp>
 #include <optional>
 #include <vector>
 
 namespace guiitem {
+// Native packed RGB/V at voxel corners; GUI meshes retain the full CUB allocation origin.
+Mesh voxelMesh(const CubModel &, steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock);
 struct Placement {
     glm::vec2 screen{0};
     glm::vec3 euler{0}; // degrees, X then Y then Z
@@ -57,8 +60,8 @@ struct Request {
     nativesaves::Item item{};
     Placement at;
     // A mesh0 Character entry carries the admitted nonnull card's setup without geometry.
-    enum class Kind { Widget, Ring, RawEdit, Character } kind = Kind::Widget;
-    float farPlane = 960;                       // Ring uses the ordinary screen-overlay lens
+    enum class Kind { Widget, Ring, Logo, RawEdit, Character } kind = Kind::Widget;
+    float farPlane = 960;                       // Ring/Logo use the ordinary screen-overlay lens
     glm::mat4 model{1}, view{1}, projection{1}; // RawEdit accepts the caller's matrices without normalization
     glm::vec4 material{1};
     std::optional<ShaderState> state;

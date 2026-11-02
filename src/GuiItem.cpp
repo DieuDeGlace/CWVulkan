@@ -1,6 +1,7 @@
 #include "GuiItem.h"
 #include "NativePose.h"
 #include "NativeRules.h"
+#include "MapLook.h"
 #include "worldgen/Noise.h"
 #include <bit>
 #include <glm/gtc/matrix_transform.hpp>
@@ -9,6 +10,15 @@
 #include <cstring>
 
 namespace guiitem {
+Mesh voxelMesh(const CubModel &cub, steamvoxel::CubEncoding encoding) {
+    Mesh mesh;
+    worldmap::meshModel({cub.sx, cub.sy, cub.sz, cub.rgb.data()}, 0, cub.sx - 1, 0, cub.sy - 1, encoding == steamvoxel::CubEncoding::Stock,
+                        mesh);
+    for (auto &vertex : mesh.vertices)
+        vertex.flags = STEAM_VERTEX;
+    return mesh;
+}
+
 Placement cursorPlacement(glm::vec2 pointer, int32_t clock) {
     return {pointer, {225, 0, phase(clock)}, 0.05f, 0, true};
 }
@@ -280,20 +290,22 @@ void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retai
         out.push_back(draw);
         return;
     }
-    if (request.kind == Request::Kind::Ring) {
+    if (request.kind == Request::Kind::Ring || request.kind == Request::Kind::Logo) {
         const auto transform = ringGeometry(request.allocation, viewport, request.at, request.farPlane);
         if (!transform)
             return;
         const bool sky = retained.whiteSky;
         retained = overlayState();
-        retained.whiteSky = sky;
-        retained.shininess = shininess(request.item);
+        if (request.kind == Request::Kind::Ring) {
+            retained.whiteSky = sky;
+            retained.shininess = shininess(request.item);
+        } // Logo retains the frame's sky, with white material and all effects zero.
         Draw draw;
         draw.mesh = request.mesh;
         draw.model = transform->model;
         draw.projection = transform->projection;
         draw.state = retained;
-        out.push_back(draw); // queued Ring items have no black duplicate or spirit-cube pass
+        out.push_back(draw); // queued models have no black duplicate or spirit-cube pass
         return;
     }
     const auto transform = geometry(request.item[nativesaves::item::TYPE], request.allocation, viewport, request.at);

@@ -1,7 +1,6 @@
 // Owner CUB resources and immediate widget requests (steam-gui-item-icons.md).
 #include "Hud.h"
 #include "ItemIcon.h"
-#include "MapLook.h"
 #include <algorithm>
 
 void Hud::addItemIcon(const std::string &key, const CubModel &cub, bool retainVolume, steamvoxel::CubEncoding encoding) {
@@ -16,8 +15,7 @@ void Hud::addItemIcon(const std::string &key, const CubModel &cub, bool retainVo
     if (retainVolume)
         model.volume = std::make_shared<CubModel>(cub);
     model.allocation = {cub.sx, cub.sy, cub.sz};
-    worldmap::meshModel({cub.sx, cub.sy, cub.sz, cub.rgb.data()}, 0, cub.sx - 1, 0, cub.sy - 1, encoding == steamvoxel::CubEncoding::Stock,
-                        model.pending);
+    model.pending = guiitem::voxelMesh(cub, encoding);
 }
 
 void Hud::uploadItemModels(Renderer &renderer) {

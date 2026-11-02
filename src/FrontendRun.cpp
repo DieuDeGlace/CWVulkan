@@ -160,11 +160,11 @@ uint32_t wallClockMs() {
     return (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-// A model drawn in screen space (the logo, the list's creatures): meshed as the game meshes
+// A fallback list creature drawn in screen space: meshed as the game meshes
 // every voxel model (worldmap-rendering.md §2: each face its own corners, the 6 x 6 corner
 // occlusion, .cub colours halved), so each voxel keeps its own colour and an open face is flat.
 // The colours are doubled back as the model shader does (§3.2) and shaded once face by face
-// (screenModelShade): the overlay pass's own light is open question 1 of frontend-title.md.
+// (screenModelShade). Native animated portraits and the logo use the WORLD path instead.
 // The mesh's corner is the model's corner, as the part matrices take it.
 uint32_t screenModel(Renderer &renderer, const CubModel &cub, int facing = -1) {
     Mesh m;
@@ -293,7 +293,8 @@ class Session {
 
     // The logo, as a screen-space model.
     uint32_t logoMesh = 0;
-    glm::vec3 logoSize{0};
+    glm::ivec3 logoSize{0};
+    std::optional<guiitem::Request> queuedLogo;
 
     int settled = 0; // frames with the world loaded, for a capture
 
@@ -416,8 +417,8 @@ bool Session::start(std::string &error) {
     if (auto path = s.assets->resolve(fs::path("sprites") / "cubeworld.cub")) {
         CubModel cub;
         if (cub.load(*path)) {
-            logoSize = glm::vec3((float)cub.sx, (float)cub.sy, (float)cub.sz);
-            logoMesh = screenModel(*s.renderer, cub, +1); // (its +z side faces the viewer)
+            logoSize = {cub.sx, cub.sy, cub.sz};
+            logoMesh = s.renderer->upload(guiitem::voxelMesh(cub));
         }
     }
     loadList();
@@ -1363,15 +1364,11 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
         view.visible = [&](const auto &sphere) { return s.renderer->steamActorVisible(sphere); };
         s.spawned->draw(*s.extracted, *s.world, dtMs, wallClockMs(), view, opaque);
     }
-    // The logo while the title layer is shown (§3.4).
+    queuedLogo.reset();
     if (titleShown && logoMesh) {
-        DrawItem d;
-        d.mesh = logoMesh;
-        d.model = logoClip(logoPlacement((float)size.width, (float)size.height, guiScale, wallClockMs()), logoSize,
-                           (float)size.width, (float)size.height);
-        d.flags = NATIVE_MENU;
-        d.castShadow = false;
-        opaque.push_back(d);
+        const auto placement = logoPlacement((float)size.width, (float)size.height, guiScale, wallClockMs());
+        const float farPlane = (float)s.renderer->settings.nativeZoneRadius * 64.f;
+        queuedLogo = logoRequest(placement, logoSize, logoMesh, farPlane);
     }
 }
 
@@ -1830,7 +1827,15 @@ bool Session::frame() {
     hud.drawScreen(screen, overlay, &templatePoints);
     for (const auto point : templatePoints)
         navigationPoint(point / guiScale);
-    s.renderer->overlay(std::move(overlay), hud.itemDraws(), hud.clipDraws());
+    auto items = hud.itemDraws();
+    auto layers = hud.clipDraws();
+    if (queuedLogo) {
+        items.insert(items.begin(), *queuedLogo);
+        // Every Plasma cut follows the logo, including layers with no preceding triangles.
+        for (auto &layer : layers)
+            ++layer.before.items;
+    }
+    s.renderer->overlay(std::move(overlay), std::move(items), std::move(layers));
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
     if (s.audio) {
         s.audio->menuMusic(dtMs);

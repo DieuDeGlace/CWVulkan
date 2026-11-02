@@ -55,14 +55,18 @@ The title is the ordinary world (the extracted or generated world, seed 123), wi
   - it is smoothed by `cameraSmoothness`;
   - its look-at point is one block above the player;
   - it is kept out of solid blocks.
-- **The logo.** `sprites/cubeworld.cub` is drawn through the renderer's screen-space path (`NATIVE_MENU`) as a
-  3D voxel model.
-  - Its centre is at (W/2, H × (0.25 + 0.05 cos φ)), with a 10-second wall-clock period.
-  - It is tilted 20 − 5 cos φ about x, then turned 180° about y.
-  - Its scale is `guiScale` × 0.011 × 1024 / H.
-  - It is seen in perspective (a 60° field of view, the middle at the depth where a voxel has that scale), so the
-    sides of its voxels show. Its faces are shaded by their direction: the faces toward the viewer lit, the
-    sides and the faces turned down darker.
+- **The logo.** The owner's `sprites/cubeworld.cub` uses the ordinary queued WORLD pass,
+  after the scene and before Plasma. Its full header allocation supplies the center.
+  - Its physical-pixel center bobs with the native 10-second wall-clock cosine; GUI scale is applied once.
+  - The model appends X tilt, the180-degree Y turn, scale and allocation centering at positive view Z1.
+  - The50-degree lens uses the negative viewport aspect, near0.05, configured zone-window far plane
+    and homogeneous depth translation−0.5. Magnification follows each transformed voxel's depth.
+  - Fixed overlay lighting and ordinary WORLD color/fog grading replace the former baked face shades.
+    Frame sky/sun values and existing depth are retained; the logo does not clear depth.
+  - Logo and item CUB meshes share native packed RGB/V shader admission. Missing logo resources
+    have no invented replacement. Font requests remain data-backed; the immediate widgets request
+    `resource1.dat`, independently of template child-text font selection.
+  See `docs/specs/steam-frontend-font-and-logo.md` and `steam-world-pass-controls.md` section4.
 - **The root menu.** It is 200 × 100, at x = (W − 200) / 2 and y = (1.6 H − 100) / 2 (interface units).
   - Its entries are Start Game, Continue (only when `slot` names a character), Options and Exit. They have the
     spec's text heights and hover bands, in font size 18 with a 4-unit outline, hovered (0.2, 1, 1).

@@ -54,7 +54,7 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.60 local GUI image cases (48
+  targets; the owner button shine is enabled.66 local GUI image cases (54
   asset-free,12 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
@@ -74,6 +74,14 @@ individual feature documents.
   Default Plasma depth testing is disabled and optional depth-stack mask0x08 starts
   off, per the independent depth contract. Widget/node caches, broader blur/callback
   state comparisons, optional depth-stack behavior and frontend pixel parity remain open.
+  The title logo now uses the independently specified finite50-degree queued projection,
+  full-allocation centering, exact clock/scale staging and normal WORLD overlay lighting.
+  It precedes every Plasma cut and retains scene depth/sky rather than using baked shades.
+  Shared logo/item CUB meshes now select packed RGB/V shading explicitly. Six asset-free
+  Vulkan cases cover color, before-Plasma order and retained depth in both world styles;
+  frontend CPU checks cover perspective and effect/palette reset. Immediate text's verified
+  request remains resource1.dat; cached/named-memory font-byte provenance and unmodified
+  visual comparisons remain open, so no resource2 substitution is inferred from modded captures.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.
@@ -579,7 +587,7 @@ individual feature documents.
   early input/camera/GUI phase fidelity and native interaction/visual comparisons
   remain release gates.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
-  exact logo lighting, panel opacity and the remaining object/effect visuals.
+  remaining panel opacity and object/effect visuals.
   Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs
   are now available. Their remaining consumers and native visual comparisons still
   need implementation/validation. Scene range and Steam sky easing now use the

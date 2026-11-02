@@ -46,8 +46,12 @@ from the widget's draw hook, through a small text helper shared by all "BaseWidg
   above 0 the string is drawn twice, first with the outline, then filled.
 
 Alignment values seen: 0 = left-aligned at x, 1 = centred on x, 2 = right-aligned at x,
-5 = centred both ways (used once, §characters). The font is `resource1.dat` (Plasma's
-ScalableFont); it has capital letters only, so mixed-case strings appear in capitals.
+5 = centred both ways (used once, §characters). The title root and character-card
+constructors explicitly request `resource1.dat` through Plasma's font resolver.
+The helper does not uppercase display text; the earlier capital-only appearance
+assertion is unproved from native code and depends on the effective font data.
+Exact binding/failure behavior, cache/memory precedence and the unresolved named-memory
+producer are [frontend fonts §§1–3](steam-frontend-font-and-logo.md).
 
 ### 0.2 Navigation points
 
@@ -218,14 +222,20 @@ does not depend on the game's clock):
 
 * **centre**: x = W × 0.5, y = H × (0.25 + 0.05 × cos φ) (screen pixels, y down): the logo
   bobs 5 % of the screen height up and down every 10 seconds;
-* **rotation**: about x by 20 − 5 × cos φ degrees, then about y by 180, then about z by 0
-  (applied in that order to the model's points, after centring the model on its own middle:
-  the model is first moved by −½ of its size along each axis);
+* **rotation**: append x rotation by 20 − 5 × cos φ degrees, then y by 180, then z by 0.
+  This is matrix append order: column-vector points are centered/scaled first, then
+  receive z, y, x rotations. Centering uses the full header allocation dimensions,
+  not occupied bounds;
 * **scale**: *g* × 0.011 × 1024 ÷ H (one uniform factor; see open question 1 for how the
   overlay maps it to pixels);
 * **colour**: (1, 1, 1, 1).
 
 The logo is not drawn while any other front screen is open.
+
+The native physical-dimension/GUI-scale inputs, exact float staging, full model
+product, voxel-corner units and queued50-degree perspective/center/depth offset are
+[frontend logo §§4–5](steam-frontend-font-and-logo.md#4-logo-inputs-use-scene-pixels-and-the-global-gui-scale).
+This queue is separate from immediate Widget text and its logical frame.
 
 ---
 
@@ -405,7 +415,11 @@ the restored position's zones are missing, treat their blocks as solid rather th
 * Models: `sprites/cubeworld.cub` (logo), `sprites/eagle.cub` (the mount). The sprite slots
   quoted (0xc31, 0xe35) are the game's numbering of its sprite list (ZoneExtractor writes the
   slot → file table).
-* Font: `resource1.dat` (Plasma ScalableFont). Interface templates: `gui.plx`
+* Requested immediate font: `resource1.dat` (Plasma ScalableFont resolver).
+  Cached fonts, named-memory precedence, directory retries and the unproved
+  effective memory-source producer remain [frontend fonts §2](steam-frontend-font-and-logo.md#2-effective-source-cache-directories-and-unresolved-memory-producer).
+  Template fonts are data-selected and have their separately specified fallback.
+  Interface templates: `gui.plx`
   ("button", "button2", "smallbutton", "edit", "leftbutton", "rightbutton", …).
 * Music: `Music\maintheme.ogg`. Sounds: `Sounds\menu-open2.wav`, `menu-close2.wav`,
   `menu-select.wav`.
@@ -431,11 +445,12 @@ Recordings to compare with (all with the ZoneExtractor DLL; "oracle request" mea
 
 ## Open questions
 
-1. **Logo scale in pixels.** 0xee5a0 receives *g* × 0.011 × 1024 ÷ H; how the overlay pass
-   projects these screen-space models (and so the logo's size in pixels) was not traced.
-   (Since traced in `hud-money.md` §3: a 50° perspective camera with the model one unit
-   away, which gives ≈ 12.08 × *g* pixels per logo voxel; still to be checked on screen.)
-   Oracle: the logo's drawn bounding box at 1280 × 720 and 1920 × 1080 with guiScale 1.
+1. **Logo producer/consumer scale: bounded contract resolved.**
+   [Frontend logo §§4–5](steam-frontend-font-and-logo.md#4-logo-inputs-use-scene-pixels-and-the-global-gui-scale)
+   specifies full header centering, voxel units, actual model/projection order and
+   physical-center offsets. Perspective magnification varies with transformed view
+   depth; a center-plane approximation is not a constant pixel size or runtime box
+   oracle. Owner model geometry and any image comparison remain separate inputs.
 2. **P+0x128 bit 0x80** (set while front): its reader was not traced (candidates: the HUD,
    the nameplate, targeting). Oracle: compare a front-screen frame with the bit forced clear.
 3. **Look input on the title.** G+0x1d74 / +0x1d78 feed the camera targets every frame; whether

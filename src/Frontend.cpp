@@ -54,48 +54,27 @@ glm::dvec3 OrbitCamera::eye(glm::dvec3 lookAt) const { return lookAt - (double)d
 // --- The logo --------------------------------------------------------------------------------
 
 LogoPlacement logoPlacement(float width, float height, float guiScale, uint32_t wallClockMs) {
-    constexpr uint32_t PERIOD_MS = 10000;
-    const float phase = 6.2831853f * ((float)(wallClockMs % PERIOD_MS) * 0.0001f);
+    // Native float staging before the double-precision pi multiplication.
+    const float fraction = (float)(wallClockMs % 10000) * .0001f;
+    const float phase = (float)((double)(fraction + fraction) * 3.14159265358979323846);
+    const float cosine = std::cos(phase);
     LogoPlacement p;
-    p.centre = {width * 0.5f, height * (0.25f + 0.05f * std::cos(phase))};
-    p.tiltDegrees = 20.0f - 5.0f * std::cos(phase);
-    p.scale = height > 0 ? guiScale * 0.011f * 1024.0f / height : 0.0f;
+    p.centre = {width * .5f, height * (.25f + (cosine * .01f) * 5.f)};
+    p.tiltDegrees = 20.f - cosine * 5.f;
+    p.scale = height > 0 ? (guiScale * .011f) * (1024.f / height) : 0;
     return p;
 }
 
-glm::mat4 logoClip(const LogoPlacement &p, glm::vec3 size, float width, float height) {
-    // The model is centred on its middle and turned about x by the tilt. The spec's further half
-    // turn about y, seen through Direct3D's left-handed view (the viewer on the -z side), turns
-    // the model's +z faces toward the viewer and its tops up toward it; the game's screen shows
-    // the logo's +z side (the face with the bevel's yellow highlights and dark edges) reading
-    // left to right, so its lens mirrors x as the map's does (worldmap-rendering.md §4.2). The
-    // half turn and the mirror together are a flip of z, after the tilt.
-    const glm::mat4 tilt = glm::rotate(glm::mat4(1), glm::radians(p.tiltDegrees), glm::vec3(1, 0, 0));
-    const glm::mat4 centred = glm::translate(glm::mat4(1), -size * 0.5f);
-    const glm::mat4 flip = glm::scale(glm::mat4(1), glm::vec3(1, 1, -1));
-    // A perspective view, so the voxels' sides show away from the middle and as the model bobs.
-    // How the overlay pass projects screen-space models is open (frontend-title.md, open
-    // question 1): CubeVulkan takes the field of view of its world camera (60 degrees) and puts
-    // the model's middle at the depth where a voxel there is `scale` clip units of the window's
-    // height, so the logo keeps its size in pixels as the window grows (0.011 x 1024 / 2 pixels a
-    // voxel), its middle at the centre.
-    constexpr float FIELD_OF_VIEW_DEGREES = 60.0f;
-    const float focal = 1.0f / std::tan(glm::radians(FIELD_OF_VIEW_DEGREES) * 0.5f);
-    const float aspect = height > 0 ? width / height : 1.0f;
-    const float depth = p.scale > 0 ? focal / p.scale : 1.0f; // voxels from the eye to the middle
-    const float nearest = depth * 0.5f, farthest = depth * 1.5f;
-    const float depthScale = farthest / (farthest - nearest);
-    const glm::vec2 centre(p.centre.x / std::max(1.0f, width) * 2.0f - 1.0f, p.centre.y / std::max(1.0f, height) * 2.0f - 1.0f);
-    // Clip space from (x right, y up, z away from the viewer, the middle at z 0): w is the
-    // distance from the eye, depth + z.
-    glm::mat4 project(0.0f);
-    project[0][0] = focal / aspect;
-    project[1][1] = -focal; // (the window's y runs down)
-    project[2][0] = centre.x, project[2][1] = centre.y, project[2][2] = depthScale, project[2][3] = 1.0f;
-    project[3][0] = centre.x * depth, project[3][1] = centre.y * depth;
-    project[3][2] = depthScale * depth - depthScale * nearest;
-    project[3][3] = depth;
-    return project * flip * tilt * centred;
+guiitem::Request logoRequest(const LogoPlacement &p, glm::ivec3 allocation, uint32_t mesh, float farPlane) {
+    guiitem::Request request;
+    request.kind = guiitem::Request::Kind::Logo;
+    request.mesh = mesh;
+    request.allocation = allocation;
+    request.at.screen = p.centre;
+    request.at.euler = {p.tiltDegrees, 180, 0};
+    request.at.size = p.scale;
+    request.farPlane = farPlane;
+    return request; // consumed before Plasma vertex0, with the ordinary queued WORLD pass
 }
 
 float screenModelShade(int axis, int sign, int facing) {

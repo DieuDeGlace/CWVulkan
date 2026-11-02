@@ -106,13 +106,10 @@ struct LogoPlacement {
     float scale = 0;
 };
 LogoPlacement logoPlacement(float width, float height, float guiScale, uint32_t wallClockMs);
-// The clip transform the renderer's screen-space path takes (DrawItem::model with NATIVE_MENU)
-// for a model of `size` voxels placed so.
-glm::mat4 logoClip(const LogoPlacement &p, glm::vec3 size, float width, float height);
+// Full allocation, finite50-degree queued lens and ordinary WORLD lighting, before Plasma.
+guiitem::Request logoRequest(const LogoPlacement &, glm::ivec3 allocation, uint32_t mesh, float farPlane);
 // The shade a screen-space model's face is baked with, by its normal's axis (0 x, 1 y, 2 z) and
-// sign: faces toward the viewer (z of sign `facing`: -1 for the list's creatures, +1 for the
-// logo) lit, turned up (+y) a little less, sides and those turned down darker. (CubeVulkan's:
-// the overlay pass's lighting is open question 1.)
+// sign. This approximation remains for fallback list creatures; the title logo uses WORLD.
 float screenModelShade(int axis, int sign, int facing = -1);
 
 // --- The root menu (frontend-title.md §4) ----------------------------------------------------

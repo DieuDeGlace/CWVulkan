@@ -65,21 +65,33 @@ void logo() {
     // Half a period later: 20 % and 25 degrees; the motion repeats every 10 seconds.
     const LogoPlacement half = logoPlacement(1920, 1080, 1, 5000), again = logoPlacement(1920, 1080, 1, 10000);
     FRONT_CHECK(near(half.centre.y, 1080 * 0.2, 1e-2) && near(half.tiltDegrees, 25, 1e-3) && near(again.centre.y, p.centre.y, 1e-3));
-    // The clip transform puts the model's middle at the centre.
-    const glm::mat4 m = logoClip(p, {66, 31, 8}, 1920, 1080);
+    // The queued lens is native Y-up; RendererGui alone performs the Vulkan Y adaptation.
+    auto request = logoRequest(p, {66, 31, 8}, 7, 960);
+    FRONT_CHECK(request.kind == guiitem::Request::Kind::Logo && request.beforeVertex == 0);
+    auto state = guiitem::characterState(); // a previous portrait must not whiten this logo's sky
+    std::vector<guiitem::Draw> draws;
+    guiitem::appendDraws(request, {1920, 1080}, state, draws);
+    FRONT_CHECK(draws.size() == 1);
+    if (draws.empty())
+        return;
+    const auto &draw = draws.front();
+    FRONT_CHECK(draw.mesh == 7 && !draw.state.whiteSky && draw.state.shininess == 0 && draw.state.glow == 0 && draw.state.white == 0 &&
+                draw.material == glm::vec4(1) && draw.opacity == 1 && draw.depthOffset == 0);
+    FRONT_CHECK(draw.state.front == glm::vec4(.7f, .7f, .2f, 1) && draw.state.ambient == glm::vec4(.3f, .3f, .8f, 1));
+    const glm::mat4 m = draw.projection * draw.model;
     const glm::vec4 middle = m * glm::vec4(33, 15.5f, 4, 1);
-    FRONT_CHECK(middle.w > 0 && near(middle.x / middle.w, 0, 1e-4) && near(middle.y / middle.w, 2 * 0.3 - 1, 1e-3) &&
+    FRONT_CHECK(near(middle.w, 1, 1e-5) && near(middle.x / middle.w, 0, 1e-4) && near(middle.y / middle.w, 1 - 2 * .3, 1e-3) &&
                 middle.z / middle.w > 0 && middle.z / middle.w < 1);
-    // A voxel at the middle is `scale` clip units of the height; the +z face is nearer the eye
-    // than the -z face (it is the one seen, as on the game's title), x runs to the right, and a
-    // voxel's side shows away from the middle.
+    // Finite depth produces perspective magnification and an above-centre voxel changes W.
     const glm::vec4 above = m * glm::vec4(33, 16.5f, 4, 1);
-    FRONT_CHECK(near(std::abs(above.y / above.w - middle.y / middle.w), p.scale * std::cos(15 * 0.0174533), 1e-4));
+    const double tilt = 15 * 3.14159265358979323846 / 180;
+    const double focal = 1 / std::tan(25 * 3.14159265358979323846 / 180);
+    const double rise = focal * p.scale * std::cos(tilt) / (1 + p.scale * std::sin(tilt));
+    FRONT_CHECK(above.w > middle.w && near(above.y / above.w - middle.y / middle.w, rise, 2e-5));
     const glm::vec4 front = m * glm::vec4(33, 15.5f, 8, 1), back = m * glm::vec4(33, 15.5f, 0, 1);
     FRONT_CHECK(front.z / front.w < back.z / back.w);
     const glm::vec4 rightFront = m * glm::vec4(66, 15.5f, 8, 1), rightBack = m * glm::vec4(66, 15.5f, 0, 1);
-    FRONT_CHECK(rightFront.x / rightFront.w > middle.x / middle.w);
-    FRONT_CHECK(rightBack.x / rightBack.w < rightFront.x / rightFront.w); // (perspective: the far edge nearer the middle)
+    FRONT_CHECK(rightFront.x / rightFront.w > 0 && rightBack.x / rightBack.w < rightFront.x / rightFront.w);
     FRONT_CHECK(screenModelShade(2, -1) > screenModelShade(1, 1) && screenModelShade(1, 1) > screenModelShade(0, 1));
     FRONT_CHECK(screenModelShade(2, 1, 1) > screenModelShade(2, -1, 1));
 }
