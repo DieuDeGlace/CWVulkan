@@ -90,7 +90,7 @@ struct OverlayVertex {
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block
 // they are in.
-enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain, Emote, Particle };
+enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain, Emote, Particle, OwnedGroundCube };
 constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
 constexpr uint32_t GUI_WORLD = 1u << 10;    // immediate owner-item WORLD shader; no scene culling/shadow/tint extensions
 constexpr uint32_t STEAM_WORLD = 1u << 9;   // ordinary world/water pass; excludes sky and menu art

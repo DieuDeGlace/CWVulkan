@@ -178,6 +178,7 @@ int staticObjectSceneTests();
 int staticObjectStreamingTests();
 int worldModelControlsTests();
 int groundItemSceneTests();
+int ownedGroundCubesTests();
 int particleTests();
 int bodyParticleTests();
 int lightPublicationTests();
@@ -9367,6 +9368,8 @@ int main(int argc, char **argv) {
         return worldModelControlsTests();
     if (argc == 2 && std::string(argv[1]) == "grounditemscene")
         return groundItemSceneTests();
+    if (argc == 2 && std::string(argv[1]) == "ownedgroundcubes")
+        return ownedGroundCubesTests();
     if (argc == 2 && std::string(argv[1]) == "deadcreatures")
         return deadCreatureTests();
     if (argc == 2 && std::string(argv[1]) == "worldobjects")
@@ -10670,6 +10673,7 @@ int main(int argc, char **argv) {
     failures += staticObjectStreamingTests();
     failures += worldModelControlsTests();
     failures += groundItemSceneTests();
+    failures += ownedGroundCubesTests();
     failures += particleTests();
     failures += bodyParticleTests();
     failures += lightPublicationTests();

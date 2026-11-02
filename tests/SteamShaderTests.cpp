@@ -766,6 +766,45 @@ int steamShaderTests() {
                 ordered &= std::abs((*blended)[channel] - int(std::lround(127.5f + .25f * (*sky)[channel]))) <= 2;
         std::cout << "Steam shader ground-static-faded-order" << (ordered ? " PASS\n" : " FAIL\n");
         failures += !ordered;
+        const auto checkCube = [&](const char *name, const auto &actual, const auto &expected) {
+            bool equal = actual && expected && sky && *expected != *sky;
+            if (equal)
+                for (int channel = 0; channel < 3; ++channel)
+                    equal &= std::abs((*actual)[channel] - (*expected)[channel]) <= 1;
+            std::cout << "Steam shader " << name << (equal ? " PASS\n" : " FAIL\n");
+            failures += !equal;
+        };
+        DrawItem cube;
+        cube.mesh = item.mesh;
+        cube.kind = DrawKind::OwnedGroundCube;
+        cube.castShadow = false;
+        cube.nativeModel = glm::mat4(1);
+        cube.model = glm::translate(glm::mat4(1), {0, -10, 0}); // a generic home-space sphere would be rejected
+        cube.material = {.5f, .25f, 1, .8f};
+        DrawItem reference = cube;
+        reference.kind = DrawKind::Scenery;
+        reference.model = glm::mat4(1);
+        reference.nativeControls = worldmodel::Controls{1, 0, 0, 0, false};
+        const auto explicitCube = captureGround("owned-cube-explicit-controls", {reference});
+        checkCube("owned-cube-no-extra-sphere", captureGround("owned-cube-no-extra-sphere", {cube}), explicitCube);
+        DrawItem carrier = reference;
+        carrier.nativeModel = glm::translate(glm::mat4(1), {2, 0, 0}) * glm::scale(glm::mat4(1), glm::vec3(.1f));
+        carrier.model = *carrier.nativeModel;
+        carrier.nativeGround = scenevisibility::Sphere{{0, 0, 65536}, 10};
+        carrier.opacity = 2;
+        carrier.nativeControls = worldmodel::Controls{0, 1, 1, .002f, false};
+        reference.opacity = 2;
+        reference.nativeControls = worldmodel::Controls{1, 1, 0, .002f, false};
+        const auto retainedReference = captureGround("owned-cube-retained-reference", {reference});
+        checkCube("owned-cube-retained-controls", captureGround("owned-cube-retained-controls", {carrier, cube}), retainedReference);
+        DrawItem particle = cube;
+        particle.kind = DrawKind::Particle;
+        particle.model = glm::mat4(1);
+        particle.flags = GLOW;
+        particle.material = {1, 0, 0, 1};
+        cube.material = {0, 1, 0, 1};
+        const auto particleOnly = captureGround("owned-cube-particle-reference", {particle});
+        checkCube("owned-cube-before-burst", captureGround("owned-cube-before-burst", {particle, cube}), particleOnly);
     }
     {
         // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.

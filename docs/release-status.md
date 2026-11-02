@@ -10,6 +10,23 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Owned ground gear now submits the specified eight owner-extracted `cube.cub`
+  draws, using exact-zero delay, adapted category, personal-data and owner gates.
+  The per-frame list uses the raw item position, regional RGBA colors, unsigned
+  clock/443 stepping, separate pulse/orbit/rise phases, local rotations and full
+  allocation-header centering. It has no additional per-cube CPU admission or
+  synthesized geometry. The immediate state0 pass follows second-context fades
+  and precedes burst particles/water, explicitly setting White0/Glow1 while
+  retaining the preceding WORLD opacity, shininess, depth offset and point tables.
+  Focused CPU tests and three Vulkan comparisons cover these boundaries. Strict
+  floating-point compilation preserves this module's staged arithmetic. All five
+  targets build warning-free; full CPU/owner checks and73 shader,2 camera,24 GUI,
+  6 map/shared-water/Alpha-scenery image checks pass. Five no-save gameplay/menu
+  runs exit0, all frames viewed, with the save database unchanged. A new independent
+  queued-state supplement distinguishes opaque grouping/readiness from faded
+  setters; full resource grouping, failed-resource inheritance, the no-earlier-point-
+  binding baseline, other effect families and native visual acceptance remain open.
+
 - Captured zones now seed their gameplay item/object lists with the owner's exact
   CWR1 records, before the existing saved-state overlay. Missing or empty captured
   lists remain empty rather than being regenerated. Loaded static-object rendering

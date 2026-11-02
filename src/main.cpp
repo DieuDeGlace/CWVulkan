@@ -2,6 +2,7 @@
 // Steam Cube World install's own sprites, music and sounds.
 #include "Assets.h"
 #include "GroundItemScene.h"
+#include "OwnedGroundCubes.h"
 #include "StaticObjectScene.h"
 #include "Audio.h"
 #include "Character.h"
@@ -6846,6 +6847,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 std::memcpy(physical.data(), local + 0x10, sizeof physical);
                 int64_t owner;
                 std::memcpy(&owner, local + 0x968, sizeof owner);
+                nativesaves::Cell region;
+                std::memcpy(region.data(), local + 0x150, sizeof region);
                 const auto center = staticobjectscene::playerZone(physical);
                 for (int zx = center[0] - 3; zx <= center[0] + 3; ++zx)
                     for (int zy = center[1] - 3; zy <= center[1] + 3; ++zy) {
@@ -6918,6 +6921,22 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                         fragment.mesh = world.modelMesh(cube->model);
                                         fragment.material = spirit.material;
                                         append(fragment, spirit.model, glm::vec3(cube->header));
+                                    }
+                            if (const auto source = ownedground::source(record, adapted, nativeInventory != nullptr, owner, input.worldMs,
+                                                                        guiitem::textColour(adapted, region)))
+                                if (const auto cube = spawned.spriteAsset(world, 0xa46))
+                                    for (const auto &preparedCube :
+                                         ownedground::prepare(*source, cube->header, renderer.steamRenderOffset())) {
+                                        DrawItem effect;
+                                        effect.mesh = world.modelMesh(cube->model);
+                                        effect.kind = DrawKind::OwnedGroundCube;
+                                        effect.castShadow = false;
+                                        effect.material = preparedCube.material;
+                                        effect.nativeModel =
+                                            preparedCube.model * glm::translate(glm::mat4(1), glm::vec3(float(cube->header.x) * .5f,
+                                                                                                        float(cube->header.y) * .5f, 0));
+                                        effect.model = *effect.nativeModel;
+                                        opaque.push_back(std::move(effect));
                                     }
                         }
                     }

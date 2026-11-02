@@ -157,6 +157,11 @@ family lists and conditional state/pass order remain
 This does not establish a rule for other source-resource producers or an
 automatic mirroring policy for unrelated callers.
 
+The exact unsigned resource-address grouping/FIFO order, failed-readiness
+distinction and terminal scalar/point-table state reaching0xe6270 are
+[queued WORLD state order](steam-queued-world-state-order.md). That contract
+does not equate native address order with a portable catalog-ID order.
+
 ## 3. Water controls and retained values
 
 **0xe85e0** shares the ordinary WORLD **vertex shader**, input layout and

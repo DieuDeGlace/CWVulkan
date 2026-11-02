@@ -1622,6 +1622,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     };
     glm::uvec4 inheritedWorldLights(0);
     float inheritedWorldOpacity = 1;
+    float inheritedWorldShininess = 0, inheritedWorldDepthOffset = 0;
     // shading: false for the shadow maps, which need no light.
     auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true, std::optional<float> opacity = {}) {
         const GpuMesh &m = meshes[item.mesh];
@@ -1632,6 +1633,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                          glm::vec4(1, 0, 0, 0), glm::uvec4(0)};
         pc.material = item.material;
         const bool particle = item.kind == DrawKind::Particle;
+        const bool ownedCube = item.kind == DrawKind::OwnedGroundCube;
         if (!alphaLook && !menuSky && shading) {
             pc.params.x = float(item.flags | STEAM_WORLD | (item.nativeModel ? ORIGIN_WORLD : 0));
             if (item.nativeModel) {
@@ -1655,7 +1657,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 pc.params.z = controls.depthOffset;
                 pc.look = {1, controls.white, controls.shininess, controls.glow};
             }
-            if (!particle) {
+            if (!particle && !ownedCube) {
                 steampoints::ZoneKey key;
                 if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
                     key = item.nativeLights->key;
@@ -1689,12 +1691,21 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 pc.lights = lightSetOf(item);
         }
         if (shading) {
-            if (particle) {
+            if (ownedCube && !alphaLook) {
+                // This immediate list changes material/WORLD, White0 and Glow1 only.
+                pc.params.x = float(uint32_t(pc.params.x) | QUEUED_WORLD);
+                pc.params.z = inheritedWorldDepthOffset;
+                pc.params.w = inheritedWorldOpacity;
+                pc.look = {1, 0, inheritedWorldShininess, 1};
+                pc.lights = inheritedWorldLights;
+            } else if (particle) {
                 pc.lights = inheritedWorldLights;
                 pc.params.w = inheritedWorldOpacity;
             } else {
                 inheritedWorldLights = pc.lights;
                 inheritedWorldOpacity = pc.params.w;
+                inheritedWorldShininess = pc.look.z;
+                inheritedWorldDepthOffset = item.nativeControls ? pc.params.z : 0;
             }
         }
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
@@ -1914,7 +1925,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             // native Alpha path retains its separate post-water actor pass.
             const bool late = alphaLook && !sharedWater && item.kind == DrawKind::Model;
             if ((!alphaLook && (item.nativeScenery || item.nativeObject || item.nativeControls)) || item.kind == DrawKind::LightBeam ||
-                item.kind == DrawKind::Particle || late != afterWater || (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
+                item.kind == DrawKind::Particle || item.kind == DrawKind::OwnedGroundCube || late != afterWater ||
+                (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
             std::optional<float> opacity;
             const bool staticAlpha = alphaLook && item.alphaScenery.has_value();
@@ -2053,6 +2065,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // scenery in its snapshot; retain the same sorted queue and depth writes.
     if (alphaLook && sharedWater)
         drawAlphaFar();
+    // The owned-ground list is immediate state0 WORLD, after second-context fades.
+    // Producer admission already ran; displaced cubes have no individual CPU gate.
+    if (!alphaLook) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline);
+        for (const DrawItem &item : opaque)
+            if (item.kind == DrawKind::OwnedGroundCube && meshes[item.mesh].indexCount)
+                bindAndDraw(item, 0);
+    }
     // Ordinary burst particles inherit WORLD tables/opacity and precede water.
     // State2 is opaque, depth-writing LEQUAL with culling disabled.
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaLook ? alphaParticlePipeline : particlePipeline);
