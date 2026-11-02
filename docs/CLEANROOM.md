@@ -1207,3 +1207,28 @@ an immediate ungated reference under the current retained lights. Original fixed
 shader-equation checks remain separate; production colours were not retuned.
 This does not establish alternate recovery/reset paths or initial GPU contents.
 No original code, owner artwork or extracted data is distributed.
+
+## Gameplay camera double-degree storage, 2026-11-02
+
+The implementer read the existing independent gameplay-camera sections1–3.4,
+the already established camera/control contracts and engine-owned sources only.
+No new original-game tracing or owner capture was required. Gameplay now reuses
+the frontend's existing independently implemented OrbitCamera state and smoothing,
+retaining target/displayed pitch, roll and yaw as double degrees. Native control
+bases, assistance targets, camera positioning, view rotation and compass inputs
+no longer round-trip through float radians.
+
+The mouse helper applies float speed/displacement staging before widening the
+delta into double targets and clamps only the mouse pitch path. Pad and assistance
+update degree targets directly. The existing polling adapter dispatches movement
+when its pointer changes so idle polling cannot impose the mouse-only clamp on
+pad targets. This is not proof of exact original callback/event coalescing or
+complete GUI capture/device admission. Those adapter gaps remain explicit.
+
+Legacy startup defaults, saved-angle/CLI compatibility and legacy presentation
+consumers retain named radian adapters. The broader frontend fixed-camera handoff
+and original event-specific initialization/reset assignments are still separate
+work; this change does not claim all camera parity. Tests use known native mouse
+increments, full pitch bounds, float-before-double staging, sub-float degree
+displacement/smoothing and non-wrapped yaw. No original source, native instruction
+bytes, owner artwork or extracted data enters the publication packages.

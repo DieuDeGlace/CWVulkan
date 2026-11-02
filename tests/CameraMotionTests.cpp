@@ -104,6 +104,32 @@ int cameraMotionTests() {
     check(close(phase.x, -0.49499624967575073f) && close(phase.y, -0.32682180404663086f),
           "independent cosine phases use world milliseconds");
     check(cameramotion::viewShake(100, 0) == glm::vec2(0), "no shake leaves render view unchanged");
+    double mousePitch = 90, mouseYaw = 180;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 4, -8, 50, false);
+    check(mousePitch == 88 && mouseYaw == 179, "native default mouse sensitivity is quarter-degree displacement");
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 0, -8, 50, true);
+    check(mousePitch == 90, "invert-Y changes only the vertical target update");
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 0, 1000, 50, false);
+    check(mousePitch == 180, "mouse clamps the pitch target at the downward pole");
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 0, -1000, 50, false);
+    check(mousePitch == 0, "mouse permits the complete native upward range");
+    mousePitch = 90;
+    mouseYaw = 180;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 7, 0, 3, false);
+    check(mouseYaw == 180.0 - double(.105f), "mouse product rounds to float before widening into target degrees");
+    mouseYaw = 180;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, .00001f, 0, 50, false);
+    check(mouseYaw < 180 && float(mouseYaw) == 180.f, "double targets retain displacement below a float-degree increment");
+    frontend::OrbitCamera precise;
+    precise.set(90, 0, 180, 8);
+    precise.targetYaw = 180.0000001;
+    precise.smooth(16, 100);
+    check(precise.yaw > 180 && precise.yaw < precise.targetYaw && float(precise.yaw) == 180.f,
+          "shared gameplay/frontend orbit retains double-degree smoothing below float precision");
+    precise.set(90, 0, 179, 8);
+    precise.targetYaw = -179;
+    precise.smooth(16, 100);
+    check(precise.yaw < 179, "displayed camera follows the stored target without shortest-angle wrapping");
     std::printf("Camera motion: %s\n", failures ? "FAILED" : "passed");
     return failures;
 }

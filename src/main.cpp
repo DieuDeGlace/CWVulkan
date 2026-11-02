@@ -128,7 +128,19 @@ bool captureChatInput = false;
 // Third-person player state (Cube World style orbit camera).
 struct Player {
     glm::vec3 position{32, 32, 80};
-    float yaw = .8f, pitch = .45f, zoom = 14;
+    // Share the native degree/distance state with the frontend. Radians are
+    // compatibility adapters for saved engine settings and legacy actor code.
+    frontend::OrbitCamera orbit;
+    static constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
+    static constexpr double RADIANS_PER_DEGREE = 0.017453292519943295;
+    Player() {
+        setYawRadians(.8f);
+        setPitchRadians(.45f);
+        orbit.distance = orbit.targetDistance = 14;
+    }
+    float yawRadians() const { return float((orbit.targetYaw + 90.0) * RADIANS_PER_DEGREE); }
+    void setYawRadians(float value) { orbit.targetYaw = double(value) * DEGREES_PER_RADIAN - 90.0; }
+    void setPitchRadians(float value) { orbit.targetPitch = double(value) * DEGREES_PER_RADIAN + 90.0; }
     bool fly = false;
     float verticalSpeed = 0;
 };
@@ -926,11 +938,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         player.position.y = startY;
     }
     if (!std::isnan(startYaw))
-        player.yaw = startYaw;
+        player.setYawRadians(startYaw);
     if (!std::isnan(startPitch))
-        player.pitch = startPitch;
+        player.setPitchRadians(startPitch);
     if (!std::isnan(startZoom))
-        player.zoom = startZoom;
+        player.orbit.targetDistance = startZoom;
     auto groundAt = [&](float x, float y) {
         if (useExtracted) {
             float h;
@@ -1003,7 +1015,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     if (resumed) {
         // Exactly where the save has the character, facing yaw 0; no ground search.
         player.position = enteredAt ? *enteredAt : saveGame.position;
-        player.yaw = saveGame.yaw;
+        player.setYawRadians(saveGame.yaw);
         logLine("Save: resuming at " + std::to_string(player.position.x) + ", " + std::to_string(player.position.y));
     }
     // The world's clock carries on from the save, as the game keeps day and time in
@@ -2942,7 +2954,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     int struck = -1; // last monster struck, for the title bar
     std::mt19937 dice(std::random_device{}());
     glm::vec3 respawn = player.position; // where this world was entered (the native player: its last shrine)
-    float heading = resumed ? saveGame.heading : player.yaw + 3.14159265f + turn; // Facing away from the camera.
+    float heading = resumed ? saveGame.heading : player.yawRadians() + 3.14159265f + turn; // Facing away from the camera.
     // Writes the character's progress to Save/characters.db and the world's to Save/world.db.
     // Returns where the progress was written ("" when nothing could be).
     auto saveProgress = [&]() -> std::string {
@@ -2951,7 +2963,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         saveGame.world = worldName;
         saveGame.hasPosition = true;
         saveGame.position = player.position;
-        saveGame.yaw = player.yaw;
+        saveGame.yaw = player.yawRadians();
         saveGame.heading = heading;
         saveGame.hpFraction = playerMaxHp > 0 ? std::clamp(playerHp / playerMaxHp, .01f, 1.f) : 1;
         if (haveGear)
@@ -3123,10 +3135,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         combat::Active effect;
         if (combat::skillEffect(id, playerAttack * spellPerAttack, effect))
             playerEffects.add(effect.type, effect.value, effect.left);
-        if (!isAttack(id)) attackQueued = false;
+        if (!isAttack(id))
+            attackQueued = false;
         attackLanded = false;
         if (dealsDamage(id))
-            heading = player.yaw + 3.14159265f; // Attacks face where the camera looks.
+            heading = player.yawRadians() + 3.14159265f; // Attacks face where the camera looks.
     };
     std::vector<glm::mat4> pose;
 
@@ -3223,7 +3236,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     GameInput gameInput;
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
-    float viewYaw = player.yaw, viewPitch = player.pitch, viewZoom = player.zoom;
+    player.orbit.set(player.orbit.targetPitch, player.orbit.targetRoll, player.orbit.targetYaw, player.orbit.targetDistance);
+    float &viewZoom = player.orbit.distance;
+    const auto displayedYawRadians = [&] { return float((player.orbit.yaw + 90.0) * Player::RADIANS_PER_DEGREE); };
+    const auto displayedPitchRadians = [&] { return float((player.orbit.pitch - 90.0) * Player::RADIANS_PER_DEGREE); };
     terrainray::World nativeTerrain;
     nativeTerrain.hasZone = [&](int32_t x, int32_t y) { return extractedWorld.gameZoneLoaded(x, y); };
     nativeTerrain.block = [&](int32_t x, int32_t y, int32_t z) {
@@ -3234,9 +3250,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // Game lifetime, independent of scene installation and each actor's cached pose origin.
     std::array<int64_t, 2> gameRenderOffset{};
     auto retainUseCamera = [&](glm::vec3 eye, glm::vec3 target) {
-        constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
-        const auto basis =
-            cameramotion::basis(double(viewPitch) * DEGREES_PER_RADIAN + 90.0, 0, double(viewYaw) * DEGREES_PER_RADIAN - 90.0);
+        const auto basis = cameramotion::basis(player.orbit.pitch, player.orbit.roll, player.orbit.yaw);
         useCamera.eye = eye;
         useCamera.rayOrigin = target;
         useCamera.forward = basis[2];
@@ -3252,8 +3266,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     };
     // Startup bridge until the frontend and gameplay share the full fixed camera state.
     const glm::vec3 initialFocus = player.position + glm::vec3(0, 0, 1.6f);
-    retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
-                                                        std::sin(viewPitch)),
+    retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(displayedYawRadians()) * std::cos(displayedPitchRadians()),
+                                                        std::sin(displayedYawRadians()) * std::cos(displayedPitchRadians()),
+                                                        std::sin(displayedPitchRadians())),
                     initialFocus);
     cameraPosition.eye = *useCamera.fixedEye;
     cameraPosition.lookAt = *useCamera.fixedRayOrigin;
@@ -3653,17 +3668,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (mapOpen && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             const glm::vec2 delta = glm::vec2(float(input.pointerX), float(input.pointerY)) - previousGuiPointer;
             targetMapPosition = mapcontrol::blocks(mapcontrol::mousePan(mapcontrol::fromBlocks(targetMapPosition), delta, mapZoom,
-                                                                        float(double(viewYaw) * 57.29577951308232)));
+                                                                        float(double(displayedYawRadians()) * 57.29577951308232)));
             mapMoved = true;
         } else if (!inventoryOpen && !mapOpen && !menusOpen && glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
                    (answers.visible()               ? answerDragLook
                     : nativeCustomization.edit.open ? customizationDragLook
                                                     : (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
-            // The look input, scaled by the camera speed option and turned over by invert-Y.
-            constexpr float RADIANS_A_PIXEL = .005f;
-            const float speed = RADIANS_A_PIXEL * gameOptions.lookSpeed(), vertical = gameOptions.invertY ? -1.0f : 1.0f;
-            player.yaw -= float(mx - lastX) * speed;
-            player.pitch = std::clamp(player.pitch + float(my - lastY) * speed * vertical, -.2f, 1.5f);
+            // Polling an idle pointer must not apply the mouse-only clamp to pad targets.
+            if (mx != lastX || my != lastY)
+                cameramotion::mouseTargets(player.orbit.targetPitch, player.orbit.targetYaw, float(mx - lastX), float(my - lastY),
+                                           gameOptions.cameraSpeed, gameOptions.invertY);
         }
         lastX = mx;
         lastY = my;
@@ -3680,7 +3694,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (menusReady && menus.wheel(delta, point))
                 continue;
             if (gameInput.held(gameoptions::WALK)) {
-                player.zoom = std::clamp(player.zoom - float(2 * delta), 0.f, 50.f);
+                player.orbit.targetDistance = std::clamp(player.orbit.targetDistance - float(2 * delta), 0.f, 50.f);
                 continue;
             }
             const int previous = mapZoom;
@@ -3747,7 +3761,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
         }
         mapZoom = mapcontrol::mappedZoom(mapZoom, gameInput.pressed(gameoptions::ZOOM_IN), gameInput.pressed(gameoptions::ZOOM_OUT));
-        player.yaw += spin * (float)dt;
+        player.orbit.targetYaw += double(spin) * dt * Player::DEGREES_PER_RADIAN;
         input.scroll = 0;
 
         // The native player: the game's controller reads the keys (its game-object fields)
@@ -3947,7 +3961,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 controlInput.dodge = controlInput.dodge || (std::fmod(time, 3.0) > 1.3 && std::fmod(time, 3.0) < 1.4);
             if (autoWalk) { // forward, a quarter turn every 4 s, a jump every 1.5 s held 0.4 s
                 controlInput.forward = true;
-                player.yaw += (float)dt * (std::fmod(time, 4.0) < 0.5 ? 3.14159265f : 0.0f);
+                player.orbit.targetYaw += dt * (std::fmod(time, 4.0) < 0.5 ? 180.0 : 0.0);
                 controlInput.jump = controlInput.jump || std::fmod(time, 1.5) < 0.4;
                 controlInput.ultimate = controlInput.ultimate || std::fmod(time, 8.0) < 0.1; // and the special skill
             }
@@ -3961,12 +3975,10 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             // Controls consume the retained displayed camera, before this frame's later
             // smoothing. Mouse/pad requests change targets, not these unshaken A/B/C columns.
-            // Bridge the legacy orbit's radians until its storage also uses native degrees.
-            constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
-            const double yawDeg = double(viewYaw) * DEGREES_PER_RADIAN - 90.0;
-            const double pitchDeg = double(viewPitch) * DEGREES_PER_RADIAN + 90.0;
+            const double yawDeg = player.orbit.yaw;
+            const double pitchDeg = player.orbit.pitch;
             controlInput.cameraYaw = yawDeg;
-            const glm::mat3 cameraBasis = cameramotion::basis(pitchDeg, 0, yawDeg);
+            const glm::mat3 cameraBasis = cameramotion::basis(pitchDeg, player.orbit.roll, yawDeg);
             for (int axis = 0; axis < 3; ++axis)
                 for (int component = 0; component < 3; ++component)
                     controlInput.camera[axis][component] = cameraBasis[axis][component];
@@ -3982,11 +3994,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 assist.forward[1] = useCamera.forward.y;
                 assist.forward[2] = useCamera.forward.z;
                 assist.cameraYaw = yawDeg;
-                assist.turnYaw = double(player.yaw) * DEGREES_PER_RADIAN - 90.0;
+                assist.turnYaw = player.orbit.targetYaw;
                 assist.dt = gamemath::frameMilliseconds(frameMs);
                 const double assistedYaw = nativecontrol::aimAssist(assist);
                 if (assistedYaw != assist.turnYaw)
-                    player.yaw = float((assistedYaw + 90.0) * 0.017453292519943295);
+                    player.orbit.targetYaw = assistedYaw;
                 spawned.controlOwnerLook();
             }
             glm::vec3 at, velocity;
@@ -4004,7 +4016,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             abilityTime = abilityMs / 1000.0;
         } else {
             // Movement relative to the camera.
-            glm::vec2 forward(-std::cos(player.yaw), -std::sin(player.yaw)), right(-forward.y, forward.x);
+            glm::vec2 forward(-std::cos(player.yawRadians()), -std::sin(player.yawRadians())), right(-forward.y, forward.x);
             glm::vec2 move(0);
             if (playerStunned <= 0) {
                 if (gameInput.held(gameoptions::UP)) move += forward;
@@ -4068,8 +4080,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     player.position = glm::vec3(at.x - back.x, at.y - back.y, at.z);
                     d = glm::vec2(at - player.position);
                 }
-                player.yaw = std::atan2(-d.y, -d.x);
-                player.pitch = .15f;
+                player.setYawRadians(std::atan2(-d.y, -d.x));
+                player.setPitchRadians(.15f);
             }
         }
         if (autoAttack && sinceAttack > .6 && !nativeMove) {
@@ -4115,7 +4127,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     player.position = glm::vec3(at.x - back.x, at.y - back.y, at.z);
                     d = glm::vec2(at - player.position);
                 }
-                player.yaw = std::atan2(d.y, d.x) + 3.14159265f;
+                player.setYawRadians(std::atan2(d.y, d.x) + 3.14159265f);
             }
         }
         if (vendorTest >= 0 && time > 2 && spawnedReady) { // --open-vendor
@@ -6096,22 +6108,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
         }
         const GamepadCamera padTurn = gamepadCamera(gameInput.gamepad().look, frameMs, trackingDistance);
-        constexpr double PAD_RADIANS = 0.017453292519943295;
         if (nativeCustomization.edit.open)
             nativeCustomization.rotatePad(padTurn.pitch, padTurn.yaw);
         else if (upgrade.open && !nativePlayer) {
             upgradeView.yawDegrees = (float)((double)upgradeView.yawDegrees + padTurn.yaw);
             upgradeView.pitchDegrees = (float)((double)upgradeView.pitchDegrees + padTurn.pitch);
         } else {
-            player.yaw = (float)((double)player.yaw - padTurn.yaw * PAD_RADIANS);
-            player.pitch = (float)((double)player.pitch - padTurn.pitch * PAD_RADIANS);
+            player.orbit.targetYaw -= padTurn.yaw;
+            player.orbit.targetPitch -= padTurn.pitch;
         }
-        { // Gameplay-camera §2: capped wall interval, with independent orbit-distance smoothing.
-            const float s = gamemath::blendFactor(gamemath::frameMilliseconds(frameMs), (float)gameOptions.smoothingConstant());
-            viewYaw += (player.yaw - viewYaw) * s;
-            viewPitch += (player.pitch - viewPitch) * s;
-            viewZoom = cameramotion::distance(viewZoom, player.zoom, frameMs);
-        }
+        player.orbit.smooth(frameMs, gameOptions.cameraSmoothness);
         glm::vec3 target, eye;
         std::optional<glm::mat3> cameraRotation;
         auto *cameraPlayer = nativePlayer ? spawned.localPlayer() : nullptr;
@@ -6139,21 +6145,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     subject.mount = seat;
                 }
             }
-            constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
-            const double pitch = double(viewPitch) * DEGREES_PER_RADIAN + 90.0;
-            const double yaw = double(viewYaw) * DEGREES_PER_RADIAN - 90.0;
-            const auto forward = cameramotion::basis(pitch, 0, yaw)[2];
+            const double pitch = player.orbit.pitch, yaw = player.orbit.yaw;
+            const auto forward = cameramotion::basis(pitch, player.orbit.roll, yaw)[2];
             cameraPosition.distance = viewZoom;
             cameraposition::update(cameraPosition, subject, {forward.x, forward.y, forward.z}, frameMs, nativeTerrain);
             record[worldgen::creature::ABILITY] = subject.ability;
             viewZoom = cameraPosition.distance;
             target = extractedWorld.toLocal(cameraPosition.lookAt.data());
             eye = extractedWorld.toLocal(cameraPosition.eye.data());
-            cameraRotation = cameramotion::viewRotation(pitch, 0, yaw);
+            cameraRotation = cameramotion::viewRotation(pitch, player.orbit.roll, yaw);
         } else {
             target = player.position + glm::vec3(0, 0, 1.6f);
-            eye = target + viewZoom * glm::vec3(std::cos(viewYaw) * std::cos(viewPitch), std::sin(viewYaw) * std::cos(viewPitch),
-                                                std::sin(viewPitch));
+            eye = target + viewZoom * glm::vec3(std::cos(displayedYawRadians()) * std::cos(displayedPitchRadians()),
+                                                std::sin(displayedYawRadians()) * std::cos(displayedPitchRadians()),
+                                                std::sin(displayedPitchRadians()));
             if (useExtracted) {
                 // Pull the camera in front of walls and roofs between it and the player.
                 glm::vec3 toEye = eye - target;
@@ -6702,7 +6707,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             const Gear::Item &w = gear.equipped(Gear::WeaponRight);
             const nativeplayer::Item raw = nativeplayer::item(w.category, w.id, w.material, w.rarity, w.modifier, w.region[0], w.region[1]);
             Loot l;
-            l.at = player.position + glm::vec3(std::sin(player.yaw), -std::cos(player.yaw), 0) * 2.0f; // to the right
+            l.at = player.position + glm::vec3(std::sin(player.yawRadians()), -std::cos(player.yawRadians()), 0) * 2.0f; // to the right
             l.hasItem = true, l.item = w, l.toBag = true, l.onGround = true, l.rotation = 30, l.dropMs = 600;
             if (const std::string sprite = spawned.itemSprite(raw.data()); !sprite.empty())
                 l.model = world.loadModel(sprite);
@@ -6775,7 +6780,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         // the render view. The stored eye and the targeting basis remain unshaken (§4/7.2).
         audio.setCameraShake(cameramotion::decayShake(audio.cameraShake(), frameMs));
         camera.viewShake = cameramotion::viewShake(spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), audio.cameraShake());
-        camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
+        camera.displayedYawDegrees = float(player.orbit.yaw);
         if (useExtracted) {
             camera.nativeFixedEye = useCamera.fixedEye;
             camera.nativeFixedLookAt = useCamera.fixedRayOrigin;
@@ -6971,7 +6976,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 input.pointerSampled = true;
                 targetMapPosition =
                     mapcontrol::blocks(mapcontrol::padPan(mapcontrol::fromBlocks(targetMapPosition), {movementStick.x, movementStick.y},
-                                                          mapZoom, float(double(viewYaw) * 57.29577951308232), frameMs));
+                                                          mapZoom, float(double(displayedYawRadians()) * 57.29577951308232), frameMs));
                 mapMoved = true;
             } else if (mapcontrol::movementCloses(mapOpen, input.lastUsedPad,
                                                   gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||
@@ -7018,7 +7023,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 view.center = mapPosition;
                 view.level = mapZoom;
                 view.radius = radius;
-                view.pitch = viewPitch, view.yaw = viewYaw;
+                view.pitch = displayedPitchRadians(), view.yaw = displayedYawRadians();
                 view.cursor = mapViewCentre;
                 view.viewScale = minimapScale * mapLabelScale; // options mapScale x the eased scale (§4.1)
                 view.screen = glm::vec2(w, h);

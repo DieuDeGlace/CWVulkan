@@ -5,8 +5,17 @@
 #include "NativeCrt.h"
 #include <glm/vec2.hpp>
 #include <glm/mat3x3.hpp>
+#include <algorithm>
 
 namespace cameramotion {
+// Gameplay-camera §3.1: float input scaling precedes the double target update.
+// The mouse alone clamps pitch; pad and assistance retain their own producer rules.
+inline void mouseTargets(double &pitch, double &yaw, float deltaX, float deltaY, int cameraSpeed, bool invertY) {
+    const float speed = float(cameraSpeed) * .005f;
+    yaw -= double(speed * deltaX);
+    const double vertical = double(speed * deltaY);
+    pitch = std::clamp(pitch + (invertY ? -vertical : vertical), 0.0, 180.0);
+}
 inline float angleRate(int smoothness) {
     return nativecrt::powf(0.005f, float(smoothness) * 0.01f);
 }

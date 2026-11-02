@@ -652,7 +652,13 @@ individual feature documents.
   targets. Controls and frontend forward vectors share the float camera-to-world
   basis, including its full up column, native radians constant and system CRT trig.
   Pole, tilted/rolled and double-to-float regressions pass. Legacy gameplay angle
-  storage still needs conversion to native double degrees. The newly documented
+  storage now shares the frontend's double-degree orbit state. Native controls,
+  camera positioning, view matrices and the compass consume those retained degrees
+  directly. Mouse scaling rounds to float before the double target update, with
+  the native sensitivity/invert/clamp rules; pad and assistance retain double
+  targets. Sub-float displacement/smoothing and no-shortest-wrap tests cover this.
+  Legacy saved-angle/startup adapters, exact event delivery and full frontend
+  camera-state handoff/reset parity remain open. The newly documented
   [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
   split early/late input phases. The live client now completes World stepping and
   one full-frame drawn-position pass before creature targeting/local control, and
