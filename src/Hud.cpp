@@ -589,9 +589,8 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
     const auto sampled = sampledHudNode(gui, index, frame.sequence, frame.sequenceMs, animateHidden);
     if (!sampled.visible)
         return;
-    // Blur and cache policy remain separate. Ordinary affine masks use the same
-    // target/shape composition as live SceneNodes, never an averaged tint.
-    const bool clips = sampled.clips && (!(sampled.displayFlags & plasma::DISPLAY_BLUR) || sampled.blurRadius <= 0);
+    const bool blur = (sampled.displayFlags & plasma::DISPLAY_BLUR) && sampled.blurRadius > 0;
+    const bool clips = sampled.clips;
     const glm::vec4 descendantsTint = tint;
     glm::mat4 m = parent;
     if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size()) {
@@ -685,6 +684,8 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
     const auto layer = [&](plasma::LayerCommand::Kind kind, uint32_t mode = 0) {
         layerCommands.push_back({kind, {out.size(), itemRequests.size()}, mode});
     };
+    if (blur)
+        layer(plasma::LayerCommand::Kind::Push);
     if (clips) {
         layer(plasma::LayerCommand::Kind::Push);
         children();
@@ -692,14 +693,21 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
         layer(plasma::LayerCommand::Kind::Mask, uint32_t(sampled.maskMode()));
         shape();
         layer(plasma::LayerCommand::Kind::Mask);
-        callback();
     } else {
-        // Preserve this compatibility adapter's existing ordinary sprite-hook order.
-        if (!sampled.clips)
-            shape();
-        callback();
+        shape();
+        // Preserve this compatibility adapter's ordinary sprite-hook order.
+        if (!blur)
+            callback();
         children();
     }
+    if (blur) {
+        layer(plasma::LayerCommand::Kind::Pop);
+        // Match the live traversal's cleared final source without pixel-dead copies.
+        layer(plasma::LayerCommand::Kind::Push);
+        layer(plasma::LayerCommand::Kind::Pop);
+        callback();
+    } else if (clips)
+        callback();
 }
 
 bool Hud::plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::vec2 position, glm::vec2 offset,

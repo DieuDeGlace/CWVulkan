@@ -54,7 +54,8 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.48 GUI image cases and owner callback
+  targets; the owner button shine is enabled.60 local GUI image cases (48
+  asset-free,12 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
   preserving independent placement/fill overrides and disabled-node admission.
@@ -64,8 +65,15 @@ individual feature documents.
   native GUI depth projection and perspective interpolation; drawing deformation
   retains bind/inverse-bind W separately from divided CPU picking. Synthetic
   owner/descendant geometry and Vulkan color/mask/depth checks pass, while the
-  flattened shader fails four image assertions. Widget/node caches, blur,
-  GUI depth-stack/state and broader frontend pixel parity remain open.
+  flattened shader fails four image assertions. The concrete blur path's cleared
+  final source and post-composite own hooks now use offscreen child traversal;
+  authored child visibility is preserved. Small/large-radius, nested-clip and
+  retained-mask GPU checks pass; omitting the final clear fails two checks.
+  The current clamp-sampler renderer omits pixel-dead intermediate/final copies;
+  this does not replay inherited native pipeline state or certify altered samplers.
+  Default Plasma depth testing is disabled and optional depth-stack mask0x08 starts
+  off, per the independent depth contract. Widget/node caches, broader blur/callback
+  state comparisons, optional depth-stack behavior and frontend pixel parity remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

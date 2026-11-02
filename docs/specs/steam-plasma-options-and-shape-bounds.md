@@ -26,6 +26,10 @@ virtual+8 →**0x38fb90**; no replacement of the option word was identified
 on this route. Default7 does not force a cache allocation or blur layer
 for a node whose own flags/data/admission do not request one.
 
+Mask0x08 starts off. Its separate matrix/counter consequence, absence of a
+reached reset and lack of a depth-enable change are specified in
+[Plasma depth state §§1–3](steam-plasma-depth-state.md).
+
 ## 2. Direct write census and temporary bit0x01 lifetime
 
 The native mapped-function direct-displacement census, with GUI receiver

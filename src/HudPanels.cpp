@@ -229,7 +229,8 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
     if (!n.visible || (n.flags & plx::NODE_DISABLED))
         return;
     const plasma::Scene &in = from ? *from : *scene;
-    const bool clip = n.clips && (!(n.displayFlags & plasma::DISPLAY_BLUR) || n.blurRadius <= 0);
+    const bool blur = (n.displayFlags & plasma::DISPLAY_BLUR) && n.blurRadius > 0;
+    const bool clip = n.clips;
     const auto layer = [&](plasma::LayerCommand::Kind kind, uint32_t mode = 0) {
         layerCommands.push_back({kind, {out.size(), itemRequests.size()}, mode});
     };
@@ -244,7 +245,7 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
                 style.color = *n.textColor;
             // Glyphs carry their own tint, independently of Display.fillColor.
             plasmaText(out, style, in.matrix(n));
-        } else if (n.shape >= 0 && (!n.clips || clip)) {
+        } else if (n.shape >= 0) {
             plasma::Scene::Drawn drawn;
             in.drawShape(n, tint * n.fill, drawn);
             const float u = white.x + 2.f, v = white.y + 2.f;
@@ -261,24 +262,36 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
         if (drawWidget && n.widget)
             drawWidget(n);
     };
-    if (clip) {
-        layer(plasma::LayerCommand::Kind::Push);
+    const auto children = [&] {
         for (const auto &child : n.children)
             sceneNode(out, *child, tint, from, drawWidget);
+    };
+    const bool beforeChildren = n.widget && (n.widget->flags & plasma::WIDGET_DRAW_FIRST);
+    if (blur)
+        layer(plasma::LayerCommand::Kind::Push);
+    if (clip) {
+        layer(plasma::LayerCommand::Kind::Push);
+        children();
         layer(plasma::LayerCommand::Kind::Pop);
         layer(plasma::LayerCommand::Kind::Mask, uint32_t(n.maskMode()));
         shape();
         layer(plasma::LayerCommand::Kind::Mask);
-        callback(); // both own-hook placements follow the clip child-layer composition
-        return;
+    } else {
+        shape();
+        if (!blur && beforeChildren)
+            callback();
+        children();
     }
-    shape();
-    const bool beforeChildren = n.widget && (n.widget->flags & plasma::WIDGET_DRAW_FIRST);
-    if (beforeChildren)
+    if (blur) {
+        layer(plasma::LayerCommand::Kind::Pop);
+        // The concrete native backend clears source A again before final copy.
+        // With our clamp sampling, copying that transparent image is a no-op.
+        // Reopen the same pool entry to retain the empty final mask source;
+        // child hooks still ran offscreen, and the own hook follows restoration.
+        layer(plasma::LayerCommand::Kind::Push);
+        layer(plasma::LayerCommand::Kind::Pop);
         callback();
-    for (const auto &child : n.children)
-        sceneNode(out, *child, tint, from, drawWidget);
-    if (!beforeChildren)
+    } else if (clip || !beforeChildren)
         callback();
 }
 

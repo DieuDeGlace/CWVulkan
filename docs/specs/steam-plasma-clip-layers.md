@@ -195,6 +195,9 @@ Pipeline construction **0x38fb90**, bound by0x38e800, establishes:
 * Depth testing disabled. The stored depth descriptor has write mask1 and
   comparison4, but disabling depth does not create depth writes. Stencil
   is disabled. Offscreen binding still has null depth as§2 specifies.
+  Exact optional counter admission and DSV-versus-state lifetime are
+  [Plasma depth state §§1–4](steam-plasma-depth-state.md); mask0x08 does
+  not enable a different Plasma depth state.
 * Solid fill, **CullMode1=NONE**, depth clipping enabled, scissor disabled,
   multisample rasterization enabled, antialiased-line mode disabled.
 

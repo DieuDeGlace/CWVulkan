@@ -1,5 +1,7 @@
-// Actual Vulkan integration of the immediate UI/WORLD boundary. Synthetic data only.
+// Actual Vulkan integration: synthetic geometry and optional owner-atlas HUD emission.
 #include "Renderer.h"
+#include "Assets.h"
+#include "Hud.h"
 #include "VoxelEdit.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -322,6 +324,104 @@ int guiRenderTests() {
         renderer.frame(camera, lighting, {}, 0, {}, {});
     }
     check("clip-queued-pool-reuse", clipped, {}, {}, {64, 64}, {128, 0, 127}, 2, {}, replacedAtlas);
+    // Exercise the actual HUD traversal. Only its local white atlas cell is
+    // sampled; all test geometry/colors are synthetic and no owner data is saved.
+    Assets assets;
+    if (assets.locate("")) {
+        Hud hud;
+        std::string error;
+        if (!hud.load(assets.gameDir(), error)) {
+            std::cerr << "Owner HUD could not load: " << error << '\n';
+            ++failures;
+        } else {
+            hud.setGuiScale(1);
+            hud.layout(renderer, {128, 128});
+            maphistory::History history({{0, 0}});
+            history.show(true);
+            hud.bindMapHistory(history.view(), "", true);
+            auto *panel = const_cast<plasma::SceneNode *>(hud.mapHistoryRoot());
+            if (!panel)
+                ++failures;
+            else {
+                auto children = std::move(panel->children);
+                auto widget = std::move(panel->widget);
+                panel->local = glm::mat4(1);
+                panel->widget.emplace();
+                panel->widget->flags = plasma::WIDGET_DRAW_FIRST;
+                panel->displayFlags = plasma::DISPLAY_BLUR;
+                panel->blurRadius = 4;
+                auto probe = std::make_unique<plasma::SceneNode>();
+                probe->parent = panel;
+                probe->shape = 0;
+                probe->animatedShape.emplace();
+                probe->animatedDrawing.emplace();
+                auto &shape = *probe->animatedDrawing;
+                shape.filled = true;
+                shape.fill.vertices = {
+                    {{20, 20}, {1, 0, 0, 1}}, {{45, 20}, {1, 0, 0, 1}}, {{45, 45}, {1, 0, 0, 1}}, {{20, 45}, {1, 0, 0, 1}}};
+                shape.fill.indices = {0, 1, 2, 0, 2, 3};
+                panel->children.push_back(std::move(probe));
+                std::vector<OverlayVertex> emitted;
+                panel->onDraw = [&](plasma::SceneNode &) {
+                    if (emitted.size() < 6) {
+                        ++failures;
+                        return;
+                    }
+                    const std::vector<OverlayVertex> own(emitted.end() - 6, emitted.end());
+                    for (auto vertex : own) {
+                        vertex.x += 60;
+                        vertex.r = vertex.b = 0;
+                        vertex.g = vertex.a = 255;
+                        emitted.push_back(vertex);
+                    }
+                };
+                hud.prepareFrame(renderer, {128, 128});
+                for (float radius : {4.f, 40.f}) {
+                    panel->blurRadius = radius;
+                    for (bool clip : {false, true}) {
+                        panel->clips = clip;
+                        Hud::State state;
+                        state.crosshair = false;
+                        hud.draw(state, emitted);
+                        if (emitted.size() < 6) {
+                            ++failures;
+                            continue;
+                        }
+                        auto composed = background;
+                        for (auto &vertex : composed) {
+                            vertex.u = emitted.back().u;
+                            vertex.v = emitted.back().v;
+                        }
+                        composed.insert(composed.end(), emitted.begin(), emitted.end());
+                        auto commands = hud.clipDraws();
+                        for (auto &command : commands)
+                            command.before.vertices += background.size();
+                        auto requests = hud.itemDraws();
+                        for (auto &request : requests)
+                            request.beforeVertex += background.size();
+                        const std::string prefix = std::string(radius > 8 ? "blur-large-" : "blur-") + (clip ? "with-clip-" : "plain-");
+                        check((prefix + "discarded-child").c_str(), composed, requests, {}, {32, 32}, {0, 0, 255}, 2, {}, commands);
+                        check((prefix + "own-hook").c_str(), composed, requests, {}, {90, 32}, {0, 255, 0}, 2, {}, commands);
+                        // Sample the retained final source explicitly. Omitting the
+                        // rebind clear would reveal the red child in the plain case.
+                        commands.push_back({Layer::Kind::Mask, {composed.size(), requests.size()}, 3});
+                        const std::vector<OverlayVertex> mask(emitted.end() - 6, emitted.end());
+                        for (auto vertex : mask) {
+                            vertex.x -= 60;
+                            vertex.r = vertex.g = vertex.b = vertex.a = 255;
+                            composed.push_back(vertex);
+                        }
+                        commands.push_back({Layer::Kind::Mask, {composed.size(), requests.size()}});
+                        check((prefix + "empty-final-mask").c_str(), composed, requests, {}, {32, 32}, {0, 0, 255}, 2, {}, commands);
+                    }
+                }
+                panel->onDraw = {};
+                panel->children = std::move(children);
+                panel->widget = std::move(widget);
+            }
+        }
+    } else
+        std::cout << "SKIP owner-atlas HUD blur integration: no local installation\n";
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

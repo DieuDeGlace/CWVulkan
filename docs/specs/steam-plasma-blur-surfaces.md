@@ -147,6 +147,10 @@ The inherited sampler, not a name such as horizontal/vertical blur,
 determines interpolation/addressing. The four passes retain the outer
 reduced projection; wrapper substitution of copy scale1 does not undo it.
 
+These rectangle copies do not consult/increment the optional raw-shape
+depth counter; their retained state effects are specified separately in
+[Plasma depth state §4](steam-plasma-depth-state.md#4-rectangle-copies-do-not-consume-the-shape-depth-counter).
+
 ## 5. Final rebind clear and final source selection
 
 After all four copies, **0x331476–0x331486** obtains the saved active pool

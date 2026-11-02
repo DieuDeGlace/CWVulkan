@@ -712,9 +712,13 @@ struct Deformer {
             for (int axis = 0; axis < 2; ++axis) {
                 const float difference = innerSize[axis] - innerBindSize[axis];
                 const float upper = innerBindPos[axis] + innerBindSize[axis];
-                const float fraction = bound[axis] < innerBindPos[axis] ? 0.f
-                                       : bound[axis] < upper            ? (bound[axis] - innerBindPos[axis]) / innerBindSize[axis]
-                                                                        : 1.f;
+                float fraction;
+                if (bound[axis] < innerBindPos[axis])
+                    fraction = 0;
+                else if (bound[axis] < upper)
+                    fraction = (bound[axis] - innerBindPos[axis]) / innerBindSize[axis];
+                else
+                    fraction = 1;
                 const float base = (bound[axis] + innerPosition[axis]) - innerBindPos[axis];
                 bound[axis] = base + fraction * difference;
             }
@@ -757,7 +761,7 @@ struct Deformer {
 };
 
 // A node's stretch: by its owner widget (its own widget, or the nearest above it).
-Deformer deformerOf(const Scene &scene, const SceneNode &n) {
+Deformer deformerOf(const Scene &scene, const SceneNode &n, bool forDrawing = false) {
     Deformer d;
     d.world = scene.matrix(n);
     const SceneNode *owner = &n;
@@ -772,7 +776,8 @@ Deformer deformerOf(const Scene &scene, const SceneNode &n) {
     d.fromWidget = ownerWorld * w.inverseBind;
     // Independently supplied inverse mapping, not inverse(toWidget). Keep the
     // grouped products and the later drawing WORLD multiplication separate.
-    d.toLocal = (glm::inverse(d.world) * ownerWorld) * w.inverseBind;
+    if (forDrawing)
+        d.toLocal = (glm::inverse(d.world) * ownerWorld) * w.inverseBind;
     d.innerBindPos = w.innerBindPos, d.innerBindSize = w.innerBindSize;
     d.innerPosition = w.innerPosition(), d.innerSize = w.innerSize();
     return d;
@@ -813,7 +818,7 @@ void Scene::drawShape(const SceneNode &n, glm::vec4 tint, Drawn &out) const {
     const ShapeDrawing *d = drawing(n);
     if (!d)
         return;
-    const Deformer deformer = deformerOf(*this, n);
+    const Deformer deformer = deformerOf(*this, n, true);
     for (const Triangles *t : {&d->fill, &d->stroke}) {
         if ((t == &d->fill && !d->filled) || (t == &d->stroke && !d->stroked))
             continue;

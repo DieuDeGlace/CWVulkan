@@ -967,3 +967,29 @@ the correct source is restored with a fresh timestamp and rebuilt before the
 complete checks. These are finite-input functional regressions, not original-game
 captures or a cross-GPU last-bit oracle. No native instructions, implementation,
 reconstruction or owner assets enter source or runtime packages.
+
+## Bounded blur clearing and callback traversal, 2026-11-02
+
+The implementer read the independent blur contract sections1–6, options/shape
+supplement1–3, depth-state contract1–5 and every updated link. The native-only
+author inspected no engine, tests, exporter, owner data or captures. The final
+source-A clear, distinct child/own-hook placement, null-depth layer behavior and
+absence of shape-counter consumption by rectangle copies come from that prose.
+CubeVulkan keeps child work in its offscreen command stream, reopens/clears the
+retained source, then reaches the own hook after restoring the parent. Under its
+explicit clamp sampling and draw-request API, copying the transparent source has
+no pixel effect; it omits that copy and the discarded intermediate images rather
+than introducing a Gaussian. Intermediate reduced projection, inherited native
+binding side effects, changed samplers and untraced callback state are not claimed
+as API/state parity. Widget/node caching and externally enabled depth-stack behavior
+remain separate. The default native depth-stack bit is off; default Plasma depth
+testing is disabled independently of the bound DSV.
+
+Local GPU integration uses synthetic red/green geometry through the actual HUD
+with only its existing white atlas cell. Small/large radii and both clip admissions
+check discarded child color, visible own hooks and the empty retained mask. The
+test loads the owner's atlas locally when available; it saves none of that data.
+Omitting the rebind clear fails exactly the two plain retained-mask cases; the
+correct source is restored and rebuilt before full checks. CPU callback/cut tests
+cover two GUI scales. Point queries avoid building the drawing-only inverse matrix.
+No native code, instructions, reconstruction or owner assets are packaged.

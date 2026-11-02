@@ -181,6 +181,30 @@ int mapHistoryTests() {
             const auto layers = plasma::layerDepth(hud.clipDraws(), {clipped.size(), hud.itemDraws().size()});
             check(layers && *layers >= 1 && hooks == std::vector<int>{2, 1},
                   "clip children precede the own DRAW_FIRST hook and emit balanced vertex/callback cuts");
+            const auto displayFlags = mutableRoot->displayFlags;
+            const float blurRadius = mutableRoot->blurRadius;
+            mutableRoot->displayFlags |= plasma::DISPLAY_BLUR;
+            mutableRoot->blurRadius = 4;
+            size_t ownHookCut = 0;
+            mutableRoot->onDraw = [&](plasma::SceneNode &) {
+                hooks.push_back(1);
+                ownHookCut = hud.clipDraws().size();
+            };
+            for (bool clip : {false, true}) {
+                mutableRoot->clips = clip;
+                hooks.clear();
+                const auto blurred = snapshot();
+                const auto depth = plasma::layerDepth(hud.clipDraws(), {blurred.size(), hud.itemDraws().size()});
+                check(depth && *depth >= (clip ? 2 : 1) && hooks == std::vector<int>{2, 1},
+                      "blur children run offscreen before the own DRAW_FIRST hook, including nested clips");
+                const auto &commands = hud.clipDraws();
+                using Kind = plasma::LayerCommand::Kind;
+                check(ownHookCut >= 3 && commands[ownHookCut - 3].kind == Kind::Pop && commands[ownHookCut - 2].kind == Kind::Push &&
+                          commands[ownHookCut - 1].kind == Kind::Pop,
+                      "blur restores the parent and clears the retained final mask before its own hook");
+            }
+            mutableRoot->displayFlags = displayFlags;
+            mutableRoot->blurRadius = blurRadius;
             mutableRoot->clips = false;
             hooks.clear();
             snapshot();
