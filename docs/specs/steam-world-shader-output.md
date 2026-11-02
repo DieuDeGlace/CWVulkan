@@ -178,11 +178,18 @@ and the pre-grade result is sat(S). Geometry Glow1 and White1 retain these
 same fog operations.
 
 **0xc59e0 → 0xc6bb0** accepts a distance F, rather than an already inverted
-scale. For F>0 it computes float32 **1/F** and uploads pixel constant buffer1;
-for nonpositive F it leaves the previous scale unchanged. Normal0xe2e00
+scale. For F>0 it computes float32 **1/F** and uploads pixel constant buffer1
+when that reciprocal differs from its cached scale; for nonpositive or NaN
+F it leaves the previous scale unchanged. Normal0xe2e00
 supplies renderer+0x4a4, except that with the effective camera block type2 it
 uses **min(renderer+0x4a4,150)**. This changes F, not the shader's fog color
 formula or interpolation mode.
+
+Exact ordered/NaN/infinity admission, reciprocal-cache upload, unproved
+initial GPU contents and shared scene/overlay/map/GUI lifetime are
+[fog-scale lifetime §§1–5](steam-fog-scale-state-lifetime.md). This confirms
+retention for nonpositive F and corrects the former contrary pass-controls
+wording; pipeline or point-table changes do not reset this fog scale.
 
 **0xc59d0 → 0xc6b10** accepts camera angle and computes
 **(angle−80)/(−30)** in float32 for pixel buffer2 fogGradientTranslation.

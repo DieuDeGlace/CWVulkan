@@ -23,7 +23,7 @@ void main() {
     vec3 reflected = reflect(-(nativeVertex ? f.steamSun.xyz : f.lightDir.xyz), normal);
     float sheen = max(dot(normalize(reflected), normalize(toEye)), 0);
     vec3 colour = clamp(blue * body + sheen * .25 * f.steamSky[0].rgb, 0, 1);
-    float scale = 1 / max(f.fog.w, .001);
+    float scale = f.steamSky[5].w;
     float exponent = 1 - .75 * exp2(-403.95462 * scale);
     float haze = steamSmooth(min(pow(distance2 * scale * scale, exponent), 1));
     colour = mix(colour, f.steamSky[2].rgb, haze);

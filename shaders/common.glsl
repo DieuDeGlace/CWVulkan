@@ -18,7 +18,7 @@ layout(set = 0, binding = 0) uniform Frame {
     vec4 sunDisk;    // xyz direction to the sun, w visibility
     vec4 moonDisk;   // xyz direction to CubeVulkan's moon (Steam look), w visibility
     // The Steam look's sky (steam_sky.glsl): sky1, sky2, fog, sun colour, sun position, and
-    // [5] = (gradient shift, 1 on the title screen, 0, 1).
+    // [5] = (gradient shift, title flag, underwater flag, bound WORLD fog scale).
     vec4 steamSky[6];
     // The Alpha look (docs/specs/alpha-rendering.md; src/AlphaLook.h).
     vec4 alphaSky1;     // rgb horizon side of the sky gradient

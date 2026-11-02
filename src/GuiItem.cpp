@@ -257,8 +257,11 @@ ShaderState characterState() {
 }
 
 void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &out) {
-    if (!request.mesh)
-        return; // unavailable owner sprite
+    if (!request.mesh) {
+        if (request.kind == Request::Kind::Character)
+            retained = request.state.value_or(characterState()); // admitted empty card setup still changes the palette
+        return;                                                  // a missing item/raw resource has no setup side effect
+    }
     if (request.kind == Request::Kind::RawEdit || request.kind == Request::Kind::Character) {
         const bool sky = retained.whiteSky;
         retained = request.kind == Request::Kind::Character ? request.state.value_or(characterState()) : editState();

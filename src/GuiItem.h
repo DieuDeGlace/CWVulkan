@@ -56,6 +56,7 @@ struct Request {
     glm::ivec3 allocation{0};
     nativesaves::Item item{};
     Placement at;
+    // A mesh0 Character entry carries the admitted nonnull card's setup without geometry.
     enum class Kind { Widget, Ring, RawEdit, Character } kind = Kind::Widget;
     float farPlane = 960;                       // Ring uses the ordinary screen-overlay lens
     glm::mat4 model{1}, view{1}, projection{1}; // RawEdit accepts the caller's matrices without normalization

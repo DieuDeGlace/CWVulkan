@@ -7139,6 +7139,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 view.forcedLand = forcedMapLand;
                 view.elapsedWorldMs = spawned.elapsedWorldTime();
                 mapHoveredLand = worldMap.collect(view, opaque);
+                renderer.mapScenePrepared();
                 // The map overlay's markers (MapMarks.h): places, missions, lands, flight points and
                 // stars, drawn far to near; then the marker under the pointer.
                 collectMapMarkers = [&, view = std::move(view)] {

@@ -11,6 +11,19 @@ int steamLightingTests() {
         if (!result) { std::printf("FAIL Steam lighting: %s\n", message); ++failures; }
     };
     auto near = [](glm::vec4 a, glm::vec4 b) { return glm::all(glm::lessThanEqual(glm::abs(a - b), glm::vec4(.000001f))); };
+    steamlighting::FogScale fog;
+    check(!fog.bound() && fog.value() == 0, "explicit engine fallback before a verified fog binding");
+    check(!fog.setDistance(0) && !fog.setDistance(-0.f) && !fog.setDistance(-1) &&
+              !fog.setDistance(std::numeric_limits<float>::quiet_NaN()) && !fog.bound(),
+          "nonpositive and unordered distances leave the binding untouched");
+    check(fog.setDistance(400) && fog.bound() && fog.value() == 1.f / 400 && !fog.setDistance(400),
+          "float reciprocal is cached, without a repeat upload for an equal value");
+    check(!fog.setDistance(-std::numeric_limits<float>::infinity()) && fog.value() == 1.f / 400,
+          "negative infinity preserves an established binding");
+    check(fog.setDistance(std::numeric_limits<float>::infinity()) && fog.value() == 0 && !std::signbit(fog.value()),
+          "positive infinity is admitted and establishes positive zero scale");
+    check(fog.setDistance(std::numeric_limits<float>::min()) && fog.value() == 1.f / std::numeric_limits<float>::min(),
+          "positive reciprocal is not replaced by an arbitrary finite-range clamp");
     constexpr float noon = 43200000;
     steamlighting::Environment environment;
     const auto day = steamlighting::targets(noon, environment), night = steamlighting::targets(0, environment);

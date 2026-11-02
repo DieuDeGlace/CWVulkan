@@ -460,6 +460,14 @@ int guiItemTests() {
               draws[0].depthOffset == .125f && state.whiteSky);
     GUI_CHECK(state.front == glm::vec4(1) && state.back == glm::vec4(.2f, .2f, .2f, 1) && state.ambient == glm::vec4(.4f, .4f, .4f, 1) &&
               state.direction.y > 0 && state.direction.z < 0);
+    request.mesh = 0;
+    state = overlayState();
+    draws.clear();
+    appendDraws(request, {1600, 1024}, state, draws);
+    GUI_CHECK(draws.empty() && state.whiteSky && state.front == glm::vec4(1));
+    request.kind = Request::Kind::Widget;
+    appendDraws(request, {1600, 1024}, state, draws);
+    GUI_CHECK(draws.empty() && state.whiteSky && state.front == glm::vec4(1)); // null item resource skips setup
     const auto light = lightDirection();
     GUI_CHECK(near(glm::length(light), 1) && near(light.y / light.x, 0.4f) && near(light.z, -light.x));
     std::printf("GUI item transforms: %s\n", failures ? "FAILED" : "PASS");

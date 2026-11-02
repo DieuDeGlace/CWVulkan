@@ -6,8 +6,7 @@ vec3 steamWorldPixel(vec3 colour, vec2 screen, vec3 viewPosition, vec2 viewNorma
         colour *= 1 + .3 * cos(5 * screen.x + 10 * Y + 2 * (viewNormal.x + viewNormal.y));
     colour = vanillaBoost(colour);
 
-    float distance = f.steamSky[5].z > .5 ? min(f.fog.w, 150) : f.fog.w;
-    float scale = 1 / distance;
+    float scale = f.steamSky[5].w;
     float q = dot(viewPosition, viewPosition) * (scale * scale);
     float exponent = 1 - .75 * exp2(-403.9546203613281 * scale);
     float t = min(exp2(log2(q) * exponent), 1);

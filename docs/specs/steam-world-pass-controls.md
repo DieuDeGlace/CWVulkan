@@ -24,8 +24,11 @@ subsequent model's local view matrix.
 The world **fog range F is renderer float+0x4a4**, the adaptive maximum
 range, not+0x49c and not the ordinary-model fade-end radius. When the
 camera's effective block type is water2, pass **min(F,150)** instead,
-with stored150 at0x42e938. Setter0xc6bb0 supplies1/F when F>0, otherwise0,
-as already specified. At0xe3a50 the gradient-angle input is the first
+with stored150 at0x42e938. Setter0xc6bb0 supplies float32 1/F when F>0;
+nonpositive or NaN F **leaves the previous scale unchanged**, rather than
+supplying0. Shared initialization, positive-infinity behavior, reset and
+later overlay/map/GUI setters are [fog lifetime §§1–5](steam-fog-scale-state-lifetime.md).
+At0xe3a50 the gradient-angle input is the first
 component of the submitted camera-angle vector, i.e. displayed pitch.
 Setter0xc6b10 computes float **(pitch−80)/(−30)**. Do not recompute that
 gradient from a GUI icon's identity view.

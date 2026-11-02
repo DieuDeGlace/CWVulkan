@@ -810,3 +810,15 @@ uninitialized memory, retain a selected-zone key or infer an origin rebase.
 Particle and water clip offsets retain preceding WORLD state; water's depth and
 color phases remain distinct. Asset-free Vulkan triangles exercise a failed
 faded-resource setter followed by each consumer, without native model bytes.
+
+## Shared fog binding, 2026-11-02
+
+The native-only author separately wrote steam-fog-scale-state-lifetime sections1–5
+and corrected the earlier conflicting nonpositive-distance description. The
+implementer read that prose, character-card-preview section6, ring-selector
+section5 and engine code only. No original code, instructions or shader binary
+was read by the implementer. FogScale, the explicit map admission and nonnull
+empty-card request preserve reached setup independently of visible pixels.
+Unproved first GPU contents have a defined engine fallback and are not a native
+numeric reference. CPU scalar inputs and asset-free Vulkan triangles test the
+world/water, empty callback, null resource and unavailable GPU-buffer boundaries.

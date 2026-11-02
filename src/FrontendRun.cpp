@@ -697,6 +697,9 @@ std::vector<guiitem::Request> Session::characterPreview(Listed &listedCharacter,
     std::stable_sort(requests.begin(), requests.end(), [](const auto &left, const auto &right) {
         return std::tie(left.mirrored, left.mesh) < std::tie(right.mirrored, right.mesh);
     });
+    guiitem::Request setup;
+    setup.kind = guiitem::Request::Kind::Character;
+    requests.insert(requests.begin(), setup); // nonnull card setup still runs when its pose has no drawable parts
     return requests;
 }
 

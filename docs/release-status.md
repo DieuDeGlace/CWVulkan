@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- WORLD fog now consumes a retained float reciprocal binding instead of
+  recomputing it from every draw's current scene range. Nonpositive/NaN distances
+  preserve the prior binding; positive infinity legitimately supplies zero scale.
+  Range reset does not reset it. Native water shares that scalar, while immediate
+  GUI models use their reached10000 setup without an underwater re-clamp.
+  Late overlay, admitted map, item/raw-resource and nonnull card callbacks retain
+  their specified ordering. Explicit map admission survives empty geometry, and
+  an empty card still submits its setup/palette; null item resources skip setup.
+  GPU-readiness failure does not erase earlier setters. Ring composition does not
+  incorrectly become another native fog write after the map.
+
+  CPU boundary/cache checks and seven Vulkan cases cover these distinctions;
+  the initial world/water cases failed before and pass after. All five targets
+  build warning-free; full CPU/owner and87 shader,2 camera,24 GUI,6 map,
+  shared-water/Alpha-scenery checks pass. Five no-save captures exit0, all reviewed,
+  with the save database unchanged. Initial native GPU contents remain unproved:
+  a zero-scale pre-binding fallback is explicit engine policy. These checks do
+  not replace native visual comparisons or final release acceptance.
+
 - Ordinary particles and water now retain the preceding WORLD clip depth offset.
   Water depth/color phases have explicit state, its depth phase leaves points zero,
   and only color draws bind zone tables. The water prologue clears points even for

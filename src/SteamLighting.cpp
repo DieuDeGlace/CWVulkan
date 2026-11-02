@@ -103,6 +103,16 @@ Colours targets(float timeMs, const Environment &environment) {
 
 glm::vec4 material(bool underwater) { return underwater ? glm::vec4(.5f, .5f, 1, 1) : glm::vec4(1); }
 
+bool FogScale::setDistance(float distance) {
+    if (!(distance > 0))
+        return false; // ordered comparison also rejects NaN
+    const float scale = 1.f / distance;
+    if (boundScale && *boundScale == scale)
+        return false;
+    boundScale = scale;
+    return true;
+}
+
 void EasedColours::reset() {
     current = {{.7f, .7f, .3f, 1}, {.5f, .5f, .5f, 1}, {.3f, .3f, .7f, 1}};
 }

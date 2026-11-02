@@ -822,6 +822,8 @@ void Renderer::initHeadless(const RenderSettings &s) {
 bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) {
     window = w;
     settings = s;
+    steamFog = {};
+    mapPrepared = false;
     setRenderStyle(settings.style); // meshes built from now on bake their light for this look
     if (!createDevice(error))
         return false;
@@ -1170,6 +1172,7 @@ worldmodel::Frame Renderer::steamPoseFrame() const {
 void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time, const std::vector<DrawItem> &opaque,
                      const std::vector<DrawItem> &water) {
     const bool reuseScene = std::exchange(scenePrepared, false);
+    const bool preparedMap = std::exchange(mapPrepared, false);
     if (noGpu)
         return;
     Frame &fr = frames[frameIndex];
@@ -1473,6 +1476,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     }
     u.alphaView.w = sharedWater && underwater ? 1.f : 0.f; // shared world-fragment tint, never interface pixels
     u.fog = glm::vec4(mapFog, sharedWater && underwater ? std::min(sceneDistance, settings.water.underwaterVisibility) : sceneDistance);
+    if (!alphaLook && !menuSky)
+        steamFog.setDistance(underwater ? std::min(u.fog.w, 150.f) : u.fog.w);
+    u.steamSky[5].w = steamFog.value(); // the actual bound reciprocal, not a fresh shader inversion
     u.sky = glm::vec4(0, 0, 0, lighting.daylight);
     float invSpan = 1 / (2 * LIGHT_DEPTH);
     // 0.008 blocks of depth bias, as in SteamShadows.
@@ -2220,6 +2226,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             bindAndDraw(draw, 0);
         }
     }
+    // Late overlay setup is reached even with no queued models. Its shared fog
+    // setting survives into the next scene unless a later map/GUI callback replaces it.
+    steamFog.setDistance(10000);
     // The original title and avatar use their own captured projection. Draw
     // them after the world, with a separate depth clear, as the native menu
     // does, so an unrelated terrain depth cannot hide the title foreground.
@@ -2246,7 +2255,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             bindAndDraw(jittered, 0);
         }
     // The world map, over everything of the world (RendererMap.cpp).
-    draws += drawMap(cmd, opaque, mapFog, glm::vec2(jitterClip[3][0], jitterClip[3][1]));
+    draws += drawMap(cmd, opaque, mapFog, glm::vec2(jitterClip[3][0], jitterClip[3][1]), preparedMap);
     vkCmdEndRendering(cmd);
     if (timing)
         vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timing, 3 * frameIndex + 1);

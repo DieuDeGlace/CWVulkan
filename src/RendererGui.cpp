@@ -124,6 +124,11 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
     guiGroups.clear();
     auto retained = guiitem::overlayState();
     for (const auto &request : guiRequests) {
+        // Character requests include an admitted setup-only entry for empty poses.
+        // Ring descriptors were prepared by the earlier overlay pass, before the map.
+        const bool characterSetup = request.kind == guiitem::Request::Kind::Character;
+        if (characterSetup || (request.mesh && request.kind != guiitem::Request::Kind::Ring))
+            steamFog.setDistance(10000);
         guiitem::appendDraws(request, {(int)extent.width, (int)extent.height}, retained, guiDraws);
         guiGroups.emplace_back(std::min(request.beforeVertex, overlayVertices.size()), guiDraws.size());
     }
@@ -179,6 +184,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
                 for (int colour = 0; colour < 4; ++colour)
                     uniforms.steamSky[colour] = glm::vec4(1);
             uniforms.fog.w = 10000;
+            uniforms.steamSky[5].w = 1.f / 10000;
             uniforms.lightDir.w = 0; // optional world shadows do not shade the native GUI
             uniforms.wind.w = 0;
             uniforms.alphaView.w = 0; // project underwater grading is for the world, not UI

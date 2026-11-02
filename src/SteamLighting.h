@@ -22,6 +22,18 @@ glm::vec3 sunDirection(float timeMs); // frame direction; upload normalizes it a
 Colours targets(float timeMs, const Environment &);
 glm::vec4 material(bool underwater);
 
+// Shared WORLD fog binding, separate from the adaptive scene range. The native
+// initial GPU value is unproved; value() defines an engine zero-scale fallback.
+class FogScale {
+  public:
+    bool setDistance(float distance);
+    float value() const { return boundScale.value_or(0); }
+    bool bound() const { return boundScale.has_value(); }
+
+  private:
+    std::optional<float> boundScale;
+};
+
 class EasedColours {
   public:
     EasedColours() { reset(); }

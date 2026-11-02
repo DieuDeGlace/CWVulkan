@@ -130,13 +130,16 @@ void Renderer::destroyMapPipeline() {
     mapLayout = VK_NULL_HANDLE;
 }
 
-unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter) {
+unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter, bool prepared) {
     std::vector<const DrawItem *> opaque, faded;
     for (const auto &item : items) {
         if (!(item.flags & WORLD_MAP) || !meshes[item.mesh].indexCount || !(item.map.opacity > 0))
             continue;
         (item.map.opacity >= 1 ? opaque : faded).push_back(&item);
     }
+    const bool admitted = prepared || !opaque.empty() || !faded.empty();
+    if (admitted)
+        steamFog.setDistance(20000);
     if (opaque.empty() && faded.empty())
         return 0;
     std::stable_sort(opaque.begin(), opaque.end(), [](const auto *a, const auto *b) { return a->mesh < b->mesh; });

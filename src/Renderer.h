@@ -236,6 +236,8 @@ class Renderer {
     worldmodel::Frame steamPoseFrame() const;
     // Early death/use queries read the retained CPU scene state.
     bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
+    // One-shot admission of the next frame's map setup, even if it produces no geometry.
+    void mapScenePrepared() { mapPrepared = true; }
     // Saves the next presented frame as a PNG (for screenshots and tests).
     void capture(const std::string &path) { capturePath = path; }
     // GPU time per frame (milliseconds, averaged since start): the whole frame and
@@ -410,6 +412,8 @@ class Renderer {
     std::map<std::pair<int32_t, int32_t>, std::optional<clouds::Cloud>> cloudCells;
     steamsky::EasedPalette steamPalette;
     steamlighting::EasedColours steamLights;
+    steamlighting::FogScale steamFog;
+    bool mapPrepared = false;
     SkyColumn skyColumn;
     glm::ivec2 skyColumnAt{0};
     bool skyColumnValid = false;
@@ -460,7 +464,7 @@ class Renderer {
     bool createMapPipeline(std::string &error);
     void destroyMapPipeline();
     // `jitter`: the TAA jitter as a clip-space shift per unit of w. Returns the draws made.
-    unsigned drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter);
+    unsigned drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter, bool prepared);
 
     std::vector<GpuMesh> meshes{1}; // Index 0 is "no mesh".
     std::vector<uint32_t> freeIds;

@@ -960,6 +960,106 @@ int steamShaderTests() {
         std::cout << "Steam shader fixed-origin point-light binding" << (sameLight ? " PASS\n" : " FAIL\n");
         failures += !sameLight;
     }
+    {
+        renderer.setWorldProbe({});
+        renderer.settings.sceneryDistance = 1000000;
+        renderer.settings.water.style = waterlook::Style::Native;
+        Mesh fogMesh;
+        for (glm::vec3 p : {glm::vec3(-100, 0, -100), glm::vec3(100, 0, -100), glm::vec3(0, 0, 100)}) {
+            fogMesh.vertices.push_back({p.x, p.y, p.z, 51, 102, 25, 128, 4, STEAM_VERTEX, 0, 0});
+            fogMesh.min = glm::min(fogMesh.min, p);
+            fogMesh.max = glm::max(fogMesh.max, p);
+        }
+        fogMesh.indices = {0, 1, 2};
+        DrawItem surface;
+        surface.mesh = renderer.upload(fogMesh);
+        surface.kind = DrawKind::Scenery;
+        surface.nativeControls = worldmodel::Controls{1, 0, 0, 0, false};
+        Camera farEye;
+        farEye.eye = {0, -400, 1};
+        farEye.target = {0, 0, 1};
+        Lighting steady;
+        steady.timeMs = 0;
+        auto fogCapture = [&](const char *name, float distance, bool waterSurface) {
+            renderer.settings.fogDistance = distance;
+            const auto path = root / (std::string(name) + ".png");
+            renderer.capture(path.string());
+            const std::vector<DrawItem> draws{surface};
+            renderer.frame(farEye, steady, {}, 0, waterSurface ? std::vector<DrawItem>{} : draws,
+                           waterSurface ? draws : std::vector<DrawItem>{});
+            return centre(path);
+        };
+        for (bool waterSurface : {false, true}) {
+            const char *name = waterSurface ? "water-rejected-fog" : "world-rejected-fog";
+            const auto expected =
+                fogCapture(waterSurface ? "water-overlay-fog-reference" : "world-overlay-fog-reference", 10000, waterSurface);
+            const auto different = fogCapture(waterSurface ? "water-short-fog" : "world-short-fog", 1, waterSurface);
+            renderer.resetSceneRange(); // range reset does not reset the shared shader buffer
+            const auto actual = fogCapture(name, 0, waterSurface);
+            bool retained = expected && different && actual && *expected != *different;
+            if (retained)
+                for (int channel = 0; channel < 3; ++channel)
+                    retained &= std::abs((*actual)[channel] - (*expected)[channel]) <= 1;
+            std::cout << "Steam shader " << name << (retained ? " PASS\n" : " FAIL\n");
+            failures += !retained;
+        }
+        const auto overlayReference = fogCapture("fog-overlay-reference", 10000, false);
+        const auto mapReference = fogCapture("fog-map-reference", 20000, false);
+        bool distinct = overlayReference && mapReference;
+        if (distinct) {
+            distinct = false;
+            for (int channel = 0; channel < 3; ++channel)
+                distinct |= std::abs((*overlayReference)[channel] - (*mapReference)[channel]) > 2;
+        }
+        auto checkRetained = [&](const char *name, const auto &expected) {
+            const auto actual = fogCapture(name, 0, false);
+            bool retained = distinct && expected && actual;
+            if (retained)
+                for (int channel = 0; channel < 3; ++channel)
+                    retained &= std::abs((*actual)[channel] - (*expected)[channel]) <= 1;
+            std::cout << "Steam shader " << name << (retained ? " PASS\n" : " FAIL\n");
+            failures += !retained;
+        };
+        renderer.mapScenePrepared();
+        fogCapture("fog-empty-map-setup", 1, false);
+        checkRetained("fog-empty-map-retained", mapReference);
+
+        guiitem::Request missing;
+        renderer.overlay({}, {missing});
+        renderer.mapScenePrepared();
+        fogCapture("fog-null-item-setup", 1, false);
+        renderer.overlay({});
+        checkRetained("fog-null-item-skips-setup", mapReference);
+
+        missing.kind = guiitem::Request::Kind::Character;
+        renderer.overlay({}, {missing});
+        renderer.mapScenePrepared();
+        fogCapture("fog-empty-card-setup", 1, false);
+        renderer.overlay({});
+        checkRetained("fog-empty-card-retained", overlayReference);
+
+        missing.kind = guiitem::Request::Kind::Widget;
+        missing.mesh = renderer.upload(fogMesh);
+        missing.allocation = {200, 1, 200};
+        missing.at.screen = {64, 64};
+        missing.at.size = .1f;
+        fogCapture("fog-unready-upload", 1, false);
+        renderer.release(missing.mesh);
+        renderer.overlay({}, {missing});
+        renderer.mapScenePrepared();
+        fogCapture("fog-unready-item-setup", 1, false);
+        renderer.overlay({});
+        checkRetained("fog-unready-item-retained", overlayReference);
+
+        // Ring items belong to the earlier overlay queue. Their delayed engine
+        // composition must not become a second native fog setter after the map.
+        missing.kind = guiitem::Request::Kind::Ring;
+        renderer.overlay({}, {missing});
+        renderer.mapScenePrepared();
+        fogCapture("fog-ring-map-setup", 1, false);
+        renderer.overlay({});
+        checkRetained("fog-ring-before-map", mapReference);
+    }
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
