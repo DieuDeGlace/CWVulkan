@@ -90,12 +90,16 @@ d²(player, C) < (0.5 × C's size x + 5)².
 |---|---|
 | +0x00 | type (i32) |
 | +0x08, +0x10, +0x18 | position x, y, z |
-| +0x20 | flags; bit 0 = rotated a quarter turn (x and y size swapped) |
+| +0x20 | unsigned turn byte; low bit swaps x/y footprint, drawing consumes the full byte×90 degrees |
 | +0x24 | scale (float) |
 | +0x28 | "active" byte. For doors it means *closed* (§3.7.2). For item-taking objects it means *not yet given* |
-| +0x30 | occupant / owner creature id (i64) |
+| +0x30 | user/link creature ID (i64; not the ground-item reservation field) |
 | +0x38 | the item it takes (0xa0 bytes; its type byte is at +0x38) |
-| +0xd8 | how many of that item it takes (byte) |
+| +0xd8 | how many of that item it takes (unsigned byte; not reward quantity) |
+
+The current-record versus separate chest-reward-map contract, native defaults
+and limits when only raw records are available are
+[live static-object metadata](steam-live-static-object-metadata.md).
 
 An object's **box size** is 0x13a960: the base size of its type (0x13a520) times its scale.
 Its **centre** is its position raised by half the box height.

@@ -805,6 +805,48 @@ int steamShaderTests() {
         cube.material = {0, 1, 0, 1};
         const auto particleOnly = captureGround("owned-cube-particle-reference", {particle});
         checkCube("owned-cube-before-burst", captureGround("owned-cube-before-burst", {particle, cube}), particleOnly);
+        // Equal geometry is not resource identity. Infer this run's address order
+        // from two distinct resources, then check a repeated resource stays FIFO.
+        DrawItem a = reference;
+        a.opacity = 1;
+        a.nativeControls = worldmodel::Controls{1, 0, 0, 0, false};
+        a.material = {1, 0, 0, 1};
+        DrawItem b = a;
+        b.mesh = renderer.upload(mesh);
+        b.material = {0, 1, 0, 1};
+        DrawItem tail = a;
+        tail.material = {0, 0, 1, 1};
+        const auto red = captureGround("queued-group-first", {a});
+        const auto green = captureGround("queued-group-other", {b});
+        const auto blue = captureGround("queued-group-tail", {tail});
+        const auto pair = captureGround("queued-group-pair", {a, b});
+        const bool firstWins = pair && red && *pair == *red;
+        const auto grouped = captureGround("queued-resource-fifo", {a, b, tail});
+        const bool addressOrder = pair && green && (firstWins || *pair == *green);
+        checkCube("queued-resource-fifo", grouped, addressOrder ? (firstWins ? blue : green) : decltype(green){});
+
+        DrawItem unavailable = carrier;
+        unavailable.mesh = renderer.upload(mesh);
+        unavailable.nativeControls->depthOffset = -10; // would clip the later immediate cube
+        captureGround("queued-unready-upload", {});    // complete the upload before retiring its GPU buffers
+        renderer.release(unavailable.mesh);
+        const auto cubeOnly = captureGround("queued-unready-baseline", {cube});
+        checkCube("queued-unready-opaque", captureGround("queued-unready-opaque", {unavailable, cube}), cubeOnly);
+        unavailable.opacity = .5f;
+        unavailable.nativeControls->opposite = true;
+        unavailable.nativeScenery = steamscenery::Bounds{};
+        unavailable.nativeScenery->water = true; // second context, before the immediate effects
+        DrawItem ready = unavailable;
+        ready.mesh = item.mesh;
+        const auto readyState = captureGround("queued-ready-faded-state", {ready, cube});
+        const auto failedState = captureGround("queued-unready-faded", {unavailable, cube});
+        const bool inheritedFailure =
+            sky && readyState && failedState && cubeOnly && *cubeOnly != *sky && *readyState == *sky && *failedState == *sky;
+        std::cout << "Steam shader queued-unready-faded" << (inheritedFailure ? " PASS\n" : " FAIL\n");
+        failures += !inheritedFailure;
+        unavailable.nativeScenery->water = false; // ordinary faded context is consumed after water/effects
+        checkCube("queued-ordinary-faded-after-effects", captureGround("queued-ordinary-faded-after-effects", {unavailable, cube}),
+                  cubeOnly);
     }
     {
         // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.

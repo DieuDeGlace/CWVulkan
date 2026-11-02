@@ -30,10 +30,17 @@ creature handling it is called **U** (the user).
 |---|---|---|
 | +0x00 | i32 | object type |
 | +0x08, +0x10, +0x18 | i64 ×3 | position |
+| +0x20 | u8 | full turn byte; low bit swaps footprint axes |
+| +0x24 | f32 | dimensionless scale |
 | +0x28 | u8 | **state**: for doors non-zero means shut; for objects that take an item non-zero means not yet given |
 | +0x2c | f32 | **swing time**, ms (the open/shut animation's progress) |
-| +0x30 | i64 | **user**: the creature sitting or lying on it (0 = free) |
+| +0x30 | i64 | **user/link creature ID**: occupancy or quest-object placement (0 = none) |
 | +0x38 | 0xa0 | the item it takes (0 type byte = takes none); its rarity is at object +0x4c |
+| +0xd8 | u8 | required item count, constructor default1; not a reward count |
+
+Construction/copy defaults, current-index resolution and the separate reward
+map's absent-entry/raw-only boundaries are
+[live static-object metadata](steam-live-static-object-metadata.md).
 
 ### 0.3 Ground item record (zone +0x30 list, 0xe0 bytes each)
 

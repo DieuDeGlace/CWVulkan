@@ -1,4 +1,6 @@
 #include "WorldModelControls.h"
+#include <algorithm>
+#include <numeric>
 #include "NativePose.h"
 #include "Renderer.h"
 #include "GameMath.h"
@@ -8,6 +10,16 @@
 #include <array>
 
 namespace worldmodel {
+std::vector<size_t> opaqueOrder(std::span<const ResourceOrder> keys) {
+    std::vector<size_t> order(keys.size());
+    std::iota(order.begin(), order.end(), size_t(0));
+    std::stable_sort(order.begin(), order.end(), [&](size_t left, size_t right) {
+        const auto &a = keys[left], &b = keys[right];
+        return a.opposite != b.opposite ? !a.opposite : a.resource < b.resource;
+    });
+    return order;
+}
+
 std::array<int32_t, 3> lightBlock(Point physical) {
     physical[2] = gamemath::addFixed(physical[2], -6553);
     return {gamemath::floorFixedBlock(physical[0]), gamemath::floorFixedBlock(physical[1]), gamemath::floorFixedBlock(physical[2])};

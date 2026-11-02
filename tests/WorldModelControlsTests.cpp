@@ -18,6 +18,10 @@ int worldModelControlsTests() {
         }
     };
     using worldmodel::Queue;
+    const std::array<worldmodel::ResourceOrder, 6> resources{
+        {{UINT64_MAX, false}, {7, true}, {7, false}, {UINT64_MAX, false}, {3, false}, {1, true}}};
+    check(worldmodel::opaqueOrder(resources) == std::vector<size_t>{4, 2, 0, 3, 5, 1},
+          "normal resource groups precede opposite groups; unsigned address order retains per-resource FIFO");
     check(worldmodel::lightBlock({65535, -1, 6553}) == std::array<int32_t, 3>{0, -1, 0} && worldmodel::lightBlock({0, 0, 6552})[2] == -1 &&
               worldmodel::lightBlock({0, 0, std::numeric_limits<int64_t>::min()})[2] == -1,
           "physical light uses the truncated6553 offset and low64/narrowed negative conversion");

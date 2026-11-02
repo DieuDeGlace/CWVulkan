@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include <numeric>
 
 #include "scene_vert.h"
 #include "scene_frag.h"
@@ -984,6 +985,7 @@ uint32_t Renderer::upload(const Mesh &mesh) {
     gm.min = mesh.min;
     gm.max = mesh.max;
     gm.nativeCentre = mesh.nativeCentre;
+    gm.identity = std::make_shared<const ResourceIdentity>();
     gm.live = true;
     uint32_t id;
     if (!freeIds.empty()) {
@@ -1002,7 +1004,9 @@ void Renderer::destroyMesh(uint32_t id) {
     if (id == 0 || id >= meshes.size() || !meshes[id].live)
         return;
     destroyBuffer(meshes[id].buffer);
-    meshes[id] = {};
+    // CPU header/order identity survives unavailable GPU buffers, until slot reuse.
+    meshes[id].live = false;
+    meshes[id].indexCount = 0;
     freeIds.push_back(id);
 }
 
@@ -1624,11 +1628,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     float inheritedWorldOpacity = 1;
     float inheritedWorldShininess = 0, inheritedWorldDepthOffset = 0;
     // shading: false for the shadow maps, which need no light.
-    auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true, std::optional<float> opacity = {}) {
+    auto bindAndDraw = [&](const DrawItem &item, float cascade, bool shading = true, std::optional<float> opacity = {},
+                           bool depthOnly = false) {
         const GpuMesh &m = meshes[item.mesh];
-        VkDeviceSize zero = 0;
-        vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
-        vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
         PushConstants pc{item.model, glm::vec4((float)item.flags, cascade, item.height, opacity.value_or(item.opacity)),
                          glm::vec4(1, 0, 0, 0), glm::uvec4(0)};
         pc.material = item.material;
@@ -1657,7 +1659,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 pc.params.z = controls.depthOffset;
                 pc.look = {1, controls.white, controls.shininess, controls.glow};
             }
-            if (!particle && !ownedCube) {
+            if (!particle && !ownedCube && !depthOnly) {
                 steampoints::ZoneKey key;
                 if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
                     key = item.nativeLights->key;
@@ -1691,7 +1693,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 pc.lights = lightSetOf(item);
         }
         if (shading) {
-            if (ownedCube && !alphaLook) {
+            if (depthOnly) {
+                // Faded depth records update WORLD/DepthOffset, retaining color inputs and points.
+                inheritedWorldDepthOffset = item.nativeControls ? pc.params.z : 0;
+            } else if (ownedCube && !alphaLook) {
                 // This immediate list changes material/WORLD, White0 and Glow1 only.
                 pc.params.x = float(uint32_t(pc.params.x) | QUEUED_WORLD);
                 pc.params.z = inheritedWorldDepthOffset;
@@ -1709,6 +1714,11 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             }
         }
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+        if (!m.live || !m.buffer.buffer)
+            return; // faded color setters above still reach the later effect consumers
+        VkDeviceSize zero = 0;
+        vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
+        vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
         draws++;
     };
@@ -1889,7 +1899,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     auto visible = [&](const DrawItem &item) {
         if (!alphaLook && !nativeZoneVisible(item))
             return false;
-        if (!meshes[item.mesh].indexCount)
+        if (!meshes[item.mesh].indexCount && !item.nativeControls && !item.nativeScenery && !item.nativeObject)
             return false;
         if (!alphaLook && item.nativeZone && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain))
             return true; // the exact native zone gate above already admitted this terrain
@@ -1965,8 +1975,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             if (item.nativeControls) {
                 const auto queue = worldmodel::queue(item.opacity);
                 if (queue != worldmodel::Queue::Hidden && !(item.flags & (NATIVE_MENU | WORLD_MAP)) && visible(item)) {
-                    const auto destination =
-                        queue == worldmodel::Queue::Opaque ? steamscenery::Queue::OrdinaryOpaque : steamscenery::Queue::OrdinaryFaded;
+                    const bool second = item.nativeScenery && item.nativeScenery->water;
+                    const auto destination = queue == worldmodel::Queue::Opaque
+                                                 ? (second ? steamscenery::Queue::WaterOpaque : steamscenery::Queue::OrdinaryOpaque)
+                                                 : (second ? steamscenery::Queue::WaterFaded : steamscenery::Queue::OrdinaryFaded);
                     sceneryQueues[size_t(destination)].push_back(item);
                 }
                 continue;
@@ -1995,15 +2007,31 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         }
     auto drawSceneryQueue = [&](steamscenery::Queue queue, bool faded) {
         const auto &items = sceneryQueues[(size_t)queue];
+        std::vector<size_t> order;
+        if (faded) {
+            order.resize(items.size());
+            std::iota(order.begin(), order.end(), size_t(0));
+        } else {
+            std::vector<worldmodel::ResourceOrder> keys;
+            keys.reserve(items.size());
+            for (const auto &item : items)
+                keys.push_back({uint64_t(reinterpret_cast<uintptr_t>(meshes[item.mesh].identity.get())),
+                                item.nativeControls ? item.nativeControls->opposite : item.mirrored()});
+            order = worldmodel::opaqueOrder(keys);
+        }
         // Native fades first write nearest depth with no color, then write blended
         // color at LEQUAL with depth writes still enabled. Both are world shaders.
         VkPipeline bound = VK_NULL_HANDLE;
         for (int pass = faded ? 0 : 1; pass < 2; ++pass)
             for (bool opposite : {false, true})
-                for (const DrawItem &item : items) {
+                for (const size_t index : order) {
+                    const DrawItem &item = items[index];
                     const bool mirrored = item.nativeControls ? item.nativeControls->opposite : item.mirrored();
                     if (mirrored != opposite)
                         continue;
+                    const auto &mesh = meshes[item.mesh];
+                    if (!faded && (!mesh.live || !mesh.buffer.buffer))
+                        continue; // opaque readiness precedes every per-instance setter
                     VkPipeline pipeline = mirrored ? mirroredScenePipeline : scenePipeline;
                     if (faded)
                         pipeline = pass == 0 ? (mirrored ? sceneryMirroredDepthPipeline : sceneryDepthPipeline)
@@ -2012,7 +2040,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                         bound = pipeline;
                     }
-                    bindAndDraw(item, 0);
+                    bindAndDraw(item, 0, true, {}, faded && pass == 0);
                 }
     };
     drawSceneryQueue(steamscenery::Queue::OrdinaryOpaque, false);

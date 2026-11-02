@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Queued WORLD consumers now group opaque draws by stable engine-owned resource
+  identity, preserve FIFO within each resource and keep winding families/context
+  order separate. Faded vectors retain append order. CPU header/identity metadata
+  survives unavailable GPU buffers: opaque resources fail before per-instance
+  setters, while faded color records still submit controls and selected point
+  tables before readiness can suppress their draw. Depth-only iterations leave
+  the retained color/point cache unchanged. Explicit controls also respect the
+  second-context selector rather than forcing every faded model after water.
+  CPU unsigned-key/FIFO and four Vulkan ordering/readiness cases pass; all five
+  targets build warning-free, with full CPU/owner and77 shader,2 camera,24 GUI,
+  6 map/shared-water/Alpha-scenery checks passing. Five final no-save captures
+  exit0, all viewed, and the save database remains unchanged. Temporary profiling
+  code was removed. Capture observation failure now returns an error instead of
+  success without an image. Native heap-address order cannot be inferred from a
+  catalog or equated to the engine's allocation order; exact cross-run/native
+  address inputs, the incoming no-point-binding baseline and visual acceptance
+  remain open. A separate live-object supplement now specifies required-item
+  counts/users and the distinction between object records and chest reward maps.
+
 - Owned ground gear now submits the specified eight owner-extracted `cube.cub`
   draws, using exact-zero delay, adapted category, personal-data and owner gates.
   The per-frame list uses the raw item position, regional RGBA colors, unsigned

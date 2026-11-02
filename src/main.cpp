@@ -8278,8 +8278,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             settledFrames = world.pendingCount() == 0 && time >= runSeconds ? settledFrames + 1 : 0;
             if (settledFrames == 30)
                 renderer.capture(capture);
-            if (settledFrames == 32 || time > 120 + runSeconds)
+            if (settledFrames == 32)
                 break;
+            if (time > 120 + runSeconds) {
+                logLine("Capture failed: the world did not settle before the observation deadline.");
+                exitCode = 1;
+                break;
+            }
         }
     }
     if (!captureFeat.empty()) {

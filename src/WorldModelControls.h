@@ -1,6 +1,8 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <span>
+#include <vector>
 #include <glm/glm.hpp>
 // Ordinary queued WORLD descriptors, from steam-world-pass-controls.md section2.1.
 struct DrawItem;
@@ -30,6 +32,12 @@ struct Controls {
 enum class Queue { Hidden, Opaque, Faded };
 // The native contract covers finite opacity; invalid engine input is rejected.
 Queue queue(float opacity);
+struct ResourceOrder {
+    uint64_t resource = 0;
+    bool opposite = false;
+};
+// Separate winding families; unsigned resource-address groups retain instance FIFO.
+std::vector<size_t> opaqueOrder(std::span<const ResourceOrder>);
 bool applyPose(DrawItem &, const nativepose::Draw &);
 // Verified playable-hair catalog entries; other factories remain unclassified.
 bool hidesAttachmentMarkers(int catalogId);

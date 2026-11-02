@@ -256,12 +256,14 @@ class Renderer {
         VkDeviceMemory memory = VK_NULL_HANDLE;
         void *mapped = nullptr;
     };
+    struct ResourceIdentity {};
     struct GpuMesh {
         Buffer buffer;
         VkDeviceSize indexOffset = 0;
         uint32_t indexCount = 0;
         glm::vec3 min{0}, max{0};
         std::optional<glm::vec3> nativeCentre;
+        std::shared_ptr<const ResourceIdentity> identity;
         bool live = false;
     };
     struct Image {
