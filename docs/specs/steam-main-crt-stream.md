@@ -8,6 +8,11 @@ implementation or owner data/captures were inspected. Addresses are RVAs.
 This extends [host CRT lifetime](steam-host-crt-stream.md), rather than
 replacing its explicit fresh-thread initialization limit.
 
+Later qualified runtime-binary evidence, startup `num`/`slot` admission and
+bounded reset coverage are in
+[CRT runtime initialization](steam-crt-runtime-initialization.md). Its proven
+fresh-record state1 is distinct from this Game's first-frame state.
+
 ## 1. State transition and what owns the state
 
 The named paths use the same imported rand/srand pair from

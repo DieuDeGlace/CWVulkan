@@ -277,7 +277,8 @@ class Renderer {
     GLFWwindow *window = nullptr;
     std::string gpuName;
     struct SceneFrame {
-        scenevisibility::SphereView sphere;
+        scenevisibility::View visibility;
+        scenevisibility::Projection projection;
         scenerange::Ranges ranges;
         double elapsedMs = -1;
     };

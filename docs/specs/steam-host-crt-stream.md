@@ -6,6 +6,12 @@ UI reseeds and worker distinctions continue in
 reference is labeled to a content-initialization subphase, not fresh worker
 or first-frame state.
 
+A later, separately qualified local runtime-binary inspection establishes
+its fresh-record numeric default and storage scope in
+[CRT runtime initialization](steam-crt-runtime-initialization.md).
+The exact worker-entry/advancement and actual-module binding limits remain;
+the original audit and public-documentation review below retain their scope.
+
 Stable bounded native audit, 2026-10-31. Sources are original host/Game
 construction, native thread launch/entry instructions, **0x83e60 → 0xf5520**,
 and the specified World time/resident/pet prelude. No game execution or

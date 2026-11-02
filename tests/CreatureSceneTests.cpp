@@ -59,9 +59,9 @@ int creatureSceneTests() {
         check(!creaturescene::admit(actor, false, view) && queries == before, "nonpositive/unordered health precedes visibility");
     }
     {
-        scenevisibility::SphereView view;
-        view.camera = {INT64_MAX - 128, 0, 0};
-        view.offset[0] = gamemath::subtractFixed(0, view.camera[0]);
+        scenevisibility::View view;
+        view.eye = {INT64_MAX - 128, 0, 0};
+        view.offset[0] = gamemath::subtractFixed(0, view.eye[0]);
         scenevisibility::Sphere sphere{{INT64_MIN + 127, 0, 0}, 0}; // exactly256 fixed units past camera
         check(!view.visible(sphere, 0) && view.visible(sphere, .004f),
               "exact fixed camera distance survives large coordinates and wrapped subtraction");

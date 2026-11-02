@@ -59,6 +59,17 @@ glm::mat4 sceneViewAt(const Camera &camera, glm::vec3 eye, glm::vec3 target) {
     return glm::translate(rotation, -eye);
 }
 
+glm::mat4 nativeSceneRotation(const Camera &camera) {
+    if (camera.nativeViewRotation)
+        return glm::mat4(*camera.nativeViewRotation);
+    auto rotation = glm::lookAtRH(glm::vec3(0), camera.target - camera.eye, glm::vec3(0, 0, 1));
+    for (int column = 0; column < 4; ++column) {
+        rotation[column][0] = -rotation[column][0];
+        rotation[column][2] = -rotation[column][2];
+    }
+    return rotation;
+}
+
 // Half the light-space depth range in blocks: tall mountains far from the
 // player can still cast into the map.
 constexpr float LIGHT_DEPTH = 420;
@@ -1076,10 +1087,10 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
     SceneFrame next;
     next.elapsedMs = lastSceneTime < 0 || time < lastSceneTime ? -1 : (time - lastSceneTime) * 1000;
     if (camera.nativeFixedEye)
-        next.sphere.camera = *camera.nativeFixedEye;
+        next.visibility.eye = *camera.nativeFixedEye;
     else
         for (int axis = 0; axis < 3; ++axis)
-            next.sphere.camera[axis] =
+            next.visibility.eye[axis] =
                 gamemath::addFixed(int64_t(worldProbe.origin[axis] * 65536), int64_t(double(camera.eye[axis]) * 65536));
     steampoints::Point lookAt{};
     if (camera.nativeFixedLookAt)
@@ -1088,37 +1099,32 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
         for (int axis = 0; axis < 3; ++axis)
             lookAt[axis] = gamemath::addFixed(int64_t(worldProbe.origin[axis] * 65536), int64_t(double(camera.target[axis]) * 65536));
     for (int axis = 0; axis < 2; ++axis)
-        next.sphere.offset[axis] = gamemath::subtractFixed(0, lookAt[axis]);
-    glm::vec3 eye;
-    for (int axis = 0; axis < 3; ++axis)
-        eye[axis] = float(gamemath::addFixed(next.sphere.camera[axis], next.sphere.offset[axis])) * (1.f / 65536.f);
-    const glm::vec3 target = eye + (camera.target - camera.eye);
-    const auto shake = glm::translate(glm::mat4(1), glm::vec3(-camera.viewShake.x, camera.viewShake.y, 0));
+        next.visibility.offset[axis] = gamemath::subtractFixed(0, lookAt[axis]);
+    glm::vec3 negativeEye;
+    for (int axis = 0; axis < 3; ++axis) {
+        const int64_t translation = gamemath::subtractFixed(axis < 2 ? lookAt[axis] : 0, next.visibility.eye[axis]);
+        negativeEye[axis] = float(translation) * (1.f / 65536.f);
+    }
     const float aspect = extent.height ? float(extent.width) / extent.height : camera.aspect;
-    next.sphere.planes = scenevisibility::planes(glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.f) * shake *
-                                                 sceneViewAt(camera, eye, target));
+    next.projection.offset = next.visibility.offset;
+    next.projection.view =
+        glm::translate(glm::translate(glm::mat4(1), glm::vec3(camera.viewShake, 0)) * nativeSceneRotation(camera), negativeEye);
+    next.projection.perspective = glm::perspectiveLH_ZO(glm::radians(settings.fov), -aspect, .05f, 1920.f);
+    next.visibility.planes = scenevisibility::planes(next.projection.perspective * next.projection.view);
     next.ranges = {settings.fogDistance, settings.sceneryDistance,
                    steampoints::abilityRange(settings.fogDistance, settings.nativeZoneRadius)};
     nativeRangeActive = false;
     const bool menuSky = lighting.menuSky[5].w > 0;
     if (settings.style == RenderStyle::Steam && !menuSky && worldProbe.sceneZone) {
         scenerange::Frame range;
-        range.camera = next.sphere.camera;
+        range.camera = next.visibility.eye;
         range.zoneRadius = settings.nativeZoneRadius;
         range.elapsedMs = next.elapsedMs;
         range.zone = worldProbe.sceneZone;
         if (worldProbe.scenePlayer)
             if (auto player = worldProbe.scenePlayer())
                 range.player = *player;
-        range.visible = [&](const scenevisibility::Bounds &absolute, float radius) {
-            auto relative = absolute;
-            for (int axis = 0; axis < 2; ++axis) {
-                relative.minimum[axis] = gamemath::addFixed(relative.minimum[axis], next.sphere.offset[axis]);
-                relative.maximum[axis] = gamemath::addFixed(relative.maximum[axis], next.sphere.offset[axis]);
-                relative.center[axis] = gamemath::addFixed(relative.center[axis], next.sphere.offset[axis]);
-            }
-            return scenevisibility::box(relative, eye, next.sphere.planes, radius);
-        };
+        range.visible = [&](const scenevisibility::Bounds &absolute, float radius) { return next.visibility.box(absolute, radius); };
         nativeRangeActive = steamRange.update(range);
         if (nativeRangeActive)
             next.ranges = steamRange.value();
@@ -1129,11 +1135,12 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
 }
 
 std::array<int64_t, 2> Renderer::steamRenderOffset() const {
-    return sceneFrame ? std::array<int64_t, 2>{sceneFrame->sphere.offset[0], sceneFrame->sphere.offset[1]} : std::array<int64_t, 2>{};
+    return sceneFrame ? std::array<int64_t, 2>{sceneFrame->visibility.offset[0], sceneFrame->visibility.offset[1]}
+                      : std::array<int64_t, 2>{};
 }
 
 bool Renderer::steamActorVisible(const scenevisibility::Sphere &sphere) const {
-    return sceneFrame && sceneFrame->sphere.visible(sphere, sceneFrame->ranges.abilities);
+    return sceneFrame && sceneFrame->visibility.visible(sphere, sceneFrame->ranges.abilities);
 }
 
 void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time, const std::vector<DrawItem> &opaque,
@@ -1227,21 +1234,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     const glm::vec3 D = alpha::sunDirection(dayMs);
     // Milliseconds since the last frame (-1 on the first, or when the clock went back).
     const double elapsedMs = sceneFrame->elapsedMs;
-    glm::vec3 nativeEye = camera.eye, nativeTarget = camera.target;
-    nativeEye.z += (float)worldProbe.origin.z;
-    nativeTarget.z += (float)worldProbe.origin.z;
-    const auto nativePlanes = scenevisibility::planes(glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, .05f, 1920.0f) * shake *
-                                                      sceneViewAt(camera, nativeEye, nativeTarget));
-    auto speechView = sceneViewAt(camera, nativeEye, nativeTarget);
-    for (int column = 0; column < 4; ++column) {
-        speechView[column][0] = -speechView[column][0];
-        speechView[column][2] = -speechView[column][2];
-    }
-    speechView = glm::translate(glm::mat4(1), glm::vec3(camera.viewShake, 0)) * speechView;
-    lastSpeechProjection =
-        scenevisibility::Projection{{-(int64_t)(worldProbe.origin.x * 65536), -(int64_t)(worldProbe.origin.y * 65536), 0},
-                                    speechView,
-                                    glm::perspectiveLH_ZO(glm::radians(settings.fov), -aspect, .05f, 1920.f)};
+    // Keep the retained speech-cache publication at its existing frame boundary.
+    lastSpeechProjection = sceneFrame->projection;
     const float sceneDistance = sceneFrame->ranges.scene;
     const float modelDistance = sceneFrame->ranges.models;
     const float actorDistance = sceneFrame->ranges.abilities;
@@ -1373,20 +1367,25 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         mapFog = palette.fog;
         steamStarValue = steamsky::starValue(dayMs, here.region.forest);
     }
+    const steampoints::Point homeXY{int64_t(worldProbe.origin.x * 65536), int64_t(worldProbe.origin.y * 65536), 0};
+    auto absolutePoint = [&](steampoints::Point point) {
+        for (int axis = 0; axis < 2; ++axis)
+            point[axis] = gamemath::addFixed(point[axis], homeXY[axis]);
+        return point; // cached metadata already has native game Z, without the GPU shift
+    };
     std::unordered_map<const scenevisibility::Bounds *, scenevisibility::Bounds> zoneSnapshots;
     auto currentZoneBounds = [&](const DrawItem &item) -> const scenevisibility::Bounds * {
-        if (!item.nativeZone) return nullptr;
-        auto [it, fresh] = zoneSnapshots.try_emplace(item.nativeZone.get(),*item.nativeZone);
-        if (fresh && worldProbe.sceneZone) {
-            const int64_t originX = (int64_t)(worldProbe.origin.x*65536), originY = (int64_t)(worldProbe.origin.y*65536);
-            const int64_t zx = (it->second.minimum[0]+originX) >> 22, zy = (it->second.minimum[1]+originY) >> 22;
-            if (auto latest = worldProbe.sceneZone(zx,zy)) {
-                for (int axis = 0; axis < 2; ++axis) {
-                    const int64_t offset = axis == 0 ? originX : originY;
-                    latest->minimum[axis] -= offset; latest->maximum[axis] -= offset; latest->center[axis] -= offset;
-                }
-                it->second = *latest;
-            }
+        if (!item.nativeZone)
+            return nullptr;
+        auto [it, fresh] = zoneSnapshots.try_emplace(item.nativeZone.get(), *item.nativeZone);
+        if (fresh) {
+            auto &bounds = it->second;
+            bounds.minimum = absolutePoint(bounds.minimum);
+            bounds.maximum = absolutePoint(bounds.maximum);
+            bounds.center = absolutePoint(bounds.center);
+            if (worldProbe.sceneZone)
+                if (auto latest = worldProbe.sceneZone(bounds.minimum[0] >> 22, bounds.minimum[1] >> 22))
+                    bounds = *latest;
         }
         return &it->second;
     };
@@ -1396,8 +1395,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             return true; // older/incomplete terrain has no asserted native cache box
         auto [it, fresh] = zoneVisibility.try_emplace(item.nativeZone.get(), false);
         if (fresh)
-            it->second = scenevisibility::visible(*currentZoneBounds(item), nativeEye, nativePlanes,
-                                                  sceneDistance, modelDistance);
+            it->second = sceneFrame->visibility.visible(*currentZoneBounds(item), sceneDistance, modelDistance);
         return it->second;
     };
     // History is released on toggles and large camera jumps (teleports, respawns).
@@ -1467,7 +1465,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         steampoints::Point origin{};
         for (int axis = 0; axis < 3; ++axis)
             origin[axis] = (int64_t)(worldProbe.origin[axis] * 65536);
-        const steampoints::Point eye = sceneFrame->sphere.camera;
+        const steampoints::Point eye = sceneFrame->visibility.eye;
         steampoints::Frame points;
         points.camera = eye;
         points.range = modelDistance;
@@ -1477,7 +1475,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         points.clockMs = lighting.timeMs;
         points.usedCell = worldProbe.usedCell;
         points.visible = [&](const steampoints::Point &p, float radius, float range) {
-            return sceneFrame->sphere.visible({p, radius}, range);
+            return sceneFrame->visibility.visible({p, radius}, range);
         };
         std::vector<steampoints::Light> lights;
         std::vector<steampoints::ZoneKey> loaded = worldProbe.loadedLightZones
@@ -1486,10 +1484,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             loaded.push_back(key);
             if (nativeZoneVisible(*draw)) {
                 if (worldProbe.groundLights && draw->nativeZone) {
-                    auto centre = currentZoneBounds(*draw)->center;
-                    // Mesh bounds retain native Z but have renderer-relative XY.
-                    centre[0] += origin[0];
-                    centre[1] += origin[1];
+                    const auto centre = currentZoneBounds(*draw)->center;
                     const float distance = steampoints::squaredDistance(centre, eye);
                     const float itemLimit = points.terrainRange + 64;
                     if (distance < itemLimit * itemLimit)
@@ -1834,9 +1829,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (!meshes[item.mesh].indexCount)
             return false;
         if (item.nativeParticle)
-            return sceneFrame->sphere.visible(*item.nativeParticle, modelDistance);
+            return sceneFrame->visibility.visible(*item.nativeParticle, modelDistance);
         if (item.nativeActor)
-            return sceneFrame->sphere.visible(*item.nativeActor, actorDistance);
+            return sceneFrame->visibility.visible(*item.nativeActor, actorDistance);
         glm::vec3 c;
         float r;
         sphereOf(item, c, r);
@@ -1851,11 +1846,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         alphascenery::Fade fade;
     };
     std::vector<DeferredAlpha> alphaFar;
-    // Camera state currently supplies a render-space float eye. Keep the fixed
-    // distance arithmetic separate so a native fixed camera can feed it later.
-    alphascenery::Point alphaEye;
-    for (int axis = 0; axis < 3; ++axis)
-        alphaEye[axis] = (int64_t)((double)nativeEye[axis] * 65536);
+    auto alphaEye = sceneFrame->visibility.eye;
+    for (int axis = 0; axis < 2; ++axis)
+        alphaEye[axis] = gamemath::subtractFixed(alphaEye[axis], homeXY[axis]);
     auto drawScene = [&](bool afterWater) {
         VkPipeline boundScene = worldPipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, boundScene);
@@ -1893,10 +1886,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             if (!item.nativeScenery)
                 continue;
             const auto &bounds = *item.nativeScenery;
-            if (!nativeZoneVisible(item) ||
-                !scenevisibility::sphere(bounds.center, bounds.radius, nativeEye, nativePlanes, modelDistance))
+            const auto centre = absolutePoint(bounds.center);
+            if (!nativeZoneVisible(item) || !sceneFrame->visibility.visible({centre, bounds.radius}, modelDistance))
                 continue;
-            const float opacity = steamscenery::fade(steamscenery::distanceSquared(bounds.center, nativeEye), modelDistance);
+            const float opacity = steamscenery::fade(steamscenery::distanceSquaredFixed(centre, sceneFrame->visibility.eye), modelDistance);
             const auto queue = steamscenery::queue(bounds, opacity);
             if (queue != steamscenery::Queue::Hidden) {
                 DrawItem draw = item;
@@ -2051,13 +2044,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     daylightMode = ::daylight;
 #endif
     const float yaw = camera.displayedYawDegrees.value_or(glm::degrees(std::atan2(forward.x, -forward.y)));
+    auto beamEye = alphaEye;
+    beamEye[2] = gamemath::subtractFixed(beamEye[2], int64_t(worldProbe.origin.z * 65536));
     for (const DrawItem &item : opaque)
         if (item.kind == DrawKind::LightBeam && (alphaLook || nativeZoneVisible(item)))
-            if (auto quad = lightbeam::sample(item.beam, camera.eye, yaw, modelDistance, daylightMode))
+            if (auto quad = lightbeam::sample(item.beam, beamEye, yaw, modelDistance, daylightMode))
                 beams.push_back({&item, *quad});
-    std::sort(beams.begin(), beams.end(), [](const auto &a, const auto &b) {
-        return a.second.distanceSquared > b.second.distanceSquared;
-    });
+    std::sort(beams.begin(), beams.end(), [](const auto &a, const auto &b) { return a.second.distanceSquared > b.second.distanceSquared; });
     if (!beams.empty()) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, beamPipeline);
         for (const auto &[item, quad] : beams) {
@@ -2185,7 +2178,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
 }
 
 bool Renderer::steamSphereVisible(const steampoints::Point &position, float radius, float range) const {
-    return sceneFrame && sceneFrame->sphere.visible({position, radius}, range);
+    return sceneFrame && sceneFrame->visibility.visible({position, radius}, range);
 }
 
 void Renderer::shutdown() {

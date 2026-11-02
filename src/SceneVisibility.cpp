@@ -63,8 +63,8 @@ Planes planes(const glm::mat4 &clip) {
     return {row(3) + row(0), row(3) - row(0), row(3) + row(1), row(3) - row(1), row(3) + row(2), row(3) - row(2)};
 }
 
-bool SphereView::visible(const Sphere &sphere, float range) const {
-    if (!steamscenery::earlyWithinFixed(sphere.centre, camera, range))
+bool View::visible(const Sphere &sphere, float range) const {
+    if (!steamscenery::earlyWithinFixed(sphere.centre, eye, range))
         return false;
     glm::vec3 point;
     for (int axis = 0; axis < 3; ++axis)
@@ -75,33 +75,28 @@ bool SphereView::visible(const Sphere &sphere, float range) const {
     return true;
 }
 
-bool sphere(const std::array<int64_t, 3> &center, float radius, glm::vec3 eye, const Planes &planes, float range) {
-    if (!steamscenery::earlyWithin(center, eye, range))
+bool View::box(const Bounds &bounds, float radius) const {
+    const std::array<int64_t, 3> midpoint{gamemath::addFixed(bounds.minimum[0], bounds.maximum[0]) / 2,
+                                          gamemath::addFixed(bounds.minimum[1], bounds.maximum[1]) / 2, 0};
+    if (!steamscenery::earlyWithinFixed(midpoint, eye, radius, true))
         return false;
-    const glm::vec3 point{(float)center[0] / 65536, (float)center[1] / 65536, (float)center[2] / 65536};
-    for (const auto &plane : planes)
-        if (plane.y * point.y + plane.x * point.x + plane.z * point.z + plane.w + radius < 0)
-            return false;
-    return true;
-}
-
-bool box(const Bounds &bounds, glm::vec3 eye, const Planes &planes, float radius) {
-    const std::array<int64_t, 3> xyCenter{(bounds.minimum[0] + bounds.maximum[0]) / 2,
-                                         (bounds.minimum[1] + bounds.maximum[1]) / 2, 0};
-    if (!steamscenery::earlyWithin(xyCenter, eye, radius, true))
-        return false;
-    for (int plane : {0, 1, 2, 4, 5}) {
+    for (int index : {0, 1, 2, 4, 5}) {
+        const auto &plane = planes[index];
         glm::vec3 corner;
-        for (int axis = 0; axis < 3; ++axis)
-            corner[axis] = (float)(planes[plane][axis] > 0 ? bounds.maximum[axis] : bounds.minimum[axis]) * (1.0f / 65536.0f);
-        if (glm::dot(glm::vec3(planes[plane]), corner) + planes[plane].w < 0)
+        for (int axis = 0; axis < 3; ++axis) {
+            const int64_t fixed = plane[axis] > 0 ? bounds.maximum[axis] : bounds.minimum[axis];
+            corner[axis] = float(gamemath::addFixed(fixed, offset[axis])) * (1.f / 65536.f);
+        }
+        if (((plane.y * corner.y + plane.x * corner.x) + plane.z * corner.z) + plane.w < 0)
             return false;
     }
     return true;
 }
-bool visible(const Bounds &bounds, glm::vec3 eye, const Planes &planes, float terrainRange, float modelRange) {
-    if (!bounds.meshed || !box(bounds,eye,planes,terrainRange+64)) return false;
+
+bool View::visible(const Bounds &bounds, float terrainRange, float modelRange) const {
+    if (!bounds.meshed || !box(bounds, terrainRange + 64))
+        return false;
     const float centerRange = modelRange + 64;
-    return steamscenery::distanceSquared(bounds.center, eye) < centerRange * centerRange;
+    return steamscenery::distanceSquaredFixed(bounds.center, eye) < centerRange * centerRange;
 }
 } // namespace scenevisibility

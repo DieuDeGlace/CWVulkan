@@ -553,3 +553,25 @@ Synthetic large-coordinate, real headless pose-cache and fragment-birth cases us
 no owner assets. Full shader/scenery-origin precision, alternate preview/reset
 paths and native visual acceptance remain separate work. No native code or system
 CRT implementation was read by the implementer; no owner content enters packages.
+
+
+## Exact CPU scene consumers and runtime-state audit, 2026-11-01
+
+The implementer used the existing scene-lighting1/1.2/1.3, worldgen-parity-gaps9.6/9.7,
+gameplay-camera7.2, NPC speech cache and independent coordinate-lifetime prose plus
+engine/tests only. A shared View now admits fixed spheres and cached boxes; the
+prepared native projection also supplies retained speech at its existing publication
+boundary. Integer relative negative-eye differences precede float conversion.
+Source-home XY metadata converts to absolute once, without a second Z shift;
+light binding, fade and fixed beam-distance adapters retain their documented roles.
+Synthetic large-coordinate/bounds/beam cases and asset-free Vulkan triangles cover
+these paths. Full GPU-origin precision and original-game visual parity remain open.
+
+The independent native-only author additionally inspected a version/hash-qualified
+runtime binary for steam-crt-runtime-initialization.md; the implementer read only
+that prose and its main/host cross-links. Its fresh-context default1 and bounded
+startup/reset facts do not imply a universal first-frame or worker-entry state.
+No runtime code was read or copied by the implementer, and this checkpoint does not
+change the engine's random initialization. Earlier notes about not inspecting a CRT
+implementation describe their earlier checkpoints; this later author-only audit
+preserves the same prose/implementation separation. No game assets enter packages.

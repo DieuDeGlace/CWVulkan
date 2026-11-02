@@ -509,6 +509,68 @@ int steamShaderTests() {
     const bool once = preparedQueries > 0 && sceneQueries == preparedQueries;
     std::cout << "Steam scene prepared range reuse" << (once ? " PASS\n" : " FAIL\n");
     failures += !once;
+    {
+        WorldProbe largeProbe;
+        largeProbe.origin = {1073741824.0, -536870912.0, -50.0};
+        renderer.settings.fogDistance = 400;
+        renderer.settings.sceneryDistance = 100;
+        renderer.setWorldProbe(largeProbe);
+        camera.viewShake = {0, 0};
+        camera.nativeFixedEye.emplace();
+        camera.nativeFixedLookAt.emplace();
+        for (int axis = 0; axis < 3; ++axis) {
+            const int64_t origin = int64_t(largeProbe.origin[axis] * 65536);
+            (*camera.nativeFixedEye)[axis] = origin + int64_t(double(camera.eye[axis]) * 65536);
+            (*camera.nativeFixedLookAt)[axis] = origin + int64_t(double(camera.target[axis]) * 65536);
+        }
+        const auto retainedOffset = renderer.speechProjection()->offset;
+        renderer.prepareScene(camera, lighting, 0);
+        const bool retainedSpeech = renderer.speechProjection()->offset == retainedOffset;
+        std::cout << "Steam scene retained speech schedule" << (retainedSpeech ? " PASS\n" : " FAIL\n");
+        failures += !retainedSpeech;
+        const auto emptyCapture = root / "large-origin-empty.png";
+        renderer.capture(emptyCapture.string());
+        renderer.frame(camera, lighting, {}, 0, {}, {});
+        const auto empty = centre(emptyCapture);
+        failures += !empty;
+        const auto &speech = *renderer.speechProjection();
+        glm::vec3 target;
+        for (int axis = 0; axis < 3; ++axis)
+            target[axis] = float((*camera.nativeFixedLookAt)[axis] + speech.offset[axis]) * (1.f / 65536.f);
+        const auto clip = speech.perspective * speech.view * glm::vec4(target, 1);
+        const bool centered = speech.offset[0] == -(*camera.nativeFixedLookAt)[0] && speech.offset[1] == -(*camera.nativeFixedLookAt)[1] &&
+                              clip.w > 0 && std::abs(clip.x / clip.w) < .00001f && std::abs(clip.y / clip.w) < .00001f;
+        std::cout << "Steam scene large-origin speech center" << (centered ? " PASS\n" : " FAIL\n");
+        failures += !centered;
+        auto cached = std::make_shared<scenevisibility::Bounds>();
+        cached->minimum = {0, 0, -54 * 65536};
+        cached->maximum = {65 * 65536, 65 * 65536, -46 * 65536};
+        cached->center = {32 * 65536, 32 * 65536, -50 * 65536};
+        cached->meshed = true;
+        cached->triangleCost = 0;
+        DrawItem shifted = item;
+        shifted.kind = DrawKind::Scenery;
+        shifted.nativeLights.reset();
+        shifted.nativeZone = cached;
+        shifted.nativeScenery = steamscenery::Bounds{{0, 0, -50 * 65536}, 1, false};
+        checkPoints("large-origin-cached-zone", {shifted}, {7, 52, 5});
+        auto latest = *cached;
+        for (int axis = 0; axis < 2; ++axis) {
+            const int64_t origin = int64_t(largeProbe.origin[axis] * 65536);
+            latest.minimum[axis] += origin;
+            latest.maximum[axis] += origin;
+            latest.center[axis] += origin;
+        }
+        latest.center[2] += 1000 * 65536;
+        largeProbe.sceneZone = [&](int64_t x, int64_t y) -> std::optional<scenevisibility::Bounds> {
+            if (x != (latest.minimum[0] >> 22) || y != (latest.minimum[1] >> 22))
+                return std::nullopt;
+            return latest;
+        };
+        renderer.setWorldProbe(largeProbe);
+        if (empty)
+            checkPoints("large-origin-latest-center", {shifted}, *empty);
+    }
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

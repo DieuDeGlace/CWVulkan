@@ -16,6 +16,7 @@ struct Quad {
 };
 // angleDegrees is the camera's horizontal width direction, not the model's width.
 // daylight is the process CRT setting, not the game clock's day/night factor.
-std::optional<Quad> sample(const Placement &, glm::vec3 eye, float angleDegrees, float range, int daylight);
+// Eye uses the same fixed engine-render coordinates as Placement; subtract before narrowing.
+std::optional<Quad> sample(const Placement &, const std::array<int64_t, 3> &eye, float angleDegrees, float range, int daylight);
 Mesh mesh(); // four vertex identifiers; the shader reads the sampled corners
 } // namespace lightbeam

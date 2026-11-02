@@ -1,13 +1,14 @@
 #include "LightBeam.h"
 #include "SteamScenery.h"
+#include "GameMath.h"
 #include <algorithm>
 #include <cmath>
 
 namespace lightbeam {
-std::optional<Quad> sample(const Placement &p, glm::vec3 eye, float angleDegrees, float range, int daylight) {
+std::optional<Quad> sample(const Placement &p, const std::array<int64_t, 3> &eye, float angleDegrees, float range, int daylight) {
     if (!(range > 0) || !std::isfinite(p.height) || !std::isfinite(p.width))
         return std::nullopt;
-    const float distanceSquared = steamscenery::distanceSquared(p.position, eye);
+    const float distanceSquared = steamscenery::distanceSquaredFixed(p.position, eye);
     const float limitSquared = range * range;
     if (!(distanceSquared < limitSquared))
         return std::nullopt;
@@ -18,9 +19,9 @@ std::optional<Quad> sample(const Placement &p, glm::vec3 eye, float angleDegrees
     auto vertex = [&](int sign, bool bottom) {
         const float xOffset = bottom ? dx * p.width * 0.25f * p.height : dx * 0.5f * p.width;
         const float yOffset = bottom ? dy * p.width * 0.25f * p.height : dy * 0.5f * p.width;
-        const int64_t x = p.position[0] + sign * (int64_t)(xOffset * 65536.0f);
-        const int64_t y = p.position[1] + sign * (int64_t)(yOffset * 65536.0f);
-        const int64_t z = p.position[2] - (bottom ? (int64_t)(p.height * 65536.0f) : 0);
+        const int64_t x = gamemath::addFixed(p.position[0], sign * int64_t(xOffset * 65536.0f));
+        const int64_t y = gamemath::addFixed(p.position[1], sign * int64_t(yOffset * 65536.0f));
+        const int64_t z = gamemath::subtractFixed(p.position[2], bottom ? int64_t(p.height * 65536.0f) : 0);
         return glm::vec3((float)x, (float)y, (float)z) * (1.0f / 65536.0f);
     };
     Quad result;

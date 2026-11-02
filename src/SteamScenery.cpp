@@ -1,4 +1,5 @@
 #include "SteamScenery.h"
+#include "GameMath.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -37,12 +38,17 @@ bool earlyWithinFixed(const std::array<int64_t, 3> &position, const std::array<i
 }
 
 float distanceSquared(const std::array<int64_t, 3> &position, glm::vec3 eye) {
+    std::array<int64_t, 3> camera;
+    for (int axis = 0; axis < 3; ++axis)
+        camera[axis] = int64_t(double(eye[axis]) * 65536);
+    return distanceSquaredFixed(position, camera);
+}
+
+float distanceSquaredFixed(const std::array<int64_t, 3> &position, const std::array<int64_t, 3> &eye) {
     glm::vec3 delta;
-    for (int axis = 0; axis < 3; ++axis) {
-        const int64_t camera = (int64_t)((double)eye[axis] * 65536);
-        delta[axis] = (float)(position[axis] - camera) * (1.0f / 65536.0f);
-    }
-    return delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;
+    for (int axis = 0; axis < 3; ++axis)
+        delta[axis] = float(gamemath::subtractFixed(position[axis], eye[axis])) * (1.f / 65536.f);
+    return (delta.x * delta.x + delta.y * delta.y) + delta.z * delta.z;
 }
 
 float fade(float squared, float range) {

@@ -103,22 +103,30 @@ int objectClockTests() {
     }
 
     lightbeam::Placement shaft{{147456, 229376, 1622016}, 20, 1}; // (2.25,3.5,24.75)
-    auto quad = lightbeam::sample(shaft, {2.25f, 3.5f, 24.75f}, 0, 20, 1);
-    check(quad && quad->alpha == 100 && same(quad->corners[0], {1.75f, 3.5f, 24.75f}) &&
-          same(quad->corners[3], {7.25f, 3.5f, 4.75f}), "native upper width, expanded lower width and downward extent");
-    quad = lightbeam::sample(shaft, {2.25f, 3.5f, 24.75f}, 90, 20, 1);
+    auto quad = lightbeam::sample(shaft, shaft.position, 0, 20, 1);
+    check(quad && quad->alpha == 100 && same(quad->corners[0], {1.75f, 3.5f, 24.75f}) && same(quad->corners[3], {7.25f, 3.5f, 4.75f}),
+          "native upper width, expanded lower width and downward extent");
+    quad = lightbeam::sample(shaft, shaft.position, 90, 20, 1);
     check(quad && same(quad->corners[0], {2.25f, 3, 24.75f}) && same(quad->corners[3], {2.25f, 8.5f, 4.75f}),
           "displayed camera yaw rotates the width direction");
-    quad = lightbeam::sample(shaft, {21.25f, 3.5f, 24.75f}, 0, 20, 1);
+    quad = lightbeam::sample(shaft, {1392640, 229376, 1622016}, 0, 20, 1);
     check(quad && quad->alpha == 50, "fade reaches half opacity at 95 percent of range");
-    check(!lightbeam::sample(shaft, {22.25f, 3.5f, 24.75f}, 0, 20, 1), "upper midpoint at exact range is excluded");
-    quad = lightbeam::sample(shaft, {2.25f, 3.5f, 24.75f}, 0, 20, 0);
+    check(!lightbeam::sample(shaft, {1458176, 229376, 1622016}, 0, 20, 1), "upper midpoint at exact range is excluded");
+    quad = lightbeam::sample(shaft, shaft.position, 0, 20, 0);
     check(quad && quad->alpha == 0, "CRT daylight zero makes the primitive transparent");
-    quad = lightbeam::sample(shaft, {2.25f, 3.5f, 24.75f}, 0, 20, 3);
+    quad = lightbeam::sample(shaft, shaft.position, 0, 20, 3);
     check(quad && quad->alpha == 44, "upper alpha is retained as a byte");
+    auto distant = shaft;
+    distant.position[0] += int64_t(1) << 58;
+    auto distantEye = distant.position;
+    distantEye[0] += 19 * 65536;
+    quad = lightbeam::sample(distant, distantEye, 0, 20, 1);
+    check(quad && quad->alpha == 50 && quad->distanceSquared == 361,
+          "fixed beam distance retains19 blocks at a position beyond float camera precision");
     const Mesh mesh = lightbeam::mesh();
-    check(mesh.indices == std::vector<uint32_t>({0, 1, 2, 2, 1, 3}) && mesh.vertices.size() == 4 &&
-          mesh.vertices[0].ao == 255 && mesh.vertices[2].ao == 0, "quad uses native topology and lower-edge alpha zero");
+    check(mesh.indices == std::vector<uint32_t>({0, 1, 2, 2, 1, 3}) && mesh.vertices.size() == 4 && mesh.vertices[0].ao == 255 &&
+              mesh.vertices[2].ao == 0,
+          "quad uses native topology and lower-edge alpha zero");
     // A roofed cavity and a solid sample distinguish native model light from
     // palette red, vertex AO, and a global daylight factor.
     std::vector<worldgen::TerrainColumn> columns(worldgen::ZONE_COLUMNS);

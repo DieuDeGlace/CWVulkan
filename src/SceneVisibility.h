@@ -30,15 +30,14 @@ struct Sphere {
     float radius = 0;
 };
 using Planes = std::array<glm::vec4, 6>;
-// One installed CPU scene: exact game-space camera, fixed point offsets and planes.
+// One installed CPU scene: exact game-space eye, negative look-at XY and planes.
 // Scene preparation replaces this state; earlier Game consumers retain the prior one.
-struct SphereView {
-    std::array<int64_t, 3> camera{}, offset{};
+struct View {
+    std::array<int64_t, 3> eye{}, offset{};
     Planes planes{};
     bool visible(const Sphere &, float range) const;
+    bool box(const Bounds &, float radius) const;
+    bool visible(const Bounds &, float terrainRange, float modelRange) const;
 };
 Planes planes(const glm::mat4 &clip);
-bool sphere(const std::array<int64_t, 3> &center, float radius, glm::vec3 eye, const Planes &, float range);
-bool box(const Bounds &, glm::vec3 eye, const Planes &, float radius);
-bool visible(const Bounds &, glm::vec3 eye, const Planes &, float terrainRange, float modelRange);
 } // namespace scenevisibility

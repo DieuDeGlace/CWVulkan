@@ -313,6 +313,14 @@ individual feature documents.
   origin left by the preceding camera update, with no invented culled-cache repair.
   Part light binding uses the native full-header center before that mesh conversion.
   Large-coordinate, retained-cache/body-birth and explicit GPU binding checks pass.
+  Zone boxes, scenery spheres/fades, adaptive ranges and retained speech now share
+  the exact native CPU view/projection. Source-home metadata is converted to absolute
+  XY once; native game Z stays unshifted. Beam distances retain a fixed eye too.
+  Speech publication keeps its earlier cache boundary; GPU geometry still uses the
+  engine frame. Full GPU-origin precision and original visual acceptance remain open.
+  The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
+  establishes a version-qualified fresh context default1 and startup/reset gates;
+  it does not establish native first-frame state or change the engine's initial seed.
   Initial/factory ordering, reached reseeds,
   optional preview calls and broader same-thread consumer integration remain open.
   Unknown styles and independently untraced producers remain open; full native CRT and
@@ -548,7 +556,7 @@ individual feature documents.
   speech views use a native inverse rotation, including zero distance and poles.
   Derived numeric/probe tests, both-style Vulkan camera cases and the full image
   regression set pass. Full double-degree angle state/producers, native startup/
-  reset transfer, render-origin/FOV fidelity and input/GUI integration remain open. Shake reads the
+  reset transfer, full GPU render-origin/FOV fidelity and input/GUI integration remain open. Shake reads the
   client world's float simulation clock after its substeps. Ordinary world frames
   now consume the retained capped double interval, 16-ms steps and a narrowed
   float residual without whole-ms carry; the final zero step is not skipped.
