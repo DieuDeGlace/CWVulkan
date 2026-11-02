@@ -6,6 +6,31 @@
 #include <cstdio>
 #include <cstring>
 
+namespace {
+template <class T> std::vector<uint8_t> legacyBytes(const T &value) {
+    std::vector<uint8_t> bytes(sizeof value);
+    std::memcpy(bytes.data(), &value, sizeof value);
+    return bytes;
+}
+template <class T> plx::Chunk legacyChannel(const char *name, T initial, T final, int time) {
+    const std::string sequence = "location";
+    auto text = legacyBytes(int32_t(sequence.size()));
+    text.insert(text.end(), sequence.begin(), sequence.end());
+    return {name,
+            {},
+            {{"Attribute.frame", legacyBytes(initial), {}},
+             {"Attribute.frame", legacyBytes(initial), {}},
+             {"Attribute.frame", legacyBytes(final), {}},
+             {"Attribute.sequence",
+              {},
+              {{"Attribute.sequence.name", text, {}},
+               {"Attribute.sequence.key",
+                {},
+                {{"Attribute.sequence.key.frame", legacyBytes(int32_t(2)), {}},
+                 {"Attribute.sequence.key.time", legacyBytes(int32_t(time)), {}}}}}}}};
+}
+} // namespace
+
 int mapHistoryTests() {
     using namespace maphistory;
     int failures = 0;
@@ -162,6 +187,7 @@ int mapHistoryTests() {
             check(hooks == std::vector<int>{1, 2}, "ordinary DRAW_FIRST placement still precedes children");
             mutableRoot->widget = std::move(previousWidget);
             mutableRoot->onDraw = std::move(previousHook);
+            const int ownerGlyph = textNode->shape;
             mutableRoot->children.pop_back();
 
             // The location banner still uses the document-placement adapter. Its
@@ -185,6 +211,64 @@ int mapHistoryTests() {
             }
             check(masks > 0, "owner location banner emits real mask composition commands");
             check(animated, "owner location shape sequence changes emitted geometry or colors");
+
+            // Isolate synthetic channels in the real document adapter, retaining
+            // the owner's glyph/font binding. Restore the document before re-layout.
+            auto &document = *const_cast<plx::Document *>(left->doc);
+            const int location = document.find("location");
+            check(location >= 0, "owner document provides the placed location root");
+            if (location >= 0) {
+                const auto saved = document.nodes[(size_t)location];
+                const size_t nodeCount = document.nodes.size(), transformCount = document.transformations.size(),
+                             displayCount = document.displays.size();
+                document.transformations.push_back(
+                    {"Transformation", {legacyChannel("Transformation.translation", glm::vec2(0), glm::vec2(24, 0), 100)}});
+                document.displays.push_back({"Display",
+                                             {legacyChannel("Display.visibility", int32_t(1), int32_t(0), 200),
+                                              legacyChannel("Display.clipping", int32_t(0), int32_t(1), 100)}});
+                plx::Node probe;
+                probe.name = "name";
+                probe.shape = ownerGlyph;
+                probe.transformation = int(transformCount);
+                probe.display = int(displayCount);
+                document.nodes.push_back(probe);
+                document.nodes[(size_t)location] = {};
+                document.nodes[(size_t)location].name = "location";
+                document.nodes[(size_t)location].children = {int(nodeCount)};
+                const auto frame = [&](float time) {
+                    Hud::State state;
+                    state.locationName = "T";
+                    state.locationMs = time;
+                    std::vector<OverlayVertex> vertices;
+                    hud.draw(state, vertices);
+                    return vertices;
+                };
+                const auto initial = frame(0), moved = frame(100);
+                bool translated = initial.size() == moved.size();
+                size_t changed = 0;
+                for (size_t i = 0; translated && i < initial.size(); ++i) {
+                    if (std::memcmp(&initial[i], &moved[i], sizeof(OverlayVertex)) == 0)
+                        continue;
+                    auto aligned = moved[i];
+                    aligned.x -= 24 * scale;
+                    translated = std::abs(aligned.x - initial[i].x) < .001f && aligned.y == initial[i].y && aligned.u == initial[i].u &&
+                                 aligned.v == initial[i].v && aligned.r == initial[i].r && aligned.g == initial[i].g &&
+                                 aligned.b == initial[i].b && aligned.a == initial[i].a;
+                    ++changed;
+                }
+                check(translated && changed > 0, "legacy translation sequence moves only the emitted probe glyph");
+                const auto commands = hud.clipDraws().size();
+                check(commands >= 4, "legacy clipping sequence changes the actual layer command stream");
+                const auto hidden = frame(200);
+                document.nodes[nodeCount].flags |= plx::NODE_DISABLED;
+                const auto disabled = frame(0);
+                check(hidden.size() < initial.size() && same(hidden, disabled),
+                      "animated visibility and disabled-node admission both remove the legacy probe");
+                document.nodes[(size_t)location] = saved;
+                document.nodes.resize(nodeCount);
+                document.transformations.resize(transformCount);
+                document.displays.resize(displayCount);
+            }
         }
         renderer.shutdown();
     }

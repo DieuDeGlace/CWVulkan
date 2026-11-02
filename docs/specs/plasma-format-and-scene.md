@@ -527,9 +527,15 @@ visited with 0x08 removed.
    Exact pool/storage, own-callback order and distinct pixel modes are
    [ordinary clip layers §§1–6](steam-plasma-clip-layers.md). The generic outline
    does not assign identical alpha-clip behavior to all three modes.
-6. Blur node: its subtree is rendered to an offscreen target sized to the blurred bounds
-   and composited with a blur whose radius scales with the matrix (render spec). Bounds of a
-   blur node grow by `0.5 × (|column 0| + |column 1|) × blurRadius` (0x332300, 0x332fd0).
+6. Blur node: the bounded concrete traversal is
+   [blur surfaces §§1–6](steam-plasma-blur-surfaces.md). It retains fullscreen
+   targets, applies reduction in the projection, and performs four ordinary
+   surface copies whose concrete wrapper discards nominal blur inputs. A final
+   rebind clears source A before the final copy. The earlier “target sized to
+   blurred bounds / blur filter” summary is superseded; sampling and own-callback
+   limits remain explicit. The bounds helper's own growth by
+   `0.5 × (|column 0| + |column 1|) × blurRadius` (0x332300,0x332fd0) is separate
+   from traversal's subsequent projected-radius expansion.
 7. Own Widgets with flag0x40 use their retained surface when the engine's
    Widget-cache option bit is enabled; node flag0x400 is a separate fallback.
    Exact selection, dimensions, dirty/reset timing and concrete copy behavior are
@@ -1260,7 +1266,11 @@ files to the last byte, with every tag id resolving to a defined name.
    The concrete Widget wrapper discards prepared final source/scale/divisor
    arguments; scale/offset still affect redraw projection. Broader field setters,
    ownership/reset writers and failure domains remain explicitly open there.
-7. **Blur rendering** (radius scaling, pass count) is only outlined (2.3.1 step 6).
+7. **Blur rendering: bounded concrete consumer resolved.** Projected radius,
+   fullscreen allocation/reduced projection, pass count, discarded generic inputs
+   and final rebind clear/source selection are [blur surfaces §§1–6](steam-plasma-blur-surfaces.md).
+   Shape/bounds inputs, sampler provenance, external pool reset and invalid/failure
+   cases retain their stated limits; no Gaussian or universal pixel appearance is inferred.
 8. **The `PLA` reader** (0x3448a0) for the older format was not examined.
 9. **The no-widget-ancestor case of `Q`** (2.7.2) multiplies the parent's world matrix with
    a matrix that already contains the node's world (confirmed in the assembly at

@@ -511,9 +511,9 @@ class Hud {
     };
     // Draws a gui.plx node and its children: placed at `position` + `offset` (screen pixels,
     // the offset in interface units) when it is the top one.
-    void plasmaNode(std::vector<OverlayVertex> &out, int node, const glm::mat4 &parent, glm::vec4 tint,
-                    const PlasmaFrame &frame, const std::wstring *text, const glm::vec4 *color = nullptr,
-                    const float *hue = nullptr) const;
+    void plasmaNode(std::vector<OverlayVertex> &out, int node, const glm::mat4 &parent, glm::vec4 tint, const PlasmaFrame &frame,
+                    const std::wstring *text, const glm::vec4 *color = nullptr, const float *hue = nullptr,
+                    bool animateHidden = false) const;
     // the interface's code-made texts: a text the game makes in code (a stroked shape and a filled one
     // over it, white with a black stroke, in resource1.dat), placed by setPosition.
     plasma::TextStyle labelStyle(int size, int stroke, int flags, bool scalable) const;

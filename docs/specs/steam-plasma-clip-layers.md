@@ -278,15 +278,15 @@ is not implied by restoring that CPU current matrix.
 ## 8. Explicit remaining boundaries
 
 Widget/node surface cache policy, its scale/offset/divisor fields and all
-invalidation writers remain separate. Blur traversal, reduced-resolution
-copies and its concrete visual result are not specified here. The concrete
-surface's virtual+0x30/+0x38 both delegate through0x3925c0 to ordinary
-rectangle composition; that alone does not establish a Gaussian filter
-or prove the entire traversal has no blur effect.
+invalidation writers remain separate. The separately completed bounded
+[blur-surface contract §§1–6](steam-plasma-blur-surfaces.md) specifies fullscreen
+allocation/reduced projection, four concrete copies, final rebind clear and
+source selection. It preserves sampler/shape/callback limits rather than
+inferring a Gaussian or universal pixel appearance from virtual-method names.
 
 The subsequently completed bounded cache consumer/lifecycle contract is
 [surface caches §§1–6](steam-plasma-surface-caches.md). It retains its own
-explicit setter/ownership/reset/failure limits and does not close blur.
+explicit setter/ownership/reset/failure limits; the blur contract is separate.
 
 Sampler provenance in§6, external resize/reset routes for retained pool
 entries, invalid/failed resource handling and exact GPU sample/interpolation

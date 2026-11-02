@@ -207,8 +207,9 @@ This is not a census of every custom Widget override or invalidation caller.
 It preserves directly reached copy/destruction gates without inventing
 automatic recovery or replacing live queries with a geometry snapshot.
 
-Blur, including its reduced-resolution/repeated copies and visual sampling
-effect, requires its own complete contract. Cache policy does not establish
-a Gaussian filter. Sampler provenance and the separately cited conditional
+Blur's bounded traversal, fullscreen allocation/reduced projection, repeated
+copies and final rebind clear/source selection are specified separately in
+[blur surfaces §§1–6](steam-plasma-blur-surfaces.md). Cache policy does not
+establish a Gaussian filter. Sampler provenance and the separately cited conditional
 NULL-sampler API defaults remain clip layers§6.1, rather than a new
 cache-specific sampler assumption.

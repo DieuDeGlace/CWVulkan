@@ -935,3 +935,16 @@ caches, blur and projective GUI remain separate. The new cache specification
 was written by the independent native-only author and read as prose only;
 it is not yet implemented. No native implementation or owner assets enter the
 source or runtime packages.
+
+## Legacy HUD animation channels, 2026-11-02
+
+The implementer used Plasma scene sections2.2/2.6/2.7.9 and the existing project
+animation evaluator. Document-placement rendering now initializes and samples
+shape, Transformation and Display channels, propagates the absolute-seek force
+gate, and applies layout overrides to their own channels. Disabled nodes are
+excluded from emission. Synthetic movement, discrete clipping and visibility
+tracks use the actual owner HUD glyph binding at two scales; deliberately
+restoring shape-only sampling fails all six integration assertions. The corrected
+source is restored and rebuilt before validation. This does not establish
+persistent shared-keyable clock identity, cache/blur support or whole-GUI pixel
+parity. No original implementation, reconstruction or owner assets are packaged.

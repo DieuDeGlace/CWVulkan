@@ -547,8 +547,33 @@ static glm::vec4 inHue(glm::vec4 c, float hue) {
     return glm::vec4(k, c.a);
 }
 
-void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4 &parent, glm::vec4 tint,
-                     const PlasmaFrame &frame, const std::wstring *text, const glm::vec4 *color, const float *hue) const {
+// Sample document values through the same evaluator used by persistent instances.
+// Layout then overrides only the channels it owns, leaving animated siblings live.
+static plasma::SceneNode sampledHudNode(const plx::Document &doc, int index, const std::string &sequence, float milliseconds,
+                                        bool animateHidden = false) {
+    const auto &source = doc.nodes[(size_t)index];
+    plasma::SceneNode node;
+    node.doc = &doc;
+    node.source = index;
+    node.shape = source.shape;
+    node.flags = source.flags | (animateHidden ? plx::NODE_ALWAYS_ANIMATE : 0);
+    if (source.transformation >= 0 && source.transformation < (int)doc.transformations.size())
+        node.transform = plasma::transformationOf(doc.transformations[(size_t)source.transformation]);
+    if (source.display >= 0 && source.display < (int)doc.displays.size()) {
+        const auto display = plasma::displayOf(doc.displays[(size_t)source.display]);
+        node.visible = display.visible;
+        node.clips = display.clips;
+        node.fill = display.fill;
+        node.blurRadius = display.blurRadius;
+        node.displayFlags = display.flags;
+    }
+    if (!sequence.empty() && milliseconds >= 0 && node.playSequence(sequence))
+        node.setSequenceTime((int)milliseconds);
+    return node;
+}
+
+void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4 &parent, glm::vec4 tint, const PlasmaFrame &frame,
+                     const std::wstring *text, const glm::vec4 *color, const float *hue, bool animateHidden) const {
     const auto &fills = frame.fills;
     const plx::Node &n = gui.nodes[(size_t)index];
     if (auto it = frame.texts.find(n.name); it != frame.texts.end())
@@ -557,50 +582,36 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
         color = &it->second;
     if (auto it = frame.hues.find(n.name); it != frame.hues.end())
         hue = &it->second;
-    if (frame.hidden.count(n.name))
+    if (frame.hidden.count(n.name) || (n.flags & plx::NODE_DISABLED))
         return;
-    plasma::Display display;
-    if (n.display >= 0 && n.display < (int)gui.displays.size())
-        display = plasma::displayOf(gui.displays[(size_t)n.display]);
-    if (!display.visible)
+    const auto sampled = sampledHudNode(gui, index, frame.sequence, frame.sequenceMs, animateHidden);
+    if (!sampled.visible)
         return;
     // Blur and cache policy remain separate. Ordinary affine masks use the same
     // target/shape composition as live SceneNodes, never an averaged tint.
-    const bool clips = display.clips && (!(display.flags & plasma::DISPLAY_BLUR) || display.blurRadius <= 0);
+    const bool clips = sampled.clips && (!(sampled.displayFlags & plasma::DISPLAY_BLUR) || sampled.blurRadius <= 0);
     const glm::vec4 descendantsTint = tint;
     glm::mat4 m = parent;
     if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size()) {
-        const plx::Object &t = gui.transformations[(size_t)n.transformation];
-        glm::vec2 moved;
-        const glm::vec2 *translation = nullptr;
+        auto transform = sampled.transform;
         if (auto it = frame.shifts.find(n.name); it != frame.shifts.end())
-            moved = plasma::translation(t) + it->second, translation = &moved;
+            transform.translation += it->second;
         if (auto it = fills.find(n.name); it != fills.end()) {
-            glm::mat4 d(1);
-            d[0][0] = it->second;
-            m = m * plasma::transformation(t, translation, &d);
-        } else
-            m = m * plasma::transformation(t, translation);
+            transform.deformation = glm::mat4(1);
+            transform.deformation[0][0] = it->second;
+        }
+        m = m * transform.local();
     }
     if (n.display >= 0 && n.display < (int)gui.displays.size()) {
-        if (!plasma::displayVisible(gui.displays[(size_t)n.display]))
-            return;
         if (const auto colour = frame.displayFills.find(n.name); colour != frame.displayFills.end())
             tint *= colour->second;
         else
-            tint *= plasma::displayColor(gui.displays[(size_t)n.display]);
+            tint *= sampled.fill;
     }
     if (auto it = fills.find(n.name); it != fills.end() && it->second <= 0.0f)
         return; // (an empty fill, or a hidden charge bar)
     const auto shape = [&] {
-        plasma::SceneNode sampled;
-        sampled.doc = &gui;
-        sampled.shape = n.shape;
         const plx::Object *source = sampled.shapeObject();
-        if (source && !frame.sequence.empty() && frame.sequenceMs >= 0 && sampled.playSequence(frame.sequence)) {
-            sampled.setSequenceTime((int)frame.sequenceMs);
-            source = sampled.shapeObject();
-        }
         plasma::TextStyle style;
         if (source && plasma::textStyle(*source, gui.loaderFlags, style)) {
             if (text)
@@ -667,7 +678,7 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
     const auto children = [&] {
         for (int c : n.children)
             if (c >= 0 && c < (int)gui.nodes.size())
-                plasmaNode(out, c, m, descendantsTint, frame, text, color, hue);
+                plasmaNode(out, c, m, descendantsTint, frame, text, color, hue, animateHidden || (n.flags & plx::NODE_ALWAYS_ANIMATE));
     };
     const auto layer = [&](plasma::LayerCommand::Kind kind, uint32_t mode = 0) {
         layerCommands.push_back({kind, {out.size(), itemRequests.size()}, mode});
@@ -676,13 +687,13 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
         layer(plasma::LayerCommand::Kind::Push);
         children();
         layer(plasma::LayerCommand::Kind::Pop);
-        layer(plasma::LayerCommand::Kind::Mask, uint32_t(display.maskMode()));
+        layer(plasma::LayerCommand::Kind::Mask, uint32_t(sampled.maskMode()));
         shape();
         layer(plasma::LayerCommand::Kind::Mask);
         callback();
     } else {
         // Preserve this compatibility adapter's existing ordinary sprite-hook order.
-        if (!display.clips)
+        if (!sampled.clips)
             shape();
         callback();
         children();
@@ -700,12 +711,14 @@ bool Hud::plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::v
     glm::mat4 root(1);
     root[0][0] = root[1][1] = guiScale;
     glm::vec2 translation = position / guiScale + offset;
-    if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size())
-        translation -= plasma::pivot(gui.transformations[(size_t)n.transformation]);
     glm::mat4 m = root;
-    const glm::mat4 deformation = glm::scale(glm::mat4(1), glm::vec3(deform, deform, 1.0f));
-    if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size())
-        m = m * plasma::transformation(gui.transformations[(size_t)n.transformation], &translation, deform != 1.0f ? &deformation : nullptr);
+    if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size()) {
+        auto sampled = sampledHudNode(gui, index, frame.sequence, frame.sequenceMs);
+        sampled.transform.translation = translation - sampled.transform.pivot;
+        if (deform != 1.0f)
+            sampled.transform.deformation = glm::scale(glm::mat4(1), glm::vec3(deform, deform, 1.0f));
+        m = m * sampled.transform.local();
+    }
     const size_t first = out.size();
     plx::Node top = n;
     top.transformation = -1; // (applied above)
