@@ -110,6 +110,10 @@ layout and constant buffers. The VS outputs perspective-linear color and
 two coordinate pairs; no flat/centroid/sample interpolation override is
 declared.
 
+Exact geometric input reconstruction, preserved homogeneous W, the XY bias
+without a W factor and the deformation path's absence of homogeneous divides
+are [projective vertices §§1–3](steam-plasma-projective-vertices.md).
+
 Let **C** denote interpolated vertex RGBA after the Plasma VS multiplies
 the mesh's vertex RGBA by the supplied BaseColor RGBA. For an ordinary
 shape, **0x3913d0** supplies the owning node's own live Display.fillColor

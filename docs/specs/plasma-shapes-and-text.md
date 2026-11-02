@@ -485,6 +485,11 @@ colour r, g, b, a. 32-bit triangle-list indices.
 coordinate = mask matrix · p; texcoord = T applied to (u, v) (affine 2D). An optional widget
 deformation (companion 2.7.4) runs before World.
 
+The full homogeneous contract is [projective vertices §§1–3](steam-plasma-projective-vertices.md):
+geometric input is(X,Y,0,1), WORLD's W survives, the XY bias is not multiplied
+by W, and neither selected VS path performs a homogeneous divide before
+PROJECTION. CPU hit-test divisions are separate operations.
+
 **Pixel shader** (DXBC at 0x47f940):
 
 1. c = interpolated colour.

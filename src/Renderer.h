@@ -82,18 +82,20 @@ struct Camera {
     std::optional<steampoints::Point> nativeFixedLookAt; // separate XY render origin; never substitutes for the eye
 };
 
-// One corner of an interface quad, in screen pixels (origin top left).
+// Undivided GUI pixel coordinates (origin top left) and retained geometric Z/W.
+// Ordinary screen quads use W=1; projective geometry is divided by the rasterizer.
 struct OverlayVertex {
     float x = 0, y = 0, u = 0, v = 0;
     // Float channels in existing 0..255 API units retain sub-byte Plasma colors.
     float r = 0, g = 0, b = 0, a = 0;
+    float z = 0, w = 1;
     constexpr OverlayVertex() = default;
     template <class R, class G, class B, class A>
-    constexpr OverlayVertex(float px, float py, float texU, float texV, R red, G green, B blue, A alpha)
+    constexpr OverlayVertex(float px, float py, float texU, float texV, R red, G green, B blue, A alpha, float weight = 1, float depth = 0)
         : x(px), y(py), u(texU), v(texV), r(static_cast<float>(red)), g(static_cast<float>(green)), b(static_cast<float>(blue)),
-          a(static_cast<float>(alpha)) {}
+          a(static_cast<float>(alpha)), z(depth), w(weight) {}
 };
-static_assert(sizeof(OverlayVertex) == 32);
+static_assert(sizeof(OverlayVertex) == 40);
 
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block

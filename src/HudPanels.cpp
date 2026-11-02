@@ -250,7 +250,8 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
             const float u = white.x + 2.f, v = white.y + 2.f;
             for (size_t i = 0; i < drawn.positions.size(); ++i) {
                 const glm::vec4 c = drawn.colors[i] * 255.f;
-                out.push_back({drawn.positions[i].x, drawn.positions[i].y, u, v, c.r, c.g, c.b, c.a});
+                out.push_back(
+                    {drawn.positions[i].x, drawn.positions[i].y, u, v, c.r, c.g, c.b, c.a, drawn.positions[i].w, drawn.positions[i].z});
             }
         }
     };

@@ -706,11 +706,12 @@ bool Renderer::createOverlayPipeline(std::string &error) {
         {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(OverlayVertex, x)},
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(OverlayVertex, u)},
         {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(OverlayVertex, r)},
+        {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(OverlayVertex, z)},
     };
     VkPipelineVertexInputStateCreateInfo input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     input.vertexBindingDescriptionCount = 1;
     input.pVertexBindingDescriptions = &vb;
-    input.vertexAttributeDescriptionCount = 3;
+    input.vertexAttributeDescriptionCount = 4;
     input.pVertexAttributeDescriptions = attributes;
     VkPipelineInputAssemblyStateCreateInfo assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

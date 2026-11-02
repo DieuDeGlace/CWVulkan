@@ -948,3 +948,22 @@ restoring shape-only sampling fails all six integration assertions. The correcte
 source is restored and rebuilt before validation. This does not establish
 persistent shared-keyable clock identity, cache/blur support or whole-GUI pixel
 parity. No original implementation, reconstruction or owner assets are packaged.
+
+## Homogeneous Plasma drawing, 2026-11-02
+
+The implementer read the independently authored projective-vertex contract
+sections1–5, the GUI-option/standard-shape supplement sections1–3, the corrected
+scene2.7.4 and all updated blur/cache/clip/shape links. The native-only author
+inspected no engine, tests, exporter, owner data or captures. The engine retains
+undivided XY, geometric Z and W in its own overlay format, applies its existing
+pixel bias before projection, and uses the specified default/layer Z coefficients.
+Drawing's grouped descendant-to-owner mappings and four-component deformation
+are separate from the CPU picking queries. Existing ordinary GUI tree matrices
+supply drawing WORLD here; temporary cache/blur projection and native depth-stack
+state remain separate work. Synthetic scene geometry checks ordinary, Widget and
+descendant results; actual Vulkan cases check color interpolation, raw mask UVs
+and near/far admission. A deliberately flattened shader fails four assertions;
+the correct source is restored with a fresh timestamp and rebuilt before the
+complete checks. These are finite-input functional regressions, not original-game
+captures or a cross-GPU last-bit oracle. No native instructions, implementation,
+reconstruction or owner assets enter source or runtime packages.

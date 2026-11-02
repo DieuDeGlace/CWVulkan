@@ -523,7 +523,9 @@ float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &
                     c.r,
                     c.g,
                     c.b,
-                    c.a};
+                    c.a,
+                    s.w,
+                    s.z};
         }
         out.insert(out.end(), {v[0], v[1], v[2], v[1], v[3], v[2]});
     };
@@ -649,7 +651,7 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
                     if (hue)
                         c = inHue(c, *hue);
                     c *= 255.0f;
-                    out.push_back({s.x / s.w + plasma::DRAW_OFFSET, s.y / s.w + plasma::DRAW_OFFSET, u, v, c.r, c.g, c.b, c.a});
+                    out.push_back({s.x + plasma::DRAW_OFFSET, s.y + plasma::DRAW_OFFSET, u, v, c.r, c.g, c.b, c.a, s.w, s.z});
                 }
             }
         }
@@ -727,9 +729,9 @@ bool Hud::plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::v
     plasmaNode(out, temporary, m, glm::vec4(1), frame, nullptr);
     const_cast<plx::Document &>(gui).nodes.pop_back();
     if (centre && out.size() > first) {
-        glm::vec2 lo(out[first].x, out[first].y), hi = lo;
+        glm::vec2 lo = glm::vec2(out[first].x, out[first].y) / out[first].w, hi = lo;
         for (size_t i = first; i < out.size(); i++)
-            lo = glm::min(lo, glm::vec2(out[i].x, out[i].y)), hi = glm::max(hi, glm::vec2(out[i].x, out[i].y));
+            lo = glm::min(lo, glm::vec2(out[i].x, out[i].y) / out[i].w), hi = glm::max(hi, glm::vec2(out[i].x, out[i].y) / out[i].w);
         *centre = (lo + hi) * 0.5f;
     }
     return true;

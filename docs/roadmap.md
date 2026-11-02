@@ -54,13 +54,18 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.42 GUI image cases and owner callback
+  targets; the owner button shine is enabled.48 GUI image cases and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
   preserving independent placement/fill overrides and disabled-node admission.
   Owner location masks and synthetic movement/visibility/clipping channels pass
   at two GUI scales; the former shape-only sampling fails those checks.
-  Widget/node caches, blur, projective GUI and broader frontend pixel parity remain open.
+  Ordinary geometry now retains homogeneous XYZW through the pixel bias,
+  native GUI depth projection and perspective interpolation; drawing deformation
+  retains bind/inverse-bind W separately from divided CPU picking. Synthetic
+  owner/descendant geometry and Vulkan color/mask/depth checks pass, while the
+  flattened shader fails four image assertions. Widget/node caches, blur,
+  GUI depth-stack/state and broader frontend pixel parity remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

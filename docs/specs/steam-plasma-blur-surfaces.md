@@ -15,6 +15,8 @@ conditional public API defaults remain [clip layers §6.1](steam-plasma-clip-lay
 Visibility0 and disabled node flag4 reject drawing before this branch.
 Blur requires **engine+0x288 bit0x04**, **live Display.flags bit0x01**,
 an ordered positive live blur-radius value, and **traversal flag0x08 clear**.
+The actual startup constructor initializes the option word to7; its bounded
+writers/callers are [GUI options §§1–2](steam-plasma-options-and-shape-bounds.md).
 Children receive the traversal flags with0x08 removed, so disabling blur
 for this node does not permanently disable blur in descendants.
 
@@ -24,9 +26,11 @@ The following contract assumes the admitted branch runs, valid nonnull
 surfaces, valid bounds and ordinary finite intermediate values.
 
 At **0x330f7b–0x331009**, the routine obtains the current GUI matrix and,
-when an own shape exists, allows that shape's virtual+0x70 operation to
-adjust the matrix. Call the resulting float matrix M, indexed in the
-existing16-component CPU storage. The blur radius calculation is separate
+when an own shape exists, invokes its virtual+0x70 bounds-preparation hook
+with that matrix. The standard Generic/Smooth/Text classes leave this matrix
+unchanged, as resolved in [standard shape hooks §3](steam-plasma-options-and-shape-bounds.md#3-standard-authored-shape-virtual0x70-does-not-change-the-matrix).
+Call the matrix M, indexed in the existing16-component CPU storage.
+The blur radius calculation is separate
 from the bounds helper's own expansion rules:
 
 * Square **M[5] and M[1]**, add those float32 squares, then call sqrtf.
@@ -192,8 +196,9 @@ source. It does not authorize a replacement Gaussian, separable filter or
 assumed radius-weighted averaging. The generic algorithms and this backend's
 ordinary rectangle copies are different factual layers.
 
-The supplied GUI matrix after any shape adjustment, valid screen bounds,
-broader engine-option/radius producers, sampler bindings, external pool
+The supplied GUI matrix, valid screen bounds, nonstandard shape overrides,
+broader radius/external-option writers beyond the bounded option census,
+sampler bindings, external pool
 resize/reset paths, invalid/degenerate/nonfinite cases and exact GPU
 sampling/rounding remain explicit inputs or limits. Cache-hit/redraw and
 ownership behavior remain the cache contract. No original game was executed

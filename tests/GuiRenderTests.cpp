@@ -216,7 +216,52 @@ int guiRenderTests() {
     raw.projection[3][2] = raw.depthOffset = 16777216.f;
     check("raw-depth-visible", background, {raw}, {}, {64, 64}, {128, 128, 128});
     check("raw-depth-coefficient", background, {raw}, {preceding}, {64, 64}, {0, 0, 255});
+    // Identical screen-space triangles need different interpolated colors when
+    // their retained clip W differs. The flattened control keeps their coverage.
+    auto projected = background;
+    projected.insert(projected.end(),
+                     {{16, 16, 0, 0, 255, 0, 0, 255, 1}, {224, 32, 0, 0, 0, 0, 0, 255, 2}, {32, 224, 0, 0, 0, 0, 0, 255, 2}});
+    check("projective-colour", projected, {}, {}, {40, 40}, {168, 0, 0});
+    auto flattened = projected;
+    for (size_t i = background.size(); i < flattened.size(); ++i) {
+        flattened[i].x /= flattened[i].w;
+        flattened[i].y /= flattened[i].w;
+        flattened[i].w = 1;
+    }
+    check("projective-flattened-control", flattened, {}, {}, {40, 40}, {125, 0, 0});
+    auto clippedDepth = background;
+    auto depthQuad = red;
+    for (auto &vertex : depthQuad) {
+        vertex.a = 255;
+        vertex.z = 2;
+    }
+    clippedDepth.insert(clippedDepth.end(), depthQuad.begin(), depthQuad.end());
+    check("gui-positive-z-near-clip", clippedDepth, {}, {}, {64, 64}, {0, 0, 255});
+    for (size_t i = background.size(); i < clippedDepth.size(); ++i)
+        clippedDepth[i].z = -20000000;
+    check("gui-negative-z-far-clip", clippedDepth, {}, {}, {64, 64}, {0, 0, 255});
     using Layer = plasma::LayerCommand;
+    auto projectiveMask = background;
+    auto leftMask = background;
+    for (auto &vertex : leftMask) {
+        vertex.x = std::min(vertex.x, 48.f);
+        vertex.r = vertex.g = vertex.b = 255;
+    }
+    projectiveMask.insert(projectiveMask.end(), leftMask.begin(), leftMask.end());
+    for (size_t i = background.size(); i < projected.size(); ++i) {
+        auto vertex = projected[i];
+        vertex.r = 255;
+        projectiveMask.push_back(vertex);
+    }
+    const std::vector<Layer> projectiveCommands{
+        {Layer::Kind::Push, {6, 0}}, {Layer::Kind::Pop, {12, 0}}, {Layer::Kind::Mask, {12, 0}, 3}, {Layer::Kind::Mask, {15, 0}}};
+    check("projective-raw-mask-uv", projectiveMask, {}, {}, {40, 40}, {0, 0, 255}, 2, {}, projectiveCommands);
+    for (size_t i = 12; i < projectiveMask.size(); ++i) {
+        projectiveMask[i].x /= projectiveMask[i].w;
+        projectiveMask[i].y /= projectiveMask[i].w;
+        projectiveMask[i].w = 1;
+    }
+    check("projective-divided-mask-control", projectiveMask, {}, {}, {40, 40}, {255, 0, 0}, 2, {}, projectiveCommands);
     auto whiteMask = background;
     for (auto &vertex : whiteMask) {
         vertex.x -= .135f;

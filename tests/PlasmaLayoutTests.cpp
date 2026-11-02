@@ -92,6 +92,52 @@ int plasmaLayoutTests() {
                {Layer::Kind::Mask, {0, 0}, 2},
                {Layer::Kind::Pop, {3, 0}}};
     check(!plasma::layerDepth(invalid, {3, 0}), "sampling the current clip attachment is rejected");
+    // Exercise the rendering facade with synthetic geometry. Point queries keep
+    // their own divisions and must not provide the drawing's homogeneous values.
+    auto *projective = add(scene.root(), {}, false);
+    projective->animatedShape.emplace();
+    projective->animatedDrawing.emplace();
+    auto &mesh = *projective->animatedDrawing;
+    mesh.filled = true;
+    mesh.fill.vertices = {{{4, 2}}, {{5, 2}}, {{4, 3}}};
+    mesh.fill.indices = {0, 1, 2};
+    glm::mat4 world(1);
+    world[0][3] = .25f;
+    world[3][2] = -3;
+    projective->local = world;
+    plasma::Scene::Drawn drawn;
+    scene.drawShape(*projective, glm::vec4(1), drawn);
+    const auto close = [](float a, float b) { return std::abs(a - b) < .00001f; };
+    check(drawn.positions.size() == 3 && close(drawn.positions[0].x, 4 + plasma::DRAW_OFFSET) &&
+              close(drawn.positions[0].y, 2 + plasma::DRAW_OFFSET) && drawn.positions[0].z == -3 && drawn.positions[0].w == 2,
+          "ordinary drawing retains WORLD Z/W and applies an unscaled XY bias");
+    check(scene.deform(*projective, {4, 2}) == glm::vec2(2, 1), "point-query division remains separate from drawing");
+    projective->local = glm::mat4(1);
+    projective->widget.emplace();
+    auto &frame = *projective->widget;
+    frame.bindSize = frame.innerBindSize = {10, 10};
+    frame.frameSize = {20, 20};
+    frame.framePos = {2, 0};
+    frame.bind[0][3] = .25f;
+    frame.inverseBind = glm::inverse(frame.bind);
+    mesh.fill.vertices = {{{1, 2}}, {{2, 2}}, {{1, 3}}};
+    drawn = {};
+    scene.drawShape(*projective, glm::vec4(1), drawn);
+    check(drawn.positions.size() == 3 && close(drawn.positions[0].x, 4 + plasma::DRAW_OFFSET) &&
+              close(drawn.positions[0].y, 4 + plasma::DRAW_OFFSET) && close(drawn.positions[0].w, .25f),
+          "Widget drawing preserves bind W through piecewise deformation and inverse bind");
+    check(scene.deform(*projective, {1, 2}).x > 30, "the divided CPU query is a distinct observable control");
+    auto *descendant = add(*projective, {}, false);
+    descendant->animatedShape.emplace();
+    descendant->animatedDrawing = mesh;
+    glm::mat4 shifted(1);
+    shifted[3][0] = .25f;
+    descendant->local = shifted;
+    drawn = {};
+    scene.drawShape(*descendant, glm::vec4(1), drawn);
+    check(drawn.positions.size() == 3 && close(drawn.positions[0].x, 4.5f + plasma::DRAW_OFFSET) &&
+              close(drawn.positions[0].y, 4 + plasma::DRAW_OFFSET) && close(drawn.positions[0].w, .1875f),
+          "descendant drawing uses both grouped owner mappings before its separate WORLD");
     std::printf("Plasma layout: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

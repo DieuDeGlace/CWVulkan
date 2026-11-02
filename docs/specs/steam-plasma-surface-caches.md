@@ -17,6 +17,10 @@ bit0x02** and **own Widget+0x150 bit0x40**. This is not a cache selected
 merely because a Widget exists. It calls **0x32d890 at0x330bef** and uses
 the Widget's surface pointer **+0x58** when available.
 
+Native GUI startup initializes the engine option word to7. Its bounded
+direct writers and temporary bit0x01 restoration are
+[GUI options §§1–2](steam-plasma-options-and-shape-bounds.md).
+
 If no Widget surface is selected, **node+0x80 bit0x400** can select the
 node's separate surface **+0x88**. That node branch does not require the
 Widget-cache engine-option bit. If its surface is absent, it creates one

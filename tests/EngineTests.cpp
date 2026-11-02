@@ -9800,7 +9800,9 @@ int main(int argc, char **argv) {
         const int W = (int)(after.x + 60), H = (int)(after.y + 60);
         std::vector<glm::vec4> img((size_t)W * H, glm::vec4(0.25f, 0.25f, 0.3f, 1));
         for (size_t k = 0; k + 2 < drawn.positions.size(); k += 3) {
-            const glm::vec2 *q = &drawn.positions[k];
+            glm::vec2 q[3];
+            for (size_t corner = 0; corner < 3; ++corner)
+                q[corner] = glm::vec2(drawn.positions[k + corner]) / drawn.positions[k + corner].w;
             const glm::vec4 *c = &drawn.colors[k];
             const float area = (q[1].x - q[0].x) * (q[2].y - q[0].y) - (q[2].x - q[0].x) * (q[1].y - q[0].y);
             if (area == 0)

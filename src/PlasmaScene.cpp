@@ -698,13 +698,30 @@ void Scene::placeWidget(SceneNode &n, glm::vec2 offset, glm::vec2 delta) {
 
 namespace {
 
-// The nine-slice stretch of a node's points by its owner widget (spec 2.7.4), as the engine's
-// vertex shader applies it: only while the inner rectangle's size differs from its design size.
+// Widget stretch has distinct drawing and point-query paths. The vertex-stage
+// contract retains all four components; CPU picking divides at its own boundaries.
 struct Deformer {
-    glm::mat4 world{1}, toWidget{1}, fromWidget{1};
+    glm::mat4 world{1}, toWidget{1}, fromWidget{1}, toLocal{1};
     glm::vec2 innerBindPos{0}, innerBindSize{0}, innerPosition{0}, innerSize{0};
     bool active = false;
 
+    glm::vec4 drawingPoint(glm::vec2 p) const {
+        glm::vec4 local(p, 0, 1);
+        if (active) {
+            glm::vec4 bound = toWidget * local;
+            for (int axis = 0; axis < 2; ++axis) {
+                const float difference = innerSize[axis] - innerBindSize[axis];
+                const float upper = innerBindPos[axis] + innerBindSize[axis];
+                const float fraction = bound[axis] < innerBindPos[axis] ? 0.f
+                                       : bound[axis] < upper            ? (bound[axis] - innerBindPos[axis]) / innerBindSize[axis]
+                                                                        : 1.f;
+                const float base = (bound[axis] + innerPosition[axis]) - innerBindPos[axis];
+                bound[axis] = base + fraction * difference;
+            }
+            local = toLocal * bound;
+        }
+        return world * local;
+    }
     glm::vec2 operator()(glm::vec2 p) const {
         if (!active)
             return apply(world, p);
@@ -751,8 +768,11 @@ Deformer deformerOf(const Scene &scene, const SceneNode &n) {
     const Widget &w = *owner->widget;
     const glm::mat4 ownerWorld = scene.matrix(*owner);
     d.active = true;
-    d.toWidget = w.bind * glm::inverse(ownerWorld) * d.world;
+    d.toWidget = (w.bind * glm::inverse(ownerWorld)) * d.world;
     d.fromWidget = ownerWorld * w.inverseBind;
+    // Independently supplied inverse mapping, not inverse(toWidget). Keep the
+    // grouped products and the later drawing WORLD multiplication separate.
+    d.toLocal = (glm::inverse(d.world) * ownerWorld) * w.inverseBind;
     d.innerBindPos = w.innerBindPos, d.innerBindSize = w.innerBindSize;
     d.innerPosition = w.innerPosition(), d.innerSize = w.innerSize();
     return d;
@@ -801,7 +821,7 @@ void Scene::drawShape(const SceneNode &n, glm::vec4 tint, Drawn &out) const {
             if (i >= t->vertices.size())
                 continue;
             const Vertex &v = t->vertices[i];
-            out.positions.push_back(deformer(v.position) + glm::vec2(DRAW_OFFSET));
+            out.positions.push_back(deformer.drawingPoint(v.position) + glm::vec4(DRAW_OFFSET, DRAW_OFFSET, 0, 0));
             out.colors.push_back(v.color * tint);
         }
     }

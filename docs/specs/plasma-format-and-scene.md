@@ -936,8 +936,14 @@ Points left of / above the inner rectangle move with its near edge, points beyon
 with its far edge, points inside are spread linearly. The inverse mapping (for hit
 testing) is the Deformer's second slot, 0x32d2e0. The GPU path (0x3913d0) enables
 deformation only when `Ds` differs from `is` (a pure move of the inner rectangle is not
-deformed there) and passes `B·invWorld(widget node)`, its inverse, `ip`, `is`, `Dp`, `Ds`
-as shader constants.
+deformed there). Its complete descendant-to-owner uploads are
+`(B·invWorld(widget node))·world(N)` and
+`(invWorld(N)·world(widget node))·stored B⁻¹`, followed by `ip`, `is`, `Dp`, `Ds`.
+The older abbreviated GPU product omitted `world(N)` and is superseded by
+[projective vertices §4](steam-plasma-projective-vertices.md#4-ordinary-shape-producer-descendant-to-owner-mappings).
+Current drawing WORLD is uploaded separately; GPU deformation does not insert
+the CPU form's homogeneous divides. Ordinary/layer projection Z/W is specified
+in that supplement§5.
 
 #### 2.7.5 Placement on parent resize (0x32bd70, widget class slot 0x48)
 

@@ -258,10 +258,10 @@ class Scene {
     // Called after a widget's size changes, by node.
     std::function<void(SceneNode &)> onResized;
 
-    // The triangles of a node's shape in window pixels: its fill, then its stroke, through its
-    // matrix, stretched by its owner widget when that is resized; coloured by the tint.
+    // Fill then stroke in homogeneous window coordinates, with the pixel bias
+    // applied to XY before projection. Picking uses its separate divided queries.
     struct Drawn {
-        std::vector<glm::vec2> positions;
+        std::vector<glm::vec4> positions;
         std::vector<glm::vec4> colors;
     };
     void drawShape(const SceneNode &n, glm::vec4 tint, Drawn &out) const;
