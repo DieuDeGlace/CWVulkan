@@ -40,6 +40,11 @@ const Crt &crt() {
 
 } // namespace
 
+int nextRandom(uint32_t &state) {
+    state = state * 214013u + 2531011u;
+    return int((state >> 16) & 0x7fff);
+}
+
 float cosf(float x) { return crt().cos(x); }
 float sinf(float x) { return crt().sin(x); }
 float asinf(float x) { return crt().asin(x); }

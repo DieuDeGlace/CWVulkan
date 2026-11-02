@@ -299,6 +299,11 @@ individual feature documents.
   Ordinary consumers0/3/4/6/7/8 now follow the independent style supplement:
   gravity/angle/pass-set differences, descending6 contact retirement, still3,
   owner note.cub7, separate geometry shrinking and per-draw shininess reset.
+  World work, body/burst births and pose sparks now share the verified CRT transition
+  in their engine execution role. Burst expansion/update precedes scene pose; AI
+  retains a separate state. Arithmetic and actual state61 spark-continuation cases
+  pass. Initial states, reached reseeds, exact pose admission/visitation and broader
+  same-thread consumer integration remain open.
   Unknown styles and independently untraced producers remain open; full native CRT and
   broader visual/peer acceptance remain open. Other object
   families and listening comparisons also remain. The independently traced

@@ -20,6 +20,7 @@
 #include "NativeBuffs.h"
 #include "ResidentPass.h"
 #include "ResidentEffects.h"
+#include "NativeCrt.h"
 
 #include <cmath>
 #include <cstdio>
@@ -2118,10 +2119,7 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
     w.objectKey = [](int zx, int zy, int i) {
         return ((uint64_t)(uint32_t)zx << 40) ^ ((uint64_t)(uint32_t)zy << 16) ^ (uint64_t)(uint32_t)i;
     };
-    w.rand = [this] { // MSVC's rand()
-        aiRand = aiRand * 214013u + 2531011u;
-        return (int)((aiRand >> 16) & 0x7fff);
-    };
+    w.rand = [this] { return nativecrt::nextRandom(aiRand); };
     w.clock = [this] { return aiClock; };
     if (roadTravel)
         advanceTrips(ew, dt);
@@ -2169,71 +2167,70 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
         return it == models.end() ? nullptr : &it->second;
     };
     std::vector<nativepose::Draw> draws;
-    static std::mt19937 poseRand(99);
     drawn = 0;
     auto drawOne = [&](Creature &cr, bool isPlayer) {
-            worldgen::CreatureRecord &r = cr.record;
-            const glm::vec3 at = ew.toLocal(reinterpret_cast<const int64_t *>(&r[worldgen::creature::POSITION]));
-            if (glm::length(glm::vec2(at - playerLocal)) > range)
-                return;
-            // A dead creature is not drawn; as it dies its parts burst into voxels (main.cpp).
-            const int64_t id = get<int64_t>(r, worldgen::creature::ID);
-            if (!(get<float>(r, worldgen::creature::HEALTH) > 0.0f))
-                return;
-            // Drawn position/orientation were prepared before input for the whole World.
-            // Visibility and mesh drawing do not rerun that interpolation phase.
+        worldgen::CreatureRecord &r = cr.record;
+        const glm::vec3 at = ew.toLocal(reinterpret_cast<const int64_t *>(&r[worldgen::creature::POSITION]));
+        if (glm::length(glm::vec2(at - playerLocal)) > range)
+            return;
+        // A dead creature is not drawn; as it dies its parts burst into voxels (main.cpp).
+        const int64_t id = get<int64_t>(r, worldgen::creature::ID);
+        if (!(get<float>(r, worldgen::creature::HEALTH) > 0.0f))
+            return;
+        // Drawn position/orientation were prepared before input for the whole World.
+        // Visibility and mesh drawing do not rerun that interpolation phase.
 
-            nativepose::Call call;
-            call.dt = (float)dtMs;
-            call.cameraX = -ew.originDotsX();
-            call.cameraY = -ew.originDotsY();
-            call.nowMs = nowMs;
-            call.rand = [] { return (int)(poseRand() & 0x7fff); };
-            const nativerules::HasBuff has = [&](int t) {
-                for (const auto &b : cr.side.buffs)
-                    if (b[0] == (uint8_t)t)
-                        return true;
-                return false;
-            };
-            call.hasBuff = has;
-            call.sparks = &cr.sparks;
-            draws.clear();
-            // The world's draw sets the pose state and its clock from the ability right before
-            // posing a creature it draws (creature-pose.md §12); one culled above keeps them.
-            if (get<float>(r, worldgen::creature::HEALTH) > 0.0f)
-                nativepose::setPoseState(r.data());
-            nativepose::PreparedSprites prepared{};
-            nativepose::pose(r.data(), call, lookup, &draws, &prepared);
-            for (size_t slot = 0; slot < prepared.size(); ++slot)
-                cr.preparedModels[slot] = prepared[slot] ? int(reinterpret_cast<intptr_t>(prepared[slot]->user)) : -1;
-            // A weapon's effect (0xeec50) stands for the spirit cubes set into the weapon
-            // (creature-pose-items.md §9.1): plain cube draws, none for a weapon without spirits.
-            const size_t posed = draws.size();
-            for (size_t k = 0; k < posed; k++)
-                if (draws[k].kind == nativepose::WEAPON_EFFECT_DRAW)
-                    nativepose::spiritDraws(draws[k], draws);
-            const int hairModel = get<int16_t>(r, 0x92); // the appearance's hair (+0x1a)
-            for (const nativepose::Draw &d : draws) {
-                if (!d.model || d.kind == nativepose::WEAPON_EFFECT_DRAW)
-                    continue;
-                const int id = (int)reinterpret_cast<intptr_t>(d.model->user);
-                // The hair takes the appearance's colour, a spirit cube (the white cube.cub) its
-                // material's: both are the model recoloured by the draw's tint.
-                const bool recoloured = id == hairModel || id == SPIRIT_CUBE_MODEL;
-                const auto *look = isPlayer && id == hairModel && playerHairStyle.dual ? &playerHairStyle : nullptr;
-                const int m = worldModel(world, id, d.tint, recoloured, look);
-                const uint32_t mesh = world.modelMesh(m);
-                if (!mesh)
-                    continue;
-                glm::mat4 game;
-                std::memcpy(&game[0][0], d.matrix, sizeof d.matrix); // the game's row vectors are glm's columns
-                const glm::vec3 size = world.modelSize(m);
-                glm::mat4 place = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
-                                  glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
-                out.push_back({mesh, place, 0, 0, true});
-                playerPartsDrawn += isPlayer;
-            }
-            drawn += !isPlayer;
+        nativepose::Call call;
+        call.dt = (float)dtMs;
+        call.cameraX = -ew.originDotsX();
+        call.cameraY = -ew.originDotsY();
+        call.nowMs = nowMs;
+        call.rand = [this] { return drawWorldRandom(); };
+        const nativerules::HasBuff has = [&](int t) {
+            for (const auto &b : cr.side.buffs)
+                if (b[0] == (uint8_t)t)
+                    return true;
+            return false;
+        };
+        call.hasBuff = has;
+        call.sparks = &cr.sparks;
+        draws.clear();
+        // The world's draw sets the pose state and its clock from the ability right before
+        // posing a creature it draws (creature-pose.md §12); one culled above keeps them.
+        if (get<float>(r, worldgen::creature::HEALTH) > 0.0f)
+            nativepose::setPoseState(r.data());
+        nativepose::PreparedSprites prepared{};
+        nativepose::pose(r.data(), call, lookup, &draws, &prepared);
+        for (size_t slot = 0; slot < prepared.size(); ++slot)
+            cr.preparedModels[slot] = prepared[slot] ? int(reinterpret_cast<intptr_t>(prepared[slot]->user)) : -1;
+        // A weapon's effect (0xeec50) stands for the spirit cubes set into the weapon
+        // (creature-pose-items.md §9.1): plain cube draws, none for a weapon without spirits.
+        const size_t posed = draws.size();
+        for (size_t k = 0; k < posed; k++)
+            if (draws[k].kind == nativepose::WEAPON_EFFECT_DRAW)
+                nativepose::spiritDraws(draws[k], draws);
+        const int hairModel = get<int16_t>(r, 0x92); // the appearance's hair (+0x1a)
+        for (const nativepose::Draw &d : draws) {
+            if (!d.model || d.kind == nativepose::WEAPON_EFFECT_DRAW)
+                continue;
+            const int id = (int)reinterpret_cast<intptr_t>(d.model->user);
+            // The hair takes the appearance's colour, a spirit cube (the white cube.cub) its
+            // material's: both are the model recoloured by the draw's tint.
+            const bool recoloured = id == hairModel || id == SPIRIT_CUBE_MODEL;
+            const auto *look = isPlayer && id == hairModel && playerHairStyle.dual ? &playerHairStyle : nullptr;
+            const int m = worldModel(world, id, d.tint, recoloured, look);
+            const uint32_t mesh = world.modelMesh(m);
+            if (!mesh)
+                continue;
+            glm::mat4 game;
+            std::memcpy(&game[0][0], d.matrix, sizeof d.matrix); // the game's row vectors are glm's columns
+            const glm::vec3 size = world.modelSize(m);
+            glm::mat4 place = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
+                              glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
+            out.push_back({mesh, place, 0, 0, true});
+            playerPartsDrawn += isPlayer;
+        }
+        drawn += !isPlayer;
     };
     for (auto &[zone, list] : zones)
         for (Creature &cr : list)
@@ -2708,10 +2705,7 @@ void SpawnedCreatures::layItem(ExtractedWorld &ew, const uint8_t *item, const in
 }
 
 int SpawnedCreatures::drawWorldRandom() {
-    randState ^= randState << 13;
-    randState ^= randState >> 17;
-    randState ^= randState << 5;
-    return int(randState & 0x7fff);
+    return nativecrt::nextRandom(randState);
 }
 
 void SpawnedCreatures::noticeDeathVisual(int64_t id) {

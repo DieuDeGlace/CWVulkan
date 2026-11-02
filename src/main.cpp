@@ -6368,8 +6368,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             std::to_string((int)p.y) + " " + std::to_string((int)p.z) + ", ground " +
                             std::to_string((int)groundAt(p.x, p.y)));
             }
-            spawned.draw(extractedWorld, world, ms, (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(),
-                         player.position, renderSettings.fogDistance, opaque);
+            // Native burst births/update precede scene-pose spark initialization.
+            // Both continue the main-role stream already used by World/body work.
+            if (!serverMode) {
+                burstParticles.append(spawned.events().particles, [&] { return spawned.drawWorldRandom(); });
+                burstParticles.update(int32_t(gamemath::frameMilliseconds(frameMs)),
+                                      [&](int32_t x, int32_t y, int32_t z) { return extractedWorld.gameBlock(x, y, z)[4]; });
+            }
+            spawned.draw(extractedWorld, world, ms,
+                         (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(), player.position,
+                         renderSettings.fogDistance, opaque);
             // Deaths: the body bursts into the voxels it was drawn with, and a kill by the
             // player pays XP like the recorded monsters'. What they dropped (0x2a6860), coins
             // included, lies on the ground as the game's ground items.
@@ -6629,8 +6637,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             // The end of the frame: what this player caused goes to its host (with its record,
             // at most every 32 ms), and the client world's lists start empty again.
-            if (!serverMode)
-                burstParticles.append(spawned.events().particles, [&] { return spawned.drawWorldRandom(); });
             session.endFrame(nowMs);
             spawned.events() = cwnet::WorldEvents{};
             static double netLogged = 0; // for the log: who this player is and whom it sees
@@ -6676,8 +6682,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         transientLights.advance(frameMs); // births age before their first scene collection
 
         if (!serverMode && useExtracted) {
-            burstParticles.update(int32_t(gamemath::frameMilliseconds(frameMs)),
-                                  [&](int32_t x, int32_t y, int32_t z) { return extractedWorld.gameBlock(x, y, z)[4]; });
             const std::array<int64_t, 2> offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
             for (const auto &particle : burstParticles.states()) {
                 if (!nativeparticles::supportedParticle(particle))

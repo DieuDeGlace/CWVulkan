@@ -189,7 +189,7 @@ bool System::step(Particle &p, int32_t milliseconds, const BlockType &block) {
     if (!p.collision && !descending) {
         for (int axis = 0; axis < 3; ++axis)
             p.position[axis] = gamemath::addFixed(p.position[axis], int64_t(displacement[axis] * 65536.0f));
-        turn(p, seconds); // ordinary collision-off particles really advance twice
+        turn(p, seconds); // free motion adds its own advance after the style-dependent first turn
         return false;
     }
     const float horizontal = descending ? displacement.y * displacement.y + displacement.x * displacement.x

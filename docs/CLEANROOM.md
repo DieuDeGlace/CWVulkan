@@ -499,3 +499,19 @@ that every catalog cache or generator helper is immutable. Full native host ligh
 scheduling and original-peer/image acceptance remain separate audits; no raw-light
 reset or guessed native solve is introduced by this ownership change. Synthetic
 roof/sea records cover both styles without adding owner data to either package.
+
+
+## Shared CRT transition and scene sparks, 2026-11-01
+
+The implementer read steam-main-crt-stream.md, steam-host-crt-stream.md and the
+existing body/burst/pose-item contracts, then engine sources only. NativeCrt adds
+the established unsigned32 transition and15-bit return; it selects no seed or
+process/thread state. The engine's logical main and host execution roles retain
+separate states, with body/burst/scene-pose draws sharing their relevant World
+provider. AI retains its separate state and prior transition. The legacy numeric
+initial choices remain explicitly engine choices; native entry/first-frame values
+are not inferred from seed123 or the arithmetic initialization reference. No system
+CRT implementation was inspected or copied. Known subphase/wrap values and actual
+body/burst/pose-spark consumer continuity are tested with synthetic data. Complete
+reseed, thread/task assignment, pose admission/visitation and whole-frame consumer
+closure remain separate work; no startup or rendered-particle parity is asserted.

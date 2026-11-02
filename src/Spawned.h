@@ -82,8 +82,8 @@ class SpawnedCreatures {
     // The world's event lists (world+0x90 .. +0x170): what its steps made since they were last
     // emptied. The host hands them to its guests each tick; a client sends its own player's.
     cwnet::WorldEvents &events() { return worldEvents; }
-    // Shared engine World stream, also consumed by local ordinary burst expansion.
-    // The legacy provider is not a claim of native CRT stream parity.
+    // Execution-role stream: World work, body/burst births and scene-pose sparks.
+    // Initial state and all native reset/consumer integration remain unverified.
     int drawWorldRandom();
     // Host tick step 5 (netcode-roles.md §2): the sounds, damage numbers (applied by 0x29dcf0),
     // buffs and effect objects the guests caused.
@@ -508,7 +508,7 @@ class SpawnedCreatures {
     hair::Style playerHairStyle;
     std::map<std::tuple<int, int, int, int, bool, std::array<uint32_t, 3>>, int> tinted; // model, RGB, recoloring, optional gradient
     uint32_t drawn = 0;
-    uint32_t randState = 0x12345678;       // rand() for the creatures' update
+    uint32_t randState = 0x12345678;       // retained engine initial state, not a native first-frame claim
     std::map<int64_t, nativeai::Entry> ai; // the AI's record of each creature
     zonestates::ZoneStates zoneStates;     // the zones in memory: their objects, ground items and block changes
     const std::set<nativesaves::Cell> *usedCells = nullptr;
@@ -547,7 +547,7 @@ class SpawnedCreatures {
     nativecontrol::State controlState;                    // the controller's statics
     double aiCarried = 0;                                 // ms since the AI's last tick
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
-    uint32_t aiRand = 1;                                  // its rand(): the C runtime's, per thread, from 1
+    uint32_t aiRand = 1;                                  // separate engine AI state; native worker-entry state is unverified
     float dayMs = 0;                                      // the time of day (world+0xc) at the last tick
     float elapsedWorldMs = 0;                             // float world+0x440, separate from AI/GUI/calendar clocks
     std::function<bool(const nativeupkeep::Hit &, const uint8_t *)> playerHit;

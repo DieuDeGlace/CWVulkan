@@ -1,5 +1,8 @@
 #include "NativeParticles.h"
 #include "GameMath.h"
+#include "NativeCrt.h"
+#include "NativePose.h"
+#include "Spawned.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -251,6 +254,62 @@ int particleTests() {
             check(supportedParticle(p) && matrix(p, {}, {2, 4, 6})[0][0] == 0,
                   "lifetime equality retains a zero-scale draw rather than inventing an age rejection");
         }
+    }
+    {
+        uint32_t state = 123;
+        for (int i = 0; i < 1037; ++i)
+            nativecrt::nextRandom(state);
+        check(state == 0x4deb0e3e && nativecrt::nextRandom(state) == 12519,
+              "CRT transition matches the independently counted World-initialization subphase, not a first-frame seed");
+        state = 0xffffffff;
+        check(nativecrt::nextRandom(state) == 35 && state == 0x235ac6, "CRT state wraps unsigned32 before extracting bits16..30");
+    }
+    {
+        SpawnedCreatures world, separateRole;
+        // Explicit engine initial-state fixture; native first-frame state is unverified.
+        for (const int expected : {13289, 23359, 19469, 24737})
+            check(world.drawWorldRandom() == expected, "World work advances the explicit engine execution-role stream");
+        int draws = 0;
+        const auto random = [&] {
+            ++draws;
+            return world.drawWorldRandom();
+        };
+        System system;
+        const std::array<uint8_t, 3> rgb{10, 20, 30};
+        BodyPart body;
+        body.dimensions = {1, 1, 1};
+        body.rgb = rgb;
+        system.prependBody(body, random);
+        check(draws == 6 && system.states().size() == 1 && system.states().front().age == -229,
+              "admitted body birth continues the preceding World draws");
+        const std::array<Burst, 1> records{burst(2, 1)};
+        system.append(records, random);
+        system.update(0, air);
+        check(draws == 18 && system.states().size() == 2, "ordinary expansion continues body draws and update adds none");
+
+        std::array<uint8_t, nativepose::CREATURE_SIZE> record{};
+        const auto put = [&](size_t offset, const auto &value) { std::memcpy(record.data() + offset, &value, sizeof value); };
+        put(0xc44, int32_t(0x61));
+        for (size_t offset = 0x84; offset <= 0x8c; offset += 4)
+            put(offset, 2.0f);
+        for (size_t offset = 0xa0; offset <= 0xc0; offset += 4)
+            put(offset, 1.0f);
+        nativepose::Model model;
+        model.size[0] = model.size[1] = model.size[2] = 2;
+        nativepose::Models models;
+        models.byId = [&](int id) { return id >= 0 ? &model : nullptr; };
+        nativepose::Sparks sparks;
+        nativepose::Call call;
+        call.rand = random;
+        call.sparks = &sparks;
+        nativepose::pose(record.data(), call, models, nullptr);
+        const float x = (float(5209) * 20.0f) / 32767.0f - 10.0f;
+        const float y = (float(6317) * 20.0f) / 32767.0f - 10.0f;
+        check(draws == 30 && sparks.size() == 6 && sparks.front() == std::array<float, 3>{x, y, 20},
+              "real state61 pose consumes its twelve shared draws after body/burst births");
+        nativepose::pose(record.data(), call, models, nullptr);
+        check(draws == 30 && world.drawWorldRandom() == 10850, "later spark updates retain the stream for subsequent frame work");
+        check(separateRole.drawWorldRandom() == 13289, "separate engine host/client execution-role states do not merge");
     }
     std::printf("Ordinary burst particles: %s\n", failures ? "FAIL" : "PASS");
     return failures;

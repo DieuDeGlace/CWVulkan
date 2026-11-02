@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- World work and local body/burst/scene-pose randomness now use the independently
+  specified CRT32-bit transition and15-bit return. Pose sparks no longer use a
+  static unrelated Mersenne Twister. Ordinary expansion and its once-frame update
+  now precede scene pose, so spark initialization continues earlier World/body/
+  burst draws. AI keeps its distinct engine state and unchanged CRT transition.
+  The helper chooses no seed or thread; engine role states retain their earlier
+  numeric initial choices, explicitly unverified as native entry/first-frame data.
+  A known1037-draw initialization subphase and overflow test check the arithmetic;
+  actual body, burst and state61 pose consumers check continued draws, zero-draw
+  updates and separate execution-role state. First-frame state, all reached
+  crafting/stock/daily/pet resets, exact pose admissions/visitation and remaining
+  same-thread consumers are not closed by this result. No owner data is packaged.
+  All five targets build; focused particles/body and full CPU/owner checks pass,
+  with48 shader,2 camera,20 GUI,6 map and shared-water/Alpha-scenery image results.
+  Both no-save combat styles exit0 with viewed frames and unchanged character data.
+  Short hidden combat FPS samples vary substantially and are not a controlled
+  performance comparison; extended profiling and the existing scene/image gates
+  remain open.
+
 - Combined sessions now own a separate host terrain reader, following the native
   allocation/local-byte-delivery ownership contract. Source metadata is copied;
   loaded identities, columns, model/light caches, history, queues and worker
