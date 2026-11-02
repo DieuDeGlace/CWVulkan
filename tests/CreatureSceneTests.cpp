@@ -73,6 +73,23 @@ int creatureSceneTests() {
     {
         Renderer renderer;
         renderer.initHeadless(RenderSettings{});
+        Camera camera{{0, 0, 1}, {0, 1, 1}};
+        camera.nativeFixedEye = steampoints::Point{INT64_MAX - 128, int64_t(1) << 60, 65536};
+        camera.nativeFixedLookAt = *camera.nativeFixedEye;
+        (*camera.nativeFixedLookAt)[1] += 20 * 65536;
+        renderer.prepareScene(camera, Lighting{}, 0);
+        check(renderer.steamRenderOffset() == std::array<int64_t, 2>{-(*camera.nativeFixedLookAt)[0], -(*camera.nativeFixedLookAt)[1]},
+              "scene origin negates exact look-at rather than the final eye or rounded renderer target");
+        auto point = *camera.nativeFixedEye;
+        point[1] += 4 * 65536;
+        check(renderer.steamSphereVisible(point, 0, 5),
+              "sphere distance uses the final eye while planes consume look-at-relative coordinates at large positions");
+        point[1] -= 8 * 65536;
+        check(!renderer.steamSphereVisible(point, 0, 5), "look-at-relative planes still reject a point behind the eye");
+    }
+    {
+        Renderer renderer;
+        renderer.initHeadless(RenderSettings{});
         Assets assets;
         Terrain terrain;
         ExtractedWorld blocks;
@@ -98,10 +115,31 @@ int creatureSceneTests() {
             return visits.back() != 10;
         };
         std::vector<DrawItem> draws;
+        view.renderOffset = {-89 * 65536, 4 * 65536};
         creatures.draw(blocks, scene, 0, 0, view, draws);
         check(visits == std::vector<int64_t>{90, 10, 70}, "real draw visits registration order rather than ID or zone order");
         check(creatures.record(90)[0x1500] == 1 && creatures.record(10)[0x1500] == 0 && creatures.record(70)[0x1500] == 1,
               "culled records retain an unprepared cache instead of executing the pose");
+        std::array<uint8_t, sizeof(glm::mat4)> cachedHead{};
+        std::memcpy(cachedHead.data(), creatures.record(70) + 0xe30, cachedHead.size());
+        const auto originAt = [&](int64_t id) {
+            std::array<int64_t, 2> origin;
+            std::memcpy(origin.data(), creatures.record(id) + 0x1508, sizeof origin);
+            return origin;
+        };
+        check(originAt(90) == view.renderOffset && originAt(70) == view.renderOffset,
+              "normal preparation records the current scene origin rather than the extraction home");
+        const auto oldOffset = view.renderOffset;
+        view.renderOffset = {-88 * 65536, 5 * 65536};
+        visits.clear();
+        view.visible = [&](const auto &sphere) {
+            visits.push_back(sphere.centre[0] / 65536);
+            return visits.back() != 70;
+        };
+        creatures.draw(blocks, scene, 0, 0, view, draws);
+        check(originAt(90) == view.renderOffset && originAt(70) == oldOffset &&
+                  std::memcmp(cachedHead.data(), creatures.record(70) + 0xe30, cachedHead.size()) == 0,
+              "camera movement updates admitted actors but preserves a culled actor's matrices and cached origin");
         bool made = true;
         auto *updated = creatures.networkCreature(90, made);
         check(updated && !made, "existing network update retains registration");
@@ -118,6 +156,10 @@ int creatureSceneTests() {
         creatures.draw(blocks, scene, 0, 0, view, draws);
         check(visits == std::vector<int64_t>{91, 10} && creatures.record(70)[0x1500] == 1,
               "updates retain order, health rejects before visibility, and the preparation marker remains sticky");
+        creatures.noticeDeathVisual(70);
+        const auto deaths = creatures.takeDeathVisuals();
+        check(deaths.size() == 1 && std::memcmp(&deaths[0].parts[0].transform[0][0], cachedHead.data(), cachedHead.size()) == 0,
+              "death delivery copies the retained matrix directly without repairing it to the latest camera origin");
         view.flags = 0x80;
         visits.clear();
         creatures.draw(blocks, scene, 0, 0, view, draws);

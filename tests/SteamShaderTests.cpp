@@ -237,7 +237,14 @@ int steamShaderTests() {
     sources->models.erase(sources->models.begin(), sources->models.begin() + 10);
     // Intensity10 saturates illumination to1 at every vertex; the resulting
     // non-glow palette equals the independent Glow1 RGB reference above.
-    checkPoints("registered", {item}, {82,214,60});
+    checkPoints("registered", {item}, {82, 214, 60});
+    {
+        DrawItem posePart = item;
+        posePart.nativeLightZone = steampoints::ZoneKey{-100, -100};
+        checkPoints("pose-binding-absent", {posePart}, {7, 52, 5});
+        posePart.nativeLightZone = sources->key;
+        checkPoints("pose-binding-present", {posePart}, {82, 214, 60});
+    }
 
     auto distant = std::make_shared<steampoints::ZoneSources>();
     distant->key = {-1,1};

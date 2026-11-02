@@ -1081,9 +1081,17 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
         for (int axis = 0; axis < 3; ++axis)
             next.sphere.camera[axis] =
                 gamemath::addFixed(int64_t(worldProbe.origin[axis] * 65536), int64_t(double(camera.eye[axis]) * 65536));
+    steampoints::Point lookAt{};
+    if (camera.nativeFixedLookAt)
+        lookAt = *camera.nativeFixedLookAt;
+    else
+        for (int axis = 0; axis < 3; ++axis)
+            lookAt[axis] = gamemath::addFixed(int64_t(worldProbe.origin[axis] * 65536), int64_t(double(camera.target[axis]) * 65536));
     for (int axis = 0; axis < 2; ++axis)
-        next.sphere.offset[axis] = gamemath::subtractFixed(0, next.sphere.camera[axis]);
-    const glm::vec3 eye{0, 0, float(next.sphere.camera[2]) * (1.f / 65536.f)};
+        next.sphere.offset[axis] = gamemath::subtractFixed(0, lookAt[axis]);
+    glm::vec3 eye;
+    for (int axis = 0; axis < 3; ++axis)
+        eye[axis] = float(gamemath::addFixed(next.sphere.camera[axis], next.sphere.offset[axis])) * (1.f / 65536.f);
     const glm::vec3 target = eye + (camera.target - camera.eye);
     const auto shake = glm::translate(glm::mat4(1), glm::vec3(-camera.viewShake.x, camera.viewShake.y, 0));
     const float aspect = extent.height ? float(extent.width) / extent.height : camera.aspect;
@@ -1118,6 +1126,10 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
     sceneFrame = next;
     scenePrepared = true;
     lastSceneTime = time;
+}
+
+std::array<int64_t, 2> Renderer::steamRenderOffset() const {
+    return sceneFrame ? std::array<int64_t, 2>{sceneFrame->sphere.offset[0], sceneFrame->sphere.offset[1]} : std::array<int64_t, 2>{};
 }
 
 bool Renderer::steamActorVisible(const scenevisibility::Sphere &sphere) const {
@@ -1452,11 +1464,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         };
         rememberSources(opaque);
         rememberSources(water);
-        steampoints::Point origin{}, eye{};
-        for (int axis = 0; axis < 3; ++axis) {
+        steampoints::Point origin{};
+        for (int axis = 0; axis < 3; ++axis)
             origin[axis] = (int64_t)(worldProbe.origin[axis] * 65536);
-            eye[axis] = origin[axis] + (int64_t)((double)camera.eye[axis] * 65536);
-        }
+        const steampoints::Point eye = sceneFrame->sphere.camera;
         steampoints::Frame points;
         points.camera = eye;
         points.range = modelDistance;
@@ -1606,6 +1617,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 steampoints::ZoneKey key;
                 if (item.nativeLights && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain)) {
                     key = item.nativeLights->key;
+                } else if (item.nativeLightZone) {
+                    key = *item.nativeLightZone;
                 } else {
                     const steampoints::Point origin{(int64_t)(worldProbe.origin.x * 65536), (int64_t)(worldProbe.origin.y * 65536), 0};
                     key = steampoints::bindingZone(item.model, m.nativeCentre.value_or((m.min + m.max) * .5f), origin);

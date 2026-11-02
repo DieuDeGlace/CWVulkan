@@ -3217,6 +3217,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         return terrainray::Cell{block[4], block[5]};
     };
     cameraposition::State cameraPosition;
+    // Game lifetime, independent of scene installation and each actor's cached pose origin.
+    std::array<int64_t, 2> gameRenderOffset{};
     auto retainUseCamera = [&](glm::vec3 eye, glm::vec3 target) {
         constexpr double DEGREES_PER_RADIAN = 57.29577951308232;
         const auto basis =
@@ -3802,7 +3804,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             source.rgb = volume.rgb;
                             source.transform = part.transform;
                             source.tint = part.tint;
-                            source.gameOffset = {-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
+                            source.gameOffset = gameRenderOffset;
                             burstParticles.prependBody(source, [&] { return spawned.drawWorldRandom(); });
                         }
                     });
@@ -6154,6 +6156,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             useCamera.fixedEye = cameraPosition.eye;
             useCamera.fixedRayOrigin = cameraPosition.lookAt;
         }
+        for (int axis = 0; axis < 2; ++axis)
+            gameRenderOffset[axis] = gamemath::subtractFixed(0, (*useCamera.fixedRayOrigin)[axis]);
         Lighting lighting = lightingAt(hour, dayNight, regionLook(columnAt(player.position.x, player.position.y)));
         if (mode == progression::Mode::Pyro && !session.started())
             session.visitLocalRegion(regionHere(), playerLevel);
@@ -6801,13 +6805,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         audio.setCameraShake(cameramotion::decayShake(audio.cameraShake(), frameMs));
         camera.viewShake = cameramotion::viewShake(spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), audio.cameraShake());
         camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
-        if (useExtracted && nativePlayer)
-            camera.nativeFixedEye = cameraPosition.eye;
+        if (useExtracted) {
+            camera.nativeFixedEye = useCamera.fixedEye;
+            camera.nativeFixedLookAt = useCamera.fixedRayOrigin;
+        }
         if (!serverMode) {
             renderer.prepareScene(camera, lighting, time);
             if (nativeActorsAt) {
                 creaturescene::View view;
                 view.flags = mapOpen ? 2 : 0;
+                view.renderOffset = renderer.steamRenderOffset();
                 view.visible = [&](const auto &sphere) { return renderer.steamActorVisible(sphere); };
                 const size_t oldEnd = opaque.size();
                 spawned.draw(extractedWorld, world, gamemath::frameMilliseconds(frameMs),

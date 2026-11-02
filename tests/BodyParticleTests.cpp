@@ -54,6 +54,21 @@ int bodyParticleTests() {
               "later part fragments precede earlier parts");
     }
     {
+        BodyPart retained = part;
+        retained.dimensions = {1, 1, 1};
+        retained.transform = glm::translate(glm::mat4(1), {.25f, 0, 0});
+        retained.gameOffset = {-101 * 65536, 0};
+        System particles;
+        particles.prependBody(retained, [] { return 0; });
+        check(particles.states().size() == 1 && particles.states()[0].position[0] == 6635520,
+              "retained quarter-block matrix subtracts the current Game origin:101.25, without restoring cached origin minus100");
+        retained.gameOffset[0] = -102 * 65536;
+        particles.prependBody(retained, [] { return 0; });
+        check(particles.states().size() == 2 && particles.states()[0].position[0] == 6701056 &&
+                  particles.states()[1].position[0] == 6635520,
+              "the next birth uses the changed Game origin while existing fragments retain their fixed positions");
+    }
+    {
         System particles;
         std::vector<uint8_t> source(2 * 2 * 2 * 3, 100);
         BodyPart ordered;

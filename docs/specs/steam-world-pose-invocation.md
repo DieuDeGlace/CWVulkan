@@ -54,7 +54,7 @@ has already installed its current supplied CPU state before0xd3170 runs.
 
 | Phase | Native state/order |
 | --- | --- |
-| Scene input copy | Fixed camera XYZ at Renderer+0x338/+0x340/+0x348; current three-float camera-angle tuple at+0x350..+0x358; origin offsets+0x428/+0x430 are low64 negations of current camera X/Y. View+0x39c and projection+0x3dc receive the current incoming matrices. |
+| Scene input copy | **Final eye** XYZ from argument2, Game+0x1dc0, is copied to Renderer+0x338/+0x340/+0x348. Independently, origin offsets+0x428/+0x430 negate **look-at X/Y** from argument3, Game+0x1dd8. The three-float angle tuple at+0x350..+0x358 and view+0x39c/projection+0x3dc receive the current inputs. |
 | CPU planes |0xdf8f0 at0xe308a extracts the six planes from those copied view/projection matrices, storing them at+0x43c. |
 | Adaptive/derived ranges |0xecda0 at0xe3096 updates the current scene range fields, including actor range+0x4a0. This follows plane extraction and precedes the actor traversal. |
 | World actor collection |0xd3170 at0xe3bd1 uses these current fields; its pose-gating sphere call is0xe08c0 at0xd5e1d. |
@@ -63,8 +63,14 @@ has already installed its current supplied CPU state before0xd3170 runs.
 In the normal Game caller, view+0x39c is supplied from **Game+0x1f24**
 and projection+0x3dc from **Game+0x1f64**. The view includes the already
 specified camera shake; it is the current scene input rather than a new
-unshaken substitute. The fixed camera, origin offsets, planes and+0x4a0
-belong to the same current scene call. Existing construction/precision
+unshaken substitute. The fixed final eye, separate look-at-based origin
+offsets, planes and+0x4a0 belong to the same current scene call. The sphere's
+fixed distance anchor is the **eye**; its plane-coordinate rebasing uses
+the **negative look-at** origin, matching that origin-relative view.
+The exact argument loads/destinations and distinct cache lifetimes are in
+[pose/body coordinate lifetime](steam-body-particle-coordinate-lifetime.md).
+This corrects the earlier table wording that negated the eye tuple for
+the render origin. Existing construction/precision
 remains in [gameplay camera](steam-gameplay-camera.md) and
 [scene visibility §§1.2–1.3](steam-scene-lighting.md#13-native-cpu-clip-matrix-and-six-plane-equations).
 

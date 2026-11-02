@@ -306,7 +306,14 @@ individual feature documents.
   registration order and pre-pose flags/health/sphere gates; body parts share that
   sphere. The independently corrected radius includes the body-height minimum.
   Headless real-draw and Vulkan snapshot/reuse checks pass, and the title underlay
-  now runs the ordinary drawn/link phase. Initial/factory ordering, reached reseeds,
+  now runs the ordinary drawn/link phase. The independently traced coordinate
+  contract distinguishes final-eye distance from negative-look-at plane/pose origins.
+  Actor caches now retain native origin-relative matrices; only queued mesh transforms
+  convert to the engine's source-home frame. Body births subtract the separate Game
+  origin left by the preceding camera update, with no invented culled-cache repair.
+  Part light binding uses the native full-header center before that mesh conversion.
+  Large-coordinate, retained-cache/body-birth and explicit GPU binding checks pass.
+  Initial/factory ordering, reached reseeds,
   optional preview calls and broader same-thread consumer integration remain open.
   Unknown styles and independently untraced producers remain open; full native CRT and
   broader visual/peer acceptance remain open. Other object

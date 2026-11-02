@@ -535,3 +535,21 @@ synthetic sphere/order and Vulkan scene-reuse cases introduce no owner data.
 Native startup/factory ordering, all preview consumers, full shader/scenery origin
 precision and cached pose/body coordinate-lifetime comparisons remain separate;
 the current engine pose matrices still use its source-home coordinate frame.
+
+
+## Separate eye, render origin and cached-body lifetime, 2026-11-01
+
+The independent native-only author corrected world-pose-invocation2 and wrote
+steam-body-particle-coordinate-lifetime.md. The implementer read that prose, the
+existing camera, particle and light-center contracts, and engine/tests only. Final
+fixed eye remains the distance anchor; exact negative look-at XY supplies plane and
+normal-pose origins. Native cached part matrices are retained in that frame, with
+engine mesh conversion performed only on submitted draws. Part light-zone selection
+uses the native matrix/header center before that conversion. Body births consume a
+separate zero-initialized Game origin, updated at camera completion after the body
+phase; they neither restore cached actor origins nor repair stale matrices. The
+previous checkpoint's source-home pose origin is replaced by this implementation.
+Synthetic large-coordinate, real headless pose-cache and fragment-birth cases use
+no owner assets. Full shader/scenery-origin precision, alternate preview/reset
+paths and native visual acceptance remain separate work. No native code or system
+CRT implementation was read by the implementer; no owner content enters packages.

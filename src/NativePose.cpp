@@ -576,8 +576,8 @@ void Poser::drawRings() {
     const int n = (int)(height * 0.5f);
     const float s = 3.0f / sizeZ(ring);
     const int64_t drop = (int64_t)((f32(HEIGHT) * 0.5f) * 65536.0f);
-    const float x = (float)(get<int64_t>(c, DRAWN_POSITION) + call.cameraX) * DOT;
-    const float y = (float)(get<int64_t>(c, DRAWN_POSITION + 8) + call.cameraY) * DOT;
+    const float x = float(gamemath::addFixed(get<int64_t>(c, DRAWN_POSITION), call.cameraX)) * DOT;
+    const float y = float(gamemath::addFixed(get<int64_t>(c, DRAWN_POSITION + 8), call.cameraY)) * DOT;
     const int64_t z0 = get<int64_t>(c, DRAWN_POSITION + 16);
     const float yaw = f32(DRAWN_YAW);
     for (int k = 0; k < n; k++) {
@@ -938,10 +938,10 @@ void Poser::sparks() {
         const Model *m = byId(frameA ? SPARK_MODEL_A : SPARK_MODEL_B);
         if (!m)
             continue;
-        const int64_t x = (px + (int64_t)(p.x * 65536.0f)) + call.cameraX;
-        const int64_t y = (py + (int64_t)(p.y * 65536.0f)) + call.cameraY;
-        const int64_t z = ((pz + (int64_t)(p.z * 65536.0f)) - (int64_t)(f32(HEIGHT_OFFSET) * 65536.0f)) +
-                          (int64_t)(animF(WHOLE_SHIFT + 8) * 65536.0f);
+        const int64_t x = gamemath::addFixed(gamemath::addFixed(px, (int64_t)(p.x * 65536.0f)), call.cameraX);
+        const int64_t y = gamemath::addFixed(gamemath::addFixed(py, (int64_t)(p.y * 65536.0f)), call.cameraY);
+        const int64_t z =
+            ((pz + (int64_t)(p.z * 65536.0f)) - (int64_t)(f32(HEIGHT_OFFSET) * 65536.0f)) + (int64_t)(animF(WHOLE_SHIFT + 8) * 65536.0f);
         Mat M = Mat::identity();
         M.translate((float)x * DOT, (float)y * DOT, (float)z * DOT);
         M.rotZ(((float)(xorshift(j + 0x2667) % 1000) / 1000.0f) * 360.0f);
@@ -953,14 +953,13 @@ void Poser::sparks() {
 
 // 8.1, 8.2: the base matrix, at the creature's drawn place, turned and sized.
 void Poser::buildBase() {
-    const bool rolling = f32(DODGE) != 0.0f &&
-                         !(c[CLASS] == 4 && c[SPECIALISATION] == 1 && (float)T > c6c &&
-                           (ability == 6 || ability == 0x12 || ability == 0x15));
-    const int64_t z = (int64_t)(animF(WHOLE_SHIFT + 8) * 65536.0f) +
-                      (get<int64_t>(c, DRAWN_POSITION + 16) - (int64_t)(f32(HEIGHT_OFFSET) * 65536.0f));
+    const bool rolling = f32(DODGE) != 0.0f && !(c[CLASS] == 4 && c[SPECIALISATION] == 1 && (float)T > c6c &&
+                                                 (ability == 6 || ability == 0x12 || ability == 0x15));
+    const int64_t z =
+        (int64_t)(animF(WHOLE_SHIFT + 8) * 65536.0f) + (get<int64_t>(c, DRAWN_POSITION + 16) - (int64_t)(f32(HEIGHT_OFFSET) * 65536.0f));
     base = Mat::identity();
-    base.translate((float)(get<int64_t>(c, DRAWN_POSITION) + call.cameraX) * DOT,
-                   (float)(get<int64_t>(c, DRAWN_POSITION + 8) + call.cameraY) * DOT, (float)z * DOT);
+    base.translate(float(gamemath::addFixed(get<int64_t>(c, DRAWN_POSITION), call.cameraX)) * DOT,
+                   float(gamemath::addFixed(get<int64_t>(c, DRAWN_POSITION + 8), call.cameraY)) * DOT, (float)z * DOT);
     const float raise = (f32(HEIGHT) * 5.0f) / f32(WIDTH);
     if (rolling) {
         float angle = (1.0f - f32(DODGE) / 600.0f) * -360.0f;
@@ -1521,8 +1520,8 @@ void Poser::moveTrails() {
         Mat M = Mat::identity();
         const int64_t z = (int64_t)(animF(WHOLE_SHIFT + 8) * 65536.0f) +
                           (get<int64_t>(c, DRAWN_POSITION + 16) - (int64_t)(f32(HEIGHT_OFFSET) * 65536.0f));
-        M.translate((float)(get<int64_t>(c, DRAWN_POSITION) + call.cameraX) * DOT,
-                    (float)(get<int64_t>(c, DRAWN_POSITION + 8) + call.cameraY) * DOT, (float)z * DOT);
+        M.translate(float(gamemath::addFixed(get<int64_t>(c, DRAWN_POSITION), call.cameraX)) * DOT,
+                    float(gamemath::addFixed(get<int64_t>(c, DRAWN_POSITION + 8), call.cameraY)) * DOT, (float)z * DOT);
         M.rotZ(f32(DRAWN_YAW));
         const float outer = ((clock - (float)d1) * 20.0f) / (float)(d1 + d2), inner = outer * 0.5f;
         for (int i = 0; i < TRAIL_POINTS; i++) {

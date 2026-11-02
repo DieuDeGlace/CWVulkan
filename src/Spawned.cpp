@@ -2174,6 +2174,11 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
         auto it = models.find(nativeitems::modelId(item));
         return it == models.end() ? nullptr : &it->second;
     };
+    const steampoints::Point renderOrigin{gamemath::subtractFixed(0, view.renderOffset[0]),
+                                          gamemath::subtractFixed(0, view.renderOffset[1]), 0};
+    const glm::vec3 renderShift{float(gamemath::subtractFixed(renderOrigin[0], ew.originDotsX())) * (1.f / 65536.f),
+                                float(gamemath::subtractFixed(renderOrigin[1], ew.originDotsY())) * (1.f / 65536.f),
+                                float(ExtractedWorld::Z_OFFSET)};
     std::vector<nativepose::Draw> draws;
     drawn = 0;
     playerPartsDrawn = 0;
@@ -2187,8 +2192,8 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
 
         nativepose::Call call;
         call.dt = (float)dtMs;
-        call.cameraX = -ew.originDotsX();
-        call.cameraY = -ew.originDotsY();
+        call.cameraX = view.renderOffset[0];
+        call.cameraY = view.renderOffset[1];
         call.nowMs = nowMs;
         call.rand = [this] { return drawWorldRandom(); };
         const nativerules::HasBuff has = [&](int t) {
@@ -2229,10 +2234,12 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             glm::mat4 game;
             std::memcpy(&game[0][0], d.matrix, sizeof d.matrix); // the game's row vectors are glm's columns
             const glm::vec3 size = world.modelSize(m);
-            glm::mat4 place = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
-                              glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
+            glm::mat4 place =
+                glm::translate(glm::mat4(1), renderShift) * game * glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
             DrawItem item{mesh, place, 0, 0, true};
             item.nativeActor = *admitted;
+            item.nativeLightZone =
+                steampoints::bindingZone(game, glm::vec3(d.model->size[0], d.model->size[1], d.model->size[2]) * .5f, renderOrigin);
             out.push_back(std::move(item));
             playerPartsDrawn += isPlayer;
         }

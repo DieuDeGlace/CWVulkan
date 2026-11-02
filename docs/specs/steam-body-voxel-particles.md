@@ -110,6 +110,12 @@ transformed fixed value. The already-translated part matrix supplies the
 actor/part location: the helper does not add the creature's drawn tuple
 again or use an additional actor-velocity input to move the spawn point.
 
+These Game fields are the last camera update's negative **look-at** X/Y,
+not negative final-eye coordinates or an automatic per-actor cache restore.
+The cached-origin float arguments passed by the caller are unused by this
+helper. Exact argument identity, matrix retention and frame lifetime are in
+[pose/body coordinate lifetime](steam-body-particle-coordinate-lifetime.md).
+
 Compute the source allocation center from **full dimensions×0.5f** on
 each axis, transformed by that same full matrix and homogeneous-divide
 calculation, then converted to fixed by the same float32×65536/truncation.

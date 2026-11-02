@@ -76,7 +76,8 @@ struct Camera {
     glm::vec2 viewShake{0};                      // Native view-space translation (left/up); never changes eye or aim.
     std::optional<float> displayedYawDegrees;    // Steam beam orientation, before eye collision adjustments
     std::optional<glm::mat3> nativeViewRotation; // Unshaken left/up/forward view; valid even when eye == target.
-    std::optional<steampoints::Point> nativeFixedEye; // exact game camera for native CPU distance/origin arithmetic
+    std::optional<steampoints::Point> nativeFixedEye;    // exact final eye for native CPU distance arithmetic
+    std::optional<steampoints::Point> nativeFixedLookAt; // separate XY render origin; never substitutes for the eye
 };
 
 // One corner of an interface quad, in screen pixels (origin top left).
@@ -132,7 +133,8 @@ struct DrawItem {
     std::shared_ptr<const scenevisibility::Bounds> nativeZone; // containing zone for native model/beam gates
     std::shared_ptr<const steampoints::ZoneSources> nativeLights;
     // Reflections reverse triangle winding (the native right foot uses one).
-    std::optional<scenevisibility::Sphere> nativeActor; // shared gate for creature parts and overhead models
+    std::optional<scenevisibility::Sphere> nativeActor;  // shared gate for creature parts and overhead models
+    std::optional<steampoints::ZoneKey> nativeLightZone; // pose-space center, before conversion to engine mesh coordinates
     bool mirrored() const { return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0; }
 };
 
@@ -218,6 +220,7 @@ class Renderer {
     // reuses it; earlier Game consumers still see the previous scene until this call.
     void prepareScene(const Camera &, const Lighting &, double time);
     bool steamActorVisible(const scenevisibility::Sphere &) const;
+    std::array<int64_t, 2> steamRenderOffset() const; // negative look-at XY of the installed scene
     // Early death/use queries read the retained CPU scene state.
     bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
     // Saves the next presented frame as a PNG (for screenshots and tests).

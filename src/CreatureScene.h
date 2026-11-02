@@ -14,7 +14,8 @@ struct Actor {
 Actor actor(const uint8_t *record);
 scenevisibility::Sphere actorSphere(const Actor &);
 struct View {
-    uint32_t flags = 0; // ordinary gameplay mask; only bits0x01/0x80 select pose membership
+    uint32_t flags = 0;                    // ordinary gameplay mask; only bits0x01/0x80 select pose membership
+    std::array<int64_t, 2> renderOffset{}; // current negative look-at XY, in fixed units
     std::function<bool(const scenevisibility::Sphere &)> visible;
 };
 // Flags and health precede visibility. Rejected entries retain their pose caches.
