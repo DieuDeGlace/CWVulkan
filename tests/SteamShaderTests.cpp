@@ -567,7 +567,18 @@ int steamShaderTests() {
         shifted.nativeLights.reset();
         shifted.nativeZone = cached;
         shifted.nativeScenery = steamscenery::Bounds{{0, 0, -50 * 65536}, 1, false};
-        checkPoints("large-origin-cached-zone", {shifted}, {7, 52, 5});
+        DrawItem reference = shifted;
+        reference.kind = DrawKind::Scenery;
+        reference.nativeZone.reset();
+        reference.nativeScenery.reset();
+        const auto referencePath = root / "large-origin-lit-reference.png";
+        renderer.capture(referencePath.string());
+        renderer.frame(camera, lighting, {}, 0, {reference}, {});
+        const auto referencePixel = centre(referencePath);
+        if (referencePixel && empty && *referencePixel != *empty)
+            checkPoints("large-origin-cached-zone", {shifted}, *referencePixel);
+        else
+            ++failures;
         auto latest = *cached;
         for (int axis = 0; axis < 2; ++axis) {
             const int64_t origin = int64_t(largeProbe.origin[axis] * 65536);
@@ -608,11 +619,23 @@ int steamShaderTests() {
         nearby.target = {0, 0, 1};
         Lighting steady;
         steady.timeMs = 0;
+        DrawItem reference = object;
+        reference.kind = DrawKind::Scenery;
+        reference.nativeObject.reset();
+        reference.nativeZone.reset();
+        const auto emptyPath = root / "static-object-empty-reference.png";
+        renderer.capture(emptyPath.string());
+        renderer.frame(nearby, steady, {}, 0, {}, {});
+        const auto emptyPixel = centre(emptyPath);
+        const auto referencePath = root / "static-object-lit-reference.png";
+        renderer.capture(referencePath.string());
+        renderer.frame(nearby, steady, {}, 0, {reference}, {});
+        const auto referencePixel = centre(referencePath);
         const auto capture = root / "static-object-unmeshed-zone.png";
         renderer.capture(capture.string());
         renderer.frame(nearby, steady, {}, 0, {object}, {});
         const auto pixel = centre(capture);
-        const bool admitted = pixel && std::abs((*pixel)[0] - 7) <= 2 && std::abs((*pixel)[1] - 52) <= 2 && std::abs((*pixel)[2] - 5) <= 2;
+        const bool admitted = pixel && referencePixel && emptyPixel && *referencePixel != *emptyPixel && *pixel == *referencePixel;
         std::cout << "Steam shader static-object independent zone admission" << (admitted ? " PASS\n" : " FAIL\n");
         failures += !admitted;
     }
@@ -1135,6 +1158,52 @@ int steamShaderTests() {
         failures += !visible;
     }
     renderer.shutdown();
+    {
+        // A fresh renderer isolates retained-light lifetime from the admission fixtures above.
+        Renderer retained;
+        if (!retained.init(window, settings, error)) {
+            std::cerr << "Directional-light renderer: " << error << '\n';
+            ++failures;
+        } else {
+            Mesh sample;
+            for (glm::vec3 p : {glm::vec3(-2, 0, -1), glm::vec3(2, 0, -1), glm::vec3(0, 0, 3)}) {
+                sample.vertices.push_back({p.x, p.y, p.z, 51, 102, 25, 128, 4, STEAM_VERTEX, 0, 0});
+                sample.min = glm::min(sample.min, p);
+                sample.max = glm::max(sample.max, p);
+            }
+            sample.indices = {0, 1, 2};
+            DrawItem draw;
+            draw.mesh = retained.upload(sample);
+            draw.kind = DrawKind::Scenery;
+            draw.standingLight = .5f;
+            Camera view;
+            view.eye = {0, -2, 1};
+            view.target = {0, 0, 1};
+            Lighting night;
+            night.timeMs = 0;
+            const auto captureAt = [&](const char *name, double time) {
+                const auto path = root / (std::string(name) + ".png");
+                retained.capture(path.string());
+                retained.frame(view, night, {}, time, {draw}, {});
+                return centre(path);
+            };
+            const auto cold = captureAt("directional-cold", 0);
+            const auto warm = captureAt("directional-warm", 1);
+            const bool advanced = cold && warm && *cold != *warm;
+            std::cout << "Steam shader directional-positive-duration" << (advanced ? " PASS\n" : " FAIL\n");
+            failures += !advanced;
+            const auto rollback = captureAt("directional-rollback", 0);
+            const bool kept = advanced && rollback && *rollback == *warm;
+            std::cout << "Steam shader directional-clock-rollback" << (kept ? " PASS\n" : " FAIL\n");
+            failures += !kept;
+            retained.resetSceneRange();
+            const auto reset = captureAt("directional-range-reset", 0);
+            const bool survived = kept && reset && *reset == *warm;
+            std::cout << "Steam shader directional-range-reset" << (survived ? " PASS\n" : " FAIL\n");
+            failures += !survived;
+        }
+        retained.shutdown();
+    }
     glfwDestroyWindow(window);
     glfwTerminate();
     const bool ownFixture = std::filesystem::equivalent(root.parent_path(), std::filesystem::temp_directory_path()) &&

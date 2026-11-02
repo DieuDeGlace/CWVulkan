@@ -1191,3 +1191,19 @@ immediate underwater presentation; Alpha appearance remains a separate extension
 These tests do not establish an original-game pixel oracle, exhaustive recovery
 lifetime, or native GPU initialization. No original implementation, owner artwork
 or extracted content is included in either package.
+
+## Directional-light state retention, 2026-11-02
+
+The existing isolated native-only author supplied directional-light-state sections
+1–4 without engine/tests/exporter or owner-data access, then held all tracing and
+writes. The implementer read only that prose, scene-lighting 2.5/6.2 and engine-owned
+sources. The renderer no longer substitutes constructor front/back/ambient colours
+when its application clock moves backward. Constructor initialization stays intact.
+
+A fresh Vulkan renderer draws a synthetic triangle before and after a positive
+interval, then verifies the changed result survives rollback and range reset.
+Two older structural admission fixtures now compare the same geometry against
+an immediate ungated reference under the current retained lights. Original fixed
+shader-equation checks remain separate; production colours were not retuned.
+This does not establish alternate recovery/reset paths or initial GPU contents.
+No original code, owner artwork or extracted data is distributed.

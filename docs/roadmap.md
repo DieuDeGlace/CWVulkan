@@ -211,6 +211,8 @@ individual feature documents.
   ordinary/interior transition rates from the independent sky-state supplement.
   Place-27 alpha, selected far-flight keys and post-water effect13 are connected.
   CPU checks cover alpha, strict flight thresholds and retained frame state.
+  Directional lighting also survives clock rollback and scene-range reset, with
+  actual rendered-image regressions after a positive-duration transition.
   Steam voxel inputs now use weighted front-layer occlusion/light, encoded CUB
   colors and native face corners/diagonals. Terrain reuses one retained light solve
   for mesh corners and models; lava has its own opaque palette group. Water films,

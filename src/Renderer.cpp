@@ -1402,8 +1402,6 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             environment.region = here.region;
         environment.effect13RemainingMs = lighting.effect13RemainingMs;
         nativeDaylight = steamlighting::collectorDaylight(lighting.timeMs, environment.region.forest);
-        if (elapsedMs < 0)
-            steamLights.reset();
         steamLights.update(steamlighting::targets(lighting.timeMs, environment),
                            steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
         // §B.3, eased as §B.4.
