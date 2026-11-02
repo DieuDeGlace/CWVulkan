@@ -333,7 +333,11 @@ individual feature documents.
   the exact native CPU view/projection. Source-home metadata is converted to absolute
   XY once; native game Z stays unshifted. Beam distances retain a fixed eye too.
   Speech publication keeps its earlier cache boundary; GPU geometry still uses the
-  engine frame. Full GPU-origin precision and original visual acceptance remain open.
+  engine frame. Ordinary WORLD now uploads its float lens separately and transforms
+  each point through WORLD, view and projection in the shader, including immediate
+  GUI models; other passes retain their existing matrices. Full CPU/owner and Vulkan
+  checks pass. Native fixed-origin translations, terrain band-local vertices and
+  original visual acceptance remain open.
   The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
   establishes a version-qualified fresh context default1 and startup/reset gates;
   it does not establish native first-frame state or change the engine's initial seed.

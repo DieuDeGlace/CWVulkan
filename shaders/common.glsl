@@ -41,6 +41,7 @@ layout(set = 0, binding = 0) uniform Frame {
     vec4 pointColours[64]; // rgb colour
     vec4 steamSun;      // xyz submitted native sunlight, w native ambient alpha
     vec4 steamMaterial; // frame material RGB and sunlight alpha (not pixel opacity)
+    mat4 projection;    // separate WORLD lens; viewProj remains available to other passes
 } f;
 
 layout(push_constant) uniform Push {

@@ -1222,6 +1222,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     }
     FrameUniforms u{};
     u.viewProj = proj * view;
+    u.projection = proj;
     Frustum viewFrustum(u.viewProj);
 
     // --- The Alpha look (docs/specs/alpha-rendering.md): clock, palette, fog, lights ---

@@ -630,3 +630,20 @@ the generator to fit it. The older structure-only comparison remains labelled as
 This does not close global region/theme coverage,
 all pending-set producers, adjacent-zone object ownership or pixel acceptance. No owner
 blocks, records, captures or assets are included in source or runtime packages.
+
+## Separate WORLD matrix uploads, 2026-11-01
+
+The implementer read steam-world-gpu-coordinates.md in full, its world-pose link,
+the relevant existing shader/camera contracts and engine sources only. The existing
+native-only author established the fixed-to-float boundaries, local vertex spaces
+and independent float WORLD/view/projection uploads without implementation, tests,
+extractor, SDK, reconstruction, owner-data or game access.
+
+The engine's column-vector convention retains separate float projection and view
+uniforms. Ordinary WORLD vertices now transform their model-space point through
+view and then projection on the GPU; immediate GUI draws supply their own lens.
+Other rendering paths retain their existing combined matrices. Full CPU/owner-data,
+52 shader, 2 camera, 24 GUI, 6 map, shared-water and Alpha-scenery checks pass.
+This closes the separate-lens upload step, not the complete coordinate contract:
+native fixed-origin translations and terrain band-local construction remain work
+in progress. No owner assets or captured data enter either distribution package.

@@ -44,12 +44,16 @@ void main() {
         steamVertexColours(world, vNormal, palette, flags, vColor.rgb, vIndirect);
     }
     vFlags = flags;
-    gl_Position = f.viewProj * vec4(world, 1);
+    // WORLD consumes the independently uploaded float matrices in point-transform order.
+    vec4 viewPoint = f.view * vec4(world, 1);
+    gl_Position = (flags & STEAM_WORLD) != 0u
+        ? f.projection * viewPoint
+        : f.viewProj * vec4(world, 1);
     if ((flags & GUI_WORLD) != 0u)
         gl_Position.z -= pc.params.z; // native shader DepthOffset, not NDC translation
     // Preserve homogeneous coordinates for division after raster interpolation.
     vClip = vec4(gl_Position.x, -gl_Position.y, gl_Position.zw);
-    vView = (f.view * vec4(world, 1)).xyz;
+    vView = viewPoint.xyz;
     vec3 viewNormal = normalize(mat3(f.view * pc.model) * normal);
     vViewNormal = vec2(-viewNormal.x, viewNormal.y); // native LH view, negative lens aspect
 }

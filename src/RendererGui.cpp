@@ -168,6 +168,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             const auto &draw = guiDraws[i];
             auto uniforms = base;
             uniforms.view = draw.view;
+            uniforms.projection = flipY * draw.projection;
             uniforms.viewProj = flipY * draw.projection * draw.view;
             uniforms.front = draw.state.front;
             uniforms.back = draw.state.back;

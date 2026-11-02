@@ -69,6 +69,8 @@ fixed distance anchor is the **eye**; its plane-coordinate rebasing uses
 the **negative look-at** origin, matching that origin-relative view.
 The exact argument loads/destinations and distinct cache lifetimes are in
 [pose/body coordinate lifetime](steam-body-particle-coordinate-lifetime.md).
+The directly reached model/terrain fixed-to-float and GPU upload boundaries
+continue in [ordinary WORLD GPU coordinates](steam-world-gpu-coordinates.md).
 This corrects the earlier table wording that negated the eye tuple for
 the render origin. Existing construction/precision
 remains in [gameplay camera](steam-gameplay-camera.md) and
