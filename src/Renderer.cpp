@@ -1426,6 +1426,16 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     u.lightNear = lightMatrix(shadowDir, focus, nearRadius, settings.nearResolution);
     u.view = view;
     u.eye = glm::vec4(camera.eye, (float)std::fmod(time, 100000.0));
+    u.originView = sceneFrame->projection.view;
+    u.originProjection = sceneFrame->projection.perspective;
+    u.originProjection[1][1] *= -1;
+    u.originProjection[2][0] = -proj[2][0];
+    u.originProjection[2][1] = -proj[2][1];
+    for (int axis = 0; axis < 3; ++axis) {
+        const int64_t home = int64_t(worldProbe.origin[axis] * 65536);
+        const int64_t relative = axis < 2 ? gamemath::addFixed(home, sceneFrame->visibility.offset[axis]) : home;
+        u.homeToOrigin[axis] = float(relative) * (1.f / 65536.f);
+    }
     u.lightDir = glm::vec4(shadowDir, shadowsOn ? shadowStrength : 0.f);
     u.front = glm::vec4(lighting.front, settings.sunWarmth);
     u.back = glm::vec4(lighting.back, settings.fadeStart);
@@ -1464,9 +1474,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         };
         rememberSources(opaque);
         rememberSources(water);
-        steampoints::Point origin{};
-        for (int axis = 0; axis < 3; ++axis)
-            origin[axis] = (int64_t)(worldProbe.origin[axis] * 65536);
+        const steampoints::Point origin{gamemath::subtractFixed(0, sceneFrame->visibility.offset[0]),
+                                        gamemath::subtractFixed(0, sceneFrame->visibility.offset[1]), 0};
         const steampoints::Point eye = sceneFrame->visibility.eye;
         steampoints::Frame points;
         points.camera = eye;
@@ -1509,7 +1518,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 const auto &light = table[i];
                 glm::vec3 position;
                 for (int axis = 0; axis < 3; ++axis)
-                    position[axis] = (float)((double)(light.position[axis] - origin[axis]) / 65536);
+                    position[axis] = gamemath::fixedBlocksBetween(light.position[axis], origin[axis]);
                 nativeGpuPoints.push_back({glm::vec4(position, light.radius), glm::vec4(light.colour, 0)});
             }
         }
@@ -1607,7 +1616,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         pc.material = item.material;
         const bool particle = item.kind == DrawKind::Particle;
         if (!alphaLook && !menuSky && shading) {
-            pc.params.x = (float)(item.flags | STEAM_WORLD);
+            pc.params.x = float(item.flags | STEAM_WORLD | (item.nativeModel ? ORIGIN_WORLD : 0));
+            if (item.nativeModel)
+                pc.model = *item.nativeModel;
             pc.look.y = item.flash;
             pc.look.z = item.nativeShininess ? 1.f : 0.f;
             if (!particle) {

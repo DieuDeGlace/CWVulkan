@@ -42,6 +42,9 @@ layout(set = 0, binding = 0) uniform Frame {
     vec4 steamSun;      // xyz submitted native sunlight, w native ambient alpha
     vec4 steamMaterial; // frame material RGB and sunlight alpha (not pixel opacity)
     mat4 projection;    // separate WORLD lens; viewProj remains available to other passes
+    mat4 originView;
+    mat4 originProjection;
+    vec4 homeToOrigin;
 } f;
 
 layout(push_constant) uniform Push {
@@ -54,6 +57,7 @@ layout(push_constant) uniform Push {
 } pc;
 
 const uint SWAY = 1u, GLOW = 2u, WATER = 4u, STEAM_VERTEX = 128u, LAVA_LIGHTING = 256u, STEAM_WORLD = 512u, GUI_WORLD = 1024u;
+const uint ORIGIN_WORLD = 2048u;
 
 // Vanilla's colour stages (Steam world pixel shader, as re-expressed in
 // SteamShadows' InlineTerrain.h). Lit surface colours get a saturation boost

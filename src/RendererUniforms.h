@@ -11,7 +11,9 @@ struct FrameUniforms {
     glm::mat4 skyProj, view;
     glm::vec4 pointLights[64], pointColours[64];
     glm::vec4 steamSun, steamMaterial; // direction/ambient alpha, frame material RGBA
-    glm::mat4 projection; // ordinary WORLD uploads its lens separately from the view
+    glm::mat4 projection;              // ordinary WORLD uploads its lens separately from the view
+    glm::mat4 originView, originProjection;
+    glm::vec4 homeToOrigin; // source-home position plus this offset is in native WORLD space
 };
 struct NativeGpuPoint {
     glm::vec4 position, colour;

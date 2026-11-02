@@ -93,6 +93,7 @@ enum class DrawKind : uint8_t { Model, Terrain, Scenery, LightBeam, LavaTerrain,
 constexpr uint32_t LAVA_LIGHTING = 1u << 8; // draw-only flag, not a vertex byte or Glow
 constexpr uint32_t GUI_WORLD = 1u << 10;    // immediate owner-item WORLD shader; no scene culling/shadow/tint extensions
 constexpr uint32_t STEAM_WORLD = 1u << 9;   // ordinary world/water pass; excludes sky and menu art
+constexpr uint32_t ORIGIN_WORLD = 1u << 11; // model uses the native fixed look-at origin
 
 struct DrawItem {
     uint32_t mesh = 0;
@@ -135,6 +136,7 @@ struct DrawItem {
     // Reflections reverse triangle winding (the native right foot uses one).
     std::optional<scenevisibility::Sphere> nativeActor;  // shared gate for creature parts and overhead models
     std::optional<steampoints::ZoneKey> nativeLightZone; // pose-space center, before conversion to engine mesh coordinates
+    std::optional<glm::mat4> nativeModel;                // origin-relative WORLD; model retains the source-home transform
     bool mirrored() const { return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0; }
 };
 

@@ -79,8 +79,10 @@ zone origins and group base.
 The group vertex buffer contains local corner coordinates relative to the
 zone's XY origin and that group's vertical band. The existing250-block
 band representation is [voxel vertex inputs §1](steam-voxel-vertex-inputs.md#1-shared-packed-vertex-input).
-The complete band-partition producer is not newly audited here; the draw's
-direct input and conversion are the signed32 group+0x5c above.
+The ordinary producer's relative anchor, signed division, negative/boundary
+heights and nonempty publication order are now specified in
+[terrain mesh bands](steam-terrain-mesh-bands.md). The draw's direct input
+and conversion remain the signed32 group+0x5c above.
 
 ## 3. Queue composition and separate GPU matrix uploads
 

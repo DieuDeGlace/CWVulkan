@@ -2242,6 +2242,7 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             glm::mat4 place =
                 glm::translate(glm::mat4(1), renderShift) * game * glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
             DrawItem item{mesh, place, 0, 0, true};
+            item.nativeModel = game * glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
             item.nativeActor = *admitted;
             item.nativeLightZone =
                 steampoints::bindingZone(game, glm::vec3(d.model->size[0], d.model->size[1], d.model->size[2]) * .5f, renderOrigin);

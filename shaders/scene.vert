@@ -33,7 +33,8 @@ void main() {
     vec3 world = (pc.model * vec4(inPosition, 1)).xyz;
     if ((flags & GUI_WORLD) == 0u)
         world = sway(world, inPosition, flags);
-    vWorld = world;
+    bool originWorld = (flags & ORIGIN_WORLD) != 0u;
+    vWorld = originWorld ? world - f.homeToOrigin.xyz : world;
     vec3 normal = (flags & 16u) != 0u
         ? normalize(vec3(inNormalFlags.x, inNormalFlags.z, inNormalFlags.w) / 127.5 - 1)
         : faceNormal(inNormalFlags.x);
@@ -41,19 +42,24 @@ void main() {
     vColor = palette;
     vIndirect = palette.rgb;
     if ((flags & (STEAM_VERTEX | STEAM_WORLD)) == (STEAM_VERTEX | STEAM_WORLD)) {
-        steamVertexColours(world, vNormal, palette, flags, vColor.rgb, vIndirect);
+        vec3 lightPosition = originWorld ? world : world + f.homeToOrigin.xyz;
+        steamVertexColours(lightPosition, vNormal, palette, flags, vColor.rgb, vIndirect);
     }
     vFlags = flags;
     // WORLD consumes the independently uploaded float matrices in point-transform order.
-    vec4 viewPoint = f.view * vec4(world, 1);
-    gl_Position = (flags & STEAM_WORLD) != 0u
-        ? f.projection * viewPoint
-        : f.viewProj * vec4(world, 1);
+    mat4 activeView = originWorld ? f.originView : f.view;
+    vec4 viewPoint = activeView * vec4(world, 1);
+    if (originWorld)
+        gl_Position = f.originProjection * viewPoint;
+    else if ((flags & STEAM_WORLD) != 0u)
+        gl_Position = f.projection * viewPoint;
+    else
+        gl_Position = f.viewProj * vec4(world, 1);
     if ((flags & GUI_WORLD) != 0u)
         gl_Position.z -= pc.params.z; // native shader DepthOffset, not NDC translation
     // Preserve homogeneous coordinates for division after raster interpolation.
     vClip = vec4(gl_Position.x, -gl_Position.y, gl_Position.zw);
     vView = viewPoint.xyz;
-    vec3 viewNormal = normalize(mat3(f.view * pc.model) * normal);
-    vViewNormal = vec2(-viewNormal.x, viewNormal.y); // native LH view, negative lens aspect
+    vec3 viewNormal = normalize(mat3(activeView * pc.model) * normal);
+    vViewNormal = originWorld ? viewNormal.xy : vec2(-viewNormal.x, viewNormal.y);
 }

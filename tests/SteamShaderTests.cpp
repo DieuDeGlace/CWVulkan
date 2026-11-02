@@ -9,6 +9,7 @@
 #include <GLFW/glfw3.h>
 #include "stb_image.h"
 #include <array>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -570,6 +571,85 @@ int steamShaderTests() {
         renderer.setWorldProbe(largeProbe);
         if (empty)
             checkPoints("large-origin-latest-center", {shifted}, *empty);
+    }
+    {
+        // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.
+        // Compare visible coverage with the same small scene near zero, not with rounded home floats.
+        renderer.setWorldProbe({});
+        renderer.settings.fogDistance = renderer.settings.sceneryDistance = 1000000;
+        Mesh marker;
+        for (glm::vec3 p : {glm::vec3(-.04f, 0, .7f), glm::vec3(.04f, 0, .7f), glm::vec3(0, 0, 1.3f)}) {
+            marker.vertices.push_back({p.x, p.y, p.z, 51, 102, 25, 128, 4, STEAM_VERTEX, 0, 0});
+            marker.min = glm::min(marker.min, p);
+            marker.max = glm::max(marker.max, p);
+        }
+        marker.indices = {0, 1, 2};
+        DrawItem actor;
+        actor.mesh = renderer.upload(marker);
+        actor.flags = GLOW;
+        actor.flash = 1;
+        actor.castShadow = false;
+        Lighting steady;
+        steady.timeMs = 0;
+        const auto renderMarker = [&](const char *name, int64_t blockOrigin, float fraction) {
+            Camera fixedCamera;
+            fixedCamera.eye = {float(blockOrigin), -2, 1};
+            fixedCamera.target = {float(blockOrigin), 0, 1};
+            fixedCamera.nativeFixedEye = steampoints::Point{blockOrigin * 65536, -2 * 65536, 65536};
+            fixedCamera.nativeFixedLookAt = steampoints::Point{blockOrigin * 65536, 0, 65536};
+            actor.model = glm::translate(glm::mat4(1), glm::vec3(float(blockOrigin) + fraction, 0, 0));
+            actor.nativeModel = glm::translate(glm::mat4(1), glm::vec3(fraction, 0, 0));
+            actor.nativeActor = scenevisibility::Sphere{{blockOrigin * 65536 + int64_t(fraction * 65536), 0, 65536}, 1};
+            const auto path = root / (std::string(name) + ".png");
+            renderer.capture(path.string());
+            renderer.frame(fixedCamera, steady, fixedCamera.target, 0, {actor}, {});
+            return path;
+        };
+        const auto mask = [](const std::filesystem::path &path) {
+            int width = 0, height = 0, channels = 0;
+            auto *pixels = stbi_load(path.string().c_str(), &width, &height, &channels, 4);
+            std::vector<uint8_t> result;
+            if (pixels && width == 128 && height == 128)
+                for (int y = 40; y < 88; ++y)
+                    for (int x = 40; x < 88; ++x) {
+                        const auto *p = pixels + 4 * (y * width + x);
+                        result.push_back(p[0] > 240 && p[1] > 240 && p[2] > 240);
+                    }
+            stbi_image_free(pixels);
+            return result;
+        };
+        const auto integral = mask(renderMarker("origin-integral", 0, 0));
+        const auto reference = mask(renderMarker("origin-quarter-reference", 0, .25f));
+        const auto distant = mask(renderMarker("origin-quarter-distant", int64_t(1) << 24, .25f));
+        const bool visibleFraction =
+            !reference.empty() && std::count(reference.begin(), reference.end(), uint8_t(1)) > 0 && reference != integral;
+        const bool sameCoverage = visibleFraction && reference == distant;
+        std::cout << "Steam shader quarter-block fixture" << (visibleFraction ? " PASS\n" : " FAIL\n");
+        std::cout << "Steam shader fixed-origin quarter-block coverage" << (sameCoverage ? " PASS\n" : " FAIL\n");
+        failures += !visibleFraction + !sameCoverage;
+        const int64_t farBlock = int64_t(1) << 24;
+        auto lamp = sourceModel(0, 0, 10);
+        lamp.record.x = farBlock * 65536 + 16384;
+        auto nearby = std::make_shared<steampoints::ZoneSources>();
+        nearby->key = {int32_t(farBlock / 64), 0};
+        nearby->models.push_back(lamp);
+        actor.nativeLights = nearby;
+        actor.nativeLightZone = nearby->key;
+        actor.flags = 0;
+        actor.flash = 0;
+        const auto litMarker = renderMarker("origin-quarter-point-light", farBlock, .25f);
+        int width = 0, height = 0, channels = 0;
+        auto *pixels = stbi_load(litMarker.string().c_str(), &width, &height, &channels, 4);
+        bool sameLight = visibleFraction && pixels && width == 128 && height == 128;
+        for (int y = 40; sameLight && y < 88; ++y)
+            for (int x = 40; sameLight && x < 88; ++x)
+                if (reference[size_t(y - 40) * 48 + x - 40]) {
+                    const auto *p = pixels + 4 * (y * width + x);
+                    sameLight = std::abs(int(p[0]) - 82) <= 2 && std::abs(int(p[1]) - 214) <= 2 && std::abs(int(p[2]) - 60) <= 2;
+                }
+        stbi_image_free(pixels);
+        std::cout << "Steam shader fixed-origin point-light binding" << (sameLight ? " PASS\n" : " FAIL\n");
+        failures += !sameLight;
     }
     renderer.shutdown();
     glfwDestroyWindow(window);

@@ -647,3 +647,23 @@ Other rendering paths retain their existing combined matrices. Full CPU/owner-da
 This closes the separate-lens upload step, not the complete coordinate contract:
 native fixed-origin translations and terrain band-local construction remain work
 in progress. No owner assets or captured data enter either distribution package.
+
+## Posed WORLD matrices at the fixed origin, 2026-11-01
+
+The implementer used the independent ordinary WORLD GPU contract, camera/pose
+contracts, scene-lighting§3.2's per-zone GPU light positions and engine sources only.
+Spawned posed actors retain the already prepared origin-relative float matrix before
+source-home conversion. The ordinary Steam draw submits that matrix with the retained
+native view/lens; the source-home matrix remains available to other rendering passes.
+Point tables now add the matching fixed XY origin before float conversion, and legacy
+geometry supplies lighting positions in that same frame. Shader shadow coordinates
+retain the source-home convention. No extra matrix exceeds the guaranteed128-byte
+Vulkan push-constant limit; the additional camera data uses the existing frame buffer.
+
+Asset-free Vulkan regressions verify that a quarter-block offset at world block2^24
+remains distinct from an integral offset and matches the near-zero coverage reference.
+A saturated nearby point light reproduces its independent RGB reference at that offset.
+The full CPU/owner suite and55 shader,2 camera,24 GUI,6 map,shared-water and Alpha-scenery
+checks pass. Terrain bands and static/environment placement still require integration;
+the independent band's full supplement has been read without importing native code.
+No owner model, terrain, record or capture bytes enter source or runtime packages.

@@ -336,8 +336,12 @@ individual feature documents.
   engine frame. Ordinary WORLD now uploads its float lens separately and transforms
   each point through WORLD, view and projection in the shader, including immediate
   GUI models; other passes retain their existing matrices. Full CPU/owner and Vulkan
-  checks pass. Native fixed-origin translations, terrain band-local vertices and
-  original visual acceptance remain open.
+  checks pass. Posed actors now retain their origin-relative matrices through GPU
+  submission, with the native view/lens and matching fixed-origin point tables.
+  Source-home transforms remain available to shadows and Alpha rendering. Asset-free
+  GPU checks preserve a quarter block at world block16,777,216 and its attached light.
+  Terrain/static placement rebasing, band-local vertices and original visual acceptance
+  remain open.
   The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
   establishes a version-qualified fresh context default1 and startup/reset gates;
   it does not establish native first-frame state or change the engine's initial seed.
