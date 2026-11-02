@@ -146,7 +146,7 @@ void weaponSpirits() {
     std::memcpy(effect.matrix, M, sizeof M);
     const float tint[4] = {0.5f, 1.0f, 1.0f, 0.75f};
     std::memcpy(effect.tint, tint, sizeof tint);
-    effect.a = 1, effect.b = 0, effect.c = 0.25f, effect.d = 0, effect.e = 3;
+    effect.opacity = 1, effect.glow = 0, effect.shininess = 0.25f, effect.white = 0, effect.depthOffset = 3;
     std::vector<nativepose::Draw> out;
     nativepose::spiritDraws(effect, out);
     POSE_CHECK(out.empty());
@@ -157,7 +157,7 @@ void weaponSpirits() {
     POSE_CHECK(out.size() == 2);
     if (out.size() == 2) {
         const nativepose::Draw &a = out[0], &b = out[1];
-        POSE_CHECK(a.kind == nativepose::PLAIN_DRAW && a.model == &cube && a.c == 0.25f && a.e == 3);
+        POSE_CHECK(a.kind == nativepose::PLAIN_DRAW && a.model == &cube && a.shininess == 0.25f && a.depthOffset == 3);
         // (1, 2, 3) through the turned, scaled frame: x 10 - 4, y 20 + 2, z 30 + 6.
         POSE_CHECK(a.matrix[12] == 6 && a.matrix[13] == 22 && a.matrix[14] == 36 && a.matrix[15] == 1);
         POSE_CHECK(std::memcmp(a.matrix, M, 12 * sizeof(float)) == 0);

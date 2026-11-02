@@ -177,6 +177,7 @@ int particleTests();
 int bodyParticleTests();
 int lightPublicationTests();
 int creatureSceneTests();
+int characterCardTests();
 int deadCreatureTests();   // tests/DeadCreatureTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
@@ -9357,6 +9358,8 @@ int main(int argc, char **argv) {
         return worldObjectTests();
     if (argc == 2 && std::string(argv[1]) == "objectclocks")
         return objectClockTests();
+    if (argc == 2 && std::string(argv[1]) == "charactercard")
+        return characterCardTests();
     if (argc == 2 && std::string(argv[1]) == "creaturescene")
         return creatureSceneTests();
     if (argc == 2 && std::string(argv[1]) == "worldcache") {
@@ -10651,6 +10654,7 @@ int main(int argc, char **argv) {
     failures += bodyParticleTests();
     failures += lightPublicationTests();
     failures += creatureSceneTests();
+    failures += characterCardTests();
     std::printf(failures ? "%d failure(s)\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

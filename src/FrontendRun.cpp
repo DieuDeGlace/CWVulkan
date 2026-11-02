@@ -3,6 +3,7 @@
 // menu over the running game. Written from docs/specs/frontend-title.md,
 // frontend-characters.md and frontend-options.md.
 #include "Frontend.h"
+#include "CharacterCard.h"
 
 #include "Assets.h"
 #include "Audio.h"
@@ -251,6 +252,9 @@ class Session {
         float yaw = 0;                // degrees turned
         float pace = 0;               // 0 standing .. 1 walking
         bool loaded = false;
+        bool native = false;
+        worldgen::CreatureRecord creature;
+        nativepose::Sparks sparks;
     };
     struct Listed {
         nativesaves::Character character;
@@ -299,6 +303,7 @@ class Session {
     void releasePreviews();
     void previewItems(std::vector<DrawItem> &opaque);
     void previewPanels(std::vector<DrawItem> &opaque);
+    std::vector<guiitem::Request> characterPreview(Listed &, const Hud::ScreenItem::ModelContext &);
     void putOnStage(const nativesaves::Character &c, bool riding);
     void enterWorld(); // Continue, Select, Create Character: the player rebuilt from the save
     void stageDefaultPlayer();
@@ -472,9 +477,20 @@ void Session::loadList() {
 // screen model a part (the game draws the creature itself into the interface, 0xdb630).
 void Session::makePreviews() {
     for (Listed &l : listed) {
+        Preview &p = l.preview;
+        std::array<uint8_t, 0xb0> appearance;
+        if (s.spawned && s.world && nativeprogress::appearanceOf(l.character.looks, appearance)) {
+            p.creature = recordOf(l.character, &appearance);
+            std::memcpy(p.creature.data() + worldgen::creature::POSITION, l.character.position.data(), sizeof l.character.position);
+            std::memcpy(p.creature.data() + 0xb10, l.character.position.data(), sizeof l.character.position);
+            std::memcpy(p.creature.data() + HEALTH, &l.character.health, sizeof l.character.health);
+            std::memcpy(p.creature.data() + 0x9a4, &l.character.field9a4, sizeof l.character.field9a4);
+            std::memcpy(p.creature.data() + 0x9a8, &l.character.field9a8, sizeof l.character.field9a8);
+            p.native = p.loaded = l.playable = true;
+            continue;
+        }
         if (!l.playable)
             continue;
-        Preview &p = l.preview;
         std::string why;
         if (!p.recording.load(l.entry.dir, why))
             continue;
@@ -538,6 +554,8 @@ void standUpright(const CharacterRecording &recording, double seconds, std::vect
 // drawing it with the final text overlay would darken the creatures as well as the world.
 // The reference confirms the translucent panel, but not its exact native opacity.
 void Session::previewPanels(std::vector<DrawItem> &opaque) {
+    if (std::none_of(listed.begin(), listed.end(), [](const Listed &l) { return !l.preview.native; }))
+        return;
     if (previewPanelMesh && previewPanelScale != guiScale)
         s.renderer->release(std::exchange(previewPanelMesh, 0));
     if (!previewPanelMesh) {
@@ -553,7 +571,9 @@ void Session::previewPanels(std::vector<DrawItem> &opaque) {
         previewPanelMesh = s.renderer->upload(panel);
         previewPanelScale = guiScale;
     }
-    for (int i = 0; i <= (int)listed.size(); i++) {
+    for (int i = 0; i < (int)listed.size(); i++) {
+        if (listed[(size_t)i].preview.native)
+            continue;
         const glm::vec2 at = entryAt(i) * guiScale;
         DrawItem panel;
         panel.mesh = previewPanelMesh;
@@ -571,7 +591,7 @@ void Session::previewItems(std::vector<DrawItem> &opaque) {
     const float ease = gamemath::blendFactor(dtMs, PREVIEW_EASE_RATE);
     for (int i = 0; i < (int)listed.size(); i++) {
         Preview &p = listed[(size_t)i].preview;
-        if (!p.loaded)
+        if (!p.loaded || p.native)
             continue;
         const glm::vec2 at = entryAt(i);
         const bool hovered = inside(mouse, at, ENTRY_SIZE);
@@ -619,6 +639,65 @@ void Session::previewItems(std::vector<DrawItem> &opaque) {
             opaque.push_back(d);
         }
     }
+}
+
+std::vector<guiitem::Request> Session::characterPreview(Listed &listedCharacter, const Hud::ScreenItem::ModelContext &context) {
+    std::vector<guiitem::Request> requests;
+    const auto placement =
+        charactercard::geometry(context.matrix, context.pivot, {(int)size.width, (int)size.height}, s.renderer->settings.nativeZoneRadius);
+    if (!placement)
+        return requests;
+    auto &preview = listedCharacter.preview;
+    std::vector<nativepose::Draw> draws;
+    const charactercard::Frame frame{hud.guiTiming().step, float(dtMs), context.hovered, wallClockMs()};
+    charactercard::prepare(
+        preview.creature.data(), frame, s.spawned->poseModels(), [this] { return s.spawned->drawWorldRandom(); }, preview.sparks, draws);
+    const size_t posed = draws.size();
+    for (size_t part = 0; part < posed; ++part)
+        if (draws[part].kind == nativepose::WEAPON_EFFECT_DRAW)
+            nativepose::spiritDraws(draws[part], draws);
+    int16_t hairId;
+    std::memcpy(&hairId, preview.creature.data() + 0x92, sizeof hairId);
+    for (const auto &part : draws) {
+        if (!part.model || part.kind == nativepose::WEAPON_EFFECT_DRAW || !(part.opacity >= 1.f))
+            continue; // this native helper never consumes its faded queues
+        const int id = int(reinterpret_cast<intptr_t>(part.model->user));
+        const auto asset = s.spawned->spriteAsset(*s.world, id);
+        if (!asset)
+            continue;
+        int model = asset->model;
+        glm::vec4 material;
+        std::memcpy(&material[0], part.tint, sizeof part.tint);
+        if (id == hairId && listedCharacter.hairStyle.dual) {
+            const glm::u8vec3 primary(glm::clamp(glm::vec3(material), glm::vec3(0), glm::vec3(1)) * 255.f);
+            model = s.world->loadModel(s.spawned->spriteName(id), primary, true, &listedCharacter.hairStyle);
+            material = {1, 1, 1, material.a};
+        }
+        const uint32_t mesh = s.world->modelMesh(model);
+        if (!mesh)
+            continue;
+        glm::mat4 transform;
+        std::memcpy(&transform[0][0], part.matrix, sizeof part.matrix);
+        const auto size = s.world->modelSize(model);
+        guiitem::Request request;
+        request.kind = guiitem::Request::Kind::Character;
+        request.mesh = mesh;
+        request.model = (placement->base * transform) * glm::translate(glm::mat4(1), {size.x * .5f, size.y * .5f, 0});
+        request.projection = placement->projection;
+        request.material = material;
+        request.opacity = part.opacity;
+        request.depthOffset = part.depthOffset;
+        request.mirrored = part.kind == nativepose::MIRRORED_DRAW;
+        request.state = guiitem::characterState();
+        request.state->glow = part.glow;
+        request.state->shininess = part.shininess;
+        request.state->white = part.white;
+        requests.push_back(std::move(request));
+    }
+    std::stable_sort(requests.begin(), requests.end(), [](const auto &left, const auto &right) {
+        return std::tie(left.mirrored, left.mesh) < std::tie(right.mirrored, right.mesh);
+    });
+    return requests;
 }
 
 void Session::putOnStage(const nativesaves::Character &c, bool ride) {
@@ -1334,12 +1413,19 @@ void Session::characterItems(Hud::Screen &out) {
         }
     for (int i = 0; i < entries; i++) {
         const glm::vec2 at = entryAt(i);
-        // The rounded frame is drawn before the entry's creature in previewPanels().
         if (i == (int)listed.size()) {
+            out.push_back(characterCard(at));
             out.push_back(text("New character", at + glm::vec2(ENTRY_SIZE.x * 0.5f, 30), 15, 3, WHITE, ALIGN_BOTH));
             continue;
         }
-        const Listed &l = listed[(size_t)i];
+        Listed &l = listed[(size_t)i];
+        if (l.preview.native) {
+            auto card = characterCard(at);
+            card.instance = "character-card/" + std::to_string(i);
+            card.modelPointer = mouse * guiScale;
+            card.drawModels = [this, character = &l](const auto &context) { return characterPreview(*character, context); };
+            out.push_back(std::move(card));
+        }
         const nativesaves::Character &c = l.character;
         out.push_back(text(c.name, at + glm::vec2(200, 30), 12, 3, NAME_COLOUR, ALIGN_LEFT));
         out.push_back(text(entryLine(std::max(1, c.level), nativesaves::raceOf(c.looks.people(), c.looks.sex()), c.classType),
@@ -1734,10 +1820,11 @@ bool Session::frame() {
     }
     std::vector<OverlayVertex> overlay;
     std::vector<glm::vec2> templatePoints;
+    hud.clearItemDraws();
     hud.drawScreen(screen, overlay, &templatePoints);
     for (const auto point : templatePoints)
         navigationPoint(point / guiScale);
-    s.renderer->overlay(std::move(overlay));
+    s.renderer->overlay(std::move(overlay), hud.itemDraws());
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
     if (s.audio) {
         s.audio->menuMusic(dtMs);

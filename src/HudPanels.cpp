@@ -226,7 +226,7 @@ float Hud::widgetText(std::vector<OverlayVertex> &out, const plasma::SceneNode &
 
 void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n, glm::vec4 tint, const plasma::Scene *from,
                     const WidgetDraw &drawWidget) const {
-    if (!n.visible)
+    if (!n.visible || (n.flags & plx::NODE_DISABLED))
         return;
     const plasma::Scene &in = from ? *from : *scene;
     tint *= n.fill;

@@ -33,12 +33,12 @@ struct Models {
 constexpr int PLAIN_DRAW = 0, WEAPON_EFFECT_DRAW = 1, MIRRORED_DRAW = 2;
 
 // One model drawn: the model, its matrix (column-major, the game's), the tint and the draw
-// call's five numbers (alpha, an outline value, glow, a fade value, depth).
+// call's five descriptor inputs (Opacity, Glow, Shininess, White, DepthOffset).
 struct Draw {
     const Model *model = nullptr;
     float matrix[16];
     float tint[4];
-    float a = 0, b = 0, c = 0, d = 0, e = 0;
+    float opacity = 0, glow = 0, shininess = 0, white = 0, depthOffset = 0;
     // 0: a plain draw; 1: a weapon's effect (0xeec50) for the item at `item`, with model
     // 0xa46; 2: a model drawn mirrored (0xee990: the right hand and foot).
     int kind = 0;

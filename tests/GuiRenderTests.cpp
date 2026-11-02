@@ -161,6 +161,20 @@ int guiRenderTests() {
         check("edit-raw-retained-depth", background, {raw}, {preceding}, {64, 64}, {0, 0, 255});
     } else
         ++failures;
+    if (edit) {
+        auto character = raw;
+        character.kind = guiitem::Request::Kind::Character;
+        character.material = {1, 1, 1, .25f};
+        character.state = guiitem::characterState();
+        character.state->glow = 1;
+        check("character-opaque-material-alpha", background, {character}, {}, {64, 64}, {128, 128, 128});
+        character.mirrored = true;
+        for (int column = 0; column < 4; ++column)
+            character.model[column][0] = -character.model[column][0];
+        check("character-opposite-winding", background, {character}, {}, {64, 64}, {128, 128, 128});
+        check("character-before-text", foreground, {character}, {}, {64, 64}, {0, 255, 0});
+        check("character-retained-depth", background, {character}, {preceding}, {64, 64}, {0, 0, 255});
+    }
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

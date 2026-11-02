@@ -92,10 +92,12 @@ Character loading reaches deserializer **0x147800 at0x9bccf**, which calls
 appearance **0x53e80 at0x147d59** using the character's actual customization
 pointer at +0x1528. It does not force the third argument null. Therefore
 reaching the loader does not justify charging five null-descriptor draws
-for every cached/selected character. The record and reached appearance
-branch remain inputs; every appearance branch's draw count is outside this
-supplement. The loader's resolved direct-call descendants contain no
-imported seed operation.
+for every cached/selected character. The bounded follow-up now proves
+**zero draws and zero seeds** for a nonnull customization descriptor with
+people index0..7, either sex bit, and arbitrary saved face/hair/RGB values:
+see [playable appearance CRT](steam-playable-appearance-crt.md). Appearance
+outside that qualified subset remains outside this supplement. The loader's
+resolved direct-call descendants contain no imported seed operation.
 
 Crafting's seeds remain main CRT §4: only after outer inventory begin/end
 +0x9f0/+0x9f8 differ, seed at **0xb23ce** from the live region pair
@@ -145,7 +147,8 @@ Established: this inspected runtime's fresh state1, current-context storage,
 both construction seed routes, startup database branch inputs and the
 bounded direct-call reset coverage. Still unproved: actual loaded runtime
 identity, exact state at window/Game entry, a universal first-frame state,
-all saved-appearance/optional callback draws, and state supplied by imported
+appearance outside the qualified playable subset, optional callback draws,
+and state supplied by imported
 launch machinery before each worker callback. No numeric state is inferred
 from a clock, World seed field, character ID or worker creator.
 

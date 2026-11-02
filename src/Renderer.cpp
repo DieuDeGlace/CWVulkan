@@ -554,6 +554,7 @@ bool Renderer::createPipelines(std::string &error) {
         {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryFadePipeline},
         {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredFadePipeline, VK_FRONT_FACE_CLOCKWISE},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &guiModelPipeline},
+        {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &guiMirroredModelPipeline, VK_FRONT_FACE_CLOCKWISE},
         {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS, &menuPipeline},
         {sceneV, sceneF, true, false, true, false, false, VK_COMPARE_OP_ALWAYS, &menuBackgroundPipeline},
         {sceneV, waterF, true, true, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterPipeline},
@@ -2203,7 +2204,8 @@ void Renderer::shutdown() {
         vkDestroyFence(device, fr.fence, nullptr);
         vkDestroySemaphore(device, fr.acquired, nullptr);
     }
-    for (auto p : {guiModelPipeline,
+    for (auto p : {guiMirroredModelPipeline,
+                   guiModelPipeline,
                    scenePipeline,
                    mirroredScenePipeline,
                    menuPipeline,

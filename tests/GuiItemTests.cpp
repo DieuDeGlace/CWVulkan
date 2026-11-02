@@ -449,6 +449,17 @@ int guiItemTests() {
     request.at.darkPass = true;
     appendDraws(request, {1600, 1024}, state, draws);
     GUI_CHECK(draws.size() >= 2 && draws[1].state.front == editState().front); // later black pass inherits the raw palette
+    request.kind = Request::Kind::Character;
+    request.material = {1, 1, 1, .25f};
+    request.opacity = 1;
+    request.mirrored = true;
+    request.depthOffset = .125f;
+    draws.clear();
+    appendDraws(request, {1600, 1024}, state, draws);
+    GUI_CHECK(draws.size() == 1 && draws[0].material.a == .25f && draws[0].opacity == 1 && draws[0].mirrored &&
+              draws[0].depthOffset == .125f && state.whiteSky);
+    GUI_CHECK(state.front == glm::vec4(1) && state.back == glm::vec4(.2f, .2f, .2f, 1) && state.ambient == glm::vec4(.4f, .4f, .4f, 1) &&
+              state.direction.y > 0 && state.direction.z < 0);
     const auto light = lightDirection();
     GUI_CHECK(near(glm::length(light), 1) && near(light.y / light.x, 0.4f) && near(light.z, -light.x));
     std::printf("GUI item transforms: %s\n", failures ? "FAILED" : "PASS");

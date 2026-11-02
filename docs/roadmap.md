@@ -37,8 +37,12 @@ individual feature documents.
   frames, physical-pixel padding and copied-shape picking. Ordinary Button release/idle/hover
   sequences retain per-instance values. Character cards preserve transferred template binding,
   center with native integer fitting and use filtered left-drag/momentum with separate clocks.
-  Scale0.4096/1/1.5 and synthetic state regressions cover these paths. Cached GUI mask layers,
-  preview creatures and full frontend pixel parity remain open.
+  Scale0.4096/1/1.5 and synthetic state regressions cover these paths. Native saved-character
+  cards now pose their own persistent records and render owner sprites at the live widget
+  callback, independently of class recordings. Integer GUI hover/walk updates, fractional
+  renderer pose steps, zero-origin cache lifetime,50-degree projection, fixed WORLD palette,
+  material/effect values and opposite winding have CPU/GPU checks. Main-target captures
+  show the native portrait; broader cached GUI mask layers and frontend pixel parity remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.
@@ -321,6 +325,9 @@ individual feature documents.
   The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
   establishes a version-qualified fresh context default1 and startup/reset gates;
   it does not establish native first-frame state or change the engine's initial seed.
+  A further [saved-appearance audit](specs/steam-playable-appearance-crt.md) proves zero
+  draws/seeds for all16 valid saved playable routes; null startup avatar creation
+  still consumes its five documented draws.
   Initial/factory ordering, reached reseeds,
   optional preview calls and broader same-thread consumer integration remain open.
   Unknown styles and independently untraced producers remain open; full native CRT and

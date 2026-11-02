@@ -22,6 +22,7 @@ std::optional<Geometry> geometry(int category, glm::ivec3 allocation, glm::ivec2
 Placement ringPlacement(size_t index, size_t count, glm::ivec3 allocation, glm::ivec2 viewport, float radius, float angle, float guiScale,
                         float worldMilliseconds);
 std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport, const Placement &, float farPlane);
+std::optional<glm::mat4> screenProjection(glm::ivec2 viewport, glm::vec2 screen, float farPlane, float depth);
 float phase(int32_t guiClockMs);
 Placement spritePlacement(glm::vec2 frameOrigin, glm::vec2 frameSize, int32_t guiClockMs);
 Placement cursorPlacement(glm::vec2 cachedPointer, int32_t guiClockMs);
@@ -44,26 +45,32 @@ struct ShaderState {
     glm::vec4 front{0.7f, 0.7f, 0.2f, 1}, back{0.5f, 0.5f, 0.5f, 1}, ambient{0.3f, 0.3f, 0.8f, 1};
     glm::vec3 direction{0};
     float white = 0, glow = 0, shininess = 0;
+    bool whiteSky = false;
 };
 ShaderState overlayState();
 ShaderState editState();
+ShaderState characterState();
 struct Request {
     size_t beforeVertex = 0; // immediate location among the Plasma triangles
     uint32_t mesh = 0, cubeMesh = 0;
     glm::ivec3 allocation{0};
     nativesaves::Item item{};
     Placement at;
-    enum class Kind { Widget, Ring, RawEdit } kind = Kind::Widget;
+    enum class Kind { Widget, Ring, RawEdit, Character } kind = Kind::Widget;
     float farPlane = 960;                       // Ring uses the ordinary screen-overlay lens
     glm::mat4 model{1}, view{1}, projection{1}; // RawEdit accepts the caller's matrices without normalization
     glm::vec4 material{1};
+    std::optional<ShaderState> state;
+    float opacity = 1, depthOffset = 0;
+    bool mirrored = false;
 };
 struct Draw {
     uint32_t mesh = 0;
     glm::mat4 model{1}, view{1}, projection{1};
     glm::vec4 material{1};
     ShaderState state;
-    float depthOffset = 0;
+    float depthOffset = 0, opacity = 1;
+    bool mirrored = false;
 };
 void appendDraws(const Request &, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &);
 struct SpiritCube {

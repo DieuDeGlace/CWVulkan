@@ -259,6 +259,7 @@ class Hud {
                      steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock);
     void prepareItemResources(Renderer &renderer) { uploadItemModels(renderer); }
     const std::vector<guiitem::Request> &itemDraws() const { return itemRequests; }
+    void clearItemDraws() const { itemRequests.clear(); }
     // OverworldEvents' quest sprites (assets/OverworldEvents/quest-icons.png, 320 x 80): the
     // orange question mark ("quest-event"), the grey one ("quest-destination") and the orange
     // exclamation mark ("quest-offer"), their green background keyed out as the mod does.
@@ -431,6 +432,13 @@ class Hud {
         int animationStepMs = 0;
         bool initializeHidden = false;
         bool replaceWidget = false; // explicit custom-widget construction; never a native resize/rectangle flag
+        struct ModelContext {
+            glm::mat4 matrix{1};
+            glm::vec2 pivot{0};
+            bool hovered = false;
+        };
+        std::optional<glm::vec2> modelPointer; // cached pointer in window pixels
+        std::function<std::vector<guiitem::Request>(const ModelContext &)> drawModels;
     };
     using Screen = std::vector<ScreenItem>;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
@@ -536,6 +544,7 @@ class Hud {
     TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0) const;
 
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
+    plasma::Scene::TextHit frontTextHit() const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
         plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr, *customization = nullptr;

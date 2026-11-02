@@ -575,3 +575,31 @@ No runtime code was read or copied by the implementer, and this checkpoint does 
 change the engine's random initialization. Earlier notes about not inspecting a CRT
 implementation describe their earlier checkpoints; this later author-only audit
 preserves the same prose/implementation separation. No game assets enter packages.
+
+
+## Saved-character card preview, 2026-11-01
+
+The independent native-only author supplied steam-character-card-preview.md, including
+its scalar-opacity classification and five descriptor inputs, without inspecting engine,
+tests, extractor, owner assets or captures. The implementer read that contract, linked
+pose/GUI/clock/world-control prose and engine sources only. CharacterCard owns pure
+record updates, temporary drawn-origin restoration and the documented consumed projection.
+The frontend retains one runtime pose record per cached saved character, reuses native
+model headers and owner-loaded voxel meshes, and supplies the callback at the live
+widget's own draw position. Resource grouping uses the engine's unsigned mesh identities;
+portable native allocation-address identity is outside the tested parity claim.
+
+The existing ordered GUI renderer supplies fixed card lighting/white sky, material,
+separate opacity and effect inputs, opposite winding and inherited depth. Shared pose
+output fields now name their independently established shader meanings. Recordings remain
+a compatibility path when the native appearance backend is unavailable. The optional
+user-requested dual-tone extension reuses its existing runtime owner-hair tinting.
+No model art, recordings, screenshots or native records enter either package.
+
+Synthetic record and geometry tests cover dual clocks, cached-state mutation, zero-health
+admission, temporary XYZ restore, signed M00 and the effective50-degree screen projection.
+Four asset-free Vulkan cases cover material alpha, opposite winding, text ordering and
+retained depth. Broader owner-cache composition, full frontend pixel acceptance and the
+other roadmap gates remain open. The same independent author additionally resolved
+saved playable appearance CRT consumption; the implementer read the full new supplement
+and its corrected frontend/initialization links. No startup stream state is inferred.

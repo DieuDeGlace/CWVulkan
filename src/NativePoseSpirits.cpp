@@ -68,7 +68,11 @@ void spiritDraws(const Draw &effect, std::vector<Draw> &out) {
         // Its colour, from the effect call's first number (0: the pose passes none).
         const std::array<float, 4> colour = materialColour(spirit[3], effect.tint, 0.0f);
         std::memcpy(cube.tint, colour.data(), sizeof cube.tint);
-        cube.a = effect.a, cube.b = effect.b, cube.c = effect.c, cube.d = effect.d, cube.e = effect.e;
+        cube.opacity = effect.opacity;
+        cube.glow = effect.glow;
+        cube.shininess = effect.shininess;
+        cube.white = effect.white;
+        cube.depthOffset = effect.depthOffset;
         cube.kind = PLAIN_DRAW;
         out.push_back(cube);
     }

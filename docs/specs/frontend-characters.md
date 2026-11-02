@@ -68,6 +68,12 @@ in [steam-character-list-input-and-frame-init.md](steam-character-list-input-and
 
 ### 2.2 One entry (0x26eba0, every frame)
 
+The complete reached3D callback, dual GUI/pose clocks, borrowed-record
+mutation, screen projection and immediate GUI layering are specified in
+[character-card preview](steam-character-card-preview.md). In particular,
+the helper's initial45° upload is replaced per descriptor by the retained
+screen-overlay projection on the ordinary scene→GUI route.
+
 Text uses font size 15 then 12, outline 3, outline colour (0, 0, 0, 1).
 
 * **The "New character" entry**: the words "New character" centred in the entry (alignment 5),
@@ -583,7 +589,8 @@ start spot and the starting items' modifiers (§5.5).
    0x53e80 **with this looks record**: the race comes from the record's race index and sex as
    in step 1; the head model is the race's first head + (F mod faces), the hair model the
    race's first hair + (K mod haircuts) (the bases are in T7); the colour bytes +2, +3, +4 of
-   the appearance are the record's red, green, blue; every other part is the race's fixed
+   the appearance are the record's red, green, blue, except both Frogman routes force
+   (255,255,255); every other part is the race's fixed
    data (`worldgen-creatures.md` §4.2). No `rand()` is drawn on this path.
 6. **The starting kit** is given (0x913b0, §5.5), then the world is unlocked (0x2b9890).
 

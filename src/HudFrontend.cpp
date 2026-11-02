@@ -149,7 +149,11 @@ bool Hud::templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDesce
         frontScene->setPosition(*node, item.at * guiScale, glm::vec2(0));
     if (!item.text.empty())
         node->setAllText(item.text);
-    auto textHit = [&](const plasma::SceneNode &n, glm::vec2 local) {
+    return frontScene->hitTest(*node, point * guiScale, frontTextHit()) != nullptr;
+}
+
+plasma::Scene::TextHit Hud::frontTextHit() const {
+    return [this](const plasma::SceneNode &n, glm::vec2 local) {
         plasma::TextStyle style;
         const auto *shape = n.shapeObject();
         if (!shape || !plasma::textStyle(*shape, n.doc->loaderFlags, style))
@@ -161,7 +165,6 @@ bool Hud::templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDesce
         return font.loaded() && plasma::textBounds(font, style, frontScene->matrix(n), box) && local.x >= box.minimum.x &&
                local.y >= box.minimum.y && local.x <= box.maximum.x && local.y <= box.maximum.y;
     };
-    return frontScene->hitTest(*node, point * guiScale, textHit) != nullptr;
 }
 
 void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation) const {
@@ -204,7 +207,19 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
                 }
                 node.advanceSequences(item.animationStepMs);
             }
-            sceneNode(out, node, item.color, frontScene.get());
+            sceneNode(out, node, item.color, frontScene.get(), [&](const plasma::SceneNode &drawn) {
+                if (&drawn != &node || !item.drawModels)
+                    return;
+                ScreenItem::ModelContext context;
+                context.matrix = frontScene->matrix(drawn);
+                context.pivot = drawn.transform.pivot;
+                context.hovered = item.modelPointer && frontScene->hitTest(drawn, *item.modelPointer, frontTextHit());
+                auto requests = item.drawModels(context);
+                for (auto &request : requests) {
+                    request.beforeVertex = out.size();
+                    itemRequests.push_back(std::move(request));
+                }
+            });
             if (navigation && item.navigation != ScreenItem::NoPoint) {
                 auto localBounds = [&](const plasma::SceneNode &n, glm::vec2 &lo, glm::vec2 &hi) {
                     plasma::TextStyle style;

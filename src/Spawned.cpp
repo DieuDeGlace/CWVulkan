@@ -2163,8 +2163,7 @@ int SpawnedCreatures::worldModel(World &world, int id, const float *tint, bool r
     return m;
 }
 
-void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
-                            std::vector<DrawItem> &out) {
+nativepose::Models SpawnedCreatures::poseModels() const {
     nativepose::Models lookup;
     lookup.byId = [&](int id) -> const nativepose::Model * {
         auto it = models.find(id);
@@ -2174,6 +2173,12 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
         auto it = models.find(nativeitems::modelId(item));
         return it == models.end() ? nullptr : &it->second;
     };
+    return lookup;
+}
+
+void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
+                            std::vector<DrawItem> &out) {
+    const auto lookup = poseModels();
     const steampoints::Point renderOrigin{gamemath::subtractFixed(0, view.renderOffset[0]),
                                           gamemath::subtractFixed(0, view.renderOffset[1]), 0};
     const glm::vec3 renderShift{float(gamemath::subtractFixed(renderOrigin[0], ew.originDotsX())) * (1.f / 65536.f),

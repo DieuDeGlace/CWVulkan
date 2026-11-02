@@ -416,7 +416,8 @@ class Renderer {
     VkDescriptorPool overlayPool = VK_NULL_HANDLE;
     VkDescriptorSet overlaySet = VK_NULL_HANDLE;
     VkPipelineLayout overlayLayout = VK_NULL_HANDLE;
-    VkPipeline overlayPipeline = VK_NULL_HANDLE, guiOverlayPipeline = VK_NULL_HANDLE, guiModelPipeline = VK_NULL_HANDLE;
+    VkPipeline overlayPipeline = VK_NULL_HANDLE, guiOverlayPipeline = VK_NULL_HANDLE;
+    VkPipeline guiModelPipeline = VK_NULL_HANDLE, guiMirroredModelPipeline = VK_NULL_HANDLE;
     Image guiDepth;
     bool guiDepthFresh = true;
     Buffer guiZeroPoints;

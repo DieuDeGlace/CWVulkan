@@ -557,7 +557,11 @@ void Poser::draw(const Model *m, const Mat &M, const float tint[4], float n1, fl
     d.model = m;
     std::memcpy(d.matrix, M.m, sizeof d.matrix);
     std::memcpy(d.tint, tint, sizeof d.tint);
-    d.a = n1, d.b = n2, d.c = n3, d.d = n4, d.e = n5;
+    d.opacity = n1;
+    d.glow = n2;
+    d.shininess = n3;
+    d.white = n4;
+    d.depthOffset = n5;
     d.kind = kind;
     d.item = forItem;
     draws->push_back(d);

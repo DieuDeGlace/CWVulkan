@@ -174,6 +174,9 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             uniforms.ambient = draw.state.ambient;
             uniforms.steamSun = glm::vec4(draw.state.direction, draw.state.ambient.a);
             uniforms.steamMaterial = draw.material;
+            if (draw.state.whiteSky)
+                for (int colour = 0; colour < 4; ++colour)
+                    uniforms.steamSky[colour] = glm::vec4(1);
             uniforms.fog.w = 10000;
             uniforms.lightDir.w = 0; // optional world shadows do not shade the native GUI
             uniforms.wind.w = 0;
@@ -215,13 +218,13 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
                     continue;
                 const auto &mesh = meshes[draw.mesh];
                 // Native cull-front/clockwise is equivalent to keep-counterclockwise here.
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, guiModelPipeline);
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.mirrored ? guiMirroredModelPipeline : guiModelPipeline);
                 const auto set = guiFrames[frameIndex].sets[drawIndex];
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &set, 0, nullptr);
                 const VkDeviceSize zero = 0;
                 vkCmdBindVertexBuffers(cmd, 0, 1, &mesh.buffer.buffer, &zero);
                 vkCmdBindIndexBuffer(cmd, mesh.buffer.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT32);
-                rendergpu::PushConstants push{draw.model, glm::vec4((float)(STEAM_WORLD | GUI_WORLD), 0, draw.depthOffset, 1),
+                rendergpu::PushConstants push{draw.model, glm::vec4((float)(STEAM_WORLD | GUI_WORLD), 0, draw.depthOffset, draw.opacity),
                                               glm::vec4(1, draw.state.white, draw.state.shininess, draw.state.glow), glm::uvec4(0)};
                 vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof push, &push);
                 vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);

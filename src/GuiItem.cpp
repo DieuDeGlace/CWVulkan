@@ -111,20 +111,27 @@ std::optional<Geometry> ringGeometry(glm::ivec3 allocation, glm::ivec2 viewport,
     }
     out.model = glm::scale(out.model, glm::vec3(at.size));
     out.model = glm::translate(out.model, glm::vec3(allocation) * -0.5f);
-    const float width = (float)viewport.x, height = (float)viewport.y;
-    const float h = 1.0f / std::tan(0.8726646900177002f * 0.5f);
+    out.projection = *screenProjection(viewport, at.screen, farPlane, -.5f);
+    return out;
+}
+
+std::optional<glm::mat4> screenProjection(glm::ivec2 viewport, glm::vec2 screen, float farPlane, float depth) {
+    if (viewport.x <= 0 || viewport.y <= 0 || farPlane <= .05f)
+        return std::nullopt;
+    const float width = float(viewport.x), height = float(viewport.y);
+    const float h = 1.f / std::tan(0.8726646900177002f * .5f);
     glm::mat4 lens(0);
     lens[0][0] = h / (-width / height);
     lens[1][1] = h;
-    lens[2][2] = farPlane / (farPlane - 0.05f);
-    lens[3][2] = (-0.05f * farPlane) / (farPlane - 0.05f);
+    lens[2][2] = farPlane / (farPlane - .05f);
+    lens[3][2] = (-.05f * farPlane) / (farPlane - .05f);
     lens[2][3] = 1;
-    float x = (at.screen.x - width * 0.5f) / width;
+    float x = (screen.x - width * .5f) / width;
     x += x;
-    const float y = ((at.screen.y - height * 0.5f) / height) * -2.0f;
-    out.projection = glm::translate(glm::mat4(1), {x, y, -0.5f}) * lens;
-    return out;
+    const float y = ((screen.y - height * .5f) / height) * -2.f;
+    return glm::translate(glm::mat4(1), {x, y, depth}) * lens;
 }
+
 std::optional<Geometry> geometry(int category, glm::ivec3 allocation, glm::ivec2 viewport, const Placement &at) {
     if (viewport.x <= 0 || viewport.y <= 0 || allocation.x <= 0 || allocation.y <= 0 || allocation.z <= 0)
         return std::nullopt;
@@ -236,11 +243,27 @@ ShaderState editState() {
     return state;
 }
 
+ShaderState characterState() {
+    ShaderState state;
+    state.front = glm::vec4(1);
+    state.back = glm::vec4(.2f, .2f, .2f, 1);
+    state.ambient = glm::vec4(.4f, .4f, .4f, 1);
+    const float a = 1.f / std::sqrt(1.2f);
+    const glm::vec3 direction(a * .2f, a * .4f, -a);
+    const float squared = (direction.x * direction.x + direction.y * direction.y) + direction.z * direction.z;
+    state.direction = direction * (1.f / std::sqrt(squared));
+    state.whiteSky = true;
+    return state;
+}
+
 void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &out) {
     if (!request.mesh)
         return; // unavailable owner sprite
-    if (request.kind == Request::Kind::RawEdit) {
-        retained = editState();
+    if (request.kind == Request::Kind::RawEdit || request.kind == Request::Kind::Character) {
+        const bool sky = retained.whiteSky;
+        retained = request.kind == Request::Kind::Character ? request.state.value_or(characterState()) : editState();
+        if (request.kind == Request::Kind::RawEdit)
+            retained.whiteSky = sky;
         Draw draw;
         draw.mesh = request.mesh;
         draw.model = request.model;
@@ -248,6 +271,9 @@ void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retai
         draw.projection = request.projection;
         draw.material = request.material;
         draw.state = retained;
+        draw.opacity = request.opacity;
+        draw.depthOffset = request.depthOffset;
+        draw.mirrored = request.mirrored;
         out.push_back(draw);
         return;
     }
@@ -255,7 +281,9 @@ void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retai
         const auto transform = ringGeometry(request.allocation, viewport, request.at, request.farPlane);
         if (!transform)
             return;
+        const bool sky = retained.whiteSky;
         retained = overlayState();
+        retained.whiteSky = sky;
         retained.shininess = shininess(request.item);
         Draw draw;
         draw.mesh = request.mesh;
