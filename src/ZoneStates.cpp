@@ -18,7 +18,7 @@ constexpr size_t GROUND_POSITION = 0xa0, GROUND_FROM = 0xb8, GROUND_ANGLE = 0xc0
                  GROUND_COUNT = 0xd4, GROUND_OWNER = 0xd8;
 constexpr int32_t NO_CREATURE = -1; // +0xb8, +0xbc without a dropping creature
 // The static object record (use-prompt.md §0.3).
-constexpr size_t OBJECT_TYPE = 0x00, OBJECT_POSITION = 0x08, OBJECT_TURN = 0x20, OBJECT_SCALE = 0x24;
+constexpr size_t OBJECT_TYPE = 0x00, OBJECT_POSITION = 0x08, OBJECT_TURN = 0x20, OBJECT_SCALE = 0x24, OBJECT_ITEM_COUNT = 0xd8;
 // A block change entry (§5.3).
 constexpr size_t CHANGE_BLOCK = 0x00, CHANGE_WAS = 0x0c, CHANGE_NOW = 0x12;
 constexpr int ZONE_SHIFT = 6; // 64 blocks a zone
@@ -63,6 +63,8 @@ Record staticObjectRecord(const worldgen::ZoneObject &o) {
     put<float>(r.data(), OBJECT_SCALE, o.scale);
     r[nativeinteract::OBJECT_STATE] = o.active ? 1 : 0;
     put<float>(r.data(), nativeinteract::OBJECT_SWING, o.swing);
+    put<int64_t>(r.data(), nativeinteract::OBJECT_USER, o.owner);
+    r[OBJECT_ITEM_COUNT] = o.takesCount;
     if (o.takes.category) {
         const nativeplayer::Item item = gameItem(o.takes);
         std::memcpy(r.data() + nativeinteract::OBJECT_ITEM, item.data(), item.size());

@@ -6,6 +6,7 @@
 #include "NativeSaves.h"
 #include "NativeProgress.h"
 #include "Gear.h"
+#include "ZoneStates.h"
 
 #include <cstdio>
 #include <cstring>
@@ -481,6 +482,34 @@ void zoneStates() {
     SAVE_CHECK(fresh.level == 1 && fresh.usedCells.count({4, 5}));
 }
 
+void generatedObjectMetadata() {
+    worldgen::ZoneObject object;
+    object.type = 0x54;
+    object.owner = -0x123456789abcdefll;
+    object.takes.category = 22;
+    object.takes.id = 7;
+    object.takesCount = 255;
+    ZoneLists generated;
+    generated.staticObjects.push_back(zonestates::staticObjectRecord(object));
+    generated.staticObjectsChanged = true;
+    WorldState saved;
+    recordZone(saved, {-3, 4}, generated);
+    WorldState restored;
+    readWorld(writeWorld(saved), restored);
+    ZoneLists live;
+    applyStoredZone(restored, {-3, 4}, live, false, nullptr);
+    SAVE_CHECK(live.staticObjects.size() == 1);
+    if (live.staticObjects.size() == 1) {
+        const auto &record = live.staticObjects.front();
+        int64_t link;
+        std::memcpy(&link, record.data() + 0x30, sizeof link);
+        SAVE_CHECK(link == object.owner && record[0x38] == 22 && record[0xd8] == 255);
+    }
+    object.takesCount = 0;
+    SAVE_CHECK(zonestates::staticObjectRecord(object)[0xd8] == 0); // explicit zero is not a missing/default value
+    SAVE_CHECK(zonestates::staticObjectRecord(worldgen::ZoneObject{})[0xd8] == 1);
+}
+
 } // namespace
 
 int saveFormatTests() {
@@ -493,5 +522,6 @@ int saveFormatTests() {
     characterFile();
     importing();
     zoneStates();
+    generatedObjectMetadata();
     return failures;
 }

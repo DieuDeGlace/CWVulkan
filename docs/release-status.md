@@ -10,6 +10,17 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Generated static-object records now preserve the signed64 user/link ID and
+  unsigned required-item count rather than losing both during conversion to the
+  live format. The default count remains1; explicit0 and255 remain unchanged.
+  Save/restore integration coverage follows these fields from generation through
+  recorded zone state back into a live list. All five targets build warning-free;
+  full CPU/owner and77 shader,2 camera,24 GUI,6 map/shared-water/Alpha-scenery
+  checks pass. A no-save gameplay run exits0 with its capture reviewed and the
+  save database unchanged. Current-record interaction adapters and captured chest
+  reward-map completeness remain separate work; a required item/count is never
+  evidence of a chest's reward contents.
+
 - Queued WORLD consumers now group opaque draws by stable engine-owned resource
   identity, preserve FIFO within each resource and keep winding families/context
   order separate. Faded vectors retain append order. CPU header/identity metadata
