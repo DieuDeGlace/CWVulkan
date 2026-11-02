@@ -478,8 +478,30 @@ int steamShaderTests() {
         pendingZone.minimum[2] += 1000*65536; pendingZone.maximum[2] += 1000*65536; pendingZone.center[2] += 1000*65536;
         checkPoints("pending-cache-new-bounds-old-geometry", {pendingDraw}, *rangeEmpty);
         pendingZone = *oldZone;
-        checkPoints("pending-cache-committed-bounds", {pendingDraw}, {82,214,60});
+        checkPoints("pending-cache-committed-bounds", {pendingDraw}, {82, 214, 60});
     }
+    int sceneQueries = 0;
+    probe.sceneZone = [&](int64_t, int64_t) {
+        ++sceneQueries;
+        return std::optional<scenevisibility::Bounds>(*oldZone);
+    };
+    renderer.setWorldProbe(probe);
+    const scenevisibility::Sphere nearOldCamera{{0, 0, 65536}, 1};
+    const bool retained = renderer.steamSphereVisible(nearOldCamera.centre, nearOldCamera.radius, 100);
+    Camera movedCamera = camera;
+    movedCamera.eye = {500, 0, 1};
+    movedCamera.target = {500, 2, 1};
+    movedCamera.nativeFixedEye = steampoints::Point{500 * 65536, 0, 65536};
+    renderer.prepareScene(movedCamera, lighting, 3);
+    const bool current = retained && !renderer.steamSphereVisible(nearOldCamera.centre, nearOldCamera.radius, 100) &&
+                         !renderer.steamActorVisible(nearOldCamera);
+    std::cout << "Steam scene current pose state" << (current ? " PASS\n" : " FAIL\n");
+    failures += !current;
+    const int preparedQueries = sceneQueries;
+    renderer.frame(movedCamera, lighting, {500, 0, 0}, 3, {}, {});
+    const bool once = preparedQueries > 0 && sceneQueries == preparedQueries;
+    std::cout << "Steam scene prepared range reuse" << (once ? " PASS\n" : " FAIL\n");
+    failures += !once;
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

@@ -410,3 +410,5 @@ target_sources(EngineTests PRIVATE tests/ParticleTests.cpp)
 target_sources(EngineTests PRIVATE tests/BodyParticleTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/LightPublicationTests.cpp)
+target_sources(engine PRIVATE src/CreatureScene.cpp)
+target_sources(EngineTests PRIVATE tests/CreatureSceneTests.cpp)

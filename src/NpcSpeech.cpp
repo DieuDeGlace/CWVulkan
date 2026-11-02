@@ -3,17 +3,11 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
-#include <cstring>
 #include <glm/gtc/matrix_transform.hpp>
 #include <set>
 
 namespace npcspeech {
 namespace {
-template <class T> T read(const uint8_t *record, size_t field) {
-    T out;
-    std::memcpy(&out, record + field, sizeof out);
-    return out;
-}
 int64_t add(int64_t a, int64_t b) { return std::bit_cast<int64_t>((uint64_t)a + (uint64_t)b); }
 int64_t subtract(int64_t a, int64_t b) { return std::bit_cast<int64_t>((uint64_t)a - (uint64_t)b); }
 int modelFor(const TalkPlay::Page &page) {
@@ -39,20 +33,6 @@ glm::vec3 transform(glm::vec3 point, const glm::mat4 &matrix) {
     const float inverseW = 1.f / out.w;
     return {out.x * inverseW, out.y * inverseW, out.z * inverseW};
 }
-}
-Actor actor(const uint8_t *record) {
-    Actor result;
-    if (!record) return result;
-    result.id = read<int64_t>(record, 8);
-    result.physical = read<Point>(record, 0x10);
-    result.drawn = read<Point>(record, 0xb10);
-    std::memcpy(&result.body.x, record + 0x84, 12);
-    result.yaw = read<float>(record, 0x30);
-    result.drop = read<float>(record, 0x990);
-    result.extraHeight = read<float>(record, 0x17c);
-    result.health = read<float>(record, 0x180);
-    result.race = read<int32_t>(record, 0x64);
-    return result;
 }
 std::optional<glm::vec2> project(Point point, const Projection &projection, glm::vec2 screen, float guiScale) {
     glm::vec3 position;
@@ -185,13 +165,5 @@ glm::mat4 emoteTransform(const Actor &actor, const EmotePose &pose, glm::ivec3 h
     const float scale = (.8f / (float)header.x) * pose.scale;
     matrix = glm::scale(matrix, glm::vec3(scale));
     return glm::translate(matrix, glm::vec3(header) * -.5f);
-}
-ActorSphere actorSphere(const Actor &actor) {
-    ActorSphere result{actor.drawn, std::max(actor.body.z, .6f * std::max(actor.body.x, actor.body.y))};
-    if (actor.race == 0x12e) {
-        result.centre[2] = add(result.centre[2], (int64_t)(actor.extraHeight * .5f * 65536.f));
-        result.radius += actor.extraHeight * 1.2f;
-    } else result.centre[2] = add(result.centre[2], (int64_t)(-actor.drop * 65536.f));
-    return result;
 }
 } // namespace npcspeech

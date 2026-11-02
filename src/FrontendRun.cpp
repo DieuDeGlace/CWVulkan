@@ -1235,6 +1235,7 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
         s.spawned->update(*s.extracted, riderFeet);
         s.spawned->think(*s.extracted, dtMs, hour);
         s.spawned->simulate(*s.extracted, dtMs);
+        s.spawned->smooth((float)dtMs); // ordinary drawn/link phase, once before camera and pose
         std::memcpy(position, r + worldgen::creature::POSITION, sizeof position);
         lookAt = s.extracted->toLocal(position) + glm::vec3(0, 0, 1); // the record's place, one block up
         riderFeet = lookAt - glm::vec3(0, 0, 1 + SpawnedCreatures::NATIVE_FEET);
@@ -1269,8 +1270,13 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
     s.world->update(focus);
     opaque.clear(), water.clear();
     s.world->collect(opaque, water);
-    if (p)
-        s.spawned->draw(*s.extracted, *s.world, dtMs, wallClockMs(), riderFeet, s.renderer->settings.fogDistance, opaque);
+    if (p) {
+        s.renderer->prepareScene(cam, light, seconds);
+        creaturescene::View view;
+        view.flags = titleShown ? 0x60 : 0x20;
+        view.visible = [&](const auto &sphere) { return s.renderer->steamActorVisible(sphere); };
+        s.spawned->draw(*s.extracted, *s.world, dtMs, wallClockMs(), view, opaque);
+    }
     // The logo while the title layer is shown (§3.4).
     if (titleShown && logoMesh) {
         DrawItem d;

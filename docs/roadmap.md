@@ -302,8 +302,12 @@ individual feature documents.
   World work, body/burst births and pose sparks now share the verified CRT transition
   in their engine execution role. Burst expansion/update precedes scene pose; AI
   retains a separate state. Arithmetic and actual state61 spark-continuation cases
-  pass. Initial states, reached reseeds, exact pose admission/visitation and broader
-  same-thread consumer integration remain open.
+  pass. Normal world posing now uses a current fixed-camera/range snapshot,
+  registration order and pre-pose flags/health/sphere gates; body parts share that
+  sphere. The independently corrected radius includes the body-height minimum.
+  Headless real-draw and Vulkan snapshot/reuse checks pass, and the title underlay
+  now runs the ordinary drawn/link phase. Initial/factory ordering, reached reseeds,
+  optional preview calls and broader same-thread consumer integration remain open.
   Unknown styles and independently untraced producers remain open; full native CRT and
   broader visual/peer acceptance remain open. Other object
   families and listening comparisons also remain. The independently traced

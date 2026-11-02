@@ -515,3 +515,23 @@ CRT implementation was inspected or copied. Known subphase/wrap values and actua
 body/burst/pose-spark consumer continuity are tested with synthetic data. Complete
 reseed, thread/task assignment, pose admission/visitation and whole-frame consumer
 closure remain separate work; no startup or rendered-particle parity is asserted.
+
+
+## Current-scene actor pose admission, 2026-11-01
+
+The independent native-only author wrote steam-world-pose-invocation.md and corrected
+creature-pose12.4 from the upstream height-minimum instructions. The implementer read
+that prose, the linked existing frame/camera/NPC-speech contracts and engine sources
+only. CreatureScene factors the engine's existing speech actor parser/sphere math
+into shared data; normal flags/health/visibility now precede pose/cache/random work.
+Registration ordinals preserve the already implemented World membership ordering.
+A shared prepared CPU scene supplies exact fixed-camera distance/origin math and
+current planes/ranges, then is reused by the renderer rather than advanced twice.
+Earlier Game queries retain the prior scene until the new preparation boundary.
+Gameplay and title-underlay callers use it; widget/direct preview calls retain their
+separate policy. The title underlay also gains the ordinary drawn/link phase, whose
+front-panel admission is established by gameplay-frame-order7. Headless real-draw,
+synthetic sphere/order and Vulkan scene-reuse cases introduce no owner data.
+Native startup/factory ordering, all preview consumers, full shader/scenery origin
+precision and cached pose/body coordinate-lifetime comparisons remain separate;
+the current engine pose matrices still use its source-home coordinate frame.

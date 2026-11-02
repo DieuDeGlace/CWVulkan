@@ -1,5 +1,6 @@
 #include "SceneVisibility.h"
 #include "SteamScenery.h"
+#include "GameMath.h"
 #include <algorithm>
 #include <cmath>
 
@@ -60,6 +61,18 @@ Bounds build(int32_t zx, int32_t zy, const Columns &columns, const BlockType &ty
 Planes planes(const glm::mat4 &clip) {
     auto row = [&](int index) { return glm::vec4(clip[0][index], clip[1][index], clip[2][index], clip[3][index]); };
     return {row(3) + row(0), row(3) - row(0), row(3) + row(1), row(3) - row(1), row(3) + row(2), row(3) - row(2)};
+}
+
+bool SphereView::visible(const Sphere &sphere, float range) const {
+    if (!steamscenery::earlyWithinFixed(sphere.centre, camera, range))
+        return false;
+    glm::vec3 point;
+    for (int axis = 0; axis < 3; ++axis)
+        point[axis] = float(gamemath::addFixed(sphere.centre[axis], offset[axis])) * (1.f / 65536.f);
+    for (const auto &plane : planes)
+        if (((point.y * plane.y + point.x * plane.x) + point.z * plane.z) + plane.w + sphere.radius < 0)
+            return false;
+    return true;
 }
 
 bool sphere(const std::array<int64_t, 3> &center, float radius, glm::vec3 eye, const Planes &planes, float range) {

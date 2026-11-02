@@ -10,11 +10,17 @@ Bounds bounds(std::array<int64_t, 3> position, glm::vec3 voxels, float size, uin
 }
 
 bool earlyWithin(const std::array<int64_t, 3> &position, glm::vec3 eye, float range, bool horizontal) {
+    std::array<int64_t, 3> camera;
+    for (int axis = 0; axis < 3; ++axis)
+        camera[axis] = int64_t(double(eye[axis]) * 65536);
+    return earlyWithinFixed(position, camera, range, horizontal);
+}
+
+bool earlyWithinFixed(const std::array<int64_t, 3> &position, const std::array<int64_t, 3> &camera, float range, bool horizontal) {
     // Unsigned operations preserve the native machine's wrap without signed C++ overflow.
     uint64_t sum = 0;
     for (int axis = 0; axis < (horizontal ? 2 : 3); ++axis) {
-        const int64_t camera = (int64_t)((double)eye[axis] * 65536);
-        const uint64_t delta = (uint64_t)position[axis] - (uint64_t)camera;
+        const uint64_t delta = (uint64_t)position[axis] - (uint64_t)camera[axis];
         const uint64_t squareBits = delta * delta;
         int64_t square;
         std::memcpy(&square, &squareBits, sizeof square);

@@ -36,6 +36,21 @@
 namespace {
 constexpr int NEAR_ZONES = 4; // the game makes creatures within 256 blocks of a player (0x2e17d0)
 
+template <class Actor, class Zones> std::vector<Actor *> registeredCreatures(Actor *local, Zones &zones) {
+    std::vector<Actor *> ordered;
+    size_t count = local ? 1 : 0;
+    for (const auto &[key, list] : zones)
+        count += list.size();
+    ordered.reserve(count);
+    if (local)
+        ordered.push_back(local);
+    for (auto &[key, list] : zones)
+        for (auto &creature : list)
+            ordered.push_back(&creature);
+    std::sort(ordered.begin(), ordered.end(), [](const Actor *a, const Actor *b) { return a->registration < b->registration; });
+    return ordered;
+}
+
 // Creature record offsets of the drawn place and its smoothing (netcode-packets.md §2.4,
 // creature-pose.md).
 constexpr size_t ORIENTATION = 0x28;                // f32 x3: pitch, roll, yaw
@@ -426,16 +441,9 @@ void SpawnedCreatures::registerCreature(Creature &creature) {
 }
 
 void SpawnedCreatures::forEachWorldCreature(const std::function<void(const uint8_t *)> &f) const {
-    std::vector<const Creature *> ordered;
-    if (hasPlayer)
-        ordered.push_back(&player);
-    for (const auto &[zone, list] : zones)
-        for (const Creature &creature : list)
-            ordered.push_back(&creature);
     // Zone storage can move or regroup creatures; those changes do not register
     // them again. Unique ordinals preserve membership order without record copies.
-    std::sort(ordered.begin(), ordered.end(), [](const Creature *a, const Creature *b) { return a->registration < b->registration; });
-    for (const Creature *creature : ordered)
+    for (const Creature *creature : registeredCreatures(hasPlayer ? &player : nullptr, zones))
         f(creature->record.data());
 }
 
@@ -2155,8 +2163,8 @@ int SpawnedCreatures::worldModel(World &world, int id, const float *tint, bool r
     return m;
 }
 
-void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, glm::vec3 playerLocal,
-                            float range, std::vector<DrawItem> &out) {
+void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
+                            std::vector<DrawItem> &out) {
     nativepose::Models lookup;
     lookup.byId = [&](int id) -> const nativepose::Model * {
         auto it = models.find(id);
@@ -2168,14 +2176,11 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
     };
     std::vector<nativepose::Draw> draws;
     drawn = 0;
+    playerPartsDrawn = 0;
     auto drawOne = [&](Creature &cr, bool isPlayer) {
         worldgen::CreatureRecord &r = cr.record;
-        const glm::vec3 at = ew.toLocal(reinterpret_cast<const int64_t *>(&r[worldgen::creature::POSITION]));
-        if (glm::length(glm::vec2(at - playerLocal)) > range)
-            return;
-        // A dead creature is not drawn; as it dies its parts burst into voxels (main.cpp).
-        const int64_t id = get<int64_t>(r, worldgen::creature::ID);
-        if (!(get<float>(r, worldgen::creature::HEALTH) > 0.0f))
+        const auto admitted = creaturescene::admit(creaturescene::actor(r.data()), isPlayer, view);
+        if (!admitted)
             return;
         // Drawn position/orientation were prepared before input for the whole World.
         // Visibility and mesh drawing do not rerun that interpolation phase.
@@ -2197,8 +2202,7 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
         draws.clear();
         // The world's draw sets the pose state and its clock from the ability right before
         // posing a creature it draws (creature-pose.md §12); one culled above keeps them.
-        if (get<float>(r, worldgen::creature::HEALTH) > 0.0f)
-            nativepose::setPoseState(r.data());
+        nativepose::setPoseState(r.data());
         nativepose::PreparedSprites prepared{};
         nativepose::pose(r.data(), call, lookup, &draws, &prepared);
         for (size_t slot = 0; slot < prepared.size(); ++slot)
@@ -2227,17 +2231,15 @@ void SpawnedCreatures::draw(const ExtractedWorld &ew, World &world, double dtMs,
             const glm::vec3 size = world.modelSize(m);
             glm::mat4 place = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
                               glm::translate(glm::mat4(1), glm::vec3(size.x * .5f, size.y * .5f, 0));
-            out.push_back({mesh, place, 0, 0, true});
+            DrawItem item{mesh, place, 0, 0, true};
+            item.nativeActor = *admitted;
+            out.push_back(std::move(item));
             playerPartsDrawn += isPlayer;
         }
         drawn += !isPlayer;
     };
-    for (auto &[zone, list] : zones)
-        for (Creature &cr : list)
-            drawOne(cr, false);
-    playerPartsDrawn = 0;
-    if (nativePlayer && hasPlayer) // the native player, by the same pose code
-        drawOne(player, true);
+    for (Creature *creature : registeredCreatures(nativePlayer && hasPlayer ? &player : nullptr, zones))
+        drawOne(*creature, creature == &player);
 }
 
 // --- Multiplayer: the world's side (docs/specs/netcode-roles.md) ----------------------------

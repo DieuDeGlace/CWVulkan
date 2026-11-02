@@ -10,6 +10,29 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Normal world pose admission now uses the current scene's camera, planes and actor
+  range, in registration order, before any state/clock/spark/cache updates. The
+  independently corrected sphere includes max(body height,0.6*max(width,depth));
+  race12e adjustments and low64 center arithmetic remain separate. Actor data and
+  sphere math are shared with speech/emotes, and all body parts carry the admitted
+  actor sphere instead of generic per-part range gates. Renderer scene preparation
+  is reused once by the GPU frame; earlier death/use queries retain the prior CPU
+  scene until that boundary. Exact fixed camera coordinates and camera-relative XY
+  plane inputs avoid a float-derived distance/origin substitution. Gameplay keeps
+  its original descriptor queue position; the title-world caller uses the same
+  policy and now performs its previously missing ordinary drawn/link phase.
+  Direct widget/character-preview calls retain their separate policy.
+  All five targets build without warnings. Focused real headless draw/order/cache,
+  shared sphere and particle tests pass, as do full CPU/owner and48 shader,2 camera,
+  20 GUI,6 map/shared-water/Alpha-scenery image checks. Current-scene replacement and
+  one-time range preparation have Vulkan integration checks. Steam/Alpha no-save
+  combat, title and character-selection runs exit0 with all four frames viewed and
+  the character database unchanged. These are bounded stability checks; the blue
+  gameplay scene, empty-sky frontend underlay and missing owner hair are not accepted
+  as native pixel parity. Pose/body matrices still use the engine's source-home
+  frame; their native cached-coordinate lifetime, factory/startup ordering, optional
+  preview counts and broader shadow/scenery/viewport acceptance remain open.
+
 - World work and local body/burst/scene-pose randomness now use the independently
   specified CRT32-bit transition and15-bit return. Pose sparks no longer use a
   static unrelated Mersenne Twister. Ordinary expansion and its once-frame update

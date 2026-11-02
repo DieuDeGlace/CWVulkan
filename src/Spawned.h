@@ -4,6 +4,7 @@
 // player comes near (worldgen/Residents.h, within 4 zones), and are posed by the game's own pose code
 // (NativePose) with the game's models (Extract/sprites.txt, the world's model list).
 #include "Extracted.h"
+#include "CreatureScene.h"
 #include "NativeAI.h"
 #include "NativeUpkeep.h"
 #include "NativeAbility.h"
@@ -315,8 +316,8 @@ class SpawnedCreatures {
         x = trips.begin()->second.x, y = trips.begin()->second.y;
         return true;
     }
-    // Poses every creature within `range` blocks (dt in milliseconds) and adds its parts.
-    void draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, glm::vec3 playerLocal, float range,
+    // Pose admitted entries in registration order, preserving culled caches (dt in ms).
+    void draw(const ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
               std::vector<DrawItem> &out);
     size_t count() const;
     // How many creatures stand on the ground (+0x5c bit 0), are in water (bit 1), and in all.

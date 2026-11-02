@@ -3,19 +3,14 @@
 // steam-npc-speech-rendering.md. Geometry comes from the owner's assets.
 #include "DialoguePanel.h"
 #include "SceneVisibility.h"
+#include "CreatureScene.h"
 #include <array>
 #include <map>
 
 namespace npcspeech {
 using Point = std::array<int64_t, 3>;
-struct Actor {
-    int64_t id = 0;
-    Point physical{}, drawn{};
-    glm::vec3 body{0};
-    float yaw = 0, drop = 0, extraHeight = 0, health = 0;
-    int32_t race = 0;
-};
-Actor actor(const uint8_t *record);
+using creaturescene::Actor;
+using creaturescene::actor;
 using Projection = scenevisibility::Projection;
 std::optional<glm::vec2> project(Point, const Projection &, glm::vec2 screen, float guiScale);
 struct Bubble {
@@ -56,5 +51,5 @@ struct EmotePose { int model = 0; float scale = 1, bounce = 0, tilt = 0; };
 EmotePose emotePose(Emote);
 glm::mat4 emoteTransform(const Actor &, const EmotePose &, glm::ivec3 header, Point renderOffset);
 using ActorSphere = scenevisibility::Sphere;
-ActorSphere actorSphere(const Actor &);
+using creaturescene::actorSphere;
 } // namespace npcspeech

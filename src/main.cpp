@@ -6159,6 +6159,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             session.visitLocalRegion(regionHere(), playerLevel);
         opaque.clear();
         water.clear();
+        std::optional<size_t> nativeActorsAt;
         // Mesh streaming/changed blocks and this frame's native object updates are ready.
         world.collect(opaque, water);
         if (spawnedReady) {
@@ -6375,9 +6376,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 burstParticles.update(int32_t(gamemath::frameMilliseconds(frameMs)),
                                       [&](int32_t x, int32_t y, int32_t z) { return extractedWorld.gameBlock(x, y, z)[4]; });
             }
-            spawned.draw(extractedWorld, world, ms,
-                         (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(), player.position,
-                         renderSettings.fogDistance, opaque);
+            if (!serverMode)
+                nativeActorsAt = opaque.size();
             // Deaths: the body bursts into the voxels it was drawn with, and a kill by the
             // player pays XP like the recorded monsters'. What they dropped (0x2a6860), coins
             // included, lies on the ground as the game's ground items.
@@ -6801,6 +6801,21 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         audio.setCameraShake(cameramotion::decayShake(audio.cameraShake(), frameMs));
         camera.viewShake = cameramotion::viewShake(spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), audio.cameraShake());
         camera.displayedYawDegrees = (float)((double)viewYaw * 57.29577951308232 - 90.0);
+        if (useExtracted && nativePlayer)
+            camera.nativeFixedEye = cameraPosition.eye;
+        if (!serverMode) {
+            renderer.prepareScene(camera, lighting, time);
+            if (nativeActorsAt) {
+                creaturescene::View view;
+                view.flags = mapOpen ? 2 : 0;
+                view.visible = [&](const auto &sphere) { return renderer.steamActorVisible(sphere); };
+                const size_t oldEnd = opaque.size();
+                spawned.draw(extractedWorld, world, gamemath::frameMilliseconds(frameMs),
+                             (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(), view, opaque);
+                // Keep actor descriptors in their original queue position without copying a second list.
+                std::rotate(opaque.begin() + *nativeActorsAt, opaque.begin() + oldEnd, opaque.end());
+            }
+        }
         // The map (the game's frame update, the map rendering): its position, its overlay between the
         // corner and the middle, its regions.
         std::function<std::vector<mapmarks::Marker>()> collectMapMarkers;

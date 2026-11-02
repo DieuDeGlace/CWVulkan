@@ -76,6 +76,7 @@ struct Camera {
     glm::vec2 viewShake{0};                      // Native view-space translation (left/up); never changes eye or aim.
     std::optional<float> displayedYawDegrees;    // Steam beam orientation, before eye collision adjustments
     std::optional<glm::mat3> nativeViewRotation; // Unshaken left/up/forward view; valid even when eye == target.
+    std::optional<steampoints::Point> nativeFixedEye; // exact game camera for native CPU distance/origin arithmetic
 };
 
 // One corner of an interface quad, in screen pixels (origin top left).
@@ -131,10 +132,8 @@ struct DrawItem {
     std::shared_ptr<const scenevisibility::Bounds> nativeZone; // containing zone for native model/beam gates
     std::shared_ptr<const steampoints::ZoneSources> nativeLights;
     // Reflections reverse triangle winding (the native right foot uses one).
-    std::optional<scenevisibility::Sphere> nativeActor; // shared actor gate for overhead models
-    bool mirrored() const {
-        return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0;
-    }
+    std::optional<scenevisibility::Sphere> nativeActor; // shared gate for creature parts and overhead models
+    bool mirrored() const { return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0; }
 };
 
 // What the sky asks about a column of the world (docs/specs/sky-and-clouds.md): the Alpha
@@ -182,9 +181,14 @@ class Renderer {
         blockLight.clear();
         cloudCells.clear();
         skyColumnValid = false;
+        scenePrepared = false;
     }
     void setSkyModels(SkyModels models) { skyModels = models; }
-    void resetSceneRange() { steamRange.reset(); nativeRangeActive = false; }
+    void resetSceneRange() {
+        steamRange.reset();
+        nativeRangeActive = false;
+        scenePrepared = false;
+    }
     std::optional<scenerange::Ranges> nativeRanges() const {
         return nativeRangeActive ? std::optional<scenerange::Ranges>(steamRange.value()) : std::nullopt;
     }
@@ -210,7 +214,11 @@ class Renderer {
     const std::string &deviceName() const { return gpuName; }
     unsigned drawsLastFrame() const { return lastDraws; }
     const std::optional<scenevisibility::Projection> &speechProjection() const { return lastSpeechProjection; }
-    // Death effects query the completed scene state before the next camera setup.
+    // Installs one CPU camera/range snapshot before normal actor posing. frame()
+    // reuses it; earlier Game consumers still see the previous scene until this call.
+    void prepareScene(const Camera &, const Lighting &, double time);
+    bool steamActorVisible(const scenevisibility::Sphere &) const;
+    // Early death/use queries read the retained CPU scene state.
     bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
     // Saves the next presented frame as a PNG (for screenshots and tests).
     void capture(const std::string &path) { capturePath = path; }
@@ -265,12 +273,14 @@ class Renderer {
 
     GLFWwindow *window = nullptr;
     std::string gpuName;
-    struct SphereState {
-        steampoints::Point origin{};
-        glm::vec3 eye{0};
-        scenevisibility::Planes planes{};
+    struct SceneFrame {
+        scenevisibility::SphereView sphere;
+        scenerange::Ranges ranges;
+        double elapsedMs = -1;
     };
-    std::optional<SphereState> lastSceneSphere;
+    std::optional<SceneFrame> sceneFrame;
+    bool scenePrepared = false;
+    double lastSceneTime = -1;
     scenerange::State steamRange;
     bool nativeRangeActive = false;
     std::optional<scenevisibility::Projection> lastSpeechProjection;

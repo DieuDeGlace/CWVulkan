@@ -8,8 +8,10 @@ state, which lives inside the creature at C+0xc38. Angles are degrees unless sta
 are milliseconds, lengths are model units (one unit is one voxel of a body-part model) and
 world positions are 64-bit integers in 1/65536 of a block ("dots").
 
-The routine is called once per drawn creature per frame (callers 0xd3170, 0xdb630,
-0xe2e00). In one call it:
+The normal world caller invokes the routine once per admitted registration-list
+entry in each world pass. Preview callers0xdb630/0xe2e00 are separate; this is
+not a global per-frame deduplication guarantee. See
+[world pose invocation](steam-world-pose-invocation.md). In one call it:
 
 1. draws race 0x12e's stack of rings;
 2. picks the model ("sprite") of every body part and held weapon;
@@ -757,7 +759,10 @@ and the clock is simply the ability clock at that moment.
 
 ### 12.1 When
 
-0xd3170 walks the world's creature list (world +0x40) once per frame. A creature reaches the
+0xd3170 walks the world's registration list (world +0x40) once per invocation.
+Its list order, insertion/update retention, current camera/range and ordinary
+draw flags are specified in [world pose invocation](steam-world-pose-invocation.md).
+A creature reaches the
 pose call only if all of these hold, in this order:
 
 1. not (draw flag bit 0 is set and C is the local player); draw flag bit 0x80 set means only
@@ -858,8 +863,12 @@ Inputs: the renderer R (0xd3170's object), a point **p** (three i64, dots), a ra
 
 For the creature: p = C's drawn position C+0xb10, +0xb18, +0xb20 with z lowered by
 trunc64(C+0x990 × 65536) (race 0x12e: z raised by trunc64(C+0x17c × 0.5 × 65536) instead);
-r = max(C+0x84, C+0x88) × 0.6 (race 0x12e: C+0x17c × 1.2 + that); D = R+0x4a0, the view
-distance.
+r = **max(C+0x8c, float32(max(C+0x84, C+0x88) × 0.6f))**
+(race0x12e: separately multiply C+0x17c by1.2f and add it to that result);
+D = R+0x4a0, the view distance. The body-height lower bound is verified in
+the native instructions0xd5cef–0xd5d03 before the0xd5e1d call; it corrects
+the earlier abbreviated reading that omitted this maximum. Exact float/truncation
+staging and current-scene timing are in the invocation supplement §3.
 
 ### 12.5 The copy
 
