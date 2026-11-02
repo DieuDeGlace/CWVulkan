@@ -459,22 +459,15 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::Creat
         mine.zones++;
         auto t0 = Clock::now();
         wg::ZoneContents z = creatures ? wg::generateZoneWithCreatures(world, *creatures, day, g.zx, g.zy, true)
-                                      : wg::generateZone(world, g.zx, g.zy, options);
+                                       : wg::generateZone(world, g.zx, g.zy, options);
         newSeconds += seconds(t0);
-        // The extracted records were taken on day.txt's day; without part C the refresh only
-        // restores the objects from the generator's copy.
+        // Fresh generation and daily refresh are distinct fixture phases. Only genr contains
+        // the refresh pass; the other sets retain the objects of fresh generation.
         if (day >= 0) {
-            if (creatures)
+            if (creatures && name == "genr_seed_123")
                 wg::refreshZoneCreatures(z, world, *creatures, day);
-            else
+            else if (!creatures)
                 wg::refreshZone(z, world, day);
-        }
-        if (creatures) {
-            // The capture includes daily objects. Compare after the separate object-publication
-            // marking boundary, rather than omitting part C's objects from a terrain assertion.
-            wg::ZoneBuild publication(z.terrain, world, wg::cellObjectsFor(world), false);
-            publication.objects = z.objects;
-            wg::markObjectBlocks(publication, z.lists);
         }
         for (int i = 0; i < wg::ZONE_COLUMNS; i++) {
             const wg::TerrainColumn &gc = g.columns[(size_t)i], &oc = z.terrain.columns[(size_t)i];
@@ -601,7 +594,7 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::Creat
         }
     }
     std::printf("wgstructures zones %d (%s, day %d%s):\n", mine.zones, name.c_str(), day,
-                creatures ? ", full creature/object generation and publication" : ", structure-only");
+                creatures ? ", full creature/object generation" : ", structure-only");
     printTotals("new", mine);
     if (name == "genr_seed_123")
         std::printf("  refresh RNG: partial capture; fresh-generation prefix check not applicable\n");
@@ -823,7 +816,7 @@ int worldgenStructureTests() {
     return failures;
 }
 
-// `EngineTests wgstructures [zones]`.
+// `EngineTests wgstructures [zones]`; WS_COMPLETE=1 checks full generation in all four owner sets.
 int worldgenStructureCommand(int maxZones) {
     failures = 0;
     plannerDoorChecks();
@@ -846,7 +839,21 @@ int worldgenStructureCommand(int maxZones) {
             }
     }
     cellsOracle(game, true, 1 << 30);
-    zonesOracle(generatedZonesDir(game), maxZones, true);
+    const auto directory = generatedZonesDir(game);
+    wg::CreatureTables creatures;
+    const wg::CreatureTables *complete = nullptr;
+    if (std::getenv("WS_COMPLETE")) {
+        std::string why;
+        if (!creatures.load(directory.parent_path() / "oracle", &why))
+            return std::printf("cannot compare full generation: %s\n", why.c_str()), 1;
+        complete = &creatures;
+    }
+    if (complete) {
+        for (const char *set : {"gen_seed_123", "gen2_seed_123", "genb_seed_123", "genr_seed_123"})
+            zonesOracle(directory.parent_path() / set, maxZones, true, complete);
+    } else {
+        zonesOracle(directory, maxZones, true);
+    }
     if (const char *w = std::getenv("WS_WORLD")) // the whole extracted world, or a spread sample of it
         worldOracle(game / "Extract" / "seed_123", std::atoi(w), true);
     std::printf(failures ? "%d failure(s)\n" : "wgstructures: all passed\n", failures);

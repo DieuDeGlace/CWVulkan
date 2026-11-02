@@ -622,8 +622,11 @@ expose effective sea water rather than treating their unused base as buried terr
 
 Synthetic tests exercise retained keys, overlap flags, narrowing, effective water,
 column extension and pending-set clearing. A new owner-only comparison includes full
-creature/daily-object generation and the separate object-publication boundary; all
-379,182 compared blocks match across its six supplied zones. The older structure-only
-comparison remains labelled as such. This does not close global region/theme coverage,
+creature/object generation, applying daily refresh only to its corresponding fixture
+set. All26,418,885 block comparisons and3,231,744 column comparisons match across789
+fresh/refreshed zone fixtures. An initial expanded comparison incorrectly refreshed
+the fresh fixture set too; that test phase error was corrected rather than changing
+the generator to fit it. The older structure-only comparison remains labelled as such.
+This does not close global region/theme coverage,
 all pending-set producers, adjacent-zone object ownership or pixel acceptance. No owner
 blocks, records, captures or assets are included in source or runtime packages.

@@ -297,11 +297,12 @@ individual feature documents.
   object lists mark immediately; pending publication copies their records before
   re-marking on both host and mirror paths. Synthetic checks cover persistent keys,
   overlap bits, empty-column sea water, missing zones and repeated publication.
-  A separate full-generation/post-publication owner check matches all379,182 blocks
-  and24,576 columns across six sampled zones. The older structure-only check's84
-  differing blocks omit two daily objects; they are not full-pipeline failures.
+  A separate full-generation owner check preserves fresh versus daily-refreshed
+  fixture phases. All26,418,885 block comparisons and3,231,744 column comparisons
+  match across789 zone fixtures in the four supplied sets. The older structure-only
+  check's84 differing blocks omit two creature-pass objects; they are not full-pipeline failures.
   Broader zone/theme coverage, pending-set producers and adjacent-zone ownership
-  still need acceptance work; the six-zone result is not global generation parity.
+  still need acceptance work; the recorded-fixture result is not global generation parity.
   Completed target-zone air/water red now publishes before geometry in both styles,
   without history/dirty/halo changes. Upkeep and particles share the corrected
   accessor; real CPU-mesh roof/sea/physical-edit cases and full CPU/GPU checks pass.
