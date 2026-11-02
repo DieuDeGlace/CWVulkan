@@ -238,6 +238,7 @@ void Renderer::destroyPostTargets() {
     destroyWaterTargets();
     destroyImage(guiDepth);
     guiDepthFresh = true;
+    destroyClipLayers();
     for (Image *i : {&sceneColor, &depthImages[0], &depthImages[1], &history[0], &history[1], &smaaEdges, &smaaWeights})
         destroyImage(*i);
 }
@@ -276,13 +277,20 @@ bool Renderer::uploadOverlay() {
     }
     return true;
 }
-void Renderer::drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth) {
+void Renderer::drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth, bool layer, VkDescriptorSet mask,
+                                uint32_t mode) {
     if (!count || !overlayImage.image || !overlayBuffers[frameIndex].buffer)
         return;
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, depth ? guiOverlayPipeline : overlayPipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayLayout, 0, 1, &overlaySet, 0, nullptr);
-    float screen[2] = {(float)extent.width, (float)extent.height};
-    vkCmdPushConstants(cmd, overlayLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(screen), screen);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layer ? layerOverlayPipeline : depth ? guiOverlayPipeline : overlayPipeline);
+    const VkDescriptorSet set = mask ? mask : overlaySet;
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, overlayLayout, 0, 1, &set, 0, nullptr);
+    struct Screen {
+        glm::vec2 size;
+        int32_t mode;
+        float bias;
+    };
+    const Screen screen{{(float)extent.width, (float)extent.height}, int32_t(mode), mode ? .13500000536441803f : 0.f};
+    vkCmdPushConstants(cmd, overlayLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(screen), &screen);
     VkDeviceSize zero = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &overlayBuffers[frameIndex].buffer, &zero);
     vkCmdDraw(cmd, count, 1, first, 0);
@@ -390,7 +398,7 @@ void Renderer::recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 ji
     }
     // The interface, sharp, over the anti-aliased image. Item callbacks retain scene
     // depth and interleave WORLD models with the Plasma triangle stream.
-    if (guiRequests.empty()) {
+    if (guiRequests.empty() && overlayLayers.empty()) {
         drawOverlay(cmd);
         vkCmdEndRendering(cmd);
     } else {

@@ -203,6 +203,53 @@ inherited-state input**, not an invented linear/clamp or repeat policy
 derived from the shader declaration's default mode. No sampler-state
 runtime oracle was obtained.
 
+### 6.1 Bounded native provenance versus the public NULL-sampler default
+
+Native startup **0x134cc0** obtains a newly created immediate context from
+**D3D11CreateDevice**, then supplies it to the concrete graphics/renderer
+construction path, including **0x38e100**. The reached Plasma initialization
+**0x38fb90**, pipeline restore **0x38e800**, surface binding **0x3921e0**,
+object texture upload/binding **0x391f90/0x391f20**, and ordinary surface
+composition **0x392280** contain no PS sampler-slot0/1 assignment or sampler
+descriptor creation. Their texture bindings assign shader-resource views,
+not sampler state.
+
+Nearby calls with the same numeric virtual displacement are not evidence
+of sampler writes: **0x134f53/0x1350ac/0x1354d0** are device depth-stencil-
+view creation calls, and **0x134695** operates on the swap chain's fullscreen
+state. Receiver identity matters, not only the displacement.
+
+The exported native call metadata census found **79 constant-displacement
++0x50 sites and18 +0xb8 sites**. Its inspected reached graphics/startup
+subset contained no PSSetSamplers/CreateSamplerState writer. Other sites
+include Game, Widget and runtime virtual methods; this bounded audit did
+not exhaustively classify every receiver, indirect/computed target or
+external writer. It therefore establishes **no local override on the
+listed reached paths**, not an explicit initial NULL assignment and not
+a proof of NULL bindings throughout every frame.
+
+Separately, Microsoft's public **PSSetSamplers** contract defines the
+behavior **when a sampler binding is NULL**:
+
+|Property|Conditional NULL-sampler value|
+|---|---|
+|Filter|MIN_MAG_MIP_LINEAR|
+|Address U/V/W|CLAMP for each axis|
+|Mip LOD bias|0|
+|Maximum anisotropy|1|
+|Comparison function|NEVER|
+|Border RGBA|All components1|
+|Minimum / maximum LOD|−FLT_MAX /+FLT_MAX|
+
+These are API-defined default values, rather than a sampler descriptor
+found in the native constructors. The authority is
+[Microsoft PSSetSamplers documentation](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-pssetsamplers).
+This conditional API rule does **not** convert absence of a reached local
+writer into proof of the native binding at an arbitrary draw. No all-frame
+native sampler-state oracle was obtained; unclassified/external writers
+and the exact native initial binding observation remain open. The shader's
+sample declaration alone does not settle those provenance questions.
+
 ## 7. Ordinary surface rectangle composition
 
 Surface virtual+0x28 **0x392280** takes destination XY, requested width/

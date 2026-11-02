@@ -87,9 +87,9 @@ int guiRenderTests() {
     int failures = 0, checks = 0;
     auto check = [&](const char *name, const std::vector<OverlayVertex> &text, const std::vector<guiitem::Request> &items,
                      const std::vector<DrawItem> &scene, glm::ivec2 at, std::array<int, 3> expected, int tolerance = 2,
-                     std::optional<int> expectedAlpha = {}) {
+                     std::optional<int> expectedAlpha = {}, const std::vector<plasma::LayerCommand> &layers = {}) {
         const auto capture = root / (std::string(name) + ".png");
-        renderer.overlay(text, items);
+        renderer.overlay(text, items, layers);
         renderer.capture(capture.string(), expectedAlpha.has_value());
         renderer.frame(camera, lighting, {0, 0, 0}, 0, scene, {});
         int width = 0, height = 0, channels = 0;
@@ -216,6 +216,67 @@ int guiRenderTests() {
     raw.projection[3][2] = raw.depthOffset = 16777216.f;
     check("raw-depth-visible", background, {raw}, {}, {64, 64}, {128, 128, 128});
     check("raw-depth-coefficient", background, {raw}, {preceding}, {64, 64}, {0, 0, 255});
+    using Layer = plasma::LayerCommand;
+    auto whiteMask = background;
+    for (auto &vertex : whiteMask) {
+        vertex.x -= .135f;
+        vertex.y -= .135f;
+        vertex.r = vertex.g = vertex.b = vertex.a = 255;
+    }
+    auto clipped = background;
+    clipped.insert(clipped.end(), red.begin(), red.end());
+    clipped.insert(clipped.end(), whiteMask.begin(), whiteMask.end());
+    const std::array<std::array<int, 3>, 3> masked{{{255, 127, 127}, {128, 0, 127}, {128, 128, 255}}};
+    for (uint32_t mode = 1; mode <= 3; ++mode) {
+        const std::vector<Layer> commands{
+            {Layer::Kind::Push, {6, 0}}, {Layer::Kind::Pop, {12, 0}}, {Layer::Kind::Mask, {12, 0}, mode}, {Layer::Kind::Mask, {18, 0}}};
+        const std::string name = "clip-mode-" + std::to_string(mode);
+        check(name.c_str(), clipped, {}, {}, {64, 64}, masked[mode - 1], 2, 255, commands);
+    }
+    auto triangle = background;
+    triangle.insert(triangle.end(), red.begin(), red.end());
+    for (auto point : {glm::vec2(20, 20), glm::vec2(108, 20), glm::vec2(20, 108)})
+        triangle.push_back({point.x - .135f, point.y - .135f, 0, 0, 255, 255, 255, 255});
+    const std::vector<Layer> triangleCommands{
+        {Layer::Kind::Push, {6, 0}}, {Layer::Kind::Pop, {12, 0}}, {Layer::Kind::Mask, {12, 0}, 2}, {Layer::Kind::Mask, {15, 0}}};
+    check("clip-triangle-inside", triangle, {}, {}, {40, 40}, {128, 0, 127}, 2, {}, triangleCommands);
+    check("clip-triangle-outside", triangle, {}, {}, {100, 100}, {0, 0, 255}, 2, {}, triangleCommands);
+    check("clip-unlayered-control", triangle, {}, {}, {100, 100}, {128, 0, 127});
+    auto empty = background;
+    empty.insert(empty.end(), whiteMask.begin(), whiteMask.end());
+    const std::vector<Layer> emptyCommands{
+        {Layer::Kind::Push, {6, 0}}, {Layer::Kind::Pop, {6, 0}}, {Layer::Kind::Mask, {6, 0}, 2}, {Layer::Kind::Mask, {12, 0}}};
+    check("clip-reused-full-clear", empty, {}, {}, {40, 40}, {0, 0, 255}, 2, {}, emptyCommands);
+    auto nested = clipped;
+    nested.insert(nested.end(), whiteMask.begin(), whiteMask.end());
+    const std::vector<Layer> nestedCommands{{Layer::Kind::Push, {6, 0}},     {Layer::Kind::Push, {6, 0}},  {Layer::Kind::Pop, {12, 0}},
+                                            {Layer::Kind::Mask, {12, 0}, 2}, {Layer::Kind::Mask, {18, 0}}, {Layer::Kind::Pop, {18, 0}},
+                                            {Layer::Kind::Mask, {18, 0}, 2}, {Layer::Kind::Mask, {24, 0}}};
+    check("clip-nested-unpremultiplication", nested, {}, {}, {64, 64}, {128, 0, 127}, 2, {}, nestedCommands);
+    auto inside = icon, outside = icon;
+    inside.beforeVertex = 6;
+    outside.beforeVertex = 12;
+    outside.mesh = brighter;
+    const std::vector<Layer> callbackCommands{
+        {Layer::Kind::Push, {6, 0}}, {Layer::Kind::Pop, {6, 1}}, {Layer::Kind::Mask, {6, 1}, 2}, {Layer::Kind::Mask, {12, 1}}};
+    check("clip-null-depth-and-restoration", empty, {inside, outside}, {preceding}, {64, 64}, {128, 128, 128}, 2, {}, callbackCommands);
+    if (!renderer.setOverlayAtlas(1, 1, white.data()))
+        ++failures;
+    const std::vector<Layer> replacedAtlas{
+        {Layer::Kind::Push, {6, 0}}, {Layer::Kind::Pop, {12, 0}}, {Layer::Kind::Mask, {12, 0}, 2}, {Layer::Kind::Mask, {18, 0}}};
+    check("clip-atlas-replacement", clipped, {}, {}, {64, 64}, {128, 0, 127}, 2, {}, replacedAtlas);
+    // Leave consecutive frames in flight: the retained pool is shared on the
+    // graphics queue, rather than copied per frame or synchronized by readback.
+    for (int frame = 0; frame < 4; ++frame) {
+        auto pending = clipped;
+        for (size_t i = 6; i < 12; ++i) {
+            pending[i].r = frame & 1 ? 0.f : 255.f;
+            pending[i].g = frame & 1 ? 255.f : 0.f;
+        }
+        renderer.overlay(pending, {}, replacedAtlas);
+        renderer.frame(camera, lighting, {}, 0, {}, {});
+    }
+    check("clip-queued-pool-reuse", clipped, {}, {}, {64, 64}, {128, 0, 127}, 2, {}, replacedAtlas);
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

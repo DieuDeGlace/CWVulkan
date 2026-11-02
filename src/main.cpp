@@ -8107,7 +8107,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (menusReady && !menus.interfaceShown())
                 renderer.overlay(hudVertices);
             else
-                renderer.overlay(hudVertices, hud.itemDraws());
+                renderer.overlay(hudVertices, hud.itemDraws(), hud.clipDraws());
         }
         if (serverMode) {
             // A dedicated server draws nothing: it keeps the world running at about

@@ -52,8 +52,11 @@ individual feature documents.
   material/effect values and opposite winding have CPU/GPU checks. Main-target captures
   show the native portrait. Float overlay RGBA, destination-alpha blending,
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
-  regressions (31 GUI image cases). The ordinary clip-pool contract is written;
-  its GPU composition, broader cached GUI layers and frontend pixel parity remain open.
+  regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
+  pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
+  targets; the owner button shine is enabled.42 GUI image cases and owner callback
+  checks pass. Widget/node caches, blur, projective GUI, static legacy clipping
+  and broader frontend pixel parity remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

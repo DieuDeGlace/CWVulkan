@@ -74,17 +74,20 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
             };
             passive(passive, node);
         }
-        // Cached surface/mask composition remains a separate renderer gap. Keep the
-        // moving shine hidden until it can be clipped through the owner's mask.
+        // Ordinary clip layers support the owner's moving shine. Blur/cache
+        // algorithms remain separate; keep unsupported blur children conservative.
         std::vector<plasma::SceneNode *> clips;
         node.findAll("clip", clips);
-        for (auto *clip : clips)
+        for (auto *clip : clips) {
+            if (!(clip->displayFlags & plasma::DISPLAY_BLUR) || clip->blurRadius <= 0)
+                continue;
             for (auto &child : clip->children) {
                 plasma::TextStyle style;
                 const auto *shape = child->shapeObject();
                 if (!shape || !plasma::textStyle(*shape, child->doc->loaderFlags, style))
                     child->visible = false;
             }
+        }
     }
     frontScene->setScale(guiScale);
     return &instance;

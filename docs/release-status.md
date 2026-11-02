@@ -10,6 +10,31 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary affine scene-graph clipping now renders children into a retained
+  fullscreen RGBA8 pool and composes them through the parent's actual shape.
+  Ordered vertex/callback cuts preserve empty geometry and own-hook placement;
+  a clip node's own callback follows child composition even with DRAW_FIRST.
+  Nested targets have null depth for WORLD callbacks and restore parent depth.
+  All three mask modes preserve their distinct alpha/RGB rules, including
+  conditional layer-RGB unpremultiplication and the separate position/UV bias.
+  Ordinary owner button shine is enabled through these masks.
+
+  Pool images are reused on the ordered graphics queue, with explicit barriers,
+  guarded allocation, atlas descriptor refresh and safe window-target teardown.
+  Invalid command streams leave the resolved scene intact. Existing nearest
+  object-atlas sampling and an explicit linear/clamp mask baseline remain engine
+  choices; the native inherited sampler state is not an all-frame oracle.
+  Widget/node caches, blur, projective/flattened-W GUI and static legacy HUD mask
+  approximation remain separate gaps.
+
+  Eleven new Vulkan cases cover mask modes, nonrectangular geometry, unlayered
+  control, nested composition, reused full clears, null-depth/restoration, atlas
+  replacement and uncaptured frames in flight. Owner-HUD callback/cut checks pass.
+  All five targets build warning-free; full CPU/owner and89 shader,2 camera,
+  42 GUI,17 map/shared-water/Alpha-scenery checks pass. Five no-save captures exit0
+  and are reviewed, with the save database unchanged. These bounded checks do not
+  certify complete native UI or rendering parity.
+
 - Plasma overlay vertices now retain float RGBA through upload, using the native
   32-byte position/UV/color layout while preserving existing API color units.
   Native text/shape emission no longer truncates these colors to bytes. Ordinary

@@ -133,6 +133,15 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
         guiGroups.emplace_back(std::min(request.beforeVertex, overlayVertices.size()), guiDraws.size());
     }
     const bool models = !guiDraws.empty() && prepareGui(guiDraws.size());
+    const auto maximum = plasma::layerDepth(overlayLayers, {overlayVertices.size(), guiRequests.size()});
+    if (!maximum || !prepareClipLayers(*maximum))
+        return; // defined engine failure policy: leave the resolved scene intact
+    for (const auto &command : overlayLayers) {
+        const auto at = command.before;
+        if ((at.items && guiGroups[at.items - 1].first > at.vertices) ||
+            (at.items < guiGroups.size() && guiGroups[at.items].first < at.vertices))
+            return; // vertex and callback cuts must describe the same append order
+    }
     // Fullscreen resolve and the following load are separate rendering instances.
     barriers(cmd, {imageBarrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -206,44 +215,104 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
     rendering.layerCount = 1;
     rendering.colorAttachmentCount = 1;
     rendering.pColorAttachments = &colour;
-    rendering.pDepthAttachment = models ? &depth : nullptr;
-    vkCmdBeginRendering(cmd, &rendering);
     VkViewport viewport{0, 0, (float)extent.width, (float)extent.height, 0, 1};
     VkRect2D scissor{{0, 0}, extent};
-    vkCmdSetViewport(cmd, 0, 1, &viewport);
-    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    size_t target = 0, maskSource = 0;
+    uint32_t maskMode = 0;
+    const auto beginTarget = [&](bool clear) {
+        const bool layer = target != 0;
+        colour.imageView = layer ? clipLayers[target - 1].colour.view : swapViews[imageIndex];
+        colour.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+        colour.clearValue.color = {{0, 0, 0, 0}};
+        rendering.pDepthAttachment = !layer && models ? &depth : nullptr;
+        if (!clear) {
+            const VkImage image = layer ? clipLayers[target - 1].colour.image : swapImages[imageIndex];
+            barriers(cmd, {imageBarrier(image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)});
+            if (!layer && models)
+                barriers(cmd,
+                         {imageBarrier(guiDepth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                                       VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                                       VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                                       VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                       VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                                       VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)});
+        }
+        vkCmdBeginRendering(cmd, &rendering);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+    };
+    beginTarget(false);
     const bool text = uploadOverlay();
-    size_t vertex = 0, drawIndex = 0;
-    for (const auto &[before, end] : guiGroups) {
-        const size_t boundary = std::max(vertex, before);
+    size_t vertex = 0, drawIndex = 0, request = 0;
+    const auto trianglesTo = [&](size_t end) {
+        end = std::max(vertex, end);
         if (text)
-            drawOverlayRange(cmd, (uint32_t)vertex, (uint32_t)(boundary - vertex), models);
-        if (models)
-            for (; drawIndex < end; drawIndex++) {
+            drawOverlayRange(cmd, uint32_t(vertex), uint32_t(end - vertex), models && !target, target != 0,
+                             maskMode ? clipLayers[maskSource].set : VK_NULL_HANDLE, maskMode);
+        vertex = end;
+    };
+    const auto drawUntil = [&](plasma::DrawPoint point) {
+        for (; request < point.items; ++request) {
+            const auto [before, end] = guiGroups[request];
+            trianglesTo(before);
+            for (; models && drawIndex < end; ++drawIndex) {
                 const auto &draw = guiDraws[drawIndex];
                 if (!draw.mesh || draw.mesh >= meshes.size() || !meshes[draw.mesh].live || !meshes[draw.mesh].indexCount)
                     continue;
                 const auto &mesh = meshes[draw.mesh];
-                // Native cull-front/clockwise is equivalent to keep-counterclockwise here.
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.mirrored ? guiMirroredModelPipeline : guiModelPipeline);
+                const VkPipeline pipeline = target ? (draw.mirrored ? layerMirroredModelPipeline : layerModelPipeline)
+                                                   : (draw.mirrored ? guiMirroredModelPipeline : guiModelPipeline);
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                 const auto set = guiFrames[frameIndex].sets[drawIndex];
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &set, 0, nullptr);
                 const VkDeviceSize zero = 0;
                 vkCmdBindVertexBuffers(cmd, 0, 1, &mesh.buffer.buffer, &zero);
                 vkCmdBindIndexBuffer(cmd, mesh.buffer.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT32);
-                rendergpu::PushConstants push{draw.model, glm::vec4((float)(STEAM_WORLD | GUI_WORLD), 0, draw.depthOffset, draw.opacity),
+                rendergpu::PushConstants push{draw.model, glm::vec4(float(STEAM_WORLD | GUI_WORLD), 0, draw.depthOffset, draw.opacity),
                                               glm::vec4(1, draw.state.white, draw.state.shininess, draw.state.glow), glm::uvec4(0)};
                 vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof push, &push);
                 vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);
             }
-        vertex = boundary;
+        }
+        trianglesTo(point.vertices);
+    };
+    for (const auto &command : overlayLayers) {
+        drawUntil(command.before);
+        if (command.kind == plasma::LayerCommand::Kind::Mask) {
+            maskMode = command.mode;
+            continue;
+        }
+        vkCmdEndRendering(cmd);
+        maskMode = 0;
+        if (command.kind == plasma::LayerCommand::Kind::Push) {
+            auto &layer = clipLayers[target++];
+            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
+                                        layer.sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        layer.sampled ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
+                                        layer.sampled ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : 0,
+                                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)});
+            beginTarget(true);
+        } else {
+            maskSource = --target;
+            auto &layer = clipLayers[maskSource];
+            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT)});
+            layer.sampled = true;
+            beginTarget(false);
+        }
     }
-    if (text)
-        drawOverlayRange(cmd, (uint32_t)vertex, (uint32_t)(overlayVertices.size() - vertex), models);
+    drawUntil({overlayVertices.size(), guiRequests.size()});
     vkCmdEndRendering(cmd);
 }
 
 void Renderer::destroyGui() {
+    destroyClipLayers();
     destroyImage(guiDepth);
     guiDepthFresh = true;
     destroyBuffer(guiZeroPoints);

@@ -901,3 +901,22 @@ Source-over alpha uses optional diagnostic readback, without changing ordinary
 screenshot opacity. This is color/tint groundwork, not a claim to implement the
 newly documented clip pool, cache, blur or all inherited sampler state. Owner
 art/fonts remain local and are excluded from source and runtime archives.
+
+## Ordinary affine Plasma clip layers, 2026-11-02
+
+The implementer read the independent clip contract sections1–8, its bounded
+sampler-provenance appendix6.1 and updated prose links plus engine code only.
+The native-only author inspected no engine/tests/exporter/owner captures. Public
+Microsoft PSSetSamplers documentation supplies a separately cited conditional
+NULL-sampler rule; it does not establish actual native bindings at arbitrary draws.
+Project-owned command cuts, retained Vulkan targets, descriptors, barriers and
+shader formulas implement ordinary affine clipping. Existing object-atlas
+sampling and an explicit single-mip mask baseline retain their stated engine
+scope; no native sampler-runtime oracle is asserted. Safe resize/allocation
+handling is engine policy where native external/reset/failure paths are unproved.
+Synthetic GPU geometry checks the three modes, nesting, empty clears, item depth,
+atlas refresh and queued reuse. Owner data is used only for local callback/cut
+validation and startup captures. No native shader instructions, original code,
+reconstruction or owner assets were read/copied into implementation/packages.
+Caches, blur, flattened projective coordinates and static legacy clipping remain
+separate work; this is not a full GUI or pixel-parity certificate.

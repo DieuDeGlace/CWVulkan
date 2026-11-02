@@ -143,6 +143,25 @@ int mapHistoryTests() {
             check(!baseline.empty() && !same(baseline, withoutGlyph), "synthetic glyph is actually emitted through the owner HUD");
             check(same(baseline, parentTint), "shape-less parent display tint does not alter descendant shape or glyph colors");
             check(same(baseline, glyphTint), "TextShape glyphs ignore their own display fill color");
+            textNode->visible = true;
+            std::vector<int> hooks;
+            auto previousWidget = std::move(mutableRoot->widget);
+            auto previousHook = std::move(mutableRoot->onDraw);
+            mutableRoot->widget.emplace();
+            mutableRoot->widget->flags = plasma::WIDGET_DRAW_FIRST;
+            mutableRoot->onDraw = [&](plasma::SceneNode &) { hooks.push_back(1); };
+            textNode->onDraw = [&](plasma::SceneNode &) { hooks.push_back(2); };
+            mutableRoot->clips = true;
+            const auto clipped = snapshot();
+            const auto layers = plasma::layerDepth(hud.clipDraws(), {clipped.size(), hud.itemDraws().size()});
+            check(layers && *layers >= 1 && hooks == std::vector<int>{2, 1},
+                  "clip children precede the own DRAW_FIRST hook and emit balanced vertex/callback cuts");
+            mutableRoot->clips = false;
+            hooks.clear();
+            snapshot();
+            check(hooks == std::vector<int>{1, 2}, "ordinary DRAW_FIRST placement still precedes children");
+            mutableRoot->widget = std::move(previousWidget);
+            mutableRoot->onDraw = std::move(previousHook);
             mutableRoot->children.pop_back();
         }
         renderer.shutdown();

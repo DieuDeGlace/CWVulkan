@@ -254,6 +254,7 @@ add_library(engine STATIC
     src/Renderer.cpp
     src/RendererPost.cpp
     src/RendererGui.cpp
+    src/RendererLayers.cpp
     src/RendererWater.cpp
     src/WaterLook.cpp
     src/RendererMap.cpp

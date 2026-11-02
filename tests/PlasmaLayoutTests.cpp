@@ -1,5 +1,6 @@
 // Native frame setter identity, boundary propagation and own-hook contracts.
 #include "PlasmaScene.h"
+#include "PlasmaDraw.h"
 #include <cstdio>
 
 int plasmaLayoutTests() {
@@ -75,6 +76,22 @@ int plasmaLayoutTests() {
           "stretch uses raw frame instead of minimum size, then runs its size hook");
     scene.placeWidget(*minimum, {}, {});
     check(minimumHooks == 2, "zero-delta stretch still reaches the size setter");
+    using Layer = plasma::LayerCommand;
+    const std::vector<Layer> balanced{{Layer::Kind::Push, {0, 0}},    {Layer::Kind::Push, {3, 0}}, {Layer::Kind::Pop, {6, 1}},
+                                      {Layer::Kind::Mask, {6, 1}, 2}, {Layer::Kind::Pop, {9, 1}},  {Layer::Kind::Mask, {9, 1}, 3},
+                                      {Layer::Kind::Mask, {12, 2}}};
+    check(plasma::layerDepth(balanced, {12, 2}) == 2, "clip commands preserve nested vertex/callback cuts");
+    auto invalid = balanced;
+    invalid.pop_back();
+    invalid.pop_back();
+    invalid.pop_back();
+    check(!plasma::layerDepth(invalid, {12, 2}), "unbalanced clip nesting is rejected before GPU recording");
+    invalid = {{Layer::Kind::Push, {0, 0}},
+               {Layer::Kind::Pop, {0, 0}},
+               {Layer::Kind::Push, {0, 0}},
+               {Layer::Kind::Mask, {0, 0}, 2},
+               {Layer::Kind::Pop, {3, 0}}};
+    check(!plasma::layerDepth(invalid, {3, 0}), "sampling the current clip attachment is rejected");
     std::printf("Plasma layout: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

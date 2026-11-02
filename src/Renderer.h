@@ -1,4 +1,5 @@
 #pragma once
+#include "PlasmaDraw.h"
 #include "WorldModelControls.h"
 #include "SteamPointLights.h"
 #include "GuiItem.h"
@@ -260,9 +261,11 @@ class Renderer {
     // Interface: an RGBA atlas (uploaded once, replaced on a later call) and the
     // triangles to draw over the next frame (3 vertices each, atlas texels as uv).
     bool setOverlayAtlas(uint32_t width, uint32_t height, const uint8_t *rgba);
-    void overlay(std::vector<OverlayVertex> triangles, const std::vector<guiitem::Request> &items = {}) {
+    void overlay(std::vector<OverlayVertex> triangles, const std::vector<guiitem::Request> &items = {},
+                 const std::vector<plasma::LayerCommand> &layers = {}) {
         overlayVertices = std::move(triangles);
         guiRequests = items;
+        overlayLayers = layers;
     }
     VkExtent2D screenSize() const { return extent; }
 
@@ -367,9 +370,12 @@ class Renderer {
     Image uploadImage(uint32_t w, uint32_t h, VkFormat format, const void *data, size_t bytes);
     void recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 jitter, const glm::mat4 &clipToPrevious, bool reproject);
     bool uploadOverlay();
-    void drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth);
+    void drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth, bool layer = false,
+                          VkDescriptorSet mask = VK_NULL_HANDLE, uint32_t mode = 0);
     void drawOverlay(VkCommandBuffer cmd);
     bool prepareGui(size_t draws);
+    bool prepareClipLayers(size_t depth);
+    void destroyClipLayers();
     void recordGui(VkCommandBuffer cmd, uint32_t imageIndex);
     void destroyGui();
     // Shared water samples an immutable copy of the opaque scene, never a live attachment.
@@ -445,12 +451,21 @@ class Renderer {
     // Interface overlay.
     Image overlayImage;
     uint32_t overlayWidth = 1, overlayHeight = 1;
-    VkSampler overlaySampler = VK_NULL_HANDLE;
+    VkSampler overlaySampler = VK_NULL_HANDLE, overlayMaskSampler = VK_NULL_HANDLE;
     VkDescriptorSetLayout overlaySetLayout = VK_NULL_HANDLE;
     VkDescriptorPool overlayPool = VK_NULL_HANDLE;
     VkDescriptorSet overlaySet = VK_NULL_HANDLE;
     VkPipelineLayout overlayLayout = VK_NULL_HANDLE;
-    VkPipeline overlayPipeline = VK_NULL_HANDLE, guiOverlayPipeline = VK_NULL_HANDLE;
+    VkPipeline overlayPipeline = VK_NULL_HANDLE, guiOverlayPipeline = VK_NULL_HANDLE, layerOverlayPipeline = VK_NULL_HANDLE;
+    VkPipeline layerModelPipeline = VK_NULL_HANDLE, layerMirroredModelPipeline = VK_NULL_HANDLE;
+    struct ClipLayer {
+        Image colour;
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        VkDescriptorSet set = VK_NULL_HANDLE;
+        bool sampled = false, descriptorReady = false;
+    };
+    std::vector<ClipLayer> clipLayers;
+    VkImageView clipAtlas = VK_NULL_HANDLE;
     VkPipeline guiModelPipeline = VK_NULL_HANDLE, guiMirroredModelPipeline = VK_NULL_HANDLE;
     Image guiDepth;
     bool guiDepthFresh = true;
@@ -469,6 +484,7 @@ class Renderer {
     Buffer overlayBuffers[FRAMES];
     VkDeviceSize overlayCapacity[FRAMES] = {};
     std::vector<OverlayVertex> overlayVertices;
+    std::vector<plasma::LayerCommand> overlayLayers;
     bool createOverlayPipeline(std::string &error);
     // The world map's pass (RendererMap.cpp): its own shaders, blending for the fade-in, and
     // push constants that carry the map's camera and the instance.

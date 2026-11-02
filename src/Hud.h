@@ -259,7 +259,11 @@ class Hud {
                      steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock);
     void prepareItemResources(Renderer &renderer) { uploadItemModels(renderer); }
     const std::vector<guiitem::Request> &itemDraws() const { return itemRequests; }
-    void clearItemDraws() const { itemRequests.clear(); }
+    const std::vector<plasma::LayerCommand> &clipDraws() const { return layerCommands; }
+    void clearItemDraws() const {
+        itemRequests.clear();
+        layerCommands.clear();
+    }
     // OverworldEvents' quest sprites (assets/OverworldEvents/quest-icons.png, 320 x 80): the
     // orange question mark ("quest-event"), the grey one ("quest-destination") and the orange
     // exclamation mark ("quest-offer"), their green background keyed out as the mod does.
@@ -384,6 +388,7 @@ class Hud {
     };
     std::map<std::string, ItemModel> itemModels;
     mutable std::vector<guiitem::Request> itemRequests;
+    mutable std::vector<plasma::LayerCommand> layerCommands;
     plasma::GuiClock interfaceClock;
     mutable int32_t guiClockMs = 0;
     mutable int32_t guiStepMs = 0;

@@ -229,37 +229,54 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
     if (!n.visible || (n.flags & plx::NODE_DISABLED))
         return;
     const plasma::Scene &in = from ? *from : *scene;
-    const glm::vec4 shapeTint = tint * n.fill;
-    const plx::Document &doc = n.doc ? *n.doc : gui;
-    plasma::TextStyle style;
-    const auto *shape = n.shapeObject();
-    if (shape && plasma::textStyle(*shape, doc.loaderFlags, style)) {
-        if (n.text)
-            style.string = *n.text;
-        if (n.textColor)
-            style.color = *n.textColor;
-        // Glyph tint comes from the text style, independently of Display.fillColor.
-        plasmaText(out, style, in.matrix(n));
-    } else if (n.shape >= 0 && !n.clips) {
-        plasma::Scene::Drawn d;
-        in.drawShape(n, shapeTint, d);
-        const float u = white.x + 2.f, v = white.y + 2.f;
-        for (size_t i = 0; i < d.positions.size(); i++) {
-            const glm::vec4 c = d.colors[i] * 255.0f;
-            out.push_back({d.positions[i].x, d.positions[i].y, u, v, c.r, c.g, c.b, c.a});
+    const bool clip = n.clips && (!(n.displayFlags & plasma::DISPLAY_BLUR) || n.blurRadius <= 0);
+    const auto layer = [&](plasma::LayerCommand::Kind kind, uint32_t mode = 0) {
+        layerCommands.push_back({kind, {out.size(), itemRequests.size()}, mode});
+    };
+    const auto shape = [&] {
+        const plx::Document &doc = n.doc ? *n.doc : gui;
+        plasma::TextStyle style;
+        const auto *source = n.shapeObject();
+        if (source && plasma::textStyle(*source, doc.loaderFlags, style)) {
+            if (n.text)
+                style.string = *n.text;
+            if (n.textColor)
+                style.color = *n.textColor;
+            // Glyphs carry their own tint, independently of Display.fillColor.
+            plasmaText(out, style, in.matrix(n));
+        } else if (n.shape >= 0 && (!n.clips || clip)) {
+            plasma::Scene::Drawn drawn;
+            in.drawShape(n, tint * n.fill, drawn);
+            const float u = white.x + 2.f, v = white.y + 2.f;
+            for (size_t i = 0; i < drawn.positions.size(); ++i) {
+                const glm::vec4 c = drawn.colors[i] * 255.f;
+                out.push_back({drawn.positions[i].x, drawn.positions[i].y, u, v, c.r, c.g, c.b, c.a});
+            }
         }
-    }
-    auto callback = [&] {
+    };
+    const auto callback = [&] {
         if (n.onDraw)
             n.onDraw(const_cast<plasma::SceneNode &>(n));
         if (drawWidget && n.widget)
             drawWidget(n);
     };
+    if (clip) {
+        layer(plasma::LayerCommand::Kind::Push);
+        for (const auto &child : n.children)
+            sceneNode(out, *child, tint, from, drawWidget);
+        layer(plasma::LayerCommand::Kind::Pop);
+        layer(plasma::LayerCommand::Kind::Mask, uint32_t(n.maskMode()));
+        shape();
+        layer(plasma::LayerCommand::Kind::Mask);
+        callback(); // both own-hook placements follow the clip child-layer composition
+        return;
+    }
+    shape();
     const bool beforeChildren = n.widget && (n.widget->flags & plasma::WIDGET_DRAW_FIRST);
     if (beforeChildren)
         callback();
-    for (auto &c : n.children)
-        sceneNode(out, *c, tint, from, drawWidget);
+    for (const auto &child : n.children)
+        sceneNode(out, *child, tint, from, drawWidget);
     if (!beforeChildren)
         callback();
 }

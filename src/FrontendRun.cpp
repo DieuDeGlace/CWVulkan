@@ -1830,7 +1830,7 @@ bool Session::frame() {
     hud.drawScreen(screen, overlay, &templatePoints);
     for (const auto point : templatePoints)
         navigationPoint(point / guiScale);
-    s.renderer->overlay(std::move(overlay), hud.itemDraws());
+    s.renderer->overlay(std::move(overlay), hud.itemDraws(), hud.clipDraws());
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
     if (s.audio) {
         s.audio->menuMusic(dtMs);

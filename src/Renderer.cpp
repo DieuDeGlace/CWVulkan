@@ -541,6 +541,7 @@ bool Renderer::createPipelines(std::string &error) {
         const VkPipelineVertexInputStateCreateInfo *input = nullptr; // other than the voxel vertex
         VkColorComponentFlags colourMask = 0xf;
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+        bool clipLayer = false;
     };
     Desc descs[] = {
         {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &particlePipeline},
@@ -556,6 +557,10 @@ bool Renderer::createPipelines(std::string &error) {
         {sceneV, sceneF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &sceneryMirroredFadePipeline, VK_FRONT_FACE_CLOCKWISE},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &guiModelPipeline},
         {sceneV, sceneF, true, true, false, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &guiMirroredModelPipeline, VK_FRONT_FACE_CLOCKWISE},
+        {sceneV, sceneF, true, false, false, true, false, VK_COMPARE_OP_ALWAYS, &layerModelPipeline, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+         nullptr, 0xf, VK_NULL_HANDLE, true},
+        {sceneV, sceneF, true, false, false, true, false, VK_COMPARE_OP_ALWAYS, &layerMirroredModelPipeline, VK_FRONT_FACE_CLOCKWISE,
+         nullptr, 0xf, VK_NULL_HANDLE, true},
         {sceneV, sceneF, true, true, false, false, false, VK_COMPARE_OP_LESS, &menuPipeline},
         {sceneV, sceneF, true, false, true, false, false, VK_COMPARE_OP_ALWAYS, &menuBackgroundPipeline},
         {sceneV, waterF, true, true, true, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterPipeline},
@@ -598,7 +603,7 @@ bool Renderer::createPipelines(std::string &error) {
         // Casters behind the light box's near plane still cast (pancaking).
         raster.depthClampEnable = d.shadow && depthClamp;
         VkPipelineDepthStencilStateCreateInfo depthState{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-        depthState.depthTestEnable = VK_TRUE;
+        depthState.depthTestEnable = !d.clipLayer;
         depthState.depthWriteEnable = d.depthWrite;
         depthState.depthCompareOp = d.depthOp;
         VkPipelineColorBlendAttachmentState attachment{};
@@ -617,8 +622,9 @@ bool Renderer::createPipelines(std::string &error) {
         blend.pAttachments = &attachment;
         VkPipelineRenderingCreateInfo rendering{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
         rendering.colorAttachmentCount = d.shadow ? 0 : 1;
-        rendering.pColorAttachmentFormats = &swapFormat;
-        rendering.depthAttachmentFormat = DEPTH_FORMAT;
+        const VkFormat colourFormat = d.clipLayer ? VK_FORMAT_R8G8B8A8_UNORM : swapFormat;
+        rendering.pColorAttachmentFormats = &colourFormat;
+        rendering.depthAttachmentFormat = d.clipLayer ? VK_FORMAT_UNDEFINED : DEPTH_FORMAT;
         VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, &rendering};
         info.stageCount = d.fs ? 2 : 1;
         info.pStages = stages;
@@ -646,13 +652,24 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     VkSamplerCreateInfo si{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     si.magFilter = si.minFilter = VK_FILTER_NEAREST; // Pixel art stays crisp.
     si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    vkCreateSampler(device, &si, nullptr, &overlaySampler);
-    VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT};
+    if (vkCreateSampler(device, &si, nullptr, &overlaySampler) != VK_SUCCESS) {
+        error = "Interface sampler creation failed";
+        return false;
+    }
+    // Defined engine baseline for single-mip layer sampling; native bindings are
+    // inherited, with the conditional API default and limits documented in clip§6.1.
+    si.magFilter = si.minFilter = VK_FILTER_LINEAR;
+    if (vkCreateSampler(device, &si, nullptr, &overlayMaskSampler) != VK_SUCCESS) {
+        error = "Interface mask sampler creation failed";
+        return false;
+    }
+    VkDescriptorSetLayoutBinding bindings[] = {{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+                                               {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT}};
     VkDescriptorSetLayoutCreateInfo sli{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    sli.bindingCount = 1;
-    sli.pBindings = &binding;
+    sli.bindingCount = 2;
+    sli.pBindings = bindings;
     vkCreateDescriptorSetLayout(device, &sli, nullptr, &overlaySetLayout);
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1};
+    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2};
     VkDescriptorPoolCreateInfo dpi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     dpi.maxSets = 1;
     dpi.poolSizeCount = 1;
@@ -663,7 +680,7 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     dai.descriptorSetCount = 1;
     dai.pSetLayouts = &overlaySetLayout;
     vkAllocateDescriptorSets(device, &dai, &overlaySet);
-    VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2};
+    VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16};
     VkPipelineLayoutCreateInfo pli{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     pli.setLayoutCount = 1;
     pli.pSetLayouts = &overlaySetLayout;
@@ -745,6 +762,12 @@ bool Renderer::createOverlayPipeline(std::string &error) {
         rendering.depthAttachmentFormat = DEPTH_FORMAT;
         result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &guiOverlayPipeline);
     }
+    if (result == VK_SUCCESS) {
+        const VkFormat layerFormat = VK_FORMAT_R8G8B8A8_UNORM;
+        rendering.pColorAttachmentFormats = &layerFormat;
+        rendering.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+        result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &layerOverlayPipeline);
+    }
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, fs, nullptr);
     if (result != VK_SUCCESS) {
@@ -799,13 +822,19 @@ bool Renderer::setOverlayAtlas(uint32_t width, uint32_t height, const uint8_t *r
     vkQueueWaitIdle(queue);
     vkFreeCommandBuffers(device, pool, 1, &cmd);
     destroyBuffer(staging);
-    VkDescriptorImageInfo image{overlaySampler, overlayImage.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    write.dstSet = overlaySet;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.pImageInfo = &image;
-    vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    VkDescriptorImageInfo images[] = {{overlaySampler, overlayImage.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                                      {overlayMaskSampler, overlayImage.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
+    VkWriteDescriptorSet writes[2]{};
+    for (uint32_t binding = 0; binding < 2; ++binding) {
+        writes[binding] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        writes[binding].dstSet = overlaySet;
+        writes[binding].dstBinding = binding;
+        writes[binding].descriptorCount = 1;
+        writes[binding].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[binding].pImageInfo = &images[binding];
+    }
+    vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+    clipAtlas = VK_NULL_HANDLE; // refresh retained layer descriptors before their next use
     overlayWidth = width;
     overlayHeight = height;
     return true;
@@ -2377,6 +2406,8 @@ void Renderer::shutdown() {
     }
     for (auto p : {guiMirroredModelPipeline,
                    guiModelPipeline,
+                   layerModelPipeline,
+                   layerMirroredModelPipeline,
                    scenePipeline,
                    mirroredScenePipeline,
                    menuPipeline,
@@ -2420,10 +2451,13 @@ void Renderer::shutdown() {
         vkDestroyPipeline(device, overlayPipeline, nullptr);
     if (guiOverlayPipeline)
         vkDestroyPipeline(device, guiOverlayPipeline, nullptr);
+    if (layerOverlayPipeline)
+        vkDestroyPipeline(device, layerOverlayPipeline, nullptr);
     vkDestroyPipelineLayout(device, overlayLayout, nullptr);
     vkDestroyDescriptorPool(device, overlayPool, nullptr);
     vkDestroyDescriptorSetLayout(device, overlaySetLayout, nullptr);
     vkDestroySampler(device, overlaySampler, nullptr);
+    vkDestroySampler(device, overlayMaskSampler, nullptr);
     destroySwapchain();
     destroyWaterResources();
     destroyPostResources();

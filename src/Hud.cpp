@@ -911,7 +911,7 @@ float Hud::mapLabelWidth(const State::MapMarker &marker) const {
 void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
                const std::function<void(std::vector<OverlayVertex> &)> &overlays) const {
     out.clear();
-    itemRequests.clear();
+    clearItemDraws();
     guiClockMs = state.guiClockMs;
     guiStepMs = state.guiStepMs;
     if (!ready)
