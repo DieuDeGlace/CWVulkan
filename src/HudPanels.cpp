@@ -229,7 +229,7 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
     if (!n.visible || (n.flags & plx::NODE_DISABLED))
         return;
     const plasma::Scene &in = from ? *from : *scene;
-    tint *= n.fill;
+    const glm::vec4 shapeTint = tint * n.fill;
     const plx::Document &doc = n.doc ? *n.doc : gui;
     plasma::TextStyle style;
     const auto *shape = n.shapeObject();
@@ -238,15 +238,15 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
             style.string = *n.text;
         if (n.textColor)
             style.color = *n.textColor;
-        style.color.a *= tint.a, style.strokeColor.a *= tint.a;
+        // Glyph tint comes from the text style, independently of Display.fillColor.
         plasmaText(out, style, in.matrix(n));
     } else if (n.shape >= 0 && !n.clips) {
         plasma::Scene::Drawn d;
-        in.drawShape(n, tint, d);
+        in.drawShape(n, shapeTint, d);
         const float u = white.x + 2.f, v = white.y + 2.f;
         for (size_t i = 0; i < d.positions.size(); i++) {
-            const glm::vec4 c = glm::clamp(d.colors[i], glm::vec4(0), glm::vec4(1)) * 255.0f;
-            out.push_back({d.positions[i].x, d.positions[i].y, u, v, (uint8_t)c.r, (uint8_t)c.g, (uint8_t)c.b, (uint8_t)c.a});
+            const glm::vec4 c = d.colors[i] * 255.0f;
+            out.push_back({d.positions[i].x, d.positions[i].y, u, v, c.r, c.g, c.b, c.a});
         }
     }
     auto callback = [&] {

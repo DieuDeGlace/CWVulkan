@@ -562,8 +562,10 @@ void Session::previewPanels(std::vector<DrawItem> &opaque) {
         std::vector<OverlayVertex> vertices;
         hud.drawScreen({characterCard({0, 0})}, vertices);
         Mesh panel;
+        // The recording-only compatibility panel uses the ordinary byte-color mesh.
+        const auto channel = [](float value) { return uint8_t(std::clamp(value, 0.f, 255.f)); };
         for (const OverlayVertex &v : vertices) {
-            panel.vertices.push_back({v.x, v.y, 0, v.r, v.g, v.b, v.a, 4, NATIVE_MENU, 0, 0});
+            panel.vertices.push_back({v.x, v.y, 0, channel(v.r), channel(v.g), channel(v.b), channel(v.a), 4, NATIVE_MENU, 0, 0});
             panel.indices.push_back((uint32_t)panel.indices.size());
         }
         if (panel.indices.empty())

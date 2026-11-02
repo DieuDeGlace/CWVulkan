@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Plasma overlay vertices now retain float RGBA through upload, using the native
+  32-byte position/UV/color layout while preserving existing API color units.
+  Native text/shape emission no longer truncates these colors to bytes. Ordinary
+  overlay blending now retains destination alpha with ONE/INV_SRC_ALPHA; debug
+  readback can preserve actual framebuffer alpha, while normal captures stay opaque.
+  Display fill affects its own shape rather than descendants, and glyphs use their
+  text/outline colors independently of their own display fill. The legacy mask
+  approximation remains separate. Recording-only panel meshes still explicitly
+  convert to their byte-color compatibility format.
+
+  Actual owner-HUD emission at GUI scales1/1.5 catches both old tint errors and
+  verifies visible glyphs. Vulkan cases cover sub-byte color, a rounded control
+  and source-over alpha. Previous tint/blend behavior fails those regressions;
+  the correction passes. All five targets build warning-free; full CPU/owner and
+  89 shader,2 camera,31 GUI,17 map/shared-water/Alpha-scenery checks pass. Five
+  no-save captures exit0 and are reviewed, with the save database unchanged.
+  The independently specified ordinary clip pool is the next implementation;
+  real layer composition, cache/blur policy and broader UI parity remain open.
+
 - Shared body/burst particle draws now build Steam WORLD matrices using the
   current installed scene's fixed negative-look-at offset before float conversion.
   Collection follows camera preparation, avoiding a preceding-frame origin.

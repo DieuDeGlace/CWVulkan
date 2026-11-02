@@ -511,13 +511,19 @@ float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &
             return;
         const TextGlyph &g = it->second;
         const glm::vec2 at = plasma::glyphPosition(r, p.pen, g.offset);
-        const glm::vec4 c = glm::clamp(colour, glm::vec4(0), glm::vec4(1)) * 255.0f;
+        const glm::vec4 c = colour * 255.0f;
         OverlayVertex v[4];
         for (int k = 0; k < 4; k++) {
             const glm::vec2 corner = at + glm::vec2(k & 1 ? g.extent.x : 0.0f, k & 2 ? g.extent.y : 0.0f);
             const glm::vec4 s = m * glm::vec4(corner, 0, 1);
-            v[k] = {s.x + plasma::DRAW_OFFSET, s.y + plasma::DRAW_OFFSET, (float)(g.atlas.x + (k & 1 ? g.size.x : 0)),
-                    (float)(g.atlas.y + (k & 2 ? g.size.y : 0)), (uint8_t)c.r, (uint8_t)c.g, (uint8_t)c.b, (uint8_t)c.a};
+            v[k] = {s.x + plasma::DRAW_OFFSET,
+                    s.y + plasma::DRAW_OFFSET,
+                    (float)(g.atlas.x + (k & 1 ? g.size.x : 0)),
+                    (float)(g.atlas.y + (k & 2 ? g.size.y : 0)),
+                    c.r,
+                    c.g,
+                    c.b,
+                    c.a};
         }
         out.insert(out.end(), {v[0], v[1], v[2], v[1], v[3], v[2]});
     };
@@ -581,6 +587,8 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
                 return;
         }
     }
+    // Compatibility clip modulation is separate from the node's own display color.
+    const glm::vec4 descendantsTint = tint;
     glm::mat4 m = parent;
     if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size()) {
         const plx::Object &t = gui.transformations[(size_t)n.transformation];
@@ -614,7 +622,8 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
             style.color = *color;
         if (hue)
             style.color = inHue(style.color, *hue), style.strokeColor = inHue(style.strokeColor, *hue);
-        style.color.a *= tint.a, style.strokeColor.a *= tint.a; // (a clipping parent's fade)
+        // Preserve only the legacy mask approximation, never Display.fillColor.
+        style.color.a *= descendantsTint.a, style.strokeColor.a *= descendantsTint.a;
         plasmaText(out, style, m);
     } else if (n.shape >= 0 && n.shape < (int)gui.shapes.size()) {
         auto found = shapes.find(n.shape);
@@ -635,8 +644,7 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
                 if (hue)
                     c = inHue(c, *hue);
                 c *= 255.0f;
-                out.push_back({s.x / s.w + plasma::DRAW_OFFSET, s.y / s.w + plasma::DRAW_OFFSET, u, v, (uint8_t)c.r, (uint8_t)c.g,
-                               (uint8_t)c.b, (uint8_t)c.a});
+                out.push_back({s.x / s.w + plasma::DRAW_OFFSET, s.y / s.w + plasma::DRAW_OFFSET, u, v, c.r, c.g, c.b, c.a});
             }
         }
     }
@@ -661,7 +669,7 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
     }
     for (int c : n.children)
         if (c >= 0 && c < (int)gui.nodes.size())
-            plasmaNode(out, c, m, tint, frame, text, color, hue);
+            plasmaNode(out, c, m, descendantsTint, frame, text, color, hue);
 }
 
 bool Hud::plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::vec2 position, glm::vec2 offset,

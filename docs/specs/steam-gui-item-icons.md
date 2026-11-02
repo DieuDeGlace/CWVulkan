@@ -310,6 +310,12 @@ private depth buffer for the icon.0xddbc0 itself preserves whichever
 target/viewport the caller's traversal has made current. Cache reuse can
 also skip rerunning a widget callback until its surface is redrawn.
 
+The ordinary clip pool's fullscreen allocation, concrete bounds-clear no-op,
+target/mask retention, own-hook order and exact Plasma pixel composition are
+[ordinary clip layers §§1–7](steam-plasma-clip-layers.md). Cache/blur policy
+and unproved inherited sampler descriptors remain separate; this link does
+not turn the WORLD hook into a Plasma-mask shader draw.
+
 ### 8.3 WORLD inputs before the optional black draw
 
 Immediately before the late queued screen overlays, scene**0xe2e00**

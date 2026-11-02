@@ -688,7 +688,7 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     VkVertexInputAttributeDescription attributes[] = {
         {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(OverlayVertex, x)},
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(OverlayVertex, u)},
-        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(OverlayVertex, r)},
+        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(OverlayVertex, r)},
     };
     VkPipelineVertexInputStateCreateInfo input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     input.vertexBindingDescriptionCount = 1;
@@ -717,7 +717,7 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     attachment.colorBlendOp = VK_BLEND_OP_ADD;
     attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     attachment.alphaBlendOp = VK_BLEND_OP_ADD;
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
     blend.attachmentCount = 1;
@@ -2326,7 +2326,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         for (size_t i = 0; i < (size_t)extent.width * extent.height; i++) {
             if (bgra)
                 std::swap(px[i * 4], px[i * 4 + 2]);
-            px[i * 4 + 3] = 255;
+            if (!captureAlpha)
+                px[i * 4 + 3] = 255;
         }
         stbi_write_png(capturePath.c_str(), extent.width, extent.height, 4, px, extent.width * 4);
         destroyBuffer(readback);

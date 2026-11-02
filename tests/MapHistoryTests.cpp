@@ -4,6 +4,7 @@
 #include "worldgen/Regions.h"
 #include "worldgen/Places.h"
 #include <cstdio>
+#include <cstring>
 
 int mapHistoryTests() {
     using namespace maphistory;
@@ -100,6 +101,49 @@ int mapHistoryTests() {
             hud.bindMapHistory(owner.view(), "Other Land", false);
             check(found && hud.mapHistoryArrowHit(true, olderPoint) && !hud.mapHistoryAction(olderPoint) && owner.selected() == b,
                   "hidden ancestors suppress dispatch while standalone arrow hits and selection remain live");
+            // Exercise actual HUD emission, not a duplicate color-multiplication helper.
+            hud.bindMapHistory(owner.view(), "Other Land", true);
+            if (!root || !left || !left->doc)
+                continue;
+            auto *mutableRoot = const_cast<plasma::SceneNode *>(root);
+            auto glyph = std::make_unique<plasma::SceneNode>();
+            glyph->doc = left->doc;
+            glyph->parent = mutableRoot;
+            for (size_t index = 0; index < glyph->doc->shapes.size(); ++index) {
+                plasma::TextStyle style;
+                if (plasma::textStyle(glyph->doc->shapes[index], glyph->doc->loaderFlags, style)) {
+                    glyph->shape = int(index);
+                    break;
+                }
+            }
+            check(glyph->shape >= 0, "owner document has a TextShape for tint integration");
+            glyph->text = L"T";
+            glyph->textColor = glm::vec4(1);
+            auto *textNode = glyph.get();
+            mutableRoot->children.push_back(std::move(glyph));
+            hud.requireText(u"T");
+            hud.prepareFrame(renderer, {1920, 1080});
+            const auto snapshot = [&] {
+                Hud::State state;
+                std::vector<OverlayVertex> vertices;
+                hud.draw(state, vertices);
+                return vertices;
+            };
+            const auto same = [](const auto &a, const auto &b) {
+                return a.size() == b.size() && (a.empty() || std::memcmp(a.data(), b.data(), a.size() * sizeof(OverlayVertex)) == 0);
+            };
+            const auto baseline = snapshot();
+            mutableRoot->fill = glm::vec4(0);
+            const auto parentTint = snapshot();
+            mutableRoot->fill = glm::vec4(1);
+            textNode->fill = glm::vec4(0);
+            const auto glyphTint = snapshot();
+            textNode->visible = false;
+            const auto withoutGlyph = snapshot();
+            check(!baseline.empty() && !same(baseline, withoutGlyph), "synthetic glyph is actually emitted through the owner HUD");
+            check(same(baseline, parentTint), "shape-less parent display tint does not alter descendant shape or glyph colors");
+            check(same(baseline, glyphTint), "TextShape glyphs ignore their own display fill color");
+            mutableRoot->children.pop_back();
         }
         renderer.shutdown();
     }

@@ -8,6 +8,6 @@ layout(location = 0) out vec2 vUv;
 layout(location = 1) out vec4 vColor;
 void main() {
     vUv = inUv;
-    vColor = inColor;
+    vColor = inColor / 255.0;
     gl_Position = vec4(inPos / screen.size * 2 - 1, 0, 1);
 }

@@ -83,9 +83,16 @@ struct Camera {
 
 // One corner of an interface quad, in screen pixels (origin top left).
 struct OverlayVertex {
-    float x, y, u, v;
-    uint8_t r, g, b, a;
+    float x = 0, y = 0, u = 0, v = 0;
+    // Float channels in existing 0..255 API units retain sub-byte Plasma colors.
+    float r = 0, g = 0, b = 0, a = 0;
+    constexpr OverlayVertex() = default;
+    template <class R, class G, class B, class A>
+    constexpr OverlayVertex(float px, float py, float texU, float texV, R red, G green, B blue, A alpha)
+        : x(px), y(py), u(texU), v(texV), r(static_cast<float>(red)), g(static_cast<float>(green)), b(static_cast<float>(blue)),
+          a(static_cast<float>(alpha)) {}
 };
+static_assert(sizeof(OverlayVertex) == 32);
 
 // What a draw is, for the Alpha look: terrain carries its light baked into its vertices,
 // scenery is lit as it stands, and other models (creatures, items) take the light of the block
@@ -242,7 +249,10 @@ class Renderer {
         pendingMapView = view;
     }
     // Saves the next presented frame as a PNG (for screenshots and tests).
-    void capture(const std::string &path) { capturePath = path; }
+    void capture(const std::string &path, bool preserveAlpha = false) {
+        capturePath = path;
+        captureAlpha = preserveAlpha;
+    }
     // GPU time per frame (milliseconds, averaged since start): the whole frame and
     // the anti-aliasing passes (TAA, SMAA, the interface draw).
     double averageGpuMs() const { return timingSamples ? gpuMsSum / timingSamples : 0; }
@@ -475,6 +485,7 @@ class Renderer {
     std::vector<PendingUpload> pending;
     unsigned lastDraws = 0;
     std::string capturePath;
+    bool captureAlpha = false; // debug/readback option; ordinary screenshots stay opaque
     bool canCapture = false;
 
     bool createDevice(std::string &error);

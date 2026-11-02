@@ -518,12 +518,15 @@ visited with 0x08 removed.
 4. Ordinary node (neither clip nor blur): draw the node's shape, then, unless `F` has
    0x10, draw each child in order. If `F` has 0x04, the children loop stops at the first
    visible, non-disabled child that is itself a clip or blur node.
-5. Clip node: push an offscreen layer (0x33c110) and clear it over the node's bounds
+5. Clip node: push an offscreen layer (0x33c110) and request a bounds operation
    (0x33c920, bounds from 0x332fd0, which for a clip node cover only its own shape); draw
    all children into that layer; pop the layer (0x33e1e0), which leaves it bound as the
    current mask source; then draw the node's own shape. The shape's draw samples the layer
-   according to the **mask mode** (2.3.3). The effect: the children are visible only where
-   the clip node's shape is.
+   according to the **mask mode** (2.3.3). In the concrete D3D backend the bounds
+   operation is a no-op; layer entry clears its entire fullscreen color target.
+   Exact pool/storage, own-callback order and distinct pixel modes are
+   [ordinary clip layers §§1–6](steam-plasma-clip-layers.md). The generic outline
+   does not assign identical alpha-clip behavior to all three modes.
 6. Blur node: its subtree is rendered to an offscreen target sized to the blurred bounds
    and composited with a blur whose radius scales with the matrix (render spec). Bounds of a
    blur node grow by `0.5 × (|column 0| + |column 1|) × blurRadius` (0x332300, 0x332fd0).
@@ -556,8 +559,9 @@ For a node whose live clipping value is non-zero, the shape is drawn with mask m
 | both clear | 1 |
 
 Other nodes draw with mode 0. The mode is a shader constant (0x390420). All five clip
-displays in gui.plx have flags 2. The exact pixel rule per mode is in the pixel shader (see
-Open questions).
+displays in gui.plx have flags 2. The exact pixel rules, conditional layer-RGB
+unpremultiplication, texture/color operands and remaining sampler boundary are
+[ordinary clip layers §§4–6](steam-plasma-clip-layers.md#4-geometry-color-and-texture-operands).
 
 #### 2.3.4 Node flags
 
@@ -1236,10 +1240,11 @@ files to the last byte, with every tag id resolving to a defined name.
    pair constructor (0x338a90) in reversed argument order; with MSVC's right-to-left
    evaluation this most likely makes the **second** string the key and the first the value,
    but no shipped file contains a variable to confirm it.
-2. **Mask modes 1–3.** The CPU side only selects a mode number (2.3.3); what each does to
-   the layer and the shape's coverage (plain mask, inverted mask, or mask without drawing
-   the shape) lives in the D3D11 pixel shader embedded in the binary and was not
-   disassembled.
+2. **Mask modes 1–3: resolved within the ordinary clip scope.** Native Plasma
+   PS0x47f940 is now traced in [ordinary clip layers §5](steam-plasma-clip-layers.md#5-exact-mask-pixel-modes-and-coordinates).
+   Its three modes have distinct RGB/alpha formulas; the earlier suggested
+   plain/inverted-mask labels were not verified behavior. Sampler inheritance
+   and cache/blur boundaries remain explicit in that supplement.
 3. **Display.strokeColor** is never read by the drawing code found here (only loaded,
    animated and copied). Whether the stroke pass uses it indirectly (through the mesh) is
    for the shape spec to confirm.

@@ -50,7 +50,10 @@ individual feature documents.
   callback, independently of class recordings. Integer GUI hover/walk updates, fractional
   renderer pose steps, zero-origin cache lifetime,50-degree projection, fixed WORLD palette,
   material/effect values and opposite winding have CPU/GPU checks. Main-target captures
-  show the native portrait; broader cached GUI mask layers and frontend pixel parity remain open.
+  show the native portrait. Float overlay RGBA, destination-alpha blending,
+  independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
+  regressions (31 GUI image cases). The ordinary clip-pool contract is written;
+  its GPU composition, broader cached GUI layers and frontend pixel parity remain open.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

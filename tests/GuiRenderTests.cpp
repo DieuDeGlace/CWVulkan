@@ -86,10 +86,11 @@ int guiRenderTests() {
     std::filesystem::create_directory(root);
     int failures = 0, checks = 0;
     auto check = [&](const char *name, const std::vector<OverlayVertex> &text, const std::vector<guiitem::Request> &items,
-                     const std::vector<DrawItem> &scene, glm::ivec2 at, std::array<int, 3> expected) {
+                     const std::vector<DrawItem> &scene, glm::ivec2 at, std::array<int, 3> expected, int tolerance = 2,
+                     std::optional<int> expectedAlpha = {}) {
         const auto capture = root / (std::string(name) + ".png");
         renderer.overlay(text, items);
-        renderer.capture(capture.string());
+        renderer.capture(capture.string(), expectedAlpha.has_value());
         renderer.frame(camera, lighting, {0, 0, 0}, 0, scene, {});
         int width = 0, height = 0, channels = 0;
         auto *pixels = stbi_load(capture.string().c_str(), &width, &height, &channels, 4);
@@ -98,13 +99,34 @@ int guiRenderTests() {
         if (pass)
             for (int i = 0; i < 3; i++) {
                 actual[i] = pixels[4 * (at.y * width + at.x) + i];
-                pass &= std::abs(actual[i] - expected[i]) <= 2;
+                pass &= std::abs(actual[i] - expected[i]) <= tolerance;
             }
+        if (pass && expectedAlpha)
+            pass &= pixels[4 * (at.y * width + at.x) + 3] == *expectedAlpha;
         stbi_image_free(pixels);
         std::cout << "GUI WORLD " << name << ": " << actual[0] << ',' << actual[1] << ',' << actual[2] << (pass ? " PASS\n" : " FAIL\n");
         failures += !pass;
         checks++;
     };
+    auto fractional = background;
+    for (auto &vertex : fractional) {
+        vertex.r = .75f;
+        vertex.g = vertex.b = 0;
+    }
+    check("float-vertex-colour", fractional, {}, {}, {64, 64}, {1, 0, 0}, 0);
+    auto rounded = fractional;
+    for (auto &vertex : rounded)
+        vertex.r = 0;
+    check("rounded-colour-control", rounded, {}, {}, {64, 64}, {0, 0, 0}, 0);
+    auto translucent = background;
+    auto red = background;
+    for (auto &vertex : red) {
+        vertex.r = 255;
+        vertex.g = vertex.b = 0;
+        vertex.a = 128;
+    }
+    translucent.insert(translucent.end(), red.begin(), red.end());
+    check("source-over-alpha", translucent, {}, {}, {64, 64}, {128, 0, 127}, 2, 255);
     // -Z, V255 saturates every native illumination channel to1. The doubled
     // 64/255 grey remains grey through saturation; final cubic grading gives128.
     check("model-over-background", background, {icon}, {}, {64, 64}, {128, 128, 128});

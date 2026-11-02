@@ -886,3 +886,18 @@ in the local asset loader. Synthetic CPU inputs check header/Z/fraction behavior
 a Vulkan triangle fixture compares near/distant coverage and a deliberately
 pre-rounded home-space control. It is not an original-game capture or a general
 last-bit GPU oracle. No models, captures, recordings or owner bytes are packaged.
+
+## Plasma color precision and tint isolation, 2026-11-02
+
+The implementer read the independent ordinary clip contract sections1–8 and its
+updated links, Plasma scene2.3.2, shape vertex/pixel operands and text6.8 plus
+engine code. The native-only author inspected no engine/tests/exporter/captures.
+The engine's float overlay representation and independent tint paths follow those
+facts; no native shader instructions/source or reconstruction were read/copied.
+Owner-HUD emission compares a visible text/shape subtree under changed parent
+and glyph display fills at two scales. Actual Vulkan cases exercise fractional
+color and preserved destination alpha; deliberate previous-behavior runs fail.
+Source-over alpha uses optional diagnostic readback, without changing ordinary
+screenshot opacity. This is color/tint groundwork, not a claim to implement the
+newly documented clip pool, cache, blur or all inherited sampler state. Owner
+art/fonts remain local and are excluded from source and runtime archives.
