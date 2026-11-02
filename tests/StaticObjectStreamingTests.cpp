@@ -1,6 +1,7 @@
 #include "Assets.h"
 #include "Extracted.h"
 #include "World.h"
+#include "Spawned.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -39,8 +40,18 @@ void fixtureZone(const fs::path &folder, int32_t x, int32_t y, int32_t objectX, 
         put(object, 8, point);
         put(object, 0x24, 1.f);
         object[0x28] = 1;
+        object[0xdf] = 0x7e; // A byte outside render placement still belongs to the source record.
         records.write(reinterpret_cast<const char *>(object.data()), object.size());
     }
+    field(records, uint32_t(0x30));
+    field(records, uint32_t(0xe0));
+    field(records, uint32_t(1));
+    nativesaves::Record ground{};
+    ground[0] = 12;
+    ground[0x1c] = 11;
+    put(ground, 0xa0, std::array<int64_t, 3>{int64_t(objectX) * 65536, 65536, 65536});
+    put(ground, 0xd4, int32_t(-2));
+    records.write(reinterpret_cast<const char *>(ground.data()), ground.size());
 }
 std::vector<DrawItem> objects(World &world) {
     std::vector<DrawItem> opaque, water;
@@ -160,6 +171,59 @@ int staticObjectStreamingTests() {
                         std::any_of(draws.begin(), draws.end(), [](const auto &draw) { return (*draw.nativePosition)[0] == 9 * 65536; }) &&
                         std::none_of(draws.begin(), draws.end(), [](const auto &draw) { return (*draw.nativePosition)[0] == 8 * 65536; }),
                     "explicit model invalidation refreshes object records within the same zone lifetime");
+                SpawnedCreatures live;
+                nativesaves::WorldState saved;
+                live.setStoredZones(blocks, &saved, false);
+                const auto captured = blocks.capturedLists(0, 0);
+                const auto *lying = live.groundItems(blocks, 0, 0);
+                const auto *statics = live.zoneObjects(0, 0);
+                check(captured && lying && statics && *lying == captured->groundItems && *statics == captured->staticObjects &&
+                          statics->size() == 1 && (*statics)[0][0xdf] == 0x7e,
+                      "captured ground and object records seed gameplay byte-for-byte instead of regenerating them");
+                if (captured) {
+                    world.setObjectListProvider([&](int x, int y) { return live.zoneObjects(x, y); });
+                    world.setObjectProvider({});
+                    auto replacement = captured->staticObjects.front();
+                    put(replacement, 8, std::array<int64_t, 3>{11 * 65536, 65536, 65536});
+                    put(replacement, 0x24, 2.f);
+                    replacement[0x20] = 1;
+                    live.replaceStaticObjects(blocks, {{0, 0}, {replacement}});
+                    world.update({1, 1, 129});
+                    draws = objects(world);
+                    check(std::any_of(
+                              draws.begin(), draws.end(),
+                              [](const auto &draw) { return (*draw.nativePosition)[0] == 11 * 65536 && draw.nativeObject->radius == 7; }) &&
+                              std::none_of(draws.begin(), draws.end(),
+                                           [](const auto &draw) { return (*draw.nativePosition)[0] == 9 * 65536; }),
+                          "live whole-list replacement updates position, scale, turn and sphere without a terrain notice");
+                    const auto currentDoor =
+                        std::find_if(draws.begin(), draws.end(), [](const auto &draw) { return (*draw.nativePosition)[0] == 11 * 65536; });
+                    if (currentDoor != draws.end()) {
+                        const auto closed = currentDoor->model;
+                        auto openedRecord = replacement;
+                        openedRecord[0x28] = 0;
+                        put(openedRecord, 0x2c, 0.f);
+                        live.replaceStaticObjects(blocks, {{0, 0}, {openedRecord}});
+                        draws = objects(world);
+                        const auto opened = std::find_if(draws.begin(), draws.end(),
+                                                         [](const auto &draw) { return (*draw.nativePosition)[0] == 11 * 65536; });
+                        check(opened != draws.end() && std::memcmp(&closed, &opened->model, sizeof closed) != 0,
+                              "live interaction state animates through the list provider without rebuilding placement");
+                    }
+                    live.replaceStaticObjects(blocks, {{0, 0}, {}});
+                    world.update({1, 1, 129});
+                    check(objects(world).size() == 2,
+                          "an authoritative empty list removes objects instead of falling back to captured ghosts");
+                    saved.zones[{0, 0}].flags = nativesaves::ZoneState::STATIC_OBJECTS_SAVED;
+                    saved.zones[{0, 0}].staticObjects = {replacement};
+                    SpawnedCreatures restored;
+                    restored.setStoredZones(blocks, &saved, false);
+                    restored.groundItems(blocks, 0, 0);
+                    check(restored.zoneObjects(0, 0) && *restored.zoneObjects(0, 0) == std::vector<nativesaves::Record>{replacement},
+                          "stored object state overlays the captured base through the existing native save contract");
+                    world.setObjectListProvider({});
+                    world.setObjectProvider({});
+                }
             }
         }
     }

@@ -1710,6 +1710,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         return spawnedReady ? spawned.groundLights(extractedWorld, key.first, key.second) : steampoints::GroundSources{};
     });
     world.setObjectProvider([&spawned](int zx, int zy, const objectvisual::Key &key) { return spawned.objectVisual(zx, zy, key); });
+    world.setObjectListProvider([&spawned](int zx, int zy) { return spawned.zoneObjects(zx, zy); });
     // The places and lands discovered (the map names them), and the places townspeople marked.
     std::set<std::array<int32_t, 2>> discoveredPlaces(saveGame.discoveredPlaces.begin(), saveGame.discoveredPlaces.end());
     std::set<std::array<int32_t, 2>> discoveredAreas(saveGame.discoveredAreas.begin(), saveGame.discoveredAreas.end());

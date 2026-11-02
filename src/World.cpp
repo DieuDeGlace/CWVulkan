@@ -811,15 +811,28 @@ void World::syncObjectZones() {
             const bool localKey = localX >= INT32_MIN && localX <= INT32_MAX && localY >= INT32_MIN && localY <= INT32_MAX;
             const bool dirty = localKey && staleObjects.contains({int(localX), int(localY)});
             const auto found = objectZones.find(key);
-            if (found != objectZones.end() && uint64_t(reinterpret_cast<uintptr_t>(found->second.identity.get())) == token->order && !dirty)
+            const auto *records = objectListProvider ? objectListProvider(x, y) : nullptr;
+            const bool sameRecords = found != objectZones.end() && found->second.live == (records != nullptr) &&
+                                     (!records || (records->size() == found->second.placements.size() &&
+                                                   std::equal(records->begin(), records->end(), found->second.placements.begin(),
+                                                              [](const auto &record, const auto &placement) {
+                                                                  return objectvisual::placement(record.data()) == placement;
+                                                              })));
+            if (sameRecords && uint64_t(reinterpret_cast<uintptr_t>(found->second.identity.get())) == token->order && !dirty)
                 continue;
-            auto objects = extracted->loadedObjectProps(x, y);
+            auto objects = extracted->loadedObjectProps(x, y, records);
             if (!objects) {
                 objectZones.erase(key);
                 continue;
             }
             ObjectZone installed;
             installed.identity = std::move(objects->identity);
+            installed.live = records != nullptr;
+            if (records) {
+                installed.placements.reserve(records->size());
+                for (const auto &record : *records)
+                    installed.placements.push_back(objectvisual::placement(record.data()));
+            }
             buildScenery(installed.scene, objects->scenery);
             objectZones[key] = std::move(installed);
         }
@@ -840,10 +853,19 @@ void World::collectScenery(const Zone &zone, int32_t ax, int32_t ay, std::vector
     }
     if (!updateObjects)
         return;
+    const auto *liveRecords = objectListProvider ? objectListProvider(ax, ay) : nullptr;
     for (const AnimatedObject &object : zone.objects) {
         auto state = object.captured;
-        if (objectProvider && object.key.index >= 0 && extracted) {
-            const auto live = objectProvider(ax, ay, object.key);
+        if (object.key.index >= 0 && extracted) {
+            std::optional<objectvisual::State> live;
+            if (liveRecords && size_t(object.key.index) < liveRecords->size()) {
+                const auto &record = (*liveRecords)[object.key.index];
+                const auto placement = objectvisual::placement(record.data());
+                if (placement.type == object.key.type && placement.position == object.key.position)
+                    live = objectvisual::read(record.data());
+            } else if (!liveRecords && objectProvider) {
+                live = objectProvider(ax, ay, object.key);
+            }
             if (live && live->type == state.type) {
                 // Placement belongs to this source snapshot, including undefined turn bytes.
                 state.closed = live->closed;

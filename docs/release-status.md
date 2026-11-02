@@ -10,6 +10,21 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Captured zones now seed their gameplay item/object lists with the owner's exact
+  CWR1 records, before the existing saved-state overlay. Missing or empty captured
+  lists remain empty rather than being regenerated. Loaded static-object rendering
+  follows authoritative replacements, including moved, resized, turned or removed
+  objects; an empty received list removes previous geometry. Placement identity
+  excludes clocks, interaction state and padding, so live door state can animate
+  without rebuilding placement. Synthetic integration coverage checks whole-record
+  preservation, source/overlay order, replacement geometry, live clocks and removal.
+  All five targets build warning-free; full CPU/owner checks and70 shader,2 camera,
+  24 GUI,6 map/shared-water/Alpha-scenery image checks pass. Five no-save captures
+  exit0, all viewed, and the save database remains unchanged. This closes the
+  captured-list and live-placement gaps for these paths; other content producers
+  and native visual acceptance remain open. A separate stable clean-room supplement
+  now specifies the owned-ground eight-cube consumer; its implementation is next.
+
 - Steam ground rendering now consumes the live native-format zone lists in physical
   player-centered loaded-zone order. It checks exact timer0, class-adapted resources,
   the raw-position sphere and original-record validity, then uses the specified
@@ -25,7 +40,7 @@ older successful runs; none of these bounded changes establishes complete parity
   alpha, raw-position admission and faded ground/static ordering. All five targets
   build warning-free; full CPU/owner checks and70 shader,2 camera,24 GUI,6 map/
   shared-water/Alpha-scenery image checks pass. Five no-save gameplay/menu captures
-  exit0, all viewed, with the save database unchanged. The kind8 own-item effect's
+  exit0, all viewed, with the save database unchanged. The owned-ground cube effect's
   downstream appearance, exact resource-pointer ordering, alternate callers, live
   list completeness and native visual acceptance remain open. Current indoor/blue
   gameplay and sky-only menu backgrounds remain stability fixtures, not native

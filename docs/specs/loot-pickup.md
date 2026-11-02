@@ -73,9 +73,9 @@ Each frame, for every zone within 3 zones of the local player and each ground it
    their cosine pulse scales **all material RGBA**, not vertical position or pixel Opacity.
    Types3/4 lie on their side. Exact style selection, scale and centering are supplement§3.
 5. Once +0xc8 is 0, gear (types 3..9, 0x1a) reserved for the local player, while world +0x210
-   is set, appends a **kind8 scene effect through0xcb910 to Renderer+0xc0**.
-   The exact initialized descriptor is supplement§6. Its downstream appearance is not
-   established by this producer and is not assigned a guessed visual name here.
+   is set, appends a scene descriptor through0xcb910 to Renderer+0xc0 with
+   **repetition count8**, not kind8. The initialized descriptor is supplement§6;
+   its direct repeated-cube draw is [owned-ground cubes](steam-owned-ground-cubes.md).
 
 ## 3. Picking up
 
@@ -230,9 +230,10 @@ interaction kind 10 (`zone-object-interaction.md` §8); the pet creature is made
 5. **The type-0x18 receipt texts** (jump table at 0xadc0c by subtype) are not specified.
 6. **Timer +0xcc** of ground items counts down but nothing here sets it; nonzero +0xcc
    excludes drawing, including a negative value.
-7. **Drawing details:** steam-ground-item-scene-rendering§§3–6 now specifies the reached
-   orientation/pulse matrices and own-item effect producer. The separate kind8 effect's
-   downstream visual contract remains outside that bounded trace.
+7. **Drawing details:** steam-ground-item-scene-rendering§§3–6 specifies the reached
+   orientation/pulse matrices and own-item producer. steam-owned-ground-cubes resolves
+   its downstream eight repeated draws; the old "kind8" label is superseded. Other
+   scene-effect families remain outside those bounded traces.
 
 ## Errata (from the clean-room implementation)
 

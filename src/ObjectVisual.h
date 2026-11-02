@@ -14,6 +14,15 @@ struct State {
     uint8_t turn = 0, closed = 1;
     float scale = 1, elapsedMs = 1000;
 };
+struct Placement {
+    int32_t type = -1;
+    std::array<int64_t, 3> position{};
+    uint32_t scaleBits = 0;
+    uint8_t turn = 0;
+    bool operator==(const Placement &) const = default;
+};
+// Geometry identity excludes clocks, interaction state and uninitialized padding.
+Placement placement(const uint8_t *record);
 // A complete static-object record, already validated by the zone-list owner.
 State read(const uint8_t *record);
 float visualFactor(int type);

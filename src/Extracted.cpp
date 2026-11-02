@@ -1124,7 +1124,8 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay, std::shared_p
     return propsForZone(zone, ax, ay, modelSnapshot, true);
 }
 
-std::optional<ExtractedWorld::LoadedObjectProps> ExtractedWorld::loadedObjectProps(int32_t ax, int32_t ay) {
+std::optional<ExtractedWorld::LoadedObjectProps> ExtractedWorld::loadedObjectProps(int32_t ax, int32_t ay,
+                                                                                   const std::vector<nativesaves::Record> *records) {
     std::shared_ptr<const Zone> zone;
     {
         std::lock_guard lock(cacheMutex);
@@ -1136,7 +1137,65 @@ std::optional<ExtractedWorld::LoadedObjectProps> ExtractedWorld::loadedObjectPro
     }
     if (!zone)
         return {};
-    return LoadedObjectProps{zone->identity, propsForZone(zone, ax, ay, nullptr, false)};
+    return LoadedObjectProps{zone->identity, records ? objectProps(*records) : propsForZone(zone, ax, ay, nullptr, false)};
+}
+
+std::optional<ExtractedWorld::CapturedLists> ExtractedWorld::capturedLists(int32_t ax, int32_t ay) const {
+    {
+        std::lock_guard lock(cacheMutex);
+        const auto found = std::find_if(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == Key{ax, ay}; });
+        if (found == cache.end() || !found->second || generatedMode || found->second->generated)
+            return {};
+    }
+    return readCapturedLists(ax, ay);
+}
+
+ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int32_t ay) const {
+    CapturedLists result;
+    std::ifstream input(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec"), std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() < 4 || input.tellg() > 128 * 1024 * 1024)
+        return result;
+    std::vector<uint8_t> bytes(size_t(input.tellg()));
+    input.seekg(0);
+    if (!input.read(reinterpret_cast<char *>(bytes.data()), bytes.size()) || std::memcmp(bytes.data(), "CWR1", 4))
+        return result;
+    for (size_t at = 4; at + 12 <= bytes.size();) {
+        uint32_t tag, stride, count;
+        std::memcpy(&tag, bytes.data() + at, 4);
+        std::memcpy(&stride, bytes.data() + at + 4, 4);
+        std::memcpy(&count, bytes.data() + at + 8, 4);
+        at += 12;
+        if (!stride || count > (bytes.size() - at) / stride)
+            break;
+        auto *destination = tag == 0x30 ? &result.groundItems : tag == 0x60 ? &result.staticObjects : nullptr;
+        if (destination && stride == sizeof(nativesaves::Record)) {
+            const size_t first = destination->size();
+            destination->resize(first + count);
+            std::memcpy(destination->data() + first, bytes.data() + at, size_t(count) * stride);
+        }
+        at += size_t(count) * stride;
+    }
+    return result;
+}
+
+std::vector<Scenery> ExtractedWorld::objectProps(std::span<const nativesaves::Record> records) {
+    std::vector<Scenery> out;
+    for (size_t index = 0; index < records.size(); ++index) {
+        const auto &record = records[index];
+        const auto state = objectvisual::read(record.data());
+        if (state.type < 0 || state.type >= int(buildingParts.size()) || buildingParts[state.type].empty() || !(state.scale > 0) ||
+            !std::isfinite(state.scale))
+            continue;
+        std::array<int64_t, 3> position;
+        std::memcpy(position.data(), record.data() + 8, sizeof position);
+        const glm::vec3 local = toLocal(position.data());
+        const auto [size, estimated] = objectScale(state.type, buildingParts[state.type], state.scale);
+        Scenery placed{buildingParts[state.type], local.x, local.y, local.z, state.turn * 1.5707963f, size, 0, estimated};
+        placed.object = state;
+        placed.objectKey = {state.type, int(index), position};
+        out.push_back(std::move(placed));
+    }
+    return out;
 }
 
 std::vector<Scenery> ExtractedWorld::propsForZone(const std::shared_ptr<const Zone> &zone, int ax, int ay,
@@ -1204,68 +1263,8 @@ std::vector<Scenery> ExtractedWorld::propsForZone(const std::shared_ptr<const Zo
         }
         return out;
     }
-    std::ifstream in(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec"), std::ios::binary);
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), {});
-    if (data.size() < 4 || memcmp(data.data(), "CWR1", 4) != 0)
-        return out;
-    // Game dots (65536 per block) -> local blocks.
-    const int64_t originDots[2] = {(int64_t)originX * 64 * 65536, (int64_t)originY * 64 * 65536};
-    auto local = [&](const uint8_t *p, float &x, float &y, float &z) {
-        int64_t pos[3];
-        memcpy(pos, p, sizeof(pos));
-        x = float((double(pos[0]) - double(originDots[0])) / 65536);
-        y = float((double(pos[1]) - double(originDots[1])) / 65536);
-        z = float(double(pos[2]) / 65536 + Z_OFFSET);
-    };
-    size_t at = 4;
-    while (at + 12 <= data.size()) {
-        uint32_t offset, stride, count;
-        memcpy(&offset, &data[at], 4);
-        memcpy(&stride, &data[at + 4], 4);
-        memcpy(&count, &data[at + 8], 4);
-        at += 12;
-        if (!stride || count > (data.size() - at) / stride)
-            break;
-        // Unknown record layouts cannot be decoded using these field offsets.
-        // Only the live model/object lists are scenery. Ground items, generation
-        // backups, and derived light/emitter lists have separate consumers.
-        if (stride != 0xe0 || offset != worldgen::zonelist::OBJECTS) {
-            at += size_t(stride) * count;
-            continue;
-        }
-        for (uint32_t i = 0; i < count; i++) {
-            const uint8_t *r = &data[at + (size_t)i * stride];
-            int32_t id;
-            memcpy(&id, r, 4);
-            float x, y, z;
-            local(r + 8, x, y, z);
-            {
-                // Object record: building part, position, quarter turns, scale.
-                // The array at 0x78 repeats these objects. Use the measured
-                // sprite size; expose the provisional fallback to DataCheck.
-                // Rotation is a byte, followed by three bytes of padding. The
-                // game leaves that padding uninitialised in many real records.
-                uint8_t turns = r[0x20];
-                float scale;
-                memcpy(&scale, r + 0x24, 4);
-                // Native drawing consumes the full byte, including captured uninitialized lamp turns.
-                // It neither rejects values above three nor masks them to two bits.
-                if (id < 0 || id >= (int)buildingParts.size() || buildingParts[id].empty() ||
-                    !(scale > 0) || !std::isfinite(scale))
-                    continue;
-                const auto [voxelScale, estimated] = objectScale(id, buildingParts[id], scale);
-                Scenery placed{buildingParts[id], x, y, z, turns * 1.5707963f, voxelScale, 0, estimated};
-                float elapsed;
-                memcpy(&elapsed, r + 0x2c, sizeof elapsed);
-                placed.object = {id, turns, r[0x28], scale, elapsed};
-                int64_t position[3];
-                std::memcpy(position, r + 8, sizeof position);
-                placed.objectKey = {id, (int)i, {position[0], position[1], position[2]}};
-                out.push_back(std::move(placed));
-            }
-        }
-        at += (size_t)stride * count;
-    }
+    const auto objects = objectProps(readCapturedLists(ax, ay).staticObjects);
+    out.insert(out.end(), objects.begin(), objects.end());
     return out;
 }
 

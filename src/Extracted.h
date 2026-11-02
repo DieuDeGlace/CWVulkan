@@ -170,7 +170,13 @@ class ExtractedWorld {
         std::vector<Scenery> scenery;
     };
     // Lookup only. Never loads a missing zone or requires a terrain mesh.
-    std::optional<LoadedObjectProps> loadedObjectProps(int32_t x, int32_t y);
+    std::optional<LoadedObjectProps> loadedObjectProps(int32_t x, int32_t y, const std::vector<nativesaves::Record> *records = nullptr);
+    struct CapturedLists {
+        std::vector<nativesaves::Record> groundItems, staticObjects;
+    };
+    // No load: capture-backed zones use the owner's raw lists; generated zones have none.
+    std::optional<CapturedLists> capturedLists(int32_t x, int32_t y) const;
+    std::vector<Scenery> objectProps(std::span<const nativesaves::Record> records);
     bool gameZoneLoaded(int32_t x, int32_t y) const; // lookup only; no block read, load or LRU mutation
     // The zones within `radius` of absolute zone (ax, ay) are kept in memory, as the game
     // keeps the zones around its player: those missing are read (or made) on a thread of
@@ -235,6 +241,7 @@ class ExtractedWorld {
     std::shared_ptr<Zone> writableZone(int ax, int ay);
     std::vector<Scenery> propsForZone(const std::shared_ptr<const Zone> &, int ax, int ay, std::shared_ptr<const void> *modelSnapshot,
                                       bool includeModels);
+    CapturedLists readCapturedLists(int32_t x, int32_t y) const;
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     void publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);

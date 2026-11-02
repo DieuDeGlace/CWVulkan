@@ -1769,14 +1769,19 @@ void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldStat
 nativesaves::ZoneLists *SpawnedCreatures::zoneLists(ExtractedWorld &ew, int zx, int zy) {
     if (nativesaves::ZoneLists *lists = zoneStates.find({zx, zy}))
         return lists;
-    std::vector<worldgen::ZoneObject> objects;
-    if (!ew.gameObjects(zx, zy, objects))
-        return nullptr; // (its blocks are not in memory yet)
     std::vector<nativesaves::Record> objectRecords, itemRecords;
-    for (const worldgen::ZoneObject &o : objects)
-        objectRecords.push_back(zonestates::staticObjectRecord(o));
-    for (const worldgen::GroundItem &g : worldgen::zone(zx, zy)->items)
-        itemRecords.push_back(zonestates::groundItemRecord(g, worldgen::worldDay()));
+    if (auto captured = ew.capturedLists(zx, zy)) {
+        objectRecords = std::move(captured->staticObjects);
+        itemRecords = std::move(captured->groundItems);
+    } else {
+        std::vector<worldgen::ZoneObject> objects;
+        if (!ew.gameObjects(zx, zy, objects))
+            return nullptr; // Its blocks are not in memory yet.
+        for (const worldgen::ZoneObject &o : objects)
+            objectRecords.push_back(zonestates::staticObjectRecord(o));
+        for (const worldgen::GroundItem &g : worldgen::zone(zx, zy)->items)
+            itemRecords.push_back(zonestates::groundItemRecord(g, worldgen::worldDay()));
+    }
     // A mirror's new zone shows its own generation until the host has sent the zone's state.
     // (Which routine flags a mirror's new zones is netcode-compatibility.md's open question 7;
     // every new zone is flagged here, which the recorded zone requests bear out.)

@@ -2,6 +2,7 @@
 // Streams terrain zones around the player (generated on worker threads),
 // caches .cub models and owns every placed model instance.
 #include "Renderer.h"
+#include "NativeSaves.h"
 #include "Terrain.h"
 #include "VegetationWind.h"
 #include "HairStyle.h"
@@ -38,6 +39,11 @@ class World {
     void collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const;
     using ObjectProvider = std::function<std::optional<objectvisual::State>(int zx, int zy, const objectvisual::Key &)>;
     void setObjectProvider(ObjectProvider provider) { objectProvider = std::move(provider); }
+    using ObjectListProvider = std::function<const std::vector<nativesaves::Record> *(int zx, int zy)>;
+    void setObjectListProvider(ObjectListProvider provider) {
+        objectListProvider = std::move(provider);
+        objectZones.clear();
+    }
     // Queried each frame: personal lights follow the current character immediately.
     void setUsedCellProvider(steampoints::UsedCellQuery provider) { usedCellProvider = std::move(provider); }
     using EffectLightProvider = std::function<std::vector<steampoints::EffectSource>()>;
@@ -125,6 +131,7 @@ class World {
         glm::vec3 position, dimensions;
     };
     ObjectProvider objectProvider;
+    ObjectListProvider objectListProvider;
     steampoints::UsedCellQuery usedCellProvider;
     EffectLightProvider effectLightProvider;
     TransientLightProvider transientLightProvider;
@@ -170,6 +177,8 @@ class World {
     struct ObjectZone {
         std::shared_ptr<const void> identity; // Retain only the small lifetime token, not old terrain snapshots.
         Zone scene;
+        bool live = false;
+        std::vector<objectvisual::Placement> placements;
     };
     std::map<Key, ObjectZone> objectZones; // absolute coordinates, independent of terrain GPU publication
     bool independentObjects = false;

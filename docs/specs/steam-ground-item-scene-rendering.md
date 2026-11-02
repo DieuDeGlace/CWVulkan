@@ -168,10 +168,11 @@ positive-fade condition here. **0xcb910** initializes:
 | +0x38 | Low32 of signed64 truncation of float World+0x440 |
 | +0x3c | float32(S×10) |
 | +0x40 | float0.10000000149011612 |
-| +0x44 | signed32 kind8 |
+| +0x44 | signed32 repetition count8, not an effect-kind selector |
 
-This identifies the producer/data, not an inferred visual name or its
-downstream effect draw. This is the renderer list, not World+0xc0 block
+The downstream [owned-ground cube consumer](steam-owned-ground-cubes.md)
+resolves the eight repeated cube draws and explicitly supersedes the earlier
+"kind8" label. This is the renderer list, not World+0xc0 block
 changes. Alternate scene/GUI callers, every resource factory, invalid assets,
 nonfinite/overflowing arithmetic, concurrent mutations and loaded-but-unmeshed
 zone content production remain outside this bounded renderer contract.

@@ -5,6 +5,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace objectvisual {
+Placement placement(const uint8_t *record) {
+    Placement result;
+    std::memcpy(&result.type, record, sizeof result.type);
+    std::memcpy(result.position.data(), record + 8, sizeof result.position);
+    std::memcpy(&result.scaleBits, record + 0x24, sizeof result.scaleBits);
+    result.turn = record[0x20];
+    return result;
+}
+
 State read(const uint8_t *record) {
     State state;
     std::memcpy(&state.type, record, 4);
