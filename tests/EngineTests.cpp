@@ -174,6 +174,7 @@ int objectClockTests(); // tests/ObjectClockTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int blockMutationTests();
 int terrainBandTests();
+int staticObjectSceneTests();
 int particleTests();
 int bodyParticleTests();
 int lightPublicationTests();
@@ -9355,6 +9356,8 @@ int main(int argc, char **argv) {
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "terrainbands")
         return terrainBandTests();
+    if (argc == 2 && std::string(argv[1]) == "staticobjectscene")
+        return staticObjectSceneTests();
     if (argc == 2 && std::string(argv[1]) == "deadcreatures")
         return deadCreatureTests();
     if (argc == 2 && std::string(argv[1]) == "worldobjects")
@@ -10654,6 +10657,7 @@ int main(int argc, char **argv) {
     failures += deadCreatureTests();
     failures += blockMutationTests();
     failures += terrainBandTests();
+    failures += staticObjectSceneTests();
     failures += particleTests();
     failures += bodyParticleTests();
     failures += lightPublicationTests();

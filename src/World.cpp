@@ -6,6 +6,7 @@
 #include "CubModel.h"
 #include "ProceduralItems.h"
 #include "Extracted.h"
+#include "StaticObjectScene.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/Generator.h"
 #include "worldgen/Height.h"
@@ -537,6 +538,10 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
         }
         d.kind = DrawKind::Scenery;
         if (s.modelType >= 0 && extracted) {
+            Instance local = i;
+            local.position = {};
+            d.nativeModel = instanceDraw(local).model;
+            d.nativePosition = s.modelPosition;
             auto position = s.modelPosition;
             position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
             position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
@@ -546,6 +551,9 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
             d.nativeZone = z.nativeBounds;
         }
         if (s.object.type >= 0 && s.objectKey.type >= 0 && extracted) {
+            d.nativeModel = objectvisual::matrix(s.object, glm::vec3(0), models[m].size);
+            d.nativePosition = s.objectKey.position;
+            d.nativeObject = staticobjectscene::sphere(s.object.type, s.object.scale, s.objectKey.position);
             auto position = s.objectKey.position;
             position[0] -= (int64_t)extracted->originZoneX() * 64 * 65536;
             position[1] -= (int64_t)extracted->originZoneY() * 64 * 65536;
@@ -773,6 +781,8 @@ void World::refreshModels(int zx, int zy) {
 
 void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const {
     const bool steamLook = renderStyle() == RenderStyle::Steam;
+    const auto player = scenePlayerProvider ? scenePlayerProvider() : std::nullopt;
+    std::vector<DrawItem> staticObjects;
     for (auto &[key, z] : zones) {
         auto terrainDraw = [&](uint32_t mesh, std::vector<DrawItem> &draws, DrawKind kind, uint32_t flags = 0, bool castShadow = true) {
             if (!mesh)
@@ -813,8 +823,14 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
         }
         const size_t first = opaque.size();
         opaque.insert(opaque.end(), z.scenery.begin(), z.scenery.end());
-        for (const Moving &m : z.moving)
+        for (const Moving &m : z.moving) {
             opaque[first + m.draw].model = vegetationwind::modelMatrix(m.placement, clockMs, steamLook);
+            if (opaque[first + m.draw].nativePosition) {
+                auto local = m.placement;
+                local.position = {};
+                opaque[first + m.draw].nativeModel = vegetationwind::modelMatrix(local, clockMs, steamLook);
+            }
+        }
         for (const AnimatedObject &object : z.objects) {
             auto state = object.captured;
             if (objectProvider && object.key.index >= 0 && extracted) {
@@ -828,8 +844,29 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
                 }
             }
             opaque[first + object.draw].model = objectvisual::matrix(state, object.position, object.dimensions);
+            if (opaque[first + object.draw].nativePosition)
+                opaque[first + object.draw].nativeModel = objectvisual::matrix(state, glm::vec3(0), object.dimensions);
+        }
+        if (steamLook && !z.objects.empty()) {
+            const bool admitted = !player || !extracted ||
+                                  staticobjectscene::inPlayerSquare(player->physical, key.first + extracted->originZoneX(),
+                                                                    key.second + extracted->originZoneY());
+            size_t keep = first;
+            for (size_t index = first; index < opaque.size(); ++index) {
+                if (opaque[index].nativeObject) {
+                    if (admitted)
+                        staticObjects.push_back(std::move(opaque[index]));
+                } else {
+                    if (keep != index)
+                        opaque[keep] = std::move(opaque[index]);
+                    ++keep;
+                }
+            }
+            opaque.resize(keep);
         }
     }
+    for (auto &object : staticObjects)
+        opaque.push_back(std::move(object));
     for (auto &i : instances)
         if (i.live)
             opaque.push_back(instanceDraw(i));

@@ -1639,8 +1639,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 } else if (item.nativeLightZone) {
                     key = *item.nativeLightZone;
                 } else {
-                    const steampoints::Point origin{(int64_t)(worldProbe.origin.x * 65536), (int64_t)(worldProbe.origin.y * 65536), 0};
-                    key = steampoints::bindingZone(item.model, m.nativeCentre.value_or((m.min + m.max) * .5f), origin);
+                    const steampoints::Point origin =
+                        item.nativeModel
+                            ? steampoints::Point{gamemath::subtractFixed(0, sceneFrame->visibility.offset[0]),
+                                                 gamemath::subtractFixed(0, sceneFrame->visibility.offset[1]), 0}
+                            : steampoints::Point{int64_t(worldProbe.origin.x * 65536), int64_t(worldProbe.origin.y * 65536), 0};
+                    key = steampoints::bindingZone(item.nativeModel ? pc.model : item.model, m.nativeCentre.value_or((m.min + m.max) * .5f),
+                                                   origin);
                 }
                 if (const auto batch = nativeBatches.find(key); batch != nativeBatches.end())
                     pc.lights = {batch->second.x, 0, 0, batch->second.y};
@@ -1883,8 +1888,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             // Shared refraction needs actors in the opaque scene snapshot. The
             // native Alpha path retains its separate post-water actor pass.
             const bool late = alphaLook && !sharedWater && item.kind == DrawKind::Model;
-            if ((!alphaLook && item.nativeScenery) || item.kind == DrawKind::LightBeam || item.kind == DrawKind::Particle ||
-                late != afterWater || (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
+            if ((!alphaLook && (item.nativeScenery || item.nativeObject)) || item.kind == DrawKind::LightBeam ||
+                item.kind == DrawKind::Particle || late != afterWater || (item.flags & (NATIVE_MENU | WORLD_MAP)) || !visible(item))
                 continue;
             std::optional<float> opacity;
             const bool staticAlpha = alphaLook && item.alphaScenery.has_value();
@@ -1909,13 +1914,21 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     std::array<std::vector<DrawItem>, 5> sceneryQueues;
     if (!alphaLook)
         for (const DrawItem &item : opaque) {
-            if (!item.nativeScenery)
+            if (!item.nativeScenery && !item.nativeObject)
                 continue;
-            const auto &bounds = *item.nativeScenery;
-            const auto centre = absolutePoint(bounds.center);
-            if (!nativeZoneVisible(item) || !sceneFrame->visibility.visible({centre, bounds.radius}, modelDistance))
+            steamscenery::Bounds bounds;
+            scenevisibility::Sphere sphere;
+            const float range = modelDistance; // renderer+0x49c for both ordinary models and static objects
+            if (item.nativeObject) {
+                sphere = *item.nativeObject;
+                bounds.water = false;
+            } else {
+                bounds = *item.nativeScenery;
+                sphere = {absolutePoint(bounds.center), bounds.radius};
+            }
+            if ((!item.nativeObject && !nativeZoneVisible(item)) || !sceneFrame->visibility.visible(sphere, range))
                 continue;
-            const float opacity = steamscenery::fade(steamscenery::distanceSquaredFixed(centre, sceneFrame->visibility.eye), modelDistance);
+            const float opacity = steamscenery::fade(steamscenery::distanceSquaredFixed(sphere.centre, sceneFrame->visibility.eye), range);
             const auto queue = steamscenery::queue(bounds, opacity);
             if (queue != steamscenery::Queue::Hidden) {
                 DrawItem draw = item;

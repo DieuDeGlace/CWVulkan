@@ -573,6 +573,37 @@ int steamShaderTests() {
             checkPoints("large-origin-latest-center", {shifted}, *empty);
     }
     {
+        DrawItem object = item;
+        object.model = glm::mat4(1);
+        object.kind = DrawKind::Scenery;
+        object.flags = 0;
+        object.flash = 0;
+        object.nativeShininess = false;
+        object.material = glm::vec4(1);
+        object.nativeActor.reset();
+        object.nativeScenery.reset();
+        object.nativeLights.reset();
+        object.nativeLightZone.reset();
+        object.nativeModel.reset();
+        object.nativePosition.reset();
+        object.nativeObject = scenevisibility::Sphere{{0, 0, 65536}, 4};
+        object.nativeZone = std::make_shared<scenevisibility::Bounds>(); // unmeshed zone must not reject this route
+        renderer.setWorldProbe({});
+        renderer.settings.fogDistance = renderer.settings.sceneryDistance = 1000000;
+        Camera nearby;
+        nearby.eye = {0, -2, 1};
+        nearby.target = {0, 0, 1};
+        Lighting steady;
+        steady.timeMs = 0;
+        const auto capture = root / "static-object-unmeshed-zone.png";
+        renderer.capture(capture.string());
+        renderer.frame(nearby, steady, {}, 0, {object}, {});
+        const auto pixel = centre(capture);
+        const bool admitted = pixel && std::abs((*pixel)[0] - 7) <= 2 && std::abs((*pixel)[1] - 52) <= 2 && std::abs((*pixel)[2] - 5) <= 2;
+        std::cout << "Steam shader static-object independent zone admission" << (admitted ? " PASS\n" : " FAIL\n");
+        failures += !admitted;
+    }
+    {
         // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.
         // Compare visible coverage with the same small scene near zero, not with rounded home floats.
         renderer.setWorldProbe({});

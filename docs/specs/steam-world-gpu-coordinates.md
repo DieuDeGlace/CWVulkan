@@ -48,6 +48,10 @@ and the origin are not separately rounded to floats and then subtracted.
 | Ordinary environment-model branch in0xd3170 | Add each record's fixed X/Y+8/+0x10 to Renderer+0x428/+0x430 before float×DOT. Fixed record Z+0x18 converts separately to float×DOT. The ordinary model translation precedes its existing scale, animation and centering operations. |
 | Generic static-object/door placement in0xe0ac0 | Add the object's fixed X/Y+8/+0x10 to the same renderer offsets before float×DOT. Fixed Z+0x18 converts to float×DOT before the existing type-specific float translation/rotation/scale stack.0xd3170 reaches this helper at0xd9244. |
 
+The generic static-object caller's separate loaded-zone traversal and individual
+center/radius/range gates are [static-object scene admission](steam-static-object-scene-admission.md).
+They do not inherit the environment-model zone admission.
+
 The pose's exact Z fixed offsets, truncations and subsequent part matrices
 remain [creature pose §8.2](creature-pose.md#82-the-base-matrix-and-the-body-frame).
 They do not introduce a Z camera-origin member. The static object's full

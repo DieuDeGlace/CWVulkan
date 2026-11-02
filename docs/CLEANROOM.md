@@ -694,3 +694,22 @@ The same independent author also clarified WORLD material-buffer delivery/readin
 and historical pose-control names. Those stable addenda have been read; they are a
 separate implementation contract and do not establish that all posed material/effect
 bindings are already integrated.
+
+## Static-object scene admission and fixed scenery anchors, 2026-11-02
+
+The implementer read steam-static-object-scene-admission.md, its coordinate link,
+the existing independent scene/fade contracts and engine sources only. The separate
+native-only author established the physical player-zone conversion, inclusive zone
+square, center/radius arithmetic, model-range binding and independent mesh admission
+without reading the engine or tests. StaticObjectScene expresses those facts using
+CubeVulkan's fixed arithmetic and shared scene view. World keeps static objects
+after environment records in available zone/record order; the renderer uses a
+separate static-object sphere rather than the environment mesh gate. Scenery keeps
+its raw fixed position while local wind and object transforms are refreshed.
+
+Asset-free CPU cases cover narrowing, negative boundaries, low64 addition, sphere
+extent, range equality, all-plane admission and fade. A synthetic GPU object renders
+despite its containing zone's failed environment-mesh bounds. Full engine and image
+checks pass. The renderer test does not establish complete loaded-but-unmeshed zone
+production, ground-item ordering or native pixel acceptance; those remain separate
+integration work. No owner assets or captured records enter either package.

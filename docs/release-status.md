@@ -10,6 +10,23 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary Steam static objects now use their own admission path, independently of
+  the environment model's cached terrain-box gate. Available scene records retain
+  zone/record order and use the player's physical-coordinate inclusive seven-zone
+  square, the independently specified half-height sphere and the model-range
+  distance/fade limit without an extra64 blocks. Scenery and animated door/window
+  transforms retain exact fixed-position anchors before float conversion; Alpha
+  and shadow transforms keep their existing coordinate policy. Synthetic boundary,
+  overflow, plane and fade checks pass, including a Vulkan object whose containing
+  zone fails the environment-mesh gate. Full CPU/owner checks and57 shader,2 camera,
+  24 GUI,6 map/shared-water/Alpha-scenery image checks pass. This closes the renderer
+  gate for available scene records; supplying objects from every loaded zone before
+  terrain-mesh publication, ground-item ordering and broader native visual
+  acceptance remain open. Five hidden no-save Steam/Alpha gameplay, title and
+  idle/hover character-selection runs exit0, with all captures viewed and the
+  character database unchanged. Their visible blue/indoor scene and sky-only menu
+  background are stability coverage, not native visual acceptance.
+
 - Normal world pose admission now uses the current scene's camera, planes and actor
   range, in registration order, before any state/clock/spark/cache updates. The
   independently corrected sphere includes max(body height,0.6*max(width,depth));
