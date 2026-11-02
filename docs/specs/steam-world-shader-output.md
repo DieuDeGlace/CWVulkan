@@ -41,6 +41,13 @@ matrix. Its world normal used for vertex lighting is separately transformed
 by the world upper3×3 and normalized. The pixel stage does not redo the
 directional/point lighting or renormalize the interpolated normal.
 
+The reached terrain, queued-model, native water depth/color and direct GUI
+WORLD bindings use this same compiled vertex shader. Independent matrix
+uploads, GPU coefficient composition and the pre-dot clip-Z DepthOffset
+operation are [WORLD composition applicability §§1–4](steam-world-vertex-composition-applicability.md).
+The geometric space chain above does not imply bit-identical sequential
+CPU/vector transforms or a CPU-precombined WVP upload.
+
 All consumed user varyings use **perspective-correct linear interpolation**,
 at ordinary pixel frequency. They have no flat, noperspective, centroid or
 sample qualifier. This is the native compiled declaration's linear mode;

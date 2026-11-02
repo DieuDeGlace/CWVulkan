@@ -1060,6 +1060,36 @@ int steamShaderTests() {
         renderer.overlay({});
         checkRetained("fog-ring-before-map", mapReference);
     }
+    {
+        // Composition must cancel WORLD/VIEW translations before the local dot.
+        // These synthetic finite inputs expose a lost triangle in sequential transforms;
+        // they are not a native GPU rounding or captured-gameplay oracle.
+        renderer.setWorldProbe({});
+        renderer.settings.fogDistance = renderer.settings.sceneryDistance = 1000000;
+        Camera shifted;
+        shifted.eye = {0, -2, 1};
+        shifted.target = {0, 0, 1};
+        Lighting steady;
+        DrawItem triangle;
+        triangle.mesh = item.mesh;
+        triangle.kind = DrawKind::OwnedGroundCube; // immediate list has no second sphere gate
+        triangle.castShadow = false;
+        triangle.material = glm::vec4(1);
+        const auto renderAt = [&](const char *name, float x, bool draw) {
+            shifted.eye.x = shifted.target.x = x;
+            triangle.model = glm::translate(glm::mat4(1), {x, 0, 0}) * glm::scale(glm::mat4(1), {.125f, 1, 1});
+            const auto path = root / (std::string(name) + ".png");
+            renderer.capture(path.string());
+            renderer.frame(shifted, steady, {}, 0, draw ? std::vector<DrawItem>{triangle} : std::vector<DrawItem>{}, {});
+            return centre(path);
+        };
+        const auto sky = renderAt("world-compose-sky", 0, false);
+        const auto near = renderAt("world-compose-near", 0, true);
+        const auto far = renderAt("world-compose-translated", 16777216.f, true);
+        const bool visible = sky && near && far && *near != *sky && *near == *far;
+        std::cout << "Steam shader WORLD matrix composition" << (visible ? " PASS\n" : " FAIL\n");
+        failures += !visible;
+    }
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

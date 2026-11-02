@@ -861,3 +861,16 @@ alpha, Glow and view-normal Shininess. No native instructions/shader source, SDK
 implementation, reconstructed code or owner asset bytes were read or copied.
 An audit found no production users of the old CPU fog/pixel approximations; they
 were removed while the CPU color helpers actually used by coin previews remain.
+
+## Shared WORLD vertex composition, 2026-11-02
+
+The implementer read steam-world-vertex-composition-applicability.md sections1–5,
+its WORLD-output/pass-control links, the existing map section6 and engine sources
+only. The independent native-only author inspected no engine, tests, exporter,
+owner data or captures. The shared vertex stage reuses the project-owned matrix
+helper to compose GPU coefficients before local dots, with separate WORLD lighting
+and view-normal inputs. Engine leaf deformation retains its own extension path.
+Synthetic finite matrix inputs test actual Vulkan coverage and retained occlusion;
+the corrected winding/visible controls demonstrate three old-shader failures and
+new-shader passes, without asserting a native numeric or cross-GPU rounding oracle.
+No native code, shader instructions, reconstruction or owner assets were copied.

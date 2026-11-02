@@ -1,6 +1,6 @@
 # Engine readiness checklist
 
-Audited against the source and tests on 2026-11-01. The checkboxes in the first
+Audited against the source and tests on 2026-11-02. The checkboxes in the first
 section mean implemented and exercised in the stated checks; they do not certify
 complete Steam or pixel parity. Older progress notes are in Git history and the
 individual feature documents.
@@ -340,19 +340,24 @@ individual feature documents.
   Zone boxes, scenery spheres/fades, adaptive ranges and retained speech now share
   the exact native CPU view/projection. Source-home metadata is converted to absolute
   XY once; native game Z stays unshifted. Beam distances retain a fixed eye too.
-  Speech publication keeps its earlier cache boundary; GPU geometry still uses the
-  engine frame. Ordinary WORLD now uploads its float lens separately and transforms
-  each point through WORLD, view and projection in the shader, including immediate
-  GUI models; other passes retain their existing matrices. Full CPU/owner and Vulkan
-  checks pass. Posed actors now retain their origin-relative matrices through GPU
+  Speech publication keeps its earlier cache boundary. Ordinary WORLD uploads
+  its float matrices separately and composes WV/WVP on the GPU before local dots,
+  including immediate GUI models and native water's shared vertex stage. DepthOffset
+  modifies the composite clip-Z coefficient. WORLD and GUI large-translation plus
+  retained-depth regressions fail before and pass after; full CPU/owner and Vulkan
+  checks pass. Cross-GPU last-bit rounding and separate family input lifetimes
+  remain bounded comparisons. Posed actors now retain their origin-relative matrices through GPU
   submission, with the native view/lens and matching fixed-origin point tables.
   Source-home transforms remain available to shadows and Alpha rendering. Asset-free
   GPU checks preserve a quarter block at world block16,777,216 and its attached light.
   Terrain now emits local corners in lowest-exposed-relative250-block bands, keeps
   source-block top250 corners and sparse bases, and submits fixed zone/band anchors.
   Source scan order, physical corner colors, face costs and native zone admission
-  have CPU/GPU checks; retired band resources follow zone lifetime. Static/environment
-  placement rebasing and original visual acceptance remain open.
+  have CPU/GPU checks; retired band resources follow zone lifetime. Ordinary
+  static/environment adapters also retain fixed anchors and local native matrices,
+  separately from source-home shadow/Alpha transforms. Particle submission still
+  needs that installed-scene origin binding; broader original visual acceptance
+  remains open.
   The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
   establishes a version-qualified fresh context default1 and startup/reset gates;
   it does not establish native first-frame state or change the engine's initial seed.

@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "common.glsl"
 #include "steam_vertex.glsl"
+#include "steam_transform.glsl"
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec4 inColor; // Native encoded RGB/V, or legacy RGB/AO.
 layout(location = 2) in uvec4 inNormalFlags;
@@ -46,20 +47,37 @@ void main() {
         steamVertexColours(lightPosition, vNormal, palette, flags, vColor.rgb, vIndirect);
     }
     vFlags = flags;
-    // WORLD consumes the independently uploaded float matrices in point-transform order.
+    // WORLD composes the independent GPU matrices before its local-position dots.
+    // Lighting still consumes the separately transformed WORLD point above.
     mat4 activeView = originWorld ? f.originView : f.view;
-    vec4 viewPoint = activeView * vec4(world, 1);
-    if (originWorld)
-        gl_Position = f.originProjection * viewPoint;
-    else if ((flags & STEAM_WORLD) != 0u)
-        gl_Position = f.projection * viewPoint;
-    else
-        gl_Position = f.viewProj * vec4(world, 1);
-    if ((flags & (GUI_WORLD | QUEUED_WORLD | WORLD_DEPTH_OFFSET)) != 0u)
-        gl_Position.z -= pc.params.z; // native shader DepthOffset, not NDC translation
+    bool nativeWorld = (flags & STEAM_WORLD) != 0u;
+    mat4 worldView = nativeWorld ? steamCompose(activeView, pc.model) : activeView * pc.model;
+    bool depthOffset = (flags & (GUI_WORLD | QUEUED_WORLD | WORLD_DEPTH_OFFSET)) != 0u;
+    bool leafSway = (flags & GUI_WORLD) == 0u && (flags & SWAY) != 0u && !(f.wind.w < .5);
+    vec4 viewPoint;
+    if (nativeWorld && !leafSway) {
+        mat4 projection = originWorld ? f.originProjection : f.projection;
+        mat4 clipTransform = steamCompose(projection, worldView);
+        if (depthOffset)
+            clipTransform[3][2] -= pc.params.z;
+        viewPoint = worldView * vec4(inPosition, 1);
+        gl_Position = clipTransform * vec4(inPosition, 1);
+    } else {
+        // Optional engine leaf deformation occurs after WORLD; retain that path.
+        // Native plant motion is already part of its submitted WORLD matrix.
+        viewPoint = activeView * vec4(world, 1);
+        if (originWorld)
+            gl_Position = f.originProjection * viewPoint;
+        else if (nativeWorld)
+            gl_Position = f.projection * viewPoint;
+        else
+            gl_Position = f.viewProj * vec4(world, 1);
+        if (depthOffset)
+            gl_Position.z -= pc.params.z;
+    }
     // Preserve homogeneous coordinates for division after raster interpolation.
     vClip = vec4(gl_Position.x, -gl_Position.y, gl_Position.zw);
     vView = viewPoint.xyz;
-    vec3 viewNormal = normalize(mat3(activeView * pc.model) * normal);
+    vec3 viewNormal = normalize(mat3(worldView) * normal);
     vViewNormal = originWorld ? viewNormal.xy : vec2(-viewNormal.x, viewNormal.y);
 }

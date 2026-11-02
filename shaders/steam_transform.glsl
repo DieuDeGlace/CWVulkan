@@ -1,6 +1,6 @@
 #ifndef CUBEVULKAN_STEAM_TRANSFORM_GLSL
 #define CUBEVULKAN_STEAM_TRANSFORM_GLSL
-// Independently expressed GPU matrix composition (map WORLD contract section6.3).
+// Independently expressed GPU matrix composition (WORLD applicability section3).
 // Keep each component's Y product before the X/Z/homogeneous accumulations.
 mat4 steamCompose(mat4 outer, mat4 inner) {
     mat4 result;

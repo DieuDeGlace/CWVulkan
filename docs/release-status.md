@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary WORLD now composes its independent float matrices on the GPU before
+  evaluating local vertices. Terrain/model, native water depth/color and direct
+  GUI paths share that vertex stage, as established by the independent binding
+  audit. View position and view normal use the composed WV; point lighting keeps
+  its separate WORLD position/normal. DepthOffset changes the composite clip-Z
+  coefficient before the local dot. The optional engine leaf-deformation path
+  remains separate, and the native-menu early return is preserved.
+
+  Three synthetic actual-Vulkan regressions fail with the previous shader and
+  pass after: WORLD translation cancellation, raw GUI translation cancellation
+  and GUI depth-coefficient placement. Visible baseline/depth controls prevent
+  empty geometry from satisfying the comparisons. All five targets build without
+  warnings. Full CPU/owner and88 shader,2 camera,28 GUI,17 map/shared-water/
+  Alpha-scenery checks pass; five no-save captures exit0 and are reviewed, with
+  the save database unchanged. These large-coordinate sensitivity fixtures are
+  not captured native rounding or complete visual-parity oracles. Cross-family
+  input/state lifetimes and special shader paths retain their separate scope.
+
 - Map models now retain independent WORLD and VIEW inputs. The frame supplies
   the map view once; the vertex stage composes WV/WVP on the GPU and keeps the
   WORLD lighting normal separate from its view-normal varying. DepthOffset is

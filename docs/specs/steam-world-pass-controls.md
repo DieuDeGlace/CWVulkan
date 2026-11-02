@@ -13,6 +13,11 @@ bind does not reset material/effect buffers to presumed defaults.
 
 ## 1. Frame-wide world constants and inheritance
 
+The exact shared WORLD vertex identity, independent W/V/P and triple-setter
+uploads, and reached terrain/model/water/direct-GUI applicability are
+[WORLD composition §§1–4](steam-world-vertex-composition-applicability.md).
+These matrix semantics preserve the distinct control/input lifetimes here.
+
 Scene setup at **0xe3974–0xe3a54** selects ordinary state0, sets **White0,
 Opacity1, Shininess0, Glow0, DepthOffset0**, and submits frame material
 **renderer+0x530**, normally white or the verified underwater(0.5,0.5,1,1).
@@ -174,6 +179,11 @@ shader pair; state9 then replaces only the pixel shader with native water
 PS **RVA0x43b790**, length0xef4, through0xc5ff0. Shader creation0xc60d0
 and state selector0xc3dc0 establish this distinction. The water pixel
 formula remains the separate water-rendering specification.
+
+Both water passes therefore retain the exact WORLD GPU composition and
+pre-dot DepthOffset semantics. Their incoming versus explicitly reinstalled
+VIEW/projection inputs remain distinct:
+[composition applicability §4](steam-world-vertex-composition-applicability.md#4-water-retains-its-own-input-timing).
 
 Before its two zone/group traversals set **White0, Glow0, material from
 renderer+0x530, zero point-light tables**, and separate Opacity from

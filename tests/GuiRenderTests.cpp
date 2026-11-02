@@ -175,6 +175,25 @@ int guiRenderTests() {
         check("character-before-text", foreground, {character}, {}, {64, 64}, {0, 255, 0});
         check("character-retained-depth", background, {character}, {preceding}, {64, 64}, {0, 0, 255});
     }
+    // Raw WORLD uses independently supplied matrices. Large equal/opposite
+    // translations must cancel before local vertices are evaluated.
+    renderer.settings = settings;
+    raw.material = glm::vec4(1);
+    raw.model = raw.view = glm::mat4(1);
+    raw.projection = glm::mat4(1);
+    raw.projection[0][0] = -1; // native negative-aspect winding
+    raw.projection[3] = {.5f, -.5f, .5f, 1};
+    check("raw-matrix-baseline", background, {raw}, {}, {64, 64}, {128, 128, 128});
+    raw.model = glm::translate(glm::mat4(1), {16777216.f, 0, 0});
+    raw.view = glm::translate(glm::mat4(1), {-16777216.f, 0, 0});
+    check("raw-matrix-composition", background, {raw}, {}, {64, 64}, {128, 128, 128});
+    // Offset the composite clip-Z coefficient before its local dot. Subtracting
+    // after the dot erases this small depth and incorrectly covers the occluder.
+    raw.model = raw.view = glm::mat4(1);
+    raw.model[0][2] = .5f;
+    raw.projection[3][2] = raw.depthOffset = 16777216.f;
+    check("raw-depth-visible", background, {raw}, {}, {64, 64}, {128, 128, 128});
+    check("raw-depth-coefficient", background, {raw}, {preceding}, {64, 64}, {0, 0, 255});
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
