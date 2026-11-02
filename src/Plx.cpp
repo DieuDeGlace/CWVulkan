@@ -428,7 +428,8 @@ std::vector<uint8_t> unseal(const uint8_t *in, size_t n, uint64_t key) {
     return out;
 }
 
-bool read(const std::vector<uint8_t> &data, Document &doc, const std::vector<uint64_t> &keys, std::string *why, int loaderFlags) {
+bool read(const std::vector<uint8_t> &data, Document &doc, const std::vector<uint64_t> &keys, std::string *why, int loaderFlags,
+          const ShapeReady &shapeReady) {
     doc = Document{};
     doc.loaderFlags = loaderFlags;
     auto fail = [&](const std::string &reason) {
@@ -459,9 +460,11 @@ bool read(const std::vector<uint8_t> &data, Document &doc, const std::vector<uin
         } else if (tag == "Texture") {
             doc.textures.push_back(readObject(s, tag));
             keepPixels(doc.textures.back(), doc);
-        } else if (SHAPE_KINDS.count(tag))
+        } else if (SHAPE_KINDS.count(tag)) {
             doc.shapes.push_back(readObject(s, tag));
-        else if (tag == "Transformation")
+            if (shapeReady)
+                shapeReady(doc.shapes.back());
+        } else if (tag == "Transformation")
             doc.transformations.push_back(readObject(s, tag));
         else if (tag == "Display")
             doc.displays.push_back(readObject(s, tag));
@@ -505,7 +508,8 @@ bool read(const std::vector<uint8_t> &data, Document &doc, const std::vector<uin
     return true;
 }
 
-bool read(const std::filesystem::path &file, Document &doc, const std::vector<uint64_t> &keys, std::string *why, int loaderFlags) {
+bool read(const std::filesystem::path &file, Document &doc, const std::vector<uint64_t> &keys, std::string *why, int loaderFlags,
+          const ShapeReady &shapeReady) {
     std::ifstream in(file, std::ios::binary);
     if (!in) {
         if (why)
@@ -514,7 +518,7 @@ bool read(const std::filesystem::path &file, Document &doc, const std::vector<ui
     }
     const std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), {});
     std::string reason;
-    if (!read(data, doc, keys, &reason, loaderFlags)) {
+    if (!read(data, doc, keys, &reason, loaderFlags, shapeReady)) {
         if (why)
             *why = file.string() + " " + reason + ".";
         return false;

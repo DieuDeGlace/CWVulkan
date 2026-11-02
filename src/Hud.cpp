@@ -1,4 +1,5 @@
 #include "Hud.h"
+#include "Assets.h"
 #include "IdentifyWindow.h"
 #include "FeatText.h"
 #define STB_IMAGE_IMPLEMENTATION
@@ -58,6 +59,8 @@ struct Packer {
 
 bool Hud::loadMenu(const fs::path &gameDir, std::string &error) {
     error.clear();
+    plasmaFonts.reset(gameDir);
+    fontBindings.clear();
     hudFont = readFile(gameDir / "resource1.dat");
     titleFont = readFile(gameDir / "resource2.dat");
     stbtt_fontinfo probe;
@@ -77,8 +80,15 @@ bool Hud::load(const fs::path &gameDir, std::string &error) {
         std::string why;
         // (the game reads gui.plx and icons.plx with scalable text, cursor.plx without)
         const std::vector<uint64_t> keys = {plx::keyOf("PlasmaXGraphics")};
-        guiLoaded = plx::read(gameDir / "gui.plx", gui, keys, &why, plx::LOAD_SCALABLE_TEXT);
-        iconsLoaded = plx::read(gameDir / "icons.plx", iconsDoc, keys, &why, plx::LOAD_SCALABLE_TEXT);
+        const auto fontReady = [&](const plx::Object &shape) {
+            plasma::TextStyle style;
+            if (plasma::textStyle(shape, plx::LOAD_SCALABLE_TEXT, style))
+                fontIndex(style.font, true);
+        };
+        iconsLoaded = plx::read(gameDir / "icons.plx", iconsDoc, keys, &why, plx::LOAD_SCALABLE_TEXT, fontReady);
+        guiLoaded = plx::read(gameDir / "gui.plx", gui, keys, &why, plx::LOAD_SCALABLE_TEXT, fontReady);
+        plx::Document questTags;
+        plx::read(gameDir / "quest-tag.plx", questTags, keys, &why, plx::LOAD_SCALABLE_TEXT, fontReady);
         // Interface's its pointer node: a node under the engine's root holding cursor.plx's nodes (in
         // place of the file's own root and its page placement), its text empty.
         if (plx::read(gameDir / "cursor.plx", cursorDoc, keys, &why) && !cursorDoc.nodes.empty()) {
@@ -258,6 +268,7 @@ static const int PLASMA_LABELS[][2] = {{24, 5}, {12, 3}, {28, 6}, {21, 5}, {16, 
 plasma::TextStyle Hud::labelStyle(int size, int stroke, int flags, bool scalable) const {
     plasma::TextStyle s;
     s.font = "resource1.dat";
+    s.templateFont = true;
     s.pixelSize = (float)size;
     s.strokeRadius = (float)stroke;
     s.lineSpacing = 3.0f;
@@ -281,14 +292,22 @@ void Hud::plasmaLabel(std::vector<OverlayVertex> &out, const std::wstring &text,
     plasmaText(out, s, m);
 }
 
+int Hud::fontIndex(const std::string &name, bool templateFont) const {
+    const auto key = std::make_pair(name, templateFont);
+    if (const auto found = fontBindings.find(key); found != fontBindings.end())
+        return found->second;
+    const int index = plasmaFonts.resolve(pathOfUtf8(name), templateFont);
+    fontBindings.emplace(key, index);
+    return index;
+}
+
 template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas, int width) {
     textGlyphs.clear();
     if (!guiLoaded)
         return;
-    if (!plasmaFonts[0].loaded())
-        plasmaFonts[0].load(hudFont);
-    if (!plasmaFonts[1].loaded())
-        plasmaFonts[1].load(titleFont);
+    fontBindings.clear();
+    fontIndex("resource1.dat");
+    fontIndex("resource2.dat");
     glm::mat4 root(1);
     root[0][0] = root[1][1] = guiScale;
     // The characters the interface writes: printable ASCII, the degree sign of the temperature,
@@ -302,7 +321,7 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
     auto bakeStyle = [&](const plasma::TextStyle &style, const glm::mat4 &m) {
         if (style.pixelSize <= 0.0f)
             return;
-        const int f = fontIndex(style.font);
+        const int f = fontIndex(style.font, style.templateFont);
         const plasma::Raster r = plasma::rasterFor(m, style);
         for (bool outline : {false, true}) {
             if (outline && r.stroke <= 0.0f)
@@ -498,7 +517,7 @@ float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &
         *pen = {};
     if (style.string.empty() || style.pixelSize <= 0.0f)
         return 0.0f;
-    const int f = fontIndex(style.font);
+    const int f = fontIndex(style.font, style.templateFont);
     const plasma::Font &font = plasmaFonts[f];
     if (!font.loaded())
         return 0.0f;

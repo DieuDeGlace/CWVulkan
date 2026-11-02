@@ -150,7 +150,7 @@ plasma::Scene::TextHit Hud::frontTextHit() const {
             return false;
         if (n.text)
             style.string = *n.text;
-        const auto &font = plasmaFonts[fontIndex(style.font)];
+        const auto &font = plasmaFonts[fontIndex(style.font, style.templateFont)];
         plasma::TextBox box;
         return font.loaded() && plasma::textBounds(font, style, frontScene->matrix(n), box) && local.x >= box.minimum.x &&
                local.y >= box.minimum.y && local.x <= box.maximum.x && local.y <= box.maximum.y;
@@ -219,7 +219,7 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
                     if (n.text)
                         style.string = *n.text;
                     plasma::TextBox box;
-                    const auto &font = plasmaFonts[fontIndex(style.font)];
+                    const auto &font = plasmaFonts[fontIndex(style.font, style.templateFont)];
                     if (!plasma::textBounds(font, style, frontScene->matrix(n), box))
                         return false;
                     lo = box.minimum, hi = box.maximum;

@@ -123,6 +123,7 @@ int saveFormatTests();     // tests/SaveTests.cpp
 int plasmaNodeAnimationTests();
 int plasmaInputTests();
 int plasmaLayoutTests();
+int fontCatalogTests();
 int cameraMotionTests();
 int controlPhaseTests();
 int residentPassTests();
@@ -9305,6 +9306,8 @@ int main(int argc, char **argv) {
         return cameraRenderTests();
     if (argc == 2 && std::string(argv[1]) == "cameramotion")
         return cameraMotionTests();
+    if (argc == 2 && std::string(argv[1]) == "fontcatalog")
+        return fontCatalogTests();
     if (argc == 2 && std::string(argv[1]) == "guilayout")
         return plasmaLayoutTests();
     if (argc == 2 && std::string(argv[1]) == "itemselector")
@@ -10671,6 +10674,7 @@ int main(int argc, char **argv) {
     failures += plasmaNodeAnimationTests();
     failures += plasmaInputTests();
     failures += plasmaLayoutTests();
+    failures += fontCatalogTests();
     failures += cameraMotionTests();
     failures += residentEffectsTests();
     failures += residentPassTests();

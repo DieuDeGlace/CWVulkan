@@ -9,6 +9,9 @@
 #include <cmath>
 #include <map>
 #include <tuple>
+#include <fstream>
+#include <cctype>
+#include <iterator>
 
 namespace plasma {
 
@@ -127,6 +130,58 @@ bool Font::load(std::vector<unsigned char> bytes) {
         return false;
     face = std::move(f);
     return true;
+}
+
+FontCatalog::FontCatalog(std::filesystem::path directory, std::vector<std::filesystem::path> search) {
+    reset(std::move(directory), std::move(search));
+}
+
+void FontCatalog::reset(std::filesystem::path directory, std::vector<std::filesystem::path> search) {
+    root = std::move(directory);
+    directories = std::move(search);
+    cached.clear();
+    fonts.clear();
+    for (int i = 0; i <= EMPTY; ++i)
+        fonts.push_back(std::make_unique<Font>());
+}
+
+int FontCatalog::load(const std::filesystem::path &name) {
+    const auto basename = name.filename();
+    if (const auto found = cached.find(basename); found != cached.end())
+        return found->second;
+    auto extension = name.extension().string();
+    for (auto &c : extension)
+        c = (char)std::toupper((unsigned char)c);
+    if (extension != ".TTF" && extension != ".DAT")
+        return EMPTY; // The separate native vector-font/document loader is not this FreeType backend.
+    auto face = std::make_unique<Font>();
+    const auto attempt = [&](const std::filesystem::path &path) {
+        std::ifstream file(path, std::ios::binary);
+        if (!file)
+            return false;
+        return face->load(std::vector<unsigned char>(std::istreambuf_iterator<char>(file), {}));
+    };
+    bool loaded = attempt(root / name);
+    if (!loaded)
+        for (const auto &directory : directories)
+            if (attempt(directory / basename)) {
+                loaded = true;
+                break;
+            }
+    if (!loaded)
+        return EMPTY; // Failed requests do not acquire a cache entry; a later call can retry.
+    const int index = basename == "resource1.dat" ? 0 : basename == "resource2.dat" ? 1 : (int)fonts.size();
+    if (index == (int)fonts.size())
+        fonts.push_back(std::move(face));
+    else
+        fonts[(size_t)index] = std::move(face);
+    cached.emplace(basename, index);
+    return index;
+}
+
+int FontCatalog::resolve(const std::filesystem::path &name, bool templateFont) {
+    const int index = load(name);
+    return index == EMPTY && templateFont ? load("arial.ttf") : index;
 }
 
 bool Font::loaded() const { return face != nullptr; }
@@ -347,6 +402,7 @@ bool textStyle(const plx::Object &shape, int loaderFlags, TextStyle &out) {
     if (shape.kind != "TextShape")
         return false;
     out = TextStyle{};
+    out.templateFont = true;
     out.scalable = (loaderFlags & plx::LOAD_SCALABLE_TEXT) != 0;
     for (const plx::Chunk &p : shape.properties) {
         const std::string &n = p.name;

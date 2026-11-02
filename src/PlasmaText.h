@@ -11,6 +11,8 @@
 
 #include <array>
 #include <memory>
+#include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -29,6 +31,7 @@ struct TextStyle {
     int flags = 0;
     bool scalable = false; // the scalable raster mode (documents read with LOAD_SCALABLE_TEXT)
     glm::vec4 color{0, 0, 0, 1}, strokeColor{0, 0, 0, 1}, extrusionColor{0, 0, 0, 1};
+    bool templateFont = false; // TextShape rebuild retries Arial; immediate Widget text does not
 };
 // Reads a TextShape object of a document read with these loader flags. False for another kind.
 bool textStyle(const plx::Object &shape, int loaderFlags, TextStyle &out);
@@ -76,6 +79,23 @@ class Font {
   private:
     struct Face;
     std::unique_ptr<Face> face;
+};
+
+// TTF/DAT file-backed part of the native basename cache. No named-memory registration is inferred.
+class FontCatalog {
+  public:
+    static constexpr int EMPTY = 2;
+    explicit FontCatalog(std::filesystem::path root = {}, std::vector<std::filesystem::path> directories = {"C:/Windows/Fonts"});
+    void reset(std::filesystem::path root, std::vector<std::filesystem::path> directories = {"C:/Windows/Fonts"});
+    int resolve(const std::filesystem::path &name, bool templateFont = false);
+    const Font &operator[](int index) const { return *fonts.at((size_t)index); }
+
+  private:
+    int load(const std::filesystem::path &name);
+    std::filesystem::path root;
+    std::vector<std::filesystem::path> directories;
+    std::map<std::filesystem::path, int> cached;
+    std::vector<std::unique_ptr<Font>> fonts; // stable face objects; indices0/1 are the two resource basenames
 };
 
 // The pen after one character (spec 6.5): its advance and, unless it is the last character, the

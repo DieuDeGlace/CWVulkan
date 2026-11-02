@@ -35,6 +35,22 @@ Normal start-up opens the title. `--play` goes straight into gameplay.
   are read at start and written straight back, so a missing or partial file is completed with the defaults.
   `--settings-folder DIR` reads and writes them in another folder (testing).
 
+## Font resolution
+
+Immediate widgets request resource1.dat without a face substitution. Template
+TextShapes resolve their own font names and retry arial.ttf only on failure.
+The file-backed TTF/DAT catalog first reuses an already loaded basename, then
+tries the requested owner path and registered font directories in order. Failed
+loads remain retryable. Per-atlas bindings avoid repeating file searches during draws.
+
+The icons, GUI and quest-tag document loads resolve complete TextShapes inline
+in stream order, preserving their shared cache before immediate menu text loads.
+The independent [startup note](specs/steam-font-byte-registration.md) records the
+verified order and its bounds. Named-memory registration/effective runtime byte
+provenance and the separate nested vector-font document route remain unclosed;
+this is not a claim of full FontEngine parity. Owner/system fonts are read locally
+and are absent from source and runtime packages.
+
 ## The title
 
 The title is the ordinary world (the extracted or generated world, seed 123), with the world's time from

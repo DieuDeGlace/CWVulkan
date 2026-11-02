@@ -1025,11 +1025,10 @@ bool Hud::inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int whic
             return false;
         if (node.text)
             style.string = *node.text;
-        const auto &font = plasmaFonts[fontIndex(style.font)];
+        const auto &font = plasmaFonts[fontIndex(style.font, style.templateFont)];
         plasma::TextBox bounds;
-        return font.loaded() && plasma::textBounds(font, style, scene->matrix(node), bounds) &&
-               point.x >= bounds.minimum.x && point.y >= bounds.minimum.y &&
-               point.x <= bounds.maximum.x && point.y <= bounds.maximum.y;
+        return font.loaded() && plasma::textBounds(font, style, scene->matrix(node), bounds) && point.x >= bounds.minimum.x &&
+               point.y >= bounds.minimum.y && point.x <= bounds.maximum.x && point.y <= bounds.maximum.y;
     };
     return scene->hitTest(*panel.node, mouse, textHit) != nullptr;
 }

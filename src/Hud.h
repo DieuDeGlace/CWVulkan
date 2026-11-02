@@ -482,7 +482,8 @@ class Hud {
     // The interface's fonts (its text shapes name resource1.dat or resource2.dat) and their
     // glyphs as the text shapes drawn here rasterise them, in the atlas: by font, raster
     // (plasma::Raster::key), plain or outline, and character.
-    plasma::Font plasmaFonts[2];
+    mutable plasma::FontCatalog plasmaFonts;
+    mutable std::map<std::pair<std::string, bool>, int> fontBindings;
     std::set<wchar_t> additionalGlyphs;
     struct TextGlyph {
         glm::ivec2 atlas{0}, size{0}; // the glyph's texture in the atlas
@@ -492,7 +493,7 @@ class Hud {
     float dialogueWordWidth(const std::wstring &word) const;
     float dialogueGlyphAdvance(wchar_t glyph) const;
     void drawDialogueWords(const dialoguepanel::Layout &, glm::vec2 at, int32_t guiTime, std::vector<OverlayVertex> &) const;
-    int fontIndex(const std::string &name) const { return name == "resource2.dat" ? 1 : 0; }
+    int fontIndex(const std::string &name, bool templateFont = false) const;
     // What a frame changes of the nodes: a child's deformation replaced by `fills` (by child
     // name: the bars' x scale), and the string of every text shape under a node of a name
     // (as the game sets a text on every node of a name), and their colours.

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -170,12 +171,15 @@ uint64_t keyOf(const std::string &phrase);
 // Undoes a seal: `n` obfuscated bytes with a key (spec 1.4). Key 0 leaves them unchanged.
 std::vector<uint8_t> unseal(const uint8_t *in, size_t n, uint64_t key);
 
+// Invoked inline after each complete shape, in stream/shape-index order.
+using ShapeReady = std::function<void(const Object &)>;
+
 // Reads a .plx. `keys` are the keys to try on the seal before 0 and the reader's own
 // ("PlasmaGraphics"). False (with `why`) when the file cannot be read, has a newer version, or
 // its seal matches no key.
 bool read(const std::filesystem::path &file, Document &doc, const std::vector<uint64_t> &keys, std::string *why = nullptr,
-          int loaderFlags = 0);
+          int loaderFlags = 0, const ShapeReady &shapeReady = {});
 bool read(const std::vector<uint8_t> &data, Document &doc, const std::vector<uint64_t> &keys, std::string *why = nullptr,
-          int loaderFlags = 0);
+          int loaderFlags = 0, const ShapeReady &shapeReady = {});
 
 } // namespace plx

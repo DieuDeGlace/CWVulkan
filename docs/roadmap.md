@@ -82,6 +82,14 @@ individual feature documents.
   frontend CPU checks cover perspective and effect/palette reset. Immediate text's verified
   request remains resource1.dat; cached/named-memory font-byte provenance and unmodified
   visual comparisons remain open, so no resource2 substitution is inferred from modded captures.
+  The former catch-all font1 mapping now uses a file-backed TTF/DAT basename cache,
+  requested-path/directory precedence and TextShape-only Arial fallback. Inline
+  document callbacks retain startup order and complete-shape request timing. Owner-face
+  tests cover first-face retention, directory priority, failed-request retry, fallback
+  isolation and parser timing; no font bytes enter the test source. Named-memory
+  sources and nested vector-font documents remain outside this bounded implementation.
+  The independent cache-startup supplement also establishes the ordinary engine-byte
+  constructor/teardown gates; persistent UI surface caching still needs implementation.
 - [x] Host/client worlds, single-player loopback, UDP, friends/invites, Steam
   transport and dedicated server. The recorded wire comparisons and local
   multi-process runs pass for the checked cases; Steam peer validation is pending.

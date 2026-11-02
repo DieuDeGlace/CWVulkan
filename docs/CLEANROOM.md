@@ -1018,3 +1018,35 @@ constructors. Named-memory and basename cache precedence do not prove the effect
 font bytes in every running installation. No resource2 switch, glyph-case claim or
 font artwork is inferred from old modded screenshots. Source/runtime packages
 contain no owner models/fonts, native instructions, native binaries or captures.
+
+## File-backed font catalog and inline document requests, 2026-11-02
+
+The implementer read frontend font/logo sections1–5 and the independent font
+registration note sections1–4. The separate author used no engine/tests/exporter,
+owner assets/captures or game execution. The new catalog follows the described
+TTF/DAT file and basename-cache route with the requested path preceding registered
+directories. A failed request does not acquire a cached face; only TextShapes
+retry Arial. The fixed font1 catch-all is removed. Backend glyph IDs and per-atlas
+bindings are engine structure, not native field/layout copies.
+
+The PLX parser's optional complete-shape callback runs inline before its next
+shape, keeping shared shape-index encounter order. The three specified startup
+documents use it before immediate menu fonts are resolved. This does not claim a
+complete global request schedule: named-byte insertion/effective byte provenance,
+native vector-font nested documents, arbitrary clone callbacks and concurrent
+resource changes remain outside the implementation. No absent registry producer
+is inferred from a bounded unsuccessful trace.
+
+Local owner-face tests use generated temporary directories to distinguish first
+basename retention, requested-file priority, ordered directory retry, template
+fallback isolation and a file becoming available after failure. Glyph comparisons
+use locally loaded references, not copied reference pixels in source. The parsed
+owner document checks complete properties and callback timing; temporary font
+copies are removed only after checking their generated direct-child path. Full
+engine/image checks and private no-save captures validate integration. Original
+game code, owner/system fonts and captures are excluded from distribution.
+
+The independent cache-startup supplement sections1–3 was also read. It establishes
+the ordinary engine byte's initial0 and reached teardown1, distinct Widget cache
+scalar defaults/copy/attachment and explicit destruction bounds. It supplies a
+future cache consumer contract; it is not a completed persistent-cache feature.
