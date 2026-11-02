@@ -847,3 +847,17 @@ never submits unavailable Vulkan buffers. Synthetic resource/FIFO cases use no
 owner assets, and unavailable-buffer cases were run only after the guards were
 implemented, avoiding a deliberately invalid Vulkan baseline. Zero geometry
 counts remain distinct from resource readiness under valid header lifetimes.
+
+## Map WORLD/view normal and composition precision, 2026-11-02
+
+The implementer read independently authored map-contract section6, the corrected
+worldmap precision links and engine sources only. The native-only author inspected
+no implementation or captures. A project-owned shared frame matrix and typed map
+controls preserve independent WORLD/VIEW inputs; GPU composition is expressed
+with engine shader helpers. Normalization constants are instruction-derived
+references under the stated float environment, not runtime captures or a GPU
+rounding guarantee. Synthetic planes compare view versus WORLD changes, material
+alpha, Glow and view-normal Shininess. No native instructions/shader source, SDK
+implementation, reconstructed code or owner asset bytes were read or copied.
+An audit found no production users of the old CPU fog/pixel approximations; they
+were removed while the CPU color helpers actually used by coin previews remain.

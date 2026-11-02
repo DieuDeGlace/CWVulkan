@@ -123,16 +123,16 @@ struct DrawItem {
     // Alpha look: the light where it stands (0..1, alpha-rendering.md 11.2), when the world
     // already knows it (zone models); below 0, a model (creature, item) reads it here.
     float standingLight = -1;
-    // The world map's draws (flags WORLD_MAP; src/WorldMap.cpp, shaders/map.*): `model` takes
-    // the model to the map camera's space, and these complete it. They are drawn after the
-    // world, over a cleared depth, with the map's own light whatever the world's look.
+    // Map draws retain their actual WORLD matrix in model; the shared map VIEW
+    // is supplied separately. They inherit world depth and use the map light rig.
     struct MapDraw {
-        glm::vec4 lens{0};          // -f / aspect, f, the screen shift x, y (MapLook.h)
-        float yaw = 0, pitch = 0;   // the map view's turn, radians
-        float opacity = 1;          // below 1: blended (a region fading in)
-        float depthOffset = 0;      // taken off the clip depth: larger draws over
-        glm::vec3 colour{1};        // the instance's colour
-        float white = 0;            // how far toward white (an outline's pulse)
+        glm::vec4 lens{0};             // -f / aspect, f, the screen shift x, y (MapLook.h)
+        float glow = 0, shininess = 0; // native per-descriptor WORLD controls
+        float materialAlpha = 1;       // scales vertex sunlight, separate from pixel opacity
+        float opacity = 1;             // below 1: blended (a region fading in)
+        float depthOffset = 0;         // taken off the clip depth: larger draws over
+        glm::vec3 colour{1};           // the instance's colour
+        float white = 0;               // how far toward white (an outline's pulse)
     } map;
     std::shared_ptr<const scenevisibility::Bounds> nativeZone; // containing zone for native model/beam gates
     std::shared_ptr<const steampoints::ZoneSources> nativeLights;
@@ -237,7 +237,10 @@ class Renderer {
     // Early death/use queries read the retained CPU scene state.
     bool steamSphereVisible(const steampoints::Point &, float radius, float range) const;
     // One-shot admission of the next frame's map setup, even if it produces no geometry.
-    void mapScenePrepared() { mapPrepared = true; }
+    void mapScenePrepared(const glm::mat4 &view = glm::mat4(1)) {
+        mapPrepared = true;
+        pendingMapView = view;
+    }
     // Saves the next presented frame as a PNG (for screenshots and tests).
     void capture(const std::string &path) { capturePath = path; }
     // GPU time per frame (milliseconds, averaged since start): the whole frame and
@@ -414,6 +417,7 @@ class Renderer {
     steamlighting::EasedColours steamLights;
     steamlighting::FogScale steamFog;
     bool mapPrepared = false;
+    glm::mat4 pendingMapView{1};
     SkyColumn skyColumn;
     glm::ivec2 skyColumnAt{0};
     bool skyColumnValid = false;
@@ -464,7 +468,7 @@ class Renderer {
     bool createMapPipeline(std::string &error);
     void destroyMapPipeline();
     // `jitter`: the TAA jitter as a clip-space shift per unit of w. Returns the draws made.
-    unsigned drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter, bool prepared);
+    unsigned drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec2 jitter, bool prepared);
 
     std::vector<GpuMesh> meshes{1}; // Index 0 is "no mesh".
     std::vector<uint32_t> freeIds;

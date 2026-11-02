@@ -1,5 +1,6 @@
 // Actual Vulkan map-pass checks with synthetic geometry; no owner assets are needed.
 #include "Renderer.h"
+#include "MapLook.h"
 #include <glm/gtc/matrix_transform.hpp>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -73,6 +74,12 @@ int mapRenderTests() {
         std::cout << "Map renderer " << name << (pass ? " PASS\n" : " FAIL\n");
         failures += !pass;
     };
+    auto samePixel = [](const auto &a, const auto &b) {
+        bool equal = true;
+        for (int channel = 0; channel < 3; ++channel)
+            equal &= std::abs(a[channel] - b[channel]) <= 2;
+        return equal;
+    };
     const auto background = capture("background", {});
     const auto opaque = capture("opaque", {item});
     check(opaque != background, "native-winding-visible");
@@ -140,6 +147,52 @@ int mapRenderTests() {
     unavailable.map.opacity = .5f;
     check(capture("unready-faded", {unavailable}) == background, "unavailable-faded-resource-skips-draw");
 
+    Mesh sideMesh = plane;
+    for (auto &vertex : sideMesh.vertices) {
+        vertex.normal = 0;
+        vertex.r = 64;
+        vertex.g = 96;
+        vertex.b = 32;
+    }
+    auto side = item;
+    side.mesh = renderer.upload(sideMesh);
+    const auto sidePixel = capture("world-normal-reference", {side});
+    const glm::mat4 rolledView = glm::rotate(glm::mat4(1), 1.2f, {0, 0, 1});
+    renderer.mapScenePrepared(rolledView);
+    const auto viewTurned = capture("view-normal-separate", {side});
+    check(sidePixel != background && samePixel(viewTurned, sidePixel), "view-turn-retains-world-lighting-normal");
+    auto worldTurned = side;
+    worldTurned.model = side.model * rolledView;
+    check(!samePixel(capture("world-normal-turned", {worldTurned}), sidePixel), "world-basis-transforms-lighting-normal");
+
+    auto translucentLight = side;
+    translucentLight.map.materialAlpha = 0;
+    const auto materialZero = capture("material-alpha-zero", {translucentLight});
+    Mesh unlitVertex = sideMesh;
+    for (auto &vertex : unlitVertex.vertices)
+        vertex.ao = 0;
+    auto vertexZero = side;
+    vertexZero.mesh = renderer.upload(unlitVertex);
+    check(!samePixel(materialZero, sidePixel) && samePixel(materialZero, capture("vertex-light-zero", {vertexZero})),
+          "material-alpha-scales-sunlight-not-opacity");
+
+    translucentLight.map.glow = 1;
+    const glm::vec3 rawGlow = glm::vec3(128, 192, 64) / 255.f;
+    const auto glowColour =
+        worldmap::sCurve(worldmap::greenBlueGrade(glm::clamp(worldmap::saturationLift(rawGlow), glm::vec3(0), glm::vec3(1))));
+    const std::array<int, 3> glowReference{int(std::lround(glowColour.r * 255)), int(std::lround(glowColour.g * 255)),
+                                           int(std::lround(glowColour.b * 255))};
+    check(samePixel(capture("map-glow-control", {translucentLight}), glowReference), "glow-selects-unlit-palette");
+
+    side.map.shininess = 1;
+    const auto shiny = capture("shininess-view-reference", {side});
+    renderer.mapScenePrepared(rolledView);
+    const auto shinyTurned = capture("shininess-view-normal", {side});
+    side.map.shininess = 7;
+    check(!samePixel(shiny, sidePixel) && !samePixel(shinyTurned, shiny) &&
+              samePixel(capture("shininess-positive-magnitude", {side}), shiny),
+          "shininess-uses-separate-view-normal");
+
     // Explicit raw palette inputs isolate the full map WORLD pixel contract.
     // A map point at/beyond F must become this frame's SkySun, not just Fog.
     const glm::vec3 rawSky(.1f, .2f, .8f), rawFog(.8f, .1f, .05f);
@@ -152,12 +205,6 @@ int mapRenderTests() {
     DrawItem distant = item;
     distant.model = glm::translate(glm::mat4(1), {0, 0, 30000}) * glm::scale(glm::mat4(1), {30000, 30000, 1});
     const auto distantPixel = capture("map-full-sky-fog", {distant});
-    auto samePixel = [](const auto &a, const auto &b) {
-        bool equal = true;
-        for (int channel = 0; channel < 3; ++channel)
-            equal &= std::abs(a[channel] - b[channel]) <= 2;
-        return equal;
-    };
     check(samePixel(distantPixel, rawSkyReference), "full-sky-fog-target");
 
     constexpr float distance = 6000, scale = 1.f / 20000;
@@ -185,8 +232,7 @@ int mapRenderTests() {
     distant.model = glm::translate(glm::mat4(1), {0, 0, 30000}) * glm::scale(glm::mat4(1), {30000, 30000, 1});
     distant.map.lens.z = .3f;
     distant.map.lens.w = -.2f;
-    distant.map.yaw = 1.2f;
-    distant.map.pitch = .4f;
+    renderer.mapScenePrepared(glm::rotate(glm::rotate(glm::mat4(1), .4f, {1, 0, 0}), 1.2f, {0, 0, 1}));
     check(sunReference != rawSkyReference && samePixel(capture("map-inherited-sun", {distant}), sunReference),
           "inherits-scene-sun-and-gradient");
     renderer.shutdown();

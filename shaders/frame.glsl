@@ -47,5 +47,6 @@ layout(set = 0, binding = 0) uniform Frame {
     mat4 originView;
     mat4 originProjection;
     vec4 homeToOrigin;
+    mat4 mapView;
 } f;
 #endif

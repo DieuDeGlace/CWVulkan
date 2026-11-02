@@ -191,8 +191,11 @@ In this order, after 0x2f44a0 has queued the map content:
 * material colour (1, 1, 1, 1) (0x42e8c0);
 * light (renderer slot +0xc0, 0xc6ce0): **front colour (0.75, 0.7, 0.3, 1)** (0x43f0c0),
   **back colour (0.5, 0.5, 0.5, 1)** (0x43f0f0), **direction (0.2, 0.5, 1.0) normalised**
-  (0.2 = 0x42e700, 0.5 = 0x4ac964, the length √1.29 from 0x43ef80; the backend normalises
-  again), and **ambient (0.25, 0.3, 0.7, 1.0)** (0x43f130). The ambient's w = 1 is used by the
+  (0.2 = 0x42e700, 0.5 = 0x4ac964;0x43ef80 stores float1.29, passed to sqrtf before
+  float reciprocal/products; the backend performs a second normalization), and
+  **ambient (0.25, 0.3, 0.7, 1.0)** (0x43f130). Exact CPU staging and derived direction
+  words are [map contract §6.1](steam-map-world-pixel-contract.md#61-cpu-direction-production-and-two-normalizations).
+  The ambient's w = 1 is used by the
   vertex shader (§3.2 step 6);
 * all ten point lights cleared to zero (0xce580), so none apply;
 * fog distance 20 000 (0x42e5ec), stored as fogScale = 1 / 20 000 (0xc6bb0);
@@ -210,6 +213,13 @@ Per region instance (0x2f44a0 → 0xee2f0 → 0xe6e60): colour (1, 1, 1, 1), **a
 region's fade** (§4.3), glow 0, shininess 0, white 0, **depth offset 0.5**.
 
 ### 3.2 Vertex shader (0x4387b0)
+
+The outline below gives the lighting formula. Exact CPU direction staging,
+embedded axis words, independent WORLD/view normal paths, compiled position
+composition and GPU precision boundaries are
+[map contract §6](steam-map-world-pixel-contract.md#6-map-light-vector-and-world-vertex-precision).
+Its lighting normal is WORLD-space, not the separately normalized view-normal
+varying; no inverse-transpose or general view-space substitution is implied.
 
 Inputs: position bytes p (× 255 back to integers, w = 1), normal index (the fourth position
 byte), colour bytes C (r, g, b, a).

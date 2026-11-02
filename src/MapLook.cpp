@@ -158,26 +158,13 @@ glm::vec3 saturationLift(glm::vec3 c) {
     return lift * c + (1 - lift) * grey;
 }
 
-float fogAmount(float viewDistance) {
-    const float scale = 1.0f / FOG_DISTANCE;
-    const float power = 1 - 0.75f * std::exp(-403.95462f * scale);
-    const float q = std::min(1.0f, std::pow(viewDistance * viewDistance * scale * scale, power));
-    return smooth(q);
-}
-
 glm::vec3 greenBlueGrade(glm::vec3 c) {
     const float grey = shaderGrey(c);
     return glm::vec3(c.r, 0.65f * c.g + 0.35f * grey, 0.65f * c.b + 0.35f * grey);
 }
 
-glm::vec3 sCurve(glm::vec3 c) { return glm::vec3(smooth(c.r), smooth(c.g), smooth(c.b)); }
-
-glm::vec3 pixelColour(glm::vec3 vertex, float viewDistance, glm::vec3 fogColour) {
-    glm::vec3 c = saturationLift(vertex);
-    // This compatibility helper has no raw sky/SunPos inputs. It is not the
-    // Steam 3D map's full pixel oracle (steam-map-world-pixel-contract.md).
-    c = glm::mix(c, fogColour, fogAmount(viewDistance));
-    return sCurve(greenBlueGrade(saturate(c)));
+glm::vec3 sCurve(glm::vec3 c) {
+    return glm::vec3(smooth(c.r), smooth(c.g), smooth(c.b));
 }
 
 // --- §4 The camera ----------------------------------------------------------------------------

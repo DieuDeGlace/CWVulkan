@@ -137,17 +137,12 @@ void pixelSteps() {
     const glm::vec3 c(0.2f, 0.6f, 0.3f);
     const float g = 0.299f * c.r + 0.587f * c.g + 0.114f * c.b, t = 1 + 0.25f * (1 - g);
     MAP_CHECK(near(worldmap::saturationLift(c), t * c + (1 - t) * g, 1e-6f));
-    // Step 3: about 3 % fog at the camera's distance of 300.
-    MAP_CHECK(near(worldmap::fogAmount(300), 0.0325f, 0.002f));
-    MAP_CHECK(worldmap::fogAmount(0) == 0);
     // Step 5: red kept, green and blue a third of the way to grey.
     const glm::vec3 graded = worldmap::greenBlueGrade(glm::vec3(1, 0, 0));
     MAP_CHECK(near(graded, glm::vec3(1, 0.35f * 0.299f, 0.35f * 0.299f), 1e-6f));
     // Step 6: 3x^2 - 2x^3.
     MAP_CHECK(near(worldmap::sCurve(glm::vec3(0, 0.5f, 1)), glm::vec3(0, 0.5f, 1), 1e-6f));
     MAP_CHECK(near(worldmap::sCurve(glm::vec3(0.25f)).r, 0.15625f, 1e-6f));
-    // All in order: white stays white without fog.
-    MAP_CHECK(near(worldmap::pixelColour(glm::vec3(1), 0, glm::vec3(0)), glm::vec3(1), 1e-6f));
 }
 
 void camera() {

@@ -37,12 +37,10 @@ DrawItem mapItem(uint32_t mesh, const MapCamera &camera, const glm::mat4 &world,
                  glm::vec3 colour = glm::vec3(1), float white = 0) {
     DrawItem d;
     d.mesh = mesh;
-    d.model = camera.view * world;
+    d.model = world;
     d.flags = WORLD_MAP;
     d.castShadow = false;
     d.map.lens = camera.lens;
-    d.map.yaw = glm::radians(camera.yawDegrees);
-    d.map.pitch = glm::radians(camera.pitchDegrees);
     d.map.opacity = opacity;
     d.map.depthOffset = depthOffset;
     d.map.colour = colour;

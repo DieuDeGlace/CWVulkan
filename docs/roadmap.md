@@ -11,8 +11,10 @@ individual feature documents.
   including base-two exponent, Fog/SkySun fourth-power blend and inherited raw
   sky/sun/gradient inputs. Synthetic far/partial/sun cases pass alongside the full
   world/GUI suites. Engine identity grouping/FIFO and unavailable-buffer checks
-  also pass. Native address/alias inputs, marker-specific producers and wider
-  native visual comparisons remain separate work.
+  also pass. WORLD/VIEW upload separation, distinct lighting/view normals and
+  typed material/effect controls now have17 map image cases. Native address/alias
+  inputs, marker-specific producers and wider native visual comparisons remain
+  separate work.
 - [x] Optional engine-owned dual-tone hair controls in character creation only.
   Hover/commit, second color, start/blend, local model/map rendering and profile
   metadata are tested. Native appearance bytes remain unchanged. Remote peers

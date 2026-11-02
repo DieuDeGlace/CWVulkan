@@ -84,6 +84,7 @@ class Map {
         float elapsedWorldMs = 0; // Native World+0x440, distinct from GUI/calendar clocks.
         std::optional<worldgen::Int2> hoveredLand, forcedLand;
     };
+    static MapCamera cameraOf(const View &view);
     // The map's draw items for this frame (flag WORLD_MAP): whole models first, then the
     // regions still fading in.
     std::optional<worldgen::Int2> collect(const View &view, std::vector<DrawItem> &out);
@@ -138,7 +139,6 @@ class Map {
     static Sprite spriteOf(Renderer &renderer, const CubModel &model, glm::vec3 colour);
 
     // The camera of a view, and where a region's model sits in map units.
-    static MapCamera cameraOf(const View &view);
     static glm::dvec3 regionOffset(const View &view, int rx, int ry, int baseHeight);
     // The regions in the drawing order (§4.3): rx outer, ry inner, around the centre.
     template <class Visit> void forEachRegion(const View &view, Visit &&visit) const;

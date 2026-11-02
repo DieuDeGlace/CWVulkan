@@ -824,6 +824,7 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
     settings = s;
     steamFog = {};
     mapPrepared = false;
+    pendingMapView = glm::mat4(1);
     setRenderStyle(settings.style); // meshes built from now on bake their light for this look
     if (!createDevice(error))
         return false;
@@ -1173,6 +1174,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                      const std::vector<DrawItem> &water) {
     const bool reuseScene = std::exchange(scenePrepared, false);
     const bool preparedMap = std::exchange(mapPrepared, false);
+    const glm::mat4 mapView = std::exchange(pendingMapView, glm::mat4(1));
     if (noGpu)
         return;
     Frame &fr = frames[frameIndex];
@@ -1247,6 +1249,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         proj[2][1] -= 2 * jitter.y / extent.height;
     }
     FrameUniforms u{};
+    u.mapView = mapView;
     u.viewProj = proj * view;
     u.projection = proj;
     Frustum viewFrustum(u.viewProj);
@@ -2255,7 +2258,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             bindAndDraw(jittered, 0);
         }
     // The world map, over everything of the world (RendererMap.cpp).
-    draws += drawMap(cmd, opaque, mapFog, glm::vec2(jitterClip[3][0], jitterClip[3][1]), preparedMap);
+    draws += drawMap(cmd, opaque, glm::vec2(jitterClip[3][0], jitterClip[3][1]), preparedMap);
     vkCmdEndRendering(cmd);
     if (timing)
         vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timing, 3 * frameIndex + 1);

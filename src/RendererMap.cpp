@@ -14,11 +14,11 @@ namespace {
 
 // Must match the push block of shaders/map.vert and map.frag.
 struct MapPush {
-    glm::mat4 modelView;
+    glm::mat4 world;
     glm::vec4 lens;
-    glm::vec4 turn;     // yaw, pitch (radians), opacity, depth offset
-    glm::vec4 material; // colour, white
-    glm::vec4 fog;      // RGB compatibility fog; w selects full Steam WORLD pixels
+    glm::vec4 parameters; // opacity, depth offset, Glow, Shininess
+    glm::vec4 material;   // full per-descriptor RGBA
+    glm::vec4 selection;  // White, full Steam pixels, reserved
 };
 static_assert(sizeof(MapPush) <= 128, "push constants beyond Vulkan's guaranteed 128 bytes");
 
@@ -132,7 +132,7 @@ void Renderer::destroyMapPipeline() {
     mapLayout = VK_NULL_HANDLE;
 }
 
-unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter, bool prepared) {
+unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec2 jitter, bool prepared) {
     std::vector<const DrawItem *> opaque, faded;
     for (const auto &item : items) {
         if (!(item.flags & WORLD_MAP) || !item.mesh || item.mesh >= meshes.size() || !(item.map.opacity > 0))
@@ -170,8 +170,9 @@ unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &ite
                 continue; // failed opaque groups skip every descriptor setter
             const auto &m = item.map;
             const glm::vec4 lens = m.lens + glm::vec4(0, 0, jitter.x, -jitter.y);
-            const MapPush push{item.model, lens, glm::vec4(m.yaw, m.pitch, m.opacity, m.depthOffset), glm::vec4(m.colour, m.white),
-                               glm::vec4(fogColour, settings.style == RenderStyle::Steam ? 1.f : 0.f)};
+            const MapPush push{item.model, lens, glm::vec4(m.opacity, m.depthOffset, m.glow, m.shininess),
+                               glm::vec4(m.colour, m.materialAlpha),
+                               glm::vec4(m.white, settings.style == RenderStyle::Steam ? 1.f : 0.f, 0, 0)};
             vkCmdPushConstants(cmd, mapLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
             if (!ready)
                 continue; // faded WORLD/depth/color submissions precede readiness

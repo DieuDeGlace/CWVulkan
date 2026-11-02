@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Map models now retain independent WORLD and VIEW inputs. The frame supplies
+  the map view once; the vertex stage composes WV/WVP on the GPU and keeps the
+  WORLD lighting normal separate from its view-normal varying. DepthOffset is
+  applied to the composite clip coefficient. Exact fixed-axis literals and the
+  independently derived default light-vector words replace rounded substitutes.
+  Typed Glow, Shininess, material alpha, White and separate Opacity reach their
+  stated stages. GPU dot/MAD/reciprocal-square-root rounding remains a bounded
+  comparison limit, rather than a CPU or captured-frame numeric oracle.
+
+  Five new Vulkan cases cover view-independent lighting, actual WORLD-basis
+  changes, material alpha versus opacity, Glow and view-normal Shininess. All
+  five targets build warning-free; full CPU/owner and87 shader,2 camera,24 GUI,
+  17 map/shared-water/Alpha-scenery checks pass. Five no-save captures exit0,
+  all reviewed, with the save database unchanged. The unused CPU fogAmount and
+  pixelColour approximations and their obsolete checks were removed after a
+  caller audit; coin-preview color helpers remain in use. Ordinary scene/water/
+  direct-GUI WORLD vertex composition is the next bounded shared-shader check.
+
 - Map opaque resources now group by stable engine-owned unsigned identity keys
   and retain descriptor FIFO. Faded vectors keep append order. Opaque buffer
   readiness precedes descriptor submission; faded submissions precede their draw

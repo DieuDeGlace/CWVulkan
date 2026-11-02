@@ -77,12 +77,11 @@ void meshModel(const VoxelModel &model, int firstI, int lastI, int firstJ, int l
 // The map pass's light rig (§3.1).
 inline const glm::vec3 LIGHT_FRONT{0.75f, 0.7f, 0.3f};
 inline const glm::vec3 LIGHT_BACK{0.5f, 0.5f, 0.5f};
-inline const glm::vec3 LIGHT_TOWARDS{0.2f, 0.5f, 1.0f}; // normalised where it is used
+// Instruction-derived default after native CPU normalization (map contract section6.1).
+inline const glm::vec3 LIGHT_TOWARDS{.17609018087387085f, .4402254521846771f, .8804509043693542f};
 inline const glm::vec4 LIGHT_AMBIENT{0.25f, 0.3f, 0.7f, 1.0f};
 // The shader's own fixed direction for the second, unsigned light term (§3.2 step 4).
-inline const glm::vec3 BACK_TERM_DIRECTION{0.597022f, 0.398015f, 0.696526f};
-// The map's fog reaches this far (map units), so it barely tints the map (§3.3 step 3).
-constexpr float FOG_DISTANCE = 20000.0f;
+inline const glm::vec3 BACK_TERM_DIRECTION{.597022294998169f, .3980148732662201f, .696526050567627f};
 
 // The light one face receives, by its normal in map space (§3.2 steps 3-6): the direct term d,
 // the back term h, the light after step 5 and the grey push k of step 6. `alpha` is the vertex
@@ -111,13 +110,10 @@ inline const LightRig MAP_LIGHTS{LIGHT_FRONT, LIGHT_BACK, LIGHT_TOWARDS, LIGHT_A
 FaceLight faceLight(glm::vec3 normal, float alpha, const LightRig &lights);
 glm::vec3 vertexColour(glm::vec4 vertex, glm::vec3 normal, const LightRig &lights, glm::vec3 material, float white, float glow);
 
-// Legacy CPU preview color approximation; actual Steam map pixels use steam_pixel.glsl.
+// CPU color helpers used by coin previews; full map fog stays in steam_pixel.glsl.
 glm::vec3 saturationLift(glm::vec3 c); // step 2
-float fogAmount(float viewDistance);   // step 3: how far toward the fog colour
 glm::vec3 greenBlueGrade(glm::vec3 c); // step 5
 glm::vec3 sCurve(glm::vec3 c);         // step 6
-// Compatibility previews have only a Fog color, without the full raw SkySun inputs.
-glm::vec3 pixelColour(glm::vec3 vertex, float viewDistance, glm::vec3 fogColour);
 
 // --- §4 The camera ----------------------------------------------------------------------------
 

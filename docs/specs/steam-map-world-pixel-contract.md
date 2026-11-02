@@ -211,3 +211,151 @@ These facts distinguish a skipped callback, valid empty context, failed
 opaque group and faded record whose draw fails after setters. They do not
 supply native addresses from catalog metadata, guarantee concurrent resource
 stability, or define device/invalid-memory recovery.
+
+## 6. Map light-vector and WORLD vertex precision
+
+This bounded precision extension uses the reached CPU instructions in
+**0xe64b0 /0xc6ce0** and compiled WORLD vertex blob **0x4387b0**. It
+distinguishes instruction-derived arithmetic references from runtime
+captures; no runtime oracle was obtained for the numbers below.
+
+### 6.1 CPU direction production and two normalizations
+
+At **0xe6613–0xe661b**, the map loads stored float32
+**1.2899999618530273**, word **0x3fa51eb8 at0x43ef80**, then calls the
+imported **sqrtf**. The stored value is the squared-length input, not an
+already stored square root. The call uses the float square-root import
+at0x395462, distinct from the double sqrt import at0x39545c.
+
+It divides float32 **1.0** by the returned float. From this reciprocal,
+it forms X by a separate float multiplication with **0.20000000298023224**
+(word **0x3e4ccccd at0x42e700**), Y by a multiplication with **0.5**
+(**0x3f000000 at0x4ac964**), and Z by retaining the reciprocal itself.
+These scalar float32 operations are at **0xe6620–0xe6661**. This path
+does not first calculate the squared length from three freshly assembled
+components or use a double-precision normalized direction.
+
+The call at **0xe6690** supplies that vector to renderer virtual+0xc0,
+reaching **0xc6ce0**. At **0xc6d16–0xc6d84**, this setter squares X, Y
+and Z separately in float32, adds **X²+Y² first, then Z²**, calls sqrtf,
+divides float1 by that result, and multiplies each original component by
+the resulting float reciprocal. It caches/submits that second normalized
+vector as the directional-light input. Normalizing only once is not the
+reached CPU operation sequence.
+
+Under ordinary round-to-nearest float32 arithmetic, the instruction-derived
+reference is:
+
+| Value | Float32 value | Word |
+|---|---|---|
+|First reciprocal / first Z|0.8804509043693542|0x3f61653b|
+|First X|0.17609018087387085|0x3e3450fc|
+|First Y|0.4402254521846771|0x3ee1653b|
+|Second squared-length sum|1.0|0x3f800000|
+|Second reciprocal|1.0|0x3f800000|
+
+The final submitted XYZ reference therefore has words
+**(0x3e3450fc,0x3ee1653b,0x3f61653b)**. This is a calculation from the
+identified constants and scalar instruction order, **not a measured native
+frame or a general promise about alternate floating-point environments**.
+
+### 6.2 Separate lighting and view-normal spaces
+
+The WORLD shader decodes the packed face selector to its local face normal.
+For lighting it transforms that local normal through the **WORLD upper3×3**,
+computes its three-component squared norm, applies the GPU reciprocal
+square root, then multiplies the transformed vector by that reciprocal.
+This normalized WORLD-space normal supplies the directional, fixed-axis
+and point-light dot products. It does not use the view-transformed normal
+for those lighting terms.
+
+Independently, the shader transforms the **original local normal** through
+the upper3×3 of the internally composed **WORLD×VIEW**, then normalizes
+that result with its own dot/reciprocal-square-root/multiply sequence.
+That is the view-normal varying used by the optional pixel shininess
+ripple. Neither route constructs an inverse-transpose matrix, and the
+view-normal route is not a reuse of the already normalized WORLD normal.
+The light-direction varying is also formed through WORLD×VIEW, without
+another normalization; the ordinary pixel shader does not read it.
+
+For ordinary region records, WORLD has a translation-only basis, so its
+lighting-normal transform receives the unchanged local face axis before
+normalization. Map yaw, pitch and view scale belong to VIEW. They do not
+rotate the CPU direction or the fixed lighting axis before the lighting
+dot products. Marker/model records with another WORLD basis still use
+that actual basis. A general substitution of view-space lighting, or of
+a simplified map-space matrix for those records, is not established.
+
+### 6.3 Position composition and independent uploads
+
+The actual inputs are the descriptor's float WORLD matrix, map view+0x58
+and map projection+0x18. They remain independent GPU uploads, with the
+existing native transposition described in
+[GPU coordinates §3](steam-world-gpu-coordinates.md#3-queue-composition-and-separate-gpu-matrix-uploads).
+The map context's verified identity base and descriptor composition remain
+the pass-family contract; no additional camera-origin subtraction is
+inserted by these vertex operations.
+
+The geometric space order is **local → WORLD → VIEW → projection**.
+The compiled shader constructs WORLD×VIEW coefficients first, then the
+combined projection coefficients, using GPU float multiply/multiply-add
+operations. Each combined component starts with its Y product, then
+accumulates X, Z and the homogeneous term. It evaluates view position
+from the original decoded local point and the composed WORLD×VIEW,
+and clip position from that local point and the composed full matrix.
+WORLD position for point-light distances is evaluated separately from
+the same local point and WORLD.
+
+Local XYZ is recovered from the normalized packed position by multiplying
+by255; homogeneous W is **1**, not the face-selector input. DepthOffset
+is subtracted from the homogeneous/translation coefficient of the
+composite clip-Z calculation before its final position dot product.
+For this W=1 input it gives the established clip-Z offset, without changing
+view position or lighting-normal inputs.
+
+Thus the established space chain does not claim a bit-identical sequence
+of three CPU/vector position transformations or a CPU double-precision
+combined matrix. The compiled GPU composition/dot order is a separate
+precision boundary from CPU map construction and direction normalization.
+
+### 6.4 Exact fixed axis and lighting/palette operation order
+
+The compiled vertex shader's fixed axis is:
+
+|Component|Exact float32 value|Word / embedded RVA|
+|---|---|---|
+|X|0.597022294998169|0x3f18d674 /0x439744|
+|Y|0.3980148732662201|0x3ecbc89b /0x439748|
+|Z|0.696526050567627|0x3f324f88 /0x43974c|
+
+It uses these literal components directly, not a runtime normalization
+of rounded replacements. The reached lighting sequence is:
+
+1. Dot the normalized WORLD normal with the submitted directional vector;
+   multiply-add using float **0.7/0.3**, then retain at least0.
+2. Dot that same normal with the fixed axis; take its absolute value,
+   then multiply-add using **0.5/0.5** to produce the fixed-axis weight.
+3. Multiply back RGB by the fixed weight, then multiply-add front RGB
+   with the directional weight into that result, saturating0..1.
+4. Separately multiply input vertex V by material alpha, and multiply
+   ambient RGB by the fixed weight. Multiply-add the saturated front/back
+   term times V×alpha into that ambient term. Add accumulated point-light
+   RGB, then saturate0..1. The map's zero point tables leave every
+   positive-radius point-light branch unentered.
+5. Double normalized stored vertex RGB by addition. Subtract clamped
+   lighting green from ambient.w, multiply-add with **0.5/1**, then
+   clamp1..2 to obtain palette saturation gain. Compute palette luminance
+   with **0.299/0.587/0.114**, separately form its product with one minus
+   the gain, then multiply-add gain times the doubled palette into that
+   product. Clamp the boosted palette0..2.
+6. For the ordinary **Glow0** path, multiply
+   clamped lighting RGB by material RGB first, then by boosted palette.
+   Other Glow choices and the final White clamp retain their existing
+   WORLD contracts; they do not substitute view-space lighting.
+
+Useful exact shader literal words are **0.7=0x3f333333**,
+**0.3=0x3e99999a**, and **0.5=0x3f000000**. This preserves the compiled
+dot, multiply, multiply-add and saturation boundaries. GPU dot reduction,
+multiply-add fusion and reciprocal-square-root rounding are not proved
+equivalent to a scalar CPU calculation; the instruction-derived CPU vector
+reference in§6.1 does not establish those GPU results bit for bit.
