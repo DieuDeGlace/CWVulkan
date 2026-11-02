@@ -1116,15 +1116,35 @@ std::vector<Scenery> ExtractedWorld::props(int zx, int zy, std::shared_ptr<const
 }
 
 std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay, std::shared_ptr<const void> *modelSnapshot) {
-    std::vector<Scenery> out;
     auto zone = editedZone(ax, ay);
     if (!zone)
         zone = load(ax, ay);
     if (!zone)
-        return out;
+        return {};
+    return propsForZone(zone, ax, ay, modelSnapshot, true);
+}
+
+std::optional<ExtractedWorld::LoadedObjectProps> ExtractedWorld::loadedObjectProps(int32_t ax, int32_t ay) {
+    std::shared_ptr<const Zone> zone;
+    {
+        std::lock_guard lock(cacheMutex);
+        for (const auto &[key, cachedZone] : cache)
+            if (key == Key{ax, ay} && cachedZone) {
+                zone = cachedZone;
+                break;
+            }
+    }
+    if (!zone)
+        return {};
+    return LoadedObjectProps{zone->identity, propsForZone(zone, ax, ay, nullptr, false)};
+}
+
+std::vector<Scenery> ExtractedWorld::propsForZone(const std::shared_ptr<const Zone> &zone, int ax, int ay,
+                                                  std::shared_ptr<const void> *modelSnapshot, bool includeModels) {
+    std::vector<Scenery> out;
     if (modelSnapshot)
         *modelSnapshot = zone->models;
-    if (zone->models) {
+    if (includeModels && zone->models) {
         std::lock_guard lock(zone->modelLights->mutex);
         for (size_t index = 0; index < zone->models->size(); ++index) {
             const auto &record = (*zone->models)[index];
@@ -1196,7 +1216,6 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay, std::shared_p
         x = float((double(pos[0]) - double(originDots[0])) / 65536);
         y = float((double(pos[1]) - double(originDots[1])) / 65536);
         z = float(double(pos[2]) / 65536 + Z_OFFSET);
-        return pos[0] != 0 || pos[1] != 0 || pos[2] != 0;
     };
     size_t at = 4;
     while (at + 12 <= data.size()) {
@@ -1219,8 +1238,7 @@ std::vector<Scenery> ExtractedWorld::propsAbsolute(int ax, int ay, std::shared_p
             int32_t id;
             memcpy(&id, r, 4);
             float x, y, z;
-            if (!local(r + 8, x, y, z))
-                continue;
+            local(r + 8, x, y, z);
             {
                 // Object record: building part, position, quarter turns, scale.
                 // The array at 0x78 repeats these objects. Use the measured

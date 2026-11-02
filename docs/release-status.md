@@ -10,6 +10,26 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Ordinary Steam static objects now come from loaded data zones independently of
+  terrain GPU publication. Lookup never loads an absent zone; the physical player's
+  inclusive seven-zone square supplies absolute XY/record ordering. Cached records
+  refresh on zone lifetime changes and explicit invalidation, keep live door clocks,
+  and do not duplicate the mesh-published object copies. Only small lifetime tokens
+  are retained, so this cache does not pin obsolete terrain snapshots. Valid captured
+  objects at fixed position(0,0,0) are no longer discarded. A synthetic headless
+  World/Extracted/Renderer integration test covers these boundaries, source reset,
+  same-lifetime refresh and missing-zone lookup. All five targets build without
+  warnings; full CPU/owner checks and68 shader,2 camera,24 GUI,6 map/shared-water/
+  Alpha-scenery image checks pass. Five no-save gameplay/menu runs exit0, all captures
+  viewed, with the save database unchanged. This closes terrain-publication gating
+  for stable source records; complete live object-list replacement, ground-item
+  interleaving, special extra geometry and native visual acceptance remain open.
+
+  Local workspace maintenance also removed122 obsolete generated source-staging
+  trees (about1.154GiB) and regenerable Python bytecode. Recent snapshots, the current
+  build/dependency setup, owner data, saves and reference captures were preserved.
+  No standalone obsolete Makefiles outside dependencies were identified.
+
 - Ordinary Steam creature poses now receive the prepared scene's frame material,
   effective channel0 physical-position light, ordered buff tint factors and separate
   raw-drawn-position fade/visibility opacity. The descriptor bridge retains RGBA,

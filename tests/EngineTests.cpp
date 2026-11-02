@@ -175,6 +175,7 @@ int worldObjectTests(); // tests/WorldObjectTests.cpp
 int blockMutationTests();
 int terrainBandTests();
 int staticObjectSceneTests();
+int staticObjectStreamingTests();
 int worldModelControlsTests();
 int particleTests();
 int bodyParticleTests();
@@ -9359,6 +9360,8 @@ int main(int argc, char **argv) {
         return terrainBandTests();
     if (argc == 2 && std::string(argv[1]) == "staticobjectscene")
         return staticObjectSceneTests();
+    if (argc == 2 && std::string(argv[1]) == "staticobjectstreaming")
+        return staticObjectStreamingTests();
     if (argc == 2 && std::string(argv[1]) == "worldmodelcontrols")
         return worldModelControlsTests();
     if (argc == 2 && std::string(argv[1]) == "deadcreatures")
@@ -10661,6 +10664,7 @@ int main(int argc, char **argv) {
     failures += blockMutationTests();
     failures += terrainBandTests();
     failures += staticObjectSceneTests();
+    failures += staticObjectStreamingTests();
     failures += worldModelControlsTests();
     failures += particleTests();
     failures += bodyParticleTests();

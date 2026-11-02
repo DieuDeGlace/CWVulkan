@@ -165,7 +165,13 @@ class ExtractedWorld {
         std::shared_ptr<const void> keepAlive;
     };
     std::optional<ZoneToken> gameZoneToken(int32_t x, int32_t y) const; // Lookup only; retain the selected zone during a pass.
-    bool gameZoneLoaded(int32_t x, int32_t y) const;                    // lookup only; no block read, load or LRU mutation
+    struct LoadedObjectProps {
+        std::shared_ptr<const void> identity;
+        std::vector<Scenery> scenery;
+    };
+    // Lookup only. Never loads a missing zone or requires a terrain mesh.
+    std::optional<LoadedObjectProps> loadedObjectProps(int32_t x, int32_t y);
+    bool gameZoneLoaded(int32_t x, int32_t y) const; // lookup only; no block read, load or LRU mutation
     // The zones within `radius` of absolute zone (ax, ay) are kept in memory, as the game
     // keeps the zones around its player: those missing are read (or made) on a thread of
     // their own, and none of them is let go to make room for others (the creatures there
@@ -227,6 +233,8 @@ class ExtractedWorld {
     BlockEdits *blockEdits() const;
     std::shared_ptr<Zone> editedZone(int ax, int ay) const;
     std::shared_ptr<Zone> writableZone(int ax, int ay);
+    std::vector<Scenery> propsForZone(const std::shared_ptr<const Zone> &, int ax, int ay, std::shared_ptr<const void> *modelSnapshot,
+                                      bool includeModels);
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     void publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);

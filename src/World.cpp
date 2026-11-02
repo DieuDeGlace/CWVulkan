@@ -668,6 +668,8 @@ void World::update(glm::vec3 focus) {
             scenery.insert(scenery.end(), found->second.decorations.begin(), found->second.decorations.end());
             buildScenery(found->second, scenery);
         }
+    syncObjectZones();
+    staleObjects.clear();
     staleModels.clear();
     // Drop zones out of range.
     for (auto it = zones.begin(); it != zones.end();) {
@@ -777,9 +779,82 @@ void World::update(glm::vec3 focus) {
 
 void World::refreshZone(int zx, int zy) {
     stale.insert({zx, zy});
+    staleObjects.insert({zx, zy});
 }
 void World::refreshModels(int zx, int zy) {
     staleModels.insert({zx, zy});
+    staleObjects.insert({zx, zy});
+}
+
+void World::syncObjectZones() {
+    const auto player = scenePlayerProvider ? scenePlayerProvider() : std::nullopt;
+    independentObjects = renderStyle() == RenderStyle::Steam && extracted && player.has_value();
+    if (!independentObjects) {
+        objectZones.clear();
+        return;
+    }
+    for (auto it = objectZones.begin(); it != objectZones.end();)
+        if (!staticobjectscene::inPlayerSquare(player->physical, it->first.first, it->first.second))
+            it = objectZones.erase(it);
+        else
+            ++it;
+    const auto center = staticobjectscene::playerZone(player->physical);
+    for (int x = center[0] - 3; x <= center[0] + 3; ++x)
+        for (int y = center[1] - 3; y <= center[1] + 3; ++y) {
+            const Key key{x, y};
+            const auto token = extracted->gameZoneToken(x, y);
+            if (!token) {
+                objectZones.erase(key);
+                continue;
+            }
+            const int64_t localX = int64_t(x) - extracted->originZoneX(), localY = int64_t(y) - extracted->originZoneY();
+            const bool localKey = localX >= INT32_MIN && localX <= INT32_MAX && localY >= INT32_MIN && localY <= INT32_MAX;
+            const bool dirty = localKey && staleObjects.contains({int(localX), int(localY)});
+            const auto found = objectZones.find(key);
+            if (found != objectZones.end() && uint64_t(reinterpret_cast<uintptr_t>(found->second.identity.get())) == token->order && !dirty)
+                continue;
+            auto objects = extracted->loadedObjectProps(x, y);
+            if (!objects) {
+                objectZones.erase(key);
+                continue;
+            }
+            ObjectZone installed;
+            installed.identity = std::move(objects->identity);
+            buildScenery(installed.scene, objects->scenery);
+            objectZones[key] = std::move(installed);
+        }
+}
+
+void World::collectScenery(const Zone &zone, int32_t ax, int32_t ay, std::vector<DrawItem> &out, bool updateObjects) const {
+    const bool steamLook = renderStyle() == RenderStyle::Steam;
+    const size_t first = out.size();
+    out.insert(out.end(), zone.scenery.begin(), zone.scenery.end());
+    for (const Moving &moving : zone.moving) {
+        auto &draw = out[first + moving.draw];
+        draw.model = vegetationwind::modelMatrix(moving.placement, clockMs, steamLook);
+        if (draw.nativePosition) {
+            auto local = moving.placement;
+            local.position = {};
+            draw.nativeModel = vegetationwind::modelMatrix(local, clockMs, steamLook);
+        }
+    }
+    if (!updateObjects)
+        return;
+    for (const AnimatedObject &object : zone.objects) {
+        auto state = object.captured;
+        if (objectProvider && object.key.index >= 0 && extracted) {
+            const auto live = objectProvider(ax, ay, object.key);
+            if (live && live->type == state.type) {
+                // Placement belongs to this source snapshot, including undefined turn bytes.
+                state.closed = live->closed;
+                state.elapsedMs = live->elapsedMs;
+            }
+        }
+        auto &draw = out[first + object.draw];
+        draw.model = objectvisual::matrix(state, object.position, object.dimensions);
+        if (draw.nativePosition)
+            draw.nativeModel = objectvisual::matrix(state, glm::vec3(0), object.dimensions);
+    }
 }
 
 void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const {
@@ -825,31 +900,8 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
             drawBand(band.lava, DrawKind::LavaTerrain, LAVA_LIGHTING);
         }
         const size_t first = opaque.size();
-        opaque.insert(opaque.end(), z.scenery.begin(), z.scenery.end());
-        for (const Moving &m : z.moving) {
-            opaque[first + m.draw].model = vegetationwind::modelMatrix(m.placement, clockMs, steamLook);
-            if (opaque[first + m.draw].nativePosition) {
-                auto local = m.placement;
-                local.position = {};
-                opaque[first + m.draw].nativeModel = vegetationwind::modelMatrix(local, clockMs, steamLook);
-            }
-        }
-        for (const AnimatedObject &object : z.objects) {
-            auto state = object.captured;
-            if (objectProvider && object.key.index >= 0 && extracted) {
-                const auto live = objectProvider(key.first + extracted->originZoneX(), key.second + extracted->originZoneY(),
-                                                 object.key);
-                if (live && live->type == state.type) {
-                    // Placement metadata belongs to this source snapshot. In particular,
-                    // regenerated lamps must not replace a captured undefined turn byte.
-                    state.closed = live->closed;
-                    state.elapsedMs = live->elapsedMs;
-                }
-            }
-            opaque[first + object.draw].model = objectvisual::matrix(state, object.position, object.dimensions);
-            if (opaque[first + object.draw].nativePosition)
-                opaque[first + object.draw].nativeModel = objectvisual::matrix(state, glm::vec3(0), object.dimensions);
-        }
+        collectScenery(z, extracted ? key.first + extracted->originZoneX() : key.first,
+                       extracted ? key.second + extracted->originZoneY() : key.second, opaque, !independentObjects);
         if (steamLook && !z.objects.empty()) {
             const bool admitted = !player || !extracted ||
                                   staticobjectscene::inPlayerSquare(player->physical, key.first + extracted->originZoneX(),
@@ -857,7 +909,7 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
             size_t keep = first;
             for (size_t index = first; index < opaque.size(); ++index) {
                 if (opaque[index].nativeObject) {
-                    if (admitted)
+                    if (admitted && !independentObjects)
                         staticObjects.push_back(std::move(opaque[index]));
                 } else {
                     if (keep != index)
@@ -870,6 +922,9 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
     }
     for (auto &object : staticObjects)
         opaque.push_back(std::move(object));
+    if (steamLook && independentObjects)
+        for (const auto &[key, objects] : objectZones)
+            collectScenery(objects.scene, key.first, key.second, opaque);
     for (auto &i : instances)
         if (i.live)
             opaque.push_back(instanceDraw(i));

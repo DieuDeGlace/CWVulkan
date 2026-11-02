@@ -146,6 +146,8 @@ class World {
         std::vector<Scenery> decorations;
     };
     void buildScenery(Zone &zone, const std::vector<Scenery> &scenery);
+    void collectScenery(const Zone &, int32_t ax, int32_t ay, std::vector<DrawItem> &, bool updateObjects = true) const;
+    void syncObjectZones();
     void releaseTerrain(const Zone &zone);
     struct Instance {
         int model = -1;
@@ -165,9 +167,16 @@ class World {
     std::unique_ptr<proceduralitem::OwnerCache> proceduralModels;
     std::unordered_map<std::string, int> modelIndex;
     std::map<Key, Zone> zones;
+    struct ObjectZone {
+        std::shared_ptr<const void> identity; // Retain only the small lifetime token, not old terrain snapshots.
+        Zone scene;
+    };
+    std::map<Key, ObjectZone> objectZones; // absolute coordinates, independent of terrain GPU publication
+    bool independentObjects = false;
     std::map<Key, std::future<Generated>> jobs;
     std::map<Key, std::shared_ptr<scenerange::CachePublication>> pendingBounds;
     std::set<Key> staleModels;
+    std::set<Key> staleObjects;
     std::set<Key> stale; // zones to mesh again
     std::vector<Instance> instances;
     DrawItem instanceDraw(const Instance &i) const;

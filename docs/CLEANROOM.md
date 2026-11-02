@@ -739,3 +739,23 @@ packed colors of surviving vertices. Full engine/image checks and five no-save
 owner-model smoke captures pass; these do not establish complete native pixel
 acceptance, all resource factories or unavailable-resource retained-state timing.
 No native implementation or owner asset/capture bytes are published.
+
+## Loaded static-object production, 2026-11-02
+
+The implementer used the existing independently authored static-object scene
+admission contract and engine sources only. The loaded-zone lookup, physical-player
+square and independent terrain-mesh admission were read before implementation.
+ExtractedWorld now offers a lookup-only object snapshot, sharing its existing record
+decoder without collecting environment models. World owns an absolute-zone object
+cache that retains small identity tokens and updates source lifetimes/notices
+independently of terrain GPU jobs. A shared collection helper preserves live door
+state while avoiding duplicate callbacks and draws. Alpha retains its prior path.
+
+The integration fixture creates tiny synthetic CWZ/CWR/CUB inputs and an inert asset
+resolver sentinel; it never executes a game or substitutes runtime owner assets.
+It checks absent-zone no-load, raw origin records, ordered unmeshed objects, live
+hinges, physical-square retirement, source reset, terrain publication and explicit
+same-lifetime invalidation. Full engine/image suites and five no-save owner-data
+stability runs pass. Stable record coverage does not establish concurrent native
+publication timing, every live list mutation, ground-item order or full visual
+acceptance. No owner content is included in source or runtime packages.
