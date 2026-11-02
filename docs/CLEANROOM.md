@@ -822,3 +822,16 @@ empty-card request preserve reached setup independently of visible pixels.
 Unproved first GPU contents have a defined engine fallback and are not a native
 numeric reference. CPU scalar inputs and asset-free Vulkan triangles test the
 world/water, empty callback, null resource and unavailable GPU-buffer boundaries.
+
+## Shared map pixel stages, 2026-11-02
+
+The native-only author independently wrote steam-map-world-pixel-contract sections1–4
+and corrected the older map paraphrase, without implementation or capture access.
+The implementer read that prose, the corrected worldmap sections3.1/3.3 and engine
+sources only. The existing engine WORLD pixel function and verified color helpers
+are shared through project shader includes; no native shader, original instructions,
+SDK implementation or reconstructed code was opened or copied. Asset-free map
+planes check full and partial fog plus retained raw sun/gradient inputs. The Alpha
+appearance compatibility path and legacy CPU previews are kept distinct from the
+bounded Steam map-region claim. Marker-specific inputs and native visual acceptance
+remain separate work; source/runtime archives contain no owner assets.

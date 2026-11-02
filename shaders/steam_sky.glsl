@@ -1,6 +1,9 @@
+#ifndef CUBEVULKAN_STEAM_SKY_GLSL
+#define CUBEVULKAN_STEAM_SKY_GLSL
+#include "frame.glsl"
 // The Steam look's sky (docs/specs/sky-and-clouds.md §B.5): the screen-space gradient and the
 // sun's glow, shared by the sky, the world's fog and the clouds. Fragment shaders only (it reads
-// gl_FragCoord). Needs common.glsl. The constants are f.steamSky: sky1, sky2, fog, the sun
+// gl_FragCoord). Includes its frame uniform dependency. The constants are f.steamSky: sky1, sky2, fog, the sun
 // colour, the sun position (x, y, width / height, visible) and the gradient shift in [5].x.
 
 // 3x^2 - 2x^3 of x clamped to 0..1.
@@ -31,3 +34,5 @@ vec3 steamSunGlow(vec3 colour, vec2 screen) {
     g *= g;
     return mix(f.steamSky[3].rgb, colour, 1 - g * g);
 }
+
+#endif

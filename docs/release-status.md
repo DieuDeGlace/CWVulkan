@@ -10,6 +10,23 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Steam map region pixels now share the full WORLD pixel implementation with
+  scene/GUI rendering. They use the base-two fog exponent and both Fog/SkySun
+  blends, retaining the actual raw frame palette, sun position and gradient when
+  map matrices change. Frame/color/pixel helpers are factored into shared shader
+  includes with explicit build dependencies; the map binds the frame descriptor.
+  The Alpha appearance option retains its compatibility coloring, and the CPU
+  preview helper is labelled as an approximation rather than a native pixel oracle.
+  Marker-specific producers and broader map comparisons remain separate work.
+
+  Three synthetic map cases failed before and pass after: full-distance SkySun,
+  a partial-fog numeric reference and retained sun/gradient with a different map
+  lens. All five targets build warning-free; full CPU/owner and87 shader,2 camera,
+  24 GUI,9 map/shared-water/Alpha-scenery checks pass. Five no-save runs exit0,
+  all captures reviewed, with the save database unchanged. No native shader bytes
+  or owner assets are included in source/runtime packages. Resource grouping and
+  unavailable-buffer handling remain the next bounded map-consumer checks.
+
 - WORLD fog now consumes a retained float reciprocal binding instead of
   recomputing it from every draw's current scene range. Nonpositive/NaN distances
   preserve the prior binding; positive infinity legitimately supplies zero scale.

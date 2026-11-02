@@ -18,7 +18,7 @@ struct MapPush {
     glm::vec4 lens;
     glm::vec4 turn;     // yaw, pitch (radians), opacity, depth offset
     glm::vec4 material; // colour, white
-    glm::vec4 fog;      // the world's fog colour
+    glm::vec4 fog;      // RGB compatibility fog; w selects full Steam WORLD pixels
 };
 static_assert(sizeof(MapPush) <= 128, "push constants beyond Vulkan's guaranteed 128 bytes");
 
@@ -37,6 +37,8 @@ bool Renderer::createMapPipeline(std::string &error) {
 
     VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MapPush)};
     VkPipelineLayoutCreateInfo pli{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pli.setLayoutCount = 1;
+    pli.pSetLayouts = &setLayout;
     pli.pushConstantRangeCount = 1;
     pli.pPushConstantRanges = &push;
     vkCreatePipelineLayout(device, &pli, nullptr, &mapLayout);
@@ -143,6 +145,8 @@ unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &ite
     if (opaque.empty() && faded.empty())
         return 0;
     std::stable_sort(opaque.begin(), opaque.end(), [](const auto *a, const auto *b) { return a->mesh < b->mesh; });
+    // The map inherits raw scene sky/sun/gradient inputs, without reprojecting them.
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mapLayout, 0, 1, &frames[frameIndex].set, 0, nullptr);
     // The map wrapper inherits the frame's depth; its native +0x80 call sets fog, not depth.
     unsigned draws = 0;
     auto submit = [&](VkPipeline pipeline, const std::vector<const DrawItem *> &queue) {
@@ -154,7 +158,7 @@ unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &ite
             const auto &m = item.map;
             const glm::vec4 lens = m.lens + glm::vec4(0, 0, jitter.x, -jitter.y);
             const MapPush push{item.model, lens, glm::vec4(m.yaw, m.pitch, m.opacity, m.depthOffset), glm::vec4(m.colour, m.white),
-                               glm::vec4(fogColour, 0)};
+                               glm::vec4(fogColour, settings.style == RenderStyle::Steam ? 1.f : 0.f)};
             vkCmdPushConstants(cmd, mapLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
             const GpuMesh &mesh = meshes[item.mesh];
             VkDeviceSize zero = 0;

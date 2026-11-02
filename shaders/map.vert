@@ -15,7 +15,7 @@ layout(push_constant) uniform MapPush {
     vec4 lens;       // -f / aspect, f, the screen shift x, y
     vec4 turn;       // the view's yaw and pitch (radians), the instance's opacity, its depth offset
     vec4 material;   // rgb the instance's colour, a its white amount
-    vec4 fog;        // rgb the world's fog colour
+    vec4 fog;        // rgb compatibility fog; w selects Steam's full pixel stages
 } map;
 
 const vec3 LIGHT_FRONT = vec3(0.75, 0.7, 0.3);

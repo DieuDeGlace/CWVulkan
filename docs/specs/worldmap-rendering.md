@@ -201,8 +201,10 @@ In this order, after 0x2f44a0 has queued the map content:
   routine, 0xe8a20);
 * the opaque queue, then the blended queue, of the map's own queue (renderer +0x268).
 
-The sky colours, fogGradientTranslation and sun position keep whatever the world pass set this
-frame; with this fog distance they have almost no effect (§3.3).
+The raw sky/fog/sun colours, fogGradientTranslation and SunPos retain their incoming
+shared pixel-buffer values. The map's view/projection setters do not recompute those
+inputs or suppress their pixel contribution. See
+[map WORLD pixel contract §§1–3](steam-map-world-pixel-contract.md).
 
 Per region instance (0x2f44a0 → 0xee2f0 → 0xe6e60): colour (1, 1, 1, 1), **alpha = the
 region's fade** (§4.3), glow 0, shininess 0, white 0, **depth offset 0.5**.
@@ -236,22 +238,20 @@ byte), colour bytes C (r, g, b, a).
 
 ### 3.3 Pixel shader (0x43a010)
 
-1. c = the interpolated vertex colour. (When shininess > 0 it is multiplied by 1 + 0.3 ×
-   cos(…) of screen position and normal, a sparkle; shininess is 0 for the map.)
-2. **Saturation lift**: g = 0.299 r + 0.587 g + 0.114 b; t = 1 + 0.25 × (1 − g); c = t × c +
-   (1 − t) × g.
-3. **Fog**: q = (|view position|² × fogScale²) ^ (1 − 0.75 × exp(−403.95462 × fogScale)),
-   at most 1; f = smooth(q). c moves toward fogColor by f, then toward a sky gradient colour by
-   f⁴ (the gradient mixes skyColor1/2 by screen height and a sun glow). With fogScale =
-   1/20 000 and the camera 300 units away, f ≈ 0.03 and f⁴ ≈ 10⁻⁶: about a 3 % tint toward the
-   world's current fog colour, and no sky colour.
-4. sat.
-5. **Grade**: g = 0.299 r + 0.587 g + 0.114 b (of the fogged colour); green becomes
-   0.65 g + 0.35 g_lum and blue 0.65 b + 0.35 g_lum, red is kept.
-6. **S-curve**: each channel becomes smooth(channel) = 3x² − 2x³.
-7. Output alpha = the alpha block (the instance's alpha, so the region fade).
+The map's state0/3/6 bind the **exact ordinary WORLD pixel blob0x43a010**,
+not a separate map approximation. The authoritative pixel-stage contract is
+[WORLD shader output §§3–6](steam-world-shader-output.md#3-pixel-base-color-and-the-optional-shininess-ripple),
+with map-specific bindings and inherited inputs in
+[map WORLD pixel contract §§1–3](steam-map-world-pixel-contract.md).
 
-There is no gamma step in either shader; step 6 is the only tone curve (see open question 5).
+This **supersedes this section's former natural-base `exp` notation and
+“no sky colour” conclusion**. The exponent uses **exp2**; the distance power
+uses **log2 → multiply → exp2**. After the first Fog blend, the shader applies
+the **full ungraded SkySun target by the fourth power of the smoothed fog
+weight**, then clamps, grades and applies cubic contrast. The retained raw
+sky palette, SunPos and gradient therefore remain shader inputs even where
+their particular contribution is small. The separate Opacity constant supplies
+output alpha; ordinary region records use their region fade.
 
 ### 3.4 What a face receives
 

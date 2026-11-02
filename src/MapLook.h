@@ -111,12 +111,12 @@ inline const LightRig MAP_LIGHTS{LIGHT_FRONT, LIGHT_BACK, LIGHT_TOWARDS, LIGHT_A
 FaceLight faceLight(glm::vec3 normal, float alpha, const LightRig &lights);
 glm::vec3 vertexColour(glm::vec4 vertex, glm::vec3 normal, const LightRig &lights, glm::vec3 material, float white, float glow);
 
-// The pixel shader's steps (§3.3).
-glm::vec3 saturationLift(glm::vec3 c);           // step 2
-float fogAmount(float viewDistance);              // step 3: how far toward the fog colour
-glm::vec3 greenBlueGrade(glm::vec3 c);           // step 5
-glm::vec3 sCurve(glm::vec3 c);                    // step 6
-// All of them in order, from the interpolated vertex colour to the pixel's colour.
+// Legacy CPU preview color approximation; actual Steam map pixels use steam_pixel.glsl.
+glm::vec3 saturationLift(glm::vec3 c); // step 2
+float fogAmount(float viewDistance);   // step 3: how far toward the fog colour
+glm::vec3 greenBlueGrade(glm::vec3 c); // step 5
+glm::vec3 sCurve(glm::vec3 c);         // step 6
+// Compatibility previews have only a Fog color, without the full raw SkySun inputs.
 glm::vec3 pixelColour(glm::vec3 vertex, float viewDistance, glm::vec3 fogColour);
 
 // --- §4 The camera ----------------------------------------------------------------------------

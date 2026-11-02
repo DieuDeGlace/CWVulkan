@@ -1,8 +1,8 @@
 #pragma once
-// Host layouts shared by scene and immediate GUI rendering. Keep common.glsl in sync.
+// Host layouts shared by scene, map and immediate GUI rendering. Keep frame.glsl in sync.
 #include <glm/glm.hpp>
 namespace rendergpu {
-// std140-compatible: only mat4 and vec4. Must match shaders/common.glsl.
+// std140-compatible: only mat4 and vec4. Must match shaders/frame.glsl.
 struct FrameUniforms {
     glm::mat4 viewProj, invViewProj, lightFar, lightNear;
     glm::vec4 eye, lightDir, front, back, ambient, fog, sky, shadowFar, shadowNear, wind, focus, sunDisk, moonDisk, steamSky[6];

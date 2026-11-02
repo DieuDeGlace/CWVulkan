@@ -1,7 +1,9 @@
 #version 450
-// The world map's pixel shader (docs/specs/worldmap-rendering.md §3.3; the CPU twin is
-// src/MapLook.cpp): a saturation lift, the faint far fog, a partial grey in green and blue,
-// and an S-curve. Alpha is the instance's opacity (a new region's fade-in).
+// Steam map regions share the full WORLD pixel contract, including the retained
+// raw sky/sun/gradient inputs (steam-map-world-pixel-contract.md).
+#extension GL_GOOGLE_include_directive : require
+#include "frame.glsl"
+#include "steam_pixel.glsl"
 layout(location = 0) in vec3 vColor;
 layout(location = 1) in vec3 vView;
 layout(location = 0) out vec4 outColor;
@@ -12,15 +14,19 @@ layout(push_constant) uniform MapPush {
     vec4 lens;
     vec4 turn;
     vec4 material;
-    vec4 fog;
+    vec4 fog; // rgb compatibility fog; w selects the full Steam WORLD pixel stages
 } map;
 
-const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 const float FOG_SCALE = 1.0 / 20000.0; // the map's fog distance
 
 vec3 smoothCurve(vec3 x) { return x * x * (3.0 - 2.0 * x); }
 
 void main() {
+    if (map.fog.w > .5) {
+        outColor = vec4(steamPixelColour(vColor, steamScreen(), vView, vec2(0), 0, FOG_SCALE), map.turn.z);
+        return;
+    }
+    // Retain the Alpha appearance option's existing compatibility map coloring.
     vec3 c = vColor;
     float grey = dot(LUMA, c);
     float lift = 1.0 + 0.25 * (1.0 - grey);

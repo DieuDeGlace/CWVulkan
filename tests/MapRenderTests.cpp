@@ -115,6 +115,55 @@ int mapRenderTests() {
     const auto foregroundColor = capture("foreground-world", {foregroundWorld});
     check(foregroundColor != background && capture("foreground-with-map", {foregroundWorld, item}) == foregroundColor,
           "inherits-world-depth-without-private-clear");
+    // Explicit raw palette inputs isolate the full map WORLD pixel contract.
+    // A map point at/beyond F must become this frame's SkySun, not just Fog.
+    const glm::vec3 rawSky(.1f, .2f, .8f), rawFog(.8f, .1f, .05f);
+    light.menuSky[0] = light.menuSky[1] = glm::vec4(rawSky, 1);
+    light.menuSky[2] = glm::vec4(rawFog, 1);
+    light.menuSky[3] = {.95f, .65f, .1f, 1};
+    light.menuSky[4] = {0, 0, 1, 0};
+    light.menuSky[5] = {.375f, 0, 0, 1};
+    const auto rawSkyReference = capture("raw-sky-reference", {});
+    DrawItem distant = item;
+    distant.model = glm::translate(glm::mat4(1), {0, 0, 30000}) * glm::scale(glm::mat4(1), {30000, 30000, 1});
+    const auto distantPixel = capture("map-full-sky-fog", {distant});
+    auto samePixel = [](const auto &a, const auto &b) {
+        bool equal = true;
+        for (int channel = 0; channel < 3; ++channel)
+            equal &= std::abs(a[channel] - b[channel]) <= 2;
+        return equal;
+    };
+    check(samePixel(distantPixel, rawSkyReference), "full-sky-fog-target");
+
+    constexpr float distance = 6000, scale = 1.f / 20000;
+    distant.model = glm::translate(glm::mat4(1), {0, 0, distance}) * glm::scale(glm::mat4(1), {distance, distance, 1});
+    distant.map.white = 1; // independently fixes the pixel's incoming RGB at white
+    const glm::vec3 pixelView{-distance / 128, -distance / 128, distance};
+    const float exponent = 1 - .75f * std::exp2(-403.9546203613281f * scale);
+    const float power = std::exp2(std::log2(glm::dot(pixelView, pixelView) * (scale * scale)) * exponent);
+    const float t = std::min(power, 1.f), fogWeight = 3 * t * t - 2 * t * t * t;
+    glm::vec3 expected = glm::mix(glm::vec3(1), rawFog, fogWeight);
+    const float squared = fogWeight * fogWeight;
+    expected = glm::clamp(glm::mix(expected, rawSky, squared * squared), glm::vec3(0), glm::vec3(1));
+    const float grey = glm::dot(expected, glm::vec3(.299f, .587f, .114f));
+    expected.g = .65f * expected.g + .35f * grey;
+    expected.b = .65f * expected.b + .35f * grey;
+    expected = 3.f * expected * expected - 2.f * expected * expected * expected;
+    const std::array<int, 3> partialReference{int(std::lround(expected.r * 255)), int(std::lround(expected.g * 255)),
+                                              int(std::lround(expected.b * 255))};
+    check(samePixel(capture("map-partial-sky-fog", {distant}), partialReference), "shared-world-fog-exponent-and-blends");
+
+    // The source sun uses the scene's gradient/screen coordinates, even when the
+    // map lens and lighting turn differ. No map-camera sun reprojection is allowed.
+    light.menuSky[4] = {1.f / 128, -.0078125f + light.menuSky[5].x, 1, 1};
+    const auto sunReference = capture("raw-sun-reference", {});
+    distant.model = glm::translate(glm::mat4(1), {0, 0, 30000}) * glm::scale(glm::mat4(1), {30000, 30000, 1});
+    distant.map.lens.z = .3f;
+    distant.map.lens.w = -.2f;
+    distant.map.yaw = 1.2f;
+    distant.map.pitch = .4f;
+    check(sunReference != rawSkyReference && samePixel(capture("map-inherited-sun", {distant}), sunReference),
+          "inherits-scene-sun-and-gradient");
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

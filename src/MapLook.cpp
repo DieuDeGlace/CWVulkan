@@ -174,8 +174,8 @@ glm::vec3 sCurve(glm::vec3 c) { return glm::vec3(smooth(c.r), smooth(c.g), smoot
 
 glm::vec3 pixelColour(glm::vec3 vertex, float viewDistance, glm::vec3 fogColour) {
     glm::vec3 c = saturationLift(vertex);
-    // The fog's second step, toward the sky's gradient by the fog amount to the fourth, is
-    // about a millionth on the map and left out.
+    // This compatibility helper has no raw sky/SunPos inputs. It is not the
+    // Steam 3D map's full pixel oracle (steam-map-world-pixel-contract.md).
     c = glm::mix(c, fogColour, fogAmount(viewDistance));
     return sCurve(greenBlueGrade(saturate(c)));
 }
