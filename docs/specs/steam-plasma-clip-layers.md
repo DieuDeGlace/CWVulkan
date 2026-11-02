@@ -284,6 +284,10 @@ surface's virtual+0x30/+0x38 both delegate through0x3925c0 to ordinary
 rectangle composition; that alone does not establish a Gaussian filter
 or prove the entire traversal has no blur effect.
 
+The subsequently completed bounded cache consumer/lifecycle contract is
+[surface caches §§1–6](steam-plasma-surface-caches.md). It retains its own
+explicit setter/ownership/reset/failure limits and does not close blur.
+
 Sampler provenance in§6, external resize/reset routes for retained pool
 entries, invalid/failed resource handling and exact GPU sample/interpolation
 rounding remain unclosed. No owner art, geometry substitute or runtime

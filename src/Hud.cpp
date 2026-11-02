@@ -559,35 +559,14 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
         hue = &it->second;
     if (frame.hidden.count(n.name))
         return;
-    // A clipping node draws its children into a layer and then its own shape sampling that layer
-    // (plasma-format-and-scene.md 2.3.1, mask modes 2.3.3). CubeVulkan has no layers in its overlay:
-    // it draws the children unclipped, with the mask arithmetic applied to their colours using the
-    // shape's mean colour at the playing frame (mode 2 multiplies by all of it, the other modes
-    // by its opacity).
-    bool clips = false;
-    if (n.display >= 0 && n.display < (int)gui.displays.size() && n.shape >= 0 && n.shape < (int)gui.shapes.size()) {
-        const plasma::Display display = plasma::displayOf(gui.displays[(size_t)n.display]);
-        if (display.clips) {
-            clips = true;
-            glm::vec4 mean(1);
-            if (const plx::Chunk *c = gui.shapes[(size_t)n.shape].property("SmoothMeshShape.vertexColors")) {
-                std::vector<float> v;
-                if (!plasma::sampleSequence(*c, frame.sequence, frame.sequenceMs, v))
-                    for (glm::vec4 colour : plx::liveArray<glm::vec4>(c))
-                        v.insert(v.end(), {colour.r, colour.g, colour.b, colour.a});
-                if (v.size() >= 4) {
-                    mean = glm::vec4(0);
-                    for (size_t k = 0; k + 3 < v.size(); k += 4)
-                        mean += glm::vec4(v[k], v[k + 1], v[k + 2], v[k + 3]);
-                    mean /= (float)(v.size() / 4);
-                }
-            }
-            tint *= display.maskMode() == 2 ? mean : glm::vec4(1, 1, 1, mean.a);
-            if (tint.a <= 0.003f)
-                return;
-        }
-    }
-    // Compatibility clip modulation is separate from the node's own display color.
+    plasma::Display display;
+    if (n.display >= 0 && n.display < (int)gui.displays.size())
+        display = plasma::displayOf(gui.displays[(size_t)n.display]);
+    if (!display.visible)
+        return;
+    // Blur and cache policy remain separate. Ordinary affine masks use the same
+    // target/shape composition as live SceneNodes, never an averaged tint.
+    const bool clips = display.clips && (!(display.flags & plasma::DISPLAY_BLUR) || display.blurRadius <= 0);
     const glm::vec4 descendantsTint = tint;
     glm::mat4 m = parent;
     if (n.transformation >= 0 && n.transformation < (int)gui.transformations.size()) {
@@ -613,63 +592,101 @@ void Hud::plasmaNode(std::vector<OverlayVertex> &out, int index, const glm::mat4
     }
     if (auto it = fills.find(n.name); it != fills.end() && it->second <= 0.0f)
         return; // (an empty fill, or a hidden charge bar)
-    plasma::TextStyle style;
-    if (clips) {
-    } else if (n.shape >= 0 && n.shape < (int)gui.shapes.size() && plasma::textStyle(gui.shapes[(size_t)n.shape], gui.loaderFlags, style)) {
-        if (text)
-            style.string = *text;
-        if (color)
-            style.color = *color;
-        if (hue)
-            style.color = inHue(style.color, *hue), style.strokeColor = inHue(style.strokeColor, *hue);
-        // Preserve only the legacy mask approximation, never Display.fillColor.
-        style.color.a *= descendantsTint.a, style.strokeColor.a *= descendantsTint.a;
-        plasmaText(out, style, m);
-    } else if (n.shape >= 0 && n.shape < (int)gui.shapes.size()) {
-        auto found = shapes.find(n.shape);
-        if (found == shapes.end()) {
-            plasma::ShapeDrawing d;
-            plasma::buildSmoothMesh(gui.shapes[(size_t)n.shape], d);
-            found = shapes.emplace(n.shape, std::move(d)).first;
+    const auto shape = [&] {
+        plasma::SceneNode sampled;
+        sampled.doc = &gui;
+        sampled.shape = n.shape;
+        const plx::Object *source = sampled.shapeObject();
+        if (source && !frame.sequence.empty() && frame.sequenceMs >= 0 && sampled.playSequence(frame.sequence)) {
+            sampled.setSequenceTime((int)frame.sequenceMs);
+            source = sampled.shapeObject();
         }
-        const plasma::ShapeDrawing &d = found->second;
-        const float u = white.x + 2.f, v = white.y + 2.f;
-        for (const plasma::Triangles *t : {&d.fill, &d.stroke}) { // the fill, then the stroke over it
-            if ((t == &d.fill && !d.filled) || (t == &d.stroke && !d.stroked))
-                continue;
-            for (uint32_t i : t->indices) {
-                const plasma::Vertex &p = t->vertices[i];
-                const glm::vec4 s = m * glm::vec4(p.position, 0, 1);
-                glm::vec4 c = glm::clamp(p.color * tint, glm::vec4(0), glm::vec4(1));
-                if (hue)
-                    c = inHue(c, *hue);
-                c *= 255.0f;
-                out.push_back({s.x / s.w + plasma::DRAW_OFFSET, s.y / s.w + plasma::DRAW_OFFSET, u, v, c.r, c.g, c.b, c.a});
+        plasma::TextStyle style;
+        if (source && plasma::textStyle(*source, gui.loaderFlags, style)) {
+            if (text)
+                style.string = *text;
+            if (color)
+                style.color = *color;
+            if (hue)
+                style.color = inHue(style.color, *hue), style.strokeColor = inHue(style.strokeColor, *hue);
+            // Glyph tint is independent of Display.fillColor; ancestors clip at composition.
+            plasmaText(out, style, m);
+        } else if (n.shape >= 0 && n.shape < (int)gui.shapes.size()) {
+            plasma::ShapeDrawing animated;
+            const plasma::ShapeDrawing *drawing = nullptr;
+            if (sampled.animatedShape) {
+                plasma::buildSmoothMesh(*source, animated);
+                drawing = &animated;
+            } else {
+                auto found = shapes.find(n.shape);
+                if (found == shapes.end()) {
+                    plasma::ShapeDrawing built;
+                    plasma::buildSmoothMesh(gui.shapes[(size_t)n.shape], built);
+                    found = shapes.emplace(n.shape, std::move(built)).first;
+                }
+                drawing = &found->second;
+            }
+            const plasma::ShapeDrawing &d = *drawing;
+            const float u = white.x + 2.f, v = white.y + 2.f;
+            for (const plasma::Triangles *t : {&d.fill, &d.stroke}) { // the fill, then the stroke over it
+                if ((t == &d.fill && !d.filled) || (t == &d.stroke && !d.stroked))
+                    continue;
+                for (uint32_t i : t->indices) {
+                    const plasma::Vertex &p = t->vertices[i];
+                    const glm::vec4 s = m * glm::vec4(p.position, 0, 1);
+                    glm::vec4 c = p.color * tint;
+                    if (hue)
+                        c = inHue(c, *hue);
+                    c *= 255.0f;
+                    out.push_back({s.x / s.w + plasma::DRAW_OFFSET, s.y / s.w + plasma::DRAW_OFFSET, u, v, c.r, c.g, c.b, c.a});
+                }
             }
         }
-    }
-    // The copied sprite child's binding supplies its physical frame. Original items
-    // use the native WORLD helper; legacy/raw bindings retain their compatibility image.
-    if (const auto sprite = frame.sprites.find(n.name);
-        sprite != frame.sprites.end() && n.widget >= 0 && n.widget < (int)gui.widgets.size()) {
-        const auto widget = plasma::reboundWidget(plasma::widgetOf(gui.widgets[(size_t)n.widget]));
-        const auto content = glm::translate(m * widget.inverseBind, glm::vec3(widget.framePos, 0));
-        const glm::vec2 origin(content * glm::vec4(0, 0, 0, 1));
-        const glm::vec2 size(content * glm::vec4(widget.effectiveSize(), 0, 0));
-        if (const auto original = frame.items.find(n.name); original != frame.items.end()) {
-            if (original->second[0] != 0)
-                itemIcon(sprite->second, original->second, guiitem::spritePlacement(origin, size, guiClockMs), out.size());
-        } else if (const auto icon = icons.find(sprite->second); icon != icons.end()) {
-            const glm::vec2 centre = origin + size * 0.5f;
-            const float side = std::min(std::abs(size.x), std::abs(size.y));
-            if (side > 0)
-                image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(centre.x - side / 2),
-                      std::round(centre.y - side / 2), side / (float)icon->second.w);
+    };
+    const auto callback = [&] {
+        // The copied sprite child's binding supplies its physical frame. Original items
+        // use the native WORLD helper; legacy/raw bindings retain their compatibility image.
+        if (const auto sprite = frame.sprites.find(n.name);
+            sprite != frame.sprites.end() && n.widget >= 0 && n.widget < (int)gui.widgets.size()) {
+            const auto widget = plasma::reboundWidget(plasma::widgetOf(gui.widgets[(size_t)n.widget]));
+            const auto content = glm::translate(m * widget.inverseBind, glm::vec3(widget.framePos, 0));
+            const glm::vec2 origin(content * glm::vec4(0, 0, 0, 1));
+            const glm::vec2 size(content * glm::vec4(widget.effectiveSize(), 0, 0));
+            if (const auto original = frame.items.find(n.name); original != frame.items.end()) {
+                if (original->second[0] != 0)
+                    itemIcon(sprite->second, original->second, guiitem::spritePlacement(origin, size, guiClockMs), out.size());
+            } else if (const auto icon = icons.find(sprite->second); icon != icons.end()) {
+                const glm::vec2 centre = origin + size * 0.5f;
+                const float side = std::min(std::abs(size.x), std::abs(size.y));
+                if (side > 0)
+                    image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(centre.x - side / 2),
+                          std::round(centre.y - side / 2), side / (float)icon->second.w);
+            }
         }
+    };
+    const auto children = [&] {
+        for (int c : n.children)
+            if (c >= 0 && c < (int)gui.nodes.size())
+                plasmaNode(out, c, m, descendantsTint, frame, text, color, hue);
+    };
+    const auto layer = [&](plasma::LayerCommand::Kind kind, uint32_t mode = 0) {
+        layerCommands.push_back({kind, {out.size(), itemRequests.size()}, mode});
+    };
+    if (clips) {
+        layer(plasma::LayerCommand::Kind::Push);
+        children();
+        layer(plasma::LayerCommand::Kind::Pop);
+        layer(plasma::LayerCommand::Kind::Mask, uint32_t(display.maskMode()));
+        shape();
+        layer(plasma::LayerCommand::Kind::Mask);
+        callback();
+    } else {
+        // Preserve this compatibility adapter's existing ordinary sprite-hook order.
+        if (!display.clips)
+            shape();
+        callback();
+        children();
     }
-    for (int c : n.children)
-        if (c >= 0 && c < (int)gui.nodes.size())
-            plasmaNode(out, c, m, descendantsTint, frame, text, color, hue);
 }
 
 bool Hud::plasmaPlaced(std::vector<OverlayVertex> &out, const char *name, glm::vec2 position, glm::vec2 offset,

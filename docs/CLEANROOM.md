@@ -920,3 +920,18 @@ validation and startup captures. No native shader instructions, original code,
 reconstruction or owner assets were read/copied into implementation/packages.
 Caches, blur, flattened projective coordinates and static legacy clipping remain
 separate work; this is not a full GUI or pixel-parity certificate.
+
+## Legacy HUD mask composition, 2026-11-02
+
+The implementer used the already independently authored clip-layer, shape/text
+and sequence contracts plus the engine's existing evaluator and renderer. The
+document-placement adapter now emits real child-layer/mask cuts and evaluates
+animated shape attributes instead of substituting an averaged mask color.
+The owner location template exercises balanced composition and changing shape
+output at two GUI scales. The existing 42 Vulkan GUI cases and full regression
+suite pass; hidden no-save captures are stability checks, not native visual
+acceptance. Transform/Display animation in this compatibility adapter, surface
+caches, blur and projective GUI remain separate. The new cache specification
+was written by the independent native-only author and read as prose only;
+it is not yet implemented. No native implementation or owner assets enter the
+source or runtime packages.

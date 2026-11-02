@@ -163,6 +163,28 @@ int mapHistoryTests() {
             mutableRoot->widget = std::move(previousWidget);
             mutableRoot->onDraw = std::move(previousHook);
             mutableRoot->children.pop_back();
+
+            // The location banner still uses the document-placement adapter. Its
+            // owner-authored mask must reach the renderer, not become a mean tint.
+            std::vector<OverlayVertex> earlier;
+            size_t masks = 0;
+            bool animated = false;
+            for (float time : {0.f, 600.f, 3000.f}) {
+                Hud::State state;
+                state.locationName = "T";
+                state.locationMs = time;
+                std::vector<OverlayVertex> vertices;
+                hud.draw(state, vertices);
+                const auto depth = plasma::layerDepth(hud.clipDraws(), {vertices.size(), hud.itemDraws().size()});
+                check(depth.has_value(), "legacy location emission keeps balanced mask and callback cuts");
+                for (const auto &command : hud.clipDraws())
+                    masks += command.kind == plasma::LayerCommand::Kind::Mask && command.mode != 0;
+                if (!earlier.empty())
+                    animated = animated || !same(earlier, vertices);
+                earlier = std::move(vertices);
+            }
+            check(masks > 0, "owner location banner emits real mask composition commands");
+            check(animated, "owner location shape sequence changes emitted geometry or colors");
         }
         renderer.shutdown();
     }

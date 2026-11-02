@@ -530,9 +530,11 @@ visited with 0x08 removed.
 6. Blur node: its subtree is rendered to an offscreen target sized to the blurred bounds
    and composited with a blur whose radius scales with the matrix (render spec). Bounds of a
    blur node grow by `0.5 × (|column 0| + |column 1|) × blurRadius` (0x332300, 0x332fd0).
-7. Widgets with widget flag 0x40, and nodes with node flag 0x400, render their subtree
-   into a cached surface that is redrawn only when something changed (0x32d890; render
-   spec).
+7. Own Widgets with flag0x40 use their retained surface when the engine's
+   Widget-cache option bit is enabled; node flag0x400 is a separate fallback.
+   Exact selection, dimensions, dirty/reset timing and concrete copy behavior are
+   [surface caches §§1–5](steam-plasma-surface-caches.md). “Only when something
+   changed” does not authorize skipping those specific admission/query rules.
 8. Pop the matrix.
 
 #### 2.3.2 Colour
@@ -1252,9 +1254,12 @@ files to the last byte, with every tag id resolving to a defined name.
    ask for it; no Plasma routine tests 0x0800.
 5. **Button.type and ScrollButton.direction** values and their behaviour were not traced
    (all shipped buttons use type 0).
-6. **Cached widget surfaces** (widget flag 0x40, node flag 0x400): the surface holds three
-   more widget fields (a scale defaulting to 1, an offset pair defaulting to 0, an integer
-   divisor defaulting to 1) used when compositing; their setters were not found.
+6. **Cached surfaces: bounded consumer resolved.** Widget scale/offset/divisor
+   fields, node bounds, constructors/copy/lifetime, dirty timing and concrete
+   composition are [surface caches §§1–6](steam-plasma-surface-caches.md).
+   The concrete Widget wrapper discards prepared final source/scale/divisor
+   arguments; scale/offset still affect redraw projection. Broader field setters,
+   ownership/reset writers and failure domains remain explicitly open there.
 7. **Blur rendering** (radius scaling, pass count) is only outlined (2.3.1 step 6).
 8. **The `PLA` reader** (0x3448a0) for the older format was not examined.
 9. **The no-widget-ancestor case of `Q`** (2.7.2) multiplies the parent's world matrix with
