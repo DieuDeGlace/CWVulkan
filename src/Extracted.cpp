@@ -1458,8 +1458,10 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
 }
 
 bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds,
-                          worldgen::MeshLightVolume *nativeLight, Mesh *lava) {
+                          worldgen::MeshLightVolume *nativeLight, Mesh *lava, std::vector<TerrainMeshBand> *terrainBands) {
     const size_t opaqueStart = opaque.indices.size(), waterStart = water.indices.size(), lavaStart = lava ? lava->indices.size() : 0;
+    if (terrainBands)
+        terrainBands->clear();
     if (nativeLight)
         *nativeLight = {};
     if (nativeBounds)
@@ -1573,6 +1575,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             c.flags |= SWAY;
         return c;
     };
+    std::map<int32_t, TerrainMeshBand> bands;
     // The Alpha look bakes the block light (docs/specs/alpha-rendering.md 9.2-9.4): the light
     // is flooded through the zone and a 16-block border, then every corner samples it.
     std::unique_ptr<alphalight::LightVolume> light;
@@ -1608,6 +1611,14 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             return CornerShade{encoded.r, encoded.g, encoded.b, encoded.a};
         };
         const MeshSelector group = [&](int x, int y, int z) -> Mesh & {
+            if (terrainBands && nativeBox) {
+                const int32_t base = terrainBandBase(z, nativeBox->lowest);
+                auto &band = bands[base];
+                band.base = base;
+                Mesh &mesh = effectiveBlock(x, y, z).type == LAVA_TYPE ? band.lava : band.opaque;
+                mesh.localOrigin = glm::ivec3(0, 0, base);
+                return mesh;
+            }
             return lava && effectiveBlock(x, y, z).type == LAVA_TYPE ? *lava : opaque;
         };
         meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset,
@@ -1689,9 +1700,18 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 } else if (type == WET_TYPE && typeAt(x, y, z + 1) == AIR_TYPE)
                     emitWater(x, y, z, 4);
             }
+    size_t solidIndices = opaque.indices.size() - opaqueStart;
+    size_t lavaIndices = lava ? lava->indices.size() - lavaStart : 0;
+    if (terrainBands)
+        for (auto &[base, band] : bands) {
+            if (band.opaque.empty() && band.lava.empty())
+                continue;
+            solidIndices += band.opaque.indices.size();
+            lavaIndices += band.lava.indices.size();
+            terrainBands->push_back(std::move(band));
+        }
     if (nativeEncoding && nativeBounds && *nativeBounds)
-        (*nativeBounds)->triangleCost = scenerange::triangleCost(opaque.indices.size() - opaqueStart, water.indices.size() - waterStart,
-                                                               lava ? lava->indices.size() - lavaStart : 0);
+        (*nativeBounds)->triangleCost = scenerange::triangleCost(solidIndices, water.indices.size() - waterStart, lavaIndices);
     return true;
 }
 

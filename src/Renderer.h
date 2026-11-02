@@ -137,6 +137,7 @@ struct DrawItem {
     std::optional<scenevisibility::Sphere> nativeActor;  // shared gate for creature parts and overhead models
     std::optional<steampoints::ZoneKey> nativeLightZone; // pose-space center, before conversion to engine mesh coordinates
     std::optional<glm::mat4> nativeModel;                // origin-relative WORLD; model retains the source-home transform
+    std::optional<steampoints::Point> nativePosition;    // fixed anchor when nativeModel contains only the local transform
     bool mirrored() const { return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0; }
 };
 

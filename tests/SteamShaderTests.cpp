@@ -591,7 +591,7 @@ int steamShaderTests() {
         actor.castShadow = false;
         Lighting steady;
         steady.timeMs = 0;
-        const auto renderMarker = [&](const char *name, int64_t blockOrigin, float fraction) {
+        const auto renderMarker = [&](const char *name, int64_t blockOrigin, float fraction, bool anchored = false) {
             Camera fixedCamera;
             fixedCamera.eye = {float(blockOrigin), -2, 1};
             fixedCamera.target = {float(blockOrigin), 0, 1};
@@ -599,6 +599,11 @@ int steamShaderTests() {
             fixedCamera.nativeFixedLookAt = steampoints::Point{blockOrigin * 65536, 0, 65536};
             actor.model = glm::translate(glm::mat4(1), glm::vec3(float(blockOrigin) + fraction, 0, 0));
             actor.nativeModel = glm::translate(glm::mat4(1), glm::vec3(fraction, 0, 0));
+            actor.nativePosition.reset();
+            if (anchored) {
+                actor.nativeModel = glm::mat4(1);
+                actor.nativePosition = steampoints::Point{blockOrigin * 65536 + int64_t(fraction * 65536), 0, 0};
+            }
             actor.nativeActor = scenevisibility::Sphere{{blockOrigin * 65536 + int64_t(fraction * 65536), 0, 65536}, 1};
             const auto path = root / (std::string(name) + ".png");
             renderer.capture(path.string());
@@ -627,6 +632,10 @@ int steamShaderTests() {
         std::cout << "Steam shader quarter-block fixture" << (visibleFraction ? " PASS\n" : " FAIL\n");
         std::cout << "Steam shader fixed-origin quarter-block coverage" << (sameCoverage ? " PASS\n" : " FAIL\n");
         failures += !visibleFraction + !sameCoverage;
+        const auto anchored = mask(renderMarker("origin-quarter-anchor", int64_t(1) << 24, .25f, true));
+        const bool anchoredCoverage = visibleFraction && anchored == reference;
+        std::cout << "Steam shader fixed-anchor quarter-block coverage" << (anchoredCoverage ? " PASS\n" : " FAIL\n");
+        failures += !anchoredCoverage;
         const int64_t farBlock = int64_t(1) << 24;
         auto lamp = sourceModel(0, 0, 10);
         lamp.record.x = farBlock * 65536 + 16384;

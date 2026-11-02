@@ -105,6 +105,7 @@ class World {
     };
     struct Generated {
         Mesh opaque, water, lava;
+        std::vector<TerrainMeshBand> terrainBands;
         std::optional<scenevisibility::Bounds> nativeBounds;
         std::shared_ptr<const steampoints::ZoneSources> nativeLights;
         std::vector<Scenery> scenery;
@@ -131,6 +132,11 @@ class World {
     ScenePlayerProvider scenePlayerProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0, lava = 0;
+        struct Band {
+            int32_t base = 0;
+            uint32_t opaque = 0, lava = 0;
+        };
+        std::vector<Band> terrainBands;
         std::shared_ptr<const scenevisibility::Bounds> nativeBounds;
         std::shared_ptr<const steampoints::ZoneSources> nativeLights;
         std::vector<DrawItem> scenery;
@@ -139,6 +145,7 @@ class World {
         std::vector<Scenery> decorations;
     };
     void buildScenery(Zone &zone, const std::vector<Scenery> &scenery);
+    void releaseTerrain(const Zone &zone);
     struct Instance {
         int model = -1;
         glm::vec3 position{0};

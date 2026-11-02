@@ -340,8 +340,11 @@ individual feature documents.
   submission, with the native view/lens and matching fixed-origin point tables.
   Source-home transforms remain available to shadows and Alpha rendering. Asset-free
   GPU checks preserve a quarter block at world block16,777,216 and its attached light.
-  Terrain/static placement rebasing, band-local vertices and original visual acceptance
-  remain open.
+  Terrain now emits local corners in lowest-exposed-relative250-block bands, keeps
+  source-block top250 corners and sparse bases, and submits fixed zone/band anchors.
+  Source scan order, physical corner colors, face costs and native zone admission
+  have CPU/GPU checks; retired band resources follow zone lifetime. Static/environment
+  placement rebasing and original visual acceptance remain open.
   The independent [runtime initialization audit](specs/steam-crt-runtime-initialization.md)
   establishes a version-qualified fresh context default1 and startup/reset gates;
   it does not establish native first-frame state or change the engine's initial seed.

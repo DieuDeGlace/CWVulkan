@@ -173,6 +173,7 @@ int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests(); // tests/ObjectClockTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int blockMutationTests();
+int terrainBandTests();
 int particleTests();
 int bodyParticleTests();
 int lightPublicationTests();
@@ -9352,6 +9353,8 @@ int main(int argc, char **argv) {
         return particleTests();
     if (argc == 2 && std::string(argv[1]) == "blockedits")
         return blockMutationTests();
+    if (argc == 2 && std::string(argv[1]) == "terrainbands")
+        return terrainBandTests();
     if (argc == 2 && std::string(argv[1]) == "deadcreatures")
         return deadCreatureTests();
     if (argc == 2 && std::string(argv[1]) == "worldobjects")
@@ -10650,6 +10653,7 @@ int main(int argc, char **argv) {
     failures += worldObjectTests();
     failures += deadCreatureTests();
     failures += blockMutationTests();
+    failures += terrainBandTests();
     failures += particleTests();
     failures += bodyParticleTests();
     failures += lightPublicationTests();

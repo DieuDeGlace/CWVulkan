@@ -1617,8 +1617,19 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         const bool particle = item.kind == DrawKind::Particle;
         if (!alphaLook && !menuSky && shading) {
             pc.params.x = float(item.flags | STEAM_WORLD | (item.nativeModel ? ORIGIN_WORLD : 0));
-            if (item.nativeModel)
+            if (item.nativeModel) {
                 pc.model = *item.nativeModel;
+                if (item.nativePosition) {
+                    glm::vec3 translation;
+                    for (int axis = 0; axis < 3; ++axis) {
+                        const int64_t relative = axis < 2
+                                                     ? gamemath::addFixed((*item.nativePosition)[axis], sceneFrame->visibility.offset[axis])
+                                                     : (*item.nativePosition)[axis];
+                        translation[axis] = float(relative) * (1.f / 65536.f);
+                    }
+                    pc.model = glm::translate(glm::mat4(1), translation) * pc.model;
+                }
+            }
             pc.look.y = item.flash;
             pc.look.z = item.nativeShininess ? 1.f : 0.f;
             if (!particle) {
@@ -1841,6 +1852,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             return false;
         if (!meshes[item.mesh].indexCount)
             return false;
+        if (!alphaLook && item.nativeZone && (item.kind == DrawKind::Terrain || item.kind == DrawKind::LavaTerrain))
+            return true; // the exact native zone gate above already admitted this terrain
         if (item.nativeParticle)
             return sceneFrame->visibility.visible(*item.nativeParticle, modelDistance);
         if (item.nativeActor)

@@ -339,6 +339,15 @@ The routine does not draw itself; it calls the renderer. CubeVulkan records thes
   fourth number, depth. Issued right after each weapon's draw. It draws the spirit cubes
   set into the item (§9.1); a weapon without spirits draws nothing more.
 
+The historical producer labels above and below do not name the shader slots:
+the five trailing values **alpha, x9, glow, fourth, depth** reach
+**Opacity, Glow, Shininess, White, DepthOffset**, respectively. In particular
+the producer's third value labelled "glow" reaches shader Shininess; x9
+reaches shader Glow. The four-float tint remains shader material RGBA.
+See [WORLD controls §2.1](steam-world-pass-controls.md#21-pose-material-delivery-readiness-and-explicit-winding)
+for the verified material-buffer handoff, readiness effects and explicit
+normal/opposite queue selection, and its card-spec link for argument positions.
+
 ### 9.1 The spirit cubes (0xeec50)
 
 Model #0xa46 is `cube.cub`, a single white voxel (1 × 1 × 1). An item record carries up to

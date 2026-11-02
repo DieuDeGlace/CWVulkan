@@ -13,6 +13,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <climits>
+#include <bit>
 #include <cmath>
 #include <memory>
 #include <thread>
@@ -133,6 +134,17 @@ World::~World() {
     renderer.setUnloadedDistance(-1);
     for (auto &[key, job] : jobs)
         job.wait();
+    for (const auto &[key, zone] : zones)
+        releaseTerrain(zone);
+}
+
+void World::releaseTerrain(const Zone &zone) {
+    for (uint32_t mesh : {zone.opaque, zone.water, zone.lava})
+        renderer.release(mesh);
+    for (const auto &band : zone.terrainBands) {
+        renderer.release(band.opaque);
+        renderer.release(band.lava);
+    }
 }
 
 namespace {
@@ -579,11 +591,9 @@ void World::update(glm::vec3 focus) {
         it = jobs.erase(it);
         pendingBounds.erase(key);
         if (std::max(std::abs(key.first - cx), std::abs(key.second - cy)) > viewZones + 1)
-            continue; // Walked away meanwhile.
+            continue;                                         // Walked away meanwhile.
         if (auto old = zones.find(key); old != zones.end()) { // meshed again
-            renderer.release(old->second.opaque);
-            renderer.release(old->second.water);
-            renderer.release(old->second.lava);
+            releaseTerrain(old->second);
         }
         Zone z;
         if (extracted) {
@@ -616,6 +626,11 @@ void World::update(glm::vec3 focus) {
         z.opaque = renderer.upload(g.opaque);
         z.water = renderer.upload(g.water);
         z.lava = renderer.upload(g.lava);
+        for (const auto &band : g.terrainBands) {
+            Zone::Band installed{band.base, renderer.upload(band.opaque), renderer.upload(band.lava)};
+            if (installed.opaque || installed.lava)
+                z.terrainBands.push_back(installed);
+        }
         z.nativeLights = std::move(g.nativeLights);
         if (extracted && g.nativeBounds) {
             const int64_t shift[] = {-extracted->originDotsX(), -extracted->originDotsY(), 0};
@@ -624,7 +639,7 @@ void World::update(glm::vec3 focus) {
                 g.nativeBounds->maximum[axis] += shift[axis];
                 g.nativeBounds->center[axis] += shift[axis];
             }
-            g.nativeBounds->meshed = z.opaque || z.water || z.lava; // actual published geometry, not planned bands
+            g.nativeBounds->meshed = z.opaque || z.water || z.lava || !z.terrainBands.empty();
             z.nativeBounds = std::make_shared<const scenevisibility::Bounds>(*g.nativeBounds);
         }
         buildScenery(z, g.scenery);
@@ -646,9 +661,7 @@ void World::update(glm::vec3 focus) {
     // Drop zones out of range.
     for (auto it = zones.begin(); it != zones.end();) {
         if (std::max(std::abs(it->first.first - cx), std::abs(it->first.second - cy)) > viewZones + 1) {
-            renderer.release(it->second.opaque);
-            renderer.release(it->second.water);
-            renderer.release(it->second.lava);
+            releaseTerrain(it->second);
             it = zones.erase(it);
         } else
             ++it;
@@ -715,7 +728,7 @@ void World::update(glm::vec3 focus) {
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
                 ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds, alphaLook ? nullptr : &nativeLight,
-                         &g.lava);
+                         &g.lava, alphaLook ? nullptr : &g.terrainBands);
                 if (g.nativeBounds)
                     publication->publish(*g.nativeBounds);
                 g.scenery = ex->props(k.first, k.second, &g.modelSnapshot);
@@ -774,6 +787,30 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
         terrainDraw(z.opaque, opaque, DrawKind::Terrain);
         terrainDraw(z.lava, opaque, DrawKind::LavaTerrain, LAVA_LIGHTING);
         terrainDraw(z.water, water, DrawKind::Terrain, 0, false);
+        for (const auto &band : z.terrainBands) {
+            const auto drawBand = [&](uint32_t mesh, DrawKind kind, uint32_t flags) {
+                if (!mesh)
+                    return;
+                DrawItem draw{
+                    mesh,
+                    glm::translate(glm::mat4(1), glm::vec3(float(key.first) * 64, float(key.second) * 64, float(band.base) + ExtractedWorld::Z_OFFSET)),
+                    flags,
+                    0,
+                    true,
+                    kind};
+                draw.nativeZone = z.nativeBounds;
+                draw.nativeLights = z.nativeLights;
+                if (extracted) {
+                    const int32_t x = std::bit_cast<int32_t>(uint32_t(key.first + extracted->originZoneX()) << 6);
+                    const int32_t y = std::bit_cast<int32_t>(uint32_t(key.second + extracted->originZoneY()) << 6);
+                    draw.nativePosition = steampoints::Point{int64_t(x) * 65536, int64_t(y) * 65536, int64_t(band.base) * 65536};
+                    draw.nativeModel = glm::mat4(1);
+                }
+                opaque.push_back(std::move(draw));
+            };
+            drawBand(band.opaque, DrawKind::Terrain, 0);
+            drawBand(band.lava, DrawKind::LavaTerrain, LAVA_LIGHTING);
+        }
         const size_t first = opaque.size();
         opaque.insert(opaque.end(), z.scenery.begin(), z.scenery.end());
         for (const Moving &m : z.moving)

@@ -105,6 +105,58 @@ queue consumers add no private depth clear; its virtual+0x80 at0xe66ac
 is the fog setter. Frame clear/inherited main-target depth and GUI
 offscreen-layer boundaries remain GUI item icons §8.
 
+### 2.1 Pose material delivery, readiness and explicit winding
+
+This bounded native-only follow-up covers the ordinary pose/enqueue/consume
+handoff, not the construction or rebuilding of source resources. The exact
+five float argument positions and finite opacity admission are
+[character-card §6.1](steam-character-card-preview.md#61-exact-pose-descriptor-classification).
+They also apply when these helpers enqueue into the ordinary WORLD context.
+
+**0xee2f0/0xee990 retain the submitted four-float material RGBA unchanged**
+in both their opaque and faded records. At consumption, renderer virtual+0x98
+reaches **0xc5a20**, then **0xc6f20** with shader state at renderer+0x558.
+The setter compares the four requested floats with its cache+0x128..0x134;
+on a difference it replaces all four and uploads them to the material buffer
+referenced at shader-state+0x408, bound as **vertex constant buffer3**.
+This operation does not combine material alpha with pixel Opacity, premultiply
+RGB, or recolor the source voxel/vertex RGB. Thus pose tint remains a separate
+shader material, alongside the source's
+[packed vertex input](steam-voxel-vertex-inputs.md#1-shared-packed-vertex-input).
+Its actual shader composition and the distinct White/Glow/pixel-alpha stages
+remain [shader-output §2](steam-world-shader-output.md#2-white-glow-and-pixel-opacity-are-distinct-stages).
+
+In **0xe6e60**, each resource group must pass **0x16eba0** before its
+instance list is consumed. A rejected group therefore submits none of its
+per-instance material/effect values. For an admitted instance, the exact
+color-control order at **0xe7332–0xe7381** is material, Shininess, Glow,
+Opacity, White, DepthOffset; the opposite opaque branch repeats it.
+Both colored branches of **0xe7980** use that same order. Its depth-only
+branches submit matrix, optional screen projection and DepthOffset while
+retaining the other color constants. In contrast to the opaque group test,
+the faded iterations submit their values **before 0x16ec60** performs its
+resource-buffer readiness check. A faded entry that produces no resource
+draw can consequently still leave its submitted shader constants current.
+
+These are per-instance submissions, not requests to initialize unspecified
+effects from defaults. Ordinary mode2 supplies WORLD matrices and the
+established point-table selection, while retaining the installed frame
+view/projection and frame lighting/sky/fog inputs. The optional per-instance
+screen projection belongs to mode bit0, which is clear for this ordinary
+WORLD mode. Equal cached material values may avoid a redundant buffer upload;
+that does not change which material is requested for the instance.
+
+Normal versus opposite winding is the producer's explicit choice of
+**0xee2f0 versus 0xee990**, independently of the opacity classification.
+The helpers do not inspect matrix determinant, material, sprite flags or
+readiness to choose or change that family. The reached pose bridges use the
+opposite helper for the right hand and right foot; see
+[pose items §9](creature-pose-items.md#9-draw-calls). Context selection,
+family lists and conditional state/pass order remain
+[pass-family §§3–4](steam-retained-item-and-map-pass-family.md#3-queue-context-versus-winding-family-versus-opacity).
+This does not establish a rule for other source-resource producers or an
+automatic mirroring policy for unrelated callers.
+
 ## 3. Water controls and retained values
 
 **0xe85e0** shares the ordinary WORLD **vertex shader**, input layout and

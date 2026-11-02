@@ -80,7 +80,7 @@ class ExtractedWorld {
     }
     // Opaque and water meshes in local world coordinates (thread-safe).
     bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,
-              worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr);
+              worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr, std::vector<TerrainMeshBand> *terrainBands = nullptr);
     std::shared_ptr<const steampoints::ZoneSources> lightSources(int zx, int zy, const worldgen::MeshLightVolume &);
     std::vector<steampoints::ZoneKey> loadedLightZones() const;
     // Independent mesh-prepass bounds in absolute native fixed coordinates.

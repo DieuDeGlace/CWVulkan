@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include "SteamVoxel.h"
 #include <cstdint>
+#include <bit>
 #include <optional>
 #include <vector>
 
@@ -31,8 +32,20 @@ struct Mesh {
     std::vector<uint32_t> indices;
     glm::vec3 min{1e30f}, max{-1e30f};
     std::optional<glm::vec3> nativeCentre; // full sprite dimensions in this mesh's local coordinates
+    std::optional<glm::ivec3> localOrigin; // subtract from integer source corners before float conversion
     bool empty() const { return indices.empty(); }
 };
+
+struct TerrainMeshBand {
+    int32_t base = 0;
+    Mesh opaque, lava;
+};
+
+// The grid starts at the prepass's lowest exposed block, with signed truncation.
+inline int32_t terrainBandBase(int32_t z, int32_t lowest) {
+    const int32_t delta = std::bit_cast<int32_t>(uint32_t(z) - uint32_t(lowest));
+    return std::bit_cast<int32_t>(uint32_t(lowest) + uint32_t(delta / 250) * 250u);
+}
 
 struct VoxelColor {
     uint8_t r, g, b, flags;
@@ -76,42 +89,50 @@ inline void appendFaceIndices(Mesh &mesh, uint32_t base, const CornerShade (&cor
 // fourth byte (ambient occlusion or baked light; higher is brighter): `corner` indexes
 // FACE_CORNERS[face]. Vertices are `offset + p * scale`.
 template <class Solid, class Color, class Shade>
-void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade &&shade, Mesh &output,
-               float scale = 1, glm::vec3 offset = glm::vec3(0), VoxelLayout layout = VoxelLayout::Classic,
-               const MeshSelector &select = {}) {
-    for (int z = lo.z; z < hi.z; z++)
-        for (int y = lo.y; y < hi.y; y++)
-            for (int x = lo.x; x < hi.x; x++) {
-                if (!solid(x, y, z))
-                    continue;
-                Mesh &mesh = select ? select(x, y, z) : output;
-                VoxelColor c{};
-                bool haveColor = false;
-                for (int face = 0; face < 6; face++) {
-                    const int f = layout == VoxelLayout::Classic ? face : steamvoxel::FACE_ORDER[face];
-                    const int *n = FACE_NORMALS[f];
-                    if (solid(x + n[0], y + n[1], z + n[2]))
-                        continue;
-                    if (!haveColor) {
-                        c = color(x, y, z);
-                        haveColor = true;
-                    }
-                    CornerShade corners[4];
-                    for (int k = 0; k < 4; k++)
-                        corners[k] = shade(x, y, z, f, k, c);
-                    uint32_t base = (uint32_t)mesh.vertices.size();
-                    for (int k = 0; k < 4; k++) {
-                        const int *corner = layout == VoxelLayout::Classic ? FACE_CORNERS[f][k] : steamvoxel::CORNERS[f][k];
-                        glm::vec3 p = offset + glm::vec3(x + corner[0], y + corner[1],
-                                                         z + corner[2]) * scale;
-                        const CornerShade &s = corners[k];
-                        mesh.vertices.push_back({p.x, p.y, p.z, s.r, s.g, s.b, s.a, (uint8_t)f, c.flags, 0, 0});
-                        mesh.min = glm::min(mesh.min, p);
-                        mesh.max = glm::max(mesh.max, p);
-                    }
-                    appendFaceIndices(mesh, base, corners, layout);
-                }
+void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade &&shade, Mesh &output, float scale = 1,
+               glm::vec3 offset = glm::vec3(0), VoxelLayout layout = VoxelLayout::Classic, const MeshSelector &select = {}) {
+    const auto emit = [&](int x, int y, int z) {
+        if (!solid(x, y, z))
+            return;
+        Mesh &mesh = select ? select(x, y, z) : output;
+        VoxelColor c{};
+        bool haveColor = false;
+        for (int face = 0; face < 6; face++) {
+            const int f = layout == VoxelLayout::Classic ? face : steamvoxel::FACE_ORDER[face];
+            const int *n = FACE_NORMALS[f];
+            if (solid(x + n[0], y + n[1], z + n[2]))
+                continue;
+            if (!haveColor) {
+                c = color(x, y, z);
+                haveColor = true;
             }
+            CornerShade corners[4];
+            for (int k = 0; k < 4; k++)
+                corners[k] = shade(x, y, z, f, k, c);
+            uint32_t base = (uint32_t)mesh.vertices.size();
+            for (int k = 0; k < 4; k++) {
+                const int *corner = layout == VoxelLayout::Classic ? FACE_CORNERS[f][k] : steamvoxel::CORNERS[f][k];
+                const glm::ivec3 source(x + corner[0], y + corner[1], z + corner[2]);
+                const glm::vec3 p = mesh.localOrigin ? glm::vec3(source - *mesh.localOrigin) * scale : offset + glm::vec3(source) * scale;
+                const CornerShade &s = corners[k];
+                mesh.vertices.push_back({p.x, p.y, p.z, s.r, s.g, s.b, s.a, (uint8_t)f, c.flags, 0, 0});
+                mesh.min = glm::min(mesh.min, p);
+                mesh.max = glm::max(mesh.max, p);
+            }
+            appendFaceIndices(mesh, base, corners, layout);
+        }
+    };
+    if (layout == VoxelLayout::SteamTerrain) {
+        for (int x = lo.x; x < hi.x; ++x)
+            for (int y = lo.y; y < hi.y; ++y)
+                for (int z = lo.z; z < hi.z; ++z)
+                    emit(x, y, z);
+    } else {
+        for (int z = lo.z; z < hi.z; ++z)
+            for (int y = lo.y; y < hi.y; ++y)
+                for (int x = lo.x; x < hi.x; ++x)
+                    emit(x, y, z);
+    }
 }
 
 // meshFaces with the classic per-corner ambient occlusion: each corner looks at the two

@@ -667,3 +667,30 @@ The full CPU/owner suite and55 shader,2 camera,24 GUI,6 map,shared-water and Alp
 checks pass. Terrain bands and static/environment placement still require integration;
 the independent band's full supplement has been read without importing native code.
 No owner model, terrain, record or capture bytes enter source or runtime packages.
+
+## Local ordinary terrain bands, 2026-11-01
+
+The implementer read steam-terrain-mesh-bands.md in full and its GPU-coordinate link,
+the existing bounds/vertex contracts and engine sources only. The native-only author
+established the relative anchor, signed division, source-block ownership, corner order,
+empty-band omission and reached category order without implementation or capture access.
+Terrain now selects a band from the retained lowest exposed block and subtracts its
+integer origin before converting corners to floats. Steam terrain visits source XYZ
+in the specified order; other mesh families retain their own traversal. The renderer
+submits fixed zone/band anchors and uses the established native zone gate. Backend
+opaque/lava resources remain engine-owned; their local geometry and category order
+follow the independent contract. Zone remesh, unload and destruction retire those resources.
+
+Synthetic CWZ fixtures verify negative/boundary arithmetic, local top250 ownership,
+sparse band bases37/287/787, physical colored-corner and face-count agreement with the
+aggregate path, and unchanged adaptive triangle cost. A beyond2^24 source-corner case
+verifies integer-before-float packing, and a Vulkan fixed-anchor case preserves the
+quarter-block reference. Full CPU/owner checks and56 shader,2 camera,24 GUI,6 map,
+shared-water and Alpha-scenery image checks pass. Water and other geometry families,
+concurrent inconsistent inputs and complete original visual acceptance retain their
+explicit scope limits. No owner assets or records are packaged.
+
+The same independent author also clarified WORLD material-buffer delivery/readiness
+and historical pose-control names. Those stable addenda have been read; they are a
+separate implementation contract and do not establish that all posed material/effect
+bindings are already integrated.
