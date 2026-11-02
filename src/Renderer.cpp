@@ -1309,6 +1309,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                                                         : glm::normalize(camera.target - camera.eye);
     const float gradientShift = alpha::fogGradientTranslation(glm::degrees(std::acos(std::clamp(forward.z, -1.f, 1.f))));
     u.alphaView = glm::vec4(gradientShift, 2.f / std::max(1u, extent.width), 2.f / std::max(1u, extent.height), 0);
+    // Native WORLD callbacks retain the frame's gradient in either appearance mode.
+    // Explicit Steam/menu palette bindings below still replace their own inputs.
+    u.steamSky[5].x = gradientShift;
     // §7.1: the fog distance follows the nearest unloaded ground, smoothed over time.
     {
         float radius = sceneDistance;

@@ -1103,3 +1103,24 @@ actual renderer uploads and pixels in both world appearance styles. No coin
 artwork, original binaries, extracted files or captures enter either package.
 These checks do not establish complete original-game visual parity or general
 resource grouping across all queued overlay producers.
+
+## Compass and HUD descriptor typing, 2026-11-02
+
+The independent native-only author supplied steam-hud-model-overlays.md1–6,
+including a separately traced normal-caller flag0x20 addendum. The implementer
+fully read both the stable contract and that addendum, plus the WORLD ripple
+prose, before using them with engine sources only. The author inspected no
+engine, tests, exporter, owner data/captures, SDK/reconstruction implementation
+or running game; it is held again. Its descriptor-to-setter trace corrects the
+older ambiguous money labels: coin Glow0/Shininess1, compass Glow1/Shininess0.
+The shared WORLD path therefore retains the positive-Shininess frame-gradient
+input under Alpha appearance too. Before that binding correction, the focused
+coin test produced173 under Alpha versus the independent90.3 reference; the
+expected pixel was not retuned to the incorrect binding.
+
+Compass geometry comes only from the owner's file at runtime. Synthetic solid
+CUBs, negative/signed-zero headings, physical placement and existing shader/depth
+checks provide bounded tests without distributing artwork. Context/special
+producer prose is available but its remaining implementation/upstream selection
+is not claimed complete. No original code, instructions, binaries or owner assets
+were copied into source or runtime packages.

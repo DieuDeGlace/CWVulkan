@@ -1,5 +1,9 @@
 # HUD money display (0xe2e00, 0xee5a0, 0xf9ac0)
 
+Typed effect correction: [HUD model overlays §2](steam-hud-model-overlays.md#2-exact-effect-argument-mapping-older-coin-labels-superseded)
+supersedes this older note's ambiguous effect labels. The coin has Glow0 and
+Shininess1; the compass has Glow1 and Shininess0. Placement/scale facts below remain.
+
 Behavioural specification of the money shown at the top left of Steam Cube World's HUD: a
 small turning gold coin and the amount beside it. Written from the decompiled executable,
 its assembly and the binary's constants. Routines are cited by RVA (image base

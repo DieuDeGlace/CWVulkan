@@ -345,10 +345,27 @@ and the cache invalidation/startup/caller supplements.
 
 The owner's `sprites/gold-coin.cub` shares the logo's queued WORLD model path.
 Its black shadow precedes the white coin, offset five GUI units right/down with
-shader DepthOffset−0.5. Both have Glow1 and retain WORLD pixel grading and the
+shader DepthOffset−0.5. Both have Glow0/Shininess1 and retain WORLD pixel grading and the
 frame's sky/fog inputs. The50-degree camera uses the configured zone-window far
 plane; its own NDC depth translation is separate from each shader offset.
-The world clock controls the10-second turn. Missing owner content stays absent;
+The canonical float simulation clock controls the10-second turn. Missing owner content stays absent;
 no replacement artwork is generated. All queued coin requests precede Plasma
 and its layer/cache boundaries. Original-game visual comparison and the remaining
-compass/context-model paths are tracked separately from this bounded conversion.
+context/special-model producers are tracked separately from this bounded conversion.
+
+## HUD compass and typed effects
+
+The owner-backed compass uses `sprites/compass2.cub`, its full allocation and the
+ordinary50-degree screen-model lens. Its center is(W−60g,20g), tilt−120 degrees,
+and final Euler angle is the sign-bit-negated displayed float yaw. Its scale is
+(g×0.003)×(1024/H). It has Glow1/Shininess0 and no extra shadow/spirit pass.
+The native caller's scene mask suppresses these HUD models under F4 and the
+specified title/character front layers; it adds no inventory/map visibility gate.
+
+The independently resolved descriptor mapping supersedes the older money note's
+ambiguous “glow1” caption: the coin actually has Glow0/Shininess1. Its ordinary
+WORLD ripple uses the inherited camera gradient in either appearance mode.
+No art is generated for missing resources. See the
+[HUD overlay contract](specs/steam-hud-model-overlays.md) sections1–3/6 and
+[WORLD ripple](specs/steam-world-shader-output.md#3-pixel-base-color-and-the-optional-shininess-ripple)
+for the bounded facts.

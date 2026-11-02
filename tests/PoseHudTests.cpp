@@ -2,6 +2,7 @@
 // (creature-pose-items.md §9.1) and the HUD's turning coin (hud-money.md), and the
 // `posestateoracle` command that holds the state rule against the game's pose recordings.
 #include "HudCoin.h"
+#include "HudCompass.h"
 #include "NativePose.h"
 #include "worldgen/Residents.h"
 
@@ -184,9 +185,10 @@ void hudCoin() {
     POSE_CHECK(hudcoin::turnDegrees(0) == 0.f);
     POSE_CHECK(std::fabs(hudcoin::turnDegrees(2500) - 90.f) < 1e-4f);
     POSE_CHECK(hudcoin::turnDegrees(10000) == 0.f);
-    POSE_CHECK(std::fabs(hudcoin::turnDegrees(12500.9) - 90.f) < 1e-4f);
-    POSE_CHECK(std::fabs(hudcoin::turnDegrees(-2500.9) + 90.f) < 1e-4f);
-    POSE_CHECK(std::fabs(hudcoin::turnDegrees(4294967296.0) + 131.328f) < 1e-4f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(12500.9f) - 90.f) < 1e-4f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(-2500.9f) + 90.f) < 1e-4f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(4294967296.f) + 131.328f) < 1e-4f);
+    POSE_CHECK(std::fabs(hudcoin::turnDegrees(float(16777215.75)) - 259.776f) < 1e-4f); // native float clock boundary
     const float W = 1280, H = 1024, g = 1.25f;
     const glm::ivec3 allocation(8, 8, 2);
     const auto requests = hudcoin::coinRequests(17, allocation, 960, g, H, 0);
@@ -211,7 +213,7 @@ void hudCoin() {
     if (draws.size() != 2)
         return;
     for (const auto &draw : draws) {
-        POSE_CHECK(draw.state.glow == 1 && draw.state.white == 0 && draw.state.shininess == 0 && !draw.state.whiteSky);
+        POSE_CHECK(draw.state.glow == 0 && draw.state.white == 0 && draw.state.shininess == 1 && !draw.state.whiteSky);
         POSE_CHECK(draw.state.front == glm::vec4(.7f, .7f, .2f, 1) && draw.opacity == 1);
     }
     auto pixel = [&](const guiitem::Draw &draw, glm::vec3 voxel) {
@@ -230,6 +232,21 @@ void hudCoin() {
     const auto smallerWindow = hudcoin::coinRequests(17, allocation, 1280, g, H * .5f, 2500);
     POSE_CHECK(smallerWindow[1].at.size == coin.at.size * 2 && smallerWindow[1].farPlane == 1280);
     POSE_CHECK(smallerWindow[1].at.euler.y == 90);
+    const auto compass = hudcompass::request(19, {29, 29, 15}, {128, 128}, 1280, 1, 725.25f);
+    POSE_CHECK(compass.has_value());
+    if (compass) {
+        POSE_CHECK(compass->at.screen == glm::vec2(68, 20) && compass->at.euler == glm::vec3(-120, 0, -725.25f));
+        POSE_CHECK(std::fabs(compass->at.size - .024f) < 1e-7f && compass->farPlane == 1280);
+        POSE_CHECK(compass->state && compass->state->glow == 1 && compass->state->shininess == 0);
+        POSE_CHECK(compass->material == glm::vec4(1) && compass->opacity == 1 && compass->depthOffset == 0);
+        POSE_CHECK(compass->allocation == glm::ivec3(29, 29, 15) && compass->beforeVertex == 0);
+    }
+    const auto positiveZero = hudcompass::request(19, {1, 1, 1}, {128, 128}, 960, 1, 0.f);
+    const auto negativeZero = hudcompass::request(19, {1, 1, 1}, {128, 128}, 960, 1, -0.f);
+    POSE_CHECK(positiveZero && std::signbit(positiveZero->at.euler.z));
+    POSE_CHECK(negativeZero && !std::signbit(negativeZero->at.euler.z));
+    POSE_CHECK(!hudcompass::request(0, {1, 1, 1}, {128, 128}, 960, 1, 0));
+    POSE_CHECK(!hudcompass::request(19, {}, {128, 128}, 960, 1, 0));
 }
 
 // The creature bytes of each record of a pose recording (creature-pose.md §11): a record is

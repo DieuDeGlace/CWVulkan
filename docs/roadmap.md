@@ -54,7 +54,7 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.83 local GUI image cases (68
+  targets; the owner button shine is enabled.89 local GUI image cases (74
   asset-free,15 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
@@ -108,12 +108,18 @@ individual feature documents.
   sound-table import and native GUI/font loading from owner data. The owner-backed
   coin and its black shadow now use the queued WORLD shader, full CUB header
   centering,50-degree lens and configured zone-window far plane. World-clock
-  rotation, Glow1, separate shader depth offsets and placement are preserved;
+  rotation, resolved Glow0/Shininess1, separate shader depth offsets and placement
+  are preserved;
   CPU-baked colors and per-turn mesh variants are removed. Mesh handles are
   scoped to the play session rather than retained across renderer recreation.
-  Ten asset-free image
-  cases cover both appearance styles, source-mesh admission, the offset shadow,
-  Plasma ordering and retained scene depth. Wider native HUD comparisons remain.
+  Ten asset-free image cases cover both appearance styles, source-mesh admission,
+  the offset shadow,
+  Plasma ordering and retained scene depth. The adjacent compass now loads the
+  owner's compass2 CUB, uses displayed float yaw without wrapping, native physical
+  placement/scale and Glow1/Shininess0. Six additional image cases cover both styles.
+  A positive-Shininess coin case also caught/fixed the missing common camera gradient
+  in Alpha-mode native WORLD callbacks. Coin rotation now uses the canonical
+  float simulation clock shared by Ring/map producers. Wider native HUD comparisons remain.
 - [x] Water surface/mesh/depth changes and render-only lilies; HP initialization
   capped at the native maximum; statue slab compared with exported blocks.
   See [water progress](water-progress.md) for the remaining rendering limits.
@@ -609,6 +615,12 @@ individual feature documents.
   Options/Controls. Focused arithmetic checks cover those bounded rules. Broader
   early input/camera/GUI phase fidelity and native interaction/visual comparisons
   remain release gates.
+- [ ] Context and special-item HUD model producers. The independent
+  [HUD overlay contract](specs/steam-hud-model-overlays.md) now specifies the
+  renderer's original context item, physical tab1 slots, region/subtype filters,
+  full-allocation sizing and typed effects. The upstream context-record selection
+  lifetime remains outside that bounded contract; its live binding and these
+  remaining producers still need implementation and native comparison.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
   remaining panel opacity and object/effect visuals.
   Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs

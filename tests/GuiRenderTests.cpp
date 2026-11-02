@@ -1,6 +1,7 @@
 // Actual Vulkan integration: synthetic geometry and optional owner-atlas HUD emission.
 #include "Renderer.h"
 #include "HudCoin.h"
+#include "HudCompass.h"
 #include "Frontend.h"
 #include "ChatLine.h"
 #include "Assets.h"
@@ -226,12 +227,31 @@ int guiRenderTests() {
         settings.style = style;
         renderer.settings = settings;
         const std::string prefix = style == RenderStyle::Steam ? "steam-coin-" : "alpha-coin-";
-        check((prefix + "world-colour").c_str(), background, overBackground, {}, {45, 52}, {128, 128, 128});
+        // WORLD output §3: screen(-.2890625,.1796875), normalXY(0,-.5), frame
+        // gradient−1/3 gives ripple phase−3.9817708; grey128 grades to90.3.
+        check((prefix + "world-colour").c_str(), background, overBackground, {}, {45, 52}, {90, 90, 90});
         check((prefix + "offset-shadow").c_str(), background, overBackground, {}, {64, 68}, {0, 0, 0});
         check((prefix + "shadow-only").c_str(), background, {overBackground[0]}, {}, {50, 57}, {0, 0, 0});
         check((prefix + "before-plasma").c_str(), background, coins, {}, {45, 52}, {0, 0, 255});
         check((prefix + "retained-scene-depth").c_str(), {}, coins, {preceding}, {45, 52}, {255, 0, 0});
     }
+    CubModel compassCub;
+    compassCub.sx = compassCub.sy = compassCub.sz = 1;
+    compassCub.rgb = {128, 128, 128};
+    const auto compass = hudcompass::request(renderer.upload(guiitem::voxelMesh(compassCub)), {1, 1, 1}, {128, 128}, 960, 1, 0);
+    if (compass) {
+        auto visible = *compass;
+        visible.beforeVertex = background.size();
+        for (auto style : {RenderStyle::Steam, RenderStyle::Alpha}) {
+            settings.style = style;
+            renderer.settings = settings;
+            const std::string prefix = style == RenderStyle::Steam ? "steam-compass-" : "alpha-compass-";
+            check((prefix + "world-colour").c_str(), background, {visible}, {}, {68, 20}, {128, 128, 128});
+            check((prefix + "before-plasma").c_str(), background, {*compass}, {}, {68, 20}, {0, 0, 255});
+            check((prefix + "retained-scene-depth").c_str(), {}, {*compass}, {preceding}, {68, 20}, {255, 0, 0});
+        }
+    } else
+        ++failures;
     guiitem::Request raw;
     raw.kind = guiitem::Request::Kind::RawEdit;
     raw.beforeVertex = 6;

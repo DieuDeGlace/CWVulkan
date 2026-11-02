@@ -223,6 +223,7 @@ add_library(engine STATIC
     src/WorldMap.cpp
     src/MapLook.cpp
     src/HudCoin.cpp
+    src/HudCompass.cpp
     src/GuiItem.cpp
     src/PyroCreatures.cpp
     src/OverworldEvents.cpp

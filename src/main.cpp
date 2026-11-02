@@ -73,6 +73,7 @@
 #include "ItemSelector.h"
 #include "Renderer.h"
 #include "HudCoin.h"
+#include "HudCompass.h"
 #include "ChatLine.h"
 #include "ChatCommands.h"
 #include "FeatText.h"
@@ -1117,6 +1118,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // The game's interface (bars, plates over monsters, damage numbers).
     Hud hud;
     hudcoin::Coin hudCoin; // GPU handles live only as long as this session's renderer
+    hudcompass::Compass hudCompass;
     bool hudReady = false;
     {
         std::string why;
@@ -8105,7 +8107,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             else {
                 std::vector<guiitem::Request> items;
                 if (hud.hasInterface()) {
-                    hudCoin.queue(renderer, assets, items, float(renderer.screenSize().height), hud.interfaceScale(), worldClockMs);
+                    hudCompass.queue(renderer, assets, items, hud.interfaceScale(), camera.displayedYawDegrees.value_or(0.f));
+                    const float hudWorldMs = spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs);
+                    hudCoin.queue(renderer, assets, items, float(renderer.screenSize().height), hud.interfaceScale(), hudWorldMs);
                 }
                 auto layers = hud.clipDraws();
                 for (auto &layer : layers)

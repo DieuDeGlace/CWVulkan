@@ -7,12 +7,12 @@
 #include <string>
 
 namespace hudcoin {
-float turnDegrees(double worldClockMs) {
+float turnDegrees(float worldClockMs) {
     return float(worldgen::trunc32(worldClockMs) % 10000) * .0001f * 360.f;
 }
 
 std::vector<guiitem::Request> coinRequests(uint32_t mesh, glm::ivec3 allocation, float farPlane, float guiScale, float height,
-                                           double worldClockMs) {
+                                           float worldClockMs) {
     if (!mesh || height <= 0 || allocation.x <= 0 || allocation.y <= 0 || allocation.z <= 0)
         return {};
     guiitem::Request coin;
@@ -24,7 +24,7 @@ std::vector<guiitem::Request> coinRequests(uint32_t mesh, glm::ivec3 allocation,
     coin.at.size = (guiScale * .004f) * (1024.f / height);
     coin.at.screen = glm::vec2(45, 52) * guiScale;
     coin.state = guiitem::overlayState();
-    coin.state->glow = 1;
+    coin.state->shininess = 1;
     auto shadow = coin;
     shadow.at.screen = glm::vec2(50, 57) * guiScale;
     shadow.material = {0, 0, 0, 1};
@@ -33,7 +33,7 @@ std::vector<guiitem::Request> coinRequests(uint32_t mesh, glm::ivec3 allocation,
 }
 
 void Coin::queue(Renderer &renderer, const Assets &assets, std::vector<guiitem::Request> &out, float height, float guiScale,
-                 double worldClockMs) {
+                 float worldClockMs) {
     if (!tried) {
         tried = true;
         CubModel cub;
