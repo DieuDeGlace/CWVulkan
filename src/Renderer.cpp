@@ -1168,6 +1168,7 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
                 range.player = *player;
         range.visible = [&](const scenevisibility::Bounds &absolute, float radius) { return next.visibility.box(absolute, radius); };
         nativeRangeActive = steamRange.update(range);
+        next.flaggedSky = glm::vec4(steamRange.flaggedColour(), 0);
         if (nativeRangeActive)
             next.ranges = steamRange.value();
     }
@@ -1403,32 +1404,33 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         nativeDaylight = steamlighting::collectorDaylight(lighting.timeMs, environment.region.forest);
         if (elapsedMs < 0)
             steamLights.reset();
-        steamLights.update(steamlighting::targets(lighting.timeMs, environment), steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
+        steamLights.update(steamlighting::targets(lighting.timeMs, environment),
+                           steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
         // §B.3, eased as §B.4.
-        steamsky::Palette target = steamsky::palette(alpha::paletteDaylight(dayMs), here.region, underwater);
+        steamsky::Palette target = steamsky::palette(alpha::paletteDaylight(dayMs), environment.region, underwater,
+                                                     {lighting.farFlight, lighting.effect13RemainingMs});
         if (sharedWater && underwater) {
             const auto submerged = waterlook::submerged(S);
-            target.sky1 = waterlook::steamShaderColour(submerged.horizon);
-            target.sky2 = waterlook::steamShaderColour(submerged.zenith);
-            target.fog = waterlook::steamShaderColour(submerged.fog);
-            target.sun = glm::vec3(0);
+            target.sky1 = glm::vec4(waterlook::steamShaderColour(submerged.horizon), 1);
+            target.sky2 = glm::vec4(waterlook::steamShaderColour(submerged.zenith), 1);
+            target.fog = glm::vec4(waterlook::steamShaderColour(submerged.fog), 1);
+            target.sun = glm::vec4(0);
         }
-        if (elapsedMs < 0)
-            steamPalette.reset();
-        steamPalette.update(target, std::max(elapsedMs, 0.0));
+        steamPalette.update(target, std::max(elapsedMs, 0.0), sceneFrame ? sceneFrame->flaggedSky : glm::vec4(0));
         // The shared submerged look has the same palette in either lighting
         // mode; keep native sky easing for the native water option and dry views.
         const steamsky::Palette &palette = sharedWater && underwater ? target : steamPalette.value();
         // §B.5: the sun's glow (from straight below while under water).
         const glm::vec3 sun = underwater ? glm::vec3(0, 0, -1) : steamsky::sunDirection(dayMs);
-        u.steamSky[0] = glm::vec4(palette.sky1, 1);
-        u.steamSky[1] = glm::vec4(palette.sky2, 1);
-        u.steamSky[2] = glm::vec4(palette.fog, 1);
-        u.steamSky[3] = glm::vec4(palette.sun, 1);
+        u.steamSky[0] = palette.sky1;
+        u.steamSky[1] = palette.sky2;
+        u.steamSky[2] = palette.fog;
+        u.steamSky[3] = palette.sun;
         u.steamSky[4] = steamsky::sunPosition(sun, view, proj, aspect, gradientShift);
-        if (sharedWater && underwater) u.steamSky[4].w = 0;
+        if (sharedWater && underwater)
+            u.steamSky[4].w = 0;
         u.steamSky[5] = glm::vec4(gradientShift, 0, underwater ? 1 : 0, 1);
-        mapFog = palette.fog;
+        mapFog = glm::vec3(palette.fog);
         steamStarValue = steamsky::starValue(dayMs, here.region.forest);
     }
     const steampoints::Point homeXY{int64_t(worldProbe.origin.x * 65536), int64_t(worldProbe.origin.y * 65536), 0};

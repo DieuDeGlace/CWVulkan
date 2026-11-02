@@ -201,24 +201,73 @@ void steamPaletteKeys() {
     SKY_CHECK(near(p.sky1, {1, .6f, 1}) && near(p.sky2, {0, .6f, 1}) && near(p.fog, {.6f, .3f, 1}));
     SKY_CHECK(near(steamsky::palette(.2f, pink, false).sky1, {1, .5f, .1f})); // dusk A's sky1 stays
 
-    // §B.4: the first frame takes the palette; then sky1 and sky2 jump, fog and sun ease.
+    // Provider RGBA: place-27's dusk-B alpha and the sun's night fade are independent.
+    pink.kind27 = .5f;
+    SKY_CHECK(near(steamsky::palette(.6f, pink, false).sky1.a, .75));
+    SKY_CHECK(near(steamsky::palette(.675f, pink, false).sky1.a, .875));
+    SKY_CHECK(near(steamsky::palette(.175f, temperate, false).sun.a, .5));
+    SKY_CHECK(steamsky::palette(0, temperate, false).sun.a == 0);
+    // Far flight changes selected keys after place modifiers; fog receives the full saved RGBA.
+    p = steamsky::palette(.6f, pink, false, {true, {}});
+    SKY_CHECK(p.sky1 == glm::vec4(0, 0, 0, 1) && p.sky2 == glm::vec4(0, 0, 0, 1));
+    SKY_CHECK(near(p.fog.a, .75) && near(p.fog, {.9f, .575f, .75f}));
+    p = steamsky::palette(.2f, pink, false, {true, {}});
+    SKY_CHECK(near(p.sky1, {1, .5f, .1f}) && near(p.fog, {1, .5f, .2f}));
+    p = steamsky::palette(0, temperate, false, {true, {}});
+    SKY_CHECK(near(p.fog, {0, .03f, .15f}) && p.fog.a == 1);
+    // Camera water replacement precedes effect13; its age uses an upper-only clamp.
+    p = steamsky::palette(.6f, pink, true, {true, 58500.f});
+    SKY_CHECK(near(p.sky1, {.45f, .5f, .5f}) && p.sky1.a == 1 && p.fog == p.sky1);
+    SKY_CHECK(p.sky2 == glm::vec4(0, 0, 0, 1) && p.sun.a == 1);
+    p = steamsky::palette(1, temperate, false, {false, 63000.f});
+    SKY_CHECK(near(p.sky1, {-.9f, .2f, 1}));
+
+    // Horizontal distance thresholds are strict and ignore altitude, in native fixed coordinates.
+    const std::array<int32_t, 2> anchor{-20, 10};
+    std::array<int64_t, 3> physical{980LL * 65536, 10LL * 65536, 9000000};
+    std::array<int64_t, 3> from{(16384LL - 20) * 65536, 10LL * 65536, -9000000};
+    SKY_CHECK(!steamsky::farFlight(0x9c, physical, anchor, from));
+    ++physical[0];
+    SKY_CHECK(!steamsky::farFlight(0x9c, physical, anchor, from));
+    ++from[0];
+    SKY_CHECK(steamsky::farFlight(0x9c, physical, anchor, from));
+    SKY_CHECK(!steamsky::farFlight(0x9d, physical, anchor, from));
+
+    // Native construction, first update and both four-component transition branches.
     steamsky::EasedPalette eased;
+    const steamsky::Palette initial = eased.value();
     const steamsky::Palette noon = steamsky::palette(1, temperate, false), night = steamsky::palette(0, temperate, false);
+    SKY_CHECK(initial.sky1 == glm::vec4(0, 0, 1, 1) && initial.sky2 == initial.sky1 && initial.fog == initial.sky1);
+    SKY_CHECK(initial.sun == glm::vec4(0));
+    eased.update(noon, 0);
+    SKY_CHECK(eased.value().sky1 == initial.sky1 && eased.value().fog == initial.fog && eased.value().sun == initial.sun);
+    const float skyStep = gamemath::blendFactor(16, .001f), fogStep = gamemath::blendFactor(16, .0005f);
+    const float sunStep = gamemath::blendFactor(16, .002f);
     eased.update(noon, 16);
-    SKY_CHECK(near(eased.value().fog, noon.fog));
-    eased.update(night, 16);
-    const float fogStep = gamemath::blendFactor(16, .0005f), sunStep = gamemath::blendFactor(16, .002f);
-    SKY_CHECK(near(eased.value().sky1, night.sky1) && near(eased.value().sky2, night.sky2));
-    SKY_CHECK(near(eased.value().fog, noon.fog + (night.fog - noon.fog) * fogStep, 1e-5f));
-    SKY_CHECK(near(eased.value().sun, noon.sun + (night.sun - noon.sun) * sunStep, 1e-5f));
-    SKY_CHECK(fogStep > 0 && fogStep < sunStep && sunStep < .1f);
-    steamsky::EasedPalette rounded;
-    rounded.update(noon, 0);
-    rounded.update(night, 9.9999999); // scene narrows this interval to float10
-    const float roundedFogStep = gamemath::blendFactor(10, .0005f);
-    const float roundedSunStep = gamemath::blendFactor(10, .002f);
-    SKY_CHECK(rounded.value().fog == (night.fog - noon.fog) * roundedFogStep + noon.fog);
-    SKY_CHECK(rounded.value().sun == (night.sun - noon.sun) * roundedSunStep + noon.sun);
+    SKY_CHECK(eased.value().sky1 == (noon.sky1 - initial.sky1) * skyStep + initial.sky1);
+    SKY_CHECK(eased.value().fog == (noon.fog - initial.fog) * fogStep + initial.fog);
+    SKY_CHECK(eased.value().sun == noon.sun * sunStep);
+    const auto before = eased.value();
+    const glm::vec4 interior(.2f, .4f, .6f, 0);
+    eased.update(noon, 16, interior);
+    SKY_CHECK(eased.value().sky1 == (interior - before.sky1) * skyStep + before.sky1);
+    SKY_CHECK(eased.value().sky2 == (interior - before.sky2) * skyStep + before.sky2);
+    SKY_CHECK(eased.value().fog == (interior - before.fog) * fogStep + before.fog);
+    SKY_CHECK(eased.value().sun == (glm::vec4(0) - before.sun) * fogStep + before.sun);
+    SKY_CHECK(eased.value().fog.a < 1 && eased.value().sky1.a < 1);
+    const auto indoors = eased.value();
+    eased.update(night, 16); // target cleared: ordinary branch resumes, retaining the previous state.
+    SKY_CHECK(eased.value().sky1 == (night.sky1 - indoors.sky1) * skyStep + indoors.sky1);
+    SKY_CHECK(eased.value().sun == (night.sun - indoors.sun) * sunStep + indoors.sun);
+    const auto unchanged = eased.value();
+    eased.update(noon, -1);
+    SKY_CHECK(eased.value().fog == unchanged.fog && eased.value().sun == unchanged.sun);
+    steamsky::EasedPalette rounded, capped, atCap;
+    rounded.update(noon, 9.9999999); // scene narrows the interval to float10 before the helper.
+    SKY_CHECK(rounded.value().fog == (noon.fog - initial.fog) * gamemath::blendFactor(10, .0005f) + initial.fog);
+    capped.update(noon, 2000);
+    atCap.update(noon, 1000);
+    SKY_CHECK(capped.value().sky1 == atCap.value().sky1 && capped.value().sun == atCap.value().sun);
 }
 
 void steamSunAndStars() {

@@ -12,17 +12,21 @@ constexpr double DAY_MS = 86400000.0;
 
 // The three sky colours at one key of the day.
 struct Key {
-    glm::vec3 sky1, sky2, fog;
+    glm::vec4 sky1, sky2, fog;
 };
-glm::vec3 lerp(glm::vec3 a, glm::vec3 b, float t) { return a * (1 - t) + b * t; }
-Key lerp(const Key &a, const Key &b, float t) { return {lerp(a.sky1, b.sky1, t), lerp(a.sky2, b.sky2, t), lerp(a.fog, b.fog, t)}; }
+glm::vec4 lerp(glm::vec4 a, glm::vec4 b, float t) {
+    return a * (1 - t) + b * t;
+}
+Key lerp(const Key &a, const Key &b, float t) {
+    return {lerp(a.sky1, b.sky1, t), lerp(a.sky2, b.sky2, t), lerp(a.fog, b.fog, t)};
+}
 
 // §B.3 key colours before the region modifiers.
-const Key DAY{{0, .6f, 1}, {0, 0, .8f}, {0, .1f, 1}};
-const Key DUSK_B{{1, .95f, .5f}, {.3f, .5f, 1}, {.7f, .6f, .3f}}; // L 0.6
-const Key DUSK_A{{1, .5f, .1f}, {.5f, .2f, .8f}, {1, .5f, .2f}};  // L 0.2
-const Key NIGHT{{0, .03f, .15f}, {0, 0, 0}, {0, .1f, .1f}};
-const glm::vec3 DAY_SUN{1.5f, 1.3f, .4f}, DUSK_SUN{1.5f, .85f, .25f};
+const Key DAY{{0, .6f, 1, 1}, {0, 0, .8f, 1}, {0, .1f, 1, 1}};
+const Key DUSK_B{{1, .95f, .5f, 1}, {.3f, .5f, 1, 1}, {.7f, .6f, .3f, 1}}; // L 0.6
+const Key DUSK_A{{1, .5f, .1f, 1}, {.5f, .2f, .8f, 1}, {1, .5f, .2f, 1}};  // L 0.2
+const Key NIGHT{{0, .03f, .15f, 1}, {0, 0, 0, 1}, {0, .1f, .1f, 1}};
+const glm::vec4 DAY_SUN{1.5f, 1.3f, .4f, 1}, DUSK_SUN{1.5f, .85f, .25f, 1};
 
 // Where the keys sit on the palette daylight L.
 constexpr float DAY_FROM = .75f, DUSK_B_AT = .6f, DUSK_A_AT = .2f;
@@ -33,12 +37,12 @@ constexpr float NIGHT_STEEPNESS = 4;
 constexpr float SEA_LEVEL_BAND = 20;            // blocks: warmth and dryness fade out below this
 constexpr float MOIST_FROM = .5f;
 constexpr float HOT_FROM = .8f, DRY_BELOW = .4f;
-constexpr float WEIGHT_FROM = .001f;             // lava, forest and kind 27 count above this
+constexpr float WEIGHT_FROM = .001f; // lava, forest and kind 27 count above this
 
-// §B.4 easing rates (the frame blend's c).
-constexpr float FOG_RATE = .0005f, SUN_RATE = .002f;
-// Long pauses are eased as one tenth of a second (the blend loops per hundredth of a ms).
-constexpr double LONGEST_EASE_MS = 100;
+// Corrected native RGBA rates: steam-sky-state-initialization.md §4.
+constexpr float SKY_RATE = .001f, FOG_RATE = .0005f, SUN_RATE = .002f;
+// Scene input caps at one second before narrowing to float.
+constexpr double LONGEST_EASE_MS = 1000;
 
 // §B.5 sun path and SunPos.
 constexpr float SUN_LEAN = -.4f;
@@ -54,7 +58,7 @@ constexpr float TILT_PER_RING = 90.f / 50;
 constexpr int DOME_UNIT = 64, DOME_INSET = 10;
 } // namespace
 
-Palette palette(float L, const Region &region, bool underwater) {
+Palette palette(float L, const Region &region, bool underwater, const Conditions &conditions) {
     Key day = DAY, duskB = DUSK_B, duskA = DUSK_A, night = NIGHT;
     float W = region.warmth, D = region.dryness;
 
@@ -67,42 +71,49 @@ Palette palette(float L, const Region &region, bool underwater) {
     // 2. Moist ground: a greener, less blue day.
     if (D > MOIST_FROM) {
         const float u = 2 * (D - MOIST_FROM);
-        day.sky1 += glm::vec3(0, 0, -.2f) * u;
-        day.sky2 += glm::vec3(0, .5f, -.3f) * u;
-        day.fog += glm::vec3(0, .5f, -.35f) * u;
+        day.sky1 += glm::vec4(0, 0, -.2f, 0) * u;
+        day.sky2 += glm::vec4(0, .5f, -.3f, 0) * u;
+        day.fog += glm::vec4(0, .5f, -.35f, 0) * u;
     }
     // 3. Hot and dry: a pale sky and a pink haze.
     if (W > HOT_FROM && D < DRY_BELOW) {
         const float k = std::min((1 - D / DRY_BELOW) * ((W - HOT_FROM) / (1 - HOT_FROM)) * 4, 1.f);
-        day.sky1 = lerp(day.sky1, {.6f, .8f, 1}, k);
-        day.sky2 = lerp(day.sky2, {.1f, .4f, 1}, k);
-        day.fog = lerp(day.fog, {.8f, .5f, .7f}, k);
+        day.sky1 = lerp(day.sky1, {.6f, .8f, 1, 1}, k);
+        day.sky2 = lerp(day.sky2, {.1f, .4f, 1, 1}, k);
+        day.fog = lerp(day.fog, {.8f, .5f, .7f, 1}, k);
     }
     // 4. Lava: red skies at every time of day (the night's upper colour stays black).
     if (region.lava > WEIGHT_FROM) {
         const float k = region.lava;
-        day = {lerp(day.sky1, {1, 0, 0}, k), lerp(day.sky2, {.4f, .2f, .2f}, k), lerp(day.fog, {.3f, 0, 0}, k)};
-        duskB = {lerp(duskB.sky1, {.8f, .1f, 0}, k), lerp(duskB.sky2, {.2f, .2f, .2f}, k), lerp(duskB.fog, {.3f, 0, 0}, k)};
-        duskA = {lerp(duskA.sky1, {.8f, .1f, 0}, k), lerp(duskA.sky2, {.2f, .2f, .2f}, k), lerp(duskA.fog, {.3f, .1f, 0}, k)};
-        night.sky1 = lerp(night.sky1, {.06f, 0, .03f}, k);
-        night.fog = lerp(night.fog, {.1f, 0, 0}, k);
+        day = {lerp(day.sky1, {1, 0, 0, 1}, k), lerp(day.sky2, {.4f, .2f, .2f, 1}, k), lerp(day.fog, {.3f, 0, 0, 1}, k)};
+        duskB = {lerp(duskB.sky1, {.8f, .1f, 0, 1}, k), lerp(duskB.sky2, {.2f, .2f, .2f, 1}, k), lerp(duskB.fog, {.3f, 0, 0, 1}, k)};
+        duskA = {lerp(duskA.sky1, {.8f, .1f, 0, 1}, k), lerp(duskA.sky2, {.2f, .2f, .2f, 1}, k), lerp(duskA.fog, {.3f, .1f, 0, 1}, k)};
+        night.sky1 = lerp(night.sky1, {.06f, 0, .03f, 1}, k);
+        night.fog = lerp(night.fog, {.1f, 0, 0, 1}, k);
     }
     // 5. Forest regions: green and purple hazes.
     if (region.forest > WEIGHT_FROM) {
         const float k = region.forest;
-        day = {lerp(day.sky1, {.2f, .6f, .4f}, k), lerp(day.sky2, {0, .1f, .2f}, k), lerp(day.fog, {.4f, .1f, .8f}, k)};
-        duskB = {lerp(duskB.sky1, {.1f, .6f, .3f}, k), lerp(duskB.sky2, {0, .05f, .1f}, k), lerp(duskB.fog, {.4f, .1f, .8f}, k)};
-        duskA = {lerp(duskA.sky1, {.3f, .1f, .4f}, k), lerp(duskA.sky2, {.2f, .2f, .2f}, k), lerp(duskA.fog, {.4f, .2f, .5f}, k)};
-        night.fog = lerp(night.fog, {.1f, .15f, .2f}, k);
+        day = {lerp(day.sky1, {.2f, .6f, .4f, 1}, k), lerp(day.sky2, {0, .1f, .2f, 1}, k), lerp(day.fog, {.4f, .1f, .8f, 1}, k)};
+        duskB = {lerp(duskB.sky1, {.1f, .6f, .3f, 1}, k), lerp(duskB.sky2, {0, .05f, .1f, 1}, k), lerp(duskB.fog, {.4f, .1f, .8f, 1}, k)};
+        duskA = {lerp(duskA.sky1, {.3f, .1f, .4f, 1}, k), lerp(duskA.sky2, {.2f, .2f, .2f, 1}, k), lerp(duskA.fog, {.4f, .2f, .5f, 1}, k)};
+        night.fog = lerp(night.fog, {.1f, .15f, .2f, 1}, k);
     }
     // 6. Places of kind 27: pink and blue skies by day and at the later dusk.
     if (region.kind27 > WEIGHT_FROM) {
         const float k = region.kind27;
-        day = {lerp(day.sky1, {1, .6f, 1}, k), lerp(day.sky2, {0, .6f, 1}, k), lerp(day.fog, {.6f, .3f, 1}, k)};
-        duskB = {lerp(duskB.sky1, {.8f, .2f, 1}, k), lerp(duskB.sky2, {0, .5f, 1}, k), lerp(duskB.fog, {.6f, .3f, 1}, k)};
-        duskA.sky2 = lerp(duskA.sky2, {.1f, .5f, .8f}, k);
+        day = {lerp(day.sky1, {1, .6f, 1, 1}, k), lerp(day.sky2, {0, .6f, 1, 1}, k), lerp(day.fog, {.6f, .3f, 1, 1}, k)};
+        duskB = {lerp(duskB.sky1, {.8f, .2f, 1, k}, k), lerp(duskB.sky2, {0, .5f, 1, 1}, k), lerp(duskB.fog, {.6f, .3f, 1, 1}, k)};
+        duskA.sky2 = lerp(duskA.sky2, {.1f, .5f, .8f, 1}, k);
     }
-    // (7. The far flight's sky is not drawn: CubeVulkan's eagle flight does not report it yet.)
+    // scene-lighting §2.8 completes the selected keys changed by far flight.
+    if (conditions.farFlight) {
+        day.fog = day.sky1;
+        duskB.fog = duskB.sky1;
+        night.fog = night.sky1;
+        day.sky1 = duskB.sky1 = night.sky1 = glm::vec4(0, 0, 0, 1);
+        day.sky2 = duskB.sky2 = glm::vec4(0, 0, 0, 1);
+    }
 
     // Interpolate over L.
     Key sky;
@@ -129,24 +140,38 @@ Palette palette(float L, const Region &region, bool underwater) {
     // Under water the whole sky takes the upper colour.
     if (underwater)
         p.sky1 = p.fog = p.sky2;
+    if (conditions.effect13RemainingMs) {
+        const float weight = std::min((60000 - *conditions.effect13RemainingMs) / 3000, 1.f);
+        p.sky1 = lerp(p.sky1, {.9f, 1, 1, 1}, weight);
+        p.sky2 = lerp(p.sky2, {0, 0, 0, 1}, weight);
+        p.fog = lerp(p.fog, {.9f, 1, 1, 1}, weight);
+    }
     return p;
 }
 
-void EasedPalette::update(const Palette &target, double elapsedMs) {
-    if (!primed) {
-        current = target;
-        primed = true;
-        return;
-    }
-    const double ms = (double)(float)std::clamp(elapsedMs, 0.0, LONGEST_EASE_MS);
-    auto ease = [&](glm::vec3 &value, glm::vec3 to, float rate) {
-        const glm::vec3 difference = to - value;
-        value = difference * gamemath::blendFactor(ms, rate) + value;
+bool farFlight(uint8_t ability, const std::array<int64_t, 3> &physical, const std::array<int32_t, 2> &anchor,
+               const std::array<int64_t, 3> &start) {
+    if (ability != 0x9c)
+        return false;
+    auto distance = [&](const std::array<int64_t, 3> &point) {
+        const double x = double(gamemath::subtractFixed(point[0], int64_t(anchor[0]) * 65536)) * (1.0 / 65536);
+        const double y = double(gamemath::subtractFixed(point[1], int64_t(anchor[1]) * 65536)) * (1.0 / 65536);
+        return std::sqrt(x * x + y * y);
     };
-    current.sky1 = target.sky1;
-    current.sky2 = target.sky2;
-    ease(current.fog, target.fog, FOG_RATE);
-    ease(current.sun, target.sun, SUN_RATE);
+    return distance(physical) > 1000 && distance(start) > 16384;
+}
+
+void EasedPalette::update(const Palette &target, double elapsedMs, glm::vec4 flaggedTarget) {
+    const double ms = (double)(float)std::min(elapsedMs, LONGEST_EASE_MS);
+    const float skyStep = gamemath::blendFactor(ms, SKY_RATE);
+    const float fogStep = gamemath::blendFactor(ms, FOG_RATE);
+    auto ease = [](glm::vec4 &value, glm::vec4 to, float step) { value = (to - value) * step + value; };
+    // Component comparisons also admit unordered inputs, as the native zero test does.
+    const bool flagged = flaggedTarget != glm::vec4(0);
+    ease(current.sky1, flagged ? flaggedTarget : target.sky1, skyStep);
+    ease(current.sky2, flagged ? flaggedTarget : target.sky2, skyStep);
+    ease(current.fog, flagged ? flaggedTarget : target.fog, fogStep);
+    ease(current.sun, flagged ? glm::vec4(0) : target.sun, flagged ? fogStep : gamemath::blendFactor(ms, SUN_RATE));
 }
 
 glm::vec3 sunDirection(double timeOfDayMs) {

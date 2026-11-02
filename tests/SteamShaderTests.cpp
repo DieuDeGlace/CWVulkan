@@ -482,11 +482,22 @@ int steamShaderTests() {
     probe.sceneZone = [&](int64_t, int64_t) { return std::optional<scenevisibility::Bounds>(pendingZone); };
     renderer.setWorldProbe(probe);
     DrawItem pendingDraw = emote;
-    pendingDraw.nativeActor.reset(); pendingDraw.nativeZone = oldZone;
-    checkPoints("pending-cache-original-visible", {pendingDraw}, {82,214,60});
-    if (rangeEmpty) {
-        pendingZone.minimum[2] += 1000*65536; pendingZone.maximum[2] += 1000*65536; pendingZone.center[2] += 1000*65536;
-        checkPoints("pending-cache-new-bounds-old-geometry", {pendingDraw}, *rangeEmpty);
+    pendingDraw.nativeActor.reset();
+    pendingDraw.nativeZone = oldZone;
+    // A later one-second range frame also advanced the retained sky palette.
+    // Compare rejected geometry with an empty frame at this same sky state.
+    const auto pendingEmptyPath = root / "pending-empty.png";
+    renderer.capture(pendingEmptyPath.string());
+    renderer.frame(camera, lighting, {0, 0, 0}, 0, {}, {});
+    const auto pendingEmpty = centre(pendingEmptyPath);
+    if (!pendingEmpty)
+        ++failures;
+    checkPoints("pending-cache-original-visible", {pendingDraw}, {82, 214, 60});
+    if (pendingEmpty) {
+        pendingZone.minimum[2] += 1000 * 65536;
+        pendingZone.maximum[2] += 1000 * 65536;
+        pendingZone.center[2] += 1000 * 65536;
+        checkPoints("pending-cache-new-bounds-old-geometry", {pendingDraw}, *pendingEmpty);
         pendingZone = *oldZone;
         checkPoints("pending-cache-committed-bounds", {pendingDraw}, {82, 214, 60});
     }

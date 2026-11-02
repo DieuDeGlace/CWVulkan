@@ -67,13 +67,15 @@ std::optional<float> candidate(const Frame &frame) {
     return std::max(std::sqrt(bound) - 44.8f, .001f);
 }
 bool State::update(const Frame &frame) {
+    const auto &player = frame.player;
+    // The sky target is valid independently of an older mesh lacking native cost metadata.
+    colour = (player.blockFlags & 0x22) == 0x22 ? groundColour(player.physical) / 255.f : glm::vec3(0);
     const auto distance = candidate(frame);
-    if (!distance) return false;
+    if (!distance)
+        return false;
     // The scene boundary narrows the capped wall interval to float, then the
     // native integration helper receives that rounded value as double.
     const double ms = (double)(float)std::min(frame.elapsedMs, 1000.0);
-    const auto &player = frame.player;
-    colour = (player.blockFlags & 0x22) == 0x22 ? groundColour(player.physical) : glm::vec3(0);
     const bool flagged = colour.r != 0 || colour.g != 0 || colour.b != 0;
     const float current = ranges.scene;
     float target = *distance, rate = .0005f;
@@ -83,13 +85,13 @@ bool State::update(const Frame &frame) {
         rate = .005f;
     } else if ((!flagged && !player.effect13) || target <= 256) {
         snap = target <= current;
-    } else target = 256;
-    ranges.scene = snap ? target : current + (target-current) * gamemath::blendFactor(ms,rate);
-    opacity = opacity + (1.f-opacity) * gamemath::blendFactor(ms,.05f);
+    } else
+        target = 256;
+    ranges.scene = snap ? target : current + (target - current) * gamemath::blendFactor(ms, rate);
+    opacity = opacity + (1.f - opacity) * gamemath::blendFactor(ms, .05f);
     const float width = zoneWidth(frame.zoneRadius);
-    ranges.models = std::min(std::min(width*.2f,ranges.scene),200.f);
-    ranges.abilities = std::min(std::min(width*.5f,ranges.scene),256.f);
-    colour /= 255.f;
+    ranges.models = std::min(std::min(width * .2f, ranges.scene), 200.f);
+    ranges.abilities = std::min(std::min(width * .5f, ranges.scene), 256.f);
     return true;
 }
 } // namespace scenerange

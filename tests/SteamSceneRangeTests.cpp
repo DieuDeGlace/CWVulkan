@@ -192,7 +192,16 @@ int steamSceneRangeTests() {
     ground.update(frame);
     check(ground.value().scene == flagged.value().scene && ground.flaggedColour() == groundColour({}) / 255.f,
           "both block flag bits and nonzero native colour select the same exceptional range branch");
-    check(groundColour({-65535,-65535,0}) == groundColour({}), "flag colour truncates negative physical XY toward zero");
+    check(groundColour({-65535, -65535, 0}) == groundColour({}), "flag colour truncates negative physical XY toward zero");
+    Frame metadataFrame = frame;
+    metadataFrame.zone = {};
+    State fallback = ground;
+    const float retained = fallback.value().scene;
+    check(!fallback.update(metadataFrame) && fallback.flaggedColour() == groundColour({}) / 255.f && fallback.value().scene == retained,
+          "physical-block sky target remains available when mesh-cost metadata is unavailable");
+    metadataFrame.player.blockFlags = 0;
+    check(!fallback.update(metadataFrame) && fallback.flaggedColour() == glm::vec3(0) && fallback.value().scene == retained,
+          "unavailable range does not retain the previous frame's interior sky target");
     frame.zoneRadius = 3;
     frame.elapsedMs = 0;
     flagged.update(frame);

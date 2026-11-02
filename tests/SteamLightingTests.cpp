@@ -56,14 +56,14 @@ int steamLightingTests() {
           "forest low ambient retains both successive blends");
     environment.region.lava = environment.region.forest = environment.region.kind27 = 1;
     const auto ordered = steamlighting::targets(noon, environment);
-    check(near(ordered.front, {.9f, .7f, .6f, 1}) && near(ordered.ambient, {.3f, .5f, .5f, 1}) &&
-          near(ordered.back, day.back), "place blend follows lava/forest; back remains independent");
+    check(near(ordered.front, {.9f, .7f, .6f, 1}) && near(ordered.ambient, {.3f, .5f, .5f, 1}) && near(ordered.back, day.back),
+          "place blend follows lava/forest; back remains independent");
     environment = {};
-    environment.effect13RemainingMs = 57000;
+    environment.effect13RemainingMs = 57000.f;
     const auto effect = steamlighting::targets(0, environment);
-    check(near(effect.front, {.05f, .1f, 1, 1}) && near(effect.back, effect.front) &&
-          near(effect.ambient, {.01f, .05f, .2f, 1}), "effect13 changes all RGBA light targets");
-    environment.effect13RemainingMs = 63000;
+    check(near(effect.front, {.05f, .1f, 1, 1}) && near(effect.back, effect.front) && near(effect.ambient, {.01f, .05f, .2f, 1}),
+          "effect13 changes all RGBA light targets");
+    environment.effect13RemainingMs = 63000.f;
     check(steamlighting::targets(0, environment).ambient.w == -1, "effect weight has no invented lower clamp");
     check(steamlighting::material(true) == glm::vec4(.5f, .5f, 1, 1) && steamlighting::material(false) == glm::vec4(1),
           "water changes scene material separately from light colors");

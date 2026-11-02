@@ -23,6 +23,7 @@ struct Lighting {
     float timeMs = 43200000;
     glm::vec3 moonFront{0}, moonBack{0}; // optional additions, separate from native palette
     std::optional<float> effect13RemainingMs;
+    bool farFlight = false;
     glm::vec3 sunDir{0, 0, 1}, moonDir{0, 0, -1}; // Sky positions (always set).
     // Optional screen-space sky captured from the original menu draw. The
     // regular world clock leaves these zero and keeps the normal sky path.

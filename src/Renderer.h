@@ -318,6 +318,7 @@ class Renderer {
     std::string gpuName;
     struct SceneFrame {
         glm::vec4 material{1};
+        glm::vec4 flaggedSky{0};
         scenevisibility::View visibility;
         scenevisibility::Projection projection;
         scenerange::Ranges ranges;

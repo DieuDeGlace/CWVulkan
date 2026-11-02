@@ -244,9 +244,9 @@ night (0, 0, 0) (alpha 0 too).
    (0.8, 0.2, 1); day sky2 (0, 0.6, 1); dusk B sky2 (0, 0.5, 1); dusk A sky2 (0.1, 0.5, 0.8);
    day fog and dusk B fog (0.6, 0.3, 1). Dusk A sky1, dusk A fog and the night keys are not
    changed.
-7. **Far flight** (0x2b8050 true): the fog keys for day, dusk B and night take the value of the
-   matching sky1 key, and the day sky1 becomes black (0, 0, 0). (Read from 0x1402b1dc3 onward;
-   worth confirming with an oracle, §C.)
+7. **Far flight**: use the completed predicate and selected key replacements in
+   [scene-lighting §2.8](steam-scene-lighting.md#28-other-palette-outputs-far-flight-completion-and-frame-transitions),
+   which supersede this section's earlier incomplete day-only sky summary.
 
 **Interpolation over L** (0x1402b1dc3..):
 
@@ -278,16 +278,15 @@ kind 0x2aa270 (0x2b or 0x2c). P9's alpha is L. These are for a Steam lighting sp
 
 ### B.4 Easing and the interior override (frame 0x1400e2e00)
 
-The renderer keeps its own copies and eases them each frame with the smoothing factor
-0xa7a0(dt, c) (`creature-physics.md` conventions): front, back and ambient light with
-c = 0.001 (0x14042e514); fog with c = 0.0005 (0x14043ef2c); sun colour with c = 0.002
-(0x14042e6d0). sky1 and sky2 are taken as computed, without easing.
-
-Exception: 0x1400ecda0 (the same routine that works out the view distance at renderer +0x4a4)
-sets an **interior colour** at renderer +0x4ec when the block at the local player has the
-flags 0x20 and 0x02 in its byte 5; the colour is the interior's colour from 0x2aa140, bytes
-divided by 255. While it is non-zero, sky1, sky2 and fog are eased (c = 0.0005) to it and the
-sun colour is eased to zero: indoors the "sky" is the room's colour.
+The independently authored [sky-state supplement](steam-sky-state-initialization.md)
+supersedes this section's earlier sky-copy and interior-rate summary. The renderer
+keeps RGBA state: sky1/sky2 ease at rate0.001, fog at0.0005, and ordinary sun
+at0.002. A freshly recomputed nonzero/unordered flagged-block target replaces the
+sky/fog targets; sun then eases toward zero at0.0005. Both sky rates remain0.001.
+Every alpha participates. Constructor values and the absence of first-update
+snapping are specified there; the reached scene-range reset retains the palette.
+The physical-block admission and noise colour are in
+[scene-lighting §2.6](steam-scene-lighting.md#26-adaptive-range0x4a4-and-the-two-derived-scene-radii).
 
 ### B.5 The Steam sun
 

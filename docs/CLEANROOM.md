@@ -1169,3 +1169,25 @@ appearance modes. Actual local-font HUD emission verifies signed gold separately
 from missing display data. Original native-save gold decoding remains unchanged.
 Only engine-owned shader/geometry and local owner font inputs are used; no owner
 artwork, native instructions or original-game files enter the source/runtime packages.
+
+## Steam sky RGBA and retained transitions, 2026-11-02
+
+The implementer used only the independent sky-and-clouds B.3/B.4,
+scene-lighting 2.6/2.8 and new sky-state-initialization sections1–5, plus
+engine-owned code/tests. The existing isolated native-only author supplied the
+new constructor/reset/transition supplement without engine or owner-data access,
+then held all tracing/writes. Its correction supersedes earlier sky-copy and
+flagged-rate prose; the older sections now point to that correction.
+
+The engine retains four-channel sky/fog/sun state, initializes it from the
+documented constructor and applies the corrected ordinary/interior rates without
+first-update snapping. Actual physical-player block flags feed the target;
+unavailable legacy mesh costs still leave that separately known colour usable.
+Flight uses canonical player fixed coordinates/anchor/start and strict horizontal
+thresholds. Provider tests cover partial place alpha, selected flight keys,
+water-before-effect13 ordering, zero/negative/rounded/capped frame intervals and
+both transition branches. The optional shared Omega water deliberately keeps its
+immediate underwater presentation; Alpha appearance remains a separate extension.
+These tests do not establish an original-game pixel oracle, exhaustive recovery
+lifetime, or native GPU initialization. No original implementation, owner artwork
+or extracted content is included in either package.

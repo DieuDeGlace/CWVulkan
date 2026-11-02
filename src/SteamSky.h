@@ -3,10 +3,12 @@
 // time of day and region, its easing from frame to frame, the sun's path and where its glow
 // sits on the screen, and the dome of star cubes. Written from docs/specs/sky-and-clouds.md
 // part B; the section numbers in the comments point there. The palette's light colours (its
-// P7..P9) belong to a lighting spec not written yet, so the Steam look's lights still come
-// from DayNight.h.
+// P7..P9) are handled separately by SteamLighting.h.
 #include <glm/glm.hpp>
 #include <vector>
+#include <array>
+#include <cstdint>
+#include <optional>
 
 namespace steamsky {
 
@@ -22,26 +24,32 @@ struct Region {
 
 // The four colours the sky is drawn with.
 struct Palette {
-    glm::vec3 sky1{0}; // lower part of the sky gradient
-    glm::vec3 sky2{0}; // upper part
-    glm::vec3 fog{0};  // near the horizon and below it
-    glm::vec3 sun{0};  // the sun's glow
+    glm::vec4 sky1{0}; // lower part of the sky gradient
+    glm::vec4 sky2{0}; // upper part
+    glm::vec4 fog{0};  // near the horizon and below it
+    glm::vec4 sun{0};  // the sun's glow
 };
 
 // §B.3: the palette for the palette daylight L (the same curve as Alpha's, AlphaLook.h).
-Palette palette(float daylight, const Region &region, bool underwater);
+struct Conditions {
+    bool farFlight = false;
+    std::optional<float> effect13RemainingMs;
+};
+Palette palette(float daylight, const Region &region, bool underwater, const Conditions &conditions = {});
 
-// §B.4: the renderer eases the fog and the sun colour towards each frame's palette; sky1 and
-// sky2 follow it at once. The first frame (or a reset) takes the palette as it is.
+// scene-lighting §2.8: horizontal fixed-coordinate distances to the flight anchor.
+bool farFlight(uint8_t ability, const std::array<int64_t, 3> &physical, const std::array<int32_t, 2> &anchor,
+               const std::array<int64_t, 3> &start);
+
+// Native RGBA lifetime/rates: steam-sky-state-initialization.md §§1–4 supersedes B.4.
+// Construction starts with blue sky/fog and no sun. World/range resets retain this state.
 class EasedPalette {
   public:
-    void update(const Palette &target, double elapsedMs);
-    void reset() { primed = false; }
+    void update(const Palette &target, double elapsedMs, glm::vec4 flaggedTarget = glm::vec4(0));
     const Palette &value() const { return current; }
 
   private:
-    Palette current;
-    bool primed = false;
+    Palette current{{0, 0, 1, 1}, {0, 0, 1, 1}, {0, 0, 1, 1}, glm::vec4(0)};
 };
 
 // §B.5: the direction towards the sun: below the ground at midnight, in +x at 06:00, high and

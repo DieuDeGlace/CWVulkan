@@ -618,16 +618,15 @@ after these changes. Camera-water replacement and effect0x13 then occur in
 the order already specified. Fog and sky1 move toward(0.9,1,1,1) for effect13,
 sky2 toward(0,0,0,1); sun is not changed by that provider effect branch.
 
-**Frame transition0xe2e00:** front/back/ambient always receive §2.5's rate0.001
-easing first. If the freshly computed renderer+0x4ec **has any nonzero RGBA
-component**, sky1+0x4ac,sky2+0x4bc and fog+0x4cc each ease toward that whole
-RGBA with0xa7a0(frameMS,0.0005), via0xcb5c0; sun+0x4dc eases toward zero RGBA
-with rate0.002. Otherwise sky1/sky2 copy their provider outputs directly,
-fog eases toward output5 at rate0.0005, and sun eases toward output6 at
-rate0.002. This is a comparison with a zero vector, **not a comparison with
-the previous frame's target**.0xecda0 resets+0x4ec to zero each call (§2.6).
-The interior override does not replace front/back/ambient after their normal
-update, and its alpha0 must not be reused as ambient.w.
+**Frame transition0xe2e00:** the independently authored
+[sky-state supplement §4](steam-sky-state-initialization.md#4-no-first-update-snapping-precise-transition-correction)
+corrects this section's earlier direct-copy wording and flagged-branch rates.
+Sky1/sky2 ease at rate0.001 in both branches; fog at0.0005. Ordinary sun
+eases toward provider output6 at0.002; flagged sun toward zero RGBA at0.0005.
+All four components participate. The branch compares the freshly recomputed
++0x4ec target with zero, not with the previous target. The supplement also
+specifies constructor values and retained reset state. Front/back/ambient
+retain their separate normal update; target alpha0 is not ambient.w.
 
 ## 3. Point-light collector: common records and selection
 

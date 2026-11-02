@@ -8156,6 +8156,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             renderer.setWorldDay(day); // the moon's phase
             if (spawnedReady) {
                 lighting.timeMs = (float)spawned.timeOfDay();
+                const auto flight = flightContext();
+                lighting.farFlight = steamsky::farFlight(flight.ability, flight.physical, flight.destination, flight.start);
                 float strength, remainingMs;
                 if (spawned.playerBuff(0x13, strength, remainingMs))
                     lighting.effect13RemainingMs = remainingMs;

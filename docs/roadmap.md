@@ -205,8 +205,12 @@ individual feature documents.
   Full structure/light-list checks pass on all 789 snapshots; fresh-generation RNG
   checks are distinct from partial daily-refresh traces. Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.
-  Native scene palette targets/RGBA easing now have numeric checks and Steam RGB
-  integration, including regional/structure/effect13 blends and capped wall timing.
+  Native directional palette targets/RGBA easing have numeric checks, including
+  regional/structure/effect13 blends and capped wall timing. Steam sky/fog/sun now
+  retain full RGBA, with constructor values, stateful first updates and corrected
+  ordinary/interior transition rates from the independent sky-state supplement.
+  Place-27 alpha, selected far-flight keys and post-water effect13 are connected.
+  CPU checks cover alpha, strict flight thresholds and retained frame state.
   Steam voxel inputs now use weighted front-layer occlusion/light, encoded CUB
   colors and native face corners/diagonals. Terrain reuses one retained light solve
   for mesh corners and models; lava has its own opaque palette group. Water films,
@@ -690,7 +694,10 @@ individual feature documents.
   clock-lifetime regressions cover this distinction.
   Stock water opacity initializes to 1 and retains 1 through range reset; the native
   audit found no zero/fade-reset writer. The previous zero initializer was corrected.
-  Flagged-block color and the remaining shader controls still need their consumers.
+  Physical flagged-block colour now feeds the sky/fog/sun transitions; it clears
+  each frame even when legacy mesh metadata cannot establish a native scene range.
+  Native numerical/visual comparisons and the remaining shader controls stay open.
+  Shared Omega water and Alpha appearance remain explicit project extensions.
   Hit flashes now consume local and received visual records, select current spirit
   weapons, retain the fixed hit position and use native first-frame aging/strict
   expiration. They share the scene sort/zone slots. CPU and Vulkan regressions
