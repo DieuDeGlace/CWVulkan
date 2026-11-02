@@ -2575,6 +2575,7 @@ void SpawnedCreatures::replaceStaticObjects(ExtractedWorld &ew, const cwnet::Zon
         return;
     lists->staticObjects.assign(zone.records.begin(), zone.records.end());
     objectsChanged.insert({zone.key.x, zone.key.y}); // (queued for the object rebuild, world+0x1a0)
+    ew.markObjectBlocks(zone.key.x, zone.key.y, lists->staticObjects);
 }
 
 void SpawnedCreatures::appendBlockHistory(ExtractedWorld &ew, const cwnet::BlockChangeRecord &change) {
@@ -2634,6 +2635,11 @@ void SpawnedCreatures::zoneChangeLists() {
             if (const nativesaves::ZoneLists *lists = zoneStates.find({zx, zy}))
                 worldEvents.staticObjects.push_back({{zx, zy}, {lists->staticObjects.begin(), lists->staticObjects.end()}});
     }
+    // Object snapshots precede marking; both authority and mirror clear the same pending set.
+    if (lastWorld)
+        for (const auto &[zx, zy] : objectsChanged)
+            if (const nativesaves::ZoneLists *lists = zoneStates.find({zx, zy}))
+                lastWorld->markObjectBlocks(zx, zy, lists->staticObjects);
     groundChanged.clear();
     objectsChanged.clear();
 }

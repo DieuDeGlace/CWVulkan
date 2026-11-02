@@ -419,7 +419,7 @@ void printTotals(const char *who, const Totals &t) {
                 t.itemsGame, who, t.itemsMine, t.itemsSame, t.itemsAngle);
 }
 
-int zonesOracle(const fs::path &dir, int maxZones, bool verbose) {
+int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::CreatureTables *creatures = nullptr) {
     const std::vector<fs::path> files = zoneFiles(dir, maxZones);
     if (files.empty())
         return 0;
@@ -458,12 +458,24 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose) {
         }
         mine.zones++;
         auto t0 = Clock::now();
-        wg::ZoneContents z = wg::generateZone(world, g.zx, g.zy, options);
+        wg::ZoneContents z = creatures ? wg::generateZoneWithCreatures(world, *creatures, day, g.zx, g.zy, true)
+                                      : wg::generateZone(world, g.zx, g.zy, options);
         newSeconds += seconds(t0);
         // The extracted records were taken on day.txt's day; without part C the refresh only
         // restores the objects from the generator's copy.
-        if (day >= 0)
-            wg::refreshZone(z, world, day);
+        if (day >= 0) {
+            if (creatures)
+                wg::refreshZoneCreatures(z, world, *creatures, day);
+            else
+                wg::refreshZone(z, world, day);
+        }
+        if (creatures) {
+            // The capture includes daily objects. Compare after the separate object-publication
+            // marking boundary, rather than omitting part C's objects from a terrain assertion.
+            wg::ZoneBuild publication(z.terrain, world, wg::cellObjectsFor(world), false);
+            publication.objects = z.objects;
+            wg::markObjectBlocks(publication, z.lists);
+        }
         for (int i = 0; i < wg::ZONE_COLUMNS; i++) {
             const wg::TerrainColumn &gc = g.columns[(size_t)i], &oc = z.terrain.columns[(size_t)i];
             const long long before = mine.blocks.exact;
@@ -588,7 +600,8 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose) {
             notes.push_back(line);
         }
     }
-    std::printf("wgstructures zones %d (%s, day %d):\n", mine.zones, name.c_str(), day);
+    std::printf("wgstructures zones %d (%s, day %d%s):\n", mine.zones, name.c_str(), day,
+                creatures ? ", full creature/object generation and publication" : ", structure-only");
     printTotals("new", mine);
     if (name == "genr_seed_123")
         std::printf("  refresh RNG: partial capture; fresh-generation prefix check not applicable\n");
@@ -621,6 +634,8 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose) {
     WS_CHECK(traces == 0 || tracesToCreature == traces);
     WS_CHECK(mine.blocks.structGame == mine.blocks.structSame && mine.blocks.structMine == mine.blocks.structGame);
     WS_CHECK(mine.modelsSame == mine.modelsGame && mine.modelsMine == mine.modelsGame);
+    if (creatures)
+        WS_CHECK(mine.blocks.same == mine.blocks.blocks && mine.blocks.exact == mine.blocks.columns);
     WS_CHECK(modelLists.rulesWhole == modelLists.zones && modelLists.oursWhole == modelLists.zones &&
              modelLists.emittersWhole == modelLists.zones);
     return mine.zones;
@@ -797,7 +812,14 @@ int worldgenStructureTests() {
     if (game.empty())
         return 0;
     cellsOracle(game, false, 5000);
-    zonesOracle(generatedZonesDir(game), 6, false);
+    const auto directory = generatedZonesDir(game);
+    zonesOracle(directory, 6, false);
+    wg::CreatureTables creatures;
+    std::string why;
+    if (creatures.load(directory.parent_path() / "oracle", &why))
+        zonesOracle(directory, 6, false, &creatures);
+    else
+        std::printf("SKIP full generated terrain comparison: %s\n", why.c_str());
     return failures;
 }
 

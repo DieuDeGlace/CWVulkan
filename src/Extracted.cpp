@@ -136,6 +136,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     zone->region = worldgen::regionBiome(r.x, r.y);
     zone->generated = true;
     zone->things = worldgen::zone(ax, ay);
+    zone->markedObjectBlocks = zone->things->lists.marked;
     auto models = std::make_shared<std::vector<ModelRecord>>();
     models->reserve(zone->things->models.size());
     for (const auto &model : zone->things->models) {
@@ -614,7 +615,7 @@ bool ExtractedWorld::gameZoneLoaded(int32_t x, int32_t y) const {
 }
 
 ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z, bool *loaded) {
-    static const GameBlock stone{0xc8, 0xc8, 0xc8, 0, 1, 0}, air{0xff, 0xff, 0xff, 0, 0, 0}, water{0xff, 0xff, 0xff, 0, 2, 0};
+    static const GameBlock stone{0xc8, 0xc8, 0xc8, 0, 1, 0};
     const int ax = (int)floorDiv(x, 64), ay = (int)floorDiv(y, 64);
     // The last few zones asked for, so a creature's many lookups skip the cache's lock.
     thread_local struct {
@@ -642,10 +643,18 @@ ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z,
         *loaded = zone != nullptr;
     if (!zone)
         return stone;
-    const Column &c = zone->columns[(x - (int64_t)ax * 64) * 64 + (y - (int64_t)ay * 64)];
-    if (z < c.base)
+    return readGameBlock(*zone, ax, ay, x, y, z);
+}
+
+ExtractedWorld::GameBlock ExtractedWorld::readGameBlock(const Zone &zone, int32_t ax, int32_t ay, int64_t x, int64_t y, int32_t z) {
+    static const GameBlock stone{0xc8, 0xc8, 0xc8, 0, 1, 0}, air{0xff, 0xff, 0xff, 0, 0, 0}, water{0xff, 0xff, 0xff, 0, 2, 0};
+    const int64_t lx = x - int64_t(ax) * 64, ly = y - int64_t(ay) * 64;
+    if (lx < 0 || lx >= 64 || ly < 0 || ly >= 64)
         return stone;
-    const size_t i = (size_t)(z - c.base);
+    const Column &c = zone.columns[size_t(lx * 64 + ly)];
+    if (!c.empty() && z < c.base)
+        return stone;
+    const size_t i = size_t(int64_t(z) - c.base);
     if (i < c.blocks.size()) {
         const Block &b = c.blocks[i];
         if (b.type != 0 || z > 0 || (b.flags & 2))
@@ -654,6 +663,36 @@ ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z,
         return air;
     }
     return water;
+}
+
+bool ExtractedWorld::markObjectBlocks(int ax, int ay, std::span<const nativesaves::Record> records) {
+    auto edits = editBlocks();
+    const auto zone = writableZone(ax, ay);
+    if (!zone)
+        return false;
+    std::vector<worldgen::StaticObject> objects;
+    objects.reserve(records.size());
+    for (const auto &record : records) {
+        auto &object = objects.emplace_back();
+        const auto read = [&](size_t offset, auto &value) { std::memcpy(&value, record.data() + offset, sizeof value); };
+        read(0, object.type);
+        read(8, object.x);
+        read(16, object.y);
+        read(24, object.z);
+        read(32, object.turn);
+        read(36, object.scale);
+        object.active = record[40] != 0;
+    }
+    worldgen::markObjectBlocks(
+        objects, zone->markedObjectBlocks,
+        [&](int32_t x, int32_t y, int32_t z) {
+            const auto b = readGameBlock(*zone, ax, ay, x, y, z);
+            return Block{b[0], b[1], b[2], b[3], b[4], b[5]};
+        },
+        [&](int32_t x, int32_t y, int32_t z, Block b) {
+            writeGameBlock(*zone, ax, ay, x, y, z, {b.r, b.g, b.b, b.glow, b.type, b.flags});
+        });
+    return true;
 }
 
 void ExtractedWorld::applyBlockChanges(int ax, int ay, Zone &zone) const {

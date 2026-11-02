@@ -148,6 +148,9 @@ class ExtractedWorld {
     // No history append, column growth, model cleanup or render request is implied.
     bool removeGameBlock(int32_t x, int32_t y, int32_t z);
     bool setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block);
+    // Re-mark an already loaded zone after object-list replacement/publication.
+    // No history notice or mesh request is implied.
+    bool markObjectBlocks(int ax, int ay, std::span<const nativesaves::Record> objects);
     void rememberBlockChange(const nativesaves::BlockChange &change);
     // Game-frame notice consumer: nine block samples at XY offsets -13/0/+13.
     void invalidateGameBlock(int32_t x, int32_t y);
@@ -204,6 +207,7 @@ class ExtractedWorld {
         std::shared_ptr<const worldgen::ZoneContents> things;   // generated zones only: models, items, spawn points
         std::shared_ptr<const std::vector<ModelRecord>> models; // current ordinary list; auxiliary lists stay separate
         std::vector<worldgen::ZoneObject> objects;              // the generator's static objects (zone+0x60)
+        std::set<std::tuple<int32_t, int32_t, int32_t>> markedObjectBlocks;
         std::shared_ptr<const std::vector<worldgen::ColourInputs>> recordedColours;
         worldgen::SandOffsets recordedSand;
         bool generated = false;   // made by the generator rather than read
@@ -218,6 +222,7 @@ class ExtractedWorld {
         std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
     };
     static bool writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t x, int32_t y, int32_t z, const GameBlock &block);
+    static GameBlock readGameBlock(const Zone &zone, int32_t ax, int32_t ay, int64_t x, int64_t y, int32_t z);
     static thread_local BlockEdits *activeEdits;
     BlockEdits *blockEdits() const;
     std::shared_ptr<Zone> editedZone(int ax, int ay) const;

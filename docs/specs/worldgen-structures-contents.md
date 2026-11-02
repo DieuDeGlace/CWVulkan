@@ -286,14 +286,20 @@ of the position is water (type 2), or the one below (z − 65536) is type 3, 17 
 "Settled and kept" = settle with the ground test, then, when true and inside, append (no second
 inside test result is needed).
 
-**Marking** 0x31d700 (step 12): first every block position in the set at zone +0xe8 has flag 0x40
-cleared (stored back). Then for each object: skip types 0x5f, 0x60, 0x11, 0x12, 0x14, 0x7d; skip
+**Marking** 0x31d700 (step 12): first visit each position in the set at zone +0xe8; when its
+effective block has flag 0x40, clear only that bit and store the full tuple. Retain the set's
+keys. Then for each object: skip types 0x5f, 0x60, 0x11, 0x12, 0x14, 0x7d; skip
 when its active byte (+0x28) is 0 and the type is one of 3–6, 8–14, 16 (mask 0x17f78). Size =
 0x13a960 (T8 × scale); odd turn swaps x and y. hx = trunc64(sx × 0.499 × 65536), hy likewise;
 x0 = floor((x − hx)/65536), x1 = floor((x + hx)/65536), y0, y1; z0 = floor(z / 65536), z1 =
 floor((z + trunc64(sz × 0.999 × 65536)) / 65536). For every block in [x0, x1] × [y0, y1] × [z0,
 z1] (x outer, then y, then z) without flag 0x40: flags |= 0x40 (0xc0 for object 15), |= 4 for
 objects 3–5; stored (0x31c1c0) and its position added to the set at +0xe8.
+
+The exact effective-read/write behavior, retained tracking set, overlapping
+object suppression, coordinate narrowing and fresh/restored/live phase order
+are specified in [static-object block flags](steam-static-object-block-flags.md).
+In particular0x31d700 does not empty that set between its clear and mark passes.
 
 ## C9. The daily refresh's objects (0x31c540)
 

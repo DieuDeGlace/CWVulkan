@@ -603,3 +603,27 @@ retained depth. Broader owner-cache composition, full frontend pixel acceptance 
 other roadmap gates remain open. The same independent author additionally resolved
 saved playable appearance CRT consumption; the implementer read the full new supplement
 and its corrected frontend/initialization links. No startup stream state is inferred.
+
+## Static-object block coverage, 2026-11-01
+
+The implementer read steam-static-object-block-flags.md in full, its independently
+verified host-publication addendum, the two corrected contents/setter links and engine
+sources only. The existing native-only author traced marking, effective reads, fixed
+coordinate narrowing, persistent tracking, overlap suppression and reached generation,
+restoration, received-list and host/Game publication boundaries without implementation,
+test, extractor, reconstruction, owner-data or game access.
+
+Generator and loaded-zone paths share an engine-owned marking pass. Immutable terrain
+snapshots retain their own tracking keys; generated keys survive subsequent stored-state
+replay. Received lists mark immediately and pending publication marks after copying the
+current object records. The host keeps its established post-drawn publication boundary.
+Neither marking path invents a history notice or mesh request. Empty stored columns now
+expose effective sea water rather than treating their unused base as buried terrain.
+
+Synthetic tests exercise retained keys, overlap flags, narrowing, effective water,
+column extension and pending-set clearing. A new owner-only comparison includes full
+creature/daily-object generation and the separate object-publication boundary; all
+379,182 compared blocks match across its six supplied zones. The older structure-only
+comparison remains labelled as such. This does not close global region/theme coverage,
+all pending-set producers, adjacent-zone object ownership or pixel acceptance. No owner
+blocks, records, captures or assets are included in source or runtime packages.

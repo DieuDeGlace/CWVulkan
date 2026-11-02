@@ -5,8 +5,10 @@
 #include "worldgen/BlockColours.h"
 #include "worldgen/Height.h"
 #include "worldgen/Options.h"
+#include "GameMath.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdlib>
 
@@ -633,13 +635,29 @@ void listLightsAndTreasures(ZoneBuild &zone, ZoneLists &lists) {
 }
 
 void markObjectBlocks(ZoneBuild &zone, ZoneLists &lists) {
-    for (const auto &[x, y, z] : lists.marked) {
-        Block b = zone.read(x, y, z);
+    markObjectBlocks(
+        zone.objects, lists.marked, [&](int32_t x, int32_t y, int32_t z) { return zone.read(x, y, z); },
+        [&](int32_t x, int32_t y, int32_t z, Block block) { zone.store(x, y, z, block); });
+}
+
+void markObjectBlocks(std::span<const StaticObject> objects, std::set<std::tuple<int32_t, int32_t, int32_t>> &marked,
+                      const std::function<Block(int32_t, int32_t, int32_t)> &read,
+                      const std::function<void(int32_t, int32_t, int32_t, Block)> &store) {
+    // Narrow before reconstructing negative fixed coordinates (the native block conversion).
+    const auto blockOf = [](int64_t fixed) {
+        int32_t block = std::bit_cast<int32_t>(uint32_t(fixed / DOTS));
+        if (fixed < 0 && int64_t(block) * DOTS != fixed)
+            block = std::bit_cast<int32_t>(uint32_t(block) - 1u);
+        return block;
+    };
+    for (const auto &[x, y, z] : marked) {
+        Block b = read(x, y, z);
+        if (!(b.flags & 0x40))
+            continue;
         b.flags &= (uint8_t)~0x40;
-        zone.store(x, y, z, b);
+        store(x, y, z, b);
     }
-    lists.marked.clear();
-    for (const StaticObject &o : zone.objects) {
+    for (const StaticObject &o : objects) {
         const int t = o.type;
         if (t == 0x5f || t == 0x60 || t == 0x11 || t == 0x12 || t == 0x14 || t == 0x7d)
             continue;
@@ -651,19 +669,20 @@ void markObjectBlocks(ZoneBuild &zone, ZoneLists &lists) {
         if (o.turn & 1)
             std::swap(sx, sy);
         const int64_t hx = trunc64(sx * 0.499f * 65536.0f), hy = trunc64(sy * 0.499f * 65536.0f);
-        const int32_t x0 = blocksOf(o.x - hx), x1 = blocksOf(o.x + hx), y0 = blocksOf(o.y - hy), y1 = blocksOf(o.y + hy);
-        const int32_t z0 = blocksOf(o.z), z1 = blocksOf(o.z + trunc64(sz * 0.999f * 65536.0f));
+        const int32_t x0 = blockOf(gamemath::subtractFixed(o.x, hx)), x1 = blockOf(gamemath::addFixed(o.x, hx));
+        const int32_t y0 = blockOf(gamemath::subtractFixed(o.y, hy)), y1 = blockOf(gamemath::addFixed(o.y, hy));
+        const int32_t z0 = blockOf(o.z), z1 = blockOf(gamemath::addFixed(o.z, trunc64(sz * 0.999f * 65536.0f)));
         for (int32_t x = x0; x <= x1; x++)
             for (int32_t y = y0; y <= y1; y++)
                 for (int32_t z = z0; z <= z1; z++) {
-                    Block b = zone.read(x, y, z);
+                    Block b = read(x, y, z);
                     if (b.flags & 0x40)
                         continue;
                     b.flags |= t == 15 ? 0xc0 : 0x40;
                     if (t >= 3 && t <= 5)
                         b.flags |= 4;
-                    zone.store(x, y, z, b);
-                    lists.marked.insert({x, y, z});
+                    store(x, y, z, b);
+                    marked.insert({x, y, z});
                 }
     }
 }

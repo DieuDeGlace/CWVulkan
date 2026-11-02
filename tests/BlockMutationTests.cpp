@@ -7,6 +7,8 @@
 #include <fstream>
 #include <future>
 #include <limits>
+#include <map>
+#include <tuple>
 #include <thread>
 
 namespace {
@@ -25,7 +27,7 @@ void materials(const fs::path &directory, int32_t x, int32_t y, float highlands 
         for (float value : {highlands, 0.5f, 0.25f, 0.0f, 0.0f, 0.0f})
             field(out, value);
 }
-void fixture(const fs::path &directory, int32_t x, int32_t y) {
+void fixture(const fs::path &directory, int32_t x, int32_t y, bool empty = false) {
     materials(directory, x, y);
     std::ofstream out(directory / ("z_" + std::to_string(x) + "_" + std::to_string(y) + ".cwz"), std::ios::binary);
     out.write("CWZ1", 4);
@@ -35,10 +37,12 @@ void fixture(const fs::path &directory, int32_t x, int32_t y) {
     field(out, int32_t(0));
     for (int i = 0; i < 4096; ++i) {
         field(out, int32_t(-1));
-        field(out, uint32_t(1));
-        field(out, uint16_t(4));
-        const ExtractedWorld::GameBlock block{20, 30, 40, 0, 1, 0x11};
-        out.write(reinterpret_cast<const char *>(block.data()), block.size());
+        field(out, uint32_t(empty ? 0 : 1));
+        if (!empty) {
+            field(out, uint16_t(4));
+            const ExtractedWorld::GameBlock block{20, 30, 40, 0, 1, 0x11};
+            out.write(reinterpret_cast<const char *>(block.data()), block.size());
+        }
     }
 }
 } // namespace
@@ -61,6 +65,7 @@ int blockMutationTests() {
     for (const auto &[x, y] :
          std::vector<std::pair<int32_t, int32_t>>{{0, 0}, {1, 0}, {-1, 0}, {0, -1}, {-1, -1}, {33554431, 0}, {-33554432, 0}})
         fixture(directory, x, y);
+    fixture(directory, 2, 0, true);
     {
         ExtractedWorld world;
         std::string error;
@@ -329,6 +334,89 @@ int blockMutationTests() {
         check(terrain.gameBlockLight(0, 0, 5) == 5, "dark open water retains the native floor5");
         terrain.setGameBlock(0, 0, 5, {250, 0, 0, 17, 1, 120});
         check(terrain.gameBlockLight(0, 0, 5) == 17, "solid light reads byte3 rather than palette red or flags");
+    }
+    {
+        using Position = std::tuple<int32_t, int32_t, int32_t>;
+        std::map<Position, worldgen::Block> blocks;
+        std::set<Position> marked;
+        int writes = 0;
+        const auto read = [&](int32_t x, int32_t y, int32_t z) { return blocks[{x, y, z}]; };
+        const auto store = [&](int32_t x, int32_t y, int32_t z, worldgen::Block block) {
+            ++writes;
+            blocks[{x, y, z}] = block;
+        };
+        worldgen::StaticObject ordinary;
+        ordinary.x = 8 * 65536;
+        ordinary.y = 9 * 65536;
+        ordinary.z = 10 * 65536;
+        ordinary.scale = 0; // a one-cell box makes overlapping object order explicit
+        auto special = ordinary, door = ordinary;
+        special.type = 15;
+        door.type = 3;
+        worldgen::markObjectBlocks(std::array{ordinary, special, door}, marked, read, store);
+        check(blocks[{8, 9, 10}].flags == 0x40 && writes == 1, "earlier ordinary object suppresses later overlap bits and writes");
+        worldgen::markObjectBlocks(std::array{special, door}, marked, read, store);
+        check(blocks[{8, 9, 10}].flags == 0xc0, "re-marking clears coverage before respecting new object order");
+        worldgen::markObjectBlocks(std::span<const worldgen::StaticObject>{}, marked, read, store);
+        check(blocks[{8, 9, 10}].flags == 0x80 && marked.size() == 1, "removing objects clears only0x40 and retains old coordinate keys");
+        const int before = writes;
+        worldgen::markObjectBlocks(std::span<const worldgen::StaticObject>{}, marked, read, store);
+        check(writes == before, "old coordinates without0x40 do not cause setter calls");
+        blocks[{8, 9, 10}].flags |= 0x40;
+        worldgen::markObjectBlocks(std::span<const worldgen::StaticObject>{}, marked, read, store);
+        check(blocks[{8, 9, 10}].flags == 0x80, "retained keys clear a later physical0x40 write");
+        marked.clear();
+        blocks[{8, 9, 10}].flags = 0x40;
+        worldgen::markObjectBlocks(std::array{special}, marked, read, store);
+        check(marked.empty() && blocks[{8, 9, 10}].flags == 0x40, "preflagged untracked cells neither gain extra bits nor enter the set");
+        ordinary.x = -(int64_t(1) << 48);
+        ordinary.y = -1;
+        worldgen::markObjectBlocks(std::array{ordinary}, marked, read, store);
+        check(marked.contains({-1, -1, 10}), "negative fixed conversion narrows before its reconstruction test");
+    }
+    {
+        ExtractedWorld terrain;
+        std::string error;
+        check(terrain.open(directory, error), "object coverage fixture opens");
+        worldgen::ZoneObject object;
+        object.type = 15;
+        object.x = 2 * 65536;
+        object.y = 3 * 65536;
+        object.z = 5 * 65536;
+        object.scale = 0;
+        const auto record = zonestates::staticObjectRecord(object);
+        check(!terrain.markObjectBlocks(1, 0, std::array<nativesaves::Record, 1>{record}) && !terrain.gameZoneLoaded(1, 0),
+              "marking does not load a missing zone");
+        SpawnedCreatures actors;
+        actors.setStoredZones(terrain, nullptr, false);
+        actors.replaceStaticObjects(terrain, {{0, 0}, {record}});
+        check(terrain.gameBlock(2, 3, 5) == ExtractedWorld::GameBlock{255, 255, 255, 0, 0, 0xc0},
+              "received objects immediately materialize marked air above the stored top");
+        terrain.setGameBlock(2, 3, 5, {255, 255, 255, 0, 0, 0});
+        actors.zoneChangeLists();
+        check(terrain.gameBlock(2, 3, 5)[5] == 0xc0 && actors.events().staticObjects.size() == 1 &&
+                  actors.events().staticObjects.front().records == std::vector<cwnet::ZoneObjectRecord>{record},
+              "pending publication copies the current objects and marks a second time");
+        terrain.setGameBlock(2, 3, 5, {255, 255, 255, 0, 0, 0});
+        actors.zoneChangeLists();
+        check(terrain.gameBlock(2, 3, 5)[5] == 0, "publication clears its pending set rather than marking every frame");
+        float surface = 0;
+        terrain.surface(128, 0, surface);
+        check(terrain.gameBlock(128, 0, -3) == ExtractedWorld::GameBlock{255, 255, 255, 0, 2, 0},
+              "an empty stored column exposes implicit water below its unused base");
+        object.x = 128 * 65536;
+        object.y = 0;
+        object.z = -3 * 65536;
+        const auto underwater = zonestates::staticObjectRecord(object);
+        terrain.markObjectBlocks(2, 0, std::array<nativesaves::Record, 1>{underwater});
+        check(terrain.gameBlock(128, 0, -3) == ExtractedWorld::GameBlock{255, 255, 255, 0, 2, 0xc0},
+              "implicit sea water is marked as effective water and retains coverage");
+        terrain.markObjectBlocks(2, 0, {});
+        check(terrain.gameBlock(128, 0, -3)[5] == 0x80 && actors.events().blockChanges.empty() && terrain.takeChangedZones().empty(),
+              "coverage removal preserves0x80 without block notices or mesh requests");
+        object.x = 64 * 65536;
+        terrain.markObjectBlocks(0, 0, std::array<nativesaves::Record, 1>{zonestates::staticObjectRecord(object)});
+        check(!terrain.gameZoneLoaded(1, 0), "out-of-zone coverage cannot load or mutate a neighbor");
     }
     materials(directory, 0, 0, std::numeric_limits<float>::quiet_NaN());
     {

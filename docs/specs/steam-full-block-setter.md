@@ -64,6 +64,10 @@ RGB shading, material recoloring, normalization or flag merging for this
 requested cell. Except for the whole-block sea substitution, all six
 bytes are preserved exactly.
 
+Static-object coverage0x40 is not merged from the old cell by this setter.
+Its separate effective-read marking/re-marking producer and phase boundaries
+are [static-object block flags](steam-static-object-block-flags.md).
+
 ## 3. Growth and raw gap bytes
 
 **0xa36e0** writes six bytes directly when the relative index is already

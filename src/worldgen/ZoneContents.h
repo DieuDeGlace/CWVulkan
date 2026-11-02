@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <set>
+#include <span>
 
 namespace worldgen {
 
@@ -63,6 +64,11 @@ struct ZoneLists {
 void copyAndRestamp(ZoneBuild &zone, ZoneLists &lists);
 void listLightsAndTreasures(ZoneBuild &zone, ZoneLists &lists);
 void markObjectBlocks(ZoneBuild &zone, ZoneLists &lists);
+// Shared generator/live-zone pass. Reads are effective and remain local to the owning zone;
+// rejected writes still contribute tracking keys. The set survives successive passes.
+void markObjectBlocks(std::span<const StaticObject> objects, std::set<std::tuple<int32_t, int32_t, int32_t>> &marked,
+                      const std::function<Block(int32_t, int32_t, int32_t)> &read,
+                      const std::function<void(int32_t, int32_t, int32_t, Block)> &store);
 
 // C9: the campfire and things of the daily refresh's travellers' camp, in cell (cx, cy) with spots
 // of `kind`; `race` the travellers' race. Part C's refresh calls it with the zone's stream seeded.
