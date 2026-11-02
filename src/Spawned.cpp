@@ -1134,15 +1134,12 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
     };
     // What a chest of a near zone holds (zone+0x450), by its index in the zone's objects.
     iw.contents = [&](int zx, int zy, int index) -> const uint8_t * {
-        const auto zone = zoneResidents.find({zx, zy});
-        if (zone == zoneResidents.end())
+        const auto contents = objectContents(ew, zx, zy, index);
+        if (!contents.known || !contents.item[0])
             return nullptr;
-        auto [chests, fresh] = zoneChests.try_emplace({zx, zy});
-        if (fresh)
-            for (const auto &[i, item] : zone->second->rewards)
-                worldgen::writeItem(chests->second[i].data(), item);
-        const auto held = chests->second.find(index);
-        return held == chests->second.end() ? nullptr : held->second.data();
+        auto &item = zoneChests[{zx, zy}][index]; // stable adapter storage, not a native-map insertion
+        item = contents.item;
+        return item.data();
     };
     // The sound requests of a step join the world's list, to be played by Audio; every list a
     // step makes joins the world's event lists (world+0x90 ..), for the network.
@@ -1732,6 +1729,35 @@ float SpawnedCreatures::playerAbilityDuration() const {
 const std::vector<nativeai::Object> *SpawnedCreatures::zoneObjects(int zx, int zy) const {
     const nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     return lists ? &lists->staticObjects : nullptr;
+}
+
+const nativesaves::Item *SpawnedCreatures::objectRewardRecord(int zx, int zy, int index) {
+    const auto zone = zoneResidents.find({zx, zy});
+    if (zone == zoneResidents.end())
+        return nullptr;
+    auto [chests, fresh] = zoneChests.try_emplace({zx, zy});
+    if (fresh)
+        for (const auto &[i, item] : zone->second->rewards)
+            worldgen::writeItem(chests->second[i].data(), item);
+    const auto held = chests->second.find(index);
+    return held == chests->second.end() ? nullptr : &held->second;
+}
+
+SpawnedCreatures::ObjectContents SpawnedCreatures::objectContents(ExtractedWorld &ew, int zx, int zy, int index) {
+    const auto token = ew.gameZoneToken(zx, zy);
+    if (!token)
+        return {};
+    if (!token->generated) {
+        const auto item = ew.capturedObjectReward(zx, zy, index);
+        return item ? ObjectContents{true, *item} : ObjectContents{};
+    }
+    if (!zoneResidents.contains({zx, zy}))
+        return {};
+    ObjectContents result;
+    result.known = true;
+    if (const auto *item = objectRewardRecord(zx, zy, index))
+        result.item = *item;
+    return result;
 }
 
 std::optional<objectvisual::State> SpawnedCreatures::objectVisual(int zx, int zy, const objectvisual::Key &key) const {

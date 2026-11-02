@@ -4,6 +4,7 @@
 
 #include "worldgen/Residents.h"
 #include "NativeInteract.h"
+#include "worldgen/StructureTables.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,6 +12,27 @@
 #include <limits>
 
 namespace useprompt {
+
+Object objectRecord(const nativeai::Object &record, int32_t zoneX, int32_t zoneY, int32_t index) {
+    Object object;
+    object.zoneX = zoneX;
+    object.zoneY = zoneY;
+    object.index = index;
+    std::memcpy(&object.type, record.data(), sizeof object.type);
+    FixedPoint position;
+    std::memcpy(position.data(), record.data() + 8, sizeof position);
+    object.fixedPosition = position;
+    float scale;
+    std::memcpy(&scale, record.data() + 0x24, sizeof scale);
+    const auto base = worldgen::objectSize(object.type);
+    object.size = glm::vec3(base.x, base.y, base.z) * scale;
+    object.quarterTurn = (record[0x20] & 1) != 0;
+    object.active = record[nativeinteract::OBJECT_STATE] != 0;
+    std::memcpy(&object.occupant, record.data() + nativeinteract::OBJECT_USER, sizeof object.occupant);
+    std::memcpy(object.item.data(), record.data() + nativeinteract::OBJECT_ITEM, object.item.size());
+    object.itemCount = record[0xd8];
+    return object;
+}
 
 namespace {
 

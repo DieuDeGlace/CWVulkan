@@ -10,6 +10,30 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Interaction targets and mission object checks now consume current loaded object
+  vectors, including moved/resized footprints, canonical indices, current state,
+  full required items and unsigned counts. Generation-time placement recovery and
+  native-path optimistic object toggles no longer override received/authority state.
+  Chest receipt preserves the full current reward item through inventory and hold-up.
+  Rewards remain a separate map, not an inference from the required item.
+
+  The extractor now emits a project-owned reward-map chunk, including explicit
+  empty maps, using a bounded guarded reader of the independently specified native
+  layout. The engine shares immutable captured maps across source snapshots and
+  distinguishes known absence from omitted metadata without hot-path file reads.
+  Old captures need refreshing; DataCheck reports missing/invalid maps. Synthetic
+  native-memory tests cover signed order, sentinel/black-node distinction, full item
+  bytes, invalid/count/cycle cases and visibly changing observations. They establish
+  no atomic native snapshot or particular synchronization lock.
+
+  All five targets build warning-free; full CPU/owner and77 shader,2 camera,24 GUI,
+  6 map/shared-water/Alpha-scenery checks pass. Five no-save runs exit0, all captures
+  viewed, with the save database unchanged. A real owner-data subset passes and
+  correctly warns about its older omitted map. The updated extractor is installed
+  locally with the previous DLL backed up. Fresh native-map capture acceptance is
+  pending: computer control fails during initialization with missing kernel assets,
+  including after reset/retry. The source/runtime packages contain no owner data.
+
 - Generated static-object records now preserve the signed64 user/link ID and
   unsigned required-item count rather than losing both during conversion to the
   live format. The default count remains1; explicit0 and255 remain unchanged.

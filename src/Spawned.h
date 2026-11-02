@@ -237,6 +237,11 @@ class SpawnedCreatures {
     // A zone's static objects as the world's AI and interactions keep them (0xe0 bytes each:
     // a door's shut byte +0x28, a seat's user +0x30); null until the zone is in memory.
     const std::vector<nativeai::Object> *zoneObjects(int zx, int zy) const;
+    struct ObjectContents {
+        bool known = false;
+        nativesaves::Item item{}; // category0 is known absence only when known is true
+    };
+    ObjectContents objectContents(ExtractedWorld &, int zx, int zy, int index);
     std::optional<objectvisual::State> objectVisual(int zx, int zy, const objectvisual::Key &key) const;
     void setUsedCells(const std::set<nativesaves::Cell> *cells) { usedCells = cells; }
     // --- What changed in the zones (ZoneStates.h, native-saves.md §5.3) ---
@@ -470,6 +475,7 @@ class SpawnedCreatures {
     std::vector<std::pair<int, glm::vec3>> list(const ExtractedWorld &ew, int hostility) const;
 
   private:
+    const nativesaves::Item *objectRewardRecord(int zx, int zy, int index);
     struct Sprite {
         std::string name; // without sprites/ and .cub
         int size[3] = {0, 0, 0};

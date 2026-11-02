@@ -83,6 +83,10 @@ seated players.
 
 ## 3. Chest rewards are a separate current map
 
+The native wrapper/node ABI, sentinel and signed in-order traversal, known-empty
+representation and synchronization limits are
+[reward-map capture layout](steam-static-object-reward-map-capture.md).
+
 **Zone+0x450** is a separate ordered map: **signed32 object index → one full
 0xa0-byte reward item**. Node key is+0x1c and item value+0x20. It is neither
 the required item at object+0x38 nor the required count at+0xd8, and has no

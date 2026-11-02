@@ -4,6 +4,7 @@
 // (the character's data +0xd8) or also solved (+0xc8), and what the completed ones give the player.
 // The places are 1024-block cells, a big place's rounded down to even.
 #include "worldgen/Generator.h"
+#include "NativeSaves.h"
 
 #include <array>
 #include <cstdint>
@@ -21,10 +22,8 @@ struct World {
     std::set<Cell> *solved = nullptr;     // the character's data +0xc8
     // Every creature's record (world+0x40).
     std::function<void(const std::function<void(const uint8_t *)> &)> creatures;
-    // A loaded zone's objects (zone+0x60), and whether one is still active (its +0x28, 1 at
-    // first): a chest no longer is once opened.
-    std::function<std::vector<worldgen::ZoneObject>(int zx, int zy)> objects;
-    std::function<bool(const worldgen::ZoneObject &)> active;
+    // Lookup only: current physical records of a loaded zone, including current state+0x28.
+    std::function<const std::vector<nativesaves::Record> *(int zx, int zy)> objects;
     // A near zone's mission creatures (zone+0x498), and whether a creature is dead for good
     // (world+0x20).
     std::function<std::vector<int64_t>(int zx, int zy)> missionCreatures;

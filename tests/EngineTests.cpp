@@ -179,6 +179,7 @@ int staticObjectStreamingTests();
 int worldModelControlsTests();
 int groundItemSceneTests();
 int ownedGroundCubesTests();
+int objectRewardCaptureTests();
 int particleTests();
 int bodyParticleTests();
 int lightPublicationTests();
@@ -2061,8 +2062,7 @@ static void progressionRules() {
                 missions::World w;
                 w.player = me.data(), w.finished = &finished, w.solved = &solved;
                 w.creatures = [&](const std::function<void(const uint8_t *)> &f) { f(resident.data()); };
-                w.objects = [](int, int) { return std::vector<worldgen::ZoneObject>(); };
-                w.active = [](const worldgen::ZoneObject &) { return true; };
+                w.objects = [](int, int) -> const std::vector<nativesaves::Record> * { return nullptr; };
                 w.missionCreatures = [](int, int) { return std::vector<int64_t>(); };
                 w.dead = [](int64_t) { return false; };
                 w.hasSpecial = [](int id) { return id == 1 || id == 4; };
@@ -2081,6 +2081,49 @@ static void progressionRules() {
                 CHECK(!missions::update(w, fx));
             }
         CHECK(gnomes > 0 && gliders > 0);
+        bool handInChecked = false;
+        for (int rx = 120; rx < 136 && !handInChecked; ++rx)
+            for (int ry = 120; ry < 136 && !handInChecked; ++ry)
+                for (const auto &role : worldgen::regionRoles({rx, ry}).roles) {
+                    if (role[2] != 15)
+                        continue;
+                    const missions::Cell place{role[0], role[1]};
+                    const int64_t x = (int64_t(place[0]) * 1024 + 512) * 65536;
+                    const int64_t y = (int64_t(place[1]) * 1024 + 512) * 65536;
+                    worldgen::CreatureRecord player(0x1600);
+                    std::memcpy(player.data() + worldgen::creature::REGION, &rx, sizeof rx);
+                    std::memcpy(player.data() + worldgen::creature::REGION + 4, &ry, sizeof ry);
+                    std::memcpy(player.data() + worldgen::creature::POSITION, &x, sizeof x);
+                    std::memcpy(player.data() + worldgen::creature::POSITION + 8, &y, sizeof y);
+                    worldgen::ZoneObject chest;
+                    chest.type = 0x16;
+                    chest.x = x;
+                    chest.y = y;
+                    chest.takes.category = 22;
+                    std::vector<nativesaves::Record> live{zonestates::staticObjectRecord(chest)};
+                    std::set<missions::Cell> finished, solved;
+                    missions::World world;
+                    world.player = player.data();
+                    world.finished = &finished;
+                    world.solved = &solved;
+                    world.creatures = [](const auto &) {};
+                    world.objects = [&](int zx, int zy) -> const std::vector<nativesaves::Record> * {
+                        return zx == int(x >> 22) && zy == int(y >> 22) ? &live : nullptr;
+                    };
+                    world.missionCreatures = [](int, int) { return std::vector<int64_t>{}; };
+                    world.dead = [](int64_t) { return false; };
+                    world.hasSpecial = [](int id) { return id == 4; };
+                    missions::Effects effects;
+                    CHECK(missions::update(world, effects) && !finished.contains(place));
+                    live[0][0x28] = 0;
+                    CHECK(missions::update(world, effects) && finished.contains(place));
+                    finished.clear();
+                    live.clear();
+                    CHECK(missions::update(world, effects) && !finished.contains(place));
+                    handInChecked = true;
+                    break;
+                }
+        CHECK(handInChecked);
         // Every artifact reward place (role 14) has its artifact (0x11d7b0): category 23, one of
         // seven kinds, its place cell as its region and its realm (0x2bb060) at +0x18.
         int artifacts = 0;
@@ -9370,6 +9413,8 @@ int main(int argc, char **argv) {
         return groundItemSceneTests();
     if (argc == 2 && std::string(argv[1]) == "ownedgroundcubes")
         return ownedGroundCubesTests();
+    if (argc == 2 && std::string(argv[1]) == "objectrewards")
+        return objectRewardCaptureTests();
     if (argc == 2 && std::string(argv[1]) == "deadcreatures")
         return deadCreatureTests();
     if (argc == 2 && std::string(argv[1]) == "worldobjects")
@@ -10674,6 +10719,7 @@ int main(int argc, char **argv) {
     failures += worldModelControlsTests();
     failures += groundItemSceneTests();
     failures += ownedGroundCubesTests();
+    failures += objectRewardCaptureTests();
     failures += particleTests();
     failures += bodyParticleTests();
     failures += lightPublicationTests();

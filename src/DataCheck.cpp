@@ -1,4 +1,5 @@
 #include "DataCheck.h"
+#include "StaticObjectRewards.h"
 #include "Assets.h"
 #include "Character.h"
 #include "ClassMoves.h"
@@ -30,8 +31,9 @@ std::string examples(const std::vector<std::string> &items) {
     if (items.size() > 4) out += "; ...";
     return out;
 }
-bool placementFile(const fs::path &file, std::string &error, bool &nativeLights) {
+bool placementFile(const fs::path &file, std::string &error, bool &nativeLights, bool &objectRewards) {
     nativeLights = false;
+    objectRewards = false;
     bool modelLights = false, objectLights = false;
     std::ifstream in(file, std::ios::binary | std::ios::ate);
     auto length = in ? in.tellg() : std::streampos(-1);
@@ -45,7 +47,23 @@ bool placementFile(const fs::path &file, std::string &error, bool &nativeLights)
         if (length - at < 12 || !in.read((char *)header, 12)) { error = "truncated placement header"; return false; }
         at += 12;
         uint64_t bytes = (uint64_t)header[1] * header[2];
-        if (!header[1] || bytes > (uint64_t)(length - at)) { error = "truncated placement records"; return false; }
+        if (!header[1] || bytes > (uint64_t)(length - at)) {
+            error = "truncated placement records";
+            return false;
+        }
+        if (header[0] == objectrewards::CHUNK) {
+            if (objectRewards || header[1] != objectrewards::RECORD_BYTES) {
+                error = "duplicate or invalid object reward map";
+                return false;
+            }
+            std::vector<uint8_t> payload(static_cast<size_t>(bytes));
+            if ((!payload.empty() && !in.read(reinterpret_cast<char *>(payload.data()), payload.size())) ||
+                !objectrewards::decode(payload)) {
+                error = "invalid object reward entries";
+                return false;
+            }
+            objectRewards = true;
+        }
         if (header[0] == 0x90 || header[0] == 0xc0) {
             bool &seen = header[0] == 0x90 ? modelLights : objectLights;
             const uint32_t stride = header[0] == 0x90 ? 0x40 : 0xe0;
@@ -138,9 +156,10 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
     add(fonts ? Status::Pass : Status::Error, "Original fonts", fonts ? "both font resources present" : "font resource missing or empty",
         fonts ? "" : "Repair the owner's Steam installation.");
 
-    size_t lightSnapshots = 0;
+    size_t lightSnapshots = 0, rewardSnapshots = 0;
     r.world = wantedWorld.empty() ? ExtractedWorld::find(game) : wantedWorld;
-    ExtractedWorld world; bool terrain = !r.world.empty() && world.open(r.world, why);
+    ExtractedWorld world;
+    bool terrain = !r.world.empty() && world.open(r.world, why);
     if (terrain) {
         r.zones = world.zoneCount();
         if (progress) progress("Checking terrain and placement records: " + std::to_string(r.zones) + " zones...");
@@ -161,10 +180,12 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
             if (nonempty(rec)) {
                 r.placements++;
                 if (deep) {
-                    bool nativeLights = false;
-                    if (!placementFile(rec, why, nativeLights)) badPlacements.push_back(utf8(rec.filename()) + " (" + why + ")");
+                    bool nativeLights = false, objectRewards = false;
+                    if (!placementFile(rec, why, nativeLights, objectRewards))
+                        badPlacements.push_back(utf8(rec.filename()) + " (" + why + ")");
                     else {
                         lightSnapshots += nativeLights;
+                        rewardSnapshots += objectRewards;
                         for (const auto &p : world.propsAbsolute(x, y)) {
                             propsChecked++;
                             if (p.beam) continue; // generated primitive, not a missing owner voxel asset
@@ -186,19 +207,30 @@ Report inspect(const fs::path &game, const fs::path &wantedWorld, bool deep, con
             add(lightSnapshots == r.zones ? Status::Pass : Status::Warning, "Native lights",
                 std::to_string(lightSnapshots) + "/" + std::to_string(r.zones) + " zones have auxiliary light snapshots",
                 lightSnapshots == r.zones ? "" : "Update the extractor, restart the original game and press F5 in affected zones.");
+            add(rewardSnapshots == r.zones ? Status::Pass : Status::Warning, "Object rewards",
+                std::to_string(rewardSnapshots) + "/" + std::to_string(r.zones) + " zones include captured reward maps",
+                rewardSnapshots == r.zones
+                    ? ""
+                    : "Older captures cannot supply object reward contents. Refresh affected zones with the updated extractor.");
             add(materialZones == r.zones ? Status::Pass : Status::Warning, "Terrain edit materials",
                 std::to_string(materialZones) + "/" + std::to_string(r.zones) + " zones include original cached material inputs",
-                materialZones == r.zones ? "" : "Refresh terrain with the updated extractor; older captures cannot supply downward-fill materials.");
+                materialZones == r.zones
+                    ? ""
+                    : "Refresh terrain with the updated extractor; older captures cannot supply downward-fill materials.");
             r.estimatedObjectTypes.assign(estimates.begin(), estimates.end());
-            add(missingModels.empty() ? Status::Pass : Status::Warning, "Placed sprites", std::to_string(propsChecked) +
-                " decoded placements; " + std::to_string(missingModels.size()) + " missing model files" +
-                (missingModels.empty() ? "" : ": " + examples(std::vector<std::string>(missingModels.begin(), missingModels.end()))),
+            add(missingModels.empty() ? Status::Pass : Status::Warning, "Placed sprites",
+                std::to_string(propsChecked) + " decoded placements; " + std::to_string(missingModels.size()) + " missing model files" +
+                    (missingModels.empty() ? "" : ": " + examples(std::vector<std::string>(missingModels.begin(), missingModels.end()))),
                 missingModels.empty() ? "" : "Capture the missing native geometry or mapping; replacement models are not generated.");
-            add(estimates.empty() ? Status::Pass : Status::Warning, "Object sizes", std::to_string(estimates.size()) + " types use provisional size estimates",
-                estimates.empty() ? "" : "These types need native transform measurements before size parity can be claimed; the full list follows.");
+            add(estimates.empty() ? Status::Pass : Status::Warning, "Object sizes",
+                std::to_string(estimates.size()) + " types use provisional size estimates",
+                estimates.empty()
+                    ? ""
+                    : "These types need native transform measurements before size parity can be claimed; the full list follows.");
         }
-    } else add(Status::Error, "Terrain", r.world.empty() ? "no extracted seed folder" : why,
-               "Install ZoneExtractor, load the owner's character and extract terrain (F11). Keep manifest.txt with the zones.");
+    } else
+        add(Status::Error, "Terrain", r.world.empty() ? "no extracted seed folder" : why,
+            "Install ZoneExtractor, load the owner's character and extract terrain (F11). Keep manifest.txt with the zones.");
     for (const char *name : {"sprite-groups.txt", "sprite-scales.txt", "class-rules.txt", "item-functions.txt"}) {
         bool exists = nonempty(game / "Extract" / name);
         add(exists ? Status::Pass : Status::Warning, name, exists ? "present" : "missing or empty",

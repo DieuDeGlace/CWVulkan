@@ -1,5 +1,6 @@
 ﻿#include "../../src/SceneCapture.h"
 #include "../../src/ProceduralItemData.h"
+#include "ObjectRewardCapture.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -714,6 +715,19 @@ static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCa
         out.insert(out.end(), (unsigned char *)&count, (unsigned char *)&count + 4);
         if (bytes)
             out.insert(out.end(), range[0], range[0] + bytes);
+    }
+    const auto rewards =
+        rewardcapture::read(uint64_t(reinterpret_cast<uintptr_t>(zone)), [](uint64_t address, void *destination, size_t size) {
+            SIZE_T copied = 0;
+            return ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void *>(uintptr_t(address)), destination, size, &copied) &&
+                   copied == size;
+        });
+    if (rewards) {
+        const auto payload = objectrewards::encode(*rewards);
+        const uint32_t header[] = {objectrewards::CHUNK, objectrewards::RECORD_BYTES, uint32_t(rewards->size())};
+        const auto *begin = reinterpret_cast<const unsigned char *>(header);
+        out.insert(out.end(), begin, begin + sizeof header);
+        out.insert(out.end(), payload.begin(), payload.end());
     }
     if (meshCacheLocked) {
         // saveZones holds this exact native lock and the zone-map lifetime lock.

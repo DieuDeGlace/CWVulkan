@@ -2,6 +2,7 @@
 #include "Extracted.h"
 #include "World.h"
 #include "Spawned.h"
+#include "UsePrompt.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -16,7 +17,8 @@ template <class T> void field(std::ostream &out, const T &value) {
 template <class T> void put(std::array<uint8_t, 0xe0> &record, size_t offset, const T &value) {
     std::memcpy(record.data() + offset, &value, sizeof value);
 }
-void fixtureZone(const fs::path &folder, int32_t x, int32_t y, int32_t objectX, bool originObject = false) {
+void fixtureZone(const fs::path &folder, int32_t x, int32_t y, int32_t objectX, bool originObject = false,
+                 const std::optional<objectrewards::Map> &rewards = std::nullopt) {
     const auto stem = "z_" + std::to_string(x) + "_" + std::to_string(y);
     std::ofstream terrain(folder / (stem + ".cwz"), std::ios::binary);
     terrain.write("CWZ1", 4);
@@ -52,6 +54,14 @@ void fixtureZone(const fs::path &folder, int32_t x, int32_t y, int32_t objectX, 
     put(ground, 0xa0, std::array<int64_t, 3>{int64_t(objectX) * 65536, 65536, 65536});
     put(ground, 0xd4, int32_t(-2));
     records.write(reinterpret_cast<const char *>(ground.data()), ground.size());
+    if (rewards) {
+        field(records, objectrewards::CHUNK);
+        field(records, objectrewards::RECORD_BYTES);
+        field(records, uint32_t(rewards->size()));
+        const auto bytes = objectrewards::encode(*rewards);
+        if (!bytes.empty())
+            records.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    }
 }
 std::vector<DrawItem> objects(World &world) {
     std::vector<DrawItem> opaque, water;
@@ -88,8 +98,10 @@ int staticObjectStreamingTests() {
         }
     }
     fixtureZone(folder, 0, 0, 1, true);
-    fixtureZone(folder, -1, 0, -63);
-    fixtureZone(folder, 1, 0, 65);
+    auto capturedReward = nativesaves::makeItem(23, 4);
+    capturedReward[0x50] = 0xcd;
+    fixtureZone(folder, -1, 0, -63, false, objectrewards::Map{});
+    fixtureZone(folder, 1, 0, 65, false, objectrewards::Map{{0, capturedReward}});
     const auto oldStyle = renderStyle();
     {
         Renderer renderer;
@@ -186,8 +198,27 @@ int staticObjectStreamingTests() {
                     auto replacement = captured->staticObjects.front();
                     put(replacement, 8, std::array<int64_t, 3>{11 * 65536, 65536, 65536});
                     put(replacement, 0x24, 2.f);
-                    replacement[0x20] = 1;
+                    replacement[0x20] = 191;
+                    const int64_t linked = 0x123456789abcde;
+                    put(replacement, 0x30, linked);
+                    auto required = nativesaves::makeItem(22, 7);
+                    required[0x50] = 0xab;
+                    std::memcpy(replacement.data() + 0x38, required.data(), required.size());
+                    replacement[0xd8] = 255;
                     live.replaceStaticObjects(blocks, {{0, 0}, {replacement}});
+                    const auto prompt = useprompt::objectRecord(live.zoneObjects(0, 0)->front(), 0, 0, 0);
+                    check(prompt.fixedPosition == useprompt::FixedPoint{11 * 65536, 65536, 65536} && prompt.size == glm::vec3(4, 2, 6) &&
+                              prompt.quarterTurn && prompt.occupant == linked && prompt.item == required && prompt.itemCount == 255 &&
+                              prompt.active,
+                          "interaction fields follow current replacement placement, full requirement, unsigned count and link");
+                    check(!live.objectContents(blocks, 0, 0, 0).known && !live.objectContents(blocks, 99, 99, 0).known,
+                          "raw-only captured or unloaded zones cannot turn an unknown reward map into generated contents");
+                    const auto contents = live.objectContents(blocks, 1, 0, 0);
+                    const auto absent = live.objectContents(blocks, 1, 0, 99);
+                    const auto empty = live.objectContents(blocks, -1, 0, 0);
+                    check(contents.known && contents.item == capturedReward && absent.known && absent.item[0] == 0 && empty.known &&
+                              empty.item[0] == 0,
+                          "captured full reward items, missing keys and explicit empty maps remain distinct from unknown metadata");
                     world.update({1, 1, 129});
                     draws = objects(world);
                     check(std::any_of(
@@ -204,6 +235,8 @@ int staticObjectStreamingTests() {
                         openedRecord[0x28] = 0;
                         put(openedRecord, 0x2c, 0.f);
                         live.replaceStaticObjects(blocks, {{0, 0}, {openedRecord}});
+                        check(!useprompt::objectRecord(live.zoneObjects(0, 0)->front(), 0, 0, 0).active,
+                              "interaction activity follows the current received state independently of generation");
                         draws = objects(world);
                         const auto opened = std::find_if(draws.begin(), draws.end(),
                                                          [](const auto &draw) { return (*draw.nativePosition)[0] == 11 * 65536; });

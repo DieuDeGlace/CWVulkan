@@ -1,5 +1,29 @@
 # Extracted scene metadata
 
+## Static-object reward maps
+
+`CWR1` may contain the project-owned chunk `0xffff0002`, with stride164 and
+count equal to the number of reward-map entries. Each record contains a
+little-endian signed32 physical object index, followed by the full160-byte item.
+Records are in strictly increasing signed-key order. A supplied zero-count chunk
+is a known-empty map. A missing, malformed or duplicate chunk is unknown metadata;
+it is never evidence that a chest has no reward. Category0 entries remain entries.
+
+These values are separate from the required item/count embedded in the224-byte
+object record. The engine retains the immutable reward map with its loaded source
+zone and shares it across block/light snapshots. Interaction reads do no file I/O.
+Both client receipt and authority lookup consume these full item values; they do
+not rebuild them from a category, rarity or object type. Older files need a fresh
+owner capture to supply this map. Generated zones retain their generated map.
+
+The extractor uses the independently specified
+[native reward-map layout](specs/steam-static-object-reward-map-capture.md). It reads
+memory without invoking native tree methods, checks traversal/count/parent/nil/key
+consistency and repeats the observed wrapper/node checks. An unavailable or visibly
+changing map omits the chunk. Those checks do not establish an atomic snapshot or
+prove a particular lock freezes every map writer; valid quiescent input remains
+the capture contract. Sentinel payload bytes are never exported as an item.
+
 `CWR1` continues to store its existing record lists. New owner captures may also
 contain a project-defined record tagged `0xffff0001`, with stride112 and count1.
 Older readers skip this unknown tag; older files without it remain supported.

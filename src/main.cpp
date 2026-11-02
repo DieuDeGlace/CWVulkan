@@ -1748,7 +1748,11 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     useprompt::Prompt usePrompt;
     std::string useIcon;
     useprompt::Camera useCamera;
-    std::optional<worldgen::ZoneObject> chestToOpen;
+    struct PendingChest {
+        lore::Cell cell;
+        nativeplayer::Item item;
+    };
+    std::optional<PendingChest> chestToOpen;
     bool reviveNow = false;
     bool autoUsePress = false; // --auto-use: the key pressed once
     // What is carried besides gear (the game's items: resources, food, pets, specials),
@@ -5297,48 +5301,34 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             const int32_t maxZoneX = zoneOf(gamemath::addFixed(playerFixed[0], 8 * 65536));
             const int32_t minZoneY = zoneOf(gamemath::subtractFixed(playerFixed[1], 8 * 65536));
             const int32_t maxZoneY = zoneOf(gamemath::addFixed(playerFixed[1], 8 * 65536));
-            std::vector<worldgen::ZoneObject> sceneObjects; // beside scene.objects
+            std::vector<SpawnedCreatures::ObjectContents> sceneContents; // beside scene.objects
             for (int32_t zx = minZoneX; zx <= maxZoneX; zx++)
                 for (int32_t zy = minZoneY; zy <= maxZoneY; zy++) {
-                    std::vector<worldgen::ZoneObject> objects;
-                    if (!extractedWorld.gameObjects(zx, zy, objects))
+                    const auto *objects = spawned.zoneObjects(zx, zy);
+                    if (!objects)
                         continue;
-                    const std::vector<nativeai::Object> *kept = spawned.zoneObjects(zx, zy);
-                    for (size_t i = 0; i < objects.size(); i++) {
-                        const worldgen::ZoneObject &o = objects[i];
-                        useprompt::Object u;
-                        const int64_t dots[3] = {o.x, o.y, o.z};
-                        u.at = extractedWorld.toLocal(dots);
-                        u.fixedPosition = useprompt::FixedPoint{o.x, o.y, o.z};
-                        if (gamemath::fixedDistanceSquared(playerFixed.data(), dots) > 16.0f)
+                    for (size_t i = 0; i < objects->size(); i++) {
+                        auto u = useprompt::objectRecord((*objects)[i], zx, zy, int32_t(i));
+                        const auto &position = *u.fixedPosition;
+                        if (gamemath::fixedDistanceSquared(playerFixed.data(), position.data()) > 16.0f)
                             continue; // (beyond the use key's 4 blocks)
-                        u.zoneX = zx, u.zoneY = zy, u.index = (int32_t)i, u.type = o.type;
-                        const worldgen::ObjectSize base = worldgen::objectSize(o.type);
-                        u.size = glm::vec3(base.x, base.y, base.z) * o.scale;
-                        u.quarterTurn = (o.turn & 1) != 0;
-                        if (kept && i < kept->size()) {
-                            u.active = (*kept)[i][0x28] != 0;
-                            std::memcpy(&u.occupant, (*kept)[i].data() + 0x30, 8);
-                        }
-                        if (const worldgen::Item &w = o.takes; w.category) {
-                            Gear::Item it;
-                            it.category = w.category, it.id = w.id, it.material = w.material, it.rarity = w.rarity, it.modifier = w.modifier;
-                            it.region[0] = w.region.x, it.region[1] = w.region.y, it.formula = (int)w.realm;
-                            u.item = rawItem(it);
-                            if (kept && i < kept->size())
-                                std::memcpy(u.item.data(), (*kept)[i].data() + nativeinteract::OBJECT_ITEM, nativesaves::ITEM_SIZE);
-                            u.itemCount = kept && i < kept->size() ? (*kept)[i][0xd8] : o.takesCount;
+                        u.at = extractedWorld.toLocal(position.data());
+                        if (u.item[0]) {
+                            const auto it = Gear::fromRecord(u.item);
                             u.itemName = itemName(it);
                             u.carried = nativeInventory ? nativeInventory->inventory.quantity(u.item)
-                                                        : carriedOf(w.category, w.id, w.modifier, w.material);
-                            u.active = u.active && !usedObjects.count({zx, zy, (int32_t)i});
+                                                        : carriedOf(it.category, it.id, it.modifier, it.material);
+                            if (!nativeInventory)
+                                u.active = u.active && !usedObjects.count({zx, zy, int32_t(i)});
                         }
-                        if (o.type == 0x16) { // a chest: opened once its cell is a known place
-                            u.chestCellKnown = usedCells.count(lore::cellOf(o.x, o.y)) != 0;
-                            u.chestHasItem = o.reward.category != 0;
+                        SpawnedCreatures::ObjectContents contents;
+                        if (u.type == 0x16) { // contents are a separate current index-keyed map
+                            contents = spawned.objectContents(extractedWorld, zx, zy, int32_t(i));
+                            u.chestCellKnown = usedCells.contains(lore::cellOf(position[0], position[1]));
+                            u.chestHasItem = contents.known && contents.item[0] != 0;
                         }
-                        scene.objects.push_back(u);
-                        sceneObjects.push_back(o);
+                        scene.objects.push_back(std::move(u));
+                        sceneContents.push_back(contents);
                     }
                 }
 
@@ -5533,7 +5523,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 }
                 case Action::GiveItem: {
                     const useprompt::Object &o = scene.objects[(size_t)p.object];
-                    const worldgen::Item &w = sceneObjects[(size_t)p.object].takes;
+                    const auto wanted = Gear::fromRecord(o.item);
                     int left = o.type == 9 ? 0 : o.itemCount; // (type 9 keeps the item)
                     if (nativeInventory && o.type != 9) {
                         nativeInventory->inventory.takeCreature(o.item, (uint8_t)o.itemCount);
@@ -5541,8 +5531,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         left = 0;
                     }
                     for (auto it = bag.begin(); it != bag.end() && left > 0;) {
-                        if (it->item.category == w.category && it->item.id == w.id && it->item.modifier == w.modifier &&
-                            it->item.material == w.material) {
+                        if (it->item.category == wanted.category && it->item.id == wanted.id && it->item.modifier == wanted.modifier &&
+                            it->item.material == wanted.material) {
                             const int taken = std::min(left, it->count);
                             left -= taken, it->count -= taken;
                             if (it->count <= 0) {
@@ -5552,18 +5542,21 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         }
                         ++it;
                     }
-                    const std::array<int32_t, 3> key{o.zoneX, o.zoneY, o.index};
-                    if (usedObjects.insert(key).second)
-                        saveGame.usedObjects.push_back(key);
-                    spawned.setObjectActive(o.zoneX, o.zoneY, (size_t)o.index, false);
+                    if (!nativeInventory) {
+                        const std::array<int32_t, 3> key{o.zoneX, o.zoneY, o.index};
+                        if (usedObjects.insert(key).second)
+                            saveGame.usedObjects.push_back(key);
+                        spawned.setObjectActive(o.zoneX, o.zoneY, size_t(o.index), false);
+                    }
                     audio.playInterface(soundrules::soundid::DROP_ITEM);
                     logLine("Use: gave object " + std::to_string(o.type) + " its item (" + o.itemName + ")");
                     break;
                 }
                 case Action::OpenChest: {
-                    chestToOpen = sceneObjects[(size_t)p.object];
                     const useprompt::Object &o = scene.objects[(size_t)p.object];
-                    spawned.setObjectActive(o.zoneX, o.zoneY, (size_t)o.index, false); // (an opened chest stays open)
+                    const auto &contents = sceneContents[size_t(p.object)];
+                    if (contents.known && contents.item[0] && o.fixedPosition)
+                        chestToOpen = PendingChest{lore::cellOf((*o.fixedPosition)[0], (*o.fixedPosition)[1]), contents.item};
                     break;
                 }
                 case Action::Customize:
@@ -5573,8 +5566,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     }
                     break;
                 case Action::ExamineLore: {
-                    const worldgen::ZoneObject &o = sceneObjects[(size_t)p.object];
-                    const lore::Cell cell = lore::cellOf(o.x, o.y);
+                    const auto &position = *scene.objects[size_t(p.object)].fixedPosition;
+                    const lore::Cell cell = lore::cellOf(position[0], position[1]);
                     startTale(Examined{lore::examine(cell).value_or(lore::Reading{cell, {}}), scene.objects[(size_t)p.object].at});
                     break;
                 }
@@ -6267,24 +6260,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 w.player = me;
                 w.finished = &saveGame.finishedMissions, w.solved = &saveGame.solvedMissions;
                 w.creatures = [&](const std::function<void(const uint8_t *)> &f) { spawned.forEach(f); };
-                w.objects = [&](int zx, int zy) {
-                    std::vector<worldgen::ZoneObject> out;
-                    extractedWorld.gameObjects(zx, zy, out);
-                    return out;
-                };
-                w.active = [&](const worldgen::ZoneObject &o) { // (+0x28: 1 until opened or given its item)
-                    if (o.type == 0x16 && o.reward.category)
-                        return !usedCells.count({(int32_t)std::floor((double)(o.x >> 16) / 16.0), (int32_t)std::floor((double)(o.y >> 16) / 16.0)});
-                    if (!o.takes.category)
-                        return true;
-                    const int32_t zx = (int32_t)std::floor((double)(o.x >> 16) / 64.0), zy = (int32_t)std::floor((double)(o.y >> 16) / 64.0);
-                    std::vector<worldgen::ZoneObject> objects;
-                    extractedWorld.gameObjects(zx, zy, objects);
-                    for (size_t i = 0; i < objects.size(); i++)
-                        if (objects[i].x == o.x && objects[i].y == o.y && objects[i].type == o.type)
-                            return !usedObjects.count({zx, zy, (int32_t)i});
-                    return true;
-                };
+                w.objects = [&](int zx, int zy) { return spawned.zoneObjects(zx, zy); };
                 w.missionCreatures = [&](int zx, int zy) { return spawned.missionIds(zx, zy); };
                 w.dead = [&](int64_t id) { return spawned.isWorldDead(id); };
                 w.hasSpecial = [&](int id) { // (0x5e890: an item 24 of the player's region; 4 always)
@@ -6569,17 +6545,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     }
             }
             if (chestToOpen) { // a chest the use key opened (UsePrompt.h, spec 3.7.3)
-                const worldgen::ZoneObject chest = *std::exchange(chestToOpen, std::nullopt);
+                const PendingChest chest = *std::exchange(chestToOpen, std::nullopt);
                 // Its cell becomes a known place, which keeps it opened.
-                const lore::Cell cell = lore::cellOf(chest.x, chest.y);
+                const lore::Cell cell = chest.cell;
                 if (usedCells.insert(cell).second)
                     saveGame.usedCells.push_back(cell);
                 // Its item (a role's own treasure, or the zone's generated reward made into the
                 // player's) goes into the bag, or a gold bag into the purse (collect).
-                const worldgen::Item &reward = chest.reward;
-                const nativeplayer::Item raw = nativeplayer::item(reward.category, reward.id, reward.material, reward.rarity, reward.modifier,
-                                                                  reward.region.x, reward.region.y, (int)reward.realm);
-                const Gear::Item got = groundLoot(raw.data(), player.position, 0.0f, 0.0f, 1, false);
+                const Gear::Item got = groundLoot(chest.item.data(), player.position, 0.0f, 0.0f, 1, false);
                 loot.back().taken = true;
                 // The dialog names it, a special or a fine piece of gear as "the" item.
                 const int type = got.category;
@@ -6592,8 +6565,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     useprompt::Scene holder;
                     holder.player = me->record;
                     holder.abilityDuration = spawned.playerAbilityDuration();
-                    useprompt::holdUp(holder, nativeplayer::item(got.category, got.id, got.material, got.rarity, got.modifier, got.region[0],
-                                                                 got.region[1], got.formula));
+                    useprompt::holdUp(holder, Gear::toRecord(got));
                 }
                 logLine("Opened a chest: " + itemName(got));
             }

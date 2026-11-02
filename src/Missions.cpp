@@ -76,15 +76,22 @@ bool update(World &w, Effects &out) {
     const int64_t px = get<int64_t>(me, worldgen::creature::POSITION), py = get<int64_t>(me, worldgen::creature::POSITION + 8);
     const int64_t reach = (int64_t)20 * 0x10000;
     for (int zx = zoneOf(px - reach); zx <= zoneOf(px + reach); zx++)
-        for (int zy = zoneOf(py - reach); zy <= zoneOf(py + reach); zy++)
-            for (const worldgen::ZoneObject &o : w.objects(zx, zy)) {
-                const Cell place = placeOf(o.x, o.y);
-                if ((o.type == 0x15 || o.type == 0x16) && o.takes.category && !w.active(o) && within2(me, o.x, o.y, o.z) < RANGE2 &&
-                    kindAt(place) == 15)
+        for (int zy = zoneOf(py - reach); zy <= zoneOf(py + reach); zy++) {
+            const auto *objects = w.objects(zx, zy);
+            if (!objects)
+                continue;
+            for (const auto &object : *objects) {
+                const auto *record = object.data();
+                const int type = get<int32_t>(record, 0);
+                const int64_t x = get<int64_t>(record, 8), y = get<int64_t>(record, 16), z = get<int64_t>(record, 24);
+                const bool active = record[0x28] != 0;
+                const Cell place = placeOf(x, y);
+                if ((type == 0x15 || type == 0x16) && record[0x38] && !active && within2(me, x, y, z) < RANGE2 && kindAt(place) == 15)
                     finish(place);
-                if (o.type == 0x7e && !w.active(o) && kindAt(place) == 22)
+                if (type == 0x7e && !active && kindAt(place) == 22)
                     solve(place);
             }
+        }
     // A zone within three of the player's whose mission creatures are all dead: the player's
     // place is finished (and solved but for kinds 15-18).
     const int pzx = zoneOf(px), pzy = zoneOf(py);

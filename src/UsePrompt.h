@@ -87,6 +87,9 @@ struct Object {
     bool chestCellKnown = false, chestHasItem = false;
     std::optional<FixedPoint> fixedPosition; // authoritative unadjusted origin, when available
 };
+// Decode current vector fields/footprint. The caller supplies local at, names,
+// inventory and personal/reward metadata; generation-time object fields are not consulted.
+Object objectRecord(const nativeai::Object &, int32_t zoneX, int32_t zoneY, int32_t index);
 
 // An item lying on the ground (zone +0x30, spec 0.4).
 struct GroundItem {

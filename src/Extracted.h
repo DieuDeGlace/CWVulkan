@@ -12,6 +12,7 @@
 #include "Terrain.h" // Biome, for skies and music
 #include "SoundRules.h"
 #include "SceneCapture.h"
+#include "StaticObjectRewards.h"
 #include "SteamPointLights.h"
 #include "SceneVisibility.h"
 #include "worldgen/ZoneLight.h"
@@ -163,6 +164,7 @@ class ExtractedWorld {
     struct ZoneToken {
         uint64_t order; // Unsigned address of the stable loaded-zone identity.
         std::shared_ptr<const void> keepAlive;
+        bool generated = false; // source provenance, independent of later saved/received object replacements
     };
     std::optional<ZoneToken> gameZoneToken(int32_t x, int32_t y) const; // Lookup only; retain the selected zone during a pass.
     struct LoadedObjectProps {
@@ -173,9 +175,12 @@ class ExtractedWorld {
     std::optional<LoadedObjectProps> loadedObjectProps(int32_t x, int32_t y, const std::vector<nativesaves::Record> *records = nullptr);
     struct CapturedLists {
         std::vector<nativesaves::Record> groundItems, staticObjects;
+        std::optional<objectrewards::Map> objectRewards;
     };
     // No load: capture-backed zones use the owner's raw lists; generated zones have none.
     std::optional<CapturedLists> capturedLists(int32_t x, int32_t y) const;
+    // nullopt: no supplied map; category0: known absent/empty item in a supplied map.
+    std::optional<nativesaves::Item> capturedObjectReward(int32_t x, int32_t y, int32_t index) const;
     std::vector<Scenery> objectProps(std::span<const nativesaves::Record> records);
     bool gameZoneLoaded(int32_t x, int32_t y) const; // lookup only; no block read, load or LRU mutation
     // The zones within `radius` of absolute zone (ax, ay) are kept in memory, as the game
@@ -222,8 +227,9 @@ class ExtractedWorld {
         std::set<std::tuple<int32_t, int32_t, int32_t>> markedObjectBlocks;
         std::shared_ptr<const std::vector<worldgen::ColourInputs>> recordedColours;
         worldgen::SandOffsets recordedSand;
-        bool generated = false;   // made by the generator rather than read
-        bool objectsMade = false; // objects made (for a read zone, once gameObjects asks)
+        bool generated = false;                                  // made by the generator rather than read
+        std::shared_ptr<const objectrewards::Map> objectRewards; // immutable captured map, shared by block/light snapshots
+        bool objectsMade = false;                                // objects made (for a read zone, once gameObjects asks)
         struct ModelLightState {
             std::mutex mutex;
             std::map<int, float> lightSamples; // native cached +0x28, indexed with the current ordinary vector

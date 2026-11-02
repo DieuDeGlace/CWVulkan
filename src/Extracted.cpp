@@ -273,9 +273,15 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     if (!generate && !zones.count(key))
         return nullptr;
     std::string error;
-    auto zone = generate ? generateZone(ax, ay)
-                              : readZone(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".cwz"), true, error);
-    if (!zone) return nullptr;
+    auto zone =
+        generate ? generateZone(ax, ay) : readZone(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".cwz"), true, error);
+    if (!zone)
+        return nullptr;
+    if (!generate) {
+        auto records = readCapturedLists(ax, ay);
+        if (records.objectRewards)
+            zone->objectRewards = std::make_shared<const objectrewards::Map>(std::move(*records.objectRewards));
+    }
     applyBlockChanges(ax, ay, *zone);
     std::lock_guard lock(cacheMutex);
     // A foreground query and prefetch can finish the same read concurrently. Preserve
@@ -605,7 +611,7 @@ std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x
     std::lock_guard lock(cacheMutex);
     for (const auto &[key, zone] : cache)
         if (key == Key{x, y} && zone)
-            return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone};
+            return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
     return std::nullopt;
 }
 
@@ -1150,6 +1156,16 @@ std::optional<ExtractedWorld::CapturedLists> ExtractedWorld::capturedLists(int32
     return readCapturedLists(ax, ay);
 }
 
+std::optional<nativesaves::Item> ExtractedWorld::capturedObjectReward(int32_t ax, int32_t ay, int32_t index) const {
+    std::lock_guard lock(cacheMutex);
+    for (const auto &[key, zone] : cache)
+        if (key == Key{ax, ay} && zone && !generatedMode && !zone->generated && zone->objectRewards) {
+            const auto found = zone->objectRewards->find(index);
+            return found == zone->objectRewards->end() ? nativesaves::Item{} : found->second;
+        }
+    return {};
+}
+
 ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int32_t ay) const {
     CapturedLists result;
     std::ifstream input(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec"), std::ios::binary | std::ios::ate);
@@ -1159,6 +1175,7 @@ ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int3
     input.seekg(0);
     if (!input.read(reinterpret_cast<char *>(bytes.data()), bytes.size()) || std::memcmp(bytes.data(), "CWR1", 4))
         return result;
+    bool rewardsSeen = false;
     for (size_t at = 4; at + 12 <= bytes.size();) {
         uint32_t tag, stride, count;
         std::memcpy(&tag, bytes.data() + at, 4);
@@ -1167,6 +1184,13 @@ ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int3
         at += 12;
         if (!stride || count > (bytes.size() - at) / stride)
             break;
+        if (tag == objectrewards::CHUNK) {
+            if (!rewardsSeen && stride == objectrewards::RECORD_BYTES)
+                result.objectRewards = objectrewards::decode(bytes.data() + at, size_t(count) * stride);
+            else
+                result.objectRewards.reset();
+            rewardsSeen = true;
+        }
         auto *destination = tag == 0x30 ? &result.groundItems : tag == 0x60 ? &result.staticObjects : nullptr;
         if (destination && stride == sizeof(nativesaves::Record)) {
             const size_t first = destination->size();

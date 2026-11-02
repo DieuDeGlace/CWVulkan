@@ -779,3 +779,20 @@ supplement's separate kind8 producer does not establish its downstream appearanc
 that effect consumer is not claimed implemented. Exact native resource-pointer
 sorting, alternate callers and complete native visual acceptance remain separate.
 No owner art, exports or native implementation is added to either package.
+
+## Live object records and reward-map capture, 2026-11-02
+
+The independent native-only author specified current static-object fields, required
+counts/users and the separate Zone reward-map ABI. That author read no engine,
+tests or exporter code. The implementer used those prose contracts, project-owned
+sources (including the existing exporter bridge) and synthetic data, without reading
+the original game's code, SDK implementation or reconstructions.
+
+Interaction and mission adapters now read current physical records. Required items
+remain separate from complete reward-map item values. The owner-data capture adds
+a versioned project chunk, including known-empty maps; omitted data remains unknown.
+The capture reader uses guarded memory observations and no native tree methods.
+Synthetic nodes test signed order, sentinel behavior, full item bytes and visibly
+changing/unavailable data. These checks do not prove a native lock or atomic snapshot;
+the bounded ABI assumes a valid quiescent map. Real-install capture acceptance is
+separate. Owner items, models and exports stay out of source/runtime packages.
