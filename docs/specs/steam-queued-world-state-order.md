@@ -68,6 +68,11 @@ empty opaque/faded consumers do **not** bind zero points merely because they
 contain no drawable descriptors. The mode-without-bit2 zero-table behavior
 in0xe6e60 belongs to its separate overlay/direct caller contract.
 
+The same resource-address grouping/FIFO and opaque-versus-faded readiness
+cuts apply to the ordinary map's **mode0** consumers. Empty/failed map
+setup, zero geometry counts, normal-only producers and mode0 point clear
+are explicit in [map WORLD contract §5](steam-map-world-pixel-contract.md#5-mode0-resource-ordering-readiness-and-empty-geometry).
+
 ## 3. State immediately before and after0xe6270 entry
 
 The ordinary sequence is terrain, opaque context **Renderer+0x138**, opaque

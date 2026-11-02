@@ -115,6 +115,31 @@ int mapRenderTests() {
     const auto foregroundColor = capture("foreground-world", {foregroundWorld});
     check(foregroundColor != background && capture("foreground-with-map", {foregroundWorld, item}) == foregroundColor,
           "inherits-world-depth-without-private-clear");
+    // Distinct resources stay grouped, while repeated descriptors retain FIFO.
+    // Address order is an input: use a two-resource image as this run's reference.
+    auto red = item;
+    red.map.colour = {1, 0, 0};
+    auto green = red;
+    green.mesh = renderer.upload(plane);
+    green.map.colour = {0, 1, 0};
+    auto blue = red;
+    blue.map.colour = {0, 0, 1};
+    const auto redPixel = capture("group-red", {red}), greenPixel = capture("group-green", {green});
+    const auto bluePixel = capture("group-blue", {blue});
+    const auto pair = capture("group-pair", {red, green});
+    const bool distinctResources = redPixel != greenPixel && redPixel != bluePixel && greenPixel != bluePixel;
+    const bool knownPair = pair == redPixel || pair == greenPixel;
+    check(distinctResources && knownPair && capture("resource-fifo", {red, green, blue}) == (pair == redPixel ? bluePixel : greenPixel),
+          "opaque-resource-groups-retain-fifo");
+
+    auto unavailable = item;
+    unavailable.mesh = renderer.upload(plane);
+    capture("unready-upload", {}); // finish its pending transfer before retiring buffers
+    renderer.release(unavailable.mesh);
+    check(capture("unready-opaque", {unavailable}) == background, "unavailable-opaque-resource-skips-draw");
+    unavailable.map.opacity = .5f;
+    check(capture("unready-faded", {unavailable}) == background, "unavailable-faded-resource-skips-draw");
+
     // Explicit raw palette inputs isolate the full map WORLD pixel contract.
     // A map point at/beyond F must become this frame's SkySun, not just Fog.
     const glm::vec3 rawSky(.1f, .2f, .8f), rawFog(.8f, .1f, .05f);

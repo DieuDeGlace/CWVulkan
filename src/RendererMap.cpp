@@ -135,7 +135,7 @@ void Renderer::destroyMapPipeline() {
 unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &items, glm::vec3 fogColour, glm::vec2 jitter, bool prepared) {
     std::vector<const DrawItem *> opaque, faded;
     for (const auto &item : items) {
-        if (!(item.flags & WORLD_MAP) || !meshes[item.mesh].indexCount || !(item.map.opacity > 0))
+        if (!(item.flags & WORLD_MAP) || !item.mesh || item.mesh >= meshes.size() || !(item.map.opacity > 0))
             continue;
         (item.map.opacity >= 1 ? opaque : faded).push_back(&item);
     }
@@ -144,23 +144,37 @@ unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &ite
         steamFog.setDistance(20000);
     if (opaque.empty() && faded.empty())
         return 0;
-    std::stable_sort(opaque.begin(), opaque.end(), [](const auto *a, const auto *b) { return a->mesh < b->mesh; });
+    // Match the resource-key rule using stable engine-owned identities. This is
+    // not a claim that catalog IDs determine Steam's runtime heap addresses.
+    std::stable_sort(opaque.begin(), opaque.end(), [&](const auto *a, const auto *b) {
+        return uint64_t(reinterpret_cast<uintptr_t>(meshes[a->mesh].identity.get())) <
+               uint64_t(reinterpret_cast<uintptr_t>(meshes[b->mesh].identity.get()));
+    });
     // The map inherits raw scene sky/sun/gradient inputs, without reprojecting them.
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mapLayout, 0, 1, &frames[frameIndex].set, 0, nullptr);
     // The map wrapper inherits the frame's depth; its native +0x80 call sets fog, not depth.
     unsigned draws = 0;
-    auto submit = [&](VkPipeline pipeline, const std::vector<const DrawItem *> &queue) {
+    enum class MapPass { Opaque, FadedDepth, FadedColour };
+    auto submit = [&](MapPass pass, const std::vector<const DrawItem *> &queue) {
         if (queue.empty())
             return;
+        const VkPipeline pipeline = pass == MapPass::Opaque       ? mapPipeline
+                                    : pass == MapPass::FadedDepth ? mapDepthPipeline
+                                                                  : mapFadePipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
         for (const auto *entry : queue) {
             const auto &item = *entry;
+            const GpuMesh &mesh = meshes[item.mesh];
+            const bool ready = mesh.live && mesh.buffer.buffer;
+            if (pass == MapPass::Opaque && !ready)
+                continue; // failed opaque groups skip every descriptor setter
             const auto &m = item.map;
             const glm::vec4 lens = m.lens + glm::vec4(0, 0, jitter.x, -jitter.y);
             const MapPush push{item.model, lens, glm::vec4(m.yaw, m.pitch, m.opacity, m.depthOffset), glm::vec4(m.colour, m.white),
                                glm::vec4(fogColour, settings.style == RenderStyle::Steam ? 1.f : 0.f)};
             vkCmdPushConstants(cmd, mapLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-            const GpuMesh &mesh = meshes[item.mesh];
+            if (!ready)
+                continue; // faded WORLD/depth/color submissions precede readiness
             VkDeviceSize zero = 0;
             vkCmdBindVertexBuffers(cmd, 0, 1, &mesh.buffer.buffer, &zero);
             vkCmdBindIndexBuffer(cmd, mesh.buffer.buffer, mesh.indexOffset, VK_INDEX_TYPE_UINT32);
@@ -168,8 +182,8 @@ unsigned Renderer::drawMap(VkCommandBuffer cmd, const std::vector<DrawItem> &ite
             ++draws;
         }
     };
-    submit(mapPipeline, opaque);
-    submit(mapDepthPipeline, faded);
-    submit(mapFadePipeline, faded);
+    submit(MapPass::Opaque, opaque);
+    submit(MapPass::FadedDepth, faded);
+    submit(MapPass::FadedColour, faded);
     return draws;
 }

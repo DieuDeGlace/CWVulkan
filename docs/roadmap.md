@@ -10,8 +10,9 @@ individual feature documents.
 - [x] Steam map-region pixel stages share the full WORLD color/fog implementation,
   including base-two exponent, Fog/SkySun fourth-power blend and inherited raw
   sky/sun/gradient inputs. Synthetic far/partial/sun cases pass alongside the full
-  world/GUI suites. Resource grouping/readiness, marker-specific producers and
-  wider native visual comparisons remain separate work.
+  world/GUI suites. Engine identity grouping/FIFO and unavailable-buffer checks
+  also pass. Native address/alias inputs, marker-specific producers and wider
+  native visual comparisons remain separate work.
 - [x] Optional engine-owned dual-tone hair controls in character creation only.
   Hover/commit, second color, start/blend, local model/map rendering and profile
   metadata are tested. Native appearance bytes remain unchanged. Remote peers

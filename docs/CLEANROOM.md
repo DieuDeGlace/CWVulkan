@@ -835,3 +835,15 @@ planes check full and partial fog plus retained raw sun/gradient inputs. The Alp
 appearance compatibility path and legacy CPU previews are kept distinct from the
 bounded Steam map-region claim. Marker-specific inputs and native visual acceptance
 remain separate work; source/runtime archives contain no owner assets.
+
+## Mode0 map resource consumers, 2026-11-02
+
+The native-only author extended the independent map WORLD contract with section5
+and a queued-state cross-link. The implementer read that prose and engine code
+only. Native address ordering is represented by engine-owned stable identities;
+no catalog/native-heap equivalence or native resource-address capture is claimed.
+The renderer separates opaque readiness from faded descriptor submission and
+never submits unavailable Vulkan buffers. Synthetic resource/FIFO cases use no
+owner assets, and unavailable-buffer cases were run only after the guards were
+implemented, avoiding a deliberately invalid Vulkan baseline. Zero geometry
+counts remain distinct from resource readiness under valid header lifetimes.

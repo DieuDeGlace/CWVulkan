@@ -10,6 +10,23 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Map opaque resources now group by stable engine-owned unsigned identity keys
+  and retain descriptor FIFO. Faded vectors keep append order. Opaque buffer
+  readiness precedes descriptor submission; faded submissions precede their draw
+  readiness check. Unavailable buffers are never bound or drawn. Valid zero-count
+  headers are not classified as unready merely from their counts. The map preset
+  and fog setup still run for an admitted empty/undrawable context.
+  Vulkan cases cover resource-group FIFO and unavailable opaque/faded resources.
+  All five targets build warning-free; full CPU/owner and87 shader,2 camera,24 GUI,
+  12 map/shared-water/Alpha-scenery checks pass. Five no-save runs exit0, all
+  captures reviewed, with the save database unchanged. Native runtime addresses
+  and aliases remain separate inputs, without a catalog-to-native-heap claim;
+  marker-specific inputs and wider native visual comparisons remain open.
+
+  Local cleanup removed ten obsolete, hash-verified smoke executable copies,
+  reclaiming146 MiB. Their screenshots, logs and verified versioned packages
+  remain available; the current build and owner files were preserved.
+
 - Steam map region pixels now share the full WORLD pixel implementation with
   scene/GUI rendering. They use the base-two fog exponent and both Fog/SkySun
   blends, retaining the actual raw frame palette, sun position and gradient when
