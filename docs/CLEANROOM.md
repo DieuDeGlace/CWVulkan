@@ -759,3 +759,23 @@ same-lifetime invalidation. Full engine/image suites and five no-save owner-data
 stability runs pass. Stable record coverage does not establish concurrent native
 publication timing, every live list mutation, ground-item order or full visual
 acceptance. No owner content is included in source or runtime packages.
+
+## Ordinary ground-item scene, 2026-11-02
+
+The separate native-only author verified steam-ground-item-scene-rendering.md and
+corrected loot-pickup.md without engine, tests, extractor, reconstruction or owner
+data access. The implementer read the complete stable supplement and changed links
+before implementing its bounded geometry/material/queue contract. GroundItemScene
+uses engine-owned matrix and fixed arithmetic, native-format records and owner
+resource dimensions. Gameplay consumes the live ordered ground lists, keeps raw
+admission/fade positions distinct from hopped GPU anchors and shares geometry with
+native interaction boxes. Existing personal-validity and shader-control helpers
+remain separate. Ground/static tags preserve the specified collection order.
+
+Tiny synthetic records and matrices test the documented numeric boundaries, and
+asset-free GPU triangles test raw-sphere rejection and faded collection ordering.
+Full engine/image checks and five no-save owner-data stability runs pass. The
+supplement's separate kind8 producer does not establish its downstream appearance;
+that effect consumer is not claimed implemented. Exact native resource-pointer
+sorting, alternate callers and complete native visual acceptance remain separate.
+No owner art, exports or native implementation is added to either package.

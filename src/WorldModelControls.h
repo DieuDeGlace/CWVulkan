@@ -9,6 +9,10 @@ struct Draw;
 }
 
 namespace worldmodel {
+struct Order {
+    int32_t x = 0, y = 0, index = 0;
+    bool ground = false;
+};
 using Point = std::array<int64_t, 3>;
 struct Frame {
     glm::vec4 material{1};

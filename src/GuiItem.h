@@ -77,5 +77,5 @@ struct SpiritCube {
     glm::mat4 model{1};
     glm::vec4 material{1};
 };
-std::vector<SpiritCube> spiritCubes(const nativesaves::Item &, const glm::mat4 &weaponModel);
+std::vector<SpiritCube> spiritCubes(const nativesaves::Item &, const glm::mat4 &weaponModel, glm::vec4 tint = glm::vec4(1));
 } // namespace guiitem

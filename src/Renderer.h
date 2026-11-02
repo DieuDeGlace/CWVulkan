@@ -142,6 +142,8 @@ struct DrawItem {
     std::optional<steampoints::Point> nativePosition;    // fixed anchor when nativeModel contains only the local transform
     std::optional<scenevisibility::Sphere> nativeObject; // independent static-object route and49c fade
     std::optional<worldmodel::Controls> nativeControls;
+    std::optional<scenevisibility::Sphere> nativeGround;
+    std::optional<worldmodel::Order> nativeOrder;
     bool mirrored() const { return glm::dot(glm::cross(glm::vec3(model[0]), glm::vec3(model[1])), glm::vec3(model[2])) < 0; }
 };
 
@@ -227,6 +229,8 @@ class Renderer {
     // reuses it; earlier Game consumers still see the previous scene until this call.
     void prepareScene(const Camera &, const Lighting &, double time);
     bool steamActorVisible(const scenevisibility::Sphere &) const;
+    bool steamModelVisible(const scenevisibility::Sphere &) const;
+    float steamModelFade(const steampoints::Point &) const;
     std::array<int64_t, 2> steamRenderOffset() const; // negative look-at XY of the installed scene
     worldmodel::Frame steamPoseFrame() const;
     // Early death/use queries read the retained CPU scene state.

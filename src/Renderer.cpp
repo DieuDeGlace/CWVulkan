@@ -1148,6 +1148,16 @@ bool Renderer::steamActorVisible(const scenevisibility::Sphere &sphere) const {
     return sceneFrame && sceneFrame->visibility.visible(sphere, sceneFrame->ranges.abilities);
 }
 
+bool Renderer::steamModelVisible(const scenevisibility::Sphere &sphere) const {
+    return sceneFrame && sceneFrame->visibility.visible(sphere, sceneFrame->ranges.models);
+}
+
+float Renderer::steamModelFade(const steampoints::Point &position) const {
+    return sceneFrame
+               ? steamscenery::fade(steamscenery::distanceSquaredFixed(position, sceneFrame->visibility.eye), sceneFrame->ranges.models)
+               : 0.f;
+}
+
 worldmodel::Frame Renderer::steamPoseFrame() const {
     return sceneFrame ? worldmodel::Frame{sceneFrame->material, sceneFrame->visibility.eye, sceneFrame->ranges.abilities}
                       : worldmodel::Frame{};
@@ -1874,6 +1884,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             return true; // the exact native zone gate above already admitted this terrain
         if (item.nativeParticle)
             return sceneFrame->visibility.visible(*item.nativeParticle, modelDistance);
+        if (item.nativeGround)
+            return sceneFrame->visibility.visible(*item.nativeGround, modelDistance);
         if (item.nativeActor)
             return sceneFrame->visibility.visible(*item.nativeActor, actorDistance);
         glm::vec3 c;
@@ -1925,8 +1937,19 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     };
     drawScene(false);
     std::array<std::vector<DrawItem>, 5> sceneryQueues;
+    std::vector<const DrawItem *> orderedModels, zoneModels;
+    if (!alphaLook) {
+        for (const auto &item : opaque)
+            (item.nativeOrder ? zoneModels : orderedModels).push_back(&item);
+        std::stable_sort(zoneModels.begin(), zoneModels.end(), [](const auto *left, const auto *right) {
+            const auto &a = *left->nativeOrder, &b = *right->nativeOrder;
+            return std::tuple{a.x, a.y, a.ground ? 0 : 1, a.index} < std::tuple{b.x, b.y, b.ground ? 0 : 1, b.index};
+        });
+        orderedModels.insert(orderedModels.end(), zoneModels.begin(), zoneModels.end());
+    }
     if (!alphaLook)
-        for (const DrawItem &item : opaque) {
+        for (const DrawItem *source : orderedModels) {
+            const DrawItem &item = *source;
             if (item.nativeControls) {
                 const auto queue = worldmodel::queue(item.opacity);
                 if (queue != worldmodel::Queue::Hidden && !(item.flags & (NATIVE_MENU | WORLD_MAP)) && visible(item)) {

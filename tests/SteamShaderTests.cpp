@@ -726,6 +726,48 @@ int steamShaderTests() {
         renderer.setWorldProbe({});
     }
     {
+        // Raw ground admission precedes hopping; tagged faded submissions interleave
+        // ground before static objects even when the adapter appended them afterward.
+        renderer.setWorldProbe({});
+        renderer.settings.fogDistance = renderer.settings.sceneryDistance = 1000000;
+        Camera nearby;
+        nearby.eye = {0, -2, 1};
+        nearby.target = {0, 0, 1};
+        Lighting steady;
+        steady.timeMs = 0;
+        const auto captureGround = [&](const char *name, const std::vector<DrawItem> &draws) {
+            const auto path = root / (std::string(name) + ".png");
+            renderer.capture(path.string());
+            renderer.frame(nearby, steady, {}, 0, draws, {});
+            return centre(path);
+        };
+        const auto sky = captureGround("ground-order-sky", {});
+        DrawItem ground;
+        ground.mesh = item.mesh;
+        ground.kind = DrawKind::Scenery;
+        ground.material = {0, 0, 0, 1};
+        ground.nativeControls = worldmodel::Controls{1, 0, 0, 0, false};
+        ground.nativeGround = scenevisibility::Sphere{{0, -4 * 65536, 65536}, 0};
+        ground.nativeOrder = worldmodel::Order{0, 0, 0, true};
+        const auto rejected = captureGround("ground-raw-sphere", {ground});
+        const bool rawGate = sky && rejected && *sky == *rejected;
+        std::cout << "Steam shader ground-raw-sphere" << (rawGate ? " PASS\n" : " FAIL\n");
+        failures += !rawGate;
+        ground.nativeGround->centre = {0, 0, 65536};
+        ground.opacity = .5f;
+        DrawItem object = ground;
+        object.nativeGround.reset();
+        object.nativeControls->white = 1;
+        object.nativeOrder->ground = false;
+        const auto blended = captureGround("ground-static-order", {object, ground});
+        bool ordered = sky && blended;
+        if (ordered)
+            for (int channel = 0; channel < 3; ++channel)
+                ordered &= std::abs((*blended)[channel] - int(std::lround(127.5f + .25f * (*sky)[channel]))) <= 2;
+        std::cout << "Steam shader ground-static-faded-order" << (ordered ? " PASS\n" : " FAIL\n");
+        failures += !ordered;
+    }
+    {
         // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.
         // Compare visible coverage with the same small scene near zero, not with rounded home floats.
         renderer.setWorldProbe({});

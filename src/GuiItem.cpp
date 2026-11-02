@@ -323,7 +323,7 @@ void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retai
         }
 }
 
-std::vector<SpiritCube> spiritCubes(const nativesaves::Item &item, const glm::mat4 &weaponModel) {
+std::vector<SpiritCube> spiritCubes(const nativesaves::Item &item, const glm::mat4 &weaponModel, glm::vec4 tint) {
     std::vector<SpiritCube> cubes;
     if (item[nativesaves::item::TYPE] != 3)
         return cubes;
@@ -332,7 +332,6 @@ std::vector<SpiritCube> spiritCubes(const nativesaves::Item &item, const glm::ma
     // A malformed count cannot make the replacement read beyond the item's allocation.
     const size_t count = std::min<size_t>(item[nativesaves::item::ATTRIBUTE_COUNT], CAPACITY);
     cubes.reserve(count);
-    const float white[4] = {1, 1, 1, 1};
     for (size_t i = 0; i < count; i++) {
         const size_t at = ATTRIBUTE_BEGIN + 4 * i;
         const float x = (float)std::bit_cast<int8_t>(item[at]), y = (float)std::bit_cast<int8_t>(item[at + 1]),
@@ -341,7 +340,7 @@ std::vector<SpiritCube> spiritCubes(const nativesaves::Item &item, const glm::ma
         cube.model = weaponModel; // every attribute starts from the original weapon matrix
         const auto dx = weaponModel[0] * x, dy = weaponModel[1] * y, dz = weaponModel[2] * z;
         cube.model[3] = ((dx + dy) + dz) + weaponModel[3];
-        const auto colour = nativepose::materialColour(item[at + 3], white, 0);
+        const auto colour = nativepose::materialColour(item[at + 3], &tint[0], 0);
         cube.material = {colour[0], colour[1], colour[2], colour[3]};
         cubes.push_back(cube);
     }

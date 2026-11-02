@@ -10,6 +10,27 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Steam ground rendering now consumes the live native-format zone lists in physical
+  player-centered loaded-zone order. It checks exact timer0, class-adapted resources,
+  the raw-position sphere and original-record validity, then uses the specified
+  fixed hop, style transforms, two-axis tumble, channel0 material, RGBA pulse and
+  selected-tuple addition. Pixel fade retains the un-hopped point and model range;
+  normal winding, shininess and separate item opacity reach the descriptor consumer.
+  Weapon spirits retain the supplied material and spectral-color policy. Stable
+  zone/index tags interleave ground/base/spirits before that zone's static objects
+  prior to queue consumption. Native interaction boxes share the placement math,
+  and missing native resources no longer become invented bobbing pouch draws.
+  Alpha/legacy drawing retains its separate existing path. Synthetic CPU cases and
+  two Vulkan cases cover hop/sphere separation, centering, pulse/selection, spectral
+  alpha, raw-position admission and faded ground/static ordering. All five targets
+  build warning-free; full CPU/owner checks and70 shader,2 camera,24 GUI,6 map/
+  shared-water/Alpha-scenery image checks pass. Five no-save gameplay/menu captures
+  exit0, all viewed, with the save database unchanged. The kind8 own-item effect's
+  downstream appearance, exact resource-pointer ordering, alternate callers, live
+  list completeness and native visual acceptance remain open. Current indoor/blue
+  gameplay and sky-only menu backgrounds remain stability fixtures, not native
+  visual acceptance.
+
 - Ordinary Steam static objects now come from loaded data zones independently of
   terrain GPU publication. Lookup never loads an absent zone; the physical player's
   inclusive seven-zone square supplies absolute XY/record ordering. Cached records
@@ -29,6 +50,9 @@ older successful runs; none of these bounded changes establishes complete parity
   trees (about1.154GiB) and regenerable Python bytecode. Recent snapshots, the current
   build/dependency setup, owner data, saves and reference captures were preserved.
   No standalone obsolete Makefiles outside dependencies were identified.
+  A further62 obsolete smoke-test executable copies (about0.865GiB) were removed,
+  retaining their captures/logs and the recent tested binaries. Total local cleanup
+  reclaimed about2GiB; current build products and packaged checkpoints remain.
 
 - Ordinary Steam creature poses now receive the prepared scene's frame material,
   effective channel0 physical-position light, ordered buff tint factors and separate

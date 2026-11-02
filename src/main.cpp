@@ -1,6 +1,8 @@
 // CubeVulkan: a standalone Vulkan engine that plays in a world built from the
 // Steam Cube World install's own sprites, music and sounds.
 #include "Assets.h"
+#include "GroundItemScene.h"
+#include "StaticObjectScene.h"
 #include "Audio.h"
 #include "Character.h"
 #include "ClassMoves.h"
@@ -1633,7 +1635,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         int count = 1;          // +0xd4
         int noticeType = 0;     // the item's type before the class adaptation (type 0x1e treasure)
         int64_t droppedBy = 0;  // the creature that dropped it
-        bool forPlayer = false; // reserved for this player (the ground item's owner +0xd8)
+        int64_t reservedFor = 0;
+        bool forPlayer = false;          // reserved for this player (the ground item's owner +0xd8)
         std::array<uint8_t, 0xa0> raw{}; // a zone's ground item: its item as the zone keeps it
     };
     std::vector<Loot> loot;
@@ -5349,12 +5352,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 useprompt::GroundItem g;
                 g.fixedPosition = l.fixedPosition;
                 g.type = l.item.category, g.subtype = l.item.id;
+                const bool nativeGroundBox = l.fixedPosition && l.raw[0] && renderStyle() == RenderStyle::Steam;
+                if (nativeGroundBox) {
+                    g.type = l.raw[0];
+                    std::memcpy(&g.subtype, l.raw.data() + 4, sizeof g.subtype);
+                }
+                g.reservedFor = l.reservedFor;
                 g.quantity = l.count;
                 g.at = l.at;
                 g.settleMs = l.dropMs;
                 g.noAutoPickup = (l.flags & grounditems::ground::STAYS_FOR_OTHERS) != 0;
                 g.pending = l.taken;
-                g.carriesOne = carriedOf(l.item.category, l.item.id, l.item.modifier, l.item.material) > 0;
+                g.carriesOne = nativeGroundBox && nativeInventory
+                                   ? nativeInventory->inventory.quantity(l.raw) > 0
+                                   : carriedOf(l.item.category, l.item.id, l.item.modifier, l.item.material) > 0;
                 const int64_t dots[2] = {(int64_t)std::floor((double)l.at.x * 65536.0) + extractedWorld.originDotsX(),
                                          (int64_t)std::floor((double)l.at.y * 65536.0) + extractedWorld.originDotsY()};
                 g.cellKnown = usedCells.count(lore::cellOf(dots[0], dots[1])) != 0;
@@ -5365,7 +5376,21 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                         g.carriedCount += c.count;
                 if (l.model >= 0 && world.modelMesh(l.model)) {
                     const glm::vec3 size = world.modelSize(l.model);
-                    const glm::mat4 m = dropPlacement(l, size, time);
+                    glm::mat4 m;
+                    if (nativeGroundBox) {
+                        groundscene::Input input;
+                        input.position = *l.fixedPosition;
+                        input.dimensions = glm::ivec3(size);
+                        input.angle = l.rotation;
+                        input.delayMs = l.dropMs;
+                        input.worldMs = spawned.elapsedWorldTime();
+                        input.originalCategory = l.raw[0];
+                        const auto adapted = nativeplayer::transformed(l.raw, haveGear ? gear.playerClass() : 0);
+                        const auto prepared = groundscene::prepare(input, adapted);
+                        m = glm::translate(glm::mat4(1), extractedWorld.toLocal(prepared.position.data())) * prepared.model;
+                    } else {
+                        m = dropPlacement(l, size, time);
+                    }
                     for (size_t k = 0; k < 8; k++)
                         g.box[k] = glm::vec3(m * glm::vec4(useprompt::boxCorners(glm::vec3(0), size)[k], 1.0f));
                     g.hasModel = true;
@@ -6435,6 +6460,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 l.fixedPosition.emplace();
                 std::memcpy(l.fixedPosition->data(), g + POSITION, sizeof(*l.fixedPosition));
                 l.notice = true;
+                l.reservedFor = owner;
                 l.timerMs = timer, l.flags = g[FLAGS], l.count = count, l.noticeType = g[ITEM];
                 return it;
             };
@@ -6742,16 +6768,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         // Dropped items as the game draws a zone's items: scaled (1/14; coins 0.04), lying
         // or standing by category, arcing five blocks high while they drop and tumbling.
-        for (auto &l : loot) {
-            const uint32_t mesh = l.onGround && l.model >= 0 && l.timerMs <= 0 ? world.modelMesh(l.model) : 0; // (+0xcc: not drawn)
-            if (!mesh)
-                continue;
-            const glm::vec3 size = world.modelSize(l.model);
-            const glm::mat4 m = dropPlacement(l, size, time);
-            // (CubeVulkan's meshes stand on their middle: the game's corner is half a size off.)
-            opaque.push_back({mesh, glm::translate(m, glm::vec3(size.x * .5f, size.y * .5f, 0)), 0, 0, true});
-        }
-        if (uint32_t mesh = world.modelMesh(pouchModel))
+        const bool nativeGroundScene = spawnedReady && spawned.playerRecord() && renderStyle() == RenderStyle::Steam;
+        if (!nativeGroundScene)
+            for (auto &l : loot) {
+                const uint32_t mesh = l.onGround && l.model >= 0 && l.timerMs <= 0 ? world.modelMesh(l.model) : 0; // (+0xcc: not drawn)
+                if (!mesh)
+                    continue;
+                const glm::vec3 size = world.modelSize(l.model);
+                const glm::mat4 m = dropPlacement(l, size, time);
+                // (CubeVulkan's meshes stand on their middle: the game's corner is half a size off.)
+                opaque.push_back({mesh, glm::translate(m, glm::vec3(size.x * .5f, size.y * .5f, 0)), 0, 0, true});
+            }
+        if (uint32_t mesh = nativeGroundScene ? 0 : world.modelMesh(pouchModel))
             for (auto &l : loot) {
                 if (l.onGround && l.model >= 0 && world.modelMesh(l.model))
                     continue;
@@ -6811,6 +6839,88 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         if (!serverMode) {
             renderer.prepareScene(camera, lighting, time);
+            if (nativeGroundScene) {
+                const auto *local = spawned.playerRecord();
+                steampoints::Point physical;
+                std::memcpy(physical.data(), local + 0x10, sizeof physical);
+                int64_t owner;
+                std::memcpy(&owner, local + 0x968, sizeof owner);
+                const auto center = staticobjectscene::playerZone(physical);
+                for (int zx = center[0] - 3; zx <= center[0] + 3; ++zx)
+                    for (int zy = center[1] - 3; zy <= center[1] + 3; ++zy) {
+                        const auto *records = spawned.groundItems(extractedWorld, zx, zy);
+                        if (!records)
+                            continue;
+                        for (size_t index = 0; index < records->size(); ++index) {
+                            const auto record = groundscene::decode((*records)[index]);
+                            if (record.timerMs != 0)
+                                continue;
+                            const auto &original = record.item;
+                            const auto adapted = nativeplayer::transformed(original, haveGear ? gear.playerClass() : 0);
+                            const std::string sprite = spawned.itemSprite(adapted.data());
+                            if (sprite.empty())
+                                continue;
+                            const int model = world.loadModel(sprite);
+                            const uint32_t mesh = world.modelMesh(model);
+                            if (!mesh)
+                                continue;
+                            groundscene::Input input;
+                            input.position = record.position;
+                            input.dimensions = glm::ivec3(world.modelSize(model));
+                            input.angle = record.angle;
+                            input.delayMs = record.delayMs;
+                            input.worldMs = spawned.elapsedWorldTime();
+                            input.originalCategory = original[0];
+                            input.selected = previewSources.ground == std::array<int32_t, 3>{zx, zy, int32_t(index)};
+                            const auto sphere = groundscene::bounds(input, adapted);
+                            if (!renderer.steamModelVisible(sphere))
+                                continue;
+                            useprompt::GroundItem valid;
+                            valid.type = original[0];
+                            std::memcpy(&valid.subtype, original.data() + 4, sizeof valid.subtype);
+                            valid.quantity = record.quantity;
+                            valid.reservedFor = record.owner;
+                            valid.carriesOne = nativeInventory
+                                                   ? nativeInventory->inventory.quantity(original) > 0
+                                                   : std::any_of(bag.begin(), bag.end(), [&](const Carried &c) {
+                                                         return c.item.category == valid.type && c.item.id == valid.subtype && c.count > 0;
+                                                     });
+                            valid.cellKnown = usedCells.contains(lore::cellOf(input.position[0], input.position[1]));
+                            valid.ownsSpecial = std::any_of(bag.begin(), bag.end(), [&](const Carried &c) {
+                                return c.item.category == 24 && c.item.id == valid.subtype;
+                            });
+                            if (!useprompt::groundItemValid(valid, owner))
+                                continue;
+                            input.light = extractedWorld.gameBlockLight(gamemath::floorFixedBlock(input.position[0]),
+                                                                        gamemath::floorFixedBlock(input.position[1]),
+                                                                        gamemath::floorFixedBlock(input.position[2]));
+                            const auto prepared = groundscene::prepare(input, adapted);
+                            DrawItem draw;
+                            draw.mesh = mesh;
+                            draw.nativePosition = prepared.position;
+                            draw.nativeGround = sphere;
+                            draw.nativeOrder = worldmodel::Order{zx, zy, int32_t(index), true};
+                            draw.material = prepared.material;
+                            draw.opacity = renderer.steamModelFade(input.position) * prepared.opacityScale;
+                            draw.nativeControls = worldmodel::Controls{0, guiitem::shininess(adapted), 0, 0, false};
+                            const auto append = [&](DrawItem item, const glm::mat4 &corner, glm::vec3 dimensions) {
+                                item.nativeModel = corner * glm::translate(glm::mat4(1), {dimensions.x * .5f, dimensions.y * .5f, 0});
+                                item.model =
+                                    glm::translate(glm::mat4(1), extractedWorld.toLocal(prepared.position.data())) * *item.nativeModel;
+                                opaque.push_back(std::move(item));
+                            };
+                            append(draw, prepared.model, glm::vec3(input.dimensions));
+                            if (adapted[0] == 3)
+                                if (const auto cube = spawned.spriteAsset(world, 0xa46))
+                                    for (const auto &spirit : guiitem::spiritCubes(adapted, prepared.model, prepared.material)) {
+                                        auto fragment = draw;
+                                        fragment.mesh = world.modelMesh(cube->model);
+                                        fragment.material = spirit.material;
+                                        append(fragment, spirit.model, glm::vec3(cube->header));
+                                    }
+                        }
+                    }
+            }
             if (nativeActorsAt) {
                 creaturescene::View view;
                 view.pose = renderer.steamPoseFrame();

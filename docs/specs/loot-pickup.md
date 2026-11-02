@@ -49,27 +49,33 @@ Nothing in this update moves an item toward a player; ground items never fly.
 
 ## 2. Drawing a ground item: the drop hop (0xd3170)
 
+The precise ordinary-WORLD gates, ordering, transforms and material/control
+inputs are now [ground-item scene rendering](steam-ground-item-scene-rendering.md).
+That bounded native-only supplement completes and corrects this earlier summary.
+
 Each frame, for every zone within 3 zones of the local player and each ground item G with
 +0xcc = 0:
 
 1. The item drawn is the class-adapted one (0x10a720 with the local player); its model comes
    from the model table (`item-models.md`). Without a model it is skipped, as is an item that
-   fails the visibility test (0x2b8140, `use-prompt.md` §2.4) or the view test.
+   fails original-record validity (0x2b8140, `use-prompt.md` §2.4) or the view test.
+   That validity helper is not terrain LOS; exact sphere-before-validity order is in the supplement.
 2. **The hop.** While +0xc8 > 0, the drawn position is raised by
    trunc((1.0 − h²) × 5.0 × 65536) with h = (+0xc8 − 250.0) / 250.0 (0x43293c, 0x42e584):
    a parabola that is 0 at 500 ms left, 5 blocks at 250 ms and 0 again at 0.
    Laid items start with 500..799 ms (`drops-and-items.md` §1 step 2), so for the first
    0..299 ms h is above 1 and the item is drawn **below** its ground point (down to about
    19 blocks at 799 ms), then it rises out, peaks 5 blocks up and lands (open question 1).
-3. While +0xc8 ≠ 0 the model is also turned about its centre by +0xc8 × 0.7 (0x4328ac;
-   degrees, the axis chosen by the model's orientation code) — it tumbles while it hops.
-4. Types 12, 13 and 14 and the special types 0x17, 0x18, 0x1d, 0x1e get extra motion from the
-   world clock (world +0x440, through cosine terms of 2 × clock × 0.2 degrees); types 3 and 4
-   lie on their side. The exact transforms are not specified here (open question 7).
+3. While +0xc8 ≠ 0 the common full-allocation-center tumble applies **X rotation by
+   +0xc8 degrees, then Y rotation by +0xc8 × 0.7f** (0x4328ac), with the precise local
+   pivot translations in supplement§2. Both rotations occur.
+4. Types 12, 13 and 14 and styles 0x17, 0x18, 0x1d, 0x1e spin with world clock+0x440;
+   their cosine pulse scales **all material RGBA**, not vertical position or pixel Opacity.
+   Types3/4 lie on their side. Exact style selection, scale and centering are supplement§3.
 5. Once +0xc8 is 0, gear (types 3..9, 0x1a) reserved for the local player, while world +0x210
-   is set, adds an effect at its position (0x1400cb910 into the list at controller +0xc0, with
-   values 8 and 0.1 and a strength of 10 × the item's draw scale) — presumably the glow that
-   marks one's own drop (open question 7).
+   is set, appends a **kind8 scene effect through0xcb910 to Renderer+0xc0**.
+   The exact initialized descriptor is supplement§6. Its downstream appearance is not
+   established by this producer and is not assigned a guessed visual name here.
 
 ## 3. Picking up
 
@@ -211,9 +217,9 @@ interaction kind 10 (`zone-object-interaction.md` §8); the pet creature is made
 
 ## 8. Open questions
 
-1. **The hop below ground.** As read, an item whose delay starts above 500 ms is drawn under
-   its ground point first. Confirm with a capture (it may be hidden by the terrain, or the
-   height may be clamped elsewhere).
+1. **The hop below ground:** steam-ground-item-scene-rendering§2 now confirms that this
+   native draw path adds the negative displacement for delay>500 without a height clamp.
+   Its actual occlusion by rendered terrain is separate.
 2. **Type 12 material 13** (counted per region in player data +0xf8) — what item it is, and
    who reads the counter. It answers `native-saves.md`'s open question on +0xf8 in part.
 3. **The +0x88 map** of per-player items keyed by block, as read here, replaces "meaning not
@@ -222,11 +228,11 @@ interaction kind 10 (`zone-object-interaction.md` §8); the pet creature is made
 4. **Script operations 8, 9, 10** (give item, give coins, take item): no emitter was found
    among the conversation builders read so far.
 5. **The type-0x18 receipt texts** (jump table at 0xadc0c by subtype) are not specified.
-6. **Timer +0xcc** of ground items counts down but nothing here sets it; items with +0xcc > 0
-   are not drawn.
-7. **Drawing details**: the clock-driven motion of coins and special items, the lying poses,
-   and the effect added for one's own gear (§2 steps 4–5). A frame capture beside a
-   ground.request dump would settle them.
+6. **Timer +0xcc** of ground items counts down but nothing here sets it; nonzero +0xcc
+   excludes drawing, including a negative value.
+7. **Drawing details:** steam-ground-item-scene-rendering§§3–6 now specifies the reached
+   orientation/pulse matrices and own-item effect producer. The separate kind8 effect's
+   downstream visual contract remains outside that bounded trace.
 
 ## Errata (from the clean-room implementation)
 

@@ -851,6 +851,7 @@ void World::collectScenery(const Zone &zone, int32_t ax, int32_t ay, std::vector
             }
         }
         auto &draw = out[first + object.draw];
+        draw.nativeOrder = worldmodel::Order{ax, ay, object.key.index, false};
         draw.model = objectvisual::matrix(state, object.position, object.dimensions);
         if (draw.nativePosition)
             draw.nativeModel = objectvisual::matrix(state, glm::vec3(0), object.dimensions);
