@@ -65,3 +65,15 @@ void Hud::ringItems(const State::Ring &ring) const {
     std::stable_sort(requests.begin(), requests.end(), [](const auto &a, const auto &b) { return a.mesh < b.mesh; });
     itemRequests.insert(itemRequests.end(), requests.begin(), requests.end());
 }
+
+void Hud::modelRowItems(const State::ModelRow &row) const {
+    for (const auto &entry : row.items) {
+        const auto resource = itemModels.find(entry.icon);
+        if (!entry.original || resource == itemModels.end())
+            continue; // the assigned integer position is retained even when owner content is unavailable
+        const auto &model = resource->second;
+        const auto requests = guiitem::hudItemRequests(model.mesh, model.allocation, *entry.original, entry.x, glm::ivec2(screen), guiScale,
+                                                       row.worldMilliseconds, row.farPlane);
+        itemRequests.insert(itemRequests.end(), requests.begin(), requests.end());
+    }
+}

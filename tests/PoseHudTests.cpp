@@ -247,6 +247,22 @@ void hudCoin() {
     POSE_CHECK(negativeZero && !std::signbit(negativeZero->at.euler.z));
     POSE_CHECK(!hudcompass::request(0, {1, 1, 1}, {128, 128}, 960, 1, 0));
     POSE_CHECK(!hudcompass::request(19, {}, {128, 128}, 960, 1, 0));
+    auto original = nativesaves::makeItem(24, 1, 1);
+    original[nativesaves::item::ATTRIBUTE_COUNT] = 1;
+    const auto row = guiitem::hudItemRequests(23, {8, 32, 4}, original, 225, {128, 128}, 1, 2500, 1280);
+    POSE_CHECK(row.size() == 2);
+    if (row.size() == 2) {
+        POSE_CHECK(row[0].at.screen == glm::vec2(230, 57) && row[1].at.screen == glm::vec2(225, 52));
+        POSE_CHECK(row[1].at.euler == glm::vec3(-120, 0, 90) && std::fabs(row[1].at.size - .00875f) < 1e-7f);
+        POSE_CHECK(row[0].depthOffset == -.5f && row[1].depthOffset == 0 && row[1].farPlane == 1280);
+        POSE_CHECK(row[1].state && row[1].state->glow == 0 && row[1].state->shininess == 1);
+        POSE_CHECK(row[1].item == original && row[1].kind == guiitem::Request::Kind::QueuedModel);
+        std::vector<guiitem::Draw> rendered;
+        auto inherited = guiitem::characterState();
+        for (const auto &request : row)
+            guiitem::appendDraws(request, {128, 128}, inherited, rendered);
+        POSE_CHECK(rendered.size() == 2); // no direct-icon spirit or extra shadow passes
+    }
 }
 
 // The creature bytes of each record of a pose recording (creature-pose.md §11): a record is

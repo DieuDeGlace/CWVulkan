@@ -190,7 +190,8 @@ int characterCardTests();
 int deadCreatureTests();   // tests/DeadCreatureTests.cpp
 int netTests();            // tests/NetTests.cpp: the game-compatible network layer (src/net/)
 int ownerSetupTests();     // tests/OwnerSetupTests.cpp: the first-run setup (src/OwnerSetup.*)
-int poseHudTests();        // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
+int hudContextTests();
+int poseHudTests(); // tests/PoseHudTests.cpp: the pose state, weapon spirits, the HUD coin
 int waterLookTests();
 int alphaSceneryTests();
 int inventorySlotTests();
@@ -9307,6 +9308,8 @@ int main(int argc, char **argv) {
         return cameraRenderTests();
     if (argc == 2 && std::string(argv[1]) == "cameramotion")
         return cameraMotionTests();
+    if (argc == 2 && std::string(argv[1]) == "hudcontext")
+        return hudContextTests();
     if (argc == 2 && std::string(argv[1]) == "chatcache")
         return chatCacheTests();
     if (argc == 2 && std::string(argv[1]) == "fontcatalog")
@@ -10693,7 +10696,8 @@ int main(int argc, char **argv) {
     failures += windContinueTests();   // tests/WindContinueTests.cpp
     failures += netTests();            // tests/NetTests.cpp
     failures += ownerSetupTests();     // tests/OwnerSetupTests.cpp
-    failures += poseHudTests();        // tests/PoseHudTests.cpp
+    failures += hudContextTests();
+    failures += poseHudTests(); // tests/PoseHudTests.cpp
     failures += waterLookTests();
     failures += alphaSceneryTests();
     failures += inventorySlotTests();

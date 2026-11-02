@@ -2,6 +2,7 @@
 #include "Assets.h"
 #include "IdentifyWindow.h"
 #include "FeatText.h"
+#include "NativeHudContext.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #include "stb_image.h"
@@ -981,6 +982,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     const Inventory *information = state.information ? state.information : state.inventory;
     if (information && (state.mapInformation || (state.mapPreview.empty() && information->infoItem)))
         positionPreview(*information); // Selection observes the preceding draw's stored frame.
+    modelRowItems(state.modelRow);
     ringItems(state.ring);
     if (!state.interfaceVisible)
         return;
@@ -1084,11 +1086,14 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
         plasmaLabel(out, std::to_wstring(state.gold), {0, 0}, {85, 60}, 24, 5);
     } else if (state.gold >= 0) { // The game's money counter, top left.
         if (auto it = icons.find("gold-coin"); it != icons.end())
-            image(out, it->second.atlas, {it->second.w, it->second.h}, std::round(offsetX + 28 * scale),
-                  std::round(26 * scale), 52 * scale / it->second.w);
-        text(out, damageFont, std::to_string(state.gold), std::round(offsetX + 112 * scale),
-             std::round(66 * scale - damageFont.ascent), {255, 255, 255, 255}, BLACK, std::max(1.f, 2 * scale));
+            image(out, it->second.atlas, {it->second.w, it->second.h}, std::round(offsetX + 28 * scale), std::round(26 * scale),
+                  52 * scale / it->second.w);
+        text(out, damageFont, std::to_string(state.gold), std::round(offsetX + 112 * scale), std::round(66 * scale - damageFont.ascent),
+             {255, 255, 255, 255}, BLACK, std::max(1.f, 2 * scale));
     }
+    const auto contextText = hudcontext::countText(state.contextCount);
+    if (guiLoaded && !contextText.empty())
+        plasmaLabel(out, std::wstring(contextText.begin(), contextText.end()), {0, 0}, {255, 60}, 24, 5);
     // The health and mana bars: the game's own shapes and text (the interface's layout for the window size:
     // the bottom middle, offset -181/8 and -50; Interface's update: the "bar" child scaled by
     // the fraction, the "text" shapes given "hp/max" and "mana/100").

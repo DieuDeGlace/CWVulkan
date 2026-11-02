@@ -154,7 +154,17 @@ class Hud {
         glm::vec2 staminaAt{0};  // screen position of the character's feet
         bool showXp = false;     // pyro progression: the XP bar fills and shows its numbers
         int xp = 0, xpMax = 1;
-        int gold = -1;           // top left, with the game's coin (-1 = hidden)
+        int32_t contextCount = 0; // derived World context total, including hidden-interface updates
+        struct ModelRow {
+            struct Item {
+                std::string icon;
+                const nativesaves::Item *original = nullptr;
+                int x = 0;
+            };
+            std::vector<Item> items;
+            float worldMilliseconds = 0, farPlane = 960;
+        } modelRow;
+        int gold = -1; // top left, with the game's coin (-1 = hidden)
         // The quick buttons (the game's frame update): the key's short name, the line under it (the
         // item's or skill's name, a cooldown, the use key's prompt) and a count.
         struct Quick {
@@ -395,6 +405,7 @@ class Hud {
     mutable glm::vec3 recipeEuler{-120, 0, 0}; // advances only when the detail widget actually draws
     void uploadItemModels(Renderer &);
     void itemIcon(const std::string &, const nativesaves::Item &, const guiitem::Placement &, size_t beforeVertex) const;
+    void modelRowItems(const State::ModelRow &) const;
     void ringItems(const State::Ring &) const;
     std::map<std::string, glm::u8vec3> colours;
     float panelDark = .55f, slotDark = .65f;

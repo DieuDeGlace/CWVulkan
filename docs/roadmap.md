@@ -54,8 +54,8 @@ individual feature documents.
   independent own-shape fill and glyph tint now have actual owner-HUD and Vulkan
   regressions. Ordinary affine scene-graph clip layers now use a retained RGBA8
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
-  targets; the owner button shine is enabled.89 local GUI image cases (74
-  asset-free,15 with the owner's atlas) and owner callback
+  targets; the owner button shine is enabled.98 local GUI image cases (82
+  asset-free,16 with the owner's atlas) and owner callback
   checks pass. The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
   preserving independent placement/fill overrides and disabled-node admission.
@@ -120,6 +120,18 @@ individual feature documents.
   A positive-Shininess coin case also caught/fixed the missing common camera gradient
   in Alpha-mode native WORLD callbacks. Coin rotation now uses the canonical
   float simulation clock shared by Ring/map producers. Wider native HUD comparisons remain.
+- [x] Context/special-item HUD model producers from independent
+  [context lifecycle](specs/steam-hud-context-item-lifecycle.md) and
+  [overlay](specs/steam-hud-model-overlays.md) contracts. Each admitted World
+  substep, including zero time, derives the last eligible nearby record in the
+  loaded3×3 walk, then checks the category-selected inventory tab. Semantic copies,
+  signed quantity overflow/rejection and the count>1 label preserve that snapshot.
+  The canonical tab1 special row keeps physical order/duplicates, region/subtype
+  filters and integer positions. Owner-backed model pairs use full allocations,
+  native scale/clock, typed effects and the shared queued WORLD path. Synthetic
+  lifecycle/selection checks, actual World zero-step integration, eight row image
+  cases and actual HUD resource/count emission pass. Full native pixel comparisons,
+  global cross-producer resource ordering and general cached text lifetimes remain open.
 - [x] Water surface/mesh/depth changes and render-only lilies; HP initialization
   capped at the native maximum; statue slab compared with exported blocks.
   See [water progress](water-progress.md) for the remaining rendering limits.
@@ -615,12 +627,6 @@ individual feature documents.
   Options/Controls. Focused arithmetic checks cover those bounded rules. Broader
   early input/camera/GUI phase fidelity and native interaction/visual comparisons
   remain release gates.
-- [ ] Context and special-item HUD model producers. The independent
-  [HUD overlay contract](specs/steam-hud-model-overlays.md) now specifies the
-  renderer's original context item, physical tab1 slots, region/subtype filters,
-  full-allocation sizing and typed effects. The upstream context-record selection
-  lifetime remains outside that bounded contract; its live binding and these
-  remaining producers still need implementation and native comparison.
 - [ ] Native gameplay camera state, water/model/overlay shader controls,
   remaining panel opacity and object/effect visuals.
   Independent camera, UI/icon, shader/pass, overhead-model and Alpha-ordering specs

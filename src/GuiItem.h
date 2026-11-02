@@ -68,6 +68,8 @@ struct Request {
     float opacity = 1, depthOffset = 0;
     bool mirrored = false;
 };
+std::vector<Request> hudItemRequests(uint32_t mesh, glm::ivec3 allocation, const nativesaves::Item &, int x, glm::ivec2 viewport,
+                                     float guiScale, float worldMilliseconds, float farPlane);
 struct Draw {
     uint32_t mesh = 0;
     glm::mat4 model{1}, view{1}, projection{1};

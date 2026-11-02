@@ -350,8 +350,8 @@ frame's sky/fog inputs. The50-degree camera uses the configured zone-window far
 plane; its own NDC depth translation is separate from each shader offset.
 The canonical float simulation clock controls the10-second turn. Missing owner content stays absent;
 no replacement artwork is generated. All queued coin requests precede Plasma
-and its layer/cache boundaries. Original-game visual comparison and the remaining
-context/special-model producers are tracked separately from this bounded conversion.
+and its layer/cache boundaries. Original-game visual comparison and global
+cross-producer resource ordering remain separate from this bounded conversion.
 
 ## HUD compass and typed effects
 
@@ -369,3 +369,24 @@ No art is generated for missing resources. See the
 [HUD overlay contract](specs/steam-hud-model-overlays.md) sections1–3/6 and
 [WORLD ripple](specs/steam-world-shader-output.md#3-pixel-base-color-and-the-optional-shininess-ripple)
 for the bounded facts.
+
+## Context and regional special-item row
+
+Each admitted World step derives the context item from loaded nearby ground and
+active object-requirement records. The last eligible record wins before its quantity
+is tested in its category's canonical inventory tab. An unavailable last record
+clears the model without retrying an earlier candidate. A skipped World slice
+retains the previous snapshot. The count label shows an ordinary decimal only
+above1, at(255g,60g) with font24/outline5; one item has a model and no numeral.
+
+The context pair is centered at(225g,52g), shadow at(230g,57g). Regional category24
+specials follow their physical tab1 order, accept signed nonzero quantities and
+exclude subtypes14–17. They start at integer225 or325 according to context category,
+advance50 per accepted slot and retain duplicate icons. Each owner model uses its
+full allocation with a minimum16 scale denominator, the float simulation clock,
+Glow0 and original-item Shininess. No direct-icon spirit pass or replacement art
+is added. Missing resources preserve assigned positions and draw nothing.
+
+See [context state](specs/steam-hud-context-item-lifecycle.md) and
+[HUD models](specs/steam-hud-model-overlays.md). Broader native visual/resource-order
+checks and generic persistent text/cache behavior remain roadmap work.

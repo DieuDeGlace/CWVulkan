@@ -1124,3 +1124,30 @@ checks provide bounded tests without distributing artwork. Context/special
 producer prose is available but its remaining implementation/upstream selection
 is not claimed complete. No original code, instructions, binaries or owner assets
 were copied into source or runtime packages.
+
+## Context-item lifecycle and special HUD row, 2026-11-02
+
+The implementer fully read the independent steam-hud-context-item-lifecycle.md
+sections1–6 and previously read HUD-model-overlays1–6, including its scene-mask
+addendum. The native-only author read no engine, tests, extractor, owner data,
+captures, SDK/reconstruction implementation or running game; all author work is
+held. Only those prose contracts and existing engine sources informed this change.
+
+NativeHudContext stores an embedded semantic item/count, queries loaded zone lists
+without allocating zones, and counts the category-selected canonical tab. Its World
+adapter runs between the prelude/pet work and ordinary creature traversal; admission
+does not acquire a positive-dt, authority, health or UI gate. Main binds the active
+engine world identifier and borrowed session inventory. No context cache is added
+to saves or packets. Renderer row selection uses current player region and physical
+tab1 slots. The legacy HUD emits the context numeral through its existing outlined
+font adapter; a complete persistent named-TextShape/cache binding is not claimed.
+
+Synthetic records test padding, inactive/active attributes, formula words, signed
+counts, last-candidate rejection and coordinates. Actual World-facade tests verify
+the zero-time snapshot and later inventory change. Generated solid CUBs test WORLD
+lighting, geometric shadows, Plasma order and depth in both appearance modes;
+an optional local HUD check tests resource requests and count threshold/font emission.
+The lit row pixel reference comes from the independent fixed-palette equations,
+not an owner screenshot or retuning the shader to a sampled color. Invalid resource
+skip is an engine admission policy, not a newly asserted native completed branch.
+No original code, native instructions, owner artwork or extracted data is packaged.

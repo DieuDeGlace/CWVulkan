@@ -310,6 +310,22 @@ int worldObjectTests() {
             const auto first = actors.takeSounds();
             check(!first.empty() && actors.takeSounds().empty(), "facade delivers trap sounds once to local audio");
             check(first == actors.events().sounds, "local audio and outgoing world retain the same trap/hit sound order");
+            hudcontext::Tabs inventory(3);
+            const auto requirement = nativesaves::makeItem(22, 7);
+            inventory[1].push_back({3, requirement});
+            actors.setHudContextSource(true, &inventory);
+            auto required = object(0xfe, 1, 0);
+            std::copy(requirement.begin(), requirement.end(), required.begin() + 0x38);
+            objects.records = {required};
+            actors.replaceStaticObjects(terrain, objects);
+            actors.simulate(terrain, 0);
+            check(actors.hudContext().item == requirement && actors.hudContext().count == 3,
+                  "actual zero-time World facade derives the context from loaded requirements and canonical inventory");
+            inventory[1][0].count = 0;
+            check(actors.hudContext().count == 3, "inventory edits retain the prior snapshot until a World rebuild");
+            actors.simulate(terrain, 0);
+            check(actors.hudContext().item[0] == 0 && actors.hudContext().count == 0,
+                  "the next zero-time World pass clears the unavailable selected requirement");
         }
         {
             ExtractedWorld terrain;

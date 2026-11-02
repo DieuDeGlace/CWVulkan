@@ -224,6 +224,7 @@ add_library(engine STATIC
     src/MapLook.cpp
     src/HudCoin.cpp
     src/HudCompass.cpp
+    src/NativeHudContext.cpp
     src/GuiItem.cpp
     src/PyroCreatures.cpp
     src/OverworldEvents.cpp
@@ -307,7 +308,7 @@ target_link_libraries(EngineTests PRIVATE engine)
 target_sources(EngineTests PRIVATE tests/FontCatalogTests.cpp tests/ChatCacheTests.cpp)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 target_sources(EngineTests PRIVATE tests/AlphaSceneryTests.cpp)
-target_sources(EngineTests PRIVATE tests/InventorySlotTests.cpp)
+target_sources(EngineTests PRIVATE tests/InventorySlotTests.cpp tests/HudContextTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)
 target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp tests/SteamSceneRangeTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)

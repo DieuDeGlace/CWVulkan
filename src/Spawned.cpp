@@ -1301,6 +1301,17 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         nativepet::step(pets);
         worldEvents.buffs.insert(worldEvents.buffs.end(), pets.buffNotes.begin(), pets.buffNotes.end());
         pets.buffNotes.clear();
+        hudcontext::Environment context;
+        context.player = hasPlayer && nativePlayer ? player.record.data() : nullptr;
+        context.namedWorld = contextNamedWorld;
+        context.inventory = contextInventory;
+        context.loadedZone = [&](nativesaves::Cell key) -> std::optional<hudcontext::Zone> {
+            const auto *lists = zoneStates.find(key);
+            if (!lists)
+                return std::nullopt;
+            return hudcontext::Zone{lists->groundItems, lists->staticObjects};
+        };
+        hudcontext::rebuild(contextState, context);
         // A separate World pass clears this bit on all current entries, including
         // dead creatures and prelude births. Later body-pass births miss this pass.
         for (uint8_t *record : w.creatures) {

@@ -252,6 +252,21 @@ int guiRenderTests() {
         }
     } else
         ++failures;
+    const auto row = guiitem::hudItemRequests(coinMesh, {8, 8, 2}, nativesaves::makeItem(24, 1), 64, {128, 128}, 1, 0, 960);
+    auto rowOverBackground = row;
+    for (auto &request : rowOverBackground)
+        request.beforeVertex = background.size();
+    for (auto style : {RenderStyle::Steam, RenderStyle::Alpha}) {
+        settings.style = style;
+        renderer.settings = settings;
+        const std::string prefix = style == RenderStyle::Steam ? "steam-hud-row-" : "alpha-hud-row-";
+        // Fixed overlay illumination of the +Z face tilted−120 degrees yields
+        // approximately RGB128/127/102 after WORLD saturation and cubic grading.
+        check((prefix + "world-colour").c_str(), background, rowOverBackground, {}, {64, 52}, {128, 127, 102});
+        check((prefix + "offset-shadow").c_str(), background, rowOverBackground, {}, {75, 60}, {0, 0, 0});
+        check((prefix + "before-plasma").c_str(), background, row, {}, {64, 52}, {0, 0, 255});
+        check((prefix + "retained-scene-depth").c_str(), {}, row, {preceding}, {64, 52}, {255, 0, 0});
+    }
     guiitem::Request raw;
     raw.kind = guiitem::Request::Kind::RawEdit;
     raw.beforeVertex = 6;
@@ -426,6 +441,28 @@ int guiRenderTests() {
             backdrop.color = {0, 0, 1, 1};
             std::vector<OverlayVertex> ownerBackground;
             hud.drawScreen({backdrop}, ownerBackground);
+            hud.addItemIcon("context-integration-fixture", coinCub);
+            hud.prepareFrame(renderer, {128, 128});
+            Hud::State rowState;
+            const auto original = nativesaves::makeItem(24, 1);
+            rowState.modelRow.items.push_back({"context-integration-fixture", &original, 64});
+            rowState.contextCount = 2;
+            std::vector<OverlayVertex> amountTwo, amountOne, amountZero;
+            hud.draw(rowState, amountTwo);
+            const auto rowRequests = hud.itemDraws();
+            if (rowRequests.size() != 2 || rowRequests[1].kind != guiitem::Request::Kind::QueuedModel) {
+                std::cerr << "FAIL actual HUD context row callback/resource admission\n";
+                ++failures;
+            }
+            check("owner-context-model-row", {}, rowRequests, {}, {64, 52}, {128, 127, 102});
+            rowState.contextCount = 1;
+            hud.draw(rowState, amountOne);
+            rowState.contextCount = 0;
+            hud.draw(rowState, amountZero);
+            if (amountTwo.size() <= amountOne.size() || amountOne.size() != amountZero.size()) {
+                std::cerr << "FAIL actual HUD context count threshold/font emission\n";
+                ++failures;
+            }
             ChatLine cachedChat;
             hud.appendChat(cachedChat, u"Cache", {255, 255, 255});
             const auto emitChat = [&] {

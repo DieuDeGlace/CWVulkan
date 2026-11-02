@@ -12,6 +12,7 @@
 #include "NativeEffects.h"
 #include "NativeDrop.h"
 #include "NativeControl.h"
+#include "NativeHudContext.h"
 #include "SoundRules.h"
 #include "ZoneStates.h"
 #include "GroundItems.h"
@@ -136,6 +137,11 @@ class SpawnedCreatures {
     int32_t day() const { return dayCount; }
     float timeOfDay() const { return dayMs; }
     float elapsedWorldTime() const { return elapsedWorldMs; }
+    void setHudContextSource(bool namedWorld, const hudcontext::Tabs *inventory) {
+        contextNamedWorld = namedWorld;
+        contextInventory = inventory;
+    }
+    const hudcontext::State &hudContext() const { return contextState; }
     void setClock(int32_t day, float timeOfDayMs) { dayCount = day, dayMs = timeOfDayMs; }
     void setClockRate(double gameMsPerMs) { clockRate = gameMsPerMs; }
     void advanceClock(double dtMs);
@@ -559,7 +565,10 @@ class SpawnedCreatures {
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
     uint32_t aiRand = 1;                                  // separate engine AI state; native worker-entry state is unverified
     float dayMs = 0;                                      // the time of day (world+0xc) at the last tick
-    float elapsedWorldMs = 0;                             // float world+0x440, separate from AI/GUI/calendar clocks
+    hudcontext::State contextState;
+    const hudcontext::Tabs *contextInventory = nullptr; // borrowed canonical session inventory
+    bool contextNamedWorld = false;
+    float elapsedWorldMs = 0; // float world+0x440, separate from AI/GUI/calendar clocks
     std::function<bool(const nativeupkeep::Hit &, const uint8_t *)> playerHit;
     std::vector<soundrules::RequestRecord> sounds; // the world's sound requests, not yet played
     size_t kills = 0; // creatures killed by others, for the log

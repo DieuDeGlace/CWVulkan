@@ -1233,6 +1233,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     if (saveGame.specialization >= 0) setSpecializationMetadata(saveGame.specialization);
     int playerXp = saveGame.xp, legacyGold = saveGame.gold;
     auto *nativeInventory = saveGame.nativeInventory ? &*saveGame.nativeInventory : nullptr;
+    spawned.setHudContextSource(!worldName.empty(), nativeInventory ? &nativeInventory->inventory.tabs : nullptr);
     saveGame.inventoryAuthoritative = nativeInventory != nullptr;
     int &playerGold = nativeInventory ? nativeInventory->inventory.gold : legacyGold;
     if (nativeInventory)
@@ -7482,6 +7483,21 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                             showIcon(sprite);
                             hs.ring.items.push_back({sprite, &stack->item});
                         }
+                }
+                const auto &context = spawned.hudContext();
+                hs.contextCount = context.count;
+                hs.modelRow.worldMilliseconds = spawned.elapsedWorldTime();
+                hs.modelRow.farPlane = float(gameOptions.zonesDrawn() << 6);
+                if (const auto *record = spawned.playerRecord()) {
+                    nativesaves::Cell region;
+                    std::memcpy(region.data(), record + 0x150, sizeof region);
+                    const hudcontext::Tabs empty;
+                    const auto &inventory = nativeInventory ? nativeInventory->inventory.tabs : empty;
+                    for (const auto &entry : hudcontext::modelRow(context, inventory, region)) {
+                        const auto sprite = spawned.itemSprite(entry.item->data());
+                        showIcon(sprite);
+                        hs.modelRow.items.push_back({sprite, entry.item, entry.x});
+                    }
                 }
                 if (nativePlayer && spawnedReady) {
                     float cooldown = 0;

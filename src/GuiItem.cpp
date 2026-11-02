@@ -266,6 +266,29 @@ ShaderState characterState() {
     return state;
 }
 
+std::vector<Request> hudItemRequests(uint32_t mesh, glm::ivec3 allocation, const nativesaves::Item &item, int x, glm::ivec2 viewport,
+                                     float guiScale, float worldMilliseconds, float farPlane) {
+    if (!mesh || viewport.y <= 0 || allocation.x <= 0 || allocation.y <= 0 || allocation.z <= 0)
+        return {};
+    Request body;
+    body.kind = Request::Kind::QueuedModel;
+    body.mesh = mesh;
+    body.allocation = allocation;
+    body.item = item;
+    body.farPlane = farPlane;
+    body.at.screen = {float(x) * guiScale, 52.f * guiScale};
+    body.at.euler = {-120, 0, phase(worldgen::trunc32(worldMilliseconds))};
+    const int denominator = std::max({16, allocation.x, allocation.y, allocation.z});
+    body.at.size = ((.035f / float(denominator)) * guiScale) * (1024.f / float(viewport.y));
+    body.state = overlayState();
+    body.state->shininess = shininess(item);
+    auto shadow = body;
+    shadow.at.screen = {float(x + 5) * guiScale, 57.f * guiScale};
+    shadow.material = {0, 0, 0, 1};
+    shadow.depthOffset = -.5f;
+    return {shadow, body};
+}
+
 void appendDraws(const Request &request, glm::ivec2 viewport, ShaderState &retained, std::vector<Draw> &out) {
     if (!request.mesh) {
         if (request.kind == Request::Kind::Character)
