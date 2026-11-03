@@ -673,8 +673,12 @@ individual feature documents.
   a detached document source, one live native root and a retained Interface on Play.
   Frontend and gameplay now share the same engine Hud and reuse completed resources
   for the same install; entry clears only transient preview draw submissions.
-  Separate template/panel scene graphs, full global picking, generated-card subtree
-  deletion and captured-node cleanup still need the broader runtime work.
+  Scene-owned detached trees, identity-preserving reparenting and explicit
+  node/Widget deletion now provide ordered cleanup for a bound Input. Production
+  probes, icons, speech and inventory cells use the scene mutation operations.
+  Separate template/panel scene graphs, full global picking and generated-card
+  subtree rebuilding still need the broader runtime work; the game does not yet
+  use the scene-bound input owner throughout its interface.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.

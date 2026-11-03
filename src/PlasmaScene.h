@@ -112,6 +112,8 @@ enum : int {
 };
 
 struct SceneNode;
+class Scene;
+class Input;
 enum class ButtonPose { Press, Release, Enter, Leave, PressChecked, ReleaseChecked, EnterChecked, LeaveChecked };
 using ButtonNames = std::array<std::string, 8>;
 const ButtonNames &defaultButtonNames();
@@ -201,14 +203,26 @@ struct SceneNode {
     void setAllText(const std::wstring &t);
     void setAllTextColor(glm::vec4 c);
     int maskMode() const;
+
+  private:
+    friend class Scene;
+    Scene *owningScene = nullptr;
 };
 
 class Scene {
   public:
     explicit Scene(const plx::Document &document);
+    Scene(const Scene &) = delete;
+    Scene &operator=(const Scene &) = delete;
+    // A bound Input borrows this scene; its lifetime must end before the scene's.
+    struct DeletionObserver {
+        virtual ~DeletionObserver() = default;
+        virtual void beforeNodeDeletion(SceneNode &) = 0;
+        virtual void beforeWidgetDeletion(SceneNode &) = 0;
+    };
     const plx::Document &document() const { return doc; }
-    // The engine's root: every node the interface makes hangs below it. Its matrix is the
-    // interface's scale.
+    // The live draw/pick root; detached source trees remain scene-owned separately.
+    // Its matrix is the interface's scale.
     SceneNode &root() { return rootNode; }
     void setScale(float s) { rootScale = s; }
     float scale() const { return rootScale; }
@@ -222,6 +236,12 @@ class Scene {
     SceneNode *instance(const plx::Document &from, int index, SceneNode *parent);
     // A copy of a scene node and its children under `parent`.
     SceneNode *instance(const SceneNode &from, SceneNode *parent);
+    // Null parents create detached, scene-owned trees, outside ordinary root traversal.
+    // Reparenting preserves identities and input references; same-parent attachment appends.
+    bool reparent(SceneNode &, SceneNode *parent);
+    bool destroy(SceneNode &);
+    void clearChildren(SceneNode &);
+    bool replaceWidget(SceneNode &, Widget);
     // A new empty node.
     SceneNode *create(SceneNode *parent, const std::string &name = "");
     // The interface's icon setter: an icons.plx node, named "icon", under the node of `targetName`
@@ -275,6 +295,12 @@ class Scene {
                              uint32_t options = 0, bool clipWidgets = true) const;
 
   private:
+    friend class Input;
+    DeletionObserver *deletionObserver = nullptr;
+    std::vector<std::unique_ptr<SceneNode>> detached;
+    bool deleting = false; // Reject structural reentry; arbitrary callback destruction is not certified.
+    SceneNode *append(std::unique_ptr<SceneNode>, SceneNode *parent);
+    void destroyOwned(SceneNode &);
     const plx::Document &doc;
     SceneNode rootNode;
     float rootScale = 1;

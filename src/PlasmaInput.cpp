@@ -1,6 +1,34 @@
 #include "PlasmaInput.h"
+#include <stdexcept>
 
 namespace plasma {
+Input::Input(Scene &scene, Pick pick) : Input(scene.root(), std::move(pick)) {
+    if (scene.deletionObserver)
+        throw std::logic_error("A GUI scene already has an input owner");
+    this->scene = &scene;
+    scene.deletionObserver = this;
+}
+Input::~Input() {
+    if (scene)
+        scene->deletionObserver = nullptr;
+}
+void Input::beforeNodeDeletion(SceneNode &node) {
+    if (captured == &node)
+        clearCapture(); // Run the unchanged-pointer pass before detachment.
+    if (hovered == &node)
+        hovered = nullptr;
+    if (!node.widget)
+        events.erase(&node);
+}
+void Input::beforeWidgetDeletion(SceneNode &node) {
+    if (focused == &node)
+        focused = nullptr;
+    if (shownAuxiliary == &node)
+        shownAuxiliary = nullptr;
+    if (qualifyingDown == &node)
+        qualifyingDown = nullptr;
+    events.erase(&node); // Widget registrations cannot survive replacement/address reuse.
+}
 SceneNode *Input::owner(SceneNode *node) {
     return node ? node->widgetOwner : nullptr;
 }

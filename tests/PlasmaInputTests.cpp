@@ -307,6 +307,93 @@ int plasmaInputTests() {
         input.leftDown();
         check(starts == std::vector<std::string>{"button:press"} && a->widget->checked, "ordinary type0 press has no check-byte write");
     }
+    {
+        // Native root/lifetime §§5–6: only destruction performs input cleanup.
+        plx::Document document;
+        plasma::Scene scene(document), other(document);
+        auto *panel = scene.create(&scene.root(), "panel");
+        auto *child = scene.create(panel, "child");
+        auto *peer = scene.create(&scene.root(), "peer");
+        panel->widget.emplace();
+        panel->widget->flags |= 0x20;
+        peer->widget.emplace();
+        scene.root().initializeWidgets();
+        Node *picked = panel;
+        Input input(scene, [&](glm::vec2) { return picked; });
+        input.move({17, 23});
+        input.leftDown();
+        input.capture(panel);
+        input.focus(panel);
+        input.auxiliary(panel);
+        panel->visible = false;
+        check(scene.reparent(*panel, nullptr) && !panel->parent && scene.root().children.size() == 1,
+              "detached tree stays scene-owned outside root traversal");
+        check(input.target() == panel && input.focusWidget() == panel && input.downOwner() == panel && input.heldButtons() == 1,
+              "hide/detach preserve capture, focus, down owner and held state");
+        check(scene.reparent(*panel, &scene.root()) && scene.root().children.back().get() == panel &&
+                  panel->children.front().get() == child,
+              "reattachment preserves node and descendant identities");
+        check(scene.reparent(*peer, &scene.root()) && scene.root().children.back().get() == peer,
+              "same-parent reattachment appends without recreating a node");
+        check(!scene.reparent(*panel, child) && !scene.reparent(*panel, &other.root()) && !other.destroy(*panel) &&
+                  !scene.destroy(scene.root()),
+              "cycles, cross-scene mutation and engine-root destruction are rejected");
+        int focusLost = 0, childMoves = 0;
+        input.registerEvent(*panel, Input::Event::FocusLost, [&](Input &, Node &) { ++focusLost; });
+        input.registerEvent(*panel, Input::Event::Move, [&](Input &, Node &) { ++childMoves; });
+        check(scene.replaceWidget(*panel, plasma::reboundWidget(*panel->widget)), "replace the wrapper without replacing its node");
+        check(!input.focusWidget() && !input.auxiliaryWidget() && !input.downOwner() && input.captureNode() == panel &&
+                  input.movementHit() == panel && input.heldButtons() == 1 && focusLost == 0,
+              "Widget deletion clears only matching Widget references without focus event or capture reset");
+        input.move(input.pointer());
+        check(childMoves == 0, "replaced Widget registrations do not remain bound to its node address");
+        panel->visible = true;
+        panel->widget->flags |= 0x20;
+        input.registerEvent(*panel, Input::Event::FocusLost, [&](Input &, Node &) { ++focusLost; });
+        input.focus(panel);
+        input.auxiliary(panel);
+        input.leftDown();
+        picked = peer;
+        bool beforeDetach = false, structuralReentryBlocked = false;
+        input.virtualHook = [&](Input &state, Node &node, Input::Hook hook) {
+            if (&node == peer && hook == Input::Hook::Move) {
+                beforeDetach = panel->parent == &scene.root() && panel->children.front().get() == child && !state.captureNode() &&
+                               state.focusWidget() == panel && state.previousPointer() == state.pointer();
+                structuralReentryBlocked = !scene.destroy(*panel) && !scene.reparent(*peer, nullptr);
+            }
+        };
+        check(scene.destroy(*panel), "destroy an owned node subtree");
+        check(beforeDetach && structuralReentryBlocked && input.movementHit() == peer && !input.captureNode() && !input.focusWidget() &&
+                  !input.auxiliaryWidget() && !input.downOwner() && input.heldButtons() == 1 && focusLost == 0,
+              "capture release repicks before detach, retains replacement hover, then clears deleted Widget references");
+        // A stationary release pass may pick the deleting node again; clear that retained hit.
+        auto *again = scene.create(&scene.root(), "again");
+        again->widget.emplace();
+        again->initializeWidgets();
+        picked = again;
+        input.capture(again);
+        input.move(input.pointer());
+        check(scene.destroy(*again) && !input.movementHit() && !input.captureNode(),
+              "deletion clears a hit repicked onto the same dying node");
+        picked = nullptr;
+        input.capture(peer);
+        scene.clearChildren(scene.root());
+        check(scene.root().children.empty() && !input.captureNode() && input.heldButtons() == 1,
+              "child clearing uses the ordinary deletion path without resetting held buttons");
+        auto *detached = scene.create(nullptr, "source");
+        detached->widget.emplace();
+        detached->widget->flags = plasma::WIDGET_WHOLE_HIT;
+        detached->widget->bindSize = detached->widget->innerBindSize = detached->widget->frameSize = {20, 20};
+        detached->initializeWidgets();
+        check(!detached->parent && scene.root().children.empty() && scene.hitTest(*detached, {5, 5}) == detached &&
+                  !scene.hitTest(scene.root(), {5, 5}),
+              "registered detached sources can be queried independently but are outside live root picking");
+        auto *copy = scene.instance(*detached, &scene.root());
+        copy->initializeWidgets();
+        check(copy != detached && scene.hitTest(scene.root(), {5, 5}) == copy && scene.destroy(*detached) &&
+                  scene.hitTest(scene.root(), {5, 5}) == copy,
+              "a live instance has its own identity and survives destruction of its detached source");
+    }
     std::printf("GUI pointer routing: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

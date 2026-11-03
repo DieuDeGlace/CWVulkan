@@ -7,7 +7,7 @@
 #include <utility>
 
 namespace plasma {
-class Input {
+class Input : private Scene::DeletionObserver {
   public:
     enum class Event { LeftDown = 2, LeftUp = 3, Move = 12, Enter = 13, Leave = 14, FocusLost = 19 };
     enum class Hook { LeftDown, LeftUp, Move, Enter, Leave, GlobalQualifyingDown, GlobalDown, GlobalUp, GlobalMove };
@@ -16,6 +16,8 @@ class Input {
     using Virtual = std::function<void(Input &, SceneNode &, Hook)>;
 
     Input(SceneNode &root, Pick pick) : root(root), pick(std::move(pick)) {}
+    Input(Scene &, Pick); // One input owner, bound to ordinary scene deletion/replacement.
+    ~Input() override;
     Input(const Input &) = delete;
     Input &operator=(const Input &) = delete;
     Virtual virtualHook;
@@ -44,6 +46,9 @@ class Input {
         Callback callback;
         bool enabledRequired = true;
     };
+    Scene *scene = nullptr;
+    void beforeNodeDeletion(SceneNode &) override;
+    void beforeWidgetDeletion(SceneNode &) override;
     SceneNode &root;
     Pick pick;
     std::map<SceneNode *, std::map<Event, Registration>> events;

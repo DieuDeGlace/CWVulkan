@@ -50,7 +50,7 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
     auto &node = *instance.node;
     const bool first = instance.requested.x < 0;
     if (first && item.replaceWidget && node.widget)
-        node.widget = plasma::reboundWidget(*node.widget);
+        frontScene->replaceWidget(node, plasma::reboundWidget(*node.widget));
     if (first || instance.requested != item.size) {
         // Constructor requests precede the global scale and the Button's keyed poses.
         // Later draws preserve that evaluated frame instead of requesting the size again.
@@ -93,23 +93,23 @@ glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested, bool r
         frontScene->setScale(1.0f);
     }
     frontScene->setScale(1.0f);
-    plasma::SceneNode *probe = frontScene->instance(name, &frontScene->root());
+    plasma::SceneNode *probe = frontScene->instance(name, nullptr); // Sizing is independent of the live root.
     if (!probe) {
         frontScene->setScale(guiScale);
         return glm::vec2(0);
     }
     if (replaceWidget && probe->widget)
-        probe->widget = plasma::reboundWidget(*probe->widget);
+        frontScene->replaceWidget(*probe, plasma::reboundWidget(*probe->widget));
     if (probe->widget && requested.x > 0 && requested.y > 0)
         frontScene->resizeTo(*probe, requested);
     probe->initializeWidgets();
     glm::vec2 size = probe->widget ? frontScene->viewSize(*probe) : glm::vec2(0);
     if (!probe->widget) {
         glm::vec2 minimum, maximum;
-        if (frontScene->screenBounds(*probe, minimum, maximum)) size = maximum - minimum;
+        if (frontScene->screenBounds(*probe, minimum, maximum))
+            size = maximum - minimum;
     }
-    auto &children = frontScene->root().children;
-    children.erase(std::remove_if(children.begin(), children.end(), [&](const auto &c) { return c.get() == probe; }), children.end());
+    frontScene->destroy(*probe);
     frontScene->setScale(guiScale);
     return size;
 }

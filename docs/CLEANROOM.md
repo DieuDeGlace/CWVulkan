@@ -1405,3 +1405,27 @@ untouched; fixture cleanup uses only its exact files and empty directories witho
 recursive deletion. No owner font/art bytes are stored in source or release assets.
 Actual frontend-entry captures cover the shared Hud through the Play transition;
 broader live UI and alternate reconstruction/recovery paths remain acceptance work.
+
+
+## Owned GUI node mutation and deletion, 2026-11-02
+
+Using only gui-root-construction-lifetime §§1–6, Scene now retains detached trees
+outside its live root, appends reparented nodes without replacing their identities,
+and rejects cross-scene/cyclic changes. A scene-bound Input observes explicit node
+and own-Widget deletion. Capture release runs the unchanged-pointer pass before
+node detachment; a retained hit on the dying node is then cleared. Own-Widget
+replacement/deletion clears matching focus, auxiliary and down-owner references
+without an ordinary focus event or a held-mask reset. Registered callbacks belong
+to that Widget lifetime. Hide/detach do not invoke deletion cleanup.
+
+Template sizing probes and inventory-cell prototypes are now detached from the live
+root. Probes, speech retirement, icon replacement, inventory-cell clearing and panel
+Widget replacement use the scene operations. Bulk clearing without a bound Input
+keeps the existing linear vector clear. Ordered asset-free tests cover the retained
+identities, callback-before-detach order, a newly picked surviving hover, a repick of
+the dying node, Widget replacement, child clearing and a detached source whose live
+copy survives its destruction. Structural callback reentry
+is explicitly rejected as an engine guard, not claimed as native recovery behavior.
+The scene must outlive its bound Input; whole-scene teardown, external raw tree
+mutation and arbitrary callback destruction remain outside this contract. Runtime
+frontend/panel scene unification and the full live input bridge are still open.

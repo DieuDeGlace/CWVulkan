@@ -29,23 +29,26 @@ void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t g
     frontScene->setScale(guiScale);
     const std::string prefix = "npc-speech-";
     std::set<std::string> retained;
-    for (const auto &bubble : bubbles) retained.insert(prefix + std::to_string(bubble.speaker));
+    for (const auto &bubble : bubbles)
+        retained.insert(prefix + std::to_string(bubble.speaker));
     for (auto it = frontNodes.begin(); it != frontNodes.end();) {
-        if (!it->first.starts_with(prefix) || retained.count(it->first)) { ++it; continue; }
+        if (!it->first.starts_with(prefix) || retained.count(it->first)) {
+            ++it;
+            continue;
+        }
         const auto nodes = it->second;
-        auto &children = frontScene->root().children;
-        std::erase_if(children, [&](const auto &node) {
-            return std::any_of(nodes.begin(), nodes.end(), [&](const auto &instance) { return instance.node == node.get(); });
-        });
+        for (const auto &instance : nodes)
+            frontScene->destroy(*instance.node);
         it = frontNodes.erase(it);
     }
     for (const auto &bubble : bubbles) {
         auto &nodes = frontNodes[prefix + std::to_string(bubble.speaker)];
         if (nodes.empty()) {
             auto *node = frontScene->instance("speech", &frontScene->root());
-            if (!node) continue;
+            if (!node)
+                continue;
             if (node->widget) {
-                node->widget = plasma::reboundWidget(*node->widget);
+                frontScene->replaceWidget(*node, plasma::reboundWidget(*node->widget));
                 node->widget->kind = "DialogWidget";
             }
             nodes.push_back({node});

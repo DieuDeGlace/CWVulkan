@@ -38,7 +38,7 @@ void Hud::buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons
     plasma::SceneNode *node = s.instance("blackwidget", panels.inGame);
     if (!node || !node->widget)
         return;
-    node->widget = plasma::reboundWidget(*node->widget);
+    s.replaceWidget(*node, plasma::reboundWidget(*node->widget));
     node->widget->kind = "InventoryWidget";
     p.node = node;
     p.tabParent = s.create(node);
@@ -72,7 +72,7 @@ void Hud::buildPanels() {
     plasma::Scene &s = *scene;
     s.setScale(1.0f); // (the game builds its interface before the scale option applies)
     panels.inGame = s.create(&s.root(), "ingame");
-    panels.templates = s.create(&s.root(), "templates");
+    panels.templates = s.create(nullptr, "templates"); // Source prototypes are outside the live tree.
     panels.templates->visible = false;
 
     // InventoryWidget's constructor: its cell size from the cell template's view.
@@ -91,7 +91,7 @@ void Hud::buildPanels() {
     // The formula details (FormulaDetailsWidget: a black widget with the item's shadow, the
     // craft button and bar, resized to 400 x 274).
     if ((panels.details = s.instance("blackwidget", panels.inGame)) && panels.details->widget) {
-        panels.details->widget = plasma::reboundWidget(*panels.details->widget);
+        s.replaceWidget(*panels.details, plasma::reboundWidget(*panels.details->widget));
         panels.details->widget->kind = "FormulaDetailsWidget";
         panels.itemShadow = s.instance("itemshadow", panels.details);
         panels.craftButton = s.instance("craftbutton", panels.details);
@@ -108,7 +108,7 @@ void Hud::buildPanels() {
     }
     if ((panels.customization = s.instance("blackwidget", panels.inGame)) && panels.customization->widget) {
         auto &root = *panels.customization;
-        root.widget = plasma::reboundWidget(*root.widget);
+        s.replaceWidget(root, plasma::reboundWidget(*root.widget));
         root.widget->kind = "VoxelWidget";
         s.resizeTo(root, {800, 800});
         root.visible = false;
@@ -119,7 +119,7 @@ void Hud::buildPanels() {
         if (!slot)
             break;
         if (slot->widget) {
-            slot->widget = plasma::reboundWidget(*slot->widget);
+            s.replaceWidget(*slot, plasma::reboundWidget(*slot->widget));
             slot->widget->kind = "SpriteWidget";
             slot->widget->flags |= plasma::WIDGET_DRAW_FIRST;
         }
@@ -133,7 +133,7 @@ void Hud::buildPanels() {
             if (plasma::SceneNode *n = panels.preview->find(star))
                 n->visible = false;
         if (panels.preview->widget)
-            panels.preview->widget = plasma::reboundWidget(*panels.preview->widget);
+            s.replaceWidget(*panels.preview, plasma::reboundWidget(*panels.preview->widget));
         if (panels.preview->widget) {
             panels.preview->widget->kind = "PreviewWidget";
             s.resizeTo(*panels.preview, glm::vec2(300, 300));
@@ -176,7 +176,7 @@ void Hud::layoutInvPanel(InvPanel &p) {
     const int cw = panels.cellWidth, ch = panels.cellHeight;
     p.columns = (int)((content.x - 10.0f) / (float)(cw + 5));
     p.rows = (int)((content.y - 40.0f) / (float)(ch + 5));
-    p.cellParent->children.clear();
+    s.clearChildren(*p.cellParent);
     p.cells.clear();
     for (int x = 0; x < p.columns; x++)
         for (int y = 0; y < p.rows; y++) {

@@ -357,17 +357,100 @@ int SceneNode::maskMode() const { return Display{visible, clips, fill, fill, 0, 
 // ---------------------------------------------------------------------------------------------
 // The scene.
 
-Scene::Scene(const plx::Document &document) : doc(document) { rootNode.name = "root"; }
+Scene::Scene(const plx::Document &document) : doc(document) {
+    rootNode.name = "root";
+    rootNode.owningScene = this;
+}
+
+SceneNode *Scene::append(std::unique_ptr<SceneNode> node, SceneNode *parent) {
+    node->parent = parent;
+    node->owningScene = this;
+    auto *result = node.get();
+    (parent ? parent->children : detached).push_back(std::move(node));
+    return result;
+}
+
+bool Scene::reparent(SceneNode &node, SceneNode *parent) {
+    if (deleting || &node == &rootNode || node.owningScene != this || (parent && parent->owningScene != this))
+        return false;
+    for (auto *ancestor = parent; ancestor; ancestor = ancestor->parent)
+        if (ancestor == &node)
+            return false;
+    auto &siblings = node.parent ? node.parent->children : detached;
+    const auto at = std::find_if(siblings.begin(), siblings.end(), [&](const auto &child) { return child.get() == &node; });
+    if (at == siblings.end())
+        return false;
+    auto owned = std::move(*at);
+    siblings.erase(at);
+    append(std::move(owned), parent);
+    return true;
+}
+
+bool Scene::destroy(SceneNode &node) {
+    if (deleting || &node == &rootNode || node.owningScene != this)
+        return false;
+    struct Guard {
+        bool &flag;
+        ~Guard() { flag = false; }
+    } guard{deleting};
+    deleting = true;
+    destroyOwned(node);
+    return true;
+}
+
+void Scene::destroyOwned(SceneNode &node) {
+    if (deletionObserver)
+        deletionObserver->beforeNodeDeletion(node);
+    std::vector<SceneNode *> children;
+    children.reserve(node.children.size());
+    for (auto &child : node.children)
+        children.push_back(child.get());
+    for (auto *child : children)
+        destroyOwned(*child);
+    auto &siblings = node.parent ? node.parent->children : detached;
+    const auto at = std::find_if(siblings.begin(), siblings.end(), [&](const auto &child) { return child.get() == &node; });
+    auto owned = std::move(*at);
+    siblings.erase(at);
+    node.parent = nullptr;
+    if (node.widget) {
+        if (deletionObserver)
+            deletionObserver->beforeWidgetDeletion(node);
+        node.widget.reset();
+    }
+    node.owningScene = nullptr;
+}
+
+void Scene::clearChildren(SceneNode &node) {
+    if (deleting || node.owningScene != this)
+        return;
+    if (!deletionObserver) {
+        node.children.clear(); // No borrowed input state; keep bulk layout rebuilding linear.
+        return;
+    }
+    std::vector<SceneNode *> children;
+    children.reserve(node.children.size());
+    for (auto &child : node.children)
+        children.push_back(child.get());
+    for (auto *child : children)
+        destroy(*child);
+}
+
+bool Scene::replaceWidget(SceneNode &node, Widget widget) {
+    if (deleting || node.owningScene != this || !node.widget)
+        return false;
+    if (deletionObserver)
+        deletionObserver->beforeWidgetDeletion(node);
+    node.widget = std::move(widget);
+    return true;
+}
 
 SceneNode *Scene::create(SceneNode *parent, const std::string &name) {
-    if (!parent)
+    if (deleting || (parent && parent->owningScene != this))
         return nullptr;
     auto n = std::make_unique<SceneNode>();
     n->name = name;
     n->doc = &doc;
-    n->parent = parent;
-    parent->children.push_back(std::move(n));
-    return parent->children.back().get();
+    return append(std::move(n), parent);
 }
 
 SceneNode *Scene::instance(const std::string &name, SceneNode *parent) { return instance(doc, doc.find(name), parent); }
@@ -377,7 +460,7 @@ SceneNode *Scene::instance(const plx::Document &from, const std::string &name, S
 }
 
 SceneNode *Scene::instance(const plx::Document &from, int index, SceneNode *parent) {
-    if (!parent || index < 0 || index >= (int)from.nodes.size())
+    if (deleting || (parent && parent->owningScene != this) || index < 0 || index >= (int)from.nodes.size())
         return nullptr;
     const plx::Node &source = from.nodes[(size_t)index];
     auto n = std::make_unique<SceneNode>();
@@ -395,9 +478,7 @@ SceneNode *Scene::instance(const plx::Document &from, int index, SceneNode *pare
     }
     if (const plx::Object *w = objectAt(from.widgets, source.widget))
         n->widget = widgetOf(*w);
-    n->parent = parent;
-    SceneNode *made = n.get();
-    parent->children.push_back(std::move(n));
+    SceneNode *made = append(std::move(n), parent);
     for (int c : source.children)
         if (c >= 0 && c < (int)from.nodes.size() && !(from.nodes[(size_t)c].flags & plx::NODE_DISABLED))
             instance(from, c, made);
@@ -405,7 +486,7 @@ SceneNode *Scene::instance(const plx::Document &from, int index, SceneNode *pare
 }
 
 SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
-    if (!parent)
+    if (deleting || (parent && parent->owningScene != this))
         return nullptr;
     auto n = std::make_unique<SceneNode>();
     n->name = from.name;
@@ -428,9 +509,7 @@ SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
     n->onDraw = from.onDraw;
     n->animatedShape = from.animatedShape;
     n->animations = from.animations;
-    n->parent = parent;
-    SceneNode *made = n.get();
-    parent->children.push_back(std::move(n));
+    SceneNode *made = append(std::move(n), parent);
     for (const auto &c : from.children)
         if (!disabled(*c))
             instance(*c, made);
@@ -556,8 +635,12 @@ void Scene::setIcon(SceneNode &node, const std::string &targetName, const plx::D
     SceneNode *target = node.find(targetName);
     if (!target)
         return;
-    auto &kids = target->children;
-    kids.erase(std::remove_if(kids.begin(), kids.end(), [](const auto &c) { return c->name == "icon"; }), kids.end());
+    std::vector<SceneNode *> previous;
+    for (auto &child : target->children)
+        if (child->name == "icon")
+            previous.push_back(child.get());
+    for (auto *icon : previous)
+        destroy(*icon);
     glm::vec2 lo, hi, iconLo, iconHi;
     if (!shapeBounds(*target, lo, hi, false))
         return;
