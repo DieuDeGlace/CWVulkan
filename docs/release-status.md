@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Independently derived Alpha Rk references now check seed123's original offset
+  draw positions, its lattice-noise word and six raw RGB float-word results with
+  synthetic cached climate. The existing generation math matches all six exactly;
+  no replacement color formula was introduced. The Alpha terrain suite passes.
+  These are bounded arithmetic references, not captured world/biome samples.
+  The fresh-process full Steam-look radius15 rerun still fails its settlement
+  deadline (135.017 seconds wall time); that performance gate remains open.
+
 - Alpha first-run readiness now requires the owner model table and validates the
   two palm and seventeen plant models used by startup. The simulated fresh-install,
   incomplete-table and damaged-model cases pass, as do existing extraction/recovery

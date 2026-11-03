@@ -12,6 +12,7 @@
 #include "worldgen/AlphaTerrain.h"
 #include "worldgen/MapModel.h"
 #include "Extracted.h"
+#include <bit>
 #include <stdexcept>
 #include <future>
 #include <barrier>
@@ -51,6 +52,33 @@ int alphaTerrainTests() {
               home->warmth == 0.5601367354393005f,
           "home region cell and climate");
     alphagen::Terrain terrain(world);
+    {
+        // Original-instruction references: alpha-rock-colour-precision.md §5.1.
+        // Seed offsets are real; cached climate is synthetic, not a native world capture.
+        check(world.offsets()[0x22c] == 28488 && world.offsets()[0x230] == 12097,
+              "native seed123 detail offsets retain their draw positions");
+        check(std::bit_cast<uint32_t>(alphagen::noise(28488, 12097)) == 0xbf2d52f4u,
+              "native lattice noise word at the seed123 detail offsets");
+        struct RockFixture {
+            float warmth, fire;
+            std::array<uint32_t, 3> rgb;
+        };
+        constexpr RockFixture fixtures[] = {
+            {0, 0, {0x4280c69cu, 0x4294c69cu, 0x42d73c21u}},     {.25f, 0, {0x430b634eu, 0x4310634eu, 0x43279e10u}},
+            {.5f, 0, {0x432e634eu, 0x432e634eu, 0x433b9e10u}},   {.75f, 0, {0x432e634eu, 0x432e634eu, 0x433b9e10u}},
+            {.5f, .5f, {0x42d7ace2u, 0x42be0171u, 0x42c59e10u}}, {.5f, 1, {0x4225264fu, 0x4179e234u, 0x41200000u}},
+        };
+        alphagen::Zone cached;
+        auto &column = cached.column(0, 0);
+        for (const auto &fixture : fixtures) {
+            column.warmth = fixture.warmth;
+            column.fire = fixture.fire;
+            const auto actual = terrain.rock(0, 0, 0, &cached);
+            check(std::bit_cast<uint32_t>(actual.r) == fixture.rgb[0] && std::bit_cast<uint32_t>(actual.g) == fixture.rgb[1] &&
+                      std::bit_cast<uint32_t>(actual.b) == fixture.rgb[2],
+                  "raw Alpha rock RGB float words match the independent cached-climate references");
+        }
+    }
     check(!terrain.generateSurface(-1, 32800) && !terrain.generateSurface(65536, 32800), "finite Alpha zone domain");
     auto stage = terrain.generateSurface(32800, 32800);
     check(stage && stage->zone && stage->paddedHeights.size() == 257 * 257, "complete padded surface stage");

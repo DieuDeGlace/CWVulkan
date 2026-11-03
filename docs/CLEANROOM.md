@@ -1645,3 +1645,14 @@ author inspected the installed original loader binary and supplied only the
 bounded prose in specs/steam-mod-loader-capture-abi.md. The implementer read that
 note, not the binary implementation or SDK code. No adapter was implemented from
 it; interface observations do not establish SDK redistribution permission.
+
+
+## Alpha raw rock precision references, 2026-11-03
+
+The separate native-only author supplied alpha-rock-colour-precision.md from
+original native instructions/constants and independent prose. The implementer
+read that note and the engine's own code, without inspecting the original game
+implementation, SDK, reconstructions or owner captures. Six conditional RGB-word
+checks use independently derived seed123 offsets and synthetic cached climate.
+The existing math passes unchanged. No original world sample or additional
+runtime parity claim follows from these arithmetic fixtures.

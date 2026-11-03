@@ -182,6 +182,10 @@ palm and seventeen plant `.cub` files before reporting ready. Damaged or missing
 original models must be repaired through Steam. Tests cover a fresh installation,
 incomplete tables, invalid models and the separate Steam generation requirements.
 
+Separate native-instruction references verify seed123 noise offsets and six raw
+rock-color float-word results with pinned synthetic cached climate. They are not
+native world captures; the existing generation math passes unchanged.
+
 Formula vectors, worked tree output, synthetic palm rotations, finite-domain and
 cache-lifetime checks validate the independent contracts. Composition tests check
 whole construction tiles, source isolation, spawn/collision agreement, reader forks
