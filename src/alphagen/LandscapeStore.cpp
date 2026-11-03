@@ -75,6 +75,19 @@ std::optional<TerrainSample> LandscapeStore::sample(int32_t x, int32_t y) {
     result.colour = terrain.surface(ax, ay, int32_t(std::floor(result.height)));
     return result;
 }
+std::optional<glm::vec3> LandscapeStore::rockColour(int32_t x, int32_t y, int32_t z) {
+    const auto point = frame.point(x, y);
+    if (!point)
+        return std::nullopt;
+    terrain.prepareRegion(point->x / REGION, point->y / REGION);
+    return terrain.rock(point->x, point->y, z);
+}
+std::optional<Block> LandscapeStore::rock(int32_t x, int32_t y, int32_t z) {
+    const auto colour = rockColour(x, y, z);
+    if (!colour)
+        return std::nullopt;
+    return Block{uint8_t(int32_t(colour->r)), uint8_t(int32_t(colour->g)), uint8_t(int32_t(colour->b)), ROCK};
+}
 std::optional<alphacoords::Coverage> LandscapeStore::coverage(int32_t zx, int32_t zy) const {
     return frame.zone(zx, zy);
 }

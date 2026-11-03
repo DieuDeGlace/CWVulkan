@@ -168,6 +168,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
         Column &c = zone->columns[i];
         c.base = columns[i].base;
         c.fullColour = columns[i].fullColour;
+        c.sourceShift = columns[i].sourceShift;
         c.blocks.reserve(columns[i].blocks.size());
         for (const worldgen::Block &b : columns[i].blocks)
             c.blocks.push_back({b.r, b.g, b.b, b.glow, b.type, b.flags});
@@ -492,13 +493,20 @@ bool ExtractedWorld::writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t 
         colours = &(*zone.recordedColours)[i];
         sand = zone.recordedSand;
     }
-    // Legacy block-only exports have no cached materials. Do not invent buried
-    // colors when a downward interior gap would need those missing inputs.
-    if (!colours && !column.blocks.empty() && int64_t(z) + 1 < column.base)
+    const bool gap = !column.empty() && int64_t(z) + 1 < column.base;
+    worldgen::ColumnFiller filler;
+    if (gap && column.fullColour) {
+        filler = worldgen::alphaColumnFiller(x, y, column.sourceShift);
+        if (!filler)
+            return false;
+    }
+    // Legacy block-only exports need native cached inputs; Alpha gaps use the
+    // retained source palette, including the column's vertical translation.
+    if (gap && !colours && !filler)
         return false;
     const worldgen::ColourInputs unused;
     return worldgen::storeColumn(column, x, y, z, {bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]}, colours ? *colours : unused,
-                                 sand);
+                                 sand, filler ? &filler : nullptr);
 }
 bool ExtractedWorld::setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block) {
     if (!blockEdits()) {
@@ -1616,9 +1624,22 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         return blockAt(column(lx, ly), z, b) && solidType(b.type);
     };
     glm::vec3 offset((float)zx * 64, (float)zy * 64, (float)Z_OFFSET);
+    // meshFaces samples each voxel's colour before shading that voxel's corners.
+    // Preserve implicit Alpha RGB in float throughout those corner calls.
+    std::optional<glm::vec3> implicitColour;
     auto colour = [&](int lx, int ly, int z) {
+        implicitColour.reset();
+        const auto &stored = column(lx, ly);
         Block b{};
-        blockAt(column(lx, ly), z, b);
+        blockAt(stored, z, b);
+        if (stored.fullColour && z < stored.base) {
+            implicitColour = worldgen::alphaImplicitColour(stored, int32_t(int64_t(ax) * 64 + lx), int32_t(int64_t(ay) * 64 + ly), z);
+            if (implicitColour && !alphaLook) {
+                b.r = alphalight::toByte(implicitColour->r);
+                b.g = alphalight::toByte(implicitColour->g);
+                b.b = alphalight::toByte(implicitColour->b);
+            }
+        }
         // Steam bytes are half intensity; Alpha columns retain their original
         // full RGB. Retained Steam construction columns keep the native encoding.
         if (column(lx, ly).fullColour) {
@@ -1628,12 +1649,13 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 b.b /= 2;
             } else {
                 VoxelColor c{b.r, b.g, b.b, 0};
-                if (b.type == LEAVES_TYPE || b.type == SNOW_LEAVES_TYPE) c.flags |= SWAY;
+                if (b.type == LEAVES_TYPE || b.type == SNOW_LEAVES_TYPE)
+                    c.flags |= SWAY;
                 return c;
             }
         }
         VoxelColor c = nativeEncoding ? VoxelColor{b.r, b.g, b.b, STEAM_VERTEX}
-                                     : VoxelColor{(uint8_t)std::min(255, b.r * 2), (uint8_t)std::min(255, b.g * 2),
+                                      : VoxelColor{(uint8_t)std::min(255, b.r * 2), (uint8_t)std::min(255, b.g * 2),
                                                    (uint8_t)std::min(255, b.b * 2), 0};
         // Vanilla never moves a block; the leaf sway is CubeVulkan's WorldMotion option
         // ([Motion] LeafSway, off by default), which the vertex shader applies to these.
@@ -1666,6 +1688,8 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         light->flood();
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = FACE_CORNERS[face][k];
+            if (implicitColour)
+                return alphalight::shadeCorner(*light, {x + corner[0], y + corner[1], z + corner[2]}, face, *implicitColour);
             return alphalight::shadeCorner(*light, {x + corner[0], y + corner[1], z + corner[2]}, face, c);
         };
         meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset);

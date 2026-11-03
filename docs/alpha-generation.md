@@ -96,6 +96,17 @@ marking runs again at the resulting positions. Composition is transactional. The
 canonical generator, collision, water, lighting, local host and mirror readers all
 consume these composed columns; H alone never places the player.
 
+Alpha downward edits fill newly stored gaps with the source rock palette, sampled
+at the original Alpha Z even inside translated transition columns. The caller's
+target block bytes stay intact. Missing material input fails without a partial
+column edit; Steam setters retain their existing material path.
+
+Implicit buried mesh faces blend the first stored solid block toward procedural
+rock over ten blocks. Air/water/empty references use pure rock. The independently
+specified scalar float stages remain unquantized through corner shading, with
+byte packing only at the vertex. This changes face color, not collision storage
+or block light. The Steam-look adapter keeps its explicit vertex-format policy.
+
 ## Sky and map
 
 Alpha terrain supplies direct World warmth, moisture, sea and fire blends to the

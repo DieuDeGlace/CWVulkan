@@ -1,4 +1,5 @@
 #pragma once
+#include <glm/vec3.hpp>
 // The world generator as the engine uses it: one world at a time (its seed, its day, the day
 // zones are refreshed for and the creature tables), the zones it makes, kept in a small cache, and
 // the questions the engine asks of it about cells, places and regions.
@@ -40,6 +41,10 @@ std::string terrainIdentity();
 bool terrainZoneAvailable(int32_t zx, int32_t zy);
 std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y);
 void composeTerrainMap(MapRegion &);
+// Captures the selected immutable Alpha context; only downward gap writes use it.
+ColumnFiller alphaColumnFiller(int32_t x, int32_t y, int32_t sourceShift);
+// Alpha buried faces retain the reference/Rk blend in float until vertex shading.
+std::optional<glm::vec3> alphaImplicitColour(const TerrainColumn &, int32_t x, int32_t y, int32_t z);
 
 // --- The world -----------------------------------------------------------------------------------
 

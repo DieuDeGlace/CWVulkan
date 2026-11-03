@@ -85,6 +85,32 @@ bool AlphaTerrain::coversZone(int32_t zx, int32_t zy) const {
         columns += coverage->patches[i].width * coverage->patches[i].height;
     return columns == ZONE_COLUMNS;
 }
+std::optional<Block> AlphaTerrain::rock(int32_t x, int32_t y, int32_t z) {
+    const auto block = source.rock(x, y, z);
+    return block ? alphagen::steamBlock(*block) : std::nullopt;
+}
+std::optional<glm::vec3> AlphaTerrain::implicitColour(const TerrainColumn &column, int32_t x, int32_t y, int32_t z) {
+    if (!column.fullColour || z >= column.base)
+        return std::nullopt;
+    const auto sourceZ = int64_t(z) - column.sourceShift;
+    if (sourceZ < INT32_MIN || sourceZ > INT32_MAX)
+        return std::nullopt;
+    const auto rock = source.rockColour(x, y, int32_t(sourceZ));
+    if (!rock)
+        return std::nullopt;
+    // Keep scalar division and the two contributions separate until vertex packing.
+    // docs/specs/alpha-implicit-terrain-colour.md; this file uses strict float arithmetic.
+    if (column.blocks.empty() || column.blocks.front().type == 0 || column.blocks.front().type == 2)
+        return glm::vec3(rock->r / 255.f, rock->g / 255.f, rock->b / 255.f);
+    const auto &reference = column.blocks.front();
+    const float k = std::min(float(int64_t(column.base) - z) * .1f, 1.f);
+    const auto blend = [k](uint8_t reference, float rock) {
+        const float referencePart = (float(reference) * (1.f - k)) / 255.f;
+        const float rockPart = (rock * k) / 255.f;
+        return referencePart + rockPart;
+    };
+    return glm::vec3(blend(reference.r, rock->r), blend(reference.g, rock->g), blend(reference.b, rock->b));
+}
 void AlphaTerrain::composeMap(MapRegion &map) {
     struct Projection {
         bool retained = false, present = false;
@@ -226,6 +252,7 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
             const float alpha = ground(column), native = ground(zone.terrain.columns[index]);
             const auto shift = transition(alpha, native, weight);
             column.base += shift;
+            column.sourceShift += shift;
             offsets[index] = int32_t(std::lround(alpha + shift - native));
             result.terrain.columns[index] = std::move(column);
         }
@@ -301,7 +328,21 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
     result.lists.marked.clear();
     markObjectBlocks(
         result.objects, result.lists.marked, [&](int32_t x, int32_t y, int32_t z) { return result.terrain.read(x, y, z); },
-        [&](int32_t x, int32_t y, int32_t z, Block b) { result.terrain.store(x, y, z, b); });
+        [&](int32_t x, int32_t y, int32_t z, Block b) {
+            const auto index = setterColumn(zx, zy, x, y);
+            if (!index)
+                return;
+            const auto &column = result.terrain.columns[*index];
+            ColumnFiller filler;
+            if (column.fullColour && !column.empty() && int64_t(z) + 1 < column.base)
+                filler = [this, x, y, shift = column.sourceShift](int32_t height) -> std::optional<Block> {
+                    const auto sourceZ = int64_t(height) - shift;
+                    if (sourceZ < INT32_MIN || sourceZ > INT32_MAX)
+                        return std::nullopt;
+                    return rock(x, y, int32_t(sourceZ));
+                };
+            result.terrain.store(x, y, z, b, filler ? &filler : nullptr);
+        });
     zone = std::move(result);
     error.clear();
     return true;

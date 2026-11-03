@@ -69,6 +69,7 @@ inline uint8_t toByte(float channel) { return (uint8_t)((int)(channel * 255) & 0
 
 // A mesh corner shaded for the Alpha look: rgb from occludedColour, alpha the corner light.
 CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, VoxelColor colour);
+CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, glm::vec3 colour);
 
 // §11.1: a model corner's openness, the share of empty voxels among the 6 x 6 in front of
 // its face. `solid(x, y, z)` tests one voxel.

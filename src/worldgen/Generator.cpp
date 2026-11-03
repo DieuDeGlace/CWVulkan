@@ -83,6 +83,22 @@ bool terrainZoneAvailable(int32_t zx, int32_t zy) {
 std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y) {
     return settings.alpha ? settings.alpha->sample(x, y) : std::nullopt;
 }
+ColumnFiller alphaColumnFiller(int32_t x, int32_t y, int32_t shift) {
+    const auto context = settings.alpha;
+    if (!context)
+        return {};
+    return [context, x, y, shift](int32_t height) -> std::optional<Block> {
+        const auto sourceZ = int64_t(height) - shift;
+        if (sourceZ < INT32_MIN || sourceZ > INT32_MAX)
+            return std::nullopt;
+        return context->rock(x, y, int32_t(sourceZ));
+    };
+}
+std::optional<glm::vec3> alphaImplicitColour(const TerrainColumn &column, int32_t x, int32_t y, int32_t z) {
+    if (!column.fullColour || z >= column.base || !settings.alpha)
+        return std::nullopt;
+    return settings.alpha->implicitColour(column, x, y, z);
+}
 void composeTerrainMap(MapRegion &map) {
     if (settings.alpha)
         settings.alpha->composeMap(map);

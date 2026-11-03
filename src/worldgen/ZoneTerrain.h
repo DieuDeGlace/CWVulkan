@@ -44,6 +44,7 @@ struct TerrainColumn {
     // Project storage metadata: Alpha colors are full RGB; Steam terrain stores
     // half-intensity channels. It is never packed into a native block flag.
     bool fullColour = false;
+    int32_t sourceShift = 0; // runtime Z minus source Alpha Z, for translated material sampling
     int32_t top() const { return base + (int32_t)blocks.size(); }
     bool empty() const { return blocks.empty(); }
 };
@@ -53,7 +54,9 @@ std::optional<size_t> setterColumn(int32_t zx, int32_t zy, int32_t x, int32_t y)
 
 // Full setter (steam-full-block-setter.md): no history/events/cache side effects.
 // The retained material inputs are used only for a downward interior gap.
-bool storeColumn(TerrainColumn &column, int32_t x, int32_t y, int32_t z, Block block, const ColourInputs &colours, const SandOffsets &sand);
+using ColumnFiller = std::function<std::optional<Block>(int32_t z)>;
+bool storeColumn(TerrainColumn &column, int32_t x, int32_t y, int32_t z, Block block, const ColourInputs &colours, const SandOffsets &sand,
+                 const ColumnFiller *filler = nullptr);
 
 // A light the cliff pass hangs in a tall overhang (a model in the zone's model list, zone+0x18;
 // its record is part B's: type 0x59, flags 2, tint 1, second float 1).
@@ -64,27 +67,25 @@ struct OverhangLight {
 
 struct ZoneTerrain {
     int32_t zx = 0, zy = 0;
-    Place place;                       // the zone's place (its cell's, with no reach limit)
-    Int2 placeCell;                    // that cell, evened when big
-    Int2 anchor = NO_ANCHOR;           // the big structure's anchor
+    Place place;                               // the zone's place (its cell's, with no reach limit)
+    Int2 placeCell;                            // that cell, evened when big
+    Int2 anchor = NO_ANCHOR;                   // the big structure's anchor
     std::vector<ColourInputs> retainedColours; // cached material inputs after construction
     std::vector<ColumnField> field;            // ZONE_COLUMNS, index localX * 64 + localY
     std::vector<TerrainColumn> columns;        // likewise
     std::vector<OverhangLight> lights;
-    CrtRandom random;                  // the zone's rand() stream, for part B to continue
-    std::vector<uint16_t> draws;       // every rand() value drawn, when asked for
+    CrtRandom random;            // the zone's rand() stream, for part B to continue
+    std::vector<uint16_t> draws; // every rand() value drawn, when asked for
     SandOffsets sand;
 
     static int index(int32_t lx, int32_t ly) { return lx * ZONE_SIZE + ly; }
-    bool contains(int32_t x, int32_t y) const {
-        return floorDiv(x, ZONE_SHIFT) == zx && floorDiv(y, ZONE_SHIFT) == zy;
-    }
+    bool contains(int32_t x, int32_t y) const { return floorDiv(x, ZONE_SHIFT) == zx && floorDiv(y, ZONE_SHIFT) == zy; }
     // The block lookup (0xeb90): solid grey outside the zone and below a column, sea water for
     // open air at or below sea level, air above.
     Block read(int32_t x, int32_t y, int32_t z) const;
     // Storing a block (0x31c1c0); the column grows down (filled with its buried colour) or up
     // (with empty blocks) to reach z.
-    void store(int32_t x, int32_t y, int32_t z, Block b);
+    void store(int32_t x, int32_t y, int32_t z, Block b, const ColumnFiller *filler = nullptr);
     void store(int32_t x, int32_t y, int32_t z, const BlockProps &p) { store(x, y, z, toBlock(p)); }
 };
 
@@ -112,8 +113,8 @@ struct RockSpan {
 };
 // P0 at a column, from SPH and the place's variant.
 float spanBaseHeight(const Place &p, float ownHeight, int32_t x, int32_t y);
-int32_t spanBottom(const RockSpan &s, int32_t x, int32_t y, float h); // 0x2ba2b0
-int32_t spanTop(const RockSpan &s, int32_t x, int32_t y, float h);    // 0x2bab80
+int32_t spanBottom(const RockSpan &s, int32_t x, int32_t y, float h);                               // 0x2ba2b0
+int32_t spanTop(const RockSpan &s, int32_t x, int32_t y, float h);                                  // 0x2bab80
 BlockProps spanColour(const RockSpan &s, int32_t x, int32_t y, int32_t z, const SandOffsets &sand); // 0x2ba5f0
 
 // A road crossing a walled pit (0x2ae6d0, §5.4 step 3): whether the column (x, y) of place p,
@@ -121,6 +122,8 @@ BlockProps spanColour(const RockSpan &s, int32_t x, int32_t y, int32_t z, const 
 bool roadPit(int32_t x, int32_t y, const Place &p, float roads, float &bottom, float &top);
 
 // The sand offsets of a world.
-inline SandOffsets sandOffsets(const WorldValues &world) { return {(double)world.sandX(), (double)world.sandY()}; }
+inline SandOffsets sandOffsets(const WorldValues &world) {
+    return {(double)world.sandX(), (double)world.sandY()};
+}
 
 } // namespace worldgen

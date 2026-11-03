@@ -94,8 +94,11 @@ glm::vec3 occludedColour(glm::vec3 colour, float open) {
 glm::vec3 waterColour(float light) { return (1 - light) * glm::vec3(.1f, .2f, 1) + light * glm::vec3(.3f, .4f, 1); }
 
 CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, VoxelColor colour) {
+    return shadeCorner(volume, corner, face, glm::vec3(colour.r, colour.g, colour.b) / 255.f);
+}
+CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, glm::vec3 colour) {
     CornerLight l = cornerLight(volume, corner, face);
-    glm::vec3 rgb = occludedColour(glm::vec3(colour.r, colour.g, colour.b) / 255.f, l.open);
+    glm::vec3 rgb = occludedColour(colour, l.open);
     return {toByte(rgb.r), toByte(rgb.g), toByte(rgb.b), toByte(l.light)};
 }
 

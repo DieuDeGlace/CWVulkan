@@ -1,6 +1,7 @@
 // Independent formula vectors, plus the explicit surface-stage/data-layout boundary.
 // Formula checks establish contract conformance; native runtime oracles remain separate.
 #include "alphagen/Terrain.h"
+#include "AlphaLight.h"
 #include "alphagen/Coordinates.h"
 #include "alphagen/SurfaceStore.h"
 #include "alphagen/SteamBridge.h"
@@ -179,6 +180,16 @@ int alphaTerrainTests() {
                 std::filesystem::remove(directory / (std::string(alphagen::plantSprite(kind)) + ".cub"));
         std::filesystem::remove(directory / "sprite-groups.txt");
         std::filesystem::remove(directory);
+    }
+    {
+        worldgen::TerrainColumn column;
+        column.base = 10;
+        column.blocks = {{30, 40, 50, 0, worldgen::blocktype::SOLID, 0}};
+        const auto before = column;
+        worldgen::ColumnFiller missing = [](int32_t) -> std::optional<worldgen::Block> { return std::nullopt; };
+        check(!worldgen::storeColumn(column, 0, 0, 5, {1, 2, 3, 0, 6, 0}, {}, {}, &missing) && column.base == before.base &&
+                  column.blocks == before.blocks,
+              "missing source gap colors reject the entire downward extension without partial writes");
     }
     // Independent caves-contract vectors and behavioral checks of the real voxel writers.
     check(alphagen::formationTop(8397000, 8397100, 180, 25, false) == 211 && alphagen::formationTop(8397000, 8397100, 180, 12, true) == 195,
@@ -594,12 +605,71 @@ int alphaTerrainTests() {
                   "playable world reader loads Alpha geometry through the canonical generation path");
             check(reader.solidAt(0, 0, surface - 0.25) && !reader.solidAt(0, 0, surface + 0.25) && reader.home().z == surface,
                   "Alpha spawn height and collision agree on the generated surface");
+            const auto &sourceColumn = worldgen::zone(0, 0)->terrain.columns[0];
+            const int base = sourceColumn.base;
+            const ExtractedWorld::GameBlock target{12, 34, 56, 0, 6, 0};
+            check(reader.setGameBlock(0, 0, base - 4, target), "Alpha reader admits a full setter below its stored run");
+            const auto gap = reader.gameBlock(0, 0, base - 2);
+            const auto expected = terrain.rock(alphacoords::HOME, alphacoords::HOME, base - 2 - sourceColumn.sourceShift);
+            auto nativeColumn = sourceColumn;
+            nativeColumn.fullColour = false;
+            check(worldgen::alphaImplicitColour(sourceColumn, 0, 0, base - 2) &&
+                      !worldgen::alphaImplicitColour(nativeColumn, 0, 0, base - 2),
+                  "implicit Alpha colour selection leaves native Steam columns unchanged");
+            auto renderColumn = sourceColumn;
+            renderColumn.base = 10;
+            renderColumn.sourceShift = 7;
+            renderColumn.blocks = {{10, 20, 30, 0, worldgen::blocktype::ROCK, 0}};
+            const auto rock = terrain.rock(alphacoords::HOME, alphacoords::HOME, 1);
+            const auto near = worldgen::alphaImplicitColour(renderColumn, 0, 0, 8);
+            const glm::vec3 blended((10.f * .8f) / 255.f + (rock.r * .2f) / 255.f, (20.f * .8f) / 255.f + (rock.g * .2f) / 255.f,
+                                    (30.f * .8f) / 255.f + (rock.b * .2f) / 255.f);
+            check(near && *near == blended,
+                  "buried solid faces blend the first stored block with unquantized source rock at translated height");
+            bool pureRock = true;
+            const glm::vec3 pure(rock.r / 255.f, rock.g / 255.f, rock.b / 255.f);
+            for (const uint8_t type : {uint8_t(0), uint8_t(2)}) {
+                renderColumn.blocks.front().type = type;
+                const auto sampled = worldgen::alphaImplicitColour(renderColumn, 0, 0, 8);
+                pureRock &= sampled && *sampled == pure;
+            }
+            renderColumn.blocks.clear();
+            const auto empty = worldgen::alphaImplicitColour(renderColumn, 0, 0, 8);
+            check(pureRock && empty && *empty == pure && !worldgen::alphaImplicitColour(renderColumn, 0, 0, 10),
+                  "air, water and empty references select pure rock only strictly below the stored range");
+            renderColumn.blocks = {{10, 20, 30, 0, worldgen::blocktype::ROCK, 0}};
+            const auto deepRock = terrain.rock(alphacoords::HOME, alphacoords::HOME, -8);
+            const auto deep = worldgen::alphaImplicitColour(renderColumn, 0, 0, -1);
+            check(deep && *deep == glm::vec3(deepRock.r / 255.f, deepRock.g / 255.f, deepRock.b / 255.f),
+                  "the reference contribution reaches zero after ten blocks of depth");
+            alphalight::LightVolume closed({0, 0, 0}, {8, 8, 8});
+            bool retainedPrecision = false;
+            for (int i = 0; i < 512 && !retainedPrecision; i++) {
+                const glm::vec3 rgb((float(i) + .5f) / 512.f, .37f, .23f);
+                const auto precise = alphalight::shadeCorner(closed, {4, 4, 4}, 0, rgb);
+                const VoxelColor packed{uint8_t(rgb.r * 255.f), uint8_t(rgb.g * 255.f), uint8_t(rgb.b * 255.f), 0};
+                const auto rounded = alphalight::shadeCorner(closed, {4, 4, 4}, 0, packed);
+                retainedPrecision = precise.r != rounded.r || precise.g != rounded.g || precise.b != rounded.b;
+            }
+            check(retainedPrecision, "corner shading retains sub-byte implicit colour until final vertex packing");
+            check(gap[0] == uint8_t(int32_t(expected.r)) && gap[1] == uint8_t(int32_t(expected.g)) &&
+                      gap[2] == uint8_t(int32_t(expected.b)) && gap[4] == worldgen::blocktype::ROCK &&
+                      reader.gameBlock(0, 0, base - 4) == target,
+                  "Alpha downward gaps use full RGB from the source rock palette and retain all target bytes");
             auto fork = reader.forkSource();
             float forkHeight = 0;
             check(fork->sourceIdentity() == reader.sourceIdentity() && fork->surface(0, 0, forkHeight) && forkHeight == surface,
                   "independent host/mirror readers reproduce the same Alpha source geometry");
         }
+        const auto retainedFiller = worldgen::alphaColumnFiller(0, 0, 7);
+        const auto shiftedColour = retainedFiller(20);
+        const auto rawColour = terrain.rock(alphacoords::HOME, alphacoords::HOME, 13);
+        check(shiftedColour && shiftedColour->r == uint8_t(int32_t(rawColour.r)) && shiftedColour->g == uint8_t(int32_t(rawColour.g)) &&
+                  shiftedColour->b == uint8_t(int32_t(rawColour.b)),
+              "translated Alpha columns sample material noise at the original source height");
         worldgen::setAlphaTerrain({});
+        check(!worldgen::alphaColumnFiller(0, 0, 0) && retainedFiller(20) == shiftedColour,
+              "gap sampler retains its source context while Steam mode keeps its native material path");
         check(!worldgen::alphaTerrainSample(0, 0), "Steam mode retains its separate climate provider");
         check(!worldgen::usingAlphaTerrain() && worldgen::terrainIdentity() == steamIdentity,
               "returning to Steam mode restores its distinct source identity");

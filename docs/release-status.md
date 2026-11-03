@@ -10,6 +10,21 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha live edits now sample source rock for newly stored downward gaps, retaining
+  original source Z through translated columns. Missing input fails atomically;
+  the target block and Steam setter path retain their existing byte contracts.
+  Implicit buried faces now follow the independent first-block/rock blend, with
+  separate float contributions preserved through corner shading and final packing.
+  Air/water/empty references use pure rock. This does not change collision storage
+  or invent implicit block lighting.
+
+  All five targets build without warnings. Focused gap/translation/branch/precision
+  checks and the full CPU/owner/Vulkan suite pass (92 shader,2 camera,102 GUI,17 map,
+  shared-water and Alpha-scenery checks). A private no-save live cliff capture exits0
+  and was visually reviewed; it is not a native pixel-parity oracle. Save/extractor
+  hashes remain unchanged. Wider runtime, cold-streaming and release acceptance
+  gates remain open.
+
 - Alpha natural ground cover now continues the retained landscape stream through
   an immutable vegetation stage. It replaces tagged Steam plants outside protected
   construction tiles and resolves all17 natural models through the owner's actual
@@ -29,7 +44,7 @@ older successful runs; none of these bounded changes establishes complete parity
   owner-model foliage on Alpha terrain; startup/nature captures exit0. The new owned
   GPL import audit confirms unchanged plant arithmetic/draw order with only output
   and storage adaptation. Save/extractor hashes remain unchanged. Broader native
-  runtime/biome comparisons, live-edit material fill, cold streaming and release
+  runtime/biome comparisons, wider live-edit coverage, cold streaming and release
   acceptance remain open.
 
 - Concurrent canonical zone requests now share one generation result or failure.

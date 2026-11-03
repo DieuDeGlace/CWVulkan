@@ -12,6 +12,8 @@ class AlphaTerrain {
                           std::shared_ptr<const alphagen::PlantModels> plants = {});
     std::string identity(double scale = 1) const;
     bool coversZone(int32_t zx, int32_t zy) const;
+    std::optional<glm::vec3> implicitColour(const TerrainColumn &, int32_t x, int32_t y, int32_t z);
+    std::optional<Block> rock(int32_t x, int32_t y, int32_t sourceZ);
     std::optional<alphagen::TerrainSample> sample(int32_t x, int32_t y) { return source.sample(x, y); }
     // Coarse H-based map overview; exact final voxel geometry remains in compose.
     void composeMap(MapRegion &);
