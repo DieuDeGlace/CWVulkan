@@ -38,6 +38,12 @@ No game assets, saves, exports, Steam DLL, loader binary, PDB or build library i
 bundled. The package includes only the extractor DLL compiled from this project's
 source. Retain the matching source asset when distributing GPL executables.
 
+A final SDK-dependent extractor release also requires the
+[SDK permission/revision boundary](sdk-license-provenance.md) to be resolved.
+The retained MIT notice identifies the local notice; it does not independently
+establish permission for all original SDK material. No additional SDK code is
+cleared for reuse by a successful compilation or package audit.
+
 A final public release waits for the [remaining readiness checks](roadmap.md).
 In particular, a local package/PE check does not validate the real first-run wizard,
 an original-game network peer or a fresh machine.

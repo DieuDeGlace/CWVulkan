@@ -833,6 +833,9 @@ See [Alpha generation](alpha-generation.md) and the
   day/night, buildings, effects and multiple GPUs.
 - [ ] Verify the Windows package and bundled extractor against the supported game
   build, its separate loader dependency, license notices and matching source.
+  Resolve the exact SDK revision and applicable permission before final
+  SDK-dependent extractor redistribution; the [local-notice audit](sdk-license-provenance.md)
+  does not establish SDK-wide license coverage.
   See [Windows packaging](release-packaging.md).
 
 The installable development package is a candidate for those checks. It is not a

@@ -10,6 +10,15 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The published a00d377 source snapshot builds all five targets in an independent
+  output directory using only its project files, cached pinned dependency sources
+  and the documented separately supplied SDK headers for the extractor. Its full
+  CPU/owner-data suite passes. The extractor is correctly optional without that
+  SDK path. This establishes source completeness on this development machine,
+  not a fresh-machine setup or clearance of the SDK's unresolved permission scope.
+  The bounded font registry audit still does not identify a named-byte producer;
+  no face bytes, registration behavior or glyph coverage were invented.
+
 - Alpha's light solver stops at a proven unchanged working state, retaining the
   exact synchronous attenuation and maximum16-sweep reach. New golden tunnel and
   isolated-air cases guard propagation limits and the neighbour floor. All five
@@ -1432,7 +1441,11 @@ and ReShade DLL file hashes. Captures remain private and excluded from the sourc
   comparisons do not prove complete gameplay parity.
 - Human/system checks: two Steam accounts and an original-game peer, a real first-run
   wizard session, a fresh-machine install and extended save/load gameplay.
-- Publication: complete provenance/rights review; the source-license choice is complete.
+- Publication: complete provenance/rights review, including the unresolved original
+  CWSDK revision/permission scope for the SDK-dependent extractor. The retained
+  Gijs MIT notice matches CubeMegaMod's project notice; it does not establish that
+  separate SDK coverage. See [SDK provenance](sdk-license-provenance.md).
+  The original-source license choice is complete.
   See [PUBLICATION.md](../PUBLICATION.md). Existing third-party licenses remain separate.
 
 Do not upload the whole development checkout. Review the fresh

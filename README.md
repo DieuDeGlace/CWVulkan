@@ -28,6 +28,9 @@ compatible CubeModLoader installation. Neither is bundled. CMake looks for heade
 at `../SteamCubeWorldMods/vendor/cwmods` by default; from a developer command prompt,
 set `-DCWSDK_DIR="<path-to-headers>"` when configuring CMake to use another location.
 Without those headers the engine builds, but the `ZoneExtractor` target is omitted.
+The exact original SDK revision/permission scope remains an
+[open provenance boundary](docs/sdk-license-provenance.md); the copied Gijs MIT
+notice is not treated as SDK-wide redistribution clearance.
 See [dependency notices](THIRD_PARTY_NOTICES.md).
 
 ## Set up the owner's game data

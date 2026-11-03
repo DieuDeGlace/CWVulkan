@@ -1606,3 +1606,31 @@ models verify palm rotation, model-presence-dependent draws and type/flag handli
 Both the focused Alpha checks and full CPU/owner-data suite pass. These formula and
 synthetic checks are not native runtime-oracle evidence. Native model data is read
 from the owner's install and is never copied into either package.
+
+
+## Alpha materials, lighting, clouds and frontend provenance, 2026-11-03
+
+The existing separate native-only author supplied bounded prose for implicit
+terrain color, environment model light, fixed cloud placement/noise constants,
+normal frontend panel backgrounds and font-registry production. The implementer
+read those notes, the engine's own code and the sister project's original GPL
+code. No original game implementation, SDK implementation or reconstructed game
+code was inspected or copied by the implementer. Owner resources were used locally
+for integration checks and captures and remain excluded from publication.
+
+The material path retains source Z and float precision; environment light keeps
+its mesh-time sample and distinct own-light rule. Cloud tests include a verified
+native-derived float word and fixed64 staging. Numeric checks remain distinct
+from new native runtime oracles. Corner reuse and converged synchronous floods
+change work, not their checked values or propagation cap. CPU/GPU checks and
+private benchmarks qualify those bounded changes; full parity is not asserted.
+
+The panel audit established owner-template provenance rather than a common RGBA
+constant. Existing normal rendering already consumes that data. The font audit
+left byte registration unresolved, so no new producer or source identity was
+inferred. A separate metadata-only SDK license audit found the copied MIT notice
+but did not establish original SDK permission/revision scope. No further SDK
+implementation reuse is authorized by that observation. The extractor's automated
+build uses its separate header dependency; this does not constitute a license
+grant or implementation-source review. Final redistribution remains gated by the
+rights/provenance checks described in sdk-license-provenance.md.
