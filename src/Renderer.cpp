@@ -1173,6 +1173,8 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
             next.ranges = steamRange.value();
     }
     sceneFrame = next;
+    // The Game camera phase publishes CPU matrices even if presentation is skipped.
+    lastSpeechProjection = next.projection;
     scenePrepared = true;
     lastSceneTime = time;
 }
@@ -1296,8 +1298,6 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     const glm::vec3 D = alpha::sunDirection(dayMs);
     // Milliseconds since the last frame (-1 on the first, or when the clock went back).
     const double elapsedMs = sceneFrame->elapsedMs;
-    // Keep the retained speech-cache publication at its existing frame boundary.
-    lastSpeechProjection = sceneFrame->projection;
     const float sceneDistance = sceneFrame->ranges.scene;
     const float modelDistance = sceneFrame->ranges.models;
     const float actorDistance = sceneFrame->ranges.abilities;

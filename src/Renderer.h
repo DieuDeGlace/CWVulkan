@@ -235,6 +235,7 @@ class Renderer {
                const std::vector<DrawItem> &opaque, const std::vector<DrawItem> &water);
     const std::string &deviceName() const { return gpuName; }
     unsigned drawsLastFrame() const { return lastDraws; }
+    // Last completed CPU camera phase, independent of swapchain presentation.
     const std::optional<scenevisibility::Projection> &speechProjection() const { return lastSpeechProjection; }
     // Installs one CPU camera/range snapshot before normal actor posing. frame()
     // reuses it; earlier Game consumers still see the previous scene until this call.

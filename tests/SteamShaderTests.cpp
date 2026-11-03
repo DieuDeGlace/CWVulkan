@@ -537,11 +537,28 @@ int steamShaderTests() {
             (*camera.nativeFixedEye)[axis] = origin + int64_t(double(camera.eye[axis]) * 65536);
             (*camera.nativeFixedLookAt)[axis] = origin + int64_t(double(camera.target[axis]) * 65536);
         }
-        const auto retainedOffset = renderer.speechProjection()->offset;
+        const auto earlySpeech = renderer.speechProjection();
+        // No frame/presentation occurs between the CPU camera update and this query.
+        // The earlier consumer owns a value snapshot; the live camera has advanced.
         renderer.prepareScene(camera, lighting, 0);
-        const bool retainedSpeech = renderer.speechProjection()->offset == retainedOffset;
-        std::cout << "Steam scene retained speech schedule" << (retainedSpeech ? " PASS\n" : " FAIL\n");
-        failures += !retainedSpeech;
+        const auto &lateSpeech = *renderer.speechProjection();
+        const bool cpuCamera = earlySpeech && lateSpeech.offset != earlySpeech->offset &&
+                               lateSpeech.offset[0] == -(*camera.nativeFixedLookAt)[0] &&
+                               lateSpeech.offset[1] == -(*camera.nativeFixedLookAt)[1];
+        std::cout << "Steam scene CPU camera before presentation" << (cpuCamera ? " PASS\n" : " FAIL\n");
+        failures += !cpuCamera;
+        const auto unshakenCamera = lateSpeech;
+        Camera shakenCamera = camera;
+        shakenCamera.viewShake = {.5f, .25f};
+        renderer.prepareScene(shakenCamera, lighting, 0);
+        const auto &shakenView = renderer.speechProjection()->view;
+        const bool zeroInterval = std::abs(shakenView[3].x - unshakenCamera.view[3].x - .5f) < .00001f &&
+                                  std::abs(shakenView[3].y - unshakenCamera.view[3].y - .25f) < .00001f;
+        renderer.prepareScene(camera, lighting, 0);
+        const bool restoredCamera = zeroInterval && renderer.speechProjection()->view == unshakenCamera.view &&
+                                    renderer.speechProjection()->perspective == unshakenCamera.perspective;
+        std::cout << "Steam scene zero-interval CPU camera rebuild" << (restoredCamera ? " PASS\n" : " FAIL\n");
+        failures += !restoredCamera;
         const auto emptyCapture = root / "large-origin-empty.png";
         renderer.capture(emptyCapture.string());
         renderer.frame(camera, lighting, {}, 0, {}, {});

@@ -663,8 +663,14 @@ individual feature documents.
   The canonical frontend now also uses the shared physical-posture/fixed-anchor
   camera and eight-corner terrain obstruction, with native view rotation/fixed
   coordinates. Its completed eye/look-at state survives Play; the prior negative
-  look-at render origin is restored separately from the eye. Direct-launch startup,
-  first/pre-camera matrix lifetime and exact event delivery still need parity work.
+  look-at render origin is restored separately from the eye. The independent
+  [matrix-lifetime audit](specs/steam-camera-matrix-lifetime.md) establishes retained
+  transition matrices and complete late CPU rebuilds, including zero elapsed time.
+  Projection publication now follows that CPU phase independently of presentation;
+  early speech/feat consumers keep a value snapshot of the preceding camera/origin.
+  No numeric native pre-first-camera defaults are established; the engine keeps an
+  explicit absent projection until its first CPU build. Direct-launch startup,
+  exact event delivery, recovery and live comparisons still need parity work.
   The newly documented
   [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
   split early/late input phases. The live client now completes World stepping and
@@ -700,9 +706,10 @@ individual feature documents.
   Zero-limit rays retain the initial zone lookup and skip block reads. World/clip/
   speech views use a native inverse rotation, including zero distance and poles.
   Derived numeric/probe tests, both-style Vulkan camera cases and the full image
-  regression set pass. Full double-degree angle state/producers, native startup/
-  reset transfer, full GPU render-origin/FOV fidelity and input/GUI integration remain open. Shake reads the
-  client world's float simulation clock after its substeps. Ordinary world frames
+  regression set pass. Exact mouse/capture producers, direct-launch startup,
+  full GPU render-origin/FOV fidelity and input/GUI integration remain open.
+  Shake reads the client world's float simulation clock after its substeps.
+  Ordinary world frames
   now consume the retained capped double interval, 16-ms steps and a narrowed
   float residual without whole-ms carry; the final zero step is not skipped.
   The host's integer tick remains a separate caller. Fractional/long-frame and

@@ -6760,9 +6760,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             for (size_t i = 0; i < pose.size() && i < characterModels.size(); i++)
                 drawPart(characterModels[i], place * pose[i]);
         }
+        // Early consumers retain the previous camera/origin through the later UI pass.
+        // prepareScene publishes this frame's CPU matrices before GPU presentation.
+        const auto earlySpeechProjection = renderer.speechProjection();
         const auto featViewport = renderer.screenSize();
-        const auto featLabels = featTexts.visit(renderer.speechProjection(), {(float)featViewport.width, (float)featViewport.height},
-                                               (int32_t)std::clamp(frameMs, 0.0, 1000.0));
+        const auto featLabels = featTexts.visit(earlySpeechProjection, {(float)featViewport.width, (float)featViewport.height},
+                                                (int32_t)std::clamp(frameMs, 0.0, 1000.0));
         // Interface/frame cleanup is independent of drawing and does not consume an item.
         mapSelection.afterInterface();
         if (nativeCustomization.edit.open && !(mapOpen && input.lastUsedPad)) {
@@ -7309,14 +7312,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             };
             speechEnvironment.hasModel = [&](int model) { return spawned.spriteAsset(world, model).has_value(); };
             speechEnvironment.project = [&](npcspeech::Point point) -> std::optional<glm::vec2> {
-                if (!renderer.speechProjection()) return {};
+                if (!earlySpeechProjection)
+                    return {};
                 const auto screen = renderer.screenSize();
-                return npcspeech::project(point, *renderer.speechProjection(), {(float)screen.width,(float)screen.height}, hud.interfaceScale());
+                return npcspeech::project(point, *earlySpeechProjection, {(float)screen.width, (float)screen.height}, hud.interfaceScale());
             };
             speechEnvironment.effects = [&](int64_t, int64_t recipient, const TalkPlay::Page &page, bool) {
-                if (recipient != spawned.playerId()) return;
-                for (const auto &cell : page.loreCells) creditLore(cell, true);
-                for (const auto &mark : page.marks) markPlace(mark);
+                if (recipient != spawned.playerId())
+                    return;
+                for (const auto &cell : page.loreCells)
+                    creditLore(cell, true);
+                for (const auto &mark : page.marks)
+                    markPlace(mark);
             };
             speechEnvironment.finished = [&](int64_t speaker) {
                 auto request = nativeinteract::fresh(4);

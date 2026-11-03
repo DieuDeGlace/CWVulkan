@@ -1275,3 +1275,28 @@ fixed-weight follow, strict safety-distance and terrain tests cover the reused
 algorithm. Entry capture runs verify both angle and fixed-state handoff markers.
 This does not close first/pre-camera matrix lifetime or full live pixel parity.
 No original implementation, instruction bytes or owner artwork is distributed.
+
+
+## CPU camera publication and retained early consumers, 2026-11-02
+
+The existing isolated native-only author supplied camera-matrix-lifetime1–5,
+read back the complete independent prose and held all tracing/writes. The engine
+implementer fully read that note without access to original implementation.
+The ordinary constructor supplies no canonical numeric values for its four CPU
+matrices; known anchor/angle defaults do not initialize them. Direct frontend
+handlers retain completed matrices. Every reached late camera phase rebuilds
+them in full, including zero elapsed time, before downstream scene submission.
+
+The engine now publishes its computed projection at prepareScene rather than
+waiting for swapchain acquisition/presentation. Earlier speech and feat consumers
+retain one value snapshot of the preceding camera and matching fixed origin,
+including through the later UI callback. This preserves ordinary scheduling
+while keeping CPU camera updates independent of skipped GPU submission. The
+absent projection before the engine's first CPU build is an explicit safe engine
+policy, not a claimed native constructor default. Destruction/recovery parity
+and untraced callbacks remain outside this bounded result.
+
+Actual renderer checks query a changed fixed origin before any presentation,
+then rebuild shaken/restored matrices at an unchanged clock. Existing native
+projection, large-origin, lifetime and Vulkan image checks remain in validation.
+No owner artwork, original implementation or instruction bytes enter the source.
