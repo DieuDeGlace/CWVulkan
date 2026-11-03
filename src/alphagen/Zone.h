@@ -52,11 +52,11 @@ struct Column {
 
 // Vegetation spec §1.3: a plant sprite.
 struct Plant {
-    int32_t x = 0, y = 0, z = 0; // stands at the corner (x, y) on top of the block below z
+    int32_t x = 0, y = 0, z = 0; // column anchor; the record bridge centers XY and adjusts lily fixed Z
     float scale = 0;
     float rotation = 0; // degrees about +Z
     int32_t kind = 0;   // plant kind table A (vegetation §1.1)
-    uint32_t flags = 0; // 4: sways (vegetation-wind.md §3)
+    uint32_t flags = 0; // generator's sway request; the record bridge supplies constructor flags
 };
 
 // Vegetation spec §5: where the tree grid decided a tree stands. The tree builder is not

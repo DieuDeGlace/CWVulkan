@@ -14,6 +14,9 @@
 #include <stdexcept>
 #include <future>
 #include <barrier>
+#include <fstream>
+#include <chrono>
+#include <tuple>
 #include <cmath>
 #include <cstdio>
 
@@ -123,6 +126,59 @@ int alphaTerrainTests() {
         alphagen::SteamTile absent(0, 0);
         check(absent.read(0, 0, 100).type == worldgen::blocktype::SOLID,
               "uncovered Alpha columns are missing-domain filler, not implicit sea or air");
+    }
+    {
+        alphagen::PlantModels models;
+        for (int i = 0; i < int(models.environment.size()); ++i)
+            models.environment[size_t(i)] = 1000 + i;
+        alphagen::Plant lily{3, -4, 10, .09f, 90, 31, 0};
+        const auto record = alphagen::steamPlant(lily, models);
+        check(record && record->type == 1031 && record->x == 229376 && record->y == -229376 && record->z == 648807 &&
+                  record->size == .09f && record->yaw == 90 && record->flags == 2 && record->groundCover,
+              "Alpha lily uses half-block XY, exact minus6553 fixed Z and one uniform voxel scale");
+        lily.kind = 22;
+        lily.flags = 4;
+        const auto reed = alphagen::steamPlant(lily, models, 5);
+        check(reed && reed->flags == 4 && reed->z == 15 * 65536, "reeds overwrite constructor flags and follow the column translation");
+        lily.kind = 4;
+        const auto temperate = alphagen::steamPlant(lily, models);
+        lily.flags = 0;
+        const auto hot = alphagen::steamPlant(lily, models);
+        check(temperate && hot && temperate->flags == 6 && hot->flags == 2,
+              "the same kind keeps its branch-dependent sway request rather than guessing from the model name");
+        lily.kind = 18;
+        models.environment[18] = -1;
+        check(!alphagen::steamPlant(lily, models), "missing owner plant kinds cannot produce a replacement model");
+
+        const auto directory = std::filesystem::temp_directory_path() /
+                               ("CubeVulkan-plant-registry-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        std::filesystem::create_directory(directory);
+        std::string table = "# environment\n";
+        for (int kind = 0; kind < 33; ++kind) {
+            const auto name = alphagen::plantSprite(kind);
+            if (name.empty())
+                continue;
+            table += std::to_string(1000 + kind) + " sprites/" + std::string(name) + ".cub\n";
+            // The resolver checks names and file presence; CubModel owns byte validation.
+            std::ofstream(directory / (std::string(name) + ".cub"), std::ios::binary).put('x');
+        }
+        table += "# building-part\n777 sprites/flowers2.cub\n";
+        {
+            std::ofstream output(directory / "sprite-groups.txt");
+            output << table;
+        }
+        std::string error;
+        const auto owner = alphagen::loadPlantModels(directory, directory, error);
+        check(owner && error.empty() && owner->type(0) == 1000 && owner->type(32) == 1032,
+              "owner registry maps Alpha kinds by name while ignoring other model tables");
+        std::filesystem::remove(directory / "flowers2.cub");
+        check(!alphagen::loadPlantModels(directory, directory, error) && !error.empty(),
+              "missing owner artwork is reported without synthesis or substitution");
+        for (int kind = 0; kind < 33; ++kind)
+            if (!alphagen::plantSprite(kind).empty())
+                std::filesystem::remove(directory / (std::string(alphagen::plantSprite(kind)) + ".cub"));
+        std::filesystem::remove(directory / "sprite-groups.txt");
+        std::filesystem::remove(directory);
     }
     // Independent caves-contract vectors and behavioral checks of the real voxel writers.
     check(alphagen::formationTop(8397000, 8397100, 180, 25, false) == 211 && alphagen::formationTop(8397000, 8397100, 180, 12, true) == 195,
@@ -347,6 +403,16 @@ int alphaTerrainTests() {
         const auto landscape = terrain.generateLandscape(32800, 32800, why);
         check(landscape && why.empty() && !landscape->zone->trees.empty(), "hybrid landscape places a voxel forest after terrain boulders");
         if (landscape) {
+            const auto vegetation = terrain.vegetation(*landscape->zone, landscape->random);
+            check(!vegetation.plants.empty() && vegetation.random.count() > landscape->random.count() && landscape->zone->plants.empty(),
+                  "vegetation continues the retained stream without mutating published landscape storage");
+            alphagen::LandscapeStore nature(123);
+            const auto plants = nature.plantsForTile(0, 0);
+            check(!plants.empty() && std::all_of(plants.begin(), plants.end(),
+                                                 [](const auto &p) { return p.x >= 0 && p.x < 64 && p.y >= 0 && p.y < 64 && p.scale > 0; }),
+                  "Alpha parent plants clip and rebase into exactly one Steam tile");
+            check(nature.vegetationParent(32800, 32800) == nature.vegetationParent(32800, 32800),
+                  "plant consumers share an immutable cached vegetation continuation");
             size_t wood = 0, leaves = 0;
             for (const auto &column : landscape->zone->columns)
                 for (const auto block : column.blocks) {
@@ -381,9 +447,15 @@ int alphaTerrainTests() {
         point.x = point.y = 0;
         point.z = int64_t(100) * worldgen::DOTS;
         zone.spawns.points[123] = point;
-        worldgen::AlphaTerrain hybrid(123);
+        auto plantModels = std::make_shared<alphagen::PlantModels>();
+        for (int i = 0; i < 33; ++i)
+            plantModels->environment[size_t(i)] = 1000 + i;
+        worldgen::AlphaTerrain hybrid(123, {}, 0, plantModels);
         std::string why;
         check(hybrid.compose(zone, nativeWorld, why) && why.empty(), "Alpha landscape composes with a complete Steam-generated zone");
+        check(std::any_of(zone.models.begin(), zone.models.end(), [](const auto &m) { return m.groundCover && m.type >= 1000; }) &&
+                  std::none_of(zone.models.begin(), zone.models.end(), [](const auto &m) { return m.groundCover && m.type < 1000; }),
+              "Alpha cover replaces tagged Steam plants outside construction while preserving other model roles");
         const auto ground = [](const worldgen::TerrainColumn &column) {
             for (int i = int(column.blocks.size()) - 1; i >= 0; --i) {
                 const auto &b = column.blocks[size_t(i)];
@@ -425,12 +497,20 @@ int alphaTerrainTests() {
                         const int zx = worldgen::floorDiv(cx, 2), zy = worldgen::floorDiv(cy, 2);
                         auto built = worldgen::generateZone(nativeWorld, zx, zy);
                         const auto before = built.terrain.columns;
+                        const auto originalModels = built.models;
                         const bool composed = hybrid.compose(built, nativeWorld, why);
                         bool kept = composed;
                         for (size_t i = 0; i < before.size(); ++i)
                             kept &= built.terrain.columns[i].base == before[i].base && built.terrain.columns[i].blocks == before[i].blocks;
                         check(kept, "whole Steam construction-admitted tile retains all original surface and underground columns");
                         check(!built.terrain.columns[0].fullColour, "retained Steam construction keeps its original color encoding");
+                        bool keptModels = built.models.size() == originalModels.size();
+                        for (size_t i = 0; i < std::min(built.models.size(), originalModels.size()); ++i) {
+                            const auto &a = built.models[i], &b = originalModels[i];
+                            keptModels &= std::tie(a.type, a.x, a.y, a.z, a.size, a.yaw, a.r, a.g, a.b, a.flags) ==
+                                          std::tie(b.type, b.x, b.y, b.z, b.size, b.yaw, b.r, b.g, b.b, b.flags);
+                        }
+                        check(keptModels, "Steam construction keeps exact model order, positions, scales, tint and flags");
                         const auto originalMap = worldgen::mapRegion(zx, zy, 0);
                         auto composedMap = originalMap;
                         hybrid.composeMap(composedMap);

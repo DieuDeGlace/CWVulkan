@@ -12,6 +12,9 @@ class LandscapeStore {
                             std::shared_ptr<const TreeModels> palms = {});
     // Generation failures reach all waiters and are not retained as completed stages.
     Parent parent(int32_t alphaZoneX, int32_t alphaZoneY);
+    std::shared_ptr<const VegetationStage> vegetationParent(int32_t alphaZoneX, int32_t alphaZoneY);
+    // Plant column anchors rebased into the requested Steam tile, without changing Z.
+    std::vector<Plant> plantsForTile(int32_t steamZoneX, int32_t steamZoneY);
     std::optional<ColumnLease> column(int32_t steamX, int32_t steamY);
     std::optional<TerrainSample> sample(int32_t steamX, int32_t steamY);
     std::optional<alphacoords::Coverage> coverage(int32_t steamZoneX, int32_t steamZoneY) const;
@@ -21,5 +24,6 @@ class LandscapeStore {
     Terrain terrain;
     const alphacoords::Mapping frame;
     detail::ParentStages<LandscapeStage> cache;
+    detail::ParentStages<VegetationStage> foliage;
 };
 } // namespace alphagen

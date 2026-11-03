@@ -41,6 +41,14 @@ struct LandscapeStage {
     Random random;
 };
 
+// A separate continuation reads immutable landscape columns. Only plants enter
+// the hybrid runtime; Alpha item/static outputs are retained as contract products.
+struct VegetationStage {
+    std::vector<Plant> plants;
+    std::vector<GroundItem> items;
+    std::vector<StaticObject> statics;
+    Random random;
+};
 enum class FormationTest { Mound, MesaGuard, MesaFill };
 int32_t formationTop(int32_t x, int32_t y, int32_t z, int32_t rz, bool mesa);
 glm::vec2 formationUV(FormationTest, int32_t X, int32_t Y, int32_t Z, int32_t x, int32_t y, int32_t rx, int32_t ry);
@@ -75,6 +83,7 @@ class Terrain {
     std::unique_ptr<SurfaceStage> generateSurface(int32_t zx, int32_t zy) const;
     std::unique_ptr<ReliefStage> generateRelief(int32_t zx, int32_t zy, std::string &error) const;
     std::unique_ptr<LandscapeStage> generateLandscape(int32_t zx, int32_t zy, std::string &error) const;
+    VegetationStage vegetation(const Zone &, Random) const;
     // Native formations and boulders use positive radii and operate only inside the supplied zone.
     void formation(Zone &, int32_t x, int32_t y, int32_t z, int32_t rx, int32_t ry, int32_t rz, bool mesa) const;
     void boulder(Zone &, const BoulderSeed &, int32_t ax, int32_t ay, int32_t az, bool fromRavine) const;

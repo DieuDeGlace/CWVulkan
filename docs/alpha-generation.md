@@ -25,10 +25,14 @@ stages do not duplicate full voxel zones.
 
 Alpha towns, dungeons, camps and type10 structure calls are deliberately skipped.
 The subsequent random stream therefore belongs to this hybrid profile, and is not
-a claim of native full-Alpha generation equality. Small Alpha plant/ground-cover
-passes are not integrated yet. Steam scenery and residents remain available and
-are reanchored to the composed ground. Extra ruin additions, including Sphinx,
-are deferred at the owner's request.
+a claim of native full-Alpha generation equality. `VegetationStage` continues a copy
+of the landscape stream over its immutable columns. Natural Alpha grass, flowers,
+reeds, underwater plants and raised-lake lilies replace tagged Steam ground cover
+outside construction cores. Other Steam scenery and residents are reanchored to
+the composed ground. Alpha ground-item and street-light decisions retain their
+ordered draws, but their records do not enter the hybrid runtime: Steam gameplay
+items and town lights remain in use. Extra ruin additions, including Sphinx, are
+deferred at the owner's request.
 
 Trees include the giant-tree continuation and owner-model palms. Palm stamping
 uses only the independent mode0 placement contract: ordered model-dependent
@@ -36,6 +40,22 @@ height draws, quarter-turn rotations, internal dry/keep air and protected-solid
 exclusion. Both valid `sprites/palm-leaf.cub` and
 `sprites/palm-leaf-diagonal.cub` must be supplied by the owner's Steam install.
 The engine creates no replacement artwork and packages neither file.
+
+Ground-cover kinds resolve by name through the owner's `Extract/sprite-groups.txt`
+environment section, with all17 required natural model files checked locally.
+Alpha kind numbers are never assumed to equal Steam registry indices. The engine
+reuses the owner's sprites; missing entries/files are reported without substitution.
+`Model::groundCover` is project provenance and is never packed into a native flag.
+
+The independent plant-consumer supplement supplies the placement bridge: XY at
+column centers, one uniform scale in blocks per model voxel, full-header XY pivot
+with base Z, and lily Z exactly `zt*65536-6553`. Reed flags overwrite to4; ordinary
+nonsway flags retain2 and other admitted sway requests produce6, including the
+branch-dependent kind4 distinction. The engine uses its active tile-model list's
+one-based order for sway, including skipped entries. The original Alpha cache's
+extent/population and remaining wind-sign details are unclosed; no full-zone or
+stable-ID phase equivalence is claimed. Small-plant integration is cosmetic and
+does not change the landscape geometry/profile identity.
 
 ## Coordinates, storage and composition
 

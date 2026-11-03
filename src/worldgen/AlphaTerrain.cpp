@@ -68,8 +68,9 @@ int32_t transition(float alpha, float native, float weight) {
     return alpha > 1 && native > 1 ? int32_t(std::lround((native - alpha) * weight)) : 0;
 }
 } // namespace
-AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeModels> palms, int32_t steamSeed)
-    : seed(seed), steamSeed(steamSeed), source(seed, {}, 16, true, std::move(palms)) {
+AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeModels> palms, int32_t steamSeed,
+                           std::shared_ptr<const alphagen::PlantModels> plants)
+    : seed(seed), steamSeed(steamSeed), source(seed, {}, 16, true, std::move(palms)), plantModels(std::move(plants)) {
 }
 std::string AlphaTerrain::identity(double scale) const {
     return "alpha-v" + std::to_string(alphagen::LandscapeStage::VERSION) + "-compose-v1-seed-" + std::to_string(seed) + "-steam-seed-" +
@@ -245,6 +246,14 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
         const float alpha = alphaGround(column->raw());
         return int32_t(std::lround(alpha + transition(alpha, native, weight) - native));
     };
+    if (plantModels) {
+        const auto replaceCover = [&](const Model &model) {
+            return model.groundCover && constructionWeight(boxes, blocksOf(model.x), blocksOf(model.y)) < 1;
+        };
+        std::erase_if(result.models, replaceCover);
+        std::erase_if(result.modelLights, replaceCover);
+        std::erase_if(result.emitters, replaceCover);
+    }
     const auto reanchor = [&](auto &record) { record.z += int64_t(offsetAt(record.x, record.y)) * DOTS; };
     for (auto &record : result.models)
         reanchor(record);
@@ -274,6 +283,20 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
     for (auto &[key, points] : result.working)
         for (auto &point : points)
             reanchor(point);
+    if (plantModels) {
+        for (const auto &plant : source.plantsForTile(zx, zy)) {
+            const auto index = setterColumn(zx, zy, plant.x, plant.y);
+            if (!index || constructionWeight(boxes, plant.x, plant.y) == 1)
+                continue;
+            const int32_t shift = result.terrain.columns[*index].base - tile->columns()[*index].base;
+            const auto model = alphagen::steamPlant(plant, *plantModels, shift);
+            if (!model) {
+                error = "unmapped Alpha ground-cover model or flags";
+                return false;
+            }
+            result.models.push_back(*model);
+        }
+    }
     // Refresh copies and working spots now share the same frame as generated objects.
     result.lists.marked.clear();
     markObjectBlocks(

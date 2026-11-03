@@ -106,6 +106,7 @@ void findSpots(ZoneBuild &zone) {
 
 void plants(ZoneBuild &zone) {
     Model m; // one record, reused: what a plant does not set stays from the last one
+    m.groundCover = true;
     auto plain = [&](int32_t flags) { m.r = m.g = m.b = 1.0f, m.flags = flags; };
     for (int32_t X = zone.x0; X < zone.x0 + ZONE_SIZE; X++)
         for (int32_t Y = zone.y0; Y < zone.y0 + ZONE_SIZE; Y++) {

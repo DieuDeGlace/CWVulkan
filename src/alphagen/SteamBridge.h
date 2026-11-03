@@ -3,6 +3,8 @@
 // This does not run Steam structure placement or select the runtime generator.
 #include "alphagen/SurfaceStore.h"
 #include "worldgen/ZoneTerrain.h"
+#include "worldgen/ZoneRecords.h"
+#include "alphagen/PlantModels.h"
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -15,6 +17,9 @@ class LandscapeStore;
 // Alpha's packed type/flags byte is not a Steam type byte. Unsupported materials
 // fail explicitly until their gameplay/render semantics have a defined bridge.
 std::optional<worldgen::Block> steamBlock(Block);
+// Plant XY is already in Steam block coordinates; shift is the composed column's
+// vertical translation. Native constructor flags and fixed placement are explicit.
+std::optional<worldgen::Model> steamPlant(const Plant &, const PlantModels &, int32_t shift = 0);
 
 class SteamTile {
   public:

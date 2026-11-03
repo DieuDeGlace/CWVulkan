@@ -10,6 +10,28 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha natural ground cover now continues the retained landscape stream through
+  an immutable vegetation stage. It replaces tagged Steam plants outside protected
+  construction tiles and resolves all17 natural models through the owner's actual
+  environment registry. No model or registry output is bundled. Steam town models
+  preserve their exact order, position, scale, tint and flags.
+
+  The bridge uses full-header voxel scale/pivot, half-block XY centering, exact
+  lily fixed-Z offset and branch-specific flags from the independent plant-consumer
+  contract. Its active-list phase follows the reached one-based convention; original
+  Alpha cache population and remaining wind-sign limits are still unclosed. Alpha
+  ground-item/static decisions retain stream order but their records are not used;
+  Steam gameplay items and town lights remain in use. This is cosmetic and leaves
+  landscape geometry/profile identity unchanged.
+
+  All five targets, focused integration checks and the full CPU/owner/Vulkan suite
+  pass. A private live capture selected from generated plant records shows actual
+  owner-model foliage on Alpha terrain; startup/nature captures exit0. The new owned
+  GPL import audit confirms unchanged plant arithmetic/draw order with only output
+  and storage adaptation. Save/extractor hashes remain unchanged. Broader native
+  runtime/biome comparisons, live-edit material fill, cold streaming and release
+  acceptance remain open.
+
 - Concurrent canonical zone requests now share one generation result or failure.
   Cache flushes retire old generations without changing terrain identity. The
   decoded-world LRU keeps up to96 unpinned zones in addition to explicitly kept

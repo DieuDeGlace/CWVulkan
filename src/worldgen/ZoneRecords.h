@@ -49,6 +49,7 @@ struct Model {
     float yaw = 0.0f;          // +0x24, degrees
     float r = 0, g = 0, b = 0; // +0x2c..: tint
     int32_t flags = 0;         // +0x38: 1 gives light
+    bool groundCover = false; // project provenance, never packed into a native record
 };
 namespace modelflag {
 constexpr int32_t LIGHT = 1;

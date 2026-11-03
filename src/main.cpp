@@ -715,7 +715,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                 fatal("Alpha terrain needs the owner's palm leaf models: " + why);
                 return 1;
             }
-            worldgen::setAlphaTerrain(std::make_shared<worldgen::AlphaTerrain>(alphaSeed, std::move(palms)));
+            auto plants = alphagen::loadPlantModels(assets.gameDir() / "Extract", assets.gameDir() / "sprites", why);
+            if (!plants) {
+                fatal("Alpha ground cover is unavailable: " + why);
+                return 1;
+            }
+            logLine("World: Alpha ground cover resolved from the owner's environment model table");
+            worldgen::setAlphaTerrain(std::make_shared<worldgen::AlphaTerrain>(alphaSeed, std::move(palms), 0, std::move(plants)));
             if (worldgen::terrainIdentity() != terrainSaveProfile) {
                 fatal("The world generation settings do not match the selected save profile.");
                 return 1;

@@ -5,7 +5,7 @@
 namespace alphagen {
 LandscapeStore::LandscapeStore(uint32_t seed, alphacoords::Mapping frame, std::size_t cachedParents, bool named,
                                std::shared_ptr<const TreeModels> palms)
-    : world(seed), terrain(world, std::move(palms)), frame(frame), cache(cachedParents) {
+    : world(seed), terrain(world, std::move(palms)), frame(frame), cache(cachedParents), foliage(cachedParents) {
     world.named = named;
 }
 LandscapeStore::Parent LandscapeStore::parent(int32_t zx, int32_t zy) {
@@ -18,6 +18,34 @@ LandscapeStore::Parent LandscapeStore::parent(int32_t zx, int32_t zy) {
             throw std::runtime_error(error);
         return stage;
     });
+}
+std::shared_ptr<const VegetationStage> LandscapeStore::vegetationParent(int32_t zx, int32_t zy) {
+    if (zx < 0 || zy < 0 || zx >= 65536 || zy >= 65536)
+        return {};
+    return foliage.get(zx, zy, [&] {
+        const auto landscape = parent(zx, zy);
+        return std::make_unique<VegetationStage>(terrain.vegetation(*landscape->zone, landscape->random));
+    });
+}
+std::vector<Plant> LandscapeStore::plantsForTile(int32_t zx, int32_t zy) {
+    std::vector<Plant> result;
+    const auto covered = coverage(zx, zy);
+    if (!covered)
+        return result;
+    for (size_t i = 0; i < covered->count; ++i) {
+        const auto &patch = covered->patches[i];
+        const auto plants = vegetationParent(patch.zoneX, patch.zoneY);
+        const int32_t ax = patch.zoneX * 256 + patch.alphaX, ay = patch.zoneY * 256 + patch.alphaY;
+        for (const auto &plant : plants->plants) {
+            if (plant.x < ax || plant.y < ay || plant.x >= ax + patch.width || plant.y >= ay + patch.height)
+                continue;
+            auto mapped = plant;
+            mapped.x = int32_t(int64_t(zx) * 64 + patch.sourceX + plant.x - ax);
+            mapped.y = int32_t(int64_t(zy) * 64 + patch.sourceY + plant.y - ay);
+            result.push_back(mapped);
+        }
+    }
+    return result;
 }
 std::optional<ColumnLease> LandscapeStore::column(int32_t x, int32_t y) {
     const auto point = frame.point(x, y);

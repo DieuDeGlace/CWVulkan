@@ -56,6 +56,23 @@ std::optional<worldgen::Block> steamBlock(Block input) {
     return result;
 }
 
+std::optional<worldgen::Model> steamPlant(const Plant &plant, const PlantModels &models, int32_t shift) {
+    if (models.type(plant.kind) < 0 || (plant.flags & ~uint32_t(4)))
+        return std::nullopt;
+    worldgen::Model result;
+    result.type = models.type(plant.kind);
+    result.x = int64_t(plant.x) * 65536 + 32768;
+    result.y = int64_t(plant.y) * 65536 + 32768;
+    result.z = (int64_t(plant.z) + shift) * 65536;
+    if (plant.kind == 31 || plant.kind == 32)
+        result.z -= 6553;
+    result.size = plant.scale;
+    result.yaw = plant.rotation;
+    result.r = result.g = result.b = 1;
+    result.flags = plant.kind == 22 ? 4 : int32_t(2 | plant.flags);
+    result.groundCover = true;
+    return result;
+}
 SteamTile::SteamTile(int32_t zx, int32_t zy) {
     terrain.zx = zx;
     terrain.zy = zy;
