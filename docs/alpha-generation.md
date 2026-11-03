@@ -14,7 +14,9 @@ clean-room code by DieuDeGlace. Its independent `alpha-worldgen-*.md` contracts
 cover random streams, regions, locations, terrain, formations and trees. The
 implementer has not read native code or third-party reconstructions. The separate
 native-only author supplied `alpha-terrain-generation-boundaries.md` and
-`alpha-sky-terrain-inputs.md`; the implementer used their prose only.
+`alpha-sky-terrain-inputs.md`, followed by bounded plant-consumer, material,
+environment-light and cloud supplements in `docs/specs/`. The implementer used
+their prose only.
 
 Height H, the initial voxel surface S and a completed native Alpha zone are
 separate products. `SurfaceStage` retains S, the padded height grid, ravine seeds
@@ -120,6 +122,14 @@ planes. The immutable-volume sampler preserves the existing float values and
 vertex packing. A private64-tile flat-scene CPU benchmark showed3.66–3.70x faster
 corner sampling across three runs with identical checksums. That is a focused
 CPU result, not a gameplay FPS or cold-streaming acceptance claim.
+
+The Alpha light flood also skips remaining synchronous sweeps once every working
+value is unchanged: subsequent sweeps would repeat that fixed point. Its original
+six-neighbour arithmetic, minimum-neighbour rule and sixteen-step propagation
+limit stay intact. Golden tunnel/isolated-air cases and full-grid benchmark hashes
+cover those distinctions. An enclosed synthetic scene was7.38x faster by median;
+outdoor and glow-wave cases retained their hashes without a measured slowdown.
+This is a focused CPU result, not a claim about whole-game frame rate.
 
 ## Sky and map
 

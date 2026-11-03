@@ -140,6 +140,27 @@ void lightFlood() {
     shaft.flood();
     ALPHA_CHECK(shaft.light({0, 0, 2}) == 4 && shaft.light({0, 0, 0}) == 4);
 
+    // The six-neighbour attenuation still advances synchronously for at most
+    // sixteen steps, even though converged states may finish earlier.
+    alphalight::LightVolume tunnel({0, 0, 0}, {19, 1, 1});
+    for (int x = 0; x < 19; x++) {
+        tunnel.setKind({x, 0, 0}, BlockKind::Open);
+        tunnel.setRoofed(x, 0);
+    }
+    tunnel.setKind({0, 0, 0}, BlockKind::Glow);
+    tunnel.flood();
+    constexpr uint8_t expectedTunnel[] = {216, 183, 155, 131, 111, 94, 79, 67, 56, 47, 39, 33, 28, 23, 19, 16, 4, 4};
+    bool capped = true;
+    for (int x = 1; x < 19; x++)
+        capped &= tunnel.light({x, 0, 0}) == expectedTunnel[x - 1];
+    ALPHA_CHECK(capped);
+    // A single isolated air block has no open neighbour to supply the floor5.
+    alphalight::LightVolume isolated({0, 0, 0}, {1, 1, 1});
+    isolated.setKind({0, 0, 0}, BlockKind::Open);
+    isolated.setRoofed(0, 0);
+    isolated.flood();
+    ALPHA_CHECK(isolated.light({0, 0, 0}) == 0);
+
     // 9.3: a top face out in the open is fully lit and open; one in the sealed cave is dark.
     alphalight::LightVolume field({-4, -4, 0}, {9, 9, 3});
     for (int x = -4; x <= 4; x++)

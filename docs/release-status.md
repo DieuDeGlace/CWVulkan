@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha's light solver stops at a proven unchanged working state, retaining the
+  exact synchronous attenuation and maximum16-sweep reach. New golden tunnel and
+  isolated-air cases guard propagation limits and the neighbour floor. All five
+  targets and the full CPU/owner/Vulkan suite pass. A three-case private benchmark
+  retained full-grid hashes in every run; enclosed-case median time improved7.38x,
+  with no measured glow-wave slowdown. This is a CPU-kernel result, not whole-game
+  FPS or a closure of wider cold-streaming acceptance.
+
 - Alpha clouds now use the independently verified noise hash additive, fixing
   an older spec typo, with an exact native-derived float-word regression vector.
   Their altitude preserves M-before-H query order, separate float stages, two
@@ -1402,8 +1410,14 @@ and ReShade DLL file hashes. Captures remain private and excluded from the sourc
 
 ## Work still open
 
-- Water: Steam vertex occlusion/point-light parity, Alpha's far-static-model threshold,
-  and wider waterfall, underwater, wet-ground, dusk/night and material comparisons.
+- Alpha hybrid: wider seed/biome/domain comparisons, construction-transition and
+  forest-edge review, live edits, cold streaming and original cache/input lifetime.
+  The implemented default and bounded numeric fixes are documented in
+  [Alpha generation](alpha-generation.md); they do not establish full native parity.
+- Water: Steam vertex occlusion/point-light parity, Alpha near/far cache/input
+  correspondence, and wider waterfall, underwater, wet-ground, dusk/night and
+  material comparisons. The independently specified Alpha threshold arithmetic
+  and staged draw order have CPU/GPU checks.
 - Frontend: exact panel opacity and logo shading require further independent evidence.
 - Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
   integrated pet combat/appearance comparisons, controller GUI/aim tracking,

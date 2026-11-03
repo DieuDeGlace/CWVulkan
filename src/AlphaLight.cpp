@@ -35,9 +35,11 @@ void LightVolume::flood() {
                     unlit.push_back(i);
             }
         }
-    // Step 2: sixteen sweeps; each reads the previous sweep's values.
+    // Step 2: up to sixteen synchronous sweeps. Once every value is unchanged,
+    // the state is a fixed point and all remaining sweeps would repeat it.
     std::vector<uint8_t> next(unlit.size());
     for (int sweep = 0; sweep < 16; sweep++) {
+        bool changed = false;
         for (size_t k = 0; k < unlit.size(); k++) {
             size_t i = unlit[k];
             int x = (int)(i % sx), y = (int)(i / sx % sy), z = (int)(i / layer);
@@ -53,7 +55,10 @@ void LightVolume::flood() {
             neighbour(x, y + 1, z), neighbour(x, y - 1, z);
             neighbour(x, y, z + 1), neighbour(x, y, z - 1);
             next[k] = (uint8_t)((unsigned)brightest * 85u / 100u);
+            changed |= next[k] != lights[i];
         }
+        if (!changed)
+            break;
         for (size_t k = 0; k < unlit.size(); k++)
             lights[unlit[k]] = next[k];
     }
