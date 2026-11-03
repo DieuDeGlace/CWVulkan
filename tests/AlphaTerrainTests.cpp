@@ -3,6 +3,7 @@
 #include "alphagen/Terrain.h"
 #include "alphagen/Coordinates.h"
 #include "alphagen/SurfaceStore.h"
+#include "alphagen/SteamBridge.h"
 #include <future>
 #include <cmath>
 #include <cstdio>
@@ -52,6 +53,64 @@ int alphaTerrainTests() {
         check(valid, "every surface column retains blocks and climate");
         check(zone.shadedLight.empty() && zone.plants.empty() && zone.statics.empty(),
               "surface stage excludes later lighting and placement");
+    }
+    // Alpha type13 is glowing, while Steam type13 is road. Flags are different too.
+    const auto light = alphagen::steamBlock({40, 50, 60, uint8_t(alphagen::GLOWING | alphagen::KEEP)});
+    check(light && light->type == worldgen::blocktype::LIGHT && light->glow == 255 && !worldgen::isOpen(*light),
+          "glowing Alpha material is not a Steam road");
+    const auto dry = alphagen::steamBlock({255, 255, 255, uint8_t(alphagen::AIR | alphagen::DRY_AIR | alphagen::KEEP)});
+    const auto plain = alphagen::steamBlock({255, 255, 255, alphagen::AIR});
+    worldgen::ZoneTerrain nativeRead;
+    nativeRead.columns.resize(worldgen::ZONE_COLUMNS);
+    nativeRead.columns[0].base = -1;
+    if (dry && plain)
+        nativeRead.columns[0].blocks = {*dry, *plain};
+    check(dry && plain && nativeRead.read(0, 0, -1).type == worldgen::blocktype::AIR &&
+              nativeRead.read(0, 0, 0).type == worldgen::blocktype::WATER && dry->flags == 2,
+          "translated dry-air flag preserves native effective underwater reads");
+    check(!alphagen::steamBlock({0, 0, 0, 31}) && !alphagen::steamBlock({0, 0, 0, alphagen::WOOD_TYPE}) &&
+              !alphagen::steamBlock({0, 0, 0, alphagen::LEAVES_TYPE}),
+          "unknown and unspecified Alpha materials are rejected rather than reinterpreted");
+    {
+        alphagen::SurfaceStore source(123, {{0, 0}, {alphacoords::HOME + 107, alphacoords::HOME + 107}});
+        std::string why = "old diagnostic";
+        const auto tile = alphagen::steamTile(source, 0, 0, why);
+        check(tile && why.empty(), "four-parent surface crop converts into one Steam-sized tile");
+        if (tile) {
+            check(tile->covers(0, 0) && tile->covers(63, 63) && !tile->covers(64, 0), "Steam tile coverage uses source coordinates");
+            bool matching = true, axisWitness = false;
+            for (int x = 0; x < 64; ++x)
+                for (int y = 0; y < 64; ++y) {
+                    const auto original = source.column(x, y), transposed = source.column(y, x);
+                    if (!original || !transposed) {
+                        matching = false;
+                        continue;
+                    }
+                    const auto &a = original->raw();
+                    const auto &b = tile->columns()[worldgen::ZoneTerrain::index(x, y)];
+                    matching &= a.bottom == b.base && a.blocks.size() == b.blocks.size();
+                    for (size_t i = 0; i < a.blocks.size() && i < b.blocks.size(); ++i)
+                        matching &= a.blocks[i].r == b.blocks[i].r && a.blocks[i].g == b.blocks[i].g && a.blocks[i].b == b.blocks[i].b;
+                    axisWitness |= a.bottom != transposed->raw().bottom || a.blocks.size() != transposed->raw().blocks.size();
+                }
+            check(matching && axisWitness, "all 4096 converted columns preserve geometry and RGB across an asymmetric four-parent crop");
+            for (const auto point : {alphacoords::Point{17, 53}, alphacoords::Point{4, 29}, alphacoords::Point{63, 0}}) {
+                const auto original = source.column(point.x, point.y);
+                if (!original) {
+                    check(false, "mapped source column is available");
+                    continue;
+                }
+                const int z = original->raw().top() - 1;
+                const auto a = original->block(z);
+                const auto b = tile->read(point.x, point.y, z);
+                check(a.r == b.r && a.g == b.g && a.b == b.b && alphagen::clear(a.type()) == worldgen::isOpen(b),
+                      "Alpha XY-major and Steam X-major column indexing preserve sampled voxel identity");
+            }
+        }
+        check(!alphagen::steamTile(source, INT32_MAX, 0, why) && !why.empty(), "invalid framing cannot publish a partial converted tile");
+        alphagen::SteamTile absent(0, 0);
+        check(absent.read(0, 0, 100).type == worldgen::blocktype::SOLID,
+              "uncovered Alpha columns are missing-domain filler, not implicit sea or air");
     }
     stage.reset();
     std::optional<alphagen::ColumnLease> held;

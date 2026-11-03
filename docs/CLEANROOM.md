@@ -1533,3 +1533,17 @@ an island (grid heights8.214..25.472), so it was moved to the adjacent exposed-s
 boundary without production formula changes. GPU groups were not repeated for
 these not-yet-wired math/data consumers; the preceding full render checks remain
 recorded separately. Runtime conversion/placement/default integration is still open.
+
+
+## Alpha surface representation bridge, 2026-11-02
+
+The implementer used the independent Alpha contracts, the bounded generation
+assessment and engine sources to translate packed Alpha material/flag records
+into Steam's explicit block representation. No native implementation or original
+instructions were read. The new adapter preserves column geometry/RGB, translates
+dry-air flags and rejects unspecified materials. Its glowing-to-light emission is
+an explicit hybrid policy, not a claim that the native lighting pipelines match.
+Synthetic material records and asset-free generated columns check all 4096 columns
+in a four-parent crop, effective underwater reads and missing-domain admission.
+There is no new playable default, structure generation or native-oracle claim.
+No original model, terrain or capture bytes are added to packages.

@@ -60,3 +60,20 @@ Effective block reads and solid-versus-water surface reads use the Alpha column
 rules. Cache capacity bounds retained entries, not caller-held leases or in-flight
 work. This store still supplies only the named initial surface stage and is not yet
 connected to playable generation or the default configuration.
+
+
+`SteamBridge` converts that initial surface into read-only Steam-sized column
+storage. The 4096 columns retain their bases, extents and RGB values across up to
+four Alpha parents; source XY indexing is transposed explicitly. An admission mask
+keeps missing finite-world columns distinct from empty native columns. Dry-air
+flags are translated rather than copied. Alpha glowing material 13 maps to Steam
+light 20, with full emission as an explicit hybrid policy, instead of Steam road 13.
+Other named surface materials have explicit mappings; voxel-tree materials and
+unknown types are rejected until their semantics are defined. This is a data
+representation adapter, not Steam structure placement or a new runtime mode.
+
+Steam also retains `obelisk.cub`, `castle-arc.cub`, `temple-arc.cub`,
+`antique-building1.cub` through `antique-building4.cub`, and `dungeon-test01.cub` /
+`dungeon-test02.cub`. File presence and names establish content availability, not
+whether Steam uses them or cut them. Owner assets remain outside source and
+development packages.

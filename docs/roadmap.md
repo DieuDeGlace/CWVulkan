@@ -773,6 +773,10 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   parent-stage caching, owning column leases and effective block/water reads are
   checked; runtime world/structure consumers still need the bridge below.
 - [ ] Complete later terrain passes and compare labeled native height/surface output.
+- [x] Read-only initial-surface column adapter: explicit material/flag translation,
+  four-parent crops, native indexing and finite-domain coverage. All 4096 columns
+  in an asymmetric fixture retain their geometry and RGB. This does not yet place
+  structures or select the playable mode.
 - [ ] Bridge Alpha terrain/biomes to Steam's retained town and dungeon layouts,
   including coordinate conversion, collision, water and lighting consumers.
 - [ ] Add separate Alpha/Steam generation selection, mode-safe caches/saves/network
