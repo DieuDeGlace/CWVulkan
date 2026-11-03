@@ -122,6 +122,7 @@ int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
 int plasmaNodeAnimationTests();
 int plasmaInputTests();
+int alphaTerrainTests();
 int plasmaLayoutTests();
 int fontCatalogTests();
 int chatCacheTests();
@@ -9286,6 +9287,8 @@ int main(int argc, char **argv) {
         return plasmaNodeAnimationTests();
     if (argc == 2 && std::string(argv[1]) == "guiinput")
         return plasmaInputTests();
+    if (argc == 2 && std::string(argv[1]) == "alphaterrain")
+        return alphaTerrainTests();
     if (argc == 2 && std::string(argv[1]) == "linkedplacement")
         return linkedPlacementTests();
     if (argc == 2 && std::string(argv[1]) == "drawnstate")
@@ -10679,6 +10682,7 @@ int main(int argc, char **argv) {
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
     failures += plasmaInputTests();
+    failures += alphaTerrainTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();
     failures += chatCacheTests();

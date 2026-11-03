@@ -1465,3 +1465,35 @@ active visibility, cached hit-only templates, global picking and runtime input
 binding still require the remaining integration. In particular, the inventory
 composite's temporary visibility is not yet the native global gameUI visibility.
 No original source or asset bytes are added.
+
+
+## Alpha surface generation core, 2026-11-02
+
+The user prioritized real Alpha terrain/biomes as the eventual default while
+retaining Steam towns/dungeons and a separate Steam generation option, then asked
+for verified Alpha-only locations and compatible TerrainVariance changes. The
+isolated native-only author supplied alpha-terrain-generation-boundaries §§1–6,
+read it back and held all tracing/writes. The implementer fully read that note;
+no original native implementation, SDK or reconstruction was opened.
+
+AlphaVulkan's README records the same clean-room process and GPL-3.0-only license.
+Its original random/region/location/column code was mechanically namespaced as
+alphagen, with source hashes recorded privately. The unchanged height/color/surface
+arithmetic was checked against that own-code source; an explicit surface-stage API
+retains the padded grid, random state and later boulder candidates without including
+later placement/lighting. No original assets or captured voxel arrays are copied.
+The six independent entry/completion contracts accompany the implementation.
+
+Dedicated formula/region/padded-surface checks and the full existing CPU/owner suite
+pass, with precision-sensitive sources built without contraction. A subsequent
+CMake source-list cleanup produced no work, preserving those binaries. These are
+contract/engine regressions, not original-game oracle evidence. Later terrain,
+hybrid Steam structure placement, runtime world consumers and mode/default changes
+remain open. No current default was renamed or switched to claim false parity.
+
+The TerrainVariance GitHub checkout is isolated under build: the user's separate
+local mod tree has unrelated uncommitted BigRegions work and was not modified.
+Only the mod's own MIT code/metadata was inspected, not its native SDK. Its existing
+column-offset hooks cannot alone establish Alpha column or biome parity. GPL Alpha
+source must not silently replace MIT mod sources without resolving the license
+boundary. The observed Steam Sphinx model is owner data and stays out of packages.

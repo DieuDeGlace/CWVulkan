@@ -105,6 +105,14 @@ target_include_directories(deps PUBLIC
 target_compile_definitions(deps PUBLIC VK_NO_PROTOTYPES GLM_FORCE_DEPTH_ZERO_TO_ONE
     GLM_FORCE_RADIANS NOMINMAX WIN32_LEAN_AND_MEAN)
 
+# Shared precision-sensitive Alpha terrain core, separate from Steam generation.
+set(ALPHA_TERRAIN_SOURCES
+    src/alphagen/Random.cpp
+    src/alphagen/Regions.cpp
+    src/alphagen/Locations.cpp
+    src/alphagen/Zone.cpp
+    src/alphagen/Terrain.cpp)
+
 # The engine core is a library so the tests link the same code as the game.
 add_library(engine STATIC
     src/Assets.cpp
@@ -113,6 +121,7 @@ add_library(engine STATIC
     src/SteamSession.cpp
     src/CubModel.cpp
     src/Terrain.cpp
+    ${ALPHA_TERRAIN_SOURCES}
     src/Extracted.cpp
     src/VegetationWind.cpp
     src/Character.cpp
@@ -284,11 +293,15 @@ target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
     # Procedural voxel bytes depend on the specified float/double staging.
-    set_source_files_properties(src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp PROPERTIES COMPILE_OPTIONS /fp:strict)
+    set_source_files_properties(
+        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp ${ALPHA_TERRAIN_SOURCES}
+        PROPERTIES COMPILE_OPTIONS /fp:strict)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
     target_compile_definitions(engine PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
-    set_source_files_properties(src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+    set_source_files_properties(
+        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp ${ALPHA_TERRAIN_SOURCES}
+        PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
 add_executable(CubeVulkan src/main.cpp)
@@ -380,7 +393,7 @@ target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
-target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp)
+target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp tests/AlphaTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
 target_sources(EngineTests PRIVATE tests/ResidentPassTests.cpp tests/ResidentEffectsTests.cpp)
 target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp tests/CameraPositionTests.cpp tests/DrawnStateTests.cpp tests/LinkedPlacementTests.cpp)

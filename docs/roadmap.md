@@ -765,6 +765,26 @@ individual feature documents.
 The independently authored [runtime-gap specification](specs/remaining-runtime-gaps.md)
 resolves several questions in older specs. Remaining checkboxes are intentional.
 
+## Requested Alpha terrain default and compatible mod support
+
+- [x] Separate Alpha random, region, location and initial surface core, reusing the
+  sister engine's clean-room code. Formula/surface checks and existing CPU tests pass;
+  this is an intermediate stage and has not changed the playable default.
+- [ ] Complete later terrain passes and compare labeled native height/surface output.
+- [ ] Bridge Alpha terrain/biomes to Steam's retained town and dungeon layouts,
+  including coordinate conversion, collision, water and lighting consumers.
+- [ ] Add separate Alpha/Steam generation selection, mode-safe caches/saves/network
+  settings, then make the working Alpha mode the default. Existing Extracted and
+  approximate Alpha-style terrain are not that new mode.
+- [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,
+  preserving its shoreline/water fixes and respecting its separate source license.
+- [ ] Add verified Alpha-only location variants alongside Steam layouts. The first
+  investigated item is the Sphinx desert-ruin type, whose model exists in the owner's
+  Steam install; its actual role/placement needs the Alpha structure contract.
+
+See [Alpha generation](alpha-generation.md) and the
+[independent parity boundary](specs/alpha-terrain-generation-boundaries.md).
+
 ## Validation needed before a final release
 
 - [ ] Close the implementation gaps above, with focused checks for each change.
