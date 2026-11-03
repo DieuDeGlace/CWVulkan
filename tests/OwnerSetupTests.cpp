@@ -4,6 +4,7 @@
 // real game folder is never touched, and no process is started.
 #include "Assets.h"
 #include "OwnerSetup.h"
+#include "alphagen/PlantModels.h"
 
 #include <cstdio>
 #include <cstring>
@@ -218,6 +219,62 @@ void completenessRules() {
     for (const auto &n : c.notes)
         covered |= n.name == "Terrain" || n.name == "Original fonts", characters |= n.name == "Characters";
     SETUP_CHECK(!covered && characters);
+}
+
+// Alpha has mandatory owner-model inputs even though it does not need captured terrain.
+void generationReadiness() {
+    FakeGame fake("generation-readiness");
+    const fs::path ini = fake.root / "CubeVulkan.ini";
+    auto alpha = assessConfigured(fake.game, ini); // same Alpha default as startup, including absent ini
+    SETUP_CHECK(!worldRequired(ini) && !alpha.find(Part::World)->required);
+    SETUP_CHECK(alpha.find(Part::SpriteList)->required && !alpha.readyToPlay());
+    SETUP_CHECK(!alpha.find(Part::GameFiles)->present);
+    SETUP_CHECK(alpha.find(Part::GameFiles)->detail.find("palm-leaf.cub") != std::string::npos);
+
+    // Small synthetic test geometry, not original game assets.
+    const int32_t dimensions[3] = {1, 1, 1};
+    std::string cub(reinterpret_cast<const char *>(dimensions), sizeof dimensions);
+    cub.append(3, char(127));
+    write(fake.game / "sprites/palm-leaf.cub", cub);
+    write(fake.game / "sprites/palm-leaf-diagonal.cub", cub);
+    std::string groups = "# environment\n";
+    for (int kind = 0; kind < 33; ++kind) {
+        const auto name = alphagen::plantSprite(kind);
+        if (name.empty())
+            continue;
+        write(fake.game / "sprites" / (std::string(name) + ".cub"), cub);
+        groups += std::to_string(100 + kind) + " sprites/" + std::string(name) + ".cub\n";
+    }
+    alpha = assessConfigured(fake.game, ini);
+    SETUP_CHECK(alpha.find(Part::GameFiles)->present && !alpha.find(Part::SpriteList)->present && !alpha.readyToPlay());
+    write(fake.game / "Extract/sprites.txt", "0 sprites/logo.cub 1 1 1\n");
+    write(fake.game / "Extract/sprite-groups.txt", "1 unrelated\n");
+    SETUP_CHECK(!assessConfigured(fake.game, ini).readyToPlay()); // nonempty alone is insufficient
+    write(fake.game / "Extract/sprite-groups.txt", groups);
+    alpha = assessConfigured(fake.game, ini);
+    SETUP_CHECK(alpha.readyToPlay() && alpha.find(Part::SpriteList)->present);
+    SETUP_CHECK(!alpha.find(Part::World)->present); // generated land needs no world sweep
+
+    write(fake.game / "sprites/water-lily02.cub", "broken");
+    alpha = assessConfigured(fake.game, ini);
+    SETUP_CHECK(!alpha.readyToPlay() && !alpha.find(Part::GameFiles)->present);
+    SETUP_CHECK(alpha.find(Part::GameFiles)->detail.find("water-lily02.cub") != std::string::npos);
+    for (const auto &target : ExtractionRun::plan(alpha))
+        SETUP_CHECK(target.part != Part::GameFiles); // original assets are repaired through Steam
+
+    // Other generation modes retain their existing requirements.
+    write(ini, "[World]\nSource=Game\n");
+    const auto steam = assessConfigured(fake.game, ini);
+    SETUP_CHECK(steam.readyToPlay() && !steam.find(Part::SpriteList)->required && !worldRequired(ini));
+    write(ini, "[World]\nSource=Alpha\n");
+    SETUP_CHECK(!assessConfigured(fake.game, ini).readyToPlay());
+    write(ini, "[World]\nSource=Generated\n");
+    SETUP_CHECK(assessConfigured(fake.game, ini).readyToPlay() && !worldRequired(ini));
+    // Values follow the same exact spelling as the startup generation selector.
+    write(ini, "[World]\nSource=alpha\n");
+    SETUP_CHECK(worldRequired(ini) && !assessConfigured(fake.game, ini).readyToPlay());
+    write(ini, "[World]\nSource=Extracted\n");
+    SETUP_CHECK(worldRequired(ini) && !assessConfigured(fake.game, ini).readyToPlay());
 }
 
 // --- The journal and its rollback ------------------------------------------------------------
@@ -485,6 +542,7 @@ int ownerSetupTests() {
     try {
         libraryParsing();
         completenessRules();
+        generationReadiness();
         journalAndRollback();
         interruptedRuns();
         extractionRun();

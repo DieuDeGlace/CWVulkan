@@ -1634,3 +1634,14 @@ implementation reuse is authorized by that observation. The extractor's automate
 build uses its separate header dependency; this does not constitute a license
 grant or implementation-source review. Final redistribution remains gated by the
 rights/provenance checks described in sdk-license-provenance.md.
+
+
+## Generation-aware setup and loader ABI note, 2026-11-03
+
+The setup change uses the engine's existing model loader, plant-name mapping and
+configuration selector. It introduces no original-game implementation or assets.
+Synthetic models exist only in temporary test folders. The separate native-only
+author inspected the installed original loader binary and supplied only the
+bounded prose in specs/steam-mod-loader-capture-abi.md. The implementer read that
+note, not the binary implementation or SDK code. No adapter was implemented from
+it; interface observations do not establish SDK redistribution permission.

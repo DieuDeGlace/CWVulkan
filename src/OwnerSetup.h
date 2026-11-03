@@ -81,7 +81,11 @@ struct Completeness {
     std::string text() const;    // the report, one line per part, in plain words
 };
 
-// The rules. `worldRequired` is false when CubeVulkan.ini says [World] Source=Alpha, Game or
+// Apply the same generation-specific asset requirements as engine startup. A missing ini
+// selects Alpha, as the engine does. Required owner files are checked, never generated.
+Completeness assessConfigured(const fs::path &game, const fs::path &ini, const dataCheck::Report *report = nullptr);
+// The legacy rules for callers explicitly inspecting captured or generated land.
+// `worldRequired` is false when CubeVulkan.ini says [World] Source=Alpha, Game or
 // Generated (then no extracted terrain is needed). `report` is DataCheck's quick report of the
 // same folder; its findings that this list does not cover are added as notes.
 Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::Report *report = nullptr);

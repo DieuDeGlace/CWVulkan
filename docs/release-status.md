@@ -10,6 +10,15 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha first-run readiness now requires the owner model table and validates the
+  two palm and seventeen plant models used by startup. The simulated fresh-install,
+  incomplete-table and damaged-model cases pass, as do existing extraction/recovery
+  tests. All five targets build; the read-only check of the owner's installation
+  passes with Steam ownership verified. Steam mode retains its previous asset
+  requirements. This is not fresh-machine or live interrupted-extraction acceptance.
+  The independent loader ABI census is documented without SDK implementation;
+  no SDK-free adapter has been implemented and the permission gate remains open.
+
 - The published a00d377 source snapshot builds all five targets in an independent
   output directory using only its project files, cached pinned dependency sources
   and the documented separately supplied SDK headers for the extractor. Its full

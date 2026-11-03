@@ -204,7 +204,7 @@ bool wizardNeeded() {
     fs::path game = text(control(PATH_EDIT));
     if (!ownersetup::inspectGame(game).found)
         return true;
-    return ownersetup::runPending(game) || !ownersetup::assess(game, ownersetup::worldRequired(ini)).readyToPlay();
+    return ownersetup::runPending(game) || !ownersetup::assessConfigured(game, ini).readyToPlay();
 }
 
 void save() {

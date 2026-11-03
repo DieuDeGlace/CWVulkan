@@ -3,6 +3,8 @@
 #include "OwnerSetup.h"
 #include "Assets.h"
 #include "Config.h"
+#include "CubModel.h"
+#include "alphagen/PlantModels.h"
 #include "Extracted.h"
 #include "SteamSession.h"
 #include <windows.h>
@@ -162,7 +164,45 @@ bool partPresent(const fs::path &game, Part part, std::string &detail) {
 }
 } // namespace
 
-Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::Report *report) {
+namespace {
+struct SourceRequirements {
+    bool capturedWorld = true;
+    bool alphaModels = false;
+};
+SourceRequirements sourceRequirements(const fs::path &ini) {
+    Config config;
+    config.load(ini);
+    const std::string source = config.text("World", "Source", "Alpha");
+    const bool alpha = source == "Alpha";
+    return {!alpha && source != "Game" && source != "Generated", alpha};
+}
+bool alphaModelFiles(const fs::path &game, std::string &detail) {
+    auto check = [&](std::string_view name) {
+        const std::string filename = std::string(name) + ".cub";
+        const fs::path file = game / "sprites" / filename;
+        std::error_code ec;
+        const auto size = fs::file_size(file, ec);
+        std::string why;
+        CubModel model;
+        if (!ec && size <= 256 * 1024 * 1024 && model.load(file, &why))
+            return true;
+        if (ec)
+            why = "missing or unreadable";
+        else if (size > 256 * 1024 * 1024)
+            why = "excessive file size";
+        detail = "Alpha terrain model " + filename + ": " + why + ". Verify the game files in Steam.";
+        return false;
+    };
+    if (!check("palm-leaf") || !check("palm-leaf-diagonal"))
+        return false;
+    for (int kind = 0; kind < 33; ++kind) {
+        const auto name = alphagen::plantSprite(kind);
+        if (!name.empty() && !check(name))
+            return false;
+    }
+    return true;
+}
+Completeness assessRequired(const fs::path &game, SourceRequirements requirements, const dataCheck::Report *report) {
     Completeness c;
     c.game = game;
     auto add = [&](Part part, const char *name, bool required, const char *without, Collect collect) {
@@ -174,10 +214,23 @@ Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::R
         c.parts.push_back(std::move(s));
     };
     add(Part::GameFiles, "Game files", true, "CubeVulkan cannot start. Verify the game files in Steam.", {});
-    add(Part::World, "Extracted land", worldRequired,
-        worldRequired ? "CubeVulkan has no land to show." : "Not needed: CubeVulkan.ini builds the land itself ([World] Source).",
+    if (requirements.alphaModels && c.parts.back().present)
+        c.parts.back().present = alphaModelFiles(game, c.parts.back().detail);
+    add(Part::World, "Extracted land", requirements.capturedWorld,
+        requirements.capturedWorld ? "CubeVulkan has no land to show."
+                                   : "Not needed: CubeVulkan.ini builds the land itself ([World] Source).",
         {"", "", true, false});
-    add(Part::SpriteList, "Model list", false, "Creatures and placed objects cannot be drawn.", {"", "", false, true});
+    add(Part::SpriteList, "Model list", requirements.alphaModels,
+        requirements.alphaModels ? "Alpha terrain cannot start without the owner's environment model table."
+                                 : "Creatures and placed objects cannot be drawn.",
+        {"", "", false, true});
+    if (requirements.alphaModels && c.parts.back().present) {
+        std::string why;
+        if (!alphagen::loadPlantModels(game / "Extract", game / "sprites", why)) {
+            c.parts.back().present = false;
+            c.parts.back().detail = why;
+        }
+    }
     add(Part::SoundList, "Sound list", false, "Sound effects are silent (music still plays).",
         {"sounds.request", "Sound list:", false, false});
     add(Part::CreatureTables, "Creature tables", false, "The world has no creatures or people.",
@@ -188,8 +241,7 @@ Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::R
         {"items.request", "Oracle: item generators", false, false});
     if (report) {
         // DataCheck's findings this list does not already cover.
-        static const std::set<std::string> covered{"Game build", "Original sprites", "Original fonts", "Terrain",
-                                                   "sprite-groups.txt"};
+        static const std::set<std::string> covered{"Game build", "Original sprites", "Original fonts", "Terrain", "sprite-groups.txt"};
         for (const auto &e : report->entries)
             if (e.status != dataCheck::Status::Pass && !covered.count(e.name))
                 c.notes.push_back(e);
@@ -197,11 +249,16 @@ Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::R
     return c;
 }
 
+} // namespace
+
+Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::Report *report) {
+    return assessRequired(game, {worldRequired, false}, report);
+}
+Completeness assessConfigured(const fs::path &game, const fs::path &ini, const dataCheck::Report *report) {
+    return assessRequired(game, sourceRequirements(ini), report);
+}
 bool worldRequired(const fs::path &ini) {
-    Config config;
-    config.load(ini);
-    const std::string source = config.text("World", "Source", "Alpha");
-    return _stricmp(source.c_str(), "Alpha") != 0 && _stricmp(source.c_str(), "Game") != 0 && _stricmp(source.c_str(), "Generated") != 0;
+    return sourceRequirements(ini).capturedWorld;
 }
 
 bool Completeness::readyToPlay() const {
@@ -914,7 +971,7 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
     if (runPending(game))
         out << "An earlier extraction run was interrupted and has not been put back. Run --setup-restore.\n";
     const dataCheck::Report report = dataCheck::inspect(game, pathOfUtf8(config.text("World", "ExtractedPath")));
-    const Completeness data = assess(game, worldRequired(setupRoot / "CubeVulkan.ini"), &report);
+    const Completeness data = assessConfigured(game, setupRoot / "CubeVulkan.ini", &report);
     out << "\nExtracted data:\n" << data.text();
     if (check)
         return !steamOk ? 2 : data.readyToPlay() ? 0 : 1;

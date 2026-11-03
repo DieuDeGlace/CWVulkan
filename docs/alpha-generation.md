@@ -176,6 +176,12 @@ profile and bypasses the remote-peer agreement wait during slow initial generati
 
 ## Verification and remaining limits
 
+First-run setup follows the selected generation mode. Alpha needs no captured
+terrain, but it requires the owner environment model table and validates the two
+palm and seventeen plant `.cub` files before reporting ready. Damaged or missing
+original models must be repaired through Steam. Tests cover a fresh installation,
+incomplete tables, invalid models and the separate Steam generation requirements.
+
 Formula vectors, worked tree output, synthetic palm rotations, finite-domain and
 cache-lifetime checks validate the independent contracts. Composition tests check
 whole construction tiles, source isolation, spawn/collision agreement, reader forks

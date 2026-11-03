@@ -98,7 +98,7 @@ void recheck() {
     setText(GAME_TEXT, game);
     if (s.status.found) {
         const dataCheck::Report report = dataCheck::inspect(s.game);
-        s.data = assess(s.game, worldRequired(s.root / "CubeVulkan.ini"), &report);
+        s.data = assessConfigured(s.game, s.root / "CubeVulkan.ini", &report);
         setText(DATA_TEXT, s.data.text());
     } else {
         s.data = {};

@@ -5,7 +5,9 @@
 `CubeVulkanSetup` opens **Get ready to play** by itself when something needed is missing (or an earlier run was interrupted); the button of that name opens it at any time. It has three parts and a Play button:
 
 1. **The game:** the Cube World folder (from `CubeVulkan.ini`, else every Steam library listed in `libraryfolders.vdf`), the executable's build (PE timestamp `0x5d93ab0d` is the one the extractor supports), CubeModLoader, and Steam online with a Cube World licence, checked as the engine does.
-2. **What is extracted:** each part the engine reads, present or missing, and what is lost without it: game files and extracted land (needed to play; land is not needed with `[World] Source=Game`), the model list, sound list (`Extract\sounds.txt`), creature tables (`Extract\oracle\`: spawn table, races, pickers, looks, gear), item models (`item-models.bin`) and special items (`items.bin`). DataCheck's other findings follow as notes.
+2. **What is extracted:** each part the engine reads, present or missing, and what is lost without it: game files (always required), captured land (not required with `[World] Source=Alpha`, `Game` or `Generated`), the model list (required by the default Alpha mode), sound list (`Extract\sounds.txt`), creature tables (`Extract\oracle\`: spawn table, races, pickers, looks, gear), item models (`item-models.bin`) and special items (`items.bin`). DataCheck's other findings follow as notes.
+For Alpha, setup also parses the two original palm models and seventeen plant models, and checks that the owner-exported environment table identifies every required plant. Missing or damaged original `.cub` files require Steam file repair; extraction does not create replacements. Setup uses the same case-sensitive generation names as engine startup.
+
 3. **Extract missing data**, one button. With the game closed, the setup:
    - copies `Save` to `<game>\CubeVulkanSetup\run-<time>\Save` and checks the copy;
    - moves the owner's `Mods` folder and `dxgi.dll` (ReShade) into the same folder, and installs `ZoneExtractor.dll` alone in a fresh `Mods` (CubeModLoader, already in the game folder, loads it);
