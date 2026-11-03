@@ -27,6 +27,13 @@ std::optional<worldgen::Block> steamBlock(Block input) {
     case alphagen::ROCK:
         result.type = worldgen::blocktype::ROCK;
         break;
+    case alphagen::WOOD_TYPE:
+        result.type = worldgen::blocktype::WOOD;
+        break;
+    case alphagen::LEAVES_TYPE:
+        result.type = worldgen::blocktype::LEAVES;
+        result.flags = 1; // Steam leaf material metadata, not the Alpha construction flags.
+        break;
     case alphagen::SNOW:
         result.type = worldgen::blocktype::SNOW;
         break;
@@ -41,7 +48,7 @@ std::optional<worldgen::Block> steamBlock(Block input) {
         result.glow = 255;
         break;
     default:
-        return std::nullopt; // Includes Alpha voxel-tree materials, which need their own contract.
+        return std::nullopt; // Unspecified material semantics must not be inferred from matching IDs.
     }
     if (input.type() == alphagen::AIR && (input.typeByte & DRY_AIR))
         result.flags = 2; // Steam keep-air flag; Alpha's 0x20/0x80 construction markers are not copied.

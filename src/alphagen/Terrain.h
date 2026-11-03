@@ -3,6 +3,7 @@
 // Surface and pre-dungeon relief are separate boundaries; later generation is not implied.
 #include "alphagen/Regions.h"
 #include "alphagen/Zone.h"
+#include "alphagen/TreeModels.h"
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -45,7 +46,8 @@ Terrace terraceAt(float height);
 
 class Terrain {
   public:
-    explicit Terrain(const World &world) : w(world) {}
+    explicit Terrain(const World &world, std::shared_ptr<const TreeModels> palms = {}) : w(world), palms(std::move(palms)) {}
+    const TreeModels *palmLeaves() const { return palms.get(); }
     float townness(int32_t x, int32_t y) const;
     float flatness(int32_t x, int32_t y) const;
     float roughness(int32_t x, int32_t y) const;
@@ -76,10 +78,11 @@ class Terrain {
         Random random;
     };
     std::unique_ptr<SurfaceWork> buildSurface(int32_t zx, int32_t zy) const;
-    bool reliefPasses(Zone &, const std::vector<float> &, Random &, std::vector<BoulderSeed> &, std::string &error) const;
+    void reliefPasses(Zone &, const std::vector<float> &, Random &, std::vector<BoulderSeed> &) const;
     void surfacePass(Zone &, const std::vector<float> &, Random &, std::vector<BoulderSeed> &) const;
     Block rockBlock(int32_t x, int32_t y, int32_t z, const Zone &) const;
     float noiseAt(uint32_t ox, uint32_t oy, double k, int32_t x, int32_t y) const;
     const World &w;
+    const std::shared_ptr<const TreeModels> palms;
 };
 } // namespace alphagen

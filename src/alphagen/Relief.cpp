@@ -5,6 +5,7 @@
 // The structure passes that follow (§8) are in Structures.cpp, the dungeon builder in
 // Dungeon.cpp.
 #include "alphagen/Terrain.h"
+#include "alphagen/Trees.h"
 #include <cmath>
 
 namespace alphagen {
@@ -156,8 +157,7 @@ void Terrain::boulder(Zone &zone, const BoulderSeed &seed, int32_t ax, int32_t a
         }
 }
 
-bool Terrain::reliefPasses(Zone &zone, const std::vector<float> &heights, Random &random, std::vector<BoulderSeed> &terraceBoulders,
-                           std::string &error) const {
+void Terrain::reliefPasses(Zone &zone, const std::vector<float> &heights, Random &random, std::vector<BoulderSeed> &terraceBoulders) const {
     const int32_t zx = zone.zx, zy = zone.zy;
     const int32_t x0 = zone.originX(), y0 = zone.originY();
     const Location *Lz = w.location(x0, y0);
@@ -168,13 +168,6 @@ bool Terrain::reliefPasses(Zone &zone, const std::vector<float> &heights, Random
     auto put = [&](int32_t x, int32_t y, int32_t z, Block b) {
         zone.place(x, y, z, b, [&, x, y](int32_t gz) { return rockBlock(x, y, gz, zone); });
     };
-
-    // This boundary stops before Alpha dungeons. Until the tree builder is ported,
-    // refuse its special location instead of publishing incomplete terrain.
-    if (Lz && Lz->type == 12 && centreIn(*Lz, zx, zy)) {
-        error = "Alpha giant-tree terrain requires the voxel-tree builder";
-        return false;
-    }
 
     // §3.1: the zone-centre climate.
     const Column &middle = zone.column(x0 + 128, y0 + 128);
@@ -205,6 +198,9 @@ bool Terrain::reliefPasses(Zone &zone, const std::vector<float> &heights, Random
     if (Lz && Lz->type == 11 && centreIn(*Lz, zx, zy)) {
         const int32_t rz = 100 + random.draw() % 100;
         formation(zone, cx, cy, top(cx, cy), 100, 100, rz, false);
+    } else if (Lz && Lz->type == 12 && centreIn(*Lz, zx, zy)) {
+        random.draw(); // The native call discards one draw before building the giant tree.
+        TreeBuilder(*this, zone, random).build(cx, cy, top(cx, cy), 80, 80, 6);
     } else if (E.kind != 1 && E.kind != 3 && E.kind != 4) {
         int32_t n = random.draw() & 3;
         if (climateBonus)
@@ -279,8 +275,6 @@ bool Terrain::reliefPasses(Zone &zone, const std::vector<float> &heights, Random
                 if (!(zone.read(x, y, z).typeByte & DRY_AIR))
                     put(x, y, z, AIR_WRITE);
         }
-
-    return true;
 }
 
 } // namespace alphagen

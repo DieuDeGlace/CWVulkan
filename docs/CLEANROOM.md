@@ -1568,3 +1568,21 @@ consumer check concurrent reuse, failed-load retry and retained column lifetime.
 Native models, columns, captures and other original assets remain outside packages.
 Steam town/dungeon layout integration and runtime default selection remain open;
 extra ruin structures were deferred by the user.
+
+
+## Alpha voxel trees and owner palm leaves, 2026-11-03
+
+The implementer read the independent tree contract and the required vegetation
+placement and prefab-mode0 sections. Original GPL tree code from AlphaVulkan was
+reused with namespace changes. The incomplete palm branch was replaced with an
+implementation of the independently described owner-model stamping facts. No native
+implementation, original instructions or third-party reconstruction was opened.
+Only the needed placement sections of the full independent structure document were
+read for this extension; unrelated structure builders remain deferred.
+
+A private source audit checks unchanged non-palm arithmetic and stable donor/prose
+hashes. Independent vectors verify the tree stream, cell counts and RGB; synthetic
+models verify palm rotation, model-presence-dependent draws and type/flag handling.
+Both the focused Alpha checks and full CPU/owner-data suite pass. These formula and
+synthetic checks are not native runtime-oracle evidence. Native model data is read
+from the owner's install and is never copied into either package.

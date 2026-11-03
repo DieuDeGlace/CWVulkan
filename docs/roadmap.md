@@ -776,8 +776,11 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   and pools at the explicit pre-dungeon boundary. Retain its random stream and
   boulder seeds; cache immutable relief parents and adapt their columns to Steam
   indexing. Protected-block, terrace, cache retry and lease-lifetime checks pass.
-- [ ] Complete the remaining terrain passes (including giant-tree support and later
-  boulder/vegetation stages) and compare labeled native height/surface output.
+- [x] Voxel-tree builders and giant-tree relief locations: preserve moss, roots,
+  crowns, dry-air exclusion and random draws. Palms load and stamp the owner's
+  cardinal/diagonal leaf models with explicit rotation and placement rules.
+- [ ] Complete later boulder/vegetation stages and compare labeled native
+  height/surface output before finishing playable Alpha generation.
 - [x] Read-only initial-surface column adapter: explicit material/flag translation,
   four-parent crops, native indexing and finite-domain coverage. All 4096 columns
   in an asymmetric fixture retain their geometry and RGB. This does not yet place

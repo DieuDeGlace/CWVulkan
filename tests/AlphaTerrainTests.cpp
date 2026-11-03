@@ -5,6 +5,8 @@
 #include "alphagen/SurfaceStore.h"
 #include "alphagen/SteamBridge.h"
 #include "alphagen/ReliefStore.h"
+#include "alphagen/Trees.h"
+#include "CubModel.h"
 #include <stdexcept>
 #include <future>
 #include <cmath>
@@ -70,9 +72,12 @@ int alphaTerrainTests() {
     check(dry && plain && nativeRead.read(0, 0, -1).type == worldgen::blocktype::AIR &&
               nativeRead.read(0, 0, 0).type == worldgen::blocktype::WATER && dry->flags == 2,
           "translated dry-air flag preserves native effective underwater reads");
-    check(!alphagen::steamBlock({0, 0, 0, 31}) && !alphagen::steamBlock({0, 0, 0, alphagen::WOOD_TYPE}) &&
-              !alphagen::steamBlock({0, 0, 0, alphagen::LEAVES_TYPE}),
-          "unknown and unspecified Alpha materials are rejected rather than reinterpreted");
+    check(!alphagen::steamBlock({0, 0, 0, 31}), "unknown Alpha materials are rejected rather than reinterpreted");
+    const auto wood = alphagen::steamBlock({20, 30, 40, uint8_t(alphagen::WOOD_TYPE | alphagen::SURFACE_COLOURED)});
+    const auto leaves = alphagen::steamBlock({50, 60, 70, uint8_t(alphagen::LEAVES_TYPE | alphagen::SURFACE_COLOURED)});
+    check(wood && leaves && wood->type == worldgen::blocktype::WOOD && wood->flags == 0 && leaves->type == worldgen::blocktype::LEAVES &&
+              leaves->flags == 1 && leaves->g == 60,
+          "tree RGB and explicit Steam material metadata survive the Alpha representation bridge");
     {
         alphagen::SurfaceStore source(123, {{0, 0}, {alphacoords::HOME + 107, alphacoords::HOME + 107}});
         std::string why = "old diagnostic";
@@ -189,13 +194,21 @@ int alphaTerrainTests() {
                 for (const auto &location : region->records)
                     if (location.type == 12) {
                         const int zx = int(location.x >> 16) / 256, zy = int(location.y >> 16) / 256;
-                        check(!terrain.generateRelief(zx, zy, why) && why.find("giant-tree") != std::string::npos,
-                              "unimplemented giant-tree terrain fails explicitly instead of silently dropping the tree");
+                        const auto giant = terrain.generateRelief(zx, zy, why);
+                        size_t woodCount = 0, leafCount = 0;
+                        if (giant)
+                            for (const auto &column : giant->zone->columns)
+                                for (const auto block : column.blocks) {
+                                    woodCount += block.type() == alphagen::WOOD_TYPE;
+                                    leafCount += block.type() == alphagen::LEAVES_TYPE;
+                                }
+                        check(giant && why.empty() && woodCount > 0 && leafCount > 0,
+                              "giant-tree locations produce their trunk roots branches and crown");
                         treeChecked = true;
                         break;
                     }
             }
-        check(treeChecked, "giant-tree rejection fixture is exercised");
+        check(treeChecked, "giant-tree terrain fixture is exercised");
     }
     {
         alphagen::detail::ParentStages<int> cache(1);
@@ -244,6 +257,85 @@ int alphaTerrainTests() {
         check(lease && !owner.expired() && lease->raw().top() == top, "relief column lease survives eviction and store destruction");
         lease.reset();
         check(owner.expired(), "last relief column lease releases the parent stage");
+    }
+    {
+        alphagen::Zone zone;
+        for (auto &column : zone.columns) {
+            column.moisture = 0.45f;
+            column.warmth = 0.5f;
+        }
+        alphagen::Random stream(123);
+        alphagen::TreeBuilder builder(terrain, zone, stream);
+        builder.build(100, 200, 50, 8, 10, 0);
+        size_t woodCount = 0, leafCount = 0;
+        for (const auto &column : zone.columns)
+            for (const auto block : column.blocks) {
+                woodCount += block.type() == alphagen::WOOD_TYPE;
+                leafCount += block.type() == alphagen::LEAVES_TYPE;
+            }
+        const auto trunk = zone.read(100, 200, 50), leaf = zone.read(104, 204, 62);
+        check(stream.count() == 57 && stream.draw() == 27840 && woodCount == 332 && leafCount == 961,
+              "independent round-tree example matches draw stream and distinct wood/leaf counts");
+        check(trunk.r == 218 && trunk.g == 177 && trunk.b == 98 && trunk.typeByte == 0x27 && leaf.r == 53 && leaf.g == 220 &&
+                  leaf.b == 60 && leaf.typeByte == 0x28,
+              "independent round-tree example matches mossy bark and leaf colors");
+        alphagen::Zone dry;
+        for (auto &column : dry.columns) {
+            column.moisture = 0.45f;
+            column.warmth = 0.5f;
+        }
+        dry.place(100, 200, 50, {255, 255, 255, alphagen::DRY_AIR});
+        alphagen::Random repeat(123);
+        alphagen::TreeBuilder(terrain, dry, repeat).build(100, 200, 50, 8, 10, 0);
+        check(dry.read(100, 200, 50).typeByte == alphagen::DRY_AIR, "tree writes preserve reserved dry-air cells");
+        bool palmRejected = false;
+        const auto before = repeat.count();
+        try {
+            alphagen::TreeBuilder(terrain, dry, repeat).build(100, 200, 50, 8, 10, 3);
+        } catch (const std::invalid_argument &) {
+            palmRejected = true;
+        }
+        check(palmRejected && repeat.count() == before, "deferred palm stamps fail before any partial tree or random draws");
+    }
+    {
+        auto model = std::make_shared<CubModel>();
+        model->sx = 3;
+        model->sy = 5;
+        model->sz = 1;
+        for (int j = 0; j < 5; ++j)
+            for (int i = 0; i < 3; ++i) {
+                model->rgb.push_back(uint8_t(10 + i));
+                model->rgb.push_back(uint8_t(20 + j));
+                model->rgb.push_back(30);
+            }
+        auto models = std::make_shared<const alphagen::TreeModels>(alphagen::TreeModels{model, {}});
+        alphagen::Terrain palms(world, models);
+        alphagen::Zone zone;
+        for (auto &column : zone.columns) {
+            column.moisture = 0.45f;
+            column.warmth = 0.5f;
+        }
+        alphagen::Random stream(123), heights(123);
+        for (int i = 0; i < 11; ++i)
+            heights.draw();
+        int z[4];
+        for (auto &value : z)
+            value = 46 + heights.draw() % 3;
+        alphagen::TreeBuilder(palms, zone, stream).build(100, 200, 50, 8, 1, 3);
+        const auto north = zone.read(99, 205, z[0]), east = zone.read(105, 201, z[1]);
+        const auto south = zone.read(99, 195, z[2]), west = zone.read(95, 201, z[3]);
+        check(stream.count() == 16 && north.r == 10 && north.g == 24 && east.r == 10 && east.g == 24 && south.r == 12 && south.g == 24 &&
+                  west.r == 12 && west.g == 24 && north.typeByte == 0x68,
+              "owner palm stamps rotate without mirroring and draw heights only for present models");
+        auto both = std::make_shared<const alphagen::TreeModels>(alphagen::TreeModels{model, model});
+        alphagen::Terrain fullPalms(world, both);
+        alphagen::Zone second;
+        alphagen::Random full(123);
+        alphagen::TreeBuilder(fullPalms, second, full).build(100, 200, 50, 8, 1, 3);
+        check(full.count() == 20, "both palm leaf models make eight ordered height draws and no marker draws");
+        std::string why;
+        check(!alphagen::loadTreeModels("build/alpha-missing-owner-models", why) && !why.empty(),
+              "owner palm loader reports missing models without synthesizing replacement assets");
     }
     stage.reset();
     std::optional<alphagen::ColumnLease> held;

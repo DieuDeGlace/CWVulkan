@@ -432,8 +432,7 @@ std::unique_ptr<ReliefStage> Terrain::generateRelief(int32_t zx, int32_t zy, std
         return {};
     }
     auto result = std::make_unique<ReliefStage>();
-    if (!reliefPasses(*work->zone, work->paddedHeights, work->random, result->terraceBoulders, error))
-        return {};
+    reliefPasses(*work->zone, work->paddedHeights, work->random, result->terraceBoulders);
     result->zone = std::move(work->zone);
     result->random = work->random;
     result->ravineBoulders = std::move(work->ravineBoulders);

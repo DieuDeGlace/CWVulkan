@@ -2,8 +2,9 @@
 #include <stdexcept>
 
 namespace alphagen {
-ReliefStore::ReliefStore(uint32_t seed, alphacoords::Mapping frame, std::size_t cachedParents, bool named)
-    : world(seed), terrain(world), frame(frame), cache(cachedParents) {
+ReliefStore::ReliefStore(uint32_t seed, alphacoords::Mapping frame, std::size_t cachedParents, bool named,
+                         std::shared_ptr<const TreeModels> palms)
+    : world(seed), terrain(world, std::move(palms)), frame(frame), cache(cachedParents) {
     world.named = named;
 }
 ReliefStore::Parent ReliefStore::parent(int32_t zx, int32_t zy) {

@@ -68,8 +68,8 @@ four Alpha parents; source XY indexing is transposed explicitly. An admission ma
 keeps missing finite-world columns distinct from empty native columns. Dry-air
 flags are translated rather than copied. Alpha glowing material 13 maps to Steam
 light 20, with full emission as an explicit hybrid policy, instead of Steam road 13.
-Other named surface materials have explicit mappings; voxel-tree materials and
-unknown types are rejected until their semantics are defined. This is a data
+Wood maps explicitly to Steam type 7/flags 0 and leaves to type 8/flags 1,
+retaining Alpha RGB rather than repacking working colors. Unknown types are rejected. This is a data
 representation adapter, not Steam structure placement or a new runtime mode.
 
 Steam also retains `obelisk.cub`, `castle-arc.cub`, `temple-arc.cub`,
@@ -92,8 +92,21 @@ later generation passes are not run at this boundary.
 separate typed stage ownership. The column adapter accepts both stores without
 reinterpreting block records. Failed loads propagate and remain retryable, and
 aliasing column leases retain the owning stage through eviction/store destruction.
-Giant-tree centers fail explicitly until the voxel-tree builder is available;
-they are never silently published with missing terrain. This remains a data
+Giant-tree centers now invoke the voxel-tree builder at the specified point in
+the same stream. Its other tree kinds share moss, dry-air and zone-clipping rules. This remains a data
 consumer integration, not a complete playable Alpha world or default switch.
 Extra ruin structures, including the Sphinx addition, are deferred at the user's
 request while terrain work continues.
+
+
+The tree builders reuse the sister project's GPL implementation under the independent
+Alpha tree contract. Palms extend its incomplete stamping path using only the
+independent mode0 placement contract: owner `palm-leaf.cub` and
+`palm-leaf-diagonal.cub` models, ordered height draws for models actually present,
+quarter-turn rotation without mirroring, internal dry/keep air and protected-solid
+exclusion. The owner loader requires both valid files; no replacement art is made.
+Raw model bytes remain owner data and are absent from source/development packages.
+The independent worked tree example checks 57 draws, 332 wood cells, 961 leaf cells
+and final bark/leaf RGB values. Synthetic palm models check all four rotations,
+material flags and model-dependent draw counts. Tree-grid placement, later terrain
+passes and runtime/default integration still follow separately.
