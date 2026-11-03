@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <bit>
+#include <string>
 
 namespace {
 int failures = 0;
@@ -29,7 +31,7 @@ double at(double hours) { return hours * 3600000.0; }
 double specLattice(int32_t a, int32_t b) {
     uint32_t k = (uint32_t)a + 57u * (uint32_t)b;
     k = (k << 13) ^ k;
-    uint32_t v = k * (k * k * 60493u + 19990303u) + 3524844813u;
+    uint32_t v = k * (k * k * 60493u + 19990303u) + 3523796237u;
     return 1.0 - (double)(v & 0x7fffffffu) / 1073741824.0;
 }
 
@@ -42,6 +44,8 @@ void alphaCloudCells() {
     SKY_CHECK(clouds::cellBase(-1, 0) == glm::dvec2(-200, -100)); // C's remainder: -1
     SKY_CHECK(clouds::cellBase(-2, -1) == glm::dvec2(-400, -200));
 
+    // Independently rechecked native constant/return vector, not a formula copy.
+    SKY_CHECK(std::bit_cast<uint32_t>(clouds::alphaNoise(0, 0)) == 0xbe9046e8u);
     // The noise: the lattice value at integer points, the cosine halfway between, within -1..1.
     bool lattice = true, inRange = true;
     for (int a = -20; a <= 20; a += 3)
@@ -82,6 +86,33 @@ void alphaCloudCells() {
             SKY_CHECK(!c->dark);
         }
     SKY_CHECK(cloudy > 0 && cloudy < cells);
+
+    // Native altitude converts each float term to fixed64 separately. One base
+    // lands halfway between fixed units; the final result must retain truncation.
+    auto precise = wet;
+    std::string heightOrder;
+    precise.mountain = [&](int32_t, int32_t) {
+        heightOrder += 'M';
+        return .234567f;
+    };
+    precise.ground = [&](int32_t, int32_t) {
+        heightOrder += 'H';
+        return 50.000003814697265625f;
+    };
+    auto zero = wet;
+    zero.ground = [](int32_t, int32_t) { return 0.f; };
+    const auto reference = clouds::alphaCloud(0, 0, zero);
+    const auto staged = clouds::alphaCloud(0, 0, precise);
+    SKY_CHECK(reference && staged && heightOrder == "MH");
+    SKY_CHECK(reference && staged && (staged->base.z - reference->base.z) * 65536.0 == 4814058.0);
+    auto tinyNegative = zero;
+    tinyNegative.ground = [](int32_t, int32_t) { return -.0000001f; };
+    const auto tinyCloud = clouds::alphaCloud(0, 0, tinyNegative);
+    SKY_CHECK(reference && tinyCloud && tinyCloud->base.z == reference->base.z);
+    auto high = zero;
+    high.ground = [](int32_t, int32_t) { return 70000.125f; };
+    const auto highCloud = clouds::alphaCloud(0, 0, high);
+    SKY_CHECK(reference && highCloud && (highCloud->base.z - reference->base.z) * 65536.0 == 4587528192.0);
 
     // Mountains lift a cloud 100 blocks; ground below the sea counts as the sea.
     clouds::AlphaWorld mountain = wet;

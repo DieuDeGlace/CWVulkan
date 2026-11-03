@@ -131,6 +131,15 @@ absolute Alpha coordinates; renderer coordinates are rebased separately. The
 independent sky supplement distinguishes these queries from loaded-column caches
 and leaves unmeasured native scheduling/fixed-altitude details open.
 
+Alpha cloud noise now uses the independently rechecked additive3523796237
+(0xD208DD0D), correcting an older specification's transcription error. The
+verified zero-lattice float word is0xBE9046E8. Altitude queries M then H, keeps
+separate float stages, converts the base and noise rise to fixed64 independently,
+clamps the converted base, then adds full64 Z. Owner-model header centering was
+already consistent and needs no replacement art. These sky corrections leave
+terrain geometry/profile identity and the Steam cloud algorithm unchanged;
+original cache/preparation and render-origin lifetime still need broader review.
+
 The Steam-style map keeps its UI, marker XY, region identities and protected
 construction geometry. Close views sample actual landscape voxels, including tree
 crowns; distant views use an H-based overview to avoid generating entire off-screen

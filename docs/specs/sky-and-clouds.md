@@ -88,6 +88,11 @@ There is no moon sprite, no moon texture and no moon light in Alpha (AR §2.3, �
 
 ### A.5 Clouds (0x4b1534..0x4b1a65)
 
+Precision supplements: [Alpha cloud fixed placement](alpha-cloud-fixed-placement.md)
+settles the two scalar fixed conversions and header centering. The independently
+rechecked [Alpha noise constant](alpha-cloud-noise-constant.md) supersedes this
+section's old additive literal with3523796237 (0xD208DD0D).
+
 **Model.** Only `cloud02.cub` is used. The loader (0x4ee230, at 0x51bdc6) puts it in model
 slot 0xa08 of the model table; `cloud01.cub` is not referenced by the client at all (it exists
 among the assets only; AR §11.4 named both, which is corrected here). The file is 24 × 24 × 16
@@ -120,8 +125,13 @@ For each cell, in this order:
 4. **Second moisture test.** m2 = 0x5c4800 at block column (x, y). Skip the cell if m2 < 0.3.
 5. **Height.** k = 0x5effa0(x, y, 0) (a 0..1 field of the Alpha terrain generator that rises in
    mountains) and h = 0x5c5e20(x, y, 0) (the Alpha generator's ground height at that column).
-   z = h + 100 × k blocks; if z < 0 it becomes 0. Then z += 170 + 50 × N(17·cx, 19·cy).
-   So a cloud's base is 120..220 blocks above the local terrain level, 100 more over mountains.
+   The separate float32 product100×k and sum with h become a float32 base. Convert
+   that base by float32×65536 then signed64 truncation, and clamp the fixed result
+   at0. Independently form float32(50×N(17·cx,19·cy))+170, convert it through the
+   same float32-to-fixed helper, then add the two full64 scalar Z values. The
+   [fixed-placement supplement](alpha-cloud-fixed-placement.md) supplies the exact
+   stages and their bounded evidence. The nominal rise is120..220 blocks, plus
+   up to100 blocks from the mountain field.
 6. **Placement**, composed so that the last step listed applies to the model first:
    translate to (x, y, z) relative to the render origin (G+0x1d8, G+0x1e0; z relative to 0);
    scale uniformly by s = 7 + 2 × N(15·cx, 23·cy) (so 5..9 blocks per voxel); rotate about the
@@ -136,7 +146,7 @@ side = 1300 blocks, normally beyond the fog).
 
 **The noise N(u, v)** (0x4c0ef0) is a lattice value noise with cosine interpolation on
 doubles: the lattice point (a, b) gets the integer hash k = a + 57·b, k = (k << 13) xor k, value
-= 1 − ((k·(k·k·60493 + 19990303) + 3524844813) and 0x7fffffff) / 1073741824 (32-bit
+= 1 − ((k·(k·k·60493 + 19990303) + 3523796237) and 0x7fffffff) / 1073741824 (32-bit
 wrap-around arithmetic, constants at 0x745df8 = 1.0, 0x702b20 = 2⁻³⁰); the four corners around
 (u, v) (integer parts by truncation towards zero) are blended with weights
 (1 − cos(π·f)) / 2 on the fractional parts f, x first. The result is in about −1..1 and is
@@ -475,5 +485,7 @@ screenshots.
 ## Errata (from the clean-room implementation)
 
 - §B.6: n = trunc(50 − 7√r) for r = 0..49 gives 855 places (about 427 stars), not 1275. 1275 is 50 + 49 + … + 1. To recheck in the decompile.
-- §A.5: the hash constant 3524844813 (0xD218DD0D) differs in one bit from the oracle-checked world hash's 0xD208DD0D. §B.6 says the stars use "the same" hash, so one of the two is likely a transcription slip. To recheck in the binary.
+- §A.5 resolved by [alpha-cloud-noise-constant.md](alpha-cloud-noise-constant.md):
+  the Alpha additive is3523796237 (0xD208DD0D). The former3524844813 literal was a
+  transcription error. This bounded recheck does not establish §B.6's star hash.
 - §B.7: the Steam cloud pass's fog scale and the cull routine 0x1400e08c0 need full specs; the implementation uses labelled stand-ins.

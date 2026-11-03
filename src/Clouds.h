@@ -54,7 +54,8 @@ struct AlphaWorld {
     std::function<float(int32_t x, int32_t y)> ground;   // the ground height in blocks (0x5c5e20)
 };
 
-// The cloud of cell (cx, cy), or none.
+// The cloud of cell (cx, cy), or none. Alpha altitude retains the two native
+// fixed64 quantizations before conversion to block coordinates for rendering.
 std::optional<Cloud> alphaCloud(int32_t cx, int32_t cy, const AlphaWorld &world);
 
 // --- Steam (§B.7) -----------------------------------------------------------------------------

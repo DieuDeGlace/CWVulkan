@@ -1,4 +1,5 @@
 #include "Clouds.h"
+#include "GameMath.h"
 #include "worldgen/Noise.h"
 #include <algorithm>
 #include <cmath>
@@ -10,7 +11,7 @@ constexpr double PI = 3.14159265358979323846;
 // --- Alpha's value noise (§A.5, 0x4c0ef0) ---
 // The hash multiplies and adds in 32-bit unsigned arithmetic, wrapping around.
 constexpr uint32_t ROW_STRIDE = 57, HASH_SHIFT = 13;
-constexpr uint32_t HASH_SQUARE = 60493, HASH_LINEAR = 19990303, HASH_OFFSET = 3524844813u;
+constexpr uint32_t HASH_SQUARE = 60493, HASH_LINEAR = 19990303, HASH_OFFSET = 3523796237u;
 constexpr uint32_t LOW_31_BITS = 0x7fffffffu;
 constexpr double HASH_SCALE = 1073741824.0; // 2^30: the hash becomes 1 - hash / 2^30
 
@@ -26,6 +27,13 @@ double latticeValue(int32_t a, int32_t b) {
 double cosineBlend(double a, double b, double f) {
     const double w = (1 - std::cos(PI * f)) / 2;
     return a * (1 - w) + b * w;
+}
+
+// Alpha converts each altitude term separately before adding in fixed space.
+// Only finite ordinary inputs fitting signed64 are part of the native contract.
+int64_t alphaFixed(float blocks) {
+    const float dots = blocks * 65536.f;
+    return int64_t(dots);
 }
 
 // --- Alpha's constants (§A.5) ---
@@ -73,13 +81,21 @@ std::optional<Cloud> alphaCloud(int32_t cx, int32_t cy, const AlphaWorld &world)
     const int32_t x = (int32_t)at.x, y = (int32_t)at.y;
     if (world.moisture(x, y) < WET_ENOUGH)
         return std::nullopt;
-    // 5: above the ground (and higher over mountains), never below sea level, then 170..220 up.
-    float z = world.ground(x, y) + MOUNTAIN_RISE * world.mountain(x, y);
-    z = std::max(z, 0.f);
-    z += ALPHA_HEIGHT + ALPHA_HEIGHT_NOISE * alphaNoise(17.0 * cx, 19.0 * cy);
+    // 5: retain the native call/float stages and two fixed conversions.
+    // docs/specs/alpha-cloud-fixed-placement.md; this source disables contraction.
+    const float mountain = world.mountain(x, y);
+    const float ground = world.ground(x, y);
+    const float mountainRise = MOUNTAIN_RISE * mountain;
+    const float baseHeight = ground + mountainRise;
+    const int64_t base = std::max<int64_t>(alphaFixed(baseHeight), 0);
+    const int32_t noiseX = int32_t(uint32_t(cx) * 17u), noiseY = int32_t(uint32_t(cy) * 19u);
+    const float noise = alphaNoise(noiseX, noiseY);
+    const float noiseRise = ALPHA_HEIGHT_NOISE * noise;
+    const float rise = noiseRise + ALPHA_HEIGHT;
+    const int64_t z = gamemath::addFixed(base, alphaFixed(rise));
     // 6: 5..9 blocks per voxel, a quarter turn per cell step.
     Cloud cloud;
-    cloud.base = {at.x, at.y, z};
+    cloud.base = {at.x, at.y, double(z) / DOTS};
     cloud.scale = SCALE_BASE + SCALE_NOISE * alphaNoise(15.0 * cx, 23.0 * cy);
     cloud.turnDegrees = (float)(cx + cy) * QUARTER_TURN;
     return cloud;

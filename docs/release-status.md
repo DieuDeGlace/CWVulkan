@@ -10,6 +10,15 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha clouds now use the independently verified noise hash additive, fixing
+  an older spec typo, with an exact native-derived float-word regression vector.
+  Their altitude preserves M-before-H query order, separate float stages, two
+  scalar fixed64 conversions, post-conversion base clamp and full64 addition.
+  Tests catch a one-fixed-unit rounding difference and accidental32-bit narrowing.
+  Full-header owner-model centering was already correct. Steam cloud logic and
+  both terrain profiles remain separate. Five targets and the full CPU/owner/GPU
+  suite pass; these are contract checks, not a new native runtime capture.
+
 - Alpha environment lighting now follows the independently traced mesh-time
   origin sample: exact fixed-coordinate division, retained scalar, dark solid
   origins and a complete OWN_LIGHT material override. It preserves cloud handling,
