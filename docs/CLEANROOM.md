@@ -1325,3 +1325,31 @@ not game implementation. Mode readback is logged; unavailable raw input retains
 an explicit cursor-motion compatibility path. This bridge does not certify device
 failure/reacquisition, exact polling/coalescing, untraced raw-input paths or hardware
 motion parity. No original implementation, instruction bytes or owner assets ship.
+
+
+## Shared native lens and projection consumers, 2026-11-02
+
+The implementer fully read the existing independent gameplay-camera7.3,8 and8.1
+without access to original implementation. The documented global float starts at
+the exact stored50-degree radians, easing toward30 when imported u16 toggle0x400
+is set and toward50 otherwise, at distinct0.01/0.002 rates. The completed float
+radians feed projection; requested orbit distance is independent. A local set
+producer remains unproved. Existing record import and acceleration-based clear
+are separate contracts; no scope key, gesture or save field is invented here.
+
+A typed CPU lens owns that retained value, explicitly shared by the process's
+gameplay/frontend services. Standalone frontend callers have their own fallback.
+Canonical camera phases update it from the existing creature facade and pass raw
+radians to CPU visibility, both world render styles, targeting rays and the legacy
+plate projector. There is no float degree conversion roundtrip or reset on normal
+character/frontend transitions. Already-at-target updates omit only the pure gain
+calculation; ordinary matrix construction remains independent and continues.
+The generic Graphics.FieldOfView setting remains the stand-in/compatibility lens;
+it does not override a canonical native camera's supplied radians. Finite GUI/map
+projections keep their separate contracts. Alternate recovery remains unproved.
+
+Derived float references cover constructor, stationary/narrow/release/fractional
+and capped intervals. Actual Vulkan checks deliberately set compatibility FOV110
+while supplying raw50/30 radians, checking pinhole displacement and a side-frustum
+sphere in both appearance styles. These are bounded consumer checks, not a claim
+of every native visual/device/recovery path. No owner assets or native code ship.

@@ -32,6 +32,9 @@ class SpawnedCreatures;
 class SteamSession;
 class World;
 struct GLFWwindow;
+namespace cameramotion {
+class FieldOfView;
+}
 
 // What the window gave since the last frame (filled by main's GLFW callbacks).
 struct MenuInput {
@@ -334,10 +337,11 @@ struct Services {
     MenuInput *input = nullptr;
     const Assets *assets = nullptr;
     Renderer *renderer = nullptr;
-    Hud *hud = nullptr;                   // the interface to draw with (the game's own in play); null: one of the screens' own
+    Hud *hud = nullptr; // the interface to draw with (the game's own in play); null: one of the screens' own
     World *world = nullptr;
-    ExtractedWorld *extracted = nullptr;  // null without an extracted or generated world
-    SpawnedCreatures *spawned = nullptr;  // the game's creatures with the native player, if any
+    ExtractedWorld *extracted = nullptr;                    // null without an extracted or generated world
+    SpawnedCreatures *spawned = nullptr;                    // the game's creatures with the native player, if any
+    cameramotion::FieldOfView *cameraFieldOfView = nullptr; // Shared process lens; null uses the session's own fallback.
     SteamSession *steam = nullptr;
     Audio *audio = nullptr;
     bool externalMenuSounds = false; // gameplay samples the combined ordinary-UI/selector edge

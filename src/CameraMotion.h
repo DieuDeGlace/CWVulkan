@@ -8,6 +8,20 @@
 #include <algorithm>
 
 namespace cameramotion {
+// Gameplay-camera §7.3: the process-global lens retains float radians.
+class FieldOfView {
+  public:
+    float radians() const { return current; }
+    void update(uint32_t toggles, double elapsedMs) {
+        const bool narrow = (toggles & 0x400) != 0;
+        const float target = narrow ? .5235987901687622f : .8726646900177002f;
+        if (current != target)
+            current += gamemath::blendFactor(gamemath::frameMilliseconds(elapsedMs), narrow ? .01f : .002f) * (target - current);
+    }
+
+  private:
+    float current = .8726646900177002f;
+};
 // Gameplay-camera §3.1: float input scaling precedes the double target update.
 // The mouse alone clamps pitch; pad and assistance retain their own producer rules.
 inline void mouseTargets(double &pitch, double &yaw, float deltaX, float deltaY, int cameraSpeed, bool invertY) {

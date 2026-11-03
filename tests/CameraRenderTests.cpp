@@ -106,6 +106,25 @@ int cameraRenderTests() {
         std::cout << "Camera renderer " << name << (pass ? " PASS" : " FAIL") << " delta " << after.x - before.x << ','
                   << after.y - before.y << " expected " << expected.x << ',' << expected.y << '\n';
         failures += !pass;
+        // Canonical radians must override a deliberately different compatibility FOV,
+        // in both the rasterized geometry and the CPU visibility projection.
+        renderer.settings.fov = 110;
+        camera.nativeFovRadians = .8726646900177002f;
+        const auto nativeWide = centroid("-native-fov50", false);
+        const steampoints::Point side{2 * 65536, 0, 0};
+        const bool wideVisible = renderer.steamSphereVisible(side, .02f, 160);
+        camera.nativeFovRadians = .5235987901687622f;
+        const auto nativeNarrow = centroid("-native-fov30", false);
+        const double narrowCot = 1.0 / std::tan(30.0 * 3.141592653589793 / 360.0);
+        const glm::dvec2 narrowExpected(-.5 * narrowCot * height / 8.0, -.25 * narrowCot * height / 8.0);
+        const bool lensPass = nativeWide.x > 0 && nativeNarrow.x > 0 && std::abs(nativeWide.x - after.x) <= 1 &&
+                              std::abs(nativeWide.y - after.y) <= 1 && wideVisible && !renderer.steamSphereVisible(side, .02f, 160) &&
+                              std::abs((nativeNarrow.x - before.x) - narrowExpected.x) <= 1 &&
+                              std::abs((nativeNarrow.y - before.y) - narrowExpected.y) <= 1;
+        std::cout << "Camera native lens " << name << (lensPass ? " PASS" : " FAIL") << " raw radians/CPU visibility/GPU pinhole\n";
+        failures += !lensPass;
+        camera.nativeFovRadians.reset();
+        renderer.settings.fov = 50;
         // Mutating the next camera cannot change the completed renderer epoch.
         camera.target = {0, -8, 0};
         camera.viewShake = {};

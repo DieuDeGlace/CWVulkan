@@ -1147,7 +1147,7 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
     next.projection.offset = next.visibility.offset;
     next.projection.view =
         glm::translate(glm::translate(glm::mat4(1), glm::vec3(camera.viewShake, 0)) * nativeSceneRotation(camera), negativeEye);
-    next.projection.perspective = glm::perspectiveLH_ZO(glm::radians(settings.fov), -aspect, .05f, 1920.f);
+    next.projection.perspective = glm::perspectiveLH_ZO(camera.fieldOfViewRadians(settings.fov), -aspect, .05f, 1920.f);
     next.visibility.planes = scenevisibility::planes(next.projection.perspective * next.projection.view);
     next.ranges = {settings.fogDistance, settings.sceneryDistance,
                    steampoints::abilityRange(settings.fogDistance, settings.nativeZoneRadius)};
@@ -1261,7 +1261,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         std::max(settings.fogDistance * ALPHA_CLOUD_REACH, settings.fogDistance + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) +
         FAR_MARGIN;
     const bool steamWorld = settings.style == RenderStyle::Steam;
-    glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(settings.fov), aspect, steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane);
+    glm::mat4 proj =
+        glm::perspectiveRH_ZO(camera.fieldOfViewRadians(settings.fov), aspect, steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane);
     proj[1][1] *= -1;
     // TAA: eight-frame Halton sub-pixel jitter (the Steam mod's), content moved by
     // `jitter` pixels; the resolve samples back at the same offset.

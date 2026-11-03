@@ -117,6 +117,7 @@ fs::path exeDir() {
 }
 
 MenuInput input;
+cameramotion::FieldOfView cameraFieldOfView; // Native lens survives frontend/character/world transitions in this process.
 struct ChatInputEvent {
     enum Kind { Key, Character, MouseDown } kind;
     int value = 0;
@@ -858,6 +859,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
     front.extracted = useExtracted ? &extractedWorld : nullptr;
     front.spawned = spawnedReady && nativePlayer ? &spawned : nullptr;
+    front.cameraFieldOfView = &cameraFieldOfView;
     front.steam = &steam, front.audio = &audio, front.root = settingsRoot, front.store = &saves.store();
     front.applyOptions = applyGameOptions;
     // The start spot's world (frontend-characters.md §4.2): the generator's cells, places, regions
@@ -3272,7 +3274,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         useCamera.right = -basis[0];
         useCamera.up = basis[1];
         const auto screen = renderer.screenSize();
-        useCamera.tanHalfHeight = std::tan(glm::radians(renderSettings.fov) * 0.5f);
+        const float fov = useExtracted && spawned.playerRecord() ? cameraFieldOfView.radians() : glm::radians(renderSettings.fov);
+        useCamera.tanHalfHeight = std::tan(fov * .5f);
         useCamera.tanHalfWidth = useCamera.tanHalfHeight * (screen.height ? float(screen.width) / float(screen.height) : 1.0f);
         useCamera.fixedEye.emplace();
         useCamera.fixedRayOrigin.emplace();
@@ -6157,6 +6160,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             target = extractedWorld.toLocal(cameraPosition.lookAt.data());
             eye = extractedWorld.toLocal(cameraPosition.eye.data());
             cameraRotation = cameramotion::viewRotation(pitch, player.orbit.roll, yaw);
+            cameraFieldOfView.update(spawned.playerToggles(), frameMs);
         } else {
             target = player.position + glm::vec3(0, 0, 1.6f);
             eye = target + viewZoom * glm::vec3(std::cos(displayedYawRadians()) * std::cos(displayedPitchRadians()),
@@ -6782,6 +6786,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         Camera camera{eye, target};
         camera.nativeViewRotation = cameraRotation;
+        if (cameraRotation)
+            camera.nativeFovRadians = cameraFieldOfView.radians();
         // Sound notices have now raised shake; decay in this same frame, then affect only
         // the render view. The stored eye and the targeting basis remain unshaken (§4/7.2).
         audio.setCameraShake(cameramotion::decayShake(audio.cameraShake(), frameMs));
@@ -7280,8 +7286,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             }
             // The same view the renderer uses, to place plates and numbers over heads.
             float aspect = screen.height ? (float)screen.width / screen.height : 1.f;
-            glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(renderSettings.fov), aspect, .1f,
-                                                   renderSettings.fogDistance + 64);
+            glm::mat4 proj =
+                glm::perspectiveRH_ZO(camera.fieldOfViewRadians(renderSettings.fov), aspect, .1f, renderSettings.fogDistance + 64);
             proj[1][1] *= -1;
             glm::mat4 viewProj = proj * glm::lookAtRH(eye, target, glm::vec3(0, 0, 1));
             auto project = [&](glm::vec3 p, glm::vec2 &out) {

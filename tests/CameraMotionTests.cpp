@@ -104,6 +104,24 @@ int cameraMotionTests() {
     check(close(phase.x, -0.49499624967575073f) && close(phase.y, -0.32682180404663086f),
           "independent cosine phases use world milliseconds");
     check(cameramotion::viewShake(100, 0) == glm::vec2(0), "no shake leaves render view unchanged");
+    cameramotion::FieldOfView lens;
+    check(lens.radians() == .8726646900177002f, "native lens starts at the exact stored fifty-degree radians");
+    lens.update(0x400, 0);
+    check(lens.radians() == .8726646900177002f, "zero interval does not prime the narrow lens target");
+    lens.update(0x400, 16);
+    check(lens.radians() == .8222894668579102f, "narrow lens uses native float easing reference");
+    lens.update(0, 16);
+    check(lens.radians() == .8238686323165894f, "released lens retains its value and uses the slower native rate");
+    cameramotion::FieldOfView longLens, cappedLens, fractionalLens;
+    longLens.update(0x400, 2000);
+    cappedLens.update(0x400, 1000);
+    fractionalLens.update(0x400, .01);
+    check(longLens.radians() == .5410485863685608f && longLens.radians() == cappedLens.radians(),
+          "lens wall interval caps at one second without snapping to target");
+    check(fractionalLens.radians() == .8725948929786682f, "lens retains native fractional-millisecond input");
+    cameramotion::FieldOfView unrelatedLens;
+    unrelatedLens.update(0x3ff, 16);
+    check(unrelatedLens.radians() == .8726646900177002f, "unrelated toggle bits do not select the narrow lens");
     double mousePitch = 90, mouseYaw = 180;
     cameramotion::mouseTargets(mousePitch, mouseYaw, 4, -8, 50, false);
     check(mousePitch == 88 && mouseYaw == 179, "native default mouse sensitivity is quarter-degree displacement");

@@ -714,7 +714,14 @@ individual feature documents.
   speech views use a native inverse rotation, including zero distance and poles.
   Derived numeric/probe tests, both-style Vulkan camera cases and the full image
   regression set pass. Exact mouse/capture producers, direct-launch startup,
-  full GPU render-origin/FOV fidelity and input/GUI integration remain open.
+  full GPU render-origin fidelity and input/GUI integration remain open.
+  The native process lens now starts at its exact50-degree float radians and
+  eases toward30/50 using the imported creature toggle and distinct native rates.
+  Frontend and gameplay share that CPU state without resetting it on selection;
+  canonical CPU/GPU projections and targeting rays consume the completed radians
+  directly in both appearance styles. Generic Graphics.FieldOfView remains a
+  compatibility-camera fallback. No unproved local scope key/gesture is added;
+  hardware/entry comparisons and untraced recovery remain validation work.
   Shake reads the client world's float simulation clock after its substeps.
   Ordinary world frames
   now consume the retained capped double interval, 16-ms steps and a narrowed

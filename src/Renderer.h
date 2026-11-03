@@ -80,6 +80,8 @@ struct Camera {
     std::optional<glm::mat3> nativeViewRotation; // Unshaken left/up/forward view; valid even when eye == target.
     std::optional<steampoints::Point> nativeFixedEye;    // exact final eye for native CPU distance arithmetic
     std::optional<steampoints::Point> nativeFixedLookAt; // separate XY render origin; never substitutes for the eye
+    std::optional<float> nativeFovRadians;               // Completed native lens; generic settings remain the compatibility fallback.
+    float fieldOfViewRadians(float fallbackDegrees) const { return nativeFovRadians.value_or(glm::radians(fallbackDegrees)); }
 };
 
 // Undivided GUI pixel coordinates (origin top left) and retained geometric Z/W.

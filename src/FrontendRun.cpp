@@ -280,6 +280,8 @@ class Session {
     bool stageHasLooks = false;
     glm::vec3 riderFeet{0}; // local blocks (the stand-in's)
     OrbitCamera camera;
+    cameramotion::FieldOfView ownFieldOfView;
+    cameramotion::FieldOfView &fieldOfView() { return s.cameraFieldOfView ? *s.cameraFieldOfView : ownFieldOfView; }
     cameraposition::State cameraPosition; // Native Game construction starts all fixed anchors at zero.
     terrainray::World cameraTerrain;
     bool cameraPositionValid = false;
@@ -1372,6 +1374,7 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
         lookAt = s.extracted->toLocal(cameraPosition.lookAt.data());
         eye = s.extracted->toLocal(cameraPosition.eye.data());
         cameraPositionValid = true;
+        fieldOfView().update(s.spawned->playerToggles(), dtMs);
     } else {
         eye = glm::vec3(camera.eye(glm::dvec3(lookAt)));
         if (s.extracted) { // Compatibility stand-in camera, without canonical creature inputs.
@@ -1391,6 +1394,7 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
         cam.displayedYawDegrees = float(camera.yaw);
         cam.nativeFixedEye = cameraPosition.eye;
         cam.nativeFixedLookAt = cameraPosition.lookAt;
+        cam.nativeFovRadians = fieldOfView().radians();
     }
     focus = lookAt;
     light = lightingAt(hour, s.dayNight);
