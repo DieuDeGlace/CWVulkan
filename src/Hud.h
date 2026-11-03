@@ -558,10 +558,9 @@ class Hud {
     // tab icons from icons.plx.
     plx::Document iconsDoc;
     bool iconsLoaded = false;
+    // Frontend templates and gameplay panels share their tree, scale and document geometry cache.
     std::unique_ptr<plasma::Scene> scene;
-    // The frontend's templates (drawScreen): a scene of their own, one instance per template
-    // and use in a frame, kept for the next frames.
-    mutable std::unique_ptr<plasma::Scene> frontScene;
+    // One frontend instance per template owner/use, retained between frames.
     struct TemplateInstance {
         plasma::SceneNode *node = nullptr;
         glm::vec2 requested{-1};

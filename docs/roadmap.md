@@ -678,9 +678,11 @@ individual feature documents.
   Scene-owned detached trees, identity-preserving reparenting and explicit
   node/Widget deletion now provide ordered cleanup for a bound Input. Production
   probes, icons, speech and inventory cells use the scene mutation operations.
-  Separate template/panel scene graphs, full global picking and generated-card
-  subtree rebuilding still need the broader runtime work; the game does not yet
-  use the scene-bound input owner throughout its interface.
+  Frontend templates, speech and gameplay panels now share one gui.plx scene and
+  document geometry cache. Semantic root order/active visibility, cached hit-only
+  templates, full global picking and generated-card subtree rebuilding still need
+  the broader runtime work; the game does not yet use the scene-bound input owner
+  throughout its interface. Cursor units remain in a separate scene.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.

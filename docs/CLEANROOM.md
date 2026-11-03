@@ -1446,3 +1446,22 @@ reload against a freshly loaded interface, using different real button templates
 make stale node reuse observable. It separately verifies same-install retention and
 failure clearing. Owner data remains temporary/local. No game content is packaged;
 full live GPU hot-reload and the wider shared input bridge are not certified here.
+
+
+## Shared frontend/gameplay GUI scene, 2026-11-02
+
+Following the already isolated root/lifetime contract, frontend templates and
+speech panels now use the same gui.plx Scene as gameplay panels. The redundant
+frontend Scene owner and lazy allocation are removed; successful full loading
+constructs the common scene before its clients use it. Menu-only or failed loads
+have no usable full scene. Shape geometry can share the existing document/index
+cache; live node, Widget and animation values remain per instance. Constructor
+sizing still uses scale1 and restores the interface scale, and source probes and
+inventory prototypes remain detached. Drawing continues through explicit subtrees.
+
+This closes the duplicate gui.plx scene ownership boundary, not the complete native
+UI tree. Cursor units remain in their separate scene. Semantic root insertion,
+active visibility, cached hit-only templates, global picking and runtime input
+binding still require the remaining integration. In particular, the inventory
+composite's temporary visibility is not yet the native global gameUI visibility.
+No original source or asset bytes are added.

@@ -21,12 +21,11 @@ float Hud::dialogueWordWidth(const std::wstring &word) const {
     return bounds.maximum.x - bounds.minimum.x;
 }
 
-void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t guiTime,
-                        std::vector<OverlayVertex> &out,
+void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t guiTime, std::vector<OverlayVertex> &out,
                         const std::function<void(int64_t, const dialoguepanel::Layout &, glm::vec2)> &onDraw) const {
-    if (!guiLoaded) return;
-    if (!frontScene) frontScene = std::make_unique<plasma::Scene>(gui);
-    frontScene->setScale(guiScale);
+    if (!guiLoaded || !scene)
+        return;
+    scene->setScale(guiScale);
     const std::string prefix = "npc-speech-";
     std::set<std::string> retained;
     for (const auto &bubble : bubbles)
@@ -38,17 +37,17 @@ void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t g
         }
         const auto nodes = it->second;
         for (const auto &instance : nodes)
-            frontScene->destroy(*instance.node);
+            scene->destroy(*instance.node);
         it = frontNodes.erase(it);
     }
     for (const auto &bubble : bubbles) {
         auto &nodes = frontNodes[prefix + std::to_string(bubble.speaker)];
         if (nodes.empty()) {
-            auto *node = frontScene->instance("speech", &frontScene->root());
+            auto *node = scene->instance("speech", &scene->root());
             if (!node)
                 continue;
             if (node->widget) {
-                frontScene->replaceWidget(*node, plasma::reboundWidget(*node->widget));
+                scene->replaceWidget(*node, plasma::reboundWidget(*node->widget));
                 node->widget->kind = "DialogWidget";
             }
             nodes.push_back({node});
@@ -58,29 +57,28 @@ void Hud::drawNpcSpeech(const std::vector<npcspeech::Bubble> &bubbles, int32_t g
         if (!node.visible || !node.widget)
             continue;
         // moveTo compensates the existing frame origin; offsets remain GUI units.
-        frontScene->moveTo(node, bubble.screenPoint + glm::vec2(-125, -170) * guiScale);
-        sceneNode(out, node, glm::vec4(1), frontScene.get());
+        scene->moveTo(node, bubble.screenPoint + glm::vec2(-125, -170) * guiScale);
+        sceneNode(out, node, glm::vec4(1), scene.get());
         if (bubble.page >= bubble.pages.size())
             continue;
-        const auto frame = frontScene->contentSize(node);
+        const auto frame = scene->contentSize(node);
         const auto layout = dialoguepanel::layout(bubble.pages[bubble.page].words, bubble.elapsedMs, frame.x,
                                                   [this](const auto &word) { return dialogueWordWidth(word); });
-        const glm::vec2 at = frontScene->viewPosition(node) / guiScale;
+        const glm::vec2 at = scene->viewPosition(node) / guiScale;
         drawDialogueWords(layout, at, guiTime, out);
-        if (onDraw) onDraw(bubble.speaker, layout, frame);
+        if (onDraw)
+            onDraw(bubble.speaker, layout, frame);
     }
 }
 
 bool Hud::dialogueChoicesHit(glm::vec2 point) const {
     const auto found = frontNodes.find("dialogue-answers");
-    return frontScene && found != frontNodes.end() && !found->second.empty() &&
-           frontScene->hitTest(*found->second.front().node, point) != nullptr;
+    return scene && found != frontNodes.end() && !found->second.empty() && scene->hitTest(*found->second.front().node, point) != nullptr;
 }
 
 bool Hud::generalDialogueHit(glm::vec2 point) const {
     const auto found = frontNodes.find("dialogue-general");
-    return frontScene && found != frontNodes.end() && !found->second.empty() &&
-           frontScene->hitTest(*found->second.front().node, point) != nullptr;
+    return scene && found != frontNodes.end() && !found->second.empty() && scene->hitTest(*found->second.front().node, point) != nullptr;
 }
 
 void Hud::drawDialogueChoices(dialoguechoice::Panel &panel, glm::vec2 screen, glm::vec2 mouse,
