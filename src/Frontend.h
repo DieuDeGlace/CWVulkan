@@ -53,11 +53,18 @@ struct MenuInput {
     bool gamepadSampled = false, gamepadModal = false, gamepadMapMode = false;
     bool pointerSampled = false;
     bool lastUsedPad = false;
+    bool lastUsedPadAtMousePoll = false;
+    // Device selection after the physical pass, before this iteration's XInput work.
+    // This retains state only; it does not admit or dispatch a pointer poll.
+    void retainMouseDevice(bool mappedPhysicalHeld) {
+        if (mappedPhysicalHeld)
+            lastUsedPad = false;
+        lastUsedPadAtMousePoll = lastUsedPad;
+    }
     double pointerX = 0, pointerY = 0; // GUI hit tests retain the pre-navigation cursor this frame.
     void sampleGamepad(GLFWwindow *window, bool capturing, const gameoptions::Controls *controls = nullptr) {
         if (!gamepadSampled) {
-            if (!capturing && controls && GameInput::physicalBindingDown(window, *controls))
-                lastUsedPad = false;
+            retainMouseDevice(!capturing && controls && GameInput::physicalBindingDown(window, *controls));
             gamepad = GameInput::pollGamepad(window, capturing);
             gamepadSampled = true;
         }

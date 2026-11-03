@@ -3672,7 +3672,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         double mx, my;
         pointerPosition(&mx, &my);
         mapSelection.move({mx - lastX, my - lastY},
-                          !input.lastUsedPad && (inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible()));
+                          !input.lastUsedPadAtMousePoll && (inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible()));
         hud.customizationLayout(nativeCustomization.edit.open);
         const auto renderExtent = renderer.screenSize();
         int pointerWindowWidth, pointerWindowHeight;
@@ -3683,17 +3683,18 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                                                                (float)my * renderExtent.height / std::max(1, pointerWindowHeight));
         const bool customizationNode =
             nativeCustomization.edit.open && (!menusReady || menus.interfaceShown()) && hud.customizationHit(customizationPointer);
-        if (nativeCustomization.edit.open && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+        if (nativeCustomization.edit.open && !input.lastUsedPadAtMousePoll &&
+            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
             nativeCustomization.rotatePointer({(float)(mx - lastX) * renderExtent.width / std::max(1, pointerWindowWidth),
                                                (float)(my - lastY) * renderExtent.height / std::max(1, pointerWindowHeight)},
                                               (float)gameOptions.cameraSpeed);
-        const bool customizationDragLook = nativeCustomization.edit.open && !input.lastUsedPad &&
+        const bool customizationDragLook = nativeCustomization.edit.open && !input.lastUsedPadAtMousePoll &&
                                            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !customizationNode;
-        const bool answerDragLook = answers.visible() && !input.lastUsedPad &&
+        const bool answerDragLook = answers.visible() && !input.lastUsedPadAtMousePoll &&
                                     glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
                                     !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
                                     !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
-        if (mapOpen && !input.lastUsedPad && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        if (mapOpen && !input.lastUsedPadAtMousePoll && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             const glm::vec2 delta = glm::vec2(float(input.pointerX), float(input.pointerY)) - previousGuiPointer;
             targetMapPosition = mapcontrol::blocks(mapcontrol::mousePan(mapcontrol::fromBlocks(targetMapPosition), delta, mapZoom,
                                                                         float(double(displayedYawRadians()) * 57.29577951308232)));

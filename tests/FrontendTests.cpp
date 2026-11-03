@@ -37,6 +37,24 @@ bool near(double a, double b, double tolerance = 1e-4) { return std::abs(a - b) 
 
 using namespace frontend;
 
+void mouseDevicePhases() {
+    MenuInput device;
+    device.retainMouseDevice(false);
+    FRONT_CHECK(!device.lastUsedPad && !device.lastUsedPadAtMousePoll);
+    device.lastUsedPad = true; // Retained controller selection from the preceding iteration.
+    device.retainMouseDevice(true);
+    FRONT_CHECK(!device.lastUsedPad && !device.lastUsedPadAtMousePoll);
+    device.gamepadPointer.padAfterCallbacks = true;
+    device.finishPointerCallbacks();
+    FRONT_CHECK(device.lastUsedPad && !device.lastUsedPadAtMousePoll);
+    device.clear();
+    FRONT_CHECK(device.lastUsedPad && !device.lastUsedPadAtMousePoll);
+    device.retainMouseDevice(false);
+    FRONT_CHECK(device.lastUsedPad && device.lastUsedPadAtMousePoll);
+    device.retainMouseDevice(true);
+    FRONT_CHECK(!device.lastUsedPad && !device.lastUsedPadAtMousePoll);
+}
+
 void titleCamera() {
     OrbitCamera c;
     c.set(90, 0, 180, 8);
@@ -712,6 +730,7 @@ void ownerCharacterButtons() {
 
 int frontendTests() {
     failures = 0;
+    mouseDevicePhases();
     optionsApplied();
     startSpot();
     zoneStatesRoundTrip();

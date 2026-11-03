@@ -1353,3 +1353,27 @@ and capped intervals. Actual Vulkan checks deliberately set compatibility FOV110
 while supplying raw50/30 radians, checking pinhole displacement and a side-frustum
 sphere in both appearance styles. These are bounded consumer checks, not a claim
 of every native visual/device/recovery path. No owner assets or native code ship.
+
+
+## Retained mouse-phase device selection, 2026-11-02
+
+The implementer used the already independently authored mouse-delivery1,3,5 and
+character-list/input-frame7 contracts. The reached physical-control pass may clear
+last-device before the mouse handler; subsequent XInput work may set it again.
+The mouse handler's UI-only return therefore observes the earlier selection,
+not the result of the later controller work. No original implementation was read.
+
+MenuInput now retains that selection immediately after its existing mapped physical
+check and before its once-per-frame controller sample. The map movement/drag,
+customization rotation and answer/customization look handlers consume this earlier
+snapshot. Current controller callbacks retain their live selection and cannot
+rewrite an already completed mouse snapshot. Buffer clearing preserves both
+retained values until the next sample. The snapshot does not itself admit a poll.
+
+CPU cases exercise default selection, mapped physical takeover, actual later
+finishPointerCallbacks, clear-buffer lifetime and the following iteration's
+controller selection. This bounded change assumes the existing engine adapter's
+UI admission/scheduling; it does not implement the entire native normal-input gate,
+shared capture/point-hit root or all UI changes during callbacks. Physical-device,
+coalescing/failure and broader live GUI comparisons remain acceptance work.
+No owner assets or original code are included.

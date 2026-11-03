@@ -664,6 +664,11 @@ individual feature documents.
   device-count units instead of desktop-accelerated cursor movement. Unsupported
   raw input remains an explicit cursor-motion compatibility path; exact shared
   GUI capture/mode admission and physical-device comparisons remain open.
+  Mouse map/preview/look handlers now retain the last-device selection after the
+  mapped physical pass and before the current XInput work. Later controller
+  callbacks update the live selection without rewriting that earlier snapshot.
+  Focus/capture admission, root picking and UI-transition scheduling still need
+  the wider runtime integration.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.
