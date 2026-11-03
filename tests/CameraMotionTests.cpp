@@ -113,6 +113,12 @@ int cameraMotionTests() {
     check(mousePitch == 180, "mouse clamps the pitch target at the downward pole");
     cameramotion::mouseTargets(mousePitch, mouseYaw, 0, -1000, 50, false);
     check(mousePitch == 0, "mouse permits the complete native upward range");
+    mousePitch = 181.25;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 0, 0, 50, false);
+    check(mousePitch == 180 && mouseYaw == 179, "stationary relative poll still clamps an out-of-range pitch target");
+    mousePitch = -.25;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, 0, 0, 0, true);
+    check(mousePitch == 0 && mouseYaw == 179, "zero sensitivity and invert do not bypass the stationary pitch clamp");
     mousePitch = 90;
     mouseYaw = 180;
     cameramotion::mouseTargets(mousePitch, mouseYaw, 7, 0, 3, false);

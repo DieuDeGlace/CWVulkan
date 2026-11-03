@@ -657,6 +657,13 @@ individual feature documents.
   directly. Mouse scaling rounds to float before the double target update, with
   the native sensitivity/invert/clamp rules; pad and assistance retain double
   targets. Sub-float displacement/smoothing and no-shortest-wrap tests cover this.
+  The independent [mouse-delivery audit](specs/steam-camera-mouse-delivery.md)
+  confirms a polled handler before XInput, including stationary relative input.
+  Its mouse-only pitch clamp now runs on every admitted poll rather than only
+  coordinate changes. Captured look requests available raw motion, retaining
+  device-count units instead of desktop-accelerated cursor movement. Unsupported
+  raw input remains an explicit cursor-motion compatibility path; exact shared
+  GUI capture/mode admission and physical-device comparisons remain open.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.

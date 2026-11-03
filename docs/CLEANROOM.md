@@ -1300,3 +1300,28 @@ Actual renderer checks query a changed fixed origin before any presentation,
 then rebuild shaken/restored matrices at an unchanged clock. Existing native
 projection, large-origin, lifetime and Vulkan image checks remain in validation.
 No owner artwork, original implementation or instruction bytes enter the source.
+
+
+## Stationary mouse polls and relative device units, 2026-11-02
+
+The existing isolated native-only author supplied mouse-delivery1–6 and held all
+tracing/writes. The implementer fully read that independent note and the existing
+character-list/input-frame7 and gameplay-camera3.1 prose. The reached native loop
+calls its movement handler once before XInput even with zero relative displacement.
+UI-false calls bypass the UI-only last-device return and still clamp pitch.
+
+The engine's earlier coordinate-change guard was incorrect for that admitted path;
+it is removed. Focus, binding capture, existing UI admission and explicit camera
+compatibility options are otherwise bounded by the existing engine adapters.
+CPU boundary cases cover stationary upper/lower poles, unchanged yaw and zero
+sensitivity/inverted Y. This does not establish the full shared GUI capture bridge.
+
+Native relative arguments are device counts, whereas absolute UI arguments come
+from cursor APIs. The engine requests supported GLFW raw motion for captured look;
+GLFW supplies it only with disabled cursor mode, leaving ordinary GUI coordinates
+absolute. The API contract is the public
+[GLFW3.4 input guide](https://www.glfw.org/docs/3.4/input_guide.html#raw_mouse_motion),
+not game implementation. Mode readback is logged; unavailable raw input retains
+an explicit cursor-motion compatibility path. This bridge does not certify device
+failure/reacquisition, exact polling/coalescing, untraced raw-input paths or hardware
+motion parity. No original implementation, instruction bytes or owner assets ship.

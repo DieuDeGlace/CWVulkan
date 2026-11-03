@@ -583,6 +583,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         glfwWindowHint(GLFW_REFRESH_RATE, windowMode.refresh);
     GLFWwindow *window = glfwCreateWindow(windowMode.width, windowMode.height, "CubeVulkan",
                                           windowMode.fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
+    // Native relative input is device counts, unaffected by desktop pointer acceleration.
+    // GLFW applies raw motion only while its cursor is disabled; GUI coordinates stay absolute.
+    if (glfwRawMouseMotionSupported())
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+    std::printf("Input: %s\n",
+                glfwGetInputMode(window, GLFW_RAW_MOUSE_MOTION) ? "raw relative mouse counts enabled" : "relative cursor compatibility");
     glfwSetScrollCallback(window, [](GLFWwindow *window, double, double y) {
         input.scroll += y;
         if (const int step = inventoryui::wheelRowStep(y)) {
@@ -3693,10 +3699,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                    (answers.visible()               ? answerDragLook
                     : nativeCustomization.edit.open ? customizationDragLook
                                                     : (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
-            // Polling an idle pointer must not apply the mouse-only clamp to pad targets.
-            if (mx != lastX || my != lastY)
-                cameramotion::mouseTargets(player.orbit.targetPitch, player.orbit.targetYaw, float(mx - lastX), float(my - lastY),
-                                           gameOptions.cameraSpeed, gameOptions.invertY);
+            // Native admitted polls also clamp stationary targets before controller look.
+            cameramotion::mouseTargets(player.orbit.targetPitch, player.orbit.targetYaw, float(mx - lastX), float(my - lastY),
+                                       gameOptions.cameraSpeed, gameOptions.invertY);
         }
         lastX = mx;
         lastY = my;
