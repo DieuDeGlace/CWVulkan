@@ -339,6 +339,8 @@ class Hud {
     // Loads the extracted HUD art, fonts and names. False (with a reason) if the
     // HUD has not been extracted yet.
     bool load(const std::filesystem::path &gameDir, std::string &error);
+    // Reuse a completed interface from the same install; load() remains an explicit reload.
+    bool ensureLoaded(const std::filesystem::path &gameDir, std::string &error);
     // Builds (or rebuilds after a resize) the atlas for a window of this size.
     void layout(Renderer &renderer, VkExtent2D screen);
     void prepareFrame(Renderer &renderer, VkExtent2D screen); // flush newly loaded icons once before emitting atlas coordinates
@@ -485,6 +487,7 @@ class Hud {
     }
 
   private:
+    std::optional<std::filesystem::path> loadedGameDirectory;
     plx::Document gui;
     bool guiLoaded = false;
     float guiScale = 1;

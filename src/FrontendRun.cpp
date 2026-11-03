@@ -410,7 +410,7 @@ bool Session::start(std::string &error) {
             return terrainray::Cell{block[4], block[5]};
         };
     }
-    if (!hud.load(s.assets->gameDir(), error))
+    if (!hud.ensureLoaded(s.assets->gameDir(), error))
         return false;
     hud.setGuiScale(s.options ? std::clamp(s.options->guiScale, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX) : 1.0f);
     cardFrame = hud.templateSize("blackwidget", ENTRY_SIZE, true);
@@ -460,7 +460,7 @@ void Session::finish() {
 // The interface keys work in play whatever is open (frontend-options.md §3); the screens are
 // the system menu's.
 bool Session::startInGame(std::string &error) {
-    if (!s.hud && !hud.load(s.assets->gameDir(), error))
+    if (!s.hud && !hud.ensureLoaded(s.assets->gameDir(), error))
         return false;
     titleShown = charactersShown = creationShown = false;
     size = s.renderer->screenSize();

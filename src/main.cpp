@@ -853,9 +853,12 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
 
     // The front screens (Frontend.h): the title over the running world, character select and
     // creation, the options.
-    const bool launchMenu = forceMenu || (!directPlay && capture.empty() && captureSpeech.empty() && captureFeat.empty() && benchmark <= 0 &&
-        std::isnan(startX) && runSeconds <= 0 && poseAbility <= 0 && !autoAttack && !openInventory && showcase.empty());
+    const bool launchMenu =
+        forceMenu || (!directPlay && capture.empty() && captureSpeech.empty() && captureFeat.empty() && benchmark <= 0 &&
+                      std::isnan(startX) && runSeconds <= 0 && poseAbility <= 0 && !autoAttack && !openInventory && showcase.empty());
+    Hud hud; // One interface survives the ordinary frontend-to-play transition.
     frontend::Services front;
+    front.hud = &hud;
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
     front.extracted = useExtracted ? &extractedWorld : nullptr;
     front.spawned = spawnedReady && nativePlayer ? &spawned : nullptr;
@@ -909,7 +912,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         request.readOnly = !savesWritable;
         logLine("Menu: the title over the world, character select and creation, options");
         const frontend::Result result = frontend::run(front, request);
-        if (!result.error.empty()) logLine("Menu: " + result.error);
+        hud.clearItemDraws(); // Frame submissions may refer to released frontend preview meshes.
+        if (!result.error.empty())
+            logLine("Menu: " + result.error);
         if (result.action != frontend::Result::Play || !result.error.empty()) {
             renderer.shutdown();
             glfwDestroyWindow(window);
@@ -1143,14 +1148,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     if (actors.count())
         logLine("Creatures: " + actors.summary());
     std::vector<glm::mat4> actorPose;
-    // The game's interface (bars, plates over monsters, damage numbers).
-    Hud hud;
+    // The retained interface (bars, plates over monsters, damage numbers).
     hudcoin::Coin hudCoin; // GPU handles live only as long as this session's renderer
     hudcompass::Compass hudCompass;
     bool hudReady = false;
     {
         std::string why;
-        hudReady = hud.load(assets.gameDir(), why);
+        hudReady = hud.ensureLoaded(assets.gameDir(), why);
         if (hudReady)
             hud.setGuiScale(guiScaleTest > 0 ? guiScaleTest : gameOptions.guiScale);
         if (hudReady)

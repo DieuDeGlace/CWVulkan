@@ -1377,3 +1377,31 @@ UI admission/scheduling; it does not implement the entire native normal-input ga
 shared capture/point-hit root or all UI changes during callbacks. Physical-device,
 coalescing/failure and broader live GUI comparisons remain acceptance work.
 No owner assets or original code are included.
+
+
+## Retained frontend/gameplay interface resources, 2026-11-02
+
+The existing isolated native-only author supplied gui-root-construction-lifetime1–7,
+read back the independent note and held all tracing/writes. The implementer fully
+read it without original implementation access. A detached document source is not
+the live E+140 draw/pick root. Direct frontend-to-play handlers retain their existing
+Interface/root; the separately proved card-child rebuild is not a whole-root reset.
+Hide/detach and actual node/Widget deletion have distinct cleanup contracts.
+
+Main now supplies one Hud to the frontend and subsequent gameplay instead of
+discarding a session-owned frontend interface and loading a second one on Play.
+Completed same-install loading is reused explicitly through ensureLoaded; explicit
+load remains a reload, menu-only loading invalidates full readiness, and a different
+installation is not accepted from the cache. Preview draw submissions are cleared
+at entry because temporary frontend meshes have been released; persistent resources
+and UI templates remain. The separate frontend/panel scene graphs and full runtime
+capture/global-pick/deletion bridge are still open and are not claimed implemented.
+
+An owner-backed local temporary fixture loads its copied font/UI document, removes
+those private copies, and checks retained geometry and same-install/path-alias reuse
+with cleared diagnostics.
+It then checks rejection of a different missing install. Original resources remain
+untouched; fixture cleanup uses only its exact files and empty directories without
+recursive deletion. No owner font/art bytes are stored in source or release assets.
+Actual frontend-entry captures cover the shared Hud through the Play transition;
+broader live UI and alternate reconstruction/recovery paths remain acceptance work.

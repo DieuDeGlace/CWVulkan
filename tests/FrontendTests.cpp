@@ -16,6 +16,7 @@
 #include "TalkGen.h"
 #include "worldgen/Generator.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -689,6 +690,43 @@ void zoneStatesRoundTrip() {
     worldgen::setWorldSeed(previousSeed);
 }
 
+// A completed interface must not reread its owner font across an ordinary transition.
+void retainedInterfaceResources() {
+    Assets assets;
+    if (!assets.locate(""))
+        return; // Owner font data stays local; no game resources are bundled.
+    namespace fs = std::filesystem;
+    const auto root = fs::temp_directory_path() /
+                      ("cubevulkan-hud-lifetime-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const bool created = fs::create_directory(root);
+    FRONT_CHECK(created);
+    if (!created)
+        return; // Never alter an existing directory.
+    const auto extracted = root / "Extract", ui = extracted / "ui", frames = ui / "hud";
+    fs::create_directories(frames);
+    fs::copy_file(assets.gameDir() / "resource1.dat", root / "resource1.dat");
+    fs::copy_file(assets.gameDir() / "gui.plx", root / "gui.plx");
+    std::ofstream(frames / "hud.txt").close();
+    Hud retained;
+    std::string why;
+    FRONT_CHECK(retained.ensureLoaded(root, why));
+    FRONT_CHECK(retained.hasInterface());
+    const auto frame = retained.templateSize("button2", {200, 30});
+    FRONT_CHECK(frame.x >= 200 && frame.y >= 30);
+    FRONT_CHECK(fs::remove(root / "resource1.dat"));
+    FRONT_CHECK(fs::remove(root / "gui.plx"));
+    why = "old diagnostic";
+    FRONT_CHECK(retained.ensureLoaded(root / ".", why) && why.empty());
+    FRONT_CHECK(retained.hasInterface() && retained.templateSize("button2", {200, 30}) == frame);
+    FRONT_CHECK(!retained.ensureLoaded(root / "different-install", why) && !why.empty());
+    // Remove only the exact files/directories created by this fixture, without recursion.
+    fs::remove(frames / "hud.txt");
+    fs::remove(frames);
+    fs::remove(ui);
+    fs::remove(extracted);
+    fs::remove(root);
+}
+
 // Owner data stays local. Exercise minimum-size expansion and the lower half of the real
 // button, which the old hard-coded 30-unit hit rectangle excluded.
 void ownerCharacterButtons() {
@@ -738,6 +776,7 @@ int frontendTests() {
     logo();
     menus();
     characterDragging();
+    retainedInterfaceResources();
     ownerCharacterButtons();
     friendRows();
     creation();

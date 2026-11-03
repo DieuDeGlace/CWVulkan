@@ -59,6 +59,7 @@ struct Packer {
 } // namespace
 
 bool Hud::loadMenu(const fs::path &gameDir, std::string &error) {
+    loadedGameDirectory.reset(); // Explicit menu loading invalidates full-interface readiness.
     error.clear();
     chatCache = {};
     plasmaFonts.reset(gameDir);
@@ -73,6 +74,19 @@ bool Hud::loadMenu(const fs::path &gameDir, std::string &error) {
     if (titleFont.empty() || !stbtt_InitFont(&probe, titleFont.data(), 0))
         titleFont = hudFont;
     return true;
+}
+
+bool Hud::ensureLoaded(const fs::path &gameDir, std::string &error) {
+    std::error_code absoluteError;
+    const auto directory = fs::absolute(gameDir, absoluteError).lexically_normal();
+    if (!absoluteError && loadedGameDirectory) {
+        std::error_code sameError;
+        if (*loadedGameDirectory == directory || fs::equivalent(*loadedGameDirectory, directory, sameError)) {
+            error.clear();
+            return true;
+        }
+    }
+    return load(gameDir, error);
 }
 
 bool Hud::load(const fs::path &gameDir, std::string &error) {
@@ -228,6 +242,10 @@ bool Hud::load(const fs::path &gameDir, std::string &error) {
     }
     buildPanels();
     buildMapHistory();
+    std::error_code absoluteError;
+    const auto directory = fs::absolute(gameDir, absoluteError);
+    if (!absoluteError)
+        loadedGameDirectory = directory.lexically_normal();
     return true;
 }
 

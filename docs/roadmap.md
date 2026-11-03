@@ -668,7 +668,13 @@ individual feature documents.
   mapped physical pass and before the current XInput work. Later controller
   callbacks update the live selection without rewriting that earlier snapshot.
   Focus/capture admission, root picking and UI-transition scheduling still need
-  the wider runtime integration.
+  the wider runtime integration. The independent
+  [GUI root/lifetime audit](specs/steam-gui-root-construction-lifetime.md) establishes
+  a detached document source, one live native root and a retained Interface on Play.
+  Frontend and gameplay now share the same engine Hud and reuse completed resources
+  for the same install; entry clears only transient preview draw submissions.
+  Separate template/panel scene graphs, full global picking, generated-card subtree
+  deletion and captured-node cleanup still need the broader runtime work.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.
