@@ -50,3 +50,13 @@ noise inputs. Coverage splits Steam tiles across Alpha parents and clips finite
 edges without periodic wrapping. It is not yet a runtime generation switch.
 Portable mod coordinate/rule checks and the engine's Alpha checks cover this step;
 the native DLL/placement suite requires the mod's separate clang-cl toolchain.
+
+
+`SurfaceStore` is the next bridge: an immutable seed/name/frame context caches Alpha
+parent stages with a bounded ready-entry LRU and coalesces simultaneous requests for
+the same parent. Generation runs outside the cache lock. Column leases retain their
+parent across eviction and store destruction; published voxel storage is const.
+Effective block reads and solid-versus-water surface reads use the Alpha column
+rules. Cache capacity bounds retained entries, not caller-held leases or in-flight
+work. This store still supplies only the named initial surface stage and is not yet
+connected to playable generation or the default configuration.

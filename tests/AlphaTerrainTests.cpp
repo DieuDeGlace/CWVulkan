@@ -2,6 +2,8 @@
 // Formula checks establish contract conformance; native runtime oracles remain separate.
 #include "alphagen/Terrain.h"
 #include "alphagen/Coordinates.h"
+#include "alphagen/SurfaceStore.h"
+#include <future>
 #include <cmath>
 #include <cstdio>
 
@@ -51,6 +53,58 @@ int alphaTerrainTests() {
         check(zone.shadedLight.empty() && zone.plants.empty() && zone.statics.empty(),
               "surface stage excludes later lighting and placement");
     }
+    stage.reset();
+    std::optional<alphagen::ColumnLease> held;
+    std::weak_ptr<const alphagen::SurfaceStage> pinned;
+    alphagen::Block retainedBlock;
+    float retainedHeight = 0;
+    {
+        alphagen::SurfaceStore source(123, {}, 1);
+        check(!source.column(INT32_MIN, 0), "unmapped coordinates do not wrap into an Alpha parent");
+        auto first = std::async(std::launch::async, [&] { return source.parent(32800, 32800); });
+        auto second = std::async(std::launch::async, [&] { return source.parent(32800, 32800); });
+        const auto a = first.get(), b = second.get();
+        check(a && a == b, "concurrent Steam-sized consumers share one Alpha parent stage");
+        pinned = a;
+        held = source.column(0, 0);
+        check(held && held->position().x == alphacoords::HOME, "column lease preserves absolute Alpha coordinates");
+        if (held) {
+            retainedBlock = held->block(0);
+            retainedHeight = held->surface();
+        }
+        check(source.parent(32801, 32800) != a, "a different parent can replace the bounded ready-cache entry");
+        // The sea cell center has an island; sample its subcell boundary farther east.
+        const auto ocean = source.parent(32848, 32796);
+        bool waterReadChecked = false;
+        if (ocean)
+            for (int x = 0; x < 256 && !waterReadChecked; ++x)
+                for (int y = 0; y < 256 && !waterReadChecked; ++y) {
+                    const int ax = ocean->zone->originX() + x, ay = ocean->zone->originY() + y;
+                    if (ocean->zone->read(ax, ay, 0).type() != alphagen::WATER)
+                        continue;
+                    const auto wet = source.column(ax - alphacoords::HOME, ay - alphacoords::HOME);
+                    if (wet && wet->surface(false) < 1) {
+                        check(wet->surface() == 1, "water surface is the top of the effective z0 water cell");
+                        waterReadChecked = true;
+                    }
+                }
+        if (!waterReadChecked && ocean) {
+            float minGrid = ocean->paddedHeights.front(), maxGrid = minGrid;
+            for (auto value : ocean->paddedHeights) {
+                minGrid = std::min(minGrid, value);
+                maxGrid = std::max(maxGrid, value);
+            }
+            std::printf("Alpha water fixture grid range: %.3f .. %.3f; first bottom/top: %d/%d\n", minGrid, maxGrid,
+                        ocean->zone->columns.front().bottom, ocean->zone->columns.front().top());
+        }
+        check(waterReadChecked, "water and solid-surface reads use different effective column products");
+    }
+    check(held && !pinned.expired(), "column lease survives ready-cache eviction and store destruction");
+    if (held)
+        check(held->block(0).typeByte == retainedBlock.typeByte && held->block(0).r == retainedBlock.r && held->surface() == retainedHeight,
+              "leased block and surface remain readable without the world store");
+    held.reset();
+    check(pinned.expired(), "the last lease releases its parent stage");
     std::printf("Alpha surface generation core: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

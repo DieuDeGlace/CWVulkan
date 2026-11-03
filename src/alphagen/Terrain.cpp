@@ -420,8 +420,7 @@ std::unique_ptr<SurfaceStage> Terrain::generateSurface(int32_t zx, int32_t zy) c
     for (int32_t i = -1; i <= 1; i++)
         for (int32_t j = -1; j <= 1; j++)
             prepareRegion((zx >> 6) + i, (zy >> 6) + j);
-    auto &zone = result->zone;
-    zone = std::make_unique<Zone>();
+    auto zone = std::make_unique<Zone>();
     zone->zx = zx;
     zone->zy = zy;
     // §5.1 step 2: the zone's own random stream.
@@ -446,6 +445,7 @@ std::unique_ptr<SurfaceStage> Terrain::generateSurface(int32_t zx, int32_t zy) c
 
     auto &ravineBoulders = result->ravineBoulders;
     surfacePass(*zone, heights, random, ravineBoulders);
+    result->zone = std::move(zone); // Publish const voxel storage only after completing the stage.
     return result;
 }
 

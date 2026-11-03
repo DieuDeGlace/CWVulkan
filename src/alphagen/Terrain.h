@@ -17,7 +17,7 @@ struct BoulderSeed {
 // Retain the exact intermediate products and stream for later terrain passes.
 // This must not be labeled as a complete generated Alpha world.
 struct SurfaceStage {
-    std::unique_ptr<Zone> zone;
+    std::unique_ptr<const Zone> zone;
     std::vector<float> paddedHeights;
     std::vector<BoulderSeed> ravineBoulders;
     Random random;

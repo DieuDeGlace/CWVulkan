@@ -1514,3 +1514,22 @@ existing terrain-rule tests pass with the available MSVC toolchain; the separate
 clang-cl compiler needed by native mod/placement builds was unavailable, so no
 native DLL or placement-suite build is claimed. Engine Alpha checks pass against
 the identical header. No runtime profile or default changes in this step.
+
+
+## Cached Alpha surface consumers, 2026-11-02
+
+SurfaceStore uses the existing independent surface/coordinate contracts and the
+engine's own data types. It retains a seed/name/frame context, shares in-flight
+parent requests, caches ready parents and provides owning column leases. Stage
+publication now transfers a completed local Zone into const-owned storage, so the
+shared const stage cannot mutate voxel data through a mutable unique_ptr pointee.
+No original native investigation, data capture, asset or mod-code change was used.
+
+All five targets build without warnings. The full CPU/owner suite passes after
+const publication/cache integration; the subsequently added focused water fixture
+also passes. Concurrent parent identity, lease survival/last-owner release and
+water/solid surface distinction are exercised. The initial water fixture selected
+an island (grid heights8.214..25.472), so it was moved to the adjacent exposed-sea
+boundary without production formula changes. GPU groups were not repeated for
+these not-yet-wired math/data consumers; the preceding full render checks remain
+recorded separately. Runtime conversion/placement/default integration is still open.

@@ -769,7 +769,9 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the
   sister engine's clean-room code. Formula/surface checks and existing CPU tests pass;
-  this is an intermediate stage and has not changed the playable default.
+  this is an intermediate stage and has not changed the playable default. Shared
+  parent-stage caching, owning column leases and effective block/water reads are
+  checked; runtime world/structure consumers still need the bridge below.
 - [ ] Complete later terrain passes and compare labeled native height/surface output.
 - [ ] Bridge Alpha terrain/biomes to Steam's retained town and dungeon layouts,
   including coordinate conversion, collision, water and lighting consumers.
