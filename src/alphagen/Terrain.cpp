@@ -439,6 +439,37 @@ std::unique_ptr<ReliefStage> Terrain::generateRelief(int32_t zx, int32_t zy, std
     return result;
 }
 
+std::unique_ptr<LandscapeStage> Terrain::generateLandscape(int32_t zx, int32_t zy, std::string &error) const {
+    error.clear();
+    auto work = buildSurface(zx, zy);
+    if (!work) {
+        error = "Alpha zone is outside the finite world";
+        return {};
+    }
+    std::vector<BoulderSeed> terraces;
+    reliefPasses(*work->zone, work->paddedHeights, work->random, terraces);
+    // Alpha structure calls are omitted by this hybrid profile; continue its own
+    // stream rather than claiming native full-zone draw equality after this point.
+    for (const auto &seed : terraces) {
+        const int ax = work->random.draw() % 3 + 2;
+        const int ay = work->random.draw() % 3 + 2;
+        const int az = work->random.draw() % 3 + 2;
+        boulder(*work->zone, seed, ax, ay, az, false);
+    }
+    for (const auto &seed : work->ravineBoulders) {
+        const int ax = (work->random.draw() & 3) + 4;
+        const int ay = (work->random.draw() & 3) + 4;
+        const int az = work->random.draw() % 6 + 4;
+        boulder(*work->zone, seed, ax, ay, az, true);
+    }
+    looseBoulders(*work->zone, work->random);
+    treeGrid(*work->zone, work->random);
+    auto result = std::make_unique<LandscapeStage>();
+    result->zone = std::move(work->zone);
+    result->random = work->random;
+    return result;
+}
+
 std::unique_ptr<Terrain::SurfaceWork> Terrain::buildSurface(int32_t zx, int32_t zy) const {
     if (zx < 0 || zy < 0 || zx >= 65536 || zy >= 65536)
         return nullptr;

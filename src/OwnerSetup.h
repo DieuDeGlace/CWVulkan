@@ -81,11 +81,11 @@ struct Completeness {
     std::string text() const;    // the report, one line per part, in plain words
 };
 
-// The rules. `worldRequired` is false when CubeVulkan.ini says [World] Source=Game or
+// The rules. `worldRequired` is false when CubeVulkan.ini says [World] Source=Alpha, Game or
 // Generated (then no extracted terrain is needed). `report` is DataCheck's quick report of the
 // same folder; its findings that this list does not cover are added as notes.
 Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::Report *report = nullptr);
-// Whether CubeVulkan.ini (`ini`) plays extracted land, the default.
+// Whether CubeVulkan.ini (`ini`) requires captured terrain instead of procedural generation.
 bool worldRequired(const fs::path &ini);
 
 // --- The system, behind an interface tests replace -------------------------------------------

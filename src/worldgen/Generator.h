@@ -11,6 +11,7 @@
 //   auto zone = worldgen::zone(zx, zy);            // blocks, objects, models, items, spawn points
 //   auto lit = worldgen::litZone(zx, zy);          // its columns lit as the game lights them
 #include "worldgen/BuildingRules.h"
+#include "alphagen/TerrainSample.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/CreatureTables.h"
 #include "worldgen/Height.h"
@@ -28,6 +29,17 @@
 #include <vector>
 
 namespace worldgen {
+
+// Select before any world workers start. Null retains the separate Steam generator.
+class AlphaTerrain;
+struct MapRegion;
+
+void setAlphaTerrain(std::shared_ptr<AlphaTerrain>);
+bool usingAlphaTerrain();
+std::string terrainIdentity();
+bool terrainZoneAvailable(int32_t zx, int32_t zy);
+std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y);
+void composeTerrainMap(MapRegion &);
 
 // --- The world -----------------------------------------------------------------------------------
 
@@ -48,9 +60,9 @@ const CreatureTables &creatureTables();
 
 // --- Cells and columns of the current world ----------------------------------------------------
 
-int cellObject(int32_t cx, int32_t cy);                     // 0x69c60
-CastleCell castleCell(int32_t cx, int32_t cy);              // 0x2a8290
-int32_t cellHeight(int32_t cx, int32_t cy, int type = 0);   // 0x2d87f0: the height a cell's building stands at
+int cellObject(int32_t cx, int32_t cy);                   // 0x69c60
+CastleCell castleCell(int32_t cx, int32_t cy);            // 0x2a8290
+int32_t cellHeight(int32_t cx, int32_t cy, int type = 0); // 0x2d87f0: the height a cell's building stands at
 // A column's values as its zone keeps them (the zone's place, with no reach limit).
 ColumnField columnField(int32_t x, int32_t y);
 

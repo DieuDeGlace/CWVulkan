@@ -50,6 +50,7 @@ class ExtractedWorld {
     // Source settings are fixed during play; no runtime cache or edit is inherited.
     std::unique_ptr<ExtractedWorld> forkSource() const;
     bool generated() const { return generatedMode; }
+    std::string sourceIdentity() const { return generatedMode ? worldgen::terrainIdentity() : folder.filename().string(); }
     // Newest seed folder under <game>/Extract, or empty.
     static std::filesystem::path find(const std::filesystem::path &gameDir);
     // Strict exporter filename and structural validation, shared with DataCheck.
@@ -77,7 +78,8 @@ class ExtractedWorld {
     // Zone coordinates are local (home zone = 0, 0). Also the zones the generator's hooks
     // make anew (load).
     bool has(int zx, int zy) const {
-        return generatedMode || zones.count({zx + originX, zy + originY}) > 0 || worldgen::hooksChange(zx + originX, zy + originY);
+        return generatedMode ? worldgen::terrainZoneAvailable(zx + originX, zy + originY)
+                             : zones.count({zx + originX, zy + originY}) > 0 || worldgen::hooksChange(zx + originX, zy + originY);
     }
     // Opaque and water meshes in local world coordinates (thread-safe).
     bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,

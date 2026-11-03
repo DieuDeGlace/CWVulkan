@@ -31,12 +31,12 @@ using namespace cwnet;
 
 namespace {
 int failures = 0;
-#define NET_CHECK(...)                                                                             \
-    do {                                                                                           \
-        if (!(__VA_ARGS__)) {                                                                      \
-            std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__);                     \
-            failures++;                                                                            \
-        }                                                                                          \
+#define NET_CHECK(...)                                                                                                                     \
+    do {                                                                                                                                   \
+        if (!(__VA_ARGS__)) {                                                                                                              \
+            std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__);                                                             \
+            failures++;                                                                                                                    \
+        }                                                                                                                                  \
     } while (0)
 
 // A record with a recognisable byte pattern.
@@ -47,7 +47,9 @@ template <size_t N> Record<N> patterned(uint8_t seed) {
     return r;
 }
 
-template <class T> void put(uint8_t *at, T v) { std::memcpy(at, &v, sizeof v); }
+template <class T> void put(uint8_t *at, T v) {
+    std::memcpy(at, &v, sizeof v);
+}
 
 // A creature snapshot with something in every field.
 CreatureSnapshot testCreature(uint8_t seed) {
@@ -89,7 +91,9 @@ WorldEvents testEvents() {
     return e;
 }
 
-bool sameEvents(const WorldEvents &a, const WorldEvents &b) { return encodeWorldEvents(a) == encodeWorldEvents(b); }
+bool sameEvents(const WorldEvents &a, const WorldEvents &b) {
+    return encodeWorldEvents(a) == encodeWorldEvents(b);
+}
 
 // --- Packets -------------------------------------------------------------------------------------
 
@@ -362,8 +366,8 @@ void creatureDelta() {
         item[0] = 3;
         item[ITEM_ATTRIBUTE_COUNT] = 1;
         CreatureSnapshot c = b;
-        c.at(0x1d8)[0x02] = 0x77;                    // padding
-        c.at(0x1d8)[ITEM_ATTRIBUTES + 4] = 0x55;     // the second attribute, past the count
+        c.at(0x1d8)[0x02] = 0x77;                // padding
+        c.at(0x1d8)[ITEM_ATTRIBUTES + 4] = 0x55; // the second attribute, past the count
         NET_CHECK(changedFields(c, b) == 0);
         c.at(0x1d8)[ITEM_SUBTYPE] = 9;
         NET_CHECK(changedFields(c, b) == 1ull << 42);
@@ -537,6 +541,70 @@ void loopbackSession() {
     in = {};
     guest.receive(now + 80, in);
     NET_CHECK(in.wentHome && guest.host() == GUEST_MACHINE && !guest.hasInvitation(HOST_MACHINE));
+}
+
+void generationHandshake() {
+    LoopbackNetwork network;
+    auto hostEnd = network.endpoint(HOST_MACHINE), guestEnd = network.endpoint(GUEST_MACHINE);
+    TestWorld hostWorld;
+    HostLink host(*hostEnd, hostWorld.links());
+    const CubeVulkanMessage expected{"test.world-ready", {1, 1, 'a'}};
+    host.setWorldHandshake(expected);
+    GuestLink guest(*guestEnd, {nullptr, nullptr});
+    guest.waitForWorldHandshake(true);
+    guest.connectTo(HOST_MACHINE, 1000);
+    const auto epoch = guest.connectionEpoch();
+    HostLink::Inbox hin;
+    host.receive(hin);
+    NET_CHECK(host.connection(GUEST_MACHINE) && !host.connection(GUEST_MACHINE)->worldAccepted);
+    GuestLink::Inbox in;
+    guest.receive(1000, in);
+    NET_CHECK(guest.localId() == 1 && !guest.worldAccepted() && !guest.sendTick(1000, testCreature(1)));
+    hin = {};
+    host.receive(hin); // Hello remains available while all world traffic is gated.
+    in = {};
+    guest.receive(1000, in);
+    NET_CHECK(guest.hostIsCubeVulkan());
+    host.sendTick(*host.connection(GUEST_MACHINE), {{77, testCreature(2)}}, {0, 100});
+    in = {};
+    guest.receive(1000, in);
+    NET_CHECK(in.creatureUpdates.empty() && in.worldUpdates.empty() && in.times.empty());
+    NET_CHECK(guest.sendExtra({expected.channel, {1, 1, 'b'}}));
+    guestEnd->send(HOST_MACHINE, Channel::ToHost, encode(CreatureUpdate{makeDelta(1, testCreature(1), nullptr)}, Direction::ToHost));
+    hin = {};
+    host.receive(hin);
+    NET_CHECK(!host.connection(GUEST_MACHINE)->worldAccepted && hin.creatureUpdates.empty());
+    // Pending joins reserve ids in the engine-only handshake path.
+    auto thirdEnd = network.endpoint(GUEST_MACHINE + 100);
+    GuestLink third(*thirdEnd, {nullptr, nullptr});
+    third.waitForWorldHandshake(true);
+    third.connectTo(HOST_MACHINE, 1000);
+    hin = {};
+    host.receive(hin);
+    NET_CHECK(host.connection(GUEST_MACHINE + 100)->creatureId == 2);
+    // ACK and the first complete player update may arrive in the same batch.
+    guest.acceptWorld();
+    NET_CHECK(guest.sendExtra(expected));
+    NET_CHECK(guest.sendTick(1100, testCreature(3)));
+    hin = {};
+    host.receive(hin);
+    NET_CHECK(host.connection(GUEST_MACHINE)->worldAccepted && hin.creatureUpdates.size() == 1 &&
+              hin.creatureUpdates[0].mask == ALL_CREATURE_FIELDS);
+    host.sendTick(*host.connection(GUEST_MACHINE), {{77, testCreature(2)}}, {0, 100});
+    in = {};
+    guest.receive(1100, in);
+    NET_CHECK(in.creatureUpdates.size() == 1 && in.times.size() == 1);
+    guest.goHome(1200);
+    NET_CHECK(guest.connectionEpoch() != epoch && guest.worldAccepted());
+    // Our own host uses the same immutable generation context. Slow terrain startup
+    // must not strand the local player behind a remote-peer handshake.
+    HostLink local(*guestEnd, hostWorld.links());
+    local.setWorldHandshake(expected);
+    hin = {};
+    local.receive(hin);
+    in = {};
+    guest.receive(10000, in);
+    NET_CHECK(local.connection(GUEST_MACHINE) && local.connection(GUEST_MACHINE)->worldAccepted && guest.worldAccepted());
 }
 
 void sessionTimers() {
@@ -740,7 +808,6 @@ void steamIds() {
 
 } // namespace
 
-
 // --- The host tick and the client's frame (net/HostGame.h, net/ClientGame.h) --------------------
 
 // A host world of bare creature records, as the host tick drives it.
@@ -931,12 +998,12 @@ void hostAndClientGames() {
         }
     };
     // The world: monsters in view, one out of view, a far player and two always-sent newcomers.
-    hostWorld.add(5001, 1, 100, 0);   // 100 blocks away
-    hostWorld.add(5002, 1, 0, 200);   // 200
-    hostWorld.add(5003, 1, 300, 0);   // too far (270)
-    hostWorld.add(5004, 1, 0, 260, 0x800);  // always sent
+    hostWorld.add(5001, 1, 100, 0);        // 100 blocks away
+    hostWorld.add(5002, 1, 0, 200);        // 200
+    hostWorld.add(5003, 1, 300, 0);        // too far (270)
+    hostWorld.add(5004, 1, 0, 260, 0x800); // always sent
     hostWorld.add(5005, 1, 0, -260, 0x2000);
-    hostWorld.add(9, 0, 5000, 5000);  // a player, any distance
+    hostWorld.add(9, 0, 5000, 5000); // a player, any distance
     client.link().goHome(now);
     tick(); // join, id 1, the player's first record
     NET_CHECK(client.link().localId() == 1 && mirror.local == 1);
@@ -949,7 +1016,7 @@ void hostAndClientGames() {
         seen.push_back(mirror.others.size());
     }
     NET_CHECK(seen.back() == 5 && !mirror.others.count(5003) && mirror.others.count(9));
-    NET_CHECK(seen[0] == 3 && seen[1] == 4 && seen[2] == 5); // (the first with the two always sent, then one a tick)
+    NET_CHECK(seen[0] == 3 && seen[1] == 4 && seen[2] == 5);                       // (the first with the two always sent, then one a tick)
     NET_CHECK(mirror.lastMask[5001] == 0 || mirror.lastMask[5001] == (1ull << 0)); // idle: an empty delta every tick
     // A monster that leaves view is gone from the mirror by its absence.
     hostWorld.moveTo(5001, 400, 0);
@@ -963,8 +1030,8 @@ void hostAndClientGames() {
     hostWorld.pending.damageNumbers = {damageNumber(5002, 1, 12.0f), damageNumber(9, 5002, 30.0f)};
     tick(3);
     NET_CHECK(mirror.kept.particles.size() == 1 && mirror.kept.sounds.size() == 1);
-    NET_CHECK(mirror.hitsOnMe.size() == 1);   // a monster's hit on the local player, applied by its client
-    NET_CHECK(mirror.shown.size() == 2);      // both shown (neither made by the local player)
+    NET_CHECK(mirror.hitsOnMe.size() == 1); // a monster's hit on the local player, applied by its client
+    NET_CHECK(mirror.shown.size() == 2);    // both shown (neither made by the local player)
     // The local player's own hits and sounds go to the host, which applies them.
     mirror.own.damageNumbers = {damageNumber(1, 5002, 25.0f), damageNumber(5002, 1, 1.0f)};
     mirror.own.sounds = {mine, near};
@@ -1080,6 +1147,7 @@ int netTests() {
     readerRule();
     creatureDelta();
     loopbackSession();
+    generationHandshake();
     sessionTimers();
     singlePlayer();
     udpTransport();
@@ -1120,14 +1188,14 @@ int netDecodeCommand(int argc, char **argv) {
             if (r == RoundTrip::Differs) {
                 differs++;
                 if (shown++ < 20)
-                    std::printf("  packet %zu (t=%u, id %u %s, %zu bytes): %s\n", n, p.timeMs, id, packetName(id),
-                                p.bytes.size(), detail.c_str());
+                    std::printf("  packet %zu (t=%u, id %u %s, %zu bytes): %s\n", n, p.timeMs, id, packetName(id), p.bytes.size(),
+                                detail.c_str());
             }
         }
     }
     for (const auto &[id, t] : byId)
-        std::printf("  id %2u %-24s %6d: %d same, %d same body, %d cut, %d trailing, %d differ\n", id, packetName(id),
-                    t.count, t.results[0], t.results[1], t.results[2], t.results[3], t.results[4]);
+        std::printf("  id %2u %-24s %6d: %d same, %d same body, %d cut, %d trailing, %d differ\n", id, packetName(id), t.count,
+                    t.results[0], t.results[1], t.results[2], t.results[3], t.results[4]);
     std::printf(differs ? "netdecode: %d packet(s) differ\n" : "netdecode: every packet encodes back\n", differs);
     return differs ? 1 : 0;
 }

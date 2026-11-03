@@ -11,6 +11,7 @@
 
 namespace alphagen {
 class ReliefStore;
+class LandscapeStore;
 // Alpha's packed type/flags byte is not a Steam type byte. Unsupported materials
 // fail explicitly until their gameplay/render semantics have a defined bridge.
 std::optional<worldgen::Block> steamBlock(Block);
@@ -32,4 +33,5 @@ class SteamTile {
 // Uncovered finite-world columns remain absent, not implicit native sea/air.
 std::optional<SteamTile> steamTile(SurfaceStore &, int32_t zx, int32_t zy, std::string &error);
 std::optional<SteamTile> steamTile(ReliefStore &, int32_t zx, int32_t zy, std::string &error);
+std::optional<SteamTile> steamTile(LandscapeStore &, int32_t zx, int32_t zy, std::string &error);
 } // namespace alphagen

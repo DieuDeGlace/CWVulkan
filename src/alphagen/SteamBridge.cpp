@@ -1,5 +1,6 @@
 #include "alphagen/SteamBridge.h"
 #include "alphagen/ReliefStore.h"
+#include "alphagen/LandscapeStore.h"
 
 namespace alphagen {
 std::optional<worldgen::Block> steamBlock(Block input) {
@@ -92,6 +93,7 @@ struct SteamTileBuilder {
                     const auto index = worldgen::ZoneTerrain::index(patch.sourceX + x, patch.sourceY + y);
                     auto &column = result.terrain.columns[index];
                     column.base = original.bottom;
+                    column.fullColour = true;
                     column.blocks.reserve(original.blocks.size());
                     for (const auto block : original.blocks) {
                         const auto converted = steamBlock(block);
@@ -111,6 +113,9 @@ std::optional<SteamTile> steamTile(SurfaceStore &source, int32_t zx, int32_t zy,
     return SteamTileBuilder::build(source, zx, zy, error);
 }
 std::optional<SteamTile> steamTile(ReliefStore &source, int32_t zx, int32_t zy, std::string &error) {
+    return SteamTileBuilder::build(source, zx, zy, error);
+}
+std::optional<SteamTile> steamTile(LandscapeStore &source, int32_t zx, int32_t zy, std::string &error) {
     return SteamTileBuilder::build(source, zx, zy, error);
 }
 } // namespace alphagen

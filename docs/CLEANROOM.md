@@ -29,6 +29,18 @@ CubeVulkan's code, and those who write the code don't read the game's code.
 Similarities with the game are expected where behaviour must match (constants, the order of
 random draws, data layouts). What must not happen is lifting code or its expression.
 
+## Alpha terrain integration
+
+The generator reuses the sister AlphaVulkan project's original GPL clean-room
+implementation under its independent prose contracts. The native-only author
+separately supplied alpha-terrain-generation-boundaries.md and
+alpha-sky-terrain-inputs.md without inspecting engine, tests, exporter or captures.
+The implementer read only those contracts and owned code. Steam construction
+preservation, transition bands, map overview, source-color metadata, isolated
+profiles and compatible-engine network agreement are explicit project policies.
+They do not establish native full-Alpha random-stream or runtime parity. Owner
+models and all game-derived data remain local and excluded from packages.
+
 ## Engine-specific appearance extension
 
 The optional dual-tone hair controls are a user-requested engine feature, not a

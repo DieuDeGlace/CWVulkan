@@ -49,13 +49,14 @@ class HostLink {
 
     // One guest (the game's 0x150-byte connection record).
     struct Connection {
-        int64_t creatureId = 0;                      // +0x00
-        PeerId peer = 0;                             // +0x08
-        WorldEvents waiting;                         // +0x10: this tick's events for it
-        std::set<ZoneKey> requestedZones;            // +0x110: zones it asked for (packet 15)
-        std::deque<ChatLine> chat;                   // +0x130: lines waiting for it
-        std::map<int64_t, CreatureSnapshot> known;   // +0x140: the creatures it has, as last sent
-        bool cubeVulkan = false;                     // it said hello (packet 25)
+        int64_t creatureId = 0;                    // +0x00
+        PeerId peer = 0;                           // +0x08
+        WorldEvents waiting;                       // +0x10: this tick's events for it
+        std::set<ZoneKey> requestedZones;          // +0x110: zones it asked for (packet 15)
+        std::deque<ChatLine> chat;                 // +0x130: lines waiting for it
+        std::map<int64_t, CreatureSnapshot> known; // +0x140: the creatures it has, as last sent
+        bool worldAccepted = true;                 // Optional engine-only handshake; native sessions start accepted.
+        bool cubeVulkan = false;                   // it said hello (packet 25)
     };
 
     // What the link needs to ask the host world.
@@ -99,6 +100,8 @@ class HostLink {
 
     // Host tick step 1: everything waiting on channel 1.
     void receive(Inbox &inbox);
+    // Configure before joining; an exact extra-message acknowledgement opens world traffic.
+    void setWorldHandshake(std::optional<CubeVulkanMessage> expected) { worldHandshake = std::move(expected); }
     // Host tick step 2: re-invites invited friends who have not joined.
     void reinvite(uint32_t nowMs);
     // Host tick step 3, for one guest whose creature exists in the host world: one packet 3 per
@@ -116,8 +119,9 @@ class HostLink {
   private:
     Transport &transport;
     World world;
-    std::map<PeerId, uint32_t> invitedAt;  // host+0x578: friend -> time of the last invitation
-    std::map<PeerId, Connection> guests;   // host+0x568
+    std::optional<CubeVulkanMessage> worldHandshake;
+    std::map<PeerId, uint32_t> invitedAt; // host+0x578: friend -> time of the last invitation
+    std::map<PeerId, Connection> guests;  // host+0x568
 
     void send(PeerId to, const Packet &packet);
     void onJoin(PeerId from, Inbox &inbox);
@@ -129,10 +133,10 @@ class HostLink {
 
 class GuestLink {
   public:
-    static constexpr uint32_t HOST_SILENCE_MS = 5000;      // longer than this without a packet: back home
-    static constexpr uint32_t INVITATION_LIFE_MS = 6000;   // an invitation not renewed for this long expires
-    static constexpr uint32_t SEND_INTERVAL_MS = 32;       // a send tick at most this often
-    static constexpr uint32_t ZONE_REQUEST_MS = 1000;      // zone requests at most once a second
+    static constexpr uint32_t HOST_SILENCE_MS = 5000;    // longer than this without a packet: back home
+    static constexpr uint32_t INVITATION_LIFE_MS = 6000; // an invitation not renewed for this long expires
+    static constexpr uint32_t SEND_INTERVAL_MS = 32;     // a send tick at most this often
+    static constexpr uint32_t ZONE_REQUEST_MS = 1000;    // zone requests at most once a second
 
     // What the link needs from the client's game.
     struct World {
@@ -153,13 +157,13 @@ class GuestLink {
         // index in its list. A world applies them in this order, so that a creature updated after
         // one packet 6 is not removed by it.
         std::vector<std::pair<bool, size_t>> creatureOrder;
-        std::optional<int64_t> givenId;             // packet 4 (the local player's new id)
-        std::vector<WorldEvents> worldUpdates;      // packet 7
-        std::vector<Time> times;                    // packet 8
-        std::vector<ChatLine> chat;                 // packet 14
-        std::vector<PeerId> invitations;            // new invitations to show ("You were invited by ...")
-        bool wentHome = false;                      // the host left or fell silent: connected back home
-        std::vector<CubeVulkanMessage> extras;      // packet 26 from a CubeVulkan host
+        std::optional<int64_t> givenId;        // packet 4 (the local player's new id)
+        std::vector<WorldEvents> worldUpdates; // packet 7
+        std::vector<Time> times;               // packet 8
+        std::vector<ChatLine> chat;            // packet 14
+        std::vector<PeerId> invitations;       // new invitations to show ("You were invited by ...")
+        bool wentHome = false;                 // the host left or fell silent: connected back home
+        std::vector<CubeVulkanMessage> extras; // packet 26 from a CubeVulkan host
     };
 
     // What the client's game queues for the host; sent and emptied by sendTick.
@@ -170,7 +174,7 @@ class GuestLink {
         std::vector<SoundRecord> sounds;
         std::vector<BuffRecord> buffs;
         std::vector<EffectRecord> effects;
-        std::vector<ZoneKey> neededZones;           // the zones still needing their state
+        std::vector<ZoneKey> neededZones; // the zones still needing their state
     };
     Outbox outbox;
 
@@ -186,6 +190,16 @@ class GuestLink {
     bool isGuestElsewhere() const { return hasHost() && currentHost != transport.self(); }
     int64_t localId() const { return myId; }
     bool hostIsCubeVulkan() const { return hostSaidHello; }
+    void waitForWorldHandshake(bool wait) {
+        requireWorldHandshake = wait;
+        worldReady = !wait;
+    }
+    bool worldAccepted() const { return worldReady; }
+    void acceptWorld() {
+        worldReady = true;
+        requestFullUpdate();
+    }
+    uint64_t connectionEpoch() const { return connectionVersion; }
     // Live invitations: friend -> when it was last renewed.
     const std::map<PeerId, uint32_t> &invitations() const { return invitedBy; }
     bool hasInvitation(PeerId from) const { return invitedBy.count(from) != 0; }
@@ -213,14 +227,16 @@ class GuestLink {
   private:
     Transport &transport;
     World world;
-    PeerId currentHost = 0;                    // client+0x70
-    uint32_t lastHeard = 0;                    // client+0x9ec
-    std::optional<CreatureSnapshot> lastSent;  // client+0x78; empty: the full-update flag is set
-    std::set<int64_t> heard;                   // client+0x9f0
-    std::map<PeerId, uint32_t> invitedBy;      // client+0xa00
+    PeerId currentHost = 0;                   // client+0x70
+    uint32_t lastHeard = 0;                   // client+0x9ec
+    std::optional<CreatureSnapshot> lastSent; // client+0x78; empty: the full-update flag is set
+    std::set<int64_t> heard;                  // client+0x9f0
+    std::map<PeerId, uint32_t> invitedBy;     // client+0xa00
     int64_t myId = 0;
     bool hostSaidHello = false;
     bool helloSent = false;
+    bool requireWorldHandshake = false, worldReady = true;
+    uint64_t connectionVersion = 0;
     std::optional<uint32_t> lastSendTick, lastZoneRound;
 
     void send(PeerId to, const Packet &packet);

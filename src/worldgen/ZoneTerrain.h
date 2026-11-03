@@ -41,6 +41,9 @@ struct ColumnField {
 struct TerrainColumn {
     int32_t base = 0;
     std::vector<Block> blocks;
+    // Project storage metadata: Alpha colors are full RGB; Steam terrain stores
+    // half-intensity channels. It is never packed into a native block flag.
+    bool fullColour = false;
     int32_t top() const { return base + (int32_t)blocks.size(); }
     bool empty() const { return blocks.empty(); }
 };

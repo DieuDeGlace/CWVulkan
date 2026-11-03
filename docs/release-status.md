@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-11-02
+# Source review checkpoint — 2026-11-03
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -9,6 +9,36 @@ checkpoint describe the intended setup and remaining limits.
 
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
+
+- Alpha terrain is now the playable default (`World.Source=Alpha`); Steam
+  generation remains separate as `Game`, with captured `Extracted` and the older
+  approximate `Generated` modes still explicit choices. The Alpha landscape runs
+  relief, ordered boulders and voxel trees while retaining conservative Steam
+  town/dungeon tiles. It reanchors residents/scenery/refresh lists and uses the
+  canonical collision, water and gameplay-light readers.
+
+  Terrain-profile databases isolate worlds and copy characters once without old
+  geographic state. Compatible-engine multiplayer checks generation identity
+  before exchanging Alpha world data; local host startup is not gated by a remote
+  handshake. Direct Alpha climate drives the palette/HUD, absolute Alpha cloud
+  coordinates are kept separate from renderer rebasing, and the Steam-style map
+  receives a close-voxel/distant-height overview. Full-RGB metadata prevents Alpha
+  terrain from being brightened twice while preserving Steam construction colors.
+
+  All five targets build warning-free. Full CPU/owner checks and92 shader,2 camera,
+  102 GUI,17 map, shared-water and Alpha-scenery Vulkan checks pass. No-save startup
+  captures pass at128 and400 blocks in Alpha lighting. Separate Steam generation
+  starts correctly, and Alpha terrain renders in a bounded Steam-lighting capture.
+  Full Steam-option streaming exceeded the capture deadline; cold fill remains an
+  open performance issue. Steam's existing save-resume identity is preserved, and
+  original-save protection also applies before that directory exists. Exact
+  whole-tile and map construction preservation, source/cache separation, spawn and
+  collision agreement, profile isolation and handshake ordering checks pass.
+  The private save fixture and extractor hashes are unchanged. No game content is
+  included. Native full-Alpha random-stream parity, Alpha small ground cover,
+  broader transitions/seeds, live-edit material behavior, two-account multiplayer
+  and manual release gates remain open; this is not a final release claim.
+  See [Alpha generation](alpha-generation.md) for the hybrid policies and limits.
 
 - Ordinary affine scene-graph clipping now renders children into a retained
   fullscreen RGBA8 pool and composes them through the parent's actual shape.

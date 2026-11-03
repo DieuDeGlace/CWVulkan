@@ -1,112 +1,130 @@
 # Alpha terrain generation
 
-The requested default is Alpha terrain and biomes with Steam town and dungeon
-layouts retained. Steam generation remains a separate mode. Verified Alpha-only
-locations may be added alongside those Steam layouts. This hybrid is a project
-extension; it must distinguish original Alpha terrain from Steam structure edits.
+`World.Source=Alpha` selects the project hybrid: independently implemented Alpha
+landscape and climate with Steam towns and dungeons preserved. Steam generation
+remains available separately as `World.Source=Game`; extracted owner zones use
+`World.Source=Extracted`. `Generated` and `Terrain.Style=Alpha` are older approximate
+terrain options, not substitutes for the Alpha generator. Restart after changing
+source, seed or scale. Alpha is the shipped default after the runtime checks below.
 
-Implementation is in progress. The current default has **not** been switched:
-`Terrain.Style=Alpha` remains the older approximate relief option, and
-`World.Source=Extracted` still reads captured Steam terrain. Selecting a different
-name for that profile would not implement Alpha generation.
+## Implementation and provenance
 
-The new `alphagen` core reuses the sister AlphaVulkan project's original
-GPL-3.0-only clean-room code (DieuDeGlace). AlphaVulkan's README documents the same
-specification/implementation separation used here. Random, region, location and
-column code is namespaced separately from Steam. The surface implementation stops
-at the independently named surface boundary and retains its padded height grid,
-random state and ravine boulder candidates. It contains no original game code,
-models, textures, saves or captured columns.
+The `alphagen` core reuses the sister AlphaVulkan project's original GPL-3.0-only
+clean-room code by DieuDeGlace. Its independent `alpha-worldgen-*.md` contracts
+cover random streams, regions, locations, terrain, formations and trees. The
+implementer has not read native code or third-party reconstructions. The separate
+native-only author supplied `alpha-terrain-generation-boundaries.md` and
+`alpha-sky-terrain-inputs.md`; the implementer used their prose only.
 
-The accompanying `alpha-worldgen-*.md` documents are the sister project's independent
-behavioral contracts. Their later locations and caves completions supersede older
-open-question summaries. Read [the bounded parity assessment](specs/alpha-terrain-generation-boundaries.md)
-before treating a height result, surface snapshot or full zone as equivalent.
-Formula vectors check implementation against those contracts, not a running-game
-oracle. Native surface, seam, precision and world-edge comparisons remain necessary.
+Height H, the initial voxel surface S and a completed native Alpha zone are
+separate products. `SurfaceStage` retains S, the padded height grid, ravine seeds
+and random state. `ReliefStage` continues through rock formations, road cuts,
+terraces and pools. `LandscapeStage` runs ordered boulder passes and the voxel-tree
+grid. Mutable working storage moves into immutable publication; intermediate
+stages do not duplicate full voxel zones.
 
-Remaining integration includes later terrain passes, coordinate/zone conversion,
-Steam structure placement on the new terrain, collision/water/lighting queries,
-mode-specific caches/saves/network settings and the final default selection.
-The original Steam mode must keep its existing generator and data interpretation.
+Alpha towns, dungeons, camps and type10 structure calls are deliberately skipped.
+The subsequent random stream therefore belongs to this hybrid profile, and is not
+a claim of native full-Alpha generation equality. Small Alpha plant/ground-cover
+passes are not integrated yet. Steam scenery and residents remain available and
+are reanchored to the composed ground. Extra ruin additions, including Sphinx,
+are deferred at the owner's request.
 
-TerrainVariance lives in the separately licensed SteamCubeWorldMods repository.
-Its current wrapper adds offsets to native Steam height queries and translates
-stored columns and object anchors after generation. Compatible height changes can
-be shared, but translating existing Steam columns alone does not recreate Alpha's
-ravine intervals, biome choices or full voxel layout. Full parity must not be
-claimed for that transformation without additional implementation and evidence.
+Trees include the giant-tree continuation and owner-model palms. Palm stamping
+uses only the independent mode0 placement contract: ordered model-dependent
+height draws, quarter-turn rotations, internal dry/keep air and protected-solid
+exclusion. Both valid `sprites/palm-leaf.cub` and
+`sprites/palm-leaf-diagonal.cub` must be supplied by the owner's Steam install.
+The engine creates no replacement artwork and packages neither file.
 
-The owner's Steam install contains `sprites/Sphinx01.cub`. Alpha's independent
-structure specification lists `sphinx01.cub` as a desert-ruin building type.
-Its verified placement and role, rather than a guessed separate dungeon, are the
-starting point for that addition. Required content stays in the owner's install.
+## Coordinates, storage and composition
 
+The original MIT coordinate helper is shared with TerrainVariance, with its
+existing notice. Steam block (0,0) maps to absolute Alpha home (8396928,8396928).
+Mapping happens in integer coordinates before noise evaluation. A Steam64 tile
+may cross four Alpha256 parents. Finite-world coverage is clipped, never wrapped;
+incomplete playable tiles are unavailable.
 
-The first shared bridge is the original MIT-licensed `AlphaCoordinates.h` utility in
-TerrainVariance, copied byte-for-byte as `alphagen/Coordinates.h` under the existing
-SteamCubeWorldMods MIT notice. Explicit integer anchors preserve absolute Alpha
-noise inputs. Coverage splits Steam tiles across Alpha parents and clips finite
-edges without periodic wrapping. It is not yet a runtime generation switch.
-Portable mod coordinate/rule checks and the engine's Alpha checks cover this step;
-the native DLL/placement suite requires the mod's separate clang-cl toolchain.
+The stores coalesce concurrent parent requests, generate outside the cache lock,
+propagate failures to waiters and permit retries. Ready entries are bounded;
+caller-held leases and in-flight work can retain additional storage. The runtime
+hybrid retains up to16 ready landscape parents. Leases keep const voxel storage
+alive through eviction without retaining a mutable generator pointer.
 
+`SteamBridge` converts four-byte Alpha materials into six-byte engine blocks with
+explicit type and flag rules. It transposes XY indexing, preserves original RGB,
+and records full-color column metadata separately from native block flags. Alpha
+lighting consumes those full RGB values directly; retained Steam construction
+columns keep their half-intensity encoding. The Steam lighting adapter quantizes
+full RGB to the Steam vertex representation. Dry air, leaves and glowing material
+have named conversions; unknown materials fail rather than sharing a coincidental
+numeric type. Glow13 becomes Steam light20 with full emission as a hybrid policy.
 
-`SurfaceStore` is the next bridge: an immutable seed/name/frame context caches Alpha
-parent stages with a bounded ready-entry LRU and coalesces simultaneous requests for
-the same parent. Generation runs outside the cache lock. Column leases retain their
-parent across eviction and store destruction; published voxel storage is const.
-Effective block reads and solid-versus-water surface reads use the Alpha column
-rules. Cache capacity bounds retained entries, not caller-held leases or in-flight
-work. This store still supplies only the named initial surface stage and is not yet
-connected to playable generation or the default configuration.
+`worldgen::AlphaTerrain` preserves every native column in conservative Steam
+construction footprints, including rooms, openings, layouts and sizes. Outside
+those cores a32-block band shifts whole Alpha columns toward Steam ground; the
+Alpha sea plane is kept fixed. This intentionally retains some surrounding Steam
+terrain. Forest edges and steep transitions still need wider visual review.
 
+Models, lights, emitters, objects, ground items, spawn/shop points and daily-refresh
+working lists are reanchored in Z; XY and model scale are retained. Object block
+marking runs again at the resulting positions. Composition is transactional. The
+canonical generator, collision, water, lighting, local host and mirror readers all
+consume these composed columns; H alone never places the player.
 
-`SteamBridge` converts that initial surface into read-only Steam-sized column
-storage. The 4096 columns retain their bases, extents and RGB values across up to
-four Alpha parents; source XY indexing is transposed explicitly. An admission mask
-keeps missing finite-world columns distinct from empty native columns. Dry-air
-flags are translated rather than copied. Alpha glowing material 13 maps to Steam
-light 20, with full emission as an explicit hybrid policy, instead of Steam road 13.
-Wood maps explicitly to Steam type 7/flags 0 and leaves to type 8/flags 1,
-retaining Alpha RGB rather than repacking working colors. Unknown types are rejected. This is a data
-representation adapter, not Steam structure placement or a new runtime mode.
+## Sky and map
 
-Steam also retains `obelisk.cub`, `castle-arc.cub`, `temple-arc.cub`,
-`antique-building1.cub` through `antique-building4.cub`, and `dungeon-test01.cub` /
-`dungeon-test02.cub`. File presence and names establish content availability, not
-whether Steam uses them or cut them. Owner assets remain outside source and
-development packages.
+Alpha terrain supplies direct World warmth, moisture, sea and fire blends to the
+Alpha palette and HUD weather values. Sea share is the weighted negative-elevation
+region indicator, not current water occupancy. H and the mountain field feed
+cloud height. Cloud hashes and the intentionally cell-indexed moisture query use
+absolute Alpha coordinates; renderer coordinates are rebased separately. The
+independent sky supplement distinguishes these queries from loaded-column caches
+and leaves unmeasured native scheduling/fixed-altitude details open.
 
+The Steam-style map keeps its UI, marker XY, region identities and protected
+construction geometry. Close views sample actual landscape voxels, including tree
+crowns; distant views use an H-based overview to avoid generating entire off-screen
+regions. Map colors are adapted to the Steam vertex format. Distant overview and
+transition bands are project policies, not a native Alpha map parity claim.
+Steam region names, quest plans and difficulty-region identities remain in use.
 
-`generateRelief` now continues the same initial-surface work through the rock
-formations, road cuts, five-block terraces and shallow pools, stopping before
-Alpha dungeon calls. The mutable working zone is moved into immutable output;
-there is no duplicate full-zone snapshot during that continuation. The output
-retains the random stream and ordered terrace/ravine boulder seeds. Mounds and
-mesas add material; a protected non-water block aborts an entire formation before
-any writes. Boulder writers are implemented and checked independently, but their
-later generation passes are not run at this boundary.
+## Saves and multiplayer
 
-`ReliefStore` uses the same parent-cache synchronization as `SurfaceStore`, with
-separate typed stage ownership. The column adapter accepts both stores without
-reinterpreting block records. Failed loads propagate and remain retryable, and
-aliasing column leases retain the owning stage through eviction/store destruction.
-Giant-tree centers now invoke the voxel-tree builder at the specified point in
-the same stream. Its other tree kinds share moss, dry-air and zone-clipping rules. This remains a data
-consumer integration, not a complete playable Alpha world or default switch.
-Extra ruin structures, including the Sphinx addition, are deferred at the user's
-request while terrain work continues.
+An Alpha profile identity includes landscape/composition versions, Alpha seed,
+Steam layout seed and exact scale bits. Its own `Save/<profile>/characters.db`
+and `world.db` keep deaths, terrain edits and progress separate from Steam saves.
+On first writable use only, characters may be copied from the engine's canonical
+save or configured read-only import. Identity, appearance, equipment, level and
+recipes carry over; coordinates, discoveries, missions, flight points and other
+geographic state start fresh. Subsequent progression is independent in each
+profile. Existing profile characters are never recopied. `--no-save` creates no
+profile or imported database. The original game's Save directory is rejected.
 
+Alpha multiplayer requires compatible CubeVulkan peers with matching mode, seeds,
+scale and generation versions before exchanging world data. Original Steam peers
+continue to use Steam generation. The local player shares the host's immutable
+profile and bypasses the remote-peer agreement wait during slow initial generation.
 
-The tree builders reuse the sister project's GPL implementation under the independent
-Alpha tree contract. Palms extend its incomplete stamping path using only the
-independent mode0 placement contract: owner `palm-leaf.cub` and
-`palm-leaf-diagonal.cub` models, ordered height draws for models actually present,
-quarter-turn rotation without mirroring, internal dry/keep air and protected-solid
-exclusion. The owner loader requires both valid files; no replacement art is made.
-Raw model bytes remain owner data and are absent from source/development packages.
-The independent worked tree example checks 57 draws, 332 wood cells, 961 leaf cells
-and final bark/leaf RGB values. Synthetic palm models check all four rotations,
-material flags and model-dependent draw counts. Tree-grid placement, later terrain
-passes and runtime/default integration still follow separately.
+## Verification and remaining limits
+
+Formula vectors, worked tree output, synthetic palm rotations, finite-domain and
+cache-lifetime checks validate the independent contracts. Composition tests check
+whole construction tiles, source isolation, spawn/collision agreement, reader forks
+and save-profile separation. Network tests check pending-player IDs, rejected
+updates and acknowledgement ordering. These checks do not establish full native
+runtime parity; broader seeds, seams, transitions, live terrain edits, weather,
+map views and long gameplay still need owner-runtime comparisons. Default Alpha
+lighting captures passed at128 and400 blocks, and a bounded Steam-lighting view
+rendered correctly. Full Steam-option streaming exceeded the capture deadline;
+cold-load performance remains open, without weakening the Steam mode's settings.
+
+TerrainVariance remains a separately MIT-licensed Steam height/column translation
+mod. Its shared coordinate/rule checks do not make its wrapper a full Alpha voxel
+generator. No GPL generation implementation is silently copied into that mod.
+Further compatible height propagation remains separate work.
+
+No original executable code, assets, sprites, terrain exports, saves or captures
+are included in the source or development packages. Steam account/license checks
+remain mandatory. This architecture and the clean-room process do not themselves
+establish legal clearance; see PUBLICATION.md.

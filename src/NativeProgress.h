@@ -47,8 +47,8 @@ const char *peopleWord(int32_t people); // "human", "elf", ... ("" outside 0..7)
 // Looks from a recorded character's snapshot (its race, hair colour and head and hair sprites).
 bool looksFromSnapshot(const std::filesystem::path &snapshot, nativesaves::Looks &out);
 // Looks from sprite names ("elf-head-f03", "elf-hair-f02"): the sprite's number less one.
-bool looksFromSprites(const std::string &race, const std::string &gender, const std::string &head,
-                      const std::string &hair, glm::u8vec3 colour, nativesaves::Looks &out);
+bool looksFromSprites(const std::string &race, const std::string &gender, const std::string &head, const std::string &hair,
+                      glm::u8vec3 colour, nativesaves::Looks &out);
 // The appearance the looks routine (0x53e80) makes for a player's looks record: the race's fixed
 // data with the chosen head, haircut and hair colour. False without the creature tables.
 bool appearanceOf(const nativesaves::Looks &looks, std::array<uint8_t, 0xb0> &out);
@@ -56,8 +56,8 @@ bool appearanceOf(const nativesaves::Looks &looks, std::array<uint8_t, 0xb0> &ou
 // The list entry of character `slot` of characters.db: its name, class, level and look, moving
 // with the newest recording of its class and specialization (or class) among `recorded`.
 // False when no recording of its class exists.
-bool entryFor(const nativesaves::Character &c, int slot, const std::vector<CharacterEntry> &recorded,
-              const SpriteTable &sprites, CharacterEntry &out);
+bool entryFor(const nativesaves::Character &c, int slot, const std::vector<CharacterEntry> &recorded, const SpriteTable &sprites,
+              CharacterEntry &out);
 
 // The race word the character screen prints for a race id (frontend-characters.md §2.2).
 const char *raceWord(int32_t race);
@@ -71,11 +71,9 @@ SaveGame toProgress(const nativesaves::Character &c, const std::string &notes, c
                     const std::function<std::string(const nativesaves::Item &)> &itemSprite);
 // Puts the progress back into the character (keeping everything CubeVulkan does not model) and
 // gives the notes to keep beside it. `gear`: what is worn and carried now (none: as saved).
-void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame &frame, nativesaves::Character &c,
-                  std::string &notes);
+void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame &frame, nativesaves::Character &c, std::string &notes);
 // A game item from CubeVulkan's item fields, and back.
-nativesaves::Item gameItem(int category, int id, int material, int rarity, uint32_t modifier, const int region[2],
-                           int formula = 0);
+nativesaves::Item gameItem(int category, int id, int material, int rarity, uint32_t modifier, const int region[2], int formula = 0);
 
 // Moves CubeVulkan's old text saves into `store` once: each character's newer copy (local
 // `saveDir`/*.sav or the cloud bundle), as a recorded character of `recorded` or one made in the
@@ -92,8 +90,8 @@ class ProgressFile {
     // copied in, read-only, if CubeVulkan has none of its own yet. Refuses a folder that is the
     // game's own Save folder (`gameSave`): the owner's real saves are never written. Not
     // `writable` (a capture, --no-save): nothing is created, imported or written.
-    bool open(const std::filesystem::path &folder, const std::filesystem::path &gameSave,
-              const std::filesystem::path &importFrom, bool writable, const std::function<void(const std::string &)> &log);
+    bool open(const std::filesystem::path &folder, const std::filesystem::path &gameSave, const std::filesystem::path &importFrom,
+              bool writable, const std::function<void(const std::string &)> &log, const std::string &profile = {});
     bool isOpen() const { return store_.isOpen(); }
     nativesaves::CharacterStore &store() { return store_; }
     nativesaves::WorldState &world() { return world_; }

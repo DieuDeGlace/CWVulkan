@@ -89,7 +89,10 @@ To record another class:
 ## CubeVulkan's progress, in the game's own format
 
 CubeVulkan saves in Steam Cube World's own format (`docs/specs/native-saves.md`, `src/NativeSaves.*`), in
-its own `Save` folder beside the engine:
+its own `Save` folder beside the engine. Alpha generation uses a separate
+`Save/<terrain-profile>/` directory for both databases; Steam mode keeps the
+canonical directory. See [Alpha profiles](alpha-generation.md#saves-and-multiplayer)
+for the copy-once character import and independent progression rules:
 
 - `Save/characters.db`: `num`, `slot` and one zlib stream per character (the character blob, version 11);
 - `Save/world.db`: `state`, the world (version 44): the day, the time of day, the dead creatures, the rewards

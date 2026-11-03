@@ -117,7 +117,10 @@ set(ALPHA_TERRAIN_SOURCES
     src/alphagen/Relief.cpp
     src/alphagen/ReliefStore.cpp
     src/alphagen/Trees.cpp
-    src/alphagen/TreeModels.cpp)
+    src/alphagen/TreeModels.cpp
+    src/alphagen/Landscape.cpp
+    src/alphagen/LandscapeStore.cpp
+    src/worldgen/AlphaTerrain.cpp)
 
 # The engine core is a library so the tests link the same code as the game.
 add_library(engine STATIC

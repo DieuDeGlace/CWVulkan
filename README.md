@@ -59,8 +59,11 @@ The extractor source is included; its output is private game data.
 
 Edit `CubeVulkan.ini` beside the executable (the template is in `config/`).
 
-- `[World] Source=Extracted` is the default: load the owner's exported zones. Areas
-  outside those exports are unavailable.
+- `[World] Source=Alpha` is the default: Alpha terrain and climate with retained Steam towns
+  and dungeons. It uses isolated terrain-profile saves and compatible-engine
+  multiplayer. See [Alpha generation and its limits](docs/alpha-generation.md).
+- `[World] Source=Extracted` loads the owner's exported zones. Areas outside those
+  exports are unavailable.
 - `[World] Source=Game` uses the independently implemented generator in
   `src/worldgen/`: terrain, structures, objects, plants and creatures. Owner-exported
   tables are still required for complete content. See [world generation](docs/worldgen.md).

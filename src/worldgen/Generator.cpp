@@ -2,6 +2,9 @@
 #include "worldgen/Generator.h"
 
 #include "worldgen/BlockColours.h"
+#include "worldgen/AlphaTerrain.h"
+#include <bit>
+#include <stdexcept>
 
 #include <atomic>
 #include <list>
@@ -17,6 +20,7 @@ struct Settings {
     std::atomic<int32_t> day{0};
     std::atomic<int32_t> refreshDay{-1};
     bool tablesLoaded = false;
+    std::shared_ptr<AlphaTerrain> alpha;
 };
 Settings settings;
 // Changes with every setting, so cached zones made under other settings are made again.
@@ -31,7 +35,7 @@ struct CachedZone {
     std::shared_ptr<const ZoneContents> zone;
 };
 std::mutex cacheLock;
-std::list<CachedZone> cache; // the most recently used first
+std::list<CachedZone> cache;        // the most recently used first
 constexpr size_t CACHED_ZONES = 96; // a lit zone reads its 8 neighbours; the near zones fit
 
 ZoneContents makeZone(int32_t zx, int32_t zy, bool recordDraws) {
@@ -46,7 +50,7 @@ ZoneContents makeZone(int32_t zx, int32_t zy, bool recordDraws) {
     return generateZoneWithCreatures(world, creatureTables(), settings.day, zx, zy, recordDraws);
 }
 
-constexpr int SPECIAL_ITEM = 24;  // the category of role items and boats
+constexpr int SPECIAL_ITEM = 24; // the category of role items and boats
 constexpr int BOAT_ID = 2;
 constexpr int ROLE_ITEM_IDS[8] = {1, 2, 0x12, 3, 5, 7, 8, 9}; // roles 6..13 (contents file §C4)
 
@@ -54,19 +58,46 @@ constexpr int ROLE_ITEM_IDS[8] = {1, 2, 0x12, 3, 5, 7, 8, 9}; // roles 6..13 (co
 
 // --- The world -------------------------------------------------------------------------------------
 
+void setAlphaTerrain(std::shared_ptr<AlphaTerrain> terrain) {
+    settings.alpha = std::move(terrain);
+    settingsVersion++;
+}
+bool usingAlphaTerrain() {
+    return bool(settings.alpha);
+}
+std::string terrainIdentity() {
+    if (settings.alpha)
+        return settings.alpha->identity(worldScale());
+    return "steam-v1-seed-" + std::to_string(settings.world.seed) + "-scale-bits-" + std::to_string(std::bit_cast<uint64_t>(worldScale()));
+}
+bool terrainZoneAvailable(int32_t zx, int32_t zy) {
+    return !settings.alpha || settings.alpha->coversZone(zx, zy);
+}
+
+std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y) {
+    return settings.alpha ? settings.alpha->sample(x, y) : std::nullopt;
+}
+void composeTerrainMap(MapRegion &map) {
+    if (settings.alpha) settings.alpha->composeMap(map);
+}
+
 void setWorldSeed(int32_t seed) {
     if (seed == settings.world.seed)
         return;
     settings.world = worldValues(seed);
     settingsVersion++;
 }
-const WorldValues &currentWorld() { return settings.world; }
+const WorldValues &currentWorld() {
+    return settings.world;
+}
 
 void setWorldDay(int32_t day) {
     if (settings.day.exchange(day) != day)
         settingsVersion++;
 }
-int32_t worldDay() { return settings.day; }
+int32_t worldDay() {
+    return settings.day;
+}
 
 void setRefreshDay(int32_t day) {
     if (settings.refreshDay.exchange(day) != day)
@@ -78,16 +109,26 @@ bool loadCreatureTables(const std::filesystem::path &oracleDir, std::string *why
     settingsVersion++;
     return settings.tablesLoaded;
 }
-bool creatureTablesLoaded() { return settings.tablesLoaded; }
-const CreatureTables &creatureTables() { return sharedCreatureTables(); }
+bool creatureTablesLoaded() {
+    return settings.tablesLoaded;
+}
+const CreatureTables &creatureTables() {
+    return sharedCreatureTables();
+}
 
 // --- Cells and columns -----------------------------------------------------------------------------
 
-int cellObject(int32_t cx, int32_t cy) { return cellObjectsFor(settings.world).type(cx, cy); }
+int cellObject(int32_t cx, int32_t cy) {
+    return cellObjectsFor(settings.world).type(cx, cy);
+}
 
-CastleCell castleCell(int32_t cx, int32_t cy) { return BuildingRules(cellObjectsFor(settings.world)).castleCell(cx, cy); }
+CastleCell castleCell(int32_t cx, int32_t cy) {
+    return BuildingRules(cellObjectsFor(settings.world)).castleCell(cx, cy);
+}
 
-int32_t cellHeight(int32_t cx, int32_t cy, int type) { return BuildingRules(cellObjectsFor(settings.world)).baseHeight(cx, cy, type); }
+int32_t cellHeight(int32_t cx, int32_t cy, int type) {
+    return BuildingRules(cellObjectsFor(settings.world)).baseHeight(cx, cy, type);
+}
 
 ColumnField columnField(int32_t x, int32_t y) {
     const Place cell = cellPlace(floorDiv(x, PLACE_SHIFT), floorDiv(y, PLACE_SHIFT));
@@ -118,9 +159,15 @@ RegionRoles regionRoles(Int2 region) {
     return out;
 }
 
-int plannerRole(Int2 region, int32_t px, int32_t py) { return regionPlan(region.x, region.y)->roleAt(px, py); }
-int plannerLevel(Int2 region, int32_t px, int32_t py) { return regionPlan(region.x, region.y)->levelAt(px, py); }
-int plannerEncounter(Int2 region, int32_t px, int32_t py, int32_t day) { return regionPlan(region.x, region.y)->encounter(px, py, day); }
+int plannerRole(Int2 region, int32_t px, int32_t py) {
+    return regionPlan(region.x, region.y)->roleAt(px, py);
+}
+int plannerLevel(Int2 region, int32_t px, int32_t py) {
+    return regionPlan(region.x, region.y)->levelAt(px, py);
+}
+int plannerEncounter(Int2 region, int32_t px, int32_t py, int32_t day) {
+    return regionPlan(region.x, region.y)->encounter(px, py, day);
+}
 
 PlaceEncounter placeEncounter(int32_t px, int32_t py) {
     PlaceEncounter e;
@@ -151,10 +198,22 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
                 return it->zone;
             }
     }
+    if (!terrainZoneAvailable(zx, zy)) {
+        auto missing = std::make_shared<ZoneContents>();
+        missing->terrain.zx = zx;
+        missing->terrain.zy = zy;
+        missing->terrain.columns.resize(ZONE_COLUMNS);
+        return missing; // No generated residents outside Alpha's finite world.
+    }
     ZoneContents z = makeZone(zx, zy, false);
     const int32_t refreshDay = settings.refreshDay.load();
     if (refreshDay >= 0 && settings.tablesLoaded)
         refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
+    if (settings.alpha) {
+        std::string error;
+        if (!settings.alpha->compose(z, settings.world, error))
+            throw std::runtime_error("Alpha terrain composition: " + error);
+    }
     // Live full-setter gap writes still need the original cached material inputs.
     z.terrain.retainedColours.reserve(z.terrain.field.size());
     for (const auto &column : z.terrain.field)
@@ -179,7 +238,9 @@ std::vector<TerrainColumn> litZone(int32_t zx, int32_t zy) {
     });
 }
 
-std::vector<uint16_t> zoneDraws(int32_t zx, int32_t zy) { return makeZone(zx, zy, true).terrain.draws; }
+std::vector<uint16_t> zoneDraws(int32_t zx, int32_t zy) {
+    return makeZone(zx, zy, true).terrain.draws;
+}
 
 std::vector<ZoneObject> zoneObjects(int32_t zx, int32_t zy) {
     const std::shared_ptr<const ZoneContents> z = zone(zx, zy);

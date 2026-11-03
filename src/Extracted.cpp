@@ -78,12 +78,17 @@ void ExtractedWorld::openGenerated(int homeX, int homeY, const fs::path &spriteD
     if (!spriteDir.empty())
         loadSpriteTables(spriteDir);
     generatedMode = true;
-    seedValue = 0;
+    seedValue = worldgen::currentWorld().seed;
     originX = (int)floorDiv(homeX, 64);
     originY = (int)floorDiv(homeY, 64);
     float ground = std::floor(worldgen::groundHeight(homeX, homeY)) + 1;
     homeLocal = glm::vec3(float(homeX - (int64_t)originX * 64), float(homeY - (int64_t)originY * 64),
                           std::max(ground, 1.f) + Z_OFFSET);
+    if (worldgen::usingAlphaTerrain()) {
+        float actual;
+        if (surface(homeLocal.x, homeLocal.y, actual))
+            homeLocal.z = actual;
+    }
 }
 
 // Sprite tables written by the extractor next to the seed folders.
@@ -162,6 +167,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     for (size_t i = 0; i < columns.size(); i++) {
         Column &c = zone->columns[i];
         c.base = columns[i].base;
+        c.fullColour = columns[i].fullColour;
         c.blocks.reserve(columns[i].blocks.size());
         for (const worldgen::Block &b : columns[i].blocks)
             c.blocks.push_back({b.r, b.g, b.b, b.glow, b.type, b.flags});
@@ -258,6 +264,8 @@ bool ExtractedWorld::validateZoneFile(const fs::path &file, std::string &error) 
 }
 
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
+    if (generatedMode && !worldgen::terrainZoneAvailable(ax, ay))
+        return nullptr;
     Key key{ax, ay};
     {
         std::lock_guard lock(cacheMutex);
@@ -1605,8 +1613,19 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     auto colour = [&](int lx, int ly, int z) {
         Block b{};
         blockAt(column(lx, ly), z, b);
-        // Native bytes are shaded first and doubled only in the shader. Keep
-        // the old full-RGB encoding for Alpha/incomplete terrain snapshots.
+        // Steam bytes are half intensity; Alpha columns retain their original
+        // full RGB. Retained Steam construction columns keep the native encoding.
+        if (column(lx, ly).fullColour) {
+            if (nativeEncoding) {
+                b.r /= 2;
+                b.g /= 2;
+                b.b /= 2;
+            } else {
+                VoxelColor c{b.r, b.g, b.b, 0};
+                if (b.type == LEAVES_TYPE || b.type == SNOW_LEAVES_TYPE) c.flags |= SWAY;
+                return c;
+            }
+        }
         VoxelColor c = nativeEncoding ? VoxelColor{b.r, b.g, b.b, STEAM_VERTEX}
                                      : VoxelColor{(uint8_t)std::min(255, b.r * 2), (uint8_t)std::min(255, b.g * 2),
                                                    (uint8_t)std::min(255, b.b * 2), 0};

@@ -6,7 +6,8 @@ namespace cwnet {
 
 // --- HostLink ----------------------------------------------------------------------------------
 
-HostLink::HostLink(Transport &transport, World world) : transport(transport), world(std::move(world)) {}
+HostLink::HostLink(Transport &transport, World world) : transport(transport), world(std::move(world)) {
+}
 
 void HostLink::send(PeerId to, const Packet &packet) {
     transport.send(to, Channel::ToClient, encode(packet, Direction::ToClient));
@@ -52,14 +53,21 @@ void HostLink::dropAll() {
 void HostLink::onJoin(PeerId from, Inbox &inbox) {
     int64_t id = 0;
     for (int64_t k = FIRST_PLAYER_ID; k <= LAST_PLAYER_ID && id == 0; k++)
-        if (!world.creatureExists || !world.creatureExists(k))
-            id = k;
+        if (!world.creatureExists || !world.creatureExists(k)) {
+            bool reserved = false;
+            if (worldHandshake)
+                for (const auto &[peer, pending] : guests)
+                    reserved = reserved || (peer != from && pending.creatureId == k);
+            if (!reserved)
+                id = k;
+        }
     if (id == 0)
-        return; // full: the joiner gets no answer
+        return;         // full: the joiner gets no answer
     guests.erase(from); // a second join replaces the old record (its creature stays)
     Connection &guest = guests[from];
     guest.creatureId = id;
     guest.peer = from;
+    guest.worldAccepted = !worldHandshake || from == transport.self();
     inbox.joined.push_back(from);
     send(from, YourId{id});
 }
@@ -96,6 +104,8 @@ void HostLink::receive(Inbox &inbox) {
         }
         if (!guest)
             continue;
+        if (!guest->worldAccepted && !std::holds_alternative<CubeVulkanHello>(packet) && !std::holds_alternative<CubeVulkanMessage>(packet))
+            continue;
         std::visit(
             [&](auto &p) {
                 using T = std::decay_t<decltype(p)>;
@@ -126,8 +136,11 @@ void HostLink::receive(Inbox &inbox) {
                         send(in.from, CubeVulkanHello{});
                     }
                 } else if constexpr (std::is_same_v<T, CubeVulkanMessage>) {
-                    if (guest->cubeVulkan)
+                    if (guest->cubeVulkan) {
+                        if (worldHandshake && p.channel == worldHandshake->channel && p.payload == worldHandshake->payload)
+                            guest->worldAccepted = true;
                         inbox.extras.emplace_back(in.from, std::move(p));
+                    }
                 }
                 // Anything else is not for the host and is ignored, as the game does.
             },
@@ -144,6 +157,8 @@ void HostLink::reinvite(uint32_t nowMs) {
 }
 
 void HostLink::sendTick(Connection &guest, const std::map<int64_t, CreatureSnapshot> &visible, const Time &time) {
+    if (!guest.worldAccepted)
+        return;
     for (const auto &[id, now] : visible) {
         auto known = guest.known.find(id);
         send(guest.peer, CreatureUpdate{makeDelta(id, now, known == guest.known.end() ? nullptr : &known->second)});
@@ -175,13 +190,18 @@ bool HostLink::sendExtra(PeerId to, const CubeVulkanMessage &message) {
 
 // --- GuestLink ---------------------------------------------------------------------------------
 
-GuestLink::GuestLink(Transport &transport, World world) : transport(transport), world(std::move(world)) {}
+GuestLink::GuestLink(Transport &transport, World world) : transport(transport), world(std::move(world)) {
+}
 
 void GuestLink::send(PeerId to, const Packet &packet) {
     transport.send(to, Channel::ToHost, encode(packet, Direction::ToHost));
 }
 
 void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
+    ++connectionVersion;
+    worldReady = !requireWorldHandshake || host == transport.self();
+    if (requireWorldHandshake)
+        myId = 0;
     // 1. Leave the current host.
     if (transport.valid(currentHost)) {
         send(currentHost, Leave{});
@@ -215,6 +235,10 @@ void GuestLink::receive(uint32_t nowMs, Inbox &inbox) {
         if (fromHost)
             lastHeard = nowMs;
         Packet packet = decode(in.bytes, Direction::ToClient);
+        if (!worldReady && !std::holds_alternative<Invitation>(packet) && !std::holds_alternative<Leave>(packet) &&
+            !std::holds_alternative<YourId>(packet) && !std::holds_alternative<CubeVulkanHello>(packet) &&
+            !std::holds_alternative<CubeVulkanMessage>(packet))
+            continue;
         // Only the current host is listened to, except for invitations and leave notices.
         if (!fromHost && !std::holds_alternative<Invitation>(packet) && !std::holds_alternative<Leave>(packet))
             continue;
@@ -285,7 +309,7 @@ bool GuestLink::checkTimers(uint32_t nowMs) {
 }
 
 bool GuestLink::sendTick(uint32_t nowMs, const CreatureSnapshot &player) {
-    if (!transport.valid(currentHost))
+    if (!transport.valid(currentHost) || !worldReady)
         return false;
     if (lastSendTick && nowMs - *lastSendTick <= SEND_INTERVAL_MS)
         return false;

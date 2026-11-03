@@ -49,6 +49,7 @@
 #include "Config.h"
 #include "Extracted.h"
 #include "worldgen/Generator.h"
+#include "worldgen/AlphaTerrain.h"
 #include "worldgen/Height.h"
 #include "worldgen/Noise.h"
 #include "worldgen/Places.h"
@@ -480,6 +481,20 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     if (checkSteamOnly)
         return 0;
 
+    if (bootstrap.flag("Game", "ImportSteamModSettings", true))
+        for (auto name : {"SteamShadows", "MoonLight", "TerrainVariance", "WaterLilies", "WorldMotion", "DualHair", "TemporalAA"})
+            if (config.load(assets.gameDir() / "Mods" / (std::string(name) + ".ini")))
+                logLine(std::string("Imported settings from Mods/") + name + ".ini");
+    config.load(root / "CubeVulkan.ini");
+    config.load(root / "Menu.ini");
+    for (auto &[key, value] : settingOverrides) // (the command line wins over the menu's choices)
+        config.set(key.substr(0, key.find('.')), key.substr(key.find('.') + 1), value);
+    const std::string worldSource = config.text("World", "Source", "Alpha");
+    const bool alphaGeneration = worldSource == "Alpha";
+    const uint32_t alphaSeed = uint32_t(int64_t(config.number("World", "Seed", 1570745101, -2147483648.0, 4294967295.0)));
+    const std::string terrainSaveProfile = alphaGeneration
+        ? worldgen::AlphaTerrain(alphaSeed).identity(config.number("World", "Scale", 1, 1, 4)) : std::string{};
+
     const bool explicitCharacter = !wantedCharacter.empty();
     // Which recorded character to play: --character, else [Game] Character=, else
     // the most recently recorded one.
@@ -489,8 +504,13 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // saves are never written.
     nativeprogress::ProgressFile saves;
     const bool savesWritable = !noSave && capture.empty() && captureSpeech.empty() && captureFeat.empty() && benchmark <= 0 && !listOnly;
-    saves.open(saveFolder.empty() ? root / "Save" : pathOfUtf8(saveFolder), assets.gameDir() / "Save", pathOfUtf8(bootstrap.text("Saves", "ImportFrom")), savesWritable,
-               [](const std::string &line) { logLine(line); });
+    const bool savesOpened = saves.open(saveFolder.empty() ? root / "Save" : pathOfUtf8(saveFolder), assets.gameDir() / "Save",
+        pathOfUtf8(config.text("Saves", "ImportFrom")), savesWritable,
+        [](const std::string &line) { logLine(line); }, terrainSaveProfile);
+    if (savesWritable && !savesOpened) {
+        fatal("CubeVulkan could not open its save profile. Check CubeVulkan.log for the reason.");
+        return 1;
+    }
     nativeprogress::SpriteTable sprites; // (the game's model list, for the looks of saved characters)
     sprites.load(assets.gameDir() / "Extract");
     // Recorded characters (their animations), then the characters of characters.db.
@@ -507,14 +527,6 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         logLine("Character: no recorded character \"" + wantedCharacter + "\"; playing the newest");
         chosen = pickCharacter(characters, "");
     }
-    if (bootstrap.flag("Game", "ImportSteamModSettings", true))
-        for (auto name : {"SteamShadows", "MoonLight", "TerrainVariance", "WaterLilies", "WorldMotion", "DualHair", "TemporalAA"})
-            if (config.load(assets.gameDir() / "Mods" / (std::string(name) + ".ini")))
-                logLine(std::string("Imported settings from Mods/") + name + ".ini");
-    config.load(root / "CubeVulkan.ini");
-    config.load(root / "Menu.ini");
-    for (auto &[key, value] : settingOverrides) // (the command line wins over the menu's choices)
-        config.set(key.substr(0, key.find('.')), key.substr(key.find('.') + 1), value);
     if (!explicitCharacter) {
         wantedCharacter = config.text("Game", "Character", wantedCharacter);
         chosen = pickCharacter(characters, wantedCharacter);
@@ -658,7 +670,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         std::to_string(terrainSettings.seed));
     Terrain terrain(terrainSettings);
     int viewZones = renderSettings.style == RenderStyle::Steam ? gameOptions.zonesDrawn() : (int)std::ceil(renderSettings.fogDistance / ZONE);
-    // [World] Source=Extracted (default): the real world blocks
+    // [World] Source=Extracted: the owner's captured world blocks
     // saved from the user's game by tools/ZoneExtractor. Generated: CubeVulkan's
     // own generator.
     // Game: the game's own world from CubeVulkan's reimplementation of its generator
@@ -688,13 +700,27 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     // OverworldEvents' travel locations change what the generator makes, so they are set
     // before anything is generated. They go by the game's single-player world, which Game
     // (0x7ea80) names "world" with seed 0x7b, as the extractions are of it.
-    const std::string gameWorldName = "world";
+    const std::string gameWorldName = alphaGeneration ? terrainSaveProfile : "world";
     const int32_t gameWorldSeed = 0x7b;
     if (config.flag("Events", "Enabled", false) && config.flag("Events", "ReplaceTravelLocations", true))
         OverworldEvents::replaceTravelLocations(gameWorldSeed, gameWorldName);
-    const std::string worldSource = config.text("World", "Source", "Extracted");
-    if (worldSource == "Game") {
+    worldgen::setAlphaTerrain({});
+    if (worldSource == "Game" || alphaGeneration) {
+        worldgen::setWorldSeed(0); // Canonical Steam layout seed; Alpha's landscape seed is separate.
         worldgen::setWorldScale(config.number("World", "Scale", 1, 1, 4));
+        if (alphaGeneration) {
+            std::string why;
+            auto palms = alphagen::loadTreeModels(assets.gameDir() / "sprites", why);
+            if (!palms) {
+                fatal("Alpha terrain needs the owner's palm leaf models: " + why);
+                return 1;
+            }
+            worldgen::setAlphaTerrain(std::make_shared<worldgen::AlphaTerrain>(alphaSeed, std::move(palms)));
+            if (worldgen::terrainIdentity() != terrainSaveProfile) {
+                fatal("The world generation settings do not match the selected save profile.");
+                return 1;
+            }
+        }
         { // the world's day (world+8, Save/world.db): some encounters go by it, and zones are
           // refreshed for it when loaded (0x31c540: shoppers, travellers' camps)
             worldgen::setWorldDay(saves.world().day);
@@ -702,13 +728,14 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
         // Start on dry land near the world's origin, where the game's starting region is.
         int homeX = 0, homeY = 0;
-        for (int ring = 0; ring < 64 && worldgen::groundHeight(homeX, homeY) < 4; ring++)
+        for (int ring = 0; !alphaGeneration && ring < 64 && worldgen::groundHeight(homeX, homeY) < 4; ring++)
             for (int i = 0; i < 16 && worldgen::groundHeight(homeX, homeY) < 4; i++) {
                 double a = i * 6.283185307179586 / 16;
                 homeX = (int)std::lround(std::cos(a) * ring * 64), homeY = (int)std::lround(std::sin(a) * ring * 64);
             }
         extractedWorld.openGenerated(homeX, homeY, assets.gameDir() / "Extract");
         useExtracted = true;
+        logLine("World source: " + extractedWorld.sourceIdentity());
         { // the game's creature tables (tools/ZoneExtractor's oracle) for the spawn points
             std::string why;
             if (worldgen::loadCreatureTables(assets.gameDir() / "Extract" / "oracle", &why))
@@ -1027,7 +1054,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
     else
         player.position.z = groundAt(player.position.x, player.position.y);
     // Back where the character was last saved, if it was in this world.
-    const std::string worldName = useExtracted ? extractedWorld.directory().filename().string() : "generated";
+    const std::string worldName = !useExtracted ? "generated" : alphaGeneration
+        ? extractedWorld.sourceIdentity() : extractedWorld.directory().filename().string();
     const bool resumed = (saveGame.hasPosition && saveGame.world == worldName) || enteredAt;
     if (resumed) {
         // Exactly where the save has the character, facing yaw 0; no ground search.
@@ -7380,13 +7408,16 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
                     return value < 0 ? "-" + text : text;
                 };
                 const worldgen::ColumnField field = worldgen::columnField(bx, by);
+                const auto alphaField = useExtracted && extractedWorld.generated() ? worldgen::alphaTerrainSample(bx, by) : std::nullopt;
+                const float warmth = alphaField ? alphaField->warmth : field.colours.warmth;
+                const float moisture = alphaField ? alphaField->moisture : field.colours.dryness;
                 char clock[64];
                 std::snprintf(clock, sizeof clock, "  TIME %d:%02d", (int)hour, (int)(hour * 60.0f) % 60);
                 // (the map's cursor while the map is open and the pointer is on it)
                 const int32_t shownX = mapOpen && mapCursorKnown ? (int32_t)mapCursor.x : bx, shownY = mapOpen && mapCursorKnown ? (int32_t)mapCursor.y : by;
                 hs.infoSmall = "COORDS " + coordinate(shownX - 512) + " | " + coordinate(shownY - 512) + clock + "  TEMP " +
-                               std::to_string(-20 - (int)(field.colours.warmth * -60.0f)) + " \xb0" + "C  HUM " +
-                               std::to_string((int)(field.colours.dryness * 100.0f)) +
+                               std::to_string(-20 - (int)(warmth * -60.0f)) + " \xb0" + "C  HUM " +
+                               std::to_string((int)(moisture * 100.0f)) +
                                "%  ZOOM 1:" + std::to_string((int32_t)(std::pow(2.f, float(mapZoom)) * 4.f));
                 // The land: its biome's name with the region's generated one (the cell hash of the region).
                 std::string text = landNameOf(worldgen::regionAt(bx, by));

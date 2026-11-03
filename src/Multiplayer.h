@@ -45,8 +45,8 @@ class Multiplayer {
 
     struct Setup {
         Way way = Way::Local;
-        uint16_t port = 0;       // Address: the UDP port to open (0: any)
-        float loss = 0;          // Address: the fraction of datagrams dropped on purpose (testing)
+        uint16_t port = 0; // Address: the UDP port to open (0: any)
+        float loss = 0;    // Address: the fraction of datagrams dropped on purpose (testing)
         SteamSession *steam = nullptr;
         // The worlds: the host world (null: no host, which no game is; kept for tests) and the
         // client world (null: a dedicated server).
@@ -105,10 +105,10 @@ class Multiplayer {
     struct FriendRow {
         uint64_t id = 0;
         std::string name;
-        bool hostOfMine = false;  // this player is that friend's guest: " (host)"
-        bool joined = false;      // connected to this player's host: " (joined)"
-        bool invited = false;     // invited by this player's host: " (invited)"
-        bool invitation = false;  // that friend's invitation to this player is live
+        bool hostOfMine = false; // this player is that friend's guest: " (host)"
+        bool joined = false;     // connected to this player's host: " (joined)"
+        bool invited = false;    // invited by this player's host: " (invited)"
+        bool invitation = false; // that friend's invitation to this player is live
         bool eligible = true;
     };
     // The immediate Steam friends, as the menu lists them when it opens (Steam only).
@@ -155,6 +155,14 @@ class Multiplayer {
 
     void clearRegionView();
     void sendRegionLevels();
+    void exchangeWorldIdentity(uint32_t nowMs);
+    std::string worldIdentity;
+    cwnet::CubeVulkanMessage worldDescriptor;
+    bool worldIdentityRequired = false;
+    std::set<cwnet::PeerId> sentWorldIdentities;
+    std::map<cwnet::PeerId, uint32_t> pendingWorldIdentities;
+    uint64_t requestedWorldEpoch = uint64_t(-1), pendingWorldEpoch = uint64_t(-1);
+    uint32_t pendingWorldSince = 0;
 
     void notice(const std::string &line, bool invitation = false);
     std::string nameOf(uint64_t peer) const;

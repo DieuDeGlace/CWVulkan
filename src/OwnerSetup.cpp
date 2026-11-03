@@ -200,8 +200,8 @@ Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::R
 bool worldRequired(const fs::path &ini) {
     Config config;
     config.load(ini);
-    const std::string source = config.text("World", "Source", "Extracted");
-    return _stricmp(source.c_str(), "Game") != 0 && _stricmp(source.c_str(), "Generated") != 0;
+    const std::string source = config.text("World", "Source", "Alpha");
+    return _stricmp(source.c_str(), "Alpha") != 0 && _stricmp(source.c_str(), "Game") != 0 && _stricmp(source.c_str(), "Generated") != 0;
 }
 
 bool Completeness::readyToPlay() const {

@@ -5,8 +5,12 @@
 #include "alphagen/SurfaceStore.h"
 #include "alphagen/SteamBridge.h"
 #include "alphagen/ReliefStore.h"
+#include "alphagen/LandscapeStore.h"
 #include "alphagen/Trees.h"
 #include "CubModel.h"
+#include "worldgen/AlphaTerrain.h"
+#include "worldgen/MapModel.h"
+#include "Extracted.h"
 #include <stdexcept>
 #include <future>
 #include <cmath>
@@ -336,6 +340,169 @@ int alphaTerrainTests() {
         std::string why;
         check(!alphagen::loadTreeModels("build/alpha-missing-owner-models", why) && !why.empty(),
               "owner palm loader reports missing models without synthesizing replacement assets");
+    }
+    {
+        std::string why;
+        const auto landscape = terrain.generateLandscape(32800, 32800, why);
+        check(landscape && why.empty() && !landscape->zone->trees.empty(), "hybrid landscape places a voxel forest after terrain boulders");
+        if (landscape) {
+            size_t wood = 0, leaves = 0;
+            for (const auto &column : landscape->zone->columns)
+                for (const auto block : column.blocks) {
+                    wood += block.type() == alphagen::WOOD_TYPE;
+                    leaves += block.type() == alphagen::LEAVES_TYPE;
+                }
+            check(wood > 0 && leaves > 0 && landscape->zone->statics.empty(),
+                  "forest geometry exists without silently generating deferred Alpha structures");
+            check(stage && landscape->random.count() > stage->random.count(),
+                  "landscape terrain and trees continue a distinct completed stream");
+            bool positions = true;
+            for (const auto &tree : landscape->zone->trees)
+                positions &= landscape->zone->contains(tree.x, tree.y) && tree.size > 0 && tree.height > 0;
+            check(positions, "forest anchors stay inside their owning Alpha parent");
+        }
+        alphagen::LandscapeStore source(123, {}, 1);
+        const auto parent = source.parent(32800, 32800);
+        check(parent && landscape && fingerprint(*parent->zone) == fingerprint(*landscape->zone),
+              "cached landscape generation reproduces uncached terrain and forests");
+        const auto native = alphagen::steamTile(source, 0, 0, why);
+        const auto home = source.column(0, 0);
+        check(native && home && why.empty() && native->columns()[0].base == home->raw().bottom &&
+                  native->columns()[0].blocks.size() == home->raw().blocks.size(),
+              "completed landscape columns reach Steam-sized terrain consumers");
+        check(!terrain.generateLandscape(65536, 0, why) && !why.empty(), "landscape finite-world rejection is explicit");
+    }
+    {
+        const auto nativeWorld = worldgen::worldValues(0);
+        auto zone = worldgen::generateZone(nativeWorld, 0, 0);
+        const auto original = zone;
+        worldgen::SpawnPoint point;
+        point.x = point.y = 0;
+        point.z = int64_t(100) * worldgen::DOTS;
+        zone.spawns.points[123] = point;
+        worldgen::AlphaTerrain hybrid(123);
+        std::string why;
+        check(hybrid.compose(zone, nativeWorld, why) && why.empty(), "Alpha landscape composes with a complete Steam-generated zone");
+        const auto ground = [](const worldgen::TerrainColumn &column) {
+            for (int i = int(column.blocks.size()) - 1; i >= 0; --i) {
+                const auto &b = column.blocks[size_t(i)];
+                if (!worldgen::isOpen(b) && b.type != 7 && b.type != 8 && b.type != 11)
+                    return column.base + i + 1;
+            }
+            return column.base;
+        };
+        const int delta = ground(zone.terrain.columns[0]) - ground(original.terrain.columns[0]);
+        check(zone.spawns.points[123].z == point.z + int64_t(delta) * worldgen::DOTS,
+              "Steam spawn height follows composed terrain while XY and fractional position remain unchanged");
+        const auto steamAgain = worldgen::generateZone(nativeWorld, 0, 0);
+        bool unchanged = true;
+        for (size_t i = 0; i < original.terrain.columns.size(); ++i)
+            unchanged &= original.terrain.columns[i].base == steamAgain.terrain.columns[i].base &&
+                         original.terrain.columns[i].blocks == steamAgain.terrain.columns[i].blocks;
+        check(unchanged, "hybrid composition does not mutate the separate Steam generator");
+        auto broken = original;
+        broken.terrain.columns.resize(1);
+        check(!hybrid.compose(broken, nativeWorld, why) && broken.terrain.columns.size() == 1 && !why.empty(),
+              "incomplete native base rejection cannot publish partial Alpha terrain");
+        check(hybrid.identity() != hybrid.identity(2) && hybrid.identity() != worldgen::AlphaTerrain(124).identity(),
+              "generation identity separates seed and world-scale inputs");
+        worldgen::CellObjects cells(nativeWorld);
+        worldgen::BuildingRules rules(cells);
+        bool constructionChecked = false;
+        for (int px = -16; px <= 16 && !constructionChecked; ++px)
+            for (int py = -16; py <= 16 && !constructionChecked; ++py) {
+                const bool big = worldgen::bigCell(px, py);
+                if (worldgen::placeKind(px, py, big) != 5)
+                    continue;
+                const auto town = worldgen::cellPoint(px, py, big);
+                const int centerX = worldgen::floorDiv(town.x, 4), centerY = worldgen::floorDiv(town.y, 4);
+                for (int dx = -12; dx <= 12 && !constructionChecked; ++dx)
+                    for (int dy = -12; dy <= 12 && !constructionChecked; ++dy) {
+                        const int cx = centerX + dx, cy = centerY + dy;
+                        if (!worldgen::isBuilding(rules.type(cx, cy)) && rules.castleCell(cx, cy).kind == 0)
+                            continue;
+                        const int zx = worldgen::floorDiv(cx, 2), zy = worldgen::floorDiv(cy, 2);
+                        auto built = worldgen::generateZone(nativeWorld, zx, zy);
+                        const auto before = built.terrain.columns;
+                        const bool composed = hybrid.compose(built, nativeWorld, why);
+                        bool kept = composed;
+                        for (size_t i = 0; i < before.size(); ++i)
+                            kept &= built.terrain.columns[i].base == before[i].base && built.terrain.columns[i].blocks == before[i].blocks;
+                        check(kept, "whole Steam construction-admitted tile retains all original surface and underground columns");
+                        check(!built.terrain.columns[0].fullColour, "retained Steam construction keeps its original color encoding");
+                        const auto originalMap = worldgen::mapRegion(zx, zy, 0);
+                        auto composedMap = originalMap;
+                        hybrid.composeMap(composedMap);
+                        bool mapKept = true;
+                        for (int i = 3; i < 19; ++i)
+                            for (int j = 3; j < 19; ++j)
+                                for (int k = 0; k < originalMap.sizeZ; ++k) {
+                                    const int mappedK = originalMap.base() + k - composedMap.base();
+                                    if (mappedK < 0 || mappedK >= composedMap.sizeZ) {
+                                        mapKept = false;
+                                        continue;
+                                    }
+                                    const auto *before = originalMap.voxel(i, j, k);
+                                    const auto *after = composedMap.voxel(i, j, mappedK);
+                                    mapKept &= std::equal(before, before + 3, after);
+                                }
+                        check(mapKept, "Steam construction map columns keep their full RGB geometry and absolute height");
+                        constructionChecked = true;
+                    }
+            }
+        check(constructionChecked, "construction preservation fixture is exercised");
+    }
+    {
+        const auto seed = worldgen::currentWorld().seed;
+        auto profile = std::make_shared<worldgen::AlphaTerrain>(123, nullptr, seed);
+        const auto steamIdentity = worldgen::terrainIdentity();
+        worldgen::setAlphaTerrain(profile);
+        const auto climate = worldgen::alphaTerrainSample(0, 0);
+        check(climate && climate->warmth == world.warmth(alphacoords::HOME, alphacoords::HOME) &&
+                  climate->moisture == world.moisture(alphacoords::HOME, alphacoords::HOME) &&
+                  climate->sea == world.seaShare(alphacoords::HOME, alphacoords::HOME) &&
+                  climate->fire == world.fireShare(alphacoords::HOME, alphacoords::HOME),
+              "sky factors use the mapped Alpha World's continuous blends");
+        check(!worldgen::alphaTerrainSample(INT32_MAX, 0), "sky/map overview does not wrap outside Alpha");
+        const auto alphaMap = worldgen::mapRegion(0, 0, 0);
+        int32_t mapTop = INT32_MIN;
+        for (int k = 0; k < alphaMap.sizeZ; ++k) {
+            const auto rgb = alphaMap.voxel(3, 3, k);
+            if (rgb[0] || rgb[1] || rgb[2])
+                mapTop = (alphaMap.base() + k) * alphaMap.unit;
+        }
+        const auto &mapColumn = worldgen::zone(0, 0)->terrain.columns[0];
+        int32_t columnTop = mapColumn.base;
+        for (int64_t k = int64_t(mapColumn.blocks.size()) - 1; k >= 0; --k) {
+            if (!worldgen::isOpen(mapColumn.blocks[size_t(k)])) {
+                columnTop = mapColumn.base + int32_t(k) + 1;
+                break;
+            }
+        }
+        check(mapColumn.fullColour && mapTop == (std::max(1, columnTop) / alphaMap.unit) * alphaMap.unit,
+              "close Alpha map top agrees with the playable landscape at the same coordinate");
+        check(worldgen::usingAlphaTerrain() && worldgen::terrainIdentity() != steamIdentity &&
+                  worldgen::terrainIdentity() == profile->identity(worldgen::worldScale()),
+              "canonical generator mode changes cache/profile identity without replacing Steam generation");
+        check(worldgen::terrainZoneAvailable(0, 0) && !worldgen::terrainZoneAvailable(INT32_MAX, 0),
+              "generated-world admission respects the Alpha finite coordinate frame");
+        {
+            ExtractedWorld reader;
+            reader.openGenerated(0, 0);
+            float surface = 0;
+            check(reader.generated() && reader.sourceIdentity() == worldgen::terrainIdentity() && reader.surface(0, 0, surface),
+                  "playable world reader loads Alpha geometry through the canonical generation path");
+            check(reader.solidAt(0, 0, surface - 0.25) && !reader.solidAt(0, 0, surface + 0.25) && reader.home().z == surface,
+                  "Alpha spawn height and collision agree on the generated surface");
+            auto fork = reader.forkSource();
+            float forkHeight = 0;
+            check(fork->sourceIdentity() == reader.sourceIdentity() && fork->surface(0, 0, forkHeight) && forkHeight == surface,
+                  "independent host/mirror readers reproduce the same Alpha source geometry");
+        }
+        worldgen::setAlphaTerrain({});
+        check(!worldgen::alphaTerrainSample(0, 0), "Steam mode retains its separate climate provider");
+        check(!worldgen::usingAlphaTerrain() && worldgen::terrainIdentity() == steamIdentity,
+              "returning to Steam mode restores its distinct source identity");
     }
     stage.reset();
     std::optional<alphagen::ColumnLease> held;

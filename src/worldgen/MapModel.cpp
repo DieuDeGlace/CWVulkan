@@ -954,6 +954,7 @@ MapRegion mapRegion(int32_t rx, int32_t ry, int level) {
     m.unit = mapUnit(level);
     m.reach = mapReach(m.unit);
     ModelBuilder(m).build();
+    composeTerrainMap(m);
     return m;
 }
 

@@ -19,12 +19,12 @@ using namespace nativesaves;
 
 namespace {
 int failures = 0;
-#define SAVE_CHECK(...)                                                                            \
-    do {                                                                                           \
-        if (!(__VA_ARGS__)) {                                                                      \
-            std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__);                    \
-            failures++;                                                                            \
-        }                                                                                          \
+#define SAVE_CHECK(...)                                                                                                                    \
+    do {                                                                                                                                   \
+        if (!(__VA_ARGS__)) {                                                                                                              \
+            std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__);                                                             \
+            failures++;                                                                                                                    \
+        }                                                                                                                                  \
     } while (0)
 
 // A test character with something in every field.
@@ -482,6 +482,75 @@ void zoneStates() {
     SAVE_CHECK(fresh.level == 1 && fresh.usedCells.count({4, 5}));
 }
 
+void terrainProfiles() {
+    const auto root = scratchFolder("terrain-profiles");
+    const auto game = root / "original-game";
+    const auto base = root / "engine";
+    fs::create_directories(game);
+    fs::create_directories(base);
+    auto character = testCharacter();
+    std::vector<uint8_t> before;
+    {
+        CharacterStore source;
+        SAVE_CHECK(source.open(base / "characters.db"));
+        SAVE_CHECK(source.create(character) == 0);
+        SaveGame notes;
+        notes.hairStyle = hair::Style{};
+        notes.world = "old-steam-world";
+        SAVE_CHECK(source.writeNotes(0, notes.text()));
+        Character loaded;
+        SAVE_CHECK(source.load(0, loaded));
+        before = writeCharacter(loaded);
+    }
+    WorldState old;
+    old.dead.insert(123);
+    old.day = 99;
+    SAVE_CHECK(writeWorldFile(base / "world.db", old));
+    const auto log = [](const std::string &) {};
+    {
+        nativeprogress::ProgressFile profile;
+        SAVE_CHECK(profile.open(base, game, {}, true, log, "alpha-profile-a"));
+        SAVE_CHECK(profile.folder() == base / "alpha-profile-a");
+        SAVE_CHECK(profile.world().dead.empty() && profile.world().day != 99);
+        Character copied;
+        SAVE_CHECK(profile.store().load(0, copied));
+        SAVE_CHECK(copied.name == character.name && copied.level == character.level && copied.gold == character.gold);
+        SAVE_CHECK(copied.equipment == character.equipment && copied.recipes == character.recipes);
+        SAVE_CHECK((copied.position == std::array<int64_t, 3>{}) && copied.discoveredZones.empty() && copied.usedCells.empty());
+        SAVE_CHECK(copied.map88.empty() && copied.finishedMissions.empty() && copied.regionValues.empty() && copied.stars.empty());
+        std::string notes;
+        SaveGame decoded;
+        SAVE_CHECK(profile.store().readNotes(0, notes) && decoded.parse(notes) && decoded.hairStyle.has_value());
+        copied.level = 42;
+        SAVE_CHECK(profile.store().save(0, copied));
+        SAVE_CHECK(profile.saveWorld(3, 1000, {77}));
+    }
+    {
+        nativeprogress::ProgressFile reopened, second, readOnly, blocked, invalid;
+        SAVE_CHECK(reopened.open(base, game, {}, true, log, "alpha-profile-a"));
+        Character copied;
+        SAVE_CHECK(reopened.store().load(0, copied) && copied.level == 42 && reopened.world().dead.count(77));
+        SAVE_CHECK(second.open(base, game, {}, true, log, "alpha-profile-b"));
+        SAVE_CHECK(second.store().load(0, copied) && copied.level == character.level && second.world().dead.empty());
+        SAVE_CHECK(!readOnly.open(base, game, {}, false, log, "alpha-profile-no-save"));
+        SAVE_CHECK(!fs::exists(base / "alpha-profile-no-save"));
+        SAVE_CHECK(!blocked.open(game, game, {}, true, log, "alpha-profile-invalid"));
+        SAVE_CHECK(!fs::exists(game / "alpha-profile-invalid"));
+        const auto absentGame = root / "uncreated-game" / "Save";
+        SAVE_CHECK(!blocked.open(absentGame, absentGame, {}, true, log, "alpha-profile-invalid"));
+        SAVE_CHECK(!fs::exists(absentGame));
+        SAVE_CHECK(!invalid.open(base, game, {}, true, log, "../escape"));
+    }
+    {
+        CharacterStore source;
+        Character unchanged;
+        SAVE_CHECK(source.openReadOnly(base / "characters.db") && source.load(0, unchanged));
+        SAVE_CHECK(writeCharacter(unchanged) == before);
+        WorldState preserved;
+        SAVE_CHECK(readWorldFile(base / "world.db", preserved) && preserved.day == 99 && preserved.dead.count(123));
+    }
+}
+
 void generatedObjectMetadata() {
     worldgen::ZoneObject object;
     object.type = 0x54;
@@ -523,5 +592,6 @@ int saveFormatTests() {
     importing();
     zoneStates();
     generatedObjectMetadata();
+    terrainProfiles();
     return failures;
 }

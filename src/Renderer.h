@@ -178,6 +178,9 @@ struct WorldProbe {
     // is in the game's blocks (game = renderer position + origin).
     std::function<SkyColumn(int32_t x, int32_t y)> column;
     glm::dvec3 origin{0};
+    // Optional absolute Alpha cloud frame, separate from Steam scene coordinates.
+    glm::dvec2 alphaCloudOrigin{0};
+    std::function<SkyColumn(int32_t x, int32_t y)> alphaCloudColumn;
     std::function<steamlighting::Environment(glm::vec3)> sceneLighting;
     std::function<std::vector<steampoints::ZoneKey>()> loadedLightZones;
     std::function<std::optional<scenevisibility::Bounds>(int64_t x, int64_t y)> sceneZone;

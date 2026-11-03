@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cwctype>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -29,13 +31,13 @@ void resetDay(SaveGame &progress) {
     progress.purchases.clear();
     if (progress.inventoryAuthoritative && progress.nativeInventory)
         progress.nativeInventory->inventory.clearType(0x16);
-    progress.bag.erase(std::remove_if(progress.bag.begin(), progress.bag.end(),
-                                      [](const SaveGame::Bagged &item) { return item.category == 0x16; }),
-                       progress.bag.end());
+    progress.bag.erase(
+        std::remove_if(progress.bag.begin(), progress.bag.end(), [](const SaveGame::Bagged &item) { return item.category == 0x16; }),
+        progress.bag.end());
 }
 
 namespace {
-constexpr double UNITS = 65536.0;      // world units in a block
+constexpr double UNITS = 65536.0;         // world units in a block
 constexpr float RECORD_ABOVE_FEET = 1.0f; // SpawnedCreatures::NATIVE_FEET
 constexpr float LOCAL_Z_OFFSET = 128.0f;  // ExtractedWorld::Z_OFFSET
 } // namespace
@@ -73,8 +75,12 @@ bool SpriteTable::load(const fs::path &extractDir) {
     return !names.empty();
 }
 
-std::string SpriteTable::name(int id) const { return id >= 0 && (size_t)id < names.size() ? names[(size_t)id] : std::string(); }
-bool SpriteTable::has(const std::string &n) const { return ids.count(n) != 0; }
+std::string SpriteTable::name(int id) const {
+    return id >= 0 && (size_t)id < names.size() ? names[(size_t)id] : std::string();
+}
+bool SpriteTable::has(const std::string &n) const {
+    return ids.count(n) != 0;
+}
 
 const char *peopleWord(int32_t people) {
     static const char *const WORDS[8] = {"human", "elf", "dwarf", "orc", "goblin", "lizard", "undead", "frogman"};
@@ -181,19 +187,33 @@ bool appearanceOf(const nativesaves::Looks &looks, std::array<uint8_t, 0xb0> &ou
 
 const char *raceWord(int32_t race) {
     switch (race) {
-    case 0: case 1: return "Elf";
-    case 2: case 3: return "Human";
-    case 4: case 5: return "Goblin";
-    case 7: case 8: return "Lizardman";
-    case 9: case 10: return "Dwarf";
-    case 11: case 12: return "Orc";
-    case 15: case 16: return "Undead";
-    default: return "";
+    case 0:
+    case 1:
+        return "Elf";
+    case 2:
+    case 3:
+        return "Human";
+    case 4:
+    case 5:
+        return "Goblin";
+    case 7:
+    case 8:
+        return "Lizardman";
+    case 9:
+    case 10:
+        return "Dwarf";
+    case 11:
+    case 12:
+        return "Orc";
+    case 15:
+    case 16:
+        return "Undead";
+    default:
+        return "";
     }
 }
 
-bool entryFor(const Character &c, int slot, const std::vector<CharacterEntry> &recorded, const SpriteTable &sprites,
-              CharacterEntry &out) {
+bool entryFor(const Character &c, int slot, const std::vector<CharacterEntry> &recorded, const SpriteTable &sprites, CharacterEntry &out) {
     const CharacterEntry *base = nullptr;
     for (const CharacterEntry &r : recorded)
         if (!r.created && !r.native && r.classType == c.classType &&
@@ -263,8 +283,12 @@ int32_t i32At(const Item &it, size_t at) {
     std::memcpy(&v, &it[at], 4);
     return v;
 }
-bool isEmpty(const Item &it) { return it[field::TYPE] == 0; }
-bool isGear(int category) { return category >= 3 && category <= 9; }
+bool isEmpty(const Item &it) {
+    return it[field::TYPE] == 0;
+}
+bool isGear(int category) {
+    return category >= 3 && category <= 9;
+}
 
 // The inventory tab an item goes in (the game's tab of an item, as the inventory screen sorts).
 int tabOf(int category) {
@@ -274,14 +298,22 @@ int tabOf(int category) {
 // The equipment slot gear of a category is found for (as gameplay places it).
 int slotFor(int category) {
     switch (category) {
-    case 3: return Gear::WeaponRight;
-    case 4: return Gear::Chest;
-    case 5: return Gear::Hands;
-    case 6: return Gear::Feet;
-    case 7: return Gear::Shoulder;
-    case 8: return Gear::Neck;
-    case 9: return Gear::RingRight;
-    default: return Gear::SLOTS;
+    case 3:
+        return Gear::WeaponRight;
+    case 4:
+        return Gear::Chest;
+    case 5:
+        return Gear::Hands;
+    case 6:
+        return Gear::Feet;
+    case 7:
+        return Gear::Shoulder;
+    case 8:
+        return Gear::Neck;
+    case 9:
+        return Gear::RingRight;
+    default:
+        return Gear::SLOTS;
     }
 }
 
@@ -460,8 +492,10 @@ void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame
     c.level = std::max(1, s.level);
     c.experience = s.xp;
     c.gold = s.gold;
-    if (s.recipes) c.recipes = *s.recipes;
-    if (s.specialization >= 0) c.specialization = (uint8_t)s.specialization;
+    if (s.recipes)
+        c.recipes = *s.recipes;
+    if (s.specialization >= 0)
+        c.specialization = (uint8_t)s.specialization;
     if (s.inventoryAuthoritative && s.nativeInventory) {
         s.nativeInventory->writeCharacter(c);
     } else {
@@ -608,39 +642,128 @@ int migrateOldSaves(nativesaves::CharacterStore &store, const fs::path &saveDir,
 
 // --- The session's Save folder -----------------------------------------------------------------
 
-bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const fs::path &importFrom, bool writable,
-                        const std::function<void(const std::string &)> &log) {
+namespace {
+// A new terrain profile inherits character identity/equipment, never geographic
+// state or an old world's edits. Publish the complete character copy atomically.
+bool initializeProfileCharacters(const fs::path &base, const fs::path &importFrom, const fs::path &target, std::string &error) {
     std::error_code ec;
-    if (fs::exists(folder, ec) && fs::exists(gameSave, ec) && fs::equivalent(folder, gameSave, ec)) {
+    const auto destination = target / "characters.db";
+    if (fs::exists(destination, ec))
+        return true;
+    auto source = base / "characters.db";
+    if (!fs::exists(source, ec))
+        source = importFrom.empty() ? fs::path{} : importFrom / "characters.db";
+    if (source.empty() || !fs::exists(source, ec))
+        return true; // Normal first install; the character store will start empty.
+    auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    auto temporary = target / ("characters-import-" + std::to_string(nonce) + ".db");
+    while (fs::exists(temporary, ec))
+        temporary = target / ("characters-import-" + std::to_string(++nonce) + ".db");
+    {
+        nativesaves::CharacterStore original, copied;
+        if (!original.openReadOnly(source, &error) || !copied.open(temporary, &error))
+            return false;
+        for (int i = 0; i < original.count(); ++i) {
+            nativesaves::Character character;
+            if (!original.load(i, character))
+                continue; // Deleted slots are not characters.
+            character.position = {};
+            character.orientation = {};
+            character.discoveredZones.clear();
+            character.set48.clear();
+            character.discoveredLands.clear();
+            character.map88.clear();
+            character.map98.clear();
+            character.usedCells.clear();
+            character.setB8.clear();
+            character.setC8.clear();
+            character.finishedMissions.clear();
+            character.missionTimers.clear();
+            character.worldSeed = 0;
+            character.worldName.clear();
+            character.flightPoints.clear();
+            character.homeCell = {};
+            character.regionValues.clear();
+            character.stars.clear();
+            character.regionHistory.clear();
+            character.purchases.clear();
+            const int slot = copied.create(character);
+            if (slot < 0) {
+                error = "cannot copy a character into the new terrain profile";
+                return false;
+            }
+            std::string notes;
+            SaveGame previous, fresh;
+            if (original.readNotes(i, notes) && previous.parse(notes))
+                fresh.hairStyle = previous.hairStyle;
+            if (!copied.writeNotes(slot, fresh.text())) {
+                error = "cannot copy character appearance notes";
+                return false;
+            }
+        }
+    }
+    fs::rename(temporary, destination, ec);
+    if (ec) {
+        error = "cannot publish terrain-profile characters: " + ec.message();
+        return false;
+    }
+    return true;
+}
+} // namespace
+
+bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const fs::path &importFrom, bool writable,
+                        const std::function<void(const std::string &)> &log, const std::string &profile) {
+    std::error_code ec;
+    // equivalent() alone cannot protect a game's Save directory before it exists.
+    const auto basePath = fs::weakly_canonical(folder, ec);
+    const bool baseResolved = !ec;
+    const auto gamePath = fs::weakly_canonical(gameSave, ec);
+    auto baseKey = basePath.native(), gameKey = gamePath.native();
+#ifdef _WIN32
+    std::transform(baseKey.begin(), baseKey.end(), baseKey.begin(), [](wchar_t c) { return std::towlower(c); });
+    std::transform(gameKey.begin(), gameKey.end(), gameKey.begin(), [](wchar_t c) { return std::towlower(c); });
+#endif
+    const bool samePath = !gameSave.empty() && baseResolved && !ec && baseKey == gameKey;
+    if (samePath || (fs::exists(folder, ec) && fs::exists(gameSave, ec) && fs::equivalent(folder, gameSave, ec))) {
         log("Saves: " + folder.string() + " is the game's own Save folder; nothing is saved");
         return false;
     }
-    folder_ = folder;
+    if (profile.size() > 128 || profile.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789-") != std::string::npos) {
+        log("Saves: invalid terrain profile identity");
+        return false;
+    }
+    const auto target = profile.empty() ? folder : folder / profile;
+    folder_ = target;
     std::string why;
     if (!writable) {
         world_ = nativesaves::WorldState{};
-        if (fs::exists(folder / "world.db", ec)) {
+        if (fs::exists(target / "world.db", ec)) {
             nativesaves::BlobDatabase db;
             std::vector<uint8_t> state;
-            if (db.openReadOnly(folder / "world.db") && db.read("state", state))
+            if (db.openReadOnly(target / "world.db") && db.read("state", state))
                 nativesaves::readWorld(state, world_);
         }
-        return store_.openReadOnly(folder / "characters.db", &why);
+        return store_.openReadOnly(target / "characters.db", &why);
     }
-    fs::create_directories(folder, ec);
-    if (!importFrom.empty()) {
+    fs::create_directories(target, ec);
+    if (!profile.empty()) {
+        if (!initializeProfileCharacters(folder, importFrom, target, why)) {
+            log("Saves: " + why);
+            return false;
+        }
+    } else if (!importFrom.empty()) {
         std::string report;
         nativesaves::importGameSaves(importFrom, folder, report);
         std::istringstream lines(report);
         for (std::string line; std::getline(lines, line);)
             log("Saves: import " + line);
     }
-    if (!store_.open(folder / "characters.db", &why)) {
+    if (!store_.open(target / "characters.db", &why)) {
         log("Saves: " + why);
         return false;
     }
     world_ = nativesaves::WorldState{};
-    if (fs::exists(folder / "world.db", ec) && !nativesaves::readWorldFile(folder / "world.db", world_, &why))
+    if (fs::exists(target / "world.db", ec) && !nativesaves::readWorldFile(target / "world.db", world_, &why))
         log("Saves: world.db unread (" + why + ")");
     return true;
 }

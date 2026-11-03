@@ -31,6 +31,13 @@ Multiplayer::~Multiplayer() {
 }
 
 bool Multiplayer::start(const Setup &setup, std::string &error) {
+    worldIdentity = setup.blocks ? setup.blocks->sourceIdentity() : std::string{};
+    worldIdentityRequired = setup.blocks && setup.blocks->generated() && worldgen::usingAlphaTerrain();
+    worldDescriptor = {"cwv.world-generation.v1", {1, uint8_t(worldIdentityRequired)}};
+    worldDescriptor.payload.insert(worldDescriptor.payload.end(), worldIdentity.begin(), worldIdentity.end());
+    sentWorldIdentities.clear();
+    pendingWorldIdentities.clear();
+    requestedWorldEpoch = pendingWorldEpoch = uint64_t(-1);
     how = setup.way;
     steam = setup.steam;
     switch (how) {
@@ -87,6 +94,9 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
                 regionLevelsChanged();
         };
         hostGame = std::make_unique<cwnet::HostGame>(*transport, *hostWorld);
+        hostGame->link().setWorldHandshake(
+            worldIdentityRequired ? std::optional<cwnet::CubeVulkanMessage>{{"cwv.world-generation.ack.v1", worldDescriptor.payload}}
+                                  : std::nullopt);
         hostGame->log = [this](const std::string &line) {
             if (log)
                 log(line);
@@ -94,6 +104,8 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
     }
     if (hostGame)
         hostGame->extra = [this](cwnet::PeerId from, const cwnet::CubeVulkanMessage &message) {
+            if (message.channel == "cwv.world-generation.request.v1" && message.payload.empty())
+                sentWorldIdentities.erase(from);
             if (message.channel == "cwv.region-levels.request.v1" && message.payload.empty())
                 sentRegionLevels.erase(from); // requests never contain client-authored region levels
         };
@@ -103,8 +115,23 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
             if (hostGame)
                 hostGame->link().dropAll();
         });
+        client->link().waitForWorldHandshake(worldIdentityRequired);
         client->extra = [this](const cwnet::CubeVulkanMessage &message) {
-            if (message.channel != regionlevels::CHANNEL)
+            if (message.channel == "cwv.world-generation.v1") {
+                if (message.payload.size() < 2 || message.payload.size() > 258 || message.payload[0] != 1 || message.payload[1] > 1)
+                    return;
+                const std::string identity(message.payload.begin() + 2, message.payload.end());
+                if ((worldIdentityRequired || message.payload[1]) && identity != worldIdentity) {
+                    notice("World generation differs. Select the host's terrain mode, seed and scale before joining.");
+                    clearRegionView();
+                    client->link().goHome(clockNow());
+                    return;
+                }
+                client->link().acceptWorld();
+                client->link().sendExtra({"cwv.world-generation.ack.v1", message.payload});
+                return;
+            }
+            if (message.channel != regionlevels::CHANNEL || !client->link().worldAccepted())
                 return;
             const auto decoded = regionlevels::decode(message.payload);
             if (!decoded)
@@ -161,7 +188,7 @@ void Multiplayer::sendRegionLevels() {
         return;
     const bool enabled = sharedRegions;
     const cwnet::CubeVulkanMessage message{regionlevels::CHANNEL,
-        regionlevels::encode({enabled, enabled ? regionOccupancy.snapshot() : regionlevels::Levels{}})};
+                                           regionlevels::encode({enabled, enabled ? regionOccupancy.snapshot() : regionlevels::Levels{}})};
     const auto &connections = hostGame->link().connections();
     for (auto it = sentRegionLevels.begin(); it != sentRegionLevels.end();)
         if (!connections.count(it->first))
@@ -169,7 +196,7 @@ void Multiplayer::sendRegionLevels() {
         else
             ++it;
     for (const auto &[peer, connection] : connections) {
-        if (!connection.cubeVulkan) {
+        if (!connection.cubeVulkan || !connection.worldAccepted) {
             sentRegionLevels.erase(peer);
             continue;
         }
@@ -177,6 +204,47 @@ void Multiplayer::sendRegionLevels() {
         if (previous == sentRegionLevels.end() || previous->second != message.payload)
             if (hostGame->link().sendExtra(peer, message))
                 sentRegionLevels[peer] = message.payload;
+    }
+}
+
+void Multiplayer::exchangeWorldIdentity(uint32_t nowMs) {
+    if (hostGame) {
+        const auto &connections = hostGame->link().connections();
+        for (auto it = sentWorldIdentities.begin(); it != sentWorldIdentities.end();)
+            it = connections.count(*it) ? std::next(it) : sentWorldIdentities.erase(it);
+        for (auto it = pendingWorldIdentities.begin(); it != pendingWorldIdentities.end();)
+            it = connections.count(it->first) ? std::next(it) : pendingWorldIdentities.erase(it);
+        std::vector<cwnet::PeerId> expired;
+        for (const auto &[peer, connection] : connections) {
+            if (connection.cubeVulkan && !sentWorldIdentities.count(peer) && hostGame->link().sendExtra(peer, worldDescriptor))
+                sentWorldIdentities.insert(peer);
+            if (connection.worldAccepted) {
+                pendingWorldIdentities.erase(peer);
+                continue;
+            }
+            const auto [entry, inserted] = pendingWorldIdentities.emplace(peer, nowMs);
+            if (nowMs - entry->second > 5000)
+                expired.push_back(peer);
+        }
+        for (auto peer : expired) {
+            notice("A guest could not confirm this world's Alpha generation settings.");
+            hostGame->link().kick(peer);
+            pendingWorldIdentities.erase(peer);
+            sentWorldIdentities.erase(peer);
+        }
+    }
+    if (client && client->link().hostIsCubeVulkan() && requestedWorldEpoch != client->link().connectionEpoch())
+        if (client->link().sendExtra({"cwv.world-generation.request.v1", {}}))
+            requestedWorldEpoch = client->link().connectionEpoch();
+    if (client && client->link().localId() && !client->link().worldAccepted()) {
+        if (pendingWorldEpoch != client->link().connectionEpoch()) {
+            pendingWorldEpoch = client->link().connectionEpoch();
+            pendingWorldSince = nowMs;
+        } else if (nowMs - pendingWorldSince > 5000) {
+            notice("The host did not confirm compatible Alpha terrain. Steam hosts require Steam generation.");
+            clearRegionView();
+            client->link().goHome(nowMs);
+        }
     }
 }
 
@@ -205,6 +273,7 @@ void Multiplayer::beginFrame(uint32_t nowMs) {
             notice("Back in your own world");
         }
     }
+    exchangeWorldIdentity(nowMs);
     // Joins and leaves, as the host sees them.
     const size_t now = guests();
     if (hostGame && now != guestsBefore) {
@@ -256,11 +325,17 @@ void Multiplayer::leave() {
     }
 }
 
-bool Multiplayer::guestElsewhere() const { return client && client->link().isGuestElsewhere(); }
+bool Multiplayer::guestElsewhere() const {
+    return client && client->link().isGuestElsewhere();
+}
 
-int64_t Multiplayer::playerId() const { return client ? client->link().localId() : 0; }
+int64_t Multiplayer::playerId() const {
+    return client ? client->link().localId() : 0;
+}
 
-size_t Multiplayer::guests() const { return hostGame ? const_cast<cwnet::HostGame &>(*hostGame).link().connections().size() : 0; }
+size_t Multiplayer::guests() const {
+    return hostGame ? const_cast<cwnet::HostGame &>(*hostGame).link().connections().size() : 0;
+}
 
 std::vector<Multiplayer::FriendRow> Multiplayer::friends() const {
     std::vector<FriendRow> rows;
@@ -331,7 +406,8 @@ bool Multiplayer::invite(const std::string &friendName) {
             c = (char)std::tolower((unsigned char)c);
         return s;
     };
-    const bool number = !friendName.empty() && std::all_of(friendName.begin(), friendName.end(), [](char c) { return std::isdigit((unsigned char)c); });
+    const bool number =
+        !friendName.empty() && std::all_of(friendName.begin(), friendName.end(), [](char c) { return std::isdigit((unsigned char)c); });
     for (uint64_t id : steam->friendIds())
         if ((number && std::to_string(id) == friendName) || lower(steam->friendName(id)) == lower(friendName)) {
             hostGame->link().invite(id, clockNow());
@@ -341,7 +417,9 @@ bool Multiplayer::invite(const std::string &friendName) {
     return false;
 }
 
-std::vector<cwnet::ChatLine> Multiplayer::takeChat() { return client ? std::exchange(client->chat, {}) : std::vector<cwnet::ChatLine>{}; }
+std::vector<cwnet::ChatLine> Multiplayer::takeChat() {
+    return client ? std::exchange(client->chat, {}) : std::vector<cwnet::ChatLine>{};
+}
 
 void Multiplayer::say(const std::u16string &line) {
     if (client && !line.empty())
@@ -356,8 +434,11 @@ void Multiplayer::notice(const std::string &line, bool invitation) {
 
 std::string Multiplayer::nameOf(uint64_t peer) const {
     switch (how) {
-    case Way::Steam: return steam ? steam->friendName(peer) : std::to_string(peer);
-    case Way::Address: return cwnet::UdpTransport::describe(peer);
-    default: return std::to_string(peer);
+    case Way::Steam:
+        return steam ? steam->friendName(peer) : std::to_string(peer);
+    case Way::Address:
+        return cwnet::UdpTransport::describe(peer);
+    default:
+        return std::to_string(peer);
     }
 }

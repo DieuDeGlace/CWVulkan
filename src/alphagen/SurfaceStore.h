@@ -16,6 +16,7 @@ class ColumnLease {
   private:
     friend class SurfaceStore;
     friend class ReliefStore;
+    friend class LandscapeStore;
     ColumnLease(std::shared_ptr<const Zone> zone, alphacoords::Point point) : zone(std::move(zone)), at(point) {}
     std::shared_ptr<const Zone> zone; // Aliases the parent stage, retaining its ownership across eviction.
     alphacoords::Point at;
