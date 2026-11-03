@@ -47,7 +47,11 @@ incomplete playable tiles are unavailable.
 
 The stores coalesce concurrent parent requests, generate outside the cache lock,
 propagate failures to waiters and permit retries. Ready entries are bounded;
-caller-held leases and in-flight work can retain additional storage. The runtime
+caller-held leases and in-flight work can retain additional storage. Canonical
+Steam64 requests also coalesce by source/settings/options identity, sharing failures
+with waiters and allowing retry. A flush retires older pending generations. The
+world reader budgets96 unpinned entries separately from explicit player keeps, so
+the native121-zone neighborhood cannot starve the streaming cache. The runtime
 hybrid retains up to16 ready landscape parents. Leases keep const voxel storage
 alive through eviction without retaining a mutable generator pointer.
 

@@ -10,6 +10,21 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Concurrent canonical zone requests now share one generation result or failure.
+  Cache flushes retire old generations without changing terrain identity. The
+  decoded-world LRU keeps up to96 unpinned zones in addition to explicitly kept
+  player neighborhoods; a121-zone keep can no longer evict every farther source
+  immediately. In-flight snapshots can retain additional data until their readers
+  finish. These are engine cache policies; generation arithmetic is unchanged.
+
+  Concurrent-pointer, geometry/identity,121-zone retention and bounded eviction
+  regressions pass. All five targets and the full CPU/owner/Vulkan suite pass
+  (92 shader,2 camera,102 GUI,17 map, shared water/scenery). Full Steam-option
+  streaming still exceeded the capture deadline; the cache corrections do not
+  close the broader performance gate. A separate native-only plant-consumer
+  contract now resolves the next ground-cover placement/scale/flag questions;
+  its bridge is not implemented in this checkpoint.
+
 - Alpha terrain is now the playable default (`World.Source=Alpha`); Steam
   generation remains separate as `Game`, with captured `Extracted` and the older
   approximate `Generated` modes still explicit choices. The Alpha landscape runs

@@ -13,6 +13,7 @@
 #include "Extracted.h"
 #include <stdexcept>
 #include <future>
+#include <barrier>
 #include <cmath>
 #include <cstdio>
 
@@ -464,6 +465,25 @@ int alphaTerrainTests() {
                   climate->fire == world.fireShare(alphacoords::HOME, alphacoords::HOME),
               "sky factors use the mapped Alpha World's continuous blends");
         check(!worldgen::alphaTerrainSample(INT32_MAX, 0), "sky/map overview does not wrap outside Alpha");
+        worldgen::forgetZones();
+        std::barrier begin(4);
+        std::array<std::future<std::shared_ptr<const worldgen::ZoneContents>>, 4> readers;
+        for (auto &reader : readers)
+            reader = std::async(std::launch::async, [&] {
+                begin.arrive_and_wait();
+                return worldgen::zone(0, 0);
+            });
+        const auto shared = readers[0].get();
+        bool coalesced = true;
+        for (size_t i = 1; i < readers.size(); ++i)
+            coalesced &= readers[i].get() == shared;
+        check(coalesced, "concurrent canonical readers share one immutable Alpha zone generation");
+        const auto profileIdentity = worldgen::terrainIdentity();
+        worldgen::forgetZones();
+        const auto reloaded = worldgen::zone(0, 0);
+        check(reloaded != shared && reloaded->terrain.columns[0].blocks == shared->terrain.columns[0].blocks &&
+                  worldgen::terrainIdentity() == profileIdentity,
+              "cache flush retires ready generations without changing terrain identity or geometry");
         const auto alphaMap = worldgen::mapRegion(0, 0, 0);
         int32_t mapTop = INT32_MIN;
         for (int k = 0; k < alphaMap.sizeZ; ++k) {
@@ -503,6 +523,27 @@ int alphaTerrainTests() {
         check(!worldgen::alphaTerrainSample(0, 0), "Steam mode retains its separate climate provider");
         check(!worldgen::usingAlphaTerrain() && worldgen::terrainIdentity() == steamIdentity,
               "returning to Steam mode restores its distinct source identity");
+    }
+    {
+        // Exercise the normal121-zone keep radius through the real generated reader.
+        // Far-zone identity must remain stable while the protected neighborhood is full.
+        ExtractedWorld reader;
+        reader.openGenerated(0, 0);
+        reader.keepAround(0, 0, 5);
+        for (int x = -5; x <= 5; ++x)
+            for (int y = -5; y <= 5; ++y)
+                reader.propsAbsolute(x, y);
+        check(reader.gameZoneLoaded(-5, -5) && reader.gameZoneLoaded(5, 5), "native player keep radius retains its full neighborhood");
+        reader.propsAbsolute(6, 0);
+        const auto first = reader.gameZoneToken(6, 0);
+        reader.propsAbsolute(7, 0);
+        const auto again = reader.gameZoneToken(6, 0);
+        check(first && again && first->order == again->order, "pinned player zones do not evict every unpinned mesh source immediately");
+        // Unpinned entries still have a bound; loaded-zone lookup does not refresh LRU.
+        for (int x = 8; x < 105; ++x)
+            reader.propsAbsolute(x, 0);
+        check(!reader.gameZoneLoaded(6, 0) && reader.gameZoneLoaded(5, 5),
+              "unpinned streaming LRU evicts old data while explicit player keeps survive");
     }
     stage.reset();
     std::optional<alphagen::ColumnLease> held;

@@ -5,6 +5,9 @@
 #include "worldgen/AlphaTerrain.h"
 #include <bit>
 #include <stdexcept>
+#include <future>
+#include <map>
+#include <tuple>
 
 #include <atomic>
 #include <list>
@@ -35,7 +38,10 @@ struct CachedZone {
     std::shared_ptr<const ZoneContents> zone;
 };
 std::mutex cacheLock;
-std::list<CachedZone> cache;        // the most recently used first
+std::list<CachedZone> cache; // the most recently used first
+using ZonePointer = std::shared_ptr<const ZoneContents>;
+using ZoneKey = std::tuple<int32_t, int32_t, uint32_t, uint32_t, bool>;
+std::map<ZoneKey, std::shared_future<ZonePointer>> pendingZones;
 constexpr size_t CACHED_ZONES = 96; // a lit zone reads its 8 neighbours; the near zones fit
 
 ZoneContents makeZone(int32_t zx, int32_t zy, bool recordDraws) {
@@ -78,7 +84,8 @@ std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y) 
     return settings.alpha ? settings.alpha->sample(x, y) : std::nullopt;
 }
 void composeTerrainMap(MapRegion &map) {
-    if (settings.alpha) settings.alpha->composeMap(map);
+    if (settings.alpha)
+        settings.alpha->composeMap(map);
 }
 
 void setWorldSeed(int32_t seed) {
@@ -190,6 +197,9 @@ PlaceEncounter placeEncounter(int32_t px, int32_t py) {
 std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
     const uint32_t version = settingsVersion.load(), options = optionsVersion();
     const bool original = generatingOriginal();
+    const ZoneKey key{zx, zy, version, options, original};
+    std::shared_ptr<std::promise<ZonePointer>> producer;
+    std::shared_future<ZonePointer> future;
     {
         std::lock_guard<std::mutex> hold(cacheLock);
         for (auto it = cache.begin(); it != cache.end(); ++it)
@@ -197,34 +207,68 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
                 cache.splice(cache.begin(), cache, it);
                 return it->zone;
             }
+        const auto loading = pendingZones.find(key);
+        if (loading != pendingZones.end())
+            future = loading->second;
+        else {
+            producer = std::make_shared<std::promise<ZonePointer>>();
+            future = producer->get_future().share();
+            pendingZones.emplace(key, future);
+        }
     }
-    if (!terrainZoneAvailable(zx, zy)) {
-        auto missing = std::make_shared<ZoneContents>();
-        missing->terrain.zx = zx;
-        missing->terrain.zy = zy;
-        missing->terrain.columns.resize(ZONE_COLUMNS);
-        return missing; // No generated residents outside Alpha's finite world.
+    // A mesh reads eight neighbors. Concurrent readers of those neighbors share
+    // one immutable result, without holding the cache lock during generation.
+    if (!producer)
+        return future.get();
+    try {
+        if (!terrainZoneAvailable(zx, zy)) {
+            auto missing = std::make_shared<ZoneContents>();
+            missing->terrain.zx = zx;
+            missing->terrain.zy = zy;
+            missing->terrain.columns.resize(ZONE_COLUMNS);
+            {
+                std::lock_guard hold(cacheLock);
+                pendingZones.erase(key);
+            }
+            producer->set_value(missing);
+            return missing; // No generated residents outside Alpha's finite world.
+        }
+        ZoneContents z = makeZone(zx, zy, false);
+        const int32_t refreshDay = settings.refreshDay.load();
+        if (refreshDay >= 0 && settings.tablesLoaded)
+            refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
+        if (settings.alpha) {
+            std::string error;
+            if (!settings.alpha->compose(z, settings.world, error))
+                throw std::runtime_error("Alpha terrain composition: " + error);
+        }
+        // Live full-setter gap writes still need the original cached material inputs.
+        z.terrain.retainedColours.reserve(z.terrain.field.size());
+        for (const auto &column : z.terrain.field)
+            z.terrain.retainedColours.push_back(column.colours);
+        std::vector<ColumnField>().swap(z.terrain.field);
+        auto made = std::make_shared<const ZoneContents>(std::move(z));
+        {
+            std::lock_guard<std::mutex> hold(cacheLock);
+            // A cache flush retires this generation. Existing waiters still receive
+            // their result, but it cannot replace the newer ready-cache contents.
+            if (settingsVersion.load() == version && optionsVersion() == options) {
+                cache.push_front({zx, zy, version, options, original, made});
+                if (cache.size() > CACHED_ZONES)
+                    cache.pop_back();
+            }
+            pendingZones.erase(key);
+        }
+        producer->set_value(made);
+        return made;
+    } catch (...) {
+        {
+            std::lock_guard hold(cacheLock);
+            pendingZones.erase(key);
+        }
+        producer->set_exception(std::current_exception());
+        throw;
     }
-    ZoneContents z = makeZone(zx, zy, false);
-    const int32_t refreshDay = settings.refreshDay.load();
-    if (refreshDay >= 0 && settings.tablesLoaded)
-        refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
-    if (settings.alpha) {
-        std::string error;
-        if (!settings.alpha->compose(z, settings.world, error))
-            throw std::runtime_error("Alpha terrain composition: " + error);
-    }
-    // Live full-setter gap writes still need the original cached material inputs.
-    z.terrain.retainedColours.reserve(z.terrain.field.size());
-    for (const auto &column : z.terrain.field)
-        z.terrain.retainedColours.push_back(column.colours);
-    std::vector<ColumnField>().swap(z.terrain.field);
-    auto made = std::make_shared<const ZoneContents>(std::move(z));
-    std::lock_guard<std::mutex> hold(cacheLock);
-    cache.push_front({zx, zy, version, options, original, made});
-    if (cache.size() > CACHED_ZONES)
-        cache.pop_back();
-    return made;
 }
 
 std::vector<TerrainColumn> litZone(int32_t zx, int32_t zy) {
@@ -292,6 +336,7 @@ bool hooksChange(int32_t zx, int32_t zy) {
 
 void forgetZones() {
     std::lock_guard<std::mutex> hold(cacheLock);
+    ++settingsVersion;
     cache.clear();
 }
 

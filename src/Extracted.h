@@ -189,6 +189,8 @@ class ExtractedWorld {
     // keeps the zones around its player: those missing are read (or made) on a thread of
     // their own, and none of them is let go to make room for others (the creatures there
     // walk and see by their blocks). Called every frame.
+    // The streaming LRU retains up to96 additional unpinned zones; explicit keeps
+    // do not consume that budget. In-flight snapshots can outlive eviction.
     void keepAround(int ax, int ay, int radius);
     // The same for several centres, on behalf of `owner`: each owner (a world, the view) keeps its
     // own centres, which replace its previous ones, and a zone stays while any owner keeps it.

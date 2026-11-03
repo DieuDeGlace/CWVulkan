@@ -35,6 +35,9 @@ The generator reuses the sister AlphaVulkan project's original GPL clean-room
 implementation under its independent prose contracts. The native-only author
 separately supplied alpha-terrain-generation-boundaries.md and
 alpha-sky-terrain-inputs.md without inspecting engine, tests, exporter or captures.
+The same native-only author subsequently supplied alpha-plant-record-consumption.md
+with the same separation, resolving ordinary scale/pivot, centered XY, lily fixed Z,
+raw flags and reached sway-phase facts. The ground-cover bridge follows separately.
 The implementer read only those contracts and owned code. Steam construction
 preservation, transition bands, map overview, source-color metadata, isolated
 profiles and compatible-engine network agreement are explicit project policies.

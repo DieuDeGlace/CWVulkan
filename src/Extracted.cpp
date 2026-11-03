@@ -300,11 +300,17 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
             return cache.front().second;
         }
     cache.emplace_front(key, zone);
-    // The least recently used zone goes, unless it is one kept around the player.
-    for (auto it = cache.end(); cache.size() > 96 && it != cache.begin();) {
+    // Explicit keeps can exceed the normal cache budget (the native player
+    // radius alone pins121 zones). Keep a separate bounded LRU for unpinned
+    // readers, or every farther mesh request would evict its own source at once.
+    constexpr size_t UNPINNED_LIMIT = 96;
+    size_t unpinned = size_t(std::count_if(cache.begin(), cache.end(), [&](const auto &entry) { return !kept(entry.first); }));
+    for (auto it = cache.end(); unpinned > UNPINNED_LIMIT && it != cache.begin();) {
         --it;
-        if (!kept(it->first))
+        if (!kept(it->first)) {
             it = cache.erase(it);
+            --unpinned;
+        }
     }
     cacheRevision = nextZoneCacheRevision();
     return zone;
