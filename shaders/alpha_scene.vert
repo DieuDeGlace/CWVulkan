@@ -78,12 +78,15 @@ void main() {
                 dot(toCamera.xy, toCamera.xy) * fogScale2);
 
     // §5.6: sun, back and ambient light, all scaled by S, by the light the vertex was baked
-    // with and by the light where a model stands; then the point lights, unscaled.
+    // with and by a model's retained light, except OWN_LIGHT; point lights stay unscaled.
     vec3 D = f.alphaSun.xyz;
     vec3 sun = max(dot(N, D), 0) * f.alphaFront.rgb;
     vec3 backColour = cloud ? f.alphaFront.rgb : f.alphaBack.rgb;
     vec3 sky = f.alphaAmbient.rgb + max(dot(N, -D), 0) * backColour;
-    float strength = f.alphaMaterial.a * pc.material.a * pc.look.x * inColor.a;
+    // Negative look.w is environment OWN_LIGHT; positive remains the cloud pass.
+    // Its material alpha is1, independently of frame S and cached block light.
+    float materialLight = pc.look.w < -.5 ? 1 : f.alphaMaterial.a * pc.material.a * pc.look.x;
+    float strength = materialLight * inColor.a;
     vec3 points = pointLightSum(world, N);
 
     // CubeVulkan's moon (src/AlphaMoon.h; not part of the spec): opposite the sun, lighting

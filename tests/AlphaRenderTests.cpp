@@ -149,6 +149,28 @@ void lightFlood() {
     field.flood();
     alphalight::CornerLight open = alphalight::cornerLight(field, {0, 0, 1}, 4);
     ALPHA_CHECK(near(open.light, 1) && near(open.open, 1));
+    ALPHA_CHECK(alphalight::environmentBlock({-6553, -65537, 131071}) == glm::ivec3(0, -1, 1));
+    ALPHA_CHECK(alphalight::environmentBlock({int64_t(8396928) * 65536 - 32768,
+                                             int64_t(8396928) * 65536 - 32768, -6553}) == glm::ivec3(8396927, 8396927, 0));
+    ALPHA_CHECK(alphalight::environmentBlock({(int64_t(1) << 48) + 65535, 65535, -65535}) == glm::ivec3(0, 0, 0));
+    ALPHA_CHECK(alphalight::environmentLight(field, {0, 0, 0}) == 0); // solid, despite open block above
+    ALPHA_CHECK(alphalight::environmentLight(field, {0, 0, 1}) == 1);
+    ALPHA_CHECK(alphalight::environmentLight(cave, {1, 1, 0}) == 1); // glow
+    ALPHA_CHECK(alphalight::environmentLight(cave, {1, 1, 1}) == 216.f / 255.f);
+    // Cached samples remain exact across plane eviction, reversed/negative Z,
+    // every face and requests outside the cache's XY window.
+    alphalight::CornerCache corners(field, {-4, -4}, {9, 9});
+    bool exactCorners = true;
+    for (int z : {0, 2, 0, 1, -1, 3, 1, 2})
+        for (int x : {-5, -4, 0, 4, 5})
+            for (int face = 0; face < 6; face++) {
+                const auto expected = alphalight::cornerLight(field, {x, 0, z}, face);
+                const auto cached = corners.sample({x, 0, z}, face);
+                const auto reused = corners.sample({x, 0, z}, face);
+                exactCorners &= cached.light == expected.light && cached.open == expected.open &&
+                                reused.light == expected.light && reused.open == expected.open;
+            }
+    ALPHA_CHECK(exactCorners);
     // 9.4: fully open keeps the colour; closed in it darkens towards c - 0.9 luminance.
     glm::vec3 grass(.2f, .6f, .1f);
     ALPHA_CHECK(near(alphalight::occludedColour(grass, 1), grass));

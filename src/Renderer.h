@@ -135,6 +135,8 @@ struct DrawItem {
     // Alpha look: the light where it stands (0..1, alpha-rendering.md 11.2), when the world
     // already knows it (zone models); below 0, a model (creature, item) reads it here.
     float standingLight = -1;
+    // Environment flag0x01 replaces material sunlight with1, including frame S.
+    bool alphaOwnLight = false;
     // Map draws retain their actual WORLD matrix in model; the shared map VIEW
     // is supplied separately. They inherit world depth and use the map light rig.
     struct MapDraw {

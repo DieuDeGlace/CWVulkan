@@ -320,6 +320,32 @@ int alphaSceneryShaderTests() {
     auto sharedBeyond = capture("beyond-fade-shared", 52, true, false);
     WATER_CHECK(sameColor(sharedDry, dry));
     WATER_CHECK(sameColor(sharedBeyond, sky));
+
+    // Environment OWN_LIGHT replaces the complete material-light factor, not
+    // distance opacity. Disable the project's optional moon for this native test.
+    renderer.settings.moon.enabled = false;
+    lighting.hour = 0;
+    lighting.timeMs = 0;
+    Mesh matte;
+    quad(matte, {{{-8, -2, 0}, {8, -2, 0}, {-8, 2, 0}, {8, 2, 0}}}, {100, 150, 50}, 4, 0);
+    model.mesh = renderer.upload(matte);
+    model.standingLight = 1;
+    auto sampledNight = capture("model-sampled-night", 36, true, false);
+    model.alphaOwnLight = true;
+    auto ownLit = capture("model-own-night", 36, true, false);
+    model.standingLight = 0;
+    auto ownDarkCache = capture("model-own-dark-cache", 36, true, false);
+    WATER_CHECK(sameColor(ownLit, ownDarkCache));
+    int ownBrighter = 0;
+    if (!ownLit.pixels.empty() && !sampledNight.pixels.empty())
+        for (int y = 0; y < 192; y++)
+            for (int x = 0; x < 256; x++)
+                ownBrighter += ownLit.channel(x, y, 1) > sampledNight.channel(x, y, 1) + 5;
+    WATER_CHECK(ownBrighter > 30);
+    auto ownBeyond = capture("model-own-beyond-fade", 52, true, false);
+    auto nightSky = capture("model-own-night-sky", 52, false, false);
+    WATER_CHECK(sameColor(ownBeyond, nightSky));
+    std::printf("Alpha environment material GPU: own-light brighter pixels%d, cached-light bypass and fade retained\n", ownBrighter);
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

@@ -195,6 +195,7 @@ class World {
     float blockLight(glm::vec3 p) const;
     // The flood's view of the blocks in [origin, origin + size) (alpha-rendering.md 9.2).
     void fillLight(alphalight::LightVolume &volume) const;
+    float environmentLight(glm::ivec3 at) const;
     // The light where each model stands, with one flood over them all (a zone's worth).
     void lightScenery(std::vector<Scenery> &scenery) const;
     double clockMs = 0;

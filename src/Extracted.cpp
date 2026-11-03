@@ -1686,11 +1686,12 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 }
             }
         light->flood();
+        alphalight::CornerCache corners(*light, {0, 0}, {65, 65});
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = FACE_CORNERS[face][k];
-            if (implicitColour)
-                return alphalight::shadeCorner(*light, {x + corner[0], y + corner[1], z + corner[2]}, face, *implicitColour);
-            return alphalight::shadeCorner(*light, {x + corner[0], y + corner[1], z + corner[2]}, face, c);
+            const auto sample = corners.sample({x + corner[0], y + corner[1], z + corner[2]}, face);
+            const auto rgb = implicitColour.value_or(glm::vec3(c.r, c.g, c.b) / 255.f);
+            return alphalight::shadeCorner(sample, rgb);
         };
         meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset);
     } else if (nativeEncoding) {

@@ -5,9 +5,9 @@
 namespace alphalight {
 
 LightVolume::LightVolume(glm::ivec3 origin, glm::ivec3 size)
-    : first(origin), extent(glm::max(size, glm::ivec3(0))),
-      kinds((size_t)extent.x * extent.y * extent.z, BlockKind::Solid),
-      lights((size_t)extent.x * extent.y * extent.z, 0), roofed((size_t)extent.x * extent.y, 0) {}
+    : first(origin), extent(glm::max(size, glm::ivec3(0))), kinds((size_t)extent.x * extent.y * extent.z, BlockKind::Solid),
+      lights((size_t)extent.x * extent.y * extent.z, 0), roofed((size_t)extent.x * extent.y, 0) {
+}
 
 bool LightVolume::inside(glm::ivec3 p) const {
     glm::ivec3 l = p - first;
@@ -73,14 +73,45 @@ CornerLight cornerLight(const LightVolume &volume, glm::ivec3 corner, int face) 
             p[ua] += u;
             p[va] += v;
             BlockKind kind = volume.kind(p);
-            float value = kind == BlockKind::Glow   ? 255.f
-                          : kind == BlockKind::Open ? (float)std::max<int>(volume.light(p), 5)
-                                                    : 5.f;
+            float value = kind == BlockKind::Glow ? 255.f : kind == BlockKind::Open ? (float)std::max<int>(volume.light(p), 5) : 5.f;
             lightSum += value * weight;
             openSum += kind == BlockKind::Solid ? 0 : weight;
             weightSum += weight;
         }
     return {lightSum / (weightSum * 255), openSum / weightSum};
+}
+
+glm::ivec3 environmentBlock(const std::array<int64_t, 3> &position) {
+    return {int32_t(position[0] / 65536), int32_t(position[1] / 65536), int32_t(position[2] / 65536)};
+}
+float environmentLight(const LightVolume &volume, glm::ivec3 at) {
+    const auto kind = volume.kind(at);
+    if (kind == BlockKind::Glow)
+        return 1;
+    if (kind != BlockKind::Open)
+        return 0;
+    return float(std::max<int>(volume.light(at), 5)) / 255.f;
+}
+
+CornerCache::CornerCache(const LightVolume &volume, glm::ivec2 firstCorner, glm::ivec2 cornerCount)
+    : volume(volume), first(firstCorner), extent(glm::max(cornerCount, glm::ivec2(0))) {
+    for (auto &slice : slices)
+        slice.values.resize(size_t(extent.x) * extent.y * 6);
+}
+CornerLight CornerCache::sample(glm::ivec3 corner, int face) {
+    const int64_t x = int64_t(corner.x) - first.x, y = int64_t(corner.y) - first.y;
+    if (x < 0 || y < 0 || x >= extent.x || y >= extent.y)
+        return cornerLight(volume, corner, face);
+    auto &slice = slices[uint32_t(corner.z) & 1u];
+    if (!slice.ready || slice.z != corner.z) {
+        std::fill(slice.values.begin(), slice.values.end(), std::nullopt);
+        slice.z = corner.z;
+        slice.ready = true;
+    }
+    auto &value = slice.values[(size_t(y) * extent.x + size_t(x)) * 6 + face];
+    if (!value)
+        value = cornerLight(volume, corner, face);
+    return *value;
 }
 
 glm::vec3 occludedColour(glm::vec3 colour, float open) {
@@ -91,15 +122,19 @@ glm::vec3 occludedColour(glm::vec3 colour, float open) {
     return colour * open + (1 - open) * shade;
 }
 
-glm::vec3 waterColour(float light) { return (1 - light) * glm::vec3(.1f, .2f, 1) + light * glm::vec3(.3f, .4f, 1); }
+glm::vec3 waterColour(float light) {
+    return (1 - light) * glm::vec3(.1f, .2f, 1) + light * glm::vec3(.3f, .4f, 1);
+}
 
 CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, VoxelColor colour) {
     return shadeCorner(volume, corner, face, glm::vec3(colour.r, colour.g, colour.b) / 255.f);
 }
 CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, glm::vec3 colour) {
-    CornerLight l = cornerLight(volume, corner, face);
-    glm::vec3 rgb = occludedColour(colour, l.open);
-    return {toByte(rgb.r), toByte(rgb.g), toByte(rgb.b), toByte(l.light)};
+    return shadeCorner(cornerLight(volume, corner, face), colour);
+}
+CornerShade shadeCorner(CornerLight light, glm::vec3 colour) {
+    glm::vec3 rgb = occludedColour(colour, light.open);
+    return {toByte(rgb.r), toByte(rgb.g), toByte(rgb.b), toByte(light.light)};
 }
 
 } // namespace alphalight

@@ -107,6 +107,20 @@ specified scalar float stages remain unquantized through corner shading, with
 byte packing only at the vertex. This changes face color, not collision storage
 or block light. The Steam-look adapter keeps its explicit vertex-format policy.
 
+Alpha environment models retain their mesh-time origin-light sample. Native
+fixed division happens before the hybrid's local coordinate conversion; source
+Alpha XY is restored before that division. A solid origin reads zero instead of
+the creature-style raised sample. OWN_LIGHT replaces both the cached factor and
+frame sunlight with1; ordinary model fading and underwater RGB remain separate.
+The hybrid still uses its lighting volumes and64-block publication tiles, so this
+does not establish the original Alpha World-light/cache lifecycle in full.
+
+Adjacent Alpha faces reuse exact corner-light values through two bounded Z
+planes. The immutable-volume sampler preserves the existing float values and
+vertex packing. A private64-tile flat-scene CPU benchmark showed3.66–3.70x faster
+corner sampling across three runs with identical checksums. That is a focused
+CPU result, not a gameplay FPS or cold-streaming acceptance claim.
+
 ## Sky and map
 
 Alpha terrain supplies direct World warmth, moisture, sea and fire blends to the

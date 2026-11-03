@@ -6,6 +6,7 @@
 #include "CubModel.h"
 #include "ProceduralItems.h"
 #include "Extracted.h"
+#include "GameMath.h"
 #include "StaticObjectScene.h"
 #include "worldgen/BlockColours.h"
 #include "alphagen/Coordinates.h"
@@ -337,13 +338,33 @@ float World::blockLight(glm::vec3 p) const {
     return standingLight(volume, at);
 }
 
+float World::environmentLight(glm::ivec3 at) const {
+    alphalight::LightVolume volume(at - glm::ivec3(LIGHT_REACH, LIGHT_REACH, LIGHT_HEIGHT),
+                                   glm::ivec3(2 * LIGHT_REACH + 1, 2 * LIGHT_REACH + 1, 2 * LIGHT_HEIGHT + 1));
+    fillLight(volume);
+    volume.flood();
+    return alphalight::environmentLight(volume, at);
+}
+
 void World::lightScenery(std::vector<Scenery> &scenery) const {
-    // A zone model's material takes the light where it stands, unless it shines itself
-    // (vegetation-wind.md §4.5; alpha-rendering.md 11.2), as creatures do. The record's +0x28
-    // factor is taken as 255 (the spec does not say what fills it). One flood covers them all.
+    // Environment models retain a mesh-time origin sample, including OWN_LIGHT
+    // records whose drawer later ignores it. Other model families keep their
+    // existing standing-light policy. See alpha-environment-model-light.md.
+    // The hybrid still uses its own lighting-volume/cache extent.
     if (scenery.empty())
         return;
-    auto base = [](const Scenery &s) { return glm::ivec3(glm::floor(glm::vec3(s.x, s.y, s.z + .1f))); };
+    auto base = [&](const Scenery &s) {
+        if (!extracted || s.modelType < 0)
+            return glm::ivec3(glm::floor(glm::vec3(s.x, s.y, s.z + .1f)));
+        auto position = s.modelPosition;
+        const int64_t sourceOrigin = worldgen::usingAlphaTerrain() ? alphacoords::HOME : 0;
+        // Apply the hybrid's integral XY frame before native fixed division.
+        position[0] = gamemath::addFixed(position[0], sourceOrigin * 65536);
+        position[1] = gamemath::addFixed(position[1], sourceOrigin * 65536);
+        const auto at = alphalight::environmentBlock(position);
+        return glm::ivec3(int64_t(at.x) - sourceOrigin - int64_t(extracted->originZoneX()) * 64,
+                          int64_t(at.y) - sourceOrigin - int64_t(extracted->originZoneY()) * 64, int64_t(at.z) + ExtractedWorld::Z_OFFSET);
+    };
     glm::ivec3 lo(INT32_MAX), hi(INT32_MIN);
     for (const Scenery &s : scenery)
         lo = glm::min(lo, base(s)), hi = glm::max(hi, base(s));
@@ -359,13 +380,14 @@ void World::lightScenery(std::vector<Scenery> &scenery) const {
         volume->flood();
     }
     for (Scenery &s : scenery) {
-        if (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT)
+        if (s.modelType >= 0)
+            s.light = oneFlood ? alphalight::environmentLight(*volume, base(s)) : environmentLight(base(s));
+        else if (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT)
             s.light = 1;
         else
             s.light = oneFlood ? standingLight(*volume, base(s)) : blockLight(glm::vec3(base(s)) + .5f);
     }
 }
-
 
 // Hair sprites take the character's hair colour, as the game tints them
 // (shared by the world renderer and the menu's portraits).
@@ -586,6 +608,7 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
             d.alphaScenery = alphascenery::Placement{alphascenery::Kind::Object, position};
         }
         d.standingLight = (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT) ? 1.0f : s.light;
+        d.alphaOwnLight = s.modelType >= 0 && (s.modelFlags & vegetationwind::modelflag::OWN_LIGHT);
         if (renderStyle() == RenderStyle::Steam && s.modelType >= 0 && (modelFlags & vegetationwind::modelflag::OWN_LIGHT))
             d.flags |= GLOW; // Native record flag0x01 drives glow; flag0x02 does not.
         using namespace vegetationwind::modelflag;

@@ -6,6 +6,8 @@
 #include "Mesher.h"
 #include <glm/glm.hpp>
 #include <cstdint>
+#include <array>
+#include <optional>
 #include <vector>
 
 namespace alphalight {
@@ -57,6 +59,30 @@ struct CornerLight {
 // `corner` is the vertex's integer position, `face` the face index (0 +X .. 5 -Z).
 CornerLight cornerLight(const LightVolume &volume, glm::ivec3 corner, int face);
 
+// Environment records sample their unmodified fixed origin, truncating toward
+// zero before taking the low32 block coordinate; solid samples stay dark.
+glm::ivec3 environmentBlock(const std::array<int64_t, 3> &position);
+float environmentLight(const LightVolume &, glm::ivec3 at);
+
+// Adjacent faces share corner samples. Two Z planes bound storage during the
+// mesher's Z traversal; other query orders remain valid and only lose reuse.
+// The referenced flooded volume must remain unchanged for the cache lifetime.
+class CornerCache {
+  public:
+    CornerCache(const LightVolume &, glm::ivec2 firstCorner, glm::ivec2 cornerCount);
+    CornerLight sample(glm::ivec3 corner, int face);
+
+  private:
+    struct Slice {
+        int32_t z = 0;
+        bool ready = false;
+        std::vector<std::optional<CornerLight>> values;
+    };
+    const LightVolume &volume;
+    glm::ivec2 first, extent;
+    std::array<Slice, 2> slices;
+};
+
 // §9.4: a block colour (0..1) darkened towards a deeper, more saturated shade as the corner
 // closes in.
 glm::vec3 occludedColour(glm::vec3 colour, float open);
@@ -65,11 +91,14 @@ glm::vec3 occludedColour(glm::vec3 colour, float open);
 glm::vec3 waterColour(float light);
 
 // §9.6: a colour channel (0..1) as a vertex byte.
-inline uint8_t toByte(float channel) { return (uint8_t)((int)(channel * 255) & 0xff); }
+inline uint8_t toByte(float channel) {
+    return (uint8_t)((int)(channel * 255) & 0xff);
+}
 
 // A mesh corner shaded for the Alpha look: rgb from occludedColour, alpha the corner light.
 CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, VoxelColor colour);
 CornerShade shadeCorner(const LightVolume &volume, glm::ivec3 corner, int face, glm::vec3 colour);
+CornerShade shadeCorner(CornerLight light, glm::vec3 colour);
 
 // §11.1: a model corner's openness, the share of empty voxels among the 6 x 6 in front of
 // its face. `solid(x, y, z)` tests one voxel.

@@ -1732,12 +1732,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         }
         if (alphaLook && shading) {
             // Creatures and items take the light of the block just above where they are (11.2).
-            // Zone models take the light where they stand too (vegetation-wind.md §4.5), which
-            // the world works out with their zone (standingLight).
+            // Environment models retain their separate mesh-time sample; their
+            // OWN_LIGHT override is alpha-environment-model-light.md §4.
             float standing = item.standingLight >= 0        ? item.standingLight
                              : item.kind == DrawKind::Model ? lightOfBlock(glm::vec3(item.model[3]) + glm::vec3(0, 0, .1f))
                                                             : 1.f;
-            pc.look = glm::vec4(standing, item.flash, (item.shimmer || item.nativeShininess) ? 1.f : 0.f, 0);
+            pc.look = glm::vec4(standing, item.flash, (item.shimmer || item.nativeShininess) ? 1.f : 0.f,
+                                item.alphaOwnLight ? -1.f : 0.f);
             if (!particle)
                 pc.lights = lightSetOf(item);
         }

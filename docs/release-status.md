@@ -10,6 +10,22 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha environment lighting now follows the independently traced mesh-time
+  origin sample: exact fixed-coordinate division, retained scalar, dark solid
+  origins and a complete OWN_LIGHT material override. It preserves cloud handling,
+  underwater RGB and separate distance fading. Steam rendering and the creature
+  standing-light policy retain their existing paths. The hybrid's lighting-volume
+  and64-block cache policy still differ from a complete original Alpha cache.
+
+  Terrain faces reuse exact corner light through two bounded Z planes. CPU checks
+  cover cache hits, eviction, reversed/negative Z and XY fallback; GPU checks cover
+  own-light at night/zero cached light and retained far fading. Five targets build
+  without warnings; the full CPU/owner/Vulkan suite and final CPU run pass. A live
+  no-save foliage capture exits0 and was visually reviewed. The private64-tile CPU
+  sampler benchmark was3.66–3.70x faster across three equal-checksum runs; this is
+  not a gameplay FPS or full cold-load result. Save/extractor hashes are unchanged.
+  Broader native cache lifecycle, runtime comparisons and release gates stay open.
+
 - Alpha live edits now sample source rock for newly stored downward gaps, retaining
   original source Z through translated columns. Missing input fails atomically;
   the target block and Steam setter path retain their existing byte contracts.
