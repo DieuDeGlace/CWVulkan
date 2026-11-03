@@ -673,6 +673,8 @@ individual feature documents.
   a detached document source, one live native root and a retained Interface on Play.
   Frontend and gameplay now share the same engine Hud and reuse completed resources
   for the same install; entry clears only transient preview draw submissions.
+  Explicit reloads separately reset the whole Hud value, avoiding stale template,
+  geometry and font bindings; failed reloads cannot report the old interface ready.
   Scene-owned detached trees, identity-preserving reparenting and explicit
   node/Widget deletion now provide ordered cleanup for a bound Input. Production
   probes, icons, speech and inventory cells use the scene mutation operations.

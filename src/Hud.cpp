@@ -59,11 +59,9 @@ struct Packer {
 } // namespace
 
 bool Hud::loadMenu(const fs::path &gameDir, std::string &error) {
-    loadedGameDirectory.reset(); // Explicit menu loading invalidates full-interface readiness.
+    *this = Hud{}; // Explicit loading starts a fresh interface; ensureLoaded retains completed resources.
     error.clear();
-    chatCache = {};
     plasmaFonts.reset(gameDir);
-    fontBindings.clear();
     hudFont = readFile(gameDir / "resource1.dat");
     titleFont = readFile(gameDir / "resource2.dat");
     stbtt_fontinfo probe;

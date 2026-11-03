@@ -1429,3 +1429,20 @@ is explicitly rejected as an engine guard, not claimed as native recovery behavi
 The scene must outlive its bound Input; whole-scene teardown, external raw tree
 mutation and arbitrary callback destruction remain outside this contract. Runtime
 frontend/panel scene unification and the full live input bridge are still open.
+
+
+## Explicit interface reload boundary, 2026-11-02
+
+This is an engine resource-lifetime correction using its own code and the existing
+root-lifetime distinction, without further native investigation. Explicit load/loadMenu
+starts a fresh Hud value before reading owner resources. Cached templates, document
+shape geometry, cursor/panel nodes, fonts, glyphs and transient submissions therefore
+cannot carry bindings from the previous document into the new load. A failed explicit
+load leaves no interface reported as ready. Ordinary same-install ensureLoaded calls
+continue retaining the completed value and do not reread removed private resources.
+
+The owner-backed private fixture now compares a reused template key after explicit
+reload against a freshly loaded interface, using different real button templates to
+make stale node reuse observable. It separately verifies same-install retention and
+failure clearing. Owner data remains temporary/local. No game content is packaged;
+full live GPU hot-reload and the wider shared input bridge are not certified here.
