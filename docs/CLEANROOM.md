@@ -1497,3 +1497,20 @@ Only the mod's own MIT code/metadata was inspected, not its native SDK. Its exis
 column-offset hooks cannot alone establish Alpha column or biome parity. GPL Alpha
 source must not silently replace MIT mod sources without resolving the license
 boundary. The observed Steam Sphinx model is owner data and stays out of packages.
+
+
+## Shared Alpha coordinate mapping, 2026-11-02
+
+A new original MIT-licensed helper was authored in the existing MIT TerrainVariance
+project from the independent coordinate-domain facts, then copied byte-for-byte
+into CubeVulkan with that project's existing MIT notice. No GPL Alpha implementation
+was copied into the mod. Explicit integer anchors map signed Steam block positions
+to absolute finite Alpha positions; 64-column coverage splits across 256-column
+parents and clips world edges without wrapping. No native SDK was opened.
+
+Mod-side coverage checks exercise four-parent seams, every covered column, signed
+coordinates, invalid/extreme inputs and both finite edges. Portable coordinate and
+existing terrain-rule tests pass with the available MSVC toolchain; the separate
+clang-cl compiler needed by native mod/placement builds was unavailable, so no
+native DLL or placement-suite build is claimed. Engine Alpha checks pass against
+the identical header. No runtime profile or default changes in this step.

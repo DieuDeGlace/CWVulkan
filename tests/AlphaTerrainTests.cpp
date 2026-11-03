@@ -1,6 +1,7 @@
 // Independent formula vectors, plus the explicit surface-stage/data-layout boundary.
 // Formula checks establish contract conformance; native runtime oracles remain separate.
 #include "alphagen/Terrain.h"
+#include "alphagen/Coordinates.h"
 #include <cmath>
 #include <cstdio>
 
@@ -12,6 +13,14 @@ int alphaTerrainTests() {
             ++failures;
         }
     };
+    alphacoords::Mapping mapping{{0, 0}, {235, 235}};
+    const auto patches = mapping.zone(0, 0);
+    check(patches && patches->count == 4, "Steam zone spans four Alpha parents");
+    int covered = 0;
+    if (patches)
+        for (size_t i = 0; i < patches->count; ++i)
+            covered += patches->patches[i].width * patches->patches[i].height;
+    check(covered == 4096 && !mapping.point(-1000, -1000), "finite nonwrapping Alpha coverage");
     alphagen::Random random(123);
     check(random.draw() == 440 && random.draw() == 19053 && random.draw() == 23075, "native random stream");
     const auto offsets = alphagen::makeSeedOffsets(123);

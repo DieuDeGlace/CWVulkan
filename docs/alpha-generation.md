@@ -41,3 +41,12 @@ The owner's Steam install contains `sprites/Sphinx01.cub`. Alpha's independent
 structure specification lists `sphinx01.cub` as a desert-ruin building type.
 Its verified placement and role, rather than a guessed separate dungeon, are the
 starting point for that addition. Required content stays in the owner's install.
+
+
+The first shared bridge is the original MIT-licensed `AlphaCoordinates.h` utility in
+TerrainVariance, copied byte-for-byte as `alphagen/Coordinates.h` under the existing
+SteamCubeWorldMods MIT notice. Explicit integer anchors preserve absolute Alpha
+noise inputs. Coverage splits Steam tiles across Alpha parents and clips finite
+edges without periodic wrapping. It is not yet a runtime generation switch.
+Portable mod coordinate/rule checks and the engine's Alpha checks cover this step;
+the native DLL/placement suite requires the mod's separate clang-cl toolchain.

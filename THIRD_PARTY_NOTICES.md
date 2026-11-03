@@ -7,8 +7,9 @@ Cube World and Steam are properties of their respective owners. This is an unoff
 
 `src/MoonRules.h` is copied from DieuDeGlace's MIT-licensed MoonandShadow project. Related day/night, shadow and terrain-mod rules cite that project's source in their comments. The retained MIT notice is in `licenses/MoonandShadow-MIT.txt`.
 
-`src/TerrainRules.h` is copied from DieuDeGlace's MIT-licensed SteamCubeWorldMods
-TerrainVariance module; its notice is `licenses/SteamCubeWorldMods-MIT.txt`.
+`src/TerrainRules.h` and `src/alphagen/Coordinates.h` are copied from DieuDeGlace's
+MIT-licensed SteamCubeWorldMods TerrainVariance module; their notice is
+`licenses/SteamCubeWorldMods-MIT.txt`.
 
 The build fetches these pinned open-source dependencies. License copies below are retained from the fetched versions; consult upstream per-file notices when distributing a compiled build or vendored source.
 
