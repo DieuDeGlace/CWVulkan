@@ -2,10 +2,7 @@
 // Immutable seed/frame context and shared Alpha parent stages for Steam-sized consumers.
 #include "alphagen/Coordinates.h"
 #include "alphagen/Terrain.h"
-#include <future>
-#include <list>
-#include <map>
-#include <mutex>
+#include "alphagen/ParentStages.h"
 
 namespace alphagen {
 class SurfaceStore;
@@ -18,8 +15,9 @@ class ColumnLease {
 
   private:
     friend class SurfaceStore;
-    ColumnLease(std::shared_ptr<const SurfaceStage> stage, alphacoords::Point point) : stage(std::move(stage)), at(point) {}
-    std::shared_ptr<const SurfaceStage> stage; // Keeps the column alive across eviction/store destruction.
+    friend class ReliefStore;
+    ColumnLease(std::shared_ptr<const Zone> zone, alphacoords::Point point) : zone(std::move(zone)), at(point) {}
+    std::shared_ptr<const Zone> zone; // Aliases the parent stage, retaining its ownership across eviction.
     alphacoords::Point at;
 };
 
@@ -34,13 +32,9 @@ class SurfaceStore {
     std::optional<alphacoords::Coverage> coverage(int32_t steamZoneX, int32_t steamZoneY) const;
 
   private:
-    using Key = std::pair<int32_t, int32_t>;
     World world;
     Terrain terrain;
     const alphacoords::Mapping frame;
-    const std::size_t capacity;
-    std::mutex lock;
-    std::list<std::pair<Key, Parent>> ready; // MRU first; external leases can outlive cache entries.
-    std::map<Key, std::shared_future<Parent>> pending;
+    detail::ParentStages<SurfaceStage> cache;
 };
 } // namespace alphagen

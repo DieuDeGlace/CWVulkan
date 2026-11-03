@@ -77,3 +77,23 @@ Steam also retains `obelisk.cub`, `castle-arc.cub`, `temple-arc.cub`,
 `dungeon-test02.cub`. File presence and names establish content availability, not
 whether Steam uses them or cut them. Owner assets remain outside source and
 development packages.
+
+
+`generateRelief` now continues the same initial-surface work through the rock
+formations, road cuts, five-block terraces and shallow pools, stopping before
+Alpha dungeon calls. The mutable working zone is moved into immutable output;
+there is no duplicate full-zone snapshot during that continuation. The output
+retains the random stream and ordered terrace/ravine boulder seeds. Mounds and
+mesas add material; a protected non-water block aborts an entire formation before
+any writes. Boulder writers are implemented and checked independently, but their
+later generation passes are not run at this boundary.
+
+`ReliefStore` uses the same parent-cache synchronization as `SurfaceStore`, with
+separate typed stage ownership. The column adapter accepts both stores without
+reinterpreting block records. Failed loads propagate and remain retryable, and
+aliasing column leases retain the owning stage through eviction/store destruction.
+Giant-tree centers fail explicitly until the voxel-tree builder is available;
+they are never silently published with missing terrain. This remains a data
+consumer integration, not a complete playable Alpha world or default switch.
+Extra ruin structures, including the Sphinx addition, are deferred at the user's
+request while terrain work continues.

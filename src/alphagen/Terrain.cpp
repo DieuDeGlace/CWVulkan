@@ -413,9 +413,37 @@ void Terrain::prepareRegion(int32_t rx, int32_t ry) const {
 }
 
 std::unique_ptr<SurfaceStage> Terrain::generateSurface(int32_t zx, int32_t zy) const {
+    auto work = buildSurface(zx, zy);
+    if (!work)
+        return {};
+    auto result = std::make_unique<SurfaceStage>();
+    result->zone = std::move(work->zone);
+    result->paddedHeights = std::move(work->paddedHeights);
+    result->ravineBoulders = std::move(work->ravineBoulders);
+    result->random = work->random;
+    return result;
+}
+
+std::unique_ptr<ReliefStage> Terrain::generateRelief(int32_t zx, int32_t zy, std::string &error) const {
+    error.clear();
+    auto work = buildSurface(zx, zy);
+    if (!work) {
+        error = "Alpha zone is outside the finite world";
+        return {};
+    }
+    auto result = std::make_unique<ReliefStage>();
+    if (!reliefPasses(*work->zone, work->paddedHeights, work->random, result->terraceBoulders, error))
+        return {};
+    result->zone = std::move(work->zone);
+    result->random = work->random;
+    result->ravineBoulders = std::move(work->ravineBoulders);
+    return result;
+}
+
+std::unique_ptr<Terrain::SurfaceWork> Terrain::buildSurface(int32_t zx, int32_t zy) const {
     if (zx < 0 || zy < 0 || zx >= 65536 || zy >= 65536)
         return nullptr;
-    auto result = std::make_unique<SurfaceStage>();
+    auto result = std::make_unique<SurfaceWork>();
     // §5.1 step 1: the regions round the zone's own.
     for (int32_t i = -1; i <= 1; i++)
         for (int32_t j = -1; j <= 1; j++)
@@ -445,7 +473,7 @@ std::unique_ptr<SurfaceStage> Terrain::generateSurface(int32_t zx, int32_t zy) c
 
     auto &ravineBoulders = result->ravineBoulders;
     surfacePass(*zone, heights, random, ravineBoulders);
-    result->zone = std::move(zone); // Publish const voxel storage only after completing the stage.
+    result->zone = std::move(zone);
     return result;
 }
 

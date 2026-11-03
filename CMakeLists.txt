@@ -113,7 +113,9 @@ set(ALPHA_TERRAIN_SOURCES
     src/alphagen/Zone.cpp
     src/alphagen/Terrain.cpp
     src/alphagen/SurfaceStore.cpp
-    src/alphagen/SteamBridge.cpp)
+    src/alphagen/SteamBridge.cpp
+    src/alphagen/Relief.cpp
+    src/alphagen/ReliefStore.cpp)
 
 # The engine core is a library so the tests link the same code as the game.
 add_library(engine STATIC

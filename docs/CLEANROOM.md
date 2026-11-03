@@ -1547,3 +1547,24 @@ Synthetic material records and asset-free generated columns check all 4096 colum
 in a four-parent crop, effective underwater reads and missing-domain admission.
 There is no new playable default, structure generation or native-oracle claim.
 No original model, terrain or capture bytes are added to packages.
+
+
+## Alpha rock, road and terrace boundary, 2026-11-03
+
+The implementer read the independent Alpha caves contract, its correction that
+formations add rock, the bounded parity assessment and the sister AlphaVulkan
+project's original GPL code. Owned PostPasses arithmetic is reused under the same
+license with namespace and stage-boundary adaptations. The native-only author
+remained held; no native implementation, original instructions, SDK code or
+third-party reconstruction was opened. A private import audit checks the donor
+hash, declared adaptations and unchanged initial-surface arithmetic/order.
+
+The new immutable relief boundary stops before Alpha dungeon calls and refuses
+unimplemented giant-tree centers. No native full-generation or running-game
+oracle equivalence is claimed. Formula vectors and synthetic voxels check rock
+addition, whole-formation protection, layered mesa material, terrace pool/floor
+rounding and the distinct boulder flag rules. The shared cache and typed relief
+consumer check concurrent reuse, failed-load retry and retained column lifetime.
+Native models, columns, captures and other original assets remain outside packages.
+Steam town/dungeon layout integration and runtime default selection remain open;
+extra ruin structures were deferred by the user.

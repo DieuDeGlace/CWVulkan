@@ -1,4 +1,5 @@
 #include "alphagen/SteamBridge.h"
+#include "alphagen/ReliefStore.h"
 
 namespace alphagen {
 std::optional<worldgen::Block> steamBlock(Block input) {
@@ -60,41 +61,49 @@ worldgen::Block SteamTile::read(int32_t x, int32_t y, int32_t z) const {
     return covers(x, y) ? terrain.read(x, y, z) : worldgen::SOLID_GREY;
 }
 
-std::optional<SteamTile> steamTile(SurfaceStore &source, int32_t zx, int32_t zy, std::string &error) {
-    error.clear();
-    const auto coverage = source.coverage(zx, zy);
-    if (!coverage) {
-        error = "invalid Alpha coordinate frame or Steam zone range";
-        return std::nullopt;
-    }
-    SteamTile result(zx, zy);
-    for (std::size_t i = 0; i < coverage->count; ++i) {
-        const auto &patch = coverage->patches[i];
-        const auto stage = source.parent(patch.zoneX, patch.zoneY);
-        if (!stage) {
-            error = "Alpha surface parent is unavailable";
+struct SteamTileBuilder {
+    template <class Source> static std::optional<SteamTile> build(Source &source, int32_t zx, int32_t zy, std::string &error) {
+        error.clear();
+        const auto coverage = source.coverage(zx, zy);
+        if (!coverage) {
+            error = "invalid Alpha coordinate frame or Steam zone range";
             return std::nullopt;
         }
-        for (int x = 0; x < patch.width; ++x)
-            for (int y = 0; y < patch.height; ++y) {
-                const int alphaX = patch.zoneX * alphacoords::ALPHA_ZONE + patch.alphaX + x;
-                const int alphaY = patch.zoneY * alphacoords::ALPHA_ZONE + patch.alphaY + y;
-                const auto &original = stage->zone->column(alphaX, alphaY);
-                const auto index = worldgen::ZoneTerrain::index(patch.sourceX + x, patch.sourceY + y);
-                auto &column = result.terrain.columns[index];
-                column.base = original.bottom;
-                column.blocks.reserve(original.blocks.size());
-                for (const auto block : original.blocks) {
-                    const auto converted = steamBlock(block);
-                    if (!converted) {
-                        error = "unmapped Alpha material " + std::to_string(block.type());
-                        return std::nullopt;
-                    }
-                    column.blocks.push_back(*converted);
-                }
-                result.present[index] = true;
+        SteamTile result(zx, zy);
+        for (std::size_t i = 0; i < coverage->count; ++i) {
+            const auto &patch = coverage->patches[i];
+            const auto stage = source.parent(patch.zoneX, patch.zoneY);
+            if (!stage) {
+                error = "Alpha terrain parent is unavailable";
+                return std::nullopt;
             }
+            for (int x = 0; x < patch.width; ++x)
+                for (int y = 0; y < patch.height; ++y) {
+                    const int alphaX = patch.zoneX * alphacoords::ALPHA_ZONE + patch.alphaX + x;
+                    const int alphaY = patch.zoneY * alphacoords::ALPHA_ZONE + patch.alphaY + y;
+                    const auto &original = stage->zone->column(alphaX, alphaY);
+                    const auto index = worldgen::ZoneTerrain::index(patch.sourceX + x, patch.sourceY + y);
+                    auto &column = result.terrain.columns[index];
+                    column.base = original.bottom;
+                    column.blocks.reserve(original.blocks.size());
+                    for (const auto block : original.blocks) {
+                        const auto converted = steamBlock(block);
+                        if (!converted) {
+                            error = "unmapped Alpha material " + std::to_string(block.type());
+                            return std::nullopt;
+                        }
+                        column.blocks.push_back(*converted);
+                    }
+                    result.present[index] = true;
+                }
+        }
+        return result;
     }
-    return result;
+};
+std::optional<SteamTile> steamTile(SurfaceStore &source, int32_t zx, int32_t zy, std::string &error) {
+    return SteamTileBuilder::build(source, zx, zy, error);
+}
+std::optional<SteamTile> steamTile(ReliefStore &source, int32_t zx, int32_t zy, std::string &error) {
+    return SteamTileBuilder::build(source, zx, zy, error);
 }
 } // namespace alphagen

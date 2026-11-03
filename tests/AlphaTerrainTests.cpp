@@ -4,6 +4,8 @@
 #include "alphagen/Coordinates.h"
 #include "alphagen/SurfaceStore.h"
 #include "alphagen/SteamBridge.h"
+#include "alphagen/ReliefStore.h"
+#include <stdexcept>
 #include <future>
 #include <cmath>
 #include <cstdio>
@@ -111,6 +113,137 @@ int alphaTerrainTests() {
         alphagen::SteamTile absent(0, 0);
         check(absent.read(0, 0, 100).type == worldgen::blocktype::SOLID,
               "uncovered Alpha columns are missing-domain filler, not implicit sea or air");
+    }
+    // Independent caves-contract vectors and behavioral checks of the real voxel writers.
+    check(alphagen::formationTop(8397000, 8397100, 180, 25, false) == 211 && alphagen::formationTop(8397000, 8397100, 180, 12, true) == 195,
+          "mound and mesa tops use their different noise scales");
+    const auto moundUV = alphagen::formationUV(alphagen::FormationTest::Mound, 8397010, 8397100, 190, 8397000, 8397100, 24, 22);
+    const auto mesaUV = alphagen::formationUV(alphagen::FormationTest::MesaFill, 8397010, 8397100, 190, 8397000, 8397100, 24, 22);
+    check(moundUV.x == 0.39192742109298706f && moundUV.y == 0.073123499751091f && mesaUV.x == 0.8065943717956543f &&
+              mesaUV.y == -0.09695065766572952f,
+          "formation inside tests preserve specified float intermediates");
+    check(alphagen::roadShade(8397000, 8397100) == 144.53866577148438f && alphagen::roadShade(8397002, 8397101) == 160.3988800048828f,
+          "road cobbles use integer lattice coordinates");
+    const auto pool = alphagen::terraceAt(12.f), raised = alphagen::terraceAt(13.9f);
+    check(pool.zb == 10 && pool.zlow == 8 && pool.zw == 10 && pool.a == 0.800000011920929f && raised.zb == 10 && raised.zlow == 13 &&
+              raised.zw == 11 && raised.a == -0.22559940814971924f,
+          "terrace pools and raised floors retain five-block step rounding");
+    const auto flat = [] {
+        alphagen::Zone zone;
+        zone.zx = 8397000 / 256;
+        zone.zy = 8397100 / 256;
+        for (auto &column : zone.columns) {
+            column.bottom = 180;
+            column.blocks = {{30, 80, 40, alphagen::GRASS}};
+            column.moisture = column.warmth = 0.5f;
+        }
+        return zone;
+    };
+    const auto fingerprint = [](const alphagen::Zone &zone) {
+        uint64_t hash = 14695981039346656037ull;
+        const auto mix = [&](uint64_t value) { hash = (hash ^ value) * 1099511628211ull; };
+        for (const auto &column : zone.columns) {
+            mix(uint32_t(column.bottom));
+            mix(column.blocks.size());
+            for (const auto block : column.blocks)
+                mix(uint32_t(block.r) | (uint32_t(block.g) << 8) | (uint32_t(block.b) << 16) | (uint32_t(block.typeByte) << 24));
+        }
+        return hash;
+    };
+    {
+        auto zone = flat();
+        terrain.formation(zone, 8397000, 8397100, 180, 24, 22, 25, false);
+        check(zone.read(8397010, 8397100, 190).type() == alphagen::ROCK && zone.column(8396930, 8397100).top() == 181,
+              "mounds add rock above the ground and leave distant columns unchanged");
+        auto blocked = flat();
+        blocked.place(8397010, 8397100, 190, {1, 2, 3, uint8_t(alphagen::SOLID | alphagen::KEEP)});
+        const auto before = fingerprint(blocked);
+        terrain.formation(blocked, 8397000, 8397100, 180, 24, 22, 25, false);
+        check(fingerprint(blocked) == before, "one protected block aborts the whole formation before any writes");
+        auto mesa = flat();
+        terrain.formation(mesa, 8397000, 8397100, 180, 24, 22, 12, true);
+        check(mesa.read(8397010, 8397100, 190).type() == alphagen::FIELD, "layered mesas use field material below their cap");
+        auto dry = flat();
+        dry.place(8397000, 8397100, 190, {255, 255, 255, alphagen::DRY_AIR});
+        terrain.boulder(dry, {8397000, 8397100, 190}, 3, 3, 3, false);
+        check(dry.read(8397000, 8397100, 190).typeByte == alphagen::DRY_AIR, "terrace boulders preserve dry-air cells");
+        terrain.boulder(dry, {8397000, 8397100, 190}, 3, 3, 3, true);
+        check(dry.read(8397000, 8397100, 190).typeByte == (alphagen::ROCK | alphagen::SURFACE_COLOURED),
+              "ravine boulders use the specified different dry-air and surface-flag rules");
+    }
+    {
+        std::string why = "previous failure";
+        const auto relief = terrain.generateRelief(32800, 32800, why);
+        check(relief && why.empty(), "rock-road-terrace boundary publishes a complete immutable stage");
+        if (relief && stage) {
+            check(relief->random.count() >= stage->random.count(), "relief continues the existing surface random stream");
+            check(fingerprint(*relief->zone) != fingerprint(*stage->zone), "post-surface terrain changes actual voxel columns");
+        }
+        check(!terrain.generateRelief(-1, 0, why) && !why.empty(), "invalid relief zones publish no partial stage");
+        bool treeChecked = false;
+        for (int rx = 511; rx <= 513 && !treeChecked; ++rx)
+            for (int ry = 511; ry <= 513 && !treeChecked; ++ry) {
+                const auto *region = world.region(rx, ry);
+                if (!region)
+                    continue;
+                for (const auto &location : region->records)
+                    if (location.type == 12) {
+                        const int zx = int(location.x >> 16) / 256, zy = int(location.y >> 16) / 256;
+                        check(!terrain.generateRelief(zx, zy, why) && why.find("giant-tree") != std::string::npos,
+                              "unimplemented giant-tree terrain fails explicitly instead of silently dropping the tree");
+                        treeChecked = true;
+                        break;
+                    }
+            }
+        check(treeChecked, "giant-tree rejection fixture is exercised");
+    }
+    {
+        alphagen::detail::ParentStages<int> cache(1);
+        int attempts = 0;
+        bool failed = false;
+        try {
+            cache.get(0, 0, [&]() -> std::shared_ptr<const int> {
+                ++attempts;
+                throw std::runtime_error("expected generation failure");
+            });
+        } catch (const std::runtime_error &) {
+            failed = true;
+        }
+        const auto retried = cache.get(0, 0, [&] {
+            ++attempts;
+            return std::make_shared<const int>(7);
+        });
+        const auto reused = cache.get(0, 0, [&] {
+            ++attempts;
+            return std::make_shared<const int>(8);
+        });
+        check(failed && attempts == 2 && retried == reused && *reused == 7,
+              "failed parent loads can be retried and completed loads are reused");
+    }
+    {
+        std::optional<alphagen::ColumnLease> lease;
+        std::weak_ptr<const alphagen::ReliefStage> owner;
+        int top = 0;
+        {
+            alphagen::ReliefStore source(123, {}, 1);
+            auto first = std::async(std::launch::async, [&] { return source.parent(32800, 32800); });
+            auto second = std::async(std::launch::async, [&] { return source.parent(32800, 32800); });
+            const auto a = first.get(), b = second.get();
+            check(a && a == b, "concurrent terrain consumers reuse the same completed relief parent");
+            owner = a;
+            lease = source.column(0, 0);
+            std::string error;
+            const auto native = alphagen::steamTile(source, 0, 0, error);
+            check(native && error.empty() && lease && native->columns()[0].base == lease->raw().bottom &&
+                      native->columns()[0].blocks.size() == lease->raw().blocks.size(),
+                  "Steam-sized consumers receive the relief stage columns through the shared adapter");
+            if (lease)
+                top = lease->raw().top();
+            check(source.parent(32801, 32800) != a, "relief parents obey the bounded ready-cache capacity");
+        }
+        check(lease && !owner.expired() && lease->raw().top() == top, "relief column lease survives eviction and store destruction");
+        lease.reset();
+        check(owner.expired(), "last relief column lease releases the parent stage");
     }
     stage.reset();
     std::optional<alphagen::ColumnLease> held;

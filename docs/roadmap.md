@@ -772,7 +772,12 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   this is an intermediate stage and has not changed the playable default. Shared
   parent-stage caching, owning column leases and effective block/water reads are
   checked; runtime world/structure consumers still need the bridge below.
-- [ ] Complete later terrain passes and compare labeled native height/surface output.
+- [x] Continue initial terrain through rock mounds, layered mesas, roads, terraces
+  and pools at the explicit pre-dungeon boundary. Retain its random stream and
+  boulder seeds; cache immutable relief parents and adapt their columns to Steam
+  indexing. Protected-block, terrace, cache retry and lease-lifetime checks pass.
+- [ ] Complete the remaining terrain passes (including giant-tree support and later
+  boulder/vegetation stages) and compare labeled native height/surface output.
 - [x] Read-only initial-surface column adapter: explicit material/flag translation,
   four-parent crops, native indexing and finite-domain coverage. All 4096 columns
   in an asymmetric fixture retain their geometry and RGB. This does not yet place
@@ -787,6 +792,7 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 - [ ] Add verified Alpha-only location variants alongside Steam layouts. The first
   investigated item is the Sphinx desert-ruin type, whose model exists in the owner's
   Steam install; its actual role/placement needs the Alpha structure contract.
+  Extra ruin structures are deferred at the user's request (2026-11-03).
 
 See [Alpha generation](alpha-generation.md) and the
 [independent parity boundary](specs/alpha-terrain-generation-boundaries.md).
