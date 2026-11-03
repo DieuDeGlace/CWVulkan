@@ -566,7 +566,9 @@ void standUpright(const CharacterRecording &recording, double seconds, std::vect
 // its entry, turned (-95, 0, 45) degrees and its own yaw.
 // Reuse the owner's rounded interface frame. It belongs behind the preview creatures;
 // drawing it with the final text overlay would darken the creatures as well as the world.
-// The reference confirms the translucent panel, but not its exact native opacity.
+// This recording-only fallback quantizes owner frame colors into a byte mesh.
+// Native cards preserve the live blackwidget data in the Plasma draw traversal
+// (docs/specs/steam-frontend-panel-backgrounds.md).
 void Session::previewPanels(std::vector<DrawItem> &opaque) {
     if (std::none_of(listed.begin(), listed.end(), [](const Listed &l) { return !l.preview.native; }))
         return;
@@ -1545,7 +1547,7 @@ void Session::creationItems(Hud::Screen &out) {
     }
     if (look.preview != stage.looks.hairColour())
         applyLook(true);
-    out.push_back(widget("blackwidget", panel, LOOK_PANEL_SIZE)); // (the panel's template is not named by the spec)
+    out.push_back(widget("blackwidget", panel, LOOK_PANEL_SIZE)); // native outer look-panel source
     static const char *const LABELS[LOOK_ROWS] = {"Race", "Gender", "Class", "Face", "Haircut"};
     const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
     for (int row = 0; row < LOOK_ROWS; row++) {

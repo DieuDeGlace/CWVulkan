@@ -1,6 +1,7 @@
 # Engine readiness checklist
 
-Audited against the source and tests on 2026-11-02. The checkboxes in the first
+Audited against the source and tests on 2026-11-02; the Alpha section was updated
+against its implementation and checks on 2026-11-03. The checkboxes in the first
 section mean implemented and exercised in the stated checks; they do not certify
 complete Steam or pixel parity. Older progress notes are in Git history and the
 individual feature documents.
@@ -56,7 +57,13 @@ individual feature documents.
   pool, distinct mask modes, null-depth child WORLD callbacks and restored parent
   targets; the owner button shine is enabled.102 local GUI image cases (86
   asset-free,16 with the owner's atlas) and owner callback
-  checks pass. The legacy placed HUD now uses the same real clip layers and
+  checks pass. Normal selection cards, creation and Options copy the owner's
+  blackwidget art and live Display values, with white non-text tint and no shared
+  fixed-alpha rectangle; the [independent panel audit](specs/steam-frontend-panel-backgrounds.md)
+  confirms those inputs. Logo placement/projection and fixed WORLD shading also
+  have independent contracts and real CUB GPU cases in both looks. Native visual
+  comparison and the recording-only preview fallback remain separate work.
+  The legacy placed HUD now uses the same real clip layers and
   samples shape, Transform and Display sequences through the existing evaluator,
   preserving independent placement/fill overrides and disabled-node admission.
   Owner location masks and synthetic movement/visibility/clipping channels pass
@@ -769,9 +776,9 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the
   sister engine's clean-room code. Formula/surface checks and existing CPU tests pass;
-  this is an intermediate stage and has not changed the playable default. Shared
-  parent-stage caching, owning column leases and effective block/water reads are
-  checked; runtime world/structure consumers still need the bridge below.
+  the initial surface remains a distinct intermediate product. Shared parent-stage
+  caching, owning column leases and effective block/water reads are checked and
+  consumed by the playable composition below.
 - [x] Continue initial terrain through rock mounds, layered mesas, roads, terraces
   and pools at the explicit pre-dungeon boundary. Retain its random stream and
   boulder seeds; cache immutable relief parents and adapt their columns to Steam
@@ -779,30 +786,43 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 - [x] Voxel-tree builders and giant-tree relief locations: preserve moss, roots,
   crowns, dry-air exclusion and random draws. Palms load and stamp the owner's
   cardinal/diagonal leaf models with explicit rotation and placement rules.
-- [ ] Complete later boulder/vegetation stages and compare labeled native
-  height/surface output before finishing playable Alpha generation.
+- [x] Later boulders and the natural vegetation continuation, with retained random
+  state, immutable parent caching, owner-model resolution and native plant placement
+  rules. Formula/import/integration checks and live foliage captures pass.
+- [ ] Broader labeled native height/surface/biome comparisons and forest-edge,
+  transition, live-edit and cold-streaming acceptance. Contract tests are not those
+  full runtime comparisons.
 - [x] Read-only initial-surface column adapter: explicit material/flag translation,
   four-parent crops, native indexing and finite-domain coverage. All 4096 columns
-  in an asymmetric fixture retain their geometry and RGB. This does not yet place
-  structures or select the playable mode.
-- [ ] Bridge Alpha terrain/biomes to Steam's retained town and dungeon layouts,
-  including coordinate conversion, collision, water and lighting consumers.
-- [ ] Add separate Alpha/Steam generation selection, mode-safe caches/saves/network
-  settings, then make the working Alpha mode the default. Existing Extracted and
-  approximate Alpha-style terrain are not that new mode.
+  in an asymmetric fixture retain their geometry and RGB. The runtime composition
+  consumes this adapter while retaining Steam construction columns.
+- [x] Bridge Alpha terrain/visual climate to Steam's retained town and dungeon
+  layouts, with coordinate conversion, collision, water, lighting and object/spawn
+  reanchoring. Protected Steam columns/models retain their tested geometry and
+  placement. Gameplay region identities and difficulty remain Steam's.
+- [x] Separate Alpha/Steam generation selection and versioned caches/save profiles,
+  finite admission and multiplayer agreement. The working Alpha source is now the
+  shipped default; original Steam generation remains Source=Game. Local and remote
+  handshake cases pass; real two-account acceptance remains below.
+- [x] Alpha material, environment-light and cloud precision corrections from separate
+  native-only specifications. Byte/float/fixed vectors and full CPU/GPU checks pass.
+  Bounded corner-light reuse and converged floods retain their checked outputs;
+  microbenchmarks are not whole-game performance acceptance.
 - [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,
   preserving its shoreline/water fixes and respecting its separate source license.
 - [ ] Add verified Alpha-only location variants alongside Steam layouts. The first
   investigated item is the Sphinx desert-ruin type, whose model exists in the owner's
   Steam install; its actual role/placement needs the Alpha structure contract.
-  Extra ruin structures are deferred at the user's request (2026-11-03).
+  Extra ruin structures are deferred at the user's request (2026-11-03) and are
+  not a final-release gate.
 
 See [Alpha generation](alpha-generation.md) and the
 [independent parity boundary](specs/alpha-terrain-generation-boundaries.md).
 
 ## Validation needed before a final release
 
-- [ ] Close the implementation gaps above, with focused checks for each change.
+- [ ] Close the implementation gaps above, excluding explicitly deferred extensions,
+  with focused checks for each change.
 - [ ] Two-account Steam session and an original Steam-game peer: join/leave,
   interactions, combat, loot, mission state, chat and reconnects.
 - [ ] Real first-run setup and interrupted extraction/recovery on a game install,

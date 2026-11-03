@@ -1418,7 +1418,13 @@ and ReShade DLL file hashes. Captures remain private and excluded from the sourc
   correspondence, and wider waterfall, underwater, wet-ground, dusk/night and
   material comparisons. The independently specified Alpha threshold arithmetic
   and staged draw order have CPU/GPU checks.
-- Frontend: exact panel opacity and logo shading require further independent evidence.
+- Frontend: wider owner-window visual comparisons and the optional recording-only
+  preview compatibility path. Normal saved cards, creation and Options already use
+  live owner blackwidget copies, authored fill/Display values and ordinary Plasma
+  blending; the independent panel audit confirms that no universal opacity constant
+  belongs here. Logo placement, queued projection and fixed WORLD lighting likewise
+  have independent specifications and CPU/GPU checks. Full native screenshots and
+  unmeasured font/cache/owner hierarchy cases remain separate acceptance work.
 - Gameplay edges: sound coverage and feat/chat presentation, ability/AI cases,
   integrated pet combat/appearance comparisons, controller GUI/aim tracking,
   newly observed item-action producers and wider gameplay comparisons,
