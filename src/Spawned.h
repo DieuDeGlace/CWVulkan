@@ -241,6 +241,7 @@ class SpawnedCreatures {
     nativeai::Creature *localPlayer();
     // The whole time of the native player's current ability in ms (0x4f220), 0 before it exists.
     float playerAbilityDuration() const;
+    float playerAbilityEffectTime() const; //0x4ead0(player,-1), separate from whole duration
     // A zone's static objects as the world's AI and interactions keep them (0xe0 bytes each:
     // a door's shut byte +0x28, a seat's user +0x30); null until the zone is in memory.
     const std::vector<nativeai::Object> *zoneObjects(int zx, int zy) const;

@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The two previously unfinished use-prompt completions, abilities 0x96/0x97,
+  now add/update and remove independently owned creature copies. A separate
+  application-lifetime owner survives menu/world sessions without inventing a
+  persisted format or transition clear. Completion uses the native effect-time
+  helper rather than whole duration and preserves reset, sound and selection
+  order. Fieldwise assignment retains unassigned padding, inventory and pose
+  state, including when updating an existing ID. Tests reproduce the missing
+  actual-prompt call and zero-ID sentinel filtering before their fixes; signed-ID
+  order/wrapping, missing targets, source immutability, suppression/Climb ordering
+  and continuation to Revive also pass. All five targets and the full CPU/owner
+  suite pass. This bounded backend does not establish other collection consumers,
+  save/network behavior or original-game runtime acceptance.
+
 - Proper-name generation now shares the verified unsigned R hash and explicit
   32-bit seed/selector arithmetic, removing a signed-overflow expression. Shared
   fragment-table aliases retain their original hash inputs. Fourteen independently

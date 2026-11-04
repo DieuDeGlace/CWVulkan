@@ -363,7 +363,7 @@ bool promptRoutine(const Scene &s, const Targets &t, Prompt &p) {
     if (s.dodgeHeld || s.walkHeld || s.dialogOpen)
         return false;
 
-    const int ability = abilityOf(me);
+    int ability = abilityOf(me);
     if (ability == CLIMBING) {
         p.text = "Fall", p.action = Action::LetGo;
         return true;
@@ -376,8 +376,19 @@ bool promptRoutine(const Scene &s, const Targets &t, Prompt &p) {
         return true;
     }
 
-    // (Abilities 0x96 and 0x97 end here, keeping or letting go of a pet in the controller's
-    // collection, spec 3.3; CubeVulkan has no such collection yet.)
+    if (s.collection) {
+        // Collection keys are raw World IDs; zero is not a crosshair sentinel here.
+        const auto resolve = [&](int64_t id) -> const uint8_t * {
+            if (s.creatureById)
+                return s.creatureById(id);
+            for (const auto &creature : s.creatures)
+                if (creature.record && idOf(creature.record) == id)
+                    return creature.record;
+            return nullptr;
+        };
+        s.collection->complete(s.player, s.abilityEffectTime, resolve, s.collectionSound);
+        ability = abilityOf(me); // later prompts observe the completed ability/time
+    }
 
     if (!(read<float>(me, worldgen::creature::HEALTH) > 0.0f)) {
         p.text = "Revive", p.action = Action::Revive;

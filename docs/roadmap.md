@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Automatic abilities 0x96/0x97 now update a controller-owned creature-copy
+  collection at the effect threshold, after prompt suppression/Climb and before
+  Revive. Copies retain constructor/prior values outside the specified semantic
+  fields; duplicate IDs update the same owned object. Signed-ID ordering, wrapped
+  selection, reset/sound/selection order, missing targets and raw zero-ID lookup
+  have direct and actual-prompt regressions. All five targets and CPU/owner checks
+  pass. The owner spans world/menu sessions; save/transition mutation rules, other
+  collection consumers and original-game runtime acceptance remain unverified.
+
 - [x] Independently verify proper-name selector dispatch, 32-bit hash inputs and
   unsigned index reductions; share the existing R implementation and retain raw
   selector bits across table aliases. Derived index/extreme-selector fixtures pass.

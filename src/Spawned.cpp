@@ -1802,6 +1802,16 @@ float SpawnedCreatures::playerAbilityDuration() const {
     return (float)nativerules::abilityDuration(player.record.data(), has);
 }
 
+float SpawnedCreatures::playerAbilityEffectTime() const {
+    if (!hasPlayer)
+        return 0.0f;
+    const nativerules::HasBuff has = [&](int type) {
+        float strength = 0, remaining = 0;
+        return playerBuff(type, strength, remaining);
+    };
+    return static_cast<float>(nativerules::abilityEffectTime(player.record.data(), -1, has));
+}
+
 const std::vector<nativeai::Object> *SpawnedCreatures::zoneObjects(int zx, int zy) const {
     const nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     return lists ? &lists->staticObjects : nullptr;

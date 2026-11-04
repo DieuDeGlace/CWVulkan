@@ -71,6 +71,7 @@
 #include "MapControls.h"
 #include "ProceduralItems.h"
 #include "UsePrompt.h"
+#include "UseCreatureCollection.h"
 #include "ItemSelector.h"
 #include "Renderer.h"
 #include "HudCoin.h"
@@ -179,7 +180,7 @@ RegionLook regionLook(const ColumnInfo &c) {
 }
 } // namespace
 
-static int runSession(int argc, char **argv, bool returningToMenu) {
+static int runSession(int argc, char **argv, bool returningToMenu, usecollection::Collection &creatureCollection) {
     const fs::path root = exeDir();
     logFile.close();
     fs::path logName = "CubeVulkan.log"; // --log FILE: another log (two instances side by side)
@@ -5369,6 +5370,9 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             useprompt::Scene scene = std::move(nativeUseScene);
             scene.playerAt = placeOf(me->record);
             scene.abilityDuration = spawned.playerAbilityDuration();
+            scene.abilityEffectTime = spawned.playerAbilityEffectTime();
+            scene.collection = &creatureCollection;
+            scene.collectionSound = [&](int number) { audio.playInterface(number); };
             scene.useDown = itemInputHeld(gameoptions::USE) || std::exchange(autoUsePress, false);
             scene.dodgeHeld = gameInput.held(gameoptions::DODGE);
             scene.walkHeld = gameInput.held(gameoptions::WALK);
@@ -8425,8 +8429,11 @@ static LONG WINAPI logCrash(EXCEPTION_POINTERS *info) {
 
 int main(int argc, char **argv) {
     SetUnhandledExceptionFilter(logCrash);
-    int result = runSession(argc, argv, false);
+    // This controller owner outlives individual world/menu sessions. No save or
+    // transition clear is inferred from the bounded native collection contract.
+    usecollection::Collection creatureCollection;
+    int result = runSession(argc, argv, false, creatureCollection);
     while (result == 2)
-        result = runSession(argc, argv, true);
+        result = runSession(argc, argv, true, creatureCollection);
     return result;
 }

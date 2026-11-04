@@ -20,6 +20,7 @@
 // Positions are CubeVulkan's local blocks (ExtractedWorld::toLocal). Creature records are the
 // game's layout (nativepose::CREATURE_SIZE bytes).
 #include "NativeAI.h"
+#include "UseCreatureCollection.h"
 
 #include <array>
 #include <cstdint>
@@ -125,6 +126,9 @@ bool groundItemValid(const GroundItem &g, int64_t playerOwnerId);
 struct Scene {
     uint8_t *player = nullptr;   // the local player's record
     glm::vec3 playerAt{0};       // its position
+    float abilityEffectTime = 0; // current ability effect threshold (0x4ead0 with -1)
+    usecollection::Collection *collection = nullptr; // borrowed controller-lifetime owner
+    usecollection::Collection::Sound collectionSound;
     float abilityDuration = 0;   // its current ability's whole time (0x4f220)
     Camera camera;
     std::vector<Creature> creatures;     // every creature of the world (spec 2.1 picks among them)

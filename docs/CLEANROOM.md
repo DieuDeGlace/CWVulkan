@@ -1910,3 +1910,16 @@ not native runtime captures. New data-reader failure/format cases and full CPU/
 owner checks pass. No original/SDK implementation or header was read by the
 implementer. Native live/output, alternate builds, malformed/concurrent records
 and broader upstream caller/grammar coverage remain separate boundaries.
+
+## Controller creature-copy completions, 2026-11-04
+
+The independent native-only author supplied steam-use-creature-collection.md,
+including exact assigned fields and unassigned gaps, without reading the engine,
+tests, exporter, SDK or owner outputs. The implementer read the complete finalized
+prose, its existing constructor-default contract and engine sources only.
+UseCreatureCollection and the prompt/runtime binding implement that bounded
+contract with project-owned records and containers. Synthetic records check the
+assignment complement, signed ordering, selection and actual prompt cut point;
+no native implementation or game content is included. Defined project defaults
+are not asserted to prove native padding initialization. Unknown transition,
+persistence, other consumer, concurrency and large-count behavior remains open.
