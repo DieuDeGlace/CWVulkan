@@ -155,6 +155,8 @@ int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
 int captureTickContextTests(); // tests/CaptureTickContextTests.cpp
 int nativeSpriteCatalogTests(); // tests/NativeSpriteCatalogTests.cpp
 int nativeTerrainBufferTests(); // tests/NativeTerrainBufferTests.cpp
+int nativeLoadedZoneTests(); // tests/NativeLoadedZoneTests.cpp
+int captureWorldSectionTests(); // tests/CaptureWorldSectionTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
@@ -9396,6 +9398,10 @@ int main(int argc, char **argv) {
         return featTextTests();
     if (argc == 2 && std::string(argv[1]) == "lootwindows")
         return lootWindowTests();
+    if (argc == 2 && std::string(argv[1]) == "extractorlocks")
+        return captureWorldSectionTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "extractorzones")
+        return nativeLoadedZoneTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "extractorchunks")
         return nativeTerrainBufferTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "extractorcatalog")
@@ -10735,6 +10741,8 @@ int main(int argc, char **argv) {
     failures += captureTickContextTests();
     failures += nativeSpriteCatalogTests();
     failures += nativeTerrainBufferTests();
+    failures += nativeLoadedZoneTests();
+    failures += captureWorldSectionTests();
     failures += steamSceneRangeTests();
     failures += steamMeshCostTests();
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp

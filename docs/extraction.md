@@ -222,7 +222,26 @@ The caller uses nonblocking loaded-zone then mesh-publication critical-section
 acquisitions and holds both through enumeration and buffer visits. Rechecks alone
 do not supply synchronization or lifetime extension. The reached eviction path is
 covered by that order; no universal guarantee for every external mutation follows.
-World-container enumeration remains an existing SDK-dependent boundary.
+World-container enumeration in this path now uses the independently specified
+sentinel/entry-count sequence, not an SDK container iterator. Other exporter
+paths remain SDK-dependent.
 `EngineTests extractorchunks` exercises malformed-memory fixtures without assets.
-The new traversal/lock integration still needs its supported-game live smoke;
-the previously validated installed DLL is retained until then.
+An extractor-only supported-game title smoke identified 3,230 sprite buffers and
+1,172 terrain buffers while presenting six distinct decoded frames. Owner
+Save/Mods/ReShade were restored and hash-checked after closing. This does not
+establish modified-session, character/combat or universal shutdown-lifetime parity.
+
+The [loaded-zone sequence contract](specs/steam-loaded-zone-container.md) now
+supplies the containing World iteration too. It reads linked element order and
+node+0x18 Zone values, not hash buckets or terrain-node payload offsets. The count
+covers entries, including null Zone values that native consumers skip. Capture
+limits and count/link rejection are defensive project policies. The shared lease
+retains the documented World container/publication lock pair through both the
+World and per-Zone traversals. These addresses still require a valid supported
+World; neither copied pointers nor a lock guard supply ownership after unlock.
+
+`EngineTests extractorzones` checks the byte view; `extractorlocks` exercises real
+Win32 critical-section contention and scope/unwinding release on synthetic storage.
+`CaptureMemory.h` centralizes the AMD64 guarded-reader arithmetic contract. These
+checks complement, rather than replace, the pending supported-game smoke. Other
+extractor paths still use SDK fields, and the known live-installed DLL is retained.

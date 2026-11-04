@@ -1817,5 +1817,21 @@ owned code, authored a linked-list byte view and explicit ordered capture guards
 and extended the shared ordinary-wrapper reader. Allocation ceilings and malformed-
 data rejection are capture policies. Tests use synthetic, noncontiguous pointer
 fixtures; they are not a native runtime oracle. No original/SDK implementation or
-class declaration was copied. Other SDK-dependent views and live integration
-validation remain open. No owner capture or original asset enters either package.
+class declaration was copied. The later loaded-zone phase supplies a bounded
+supported-game integration smoke; other SDK-dependent views remain open. No owner
+capture or original asset enters either package.
+
+### Independent loaded-zone sequence and capture lease, 2026-11-04
+
+The same native-only author supplied steam-loaded-zone-container.md without
+implementation, SDK or owner-data access. The implementer read all five finalized
+sections and owned code, then authored a bounded linked sequence reader and a
+shared Win32 lease. Keys, bucket algorithms and complete classes were not copied
+or reconstructed. Synthetic fixtures verify the +0x18 Zone payload distinction
+and null-entry counts; actual Win32 sections verify contention and unwinding.
+The shared byte-read arithmetic is original project code. After implementation
+and CPU checks, the implementer ran an isolated, extractor-only native title smoke:
+3,230 sprite buffers, 1,172 terrain buffers and six distinct presented frames.
+The native-only author did not read these outputs. Owner Save/Mods/ReShade were
+restored and hash-checked; only bounded integration is established. No owner data
+or original asset is added to source/runtime packages.

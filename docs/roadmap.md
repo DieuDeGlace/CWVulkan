@@ -813,6 +813,14 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   Supported-game live validation of this new path remains a release gate; other
   World views still depend on the SDK.
 
+- [x] Replace the remaining SDK loaded-zone iterator in terrain-buffer capture
+  with the independently traced element-sequence view. Synthetic noncontiguous,
+  null-entry, corrupt/cyclic, changed-container and overflow cases pass. Actual
+  Win32 contention/unwinding checks verify ordered nonblocking lock leases. The
+  full CPU/owner suite passes. An extractor-only original title session also
+  identified 3,230 sprite/1,172 terrain buffers and decoded six distinct frames.
+  Broader lifetime, modified-session and gameplay acceptance remain separate.
+
 ## Host source-window continuation, 2026-11-03
 
 - [x] Replace host square source demand with the independently verified per-player

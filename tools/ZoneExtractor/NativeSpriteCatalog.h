@@ -1,9 +1,7 @@
 #pragma once
 // Independent layout facts: docs/specs/steam-native-sprite-catalog.md §§2–5.
+#include "CaptureMemory.h"
 #include <array>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
 #include <utility>
 #include <vector>
 
@@ -19,15 +17,6 @@ struct PrimarySprite {
 // Exporter allocation ceiling, not a native count or an exhaustive resource list.
 constexpr std::size_t MAX_PRIMARY_SPRITES = 65536;
 
-template <class Read>
-bool readSpriteField(std::uintptr_t object, std::size_t offset, void *destination, std::size_t count, Read &read) {
-    constexpr auto maximum = std::numeric_limits<std::uintptr_t>::max();
-    if (!object || offset > maximum - object)
-        return false;
-    const auto address = object + offset;
-    return (!count || count - 1 <= maximum - address) && read(address, destination, count);
-}
-
 // The caller validates the supported image and copies through a guarded reader.
 // Only borrowed addresses and raw dimensions are captured: no RGB/GPU readiness,
 // scale, resource ownership, or complete SDK replacement is implied. Rechecking
@@ -37,10 +26,10 @@ template <class Read> bool readPrimarySprites(std::uintptr_t world, std::vector<
     static_assert(sizeof(SpriteDimensions) == 12);
     output.clear();
     std::uintptr_t catalog = 0;
-    if (!readSpriteField(world, 0x70, &catalog, sizeof catalog, read) || !catalog)
+    if (!readField(world, 0x70, &catalog, sizeof catalog, read) || !catalog)
         return false;
     std::array<std::uintptr_t, 3> bounds{};
-    if (!readSpriteField(catalog, 0x10, bounds.data(), sizeof bounds, read))
+    if (!readField(catalog, 0x10, bounds.data(), sizeof bounds, read))
         return false;
     const auto begin = bounds[0], end = bounds[1], capacityEnd = bounds[2];
     if ((!begin && (end || capacityEnd)) || begin > end || end > capacityEnd || ((begin | end | capacityEnd) & 7))
@@ -49,18 +38,18 @@ template <class Read> bool readPrimarySprites(std::uintptr_t world, std::vector<
     if (count > MAX_PRIMARY_SPRITES)
         return false;
     std::vector<std::uintptr_t> pointers(count);
-    if (count && !readSpriteField(begin, 0, pointers.data(), count * sizeof(std::uintptr_t), read))
+    if (count && !readField(begin, 0, pointers.data(), count * sizeof(std::uintptr_t), read))
         return false;
     std::vector<PrimarySprite> result(count);
     for (std::size_t i = 0; i < count; ++i) {
         result[i].address = pointers[i];
-        if (pointers[i] && !readSpriteField(pointers[i], 0x88, &result[i].dimensions, sizeof(SpriteDimensions), read))
+        if (pointers[i] && !readField(pointers[i], 0x88, &result[i].dimensions, sizeof(SpriteDimensions), read))
             return false;
     }
     std::uintptr_t currentCatalog = 0;
     std::array<std::uintptr_t, 3> currentBounds{};
-    if (!readSpriteField(world, 0x70, &currentCatalog, sizeof currentCatalog, read) || currentCatalog != catalog ||
-        !readSpriteField(catalog, 0x10, currentBounds.data(), sizeof currentBounds, read) || currentBounds != bounds)
+    if (!readField(world, 0x70, &currentCatalog, sizeof currentCatalog, read) || currentCatalog != catalog ||
+        !readField(catalog, 0x10, currentBounds.data(), sizeof currentBounds, read) || currentBounds != bounds)
         return false;
     output = std::move(result);
     return true;

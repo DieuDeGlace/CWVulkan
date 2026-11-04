@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-11-03
+# Source review checkpoint — 2026-11-04
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -10,16 +10,28 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Loaded-zone enumeration in terrain-buffer capture now uses an independently
+  specified sentinel-linked byte view. It preserves current forward order, counts
+  null entries without treating them as Zones, ignores keys/buckets, and rejects
+  inconsistent or changing sequences. This removes the SDK container iterator from
+  that capture path; other extractor fields still depend on SDK views. The shared
+  ordered World-lock lease has real Win32 contention and exception-unwinding tests.
+  All five targets, focused capture checks and the full CPU/owner-data suite pass.
+  A subsequent extractor-only supported-game title session identified 3,230 sprite
+  buffers and 1,172 terrain buffers, decoded six distinct 1920x1080 presented frames,
+  and closed on request. Owner Save/Mods/ReShade were restored and hash-checked.
+  This covers the integrated terrain/list/lock path; it is not a full SDK
+  replacement, ownership extension, modified-session or universal lifecycle proof.
+
 - Terrain buffer identification now uses an independently specified active Zone
   linked-list view and the shared ordinary-backend wrapper reader. The caller
   retains the documented loaded-zone/publication lock pair throughout traversal;
   header-only locking is not substituted. Sentinel/link/count/overflow/changed-
   publication fixtures, all five build targets and the full CPU/owner-data suite
-  pass. This new terrain traversal/lock path has not yet been exercised in the
-  original game. The known installed extractor remains the previously live-checked
-  build; a later supported-game smoke is required before replacing it. World
-  enumeration and other SDK fields remain an explicit dependency. No original
-  code, header or complete native class was copied.
+  pass. The later loaded-zone checkpoint above supplies its supported-game title
+  smoke and replaces this path's World-container iterator. Other SDK fields remain
+  an explicit dependency. No original code, header or complete native class was
+  copied.
 
 - An additional no-save Alpha-look flight traveled 4,096 blocks and landed, then
   completed its 145-simulation-second observation and exited normally. Wall time

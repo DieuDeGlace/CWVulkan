@@ -141,6 +141,12 @@ still does, so the grant/revision/complete-adapter gate remains open.
 
 The active terrain-list view and its documented lock addresses now come from
 [separate native-only prose](specs/steam-terrain-buffer-resources.md). The capture
-code still uses the existing SDK-dependent World-container enumeration. This
-further bounded reader does not supply a complete independent adapter, resolve
-the SDK grant/revision or qualify an untested live integration for final release.
+code's World-container enumeration was replaced by the later independent element
+view described below. These bounded readers do not supply a complete independent
+adapter or resolve the SDK grant/revision for final release.
+
+Terrain-buffer capture now also replaces its SDK loaded-zone iterator with the
+[independent element-sequence view](specs/steam-loaded-zone-container.md). The
+ordered capture lease is original project code using documented native lock
+addresses and Windows APIs. Other extractor paths remain SDK-dependent; this
+change does not establish the missing SDK grant, revision or complete replacement.

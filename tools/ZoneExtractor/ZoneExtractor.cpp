@@ -5,6 +5,8 @@
 #include "NativeSpriteCatalog.h"
 #include "NativeSpriteBuffers.h"
 #include "NativeTerrainBuffers.h"
+#include "NativeLoadedZones.h"
+#include "CaptureWorldSections.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -615,49 +617,17 @@ static void keepHooked() {
             }
     }
 }
-// Match the reached native eviction order: loaded-zone ownership, then active
-// mesh publication. Both acquisitions are nonblocking and held through the visit.
-class TerrainCaptureLock {
-    CRITICAL_SECTION *zones = nullptr, *mesh = nullptr;
-    static CRITICAL_SECTION *section(cube::World *world, size_t offset) {
-        const auto address = reinterpret_cast<uintptr_t>(world);
-        constexpr auto maximum = std::numeric_limits<uintptr_t>::max();
-        if (!address || offset > maximum - address || sizeof(CRITICAL_SECTION) - 1 > maximum - (address + offset))
-            return nullptr;
-        return reinterpret_cast<CRITICAL_SECTION *>(address + offset);
-    }
-
-  public:
-    explicit TerrainCaptureLock(cube::World *world) {
-        auto *owner = section(world, captureabi::WORLD_ZONES_SECTION);
-        auto *publication = section(world, captureabi::WORLD_MESH_SECTION);
-        if (!owner || !publication || !TryEnterCriticalSection(owner))
-            return;
-        zones = owner;
-        if (TryEnterCriticalSection(publication))
-            mesh = publication;
-    }
-    ~TerrainCaptureLock() {
-        if (mesh)
-            LeaveCriticalSection(mesh);
-        if (zones)
-            LeaveCriticalSection(zones);
-    }
-    TerrainCaptureLock(const TerrainCaptureLock &) = delete;
-    TerrainCaptureLock &operator=(const TerrainCaptureLock &) = delete;
-    explicit operator bool() const { return mesh != nullptr; }
-};
 template <class Visit> static void visitTerrainBuffers(cube::World *world, Visit visit) {
-    TerrainCaptureLock locked(world);
+    captureabi::WorldBufferLease locked(reinterpret_cast<uintptr_t>(world));
     if (!locked)
         return;
     const auto module = base();
     std::vector<captureabi::VertexBufferView> buffers;
-    // World enumeration remains an existing SDK-dependent boundary. The Zone's
-    // active list and ordinary buffer fields are independently specified views.
-    for (auto &[key, zone] : world->zones)
-        if (zone &&
-            captureabi::readTerrainVertexBuffers(module, reinterpret_cast<uintptr_t>(zone), buffers, readNative))
+    std::vector<uintptr_t> zones;
+    if (!captureabi::readLoadedZones(reinterpret_cast<uintptr_t>(world), zones, readNative))
+        return;
+    for (const auto zone : zones)
+        if (captureabi::readTerrainVertexBuffers(module, zone, buffers, readNative))
             for (const auto &resource : buffers)
                 if (visit(resource))
                     return;
