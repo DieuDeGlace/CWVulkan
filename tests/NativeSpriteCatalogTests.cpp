@@ -109,7 +109,7 @@ int nativeSpriteCatalogTests() {
         store(wrapper, module + captureabi::VERTEX_BUFFER_TABLE_RVA);
         store(wrapper + 8, std::array<std::uintptr_t, 2>{context, buffer});
     };
-    captureabi::SpriteVertexBuffer vertex;
+    captureabi::VertexBufferView vertex;
     const auto vertexCapture = [&] { return captureabi::readSpriteVertexBuffer(module, first, vertex, read); };
     vertexFixture();
     check(vertexCapture() && vertex.wrapper == wrapper && vertex.context == context && vertex.buffer == buffer,

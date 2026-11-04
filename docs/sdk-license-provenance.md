@@ -138,3 +138,9 @@ The sprite vertex-buffer view is now independently authored from
 wrapper's context and actual COM buffer fields without invoking its bind methods.
 This further component does not include SDK headers; the rest of the extractor
 still does, so the grant/revision/complete-adapter gate remains open.
+
+The active terrain-list view and its documented lock addresses now come from
+[separate native-only prose](specs/steam-terrain-buffer-resources.md). The capture
+code still uses the existing SDK-dependent World-container enumeration. This
+further bounded reader does not supply a complete independent adapter, resolve
+the SDK grant/revision or qualify an untested live integration for final release.

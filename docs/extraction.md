@@ -208,3 +208,21 @@ separate from loaded, lit snapshots; comparing the former to a lit terrain oracl
 can produce legitimate air/water-light differences. The isolated loaded reference
 for four coordinates compared all 106,380 blocks and all four region types exactly.
 Captures and this pinned reference remain local and are excluded from packages.
+
+## Active terrain buffer identities
+
+The [independent active-list contract](specs/steam-terrain-buffer-resources.md)
+supplies the Zone sentinel/count and linked node/group fields. The reader follows
+links, validates their count/tail/backlinks, bounds capture allocations and rejects
+changed publication before returning borrowed buffer identities. Pending groups
+are not traversed. The ordinary wrapper reader is shared with sprite capture; it
+does not invoke the native bind methods or establish GPU readiness.
+
+The caller uses nonblocking loaded-zone then mesh-publication critical-section
+acquisitions and holds both through enumeration and buffer visits. Rechecks alone
+do not supply synchronization or lifetime extension. The reached eviction path is
+covered by that order; no universal guarantee for every external mutation follows.
+World-container enumeration remains an existing SDK-dependent boundary.
+`EngineTests extractorchunks` exercises malformed-memory fixtures without assets.
+The new traversal/lock integration still needs its supported-game live smoke;
+the previously validated installed DLL is retained until then.

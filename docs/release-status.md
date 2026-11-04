@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Terrain buffer identification now uses an independently specified active Zone
+  linked-list view and the shared ordinary-backend wrapper reader. The caller
+  retains the documented loaded-zone/publication lock pair throughout traversal;
+  header-only locking is not substituted. Sentinel/link/count/overflow/changed-
+  publication fixtures, all five build targets and the full CPU/owner-data suite
+  pass. This new terrain traversal/lock path has not yet been exercised in the
+  original game. The known installed extractor remains the previously live-checked
+  build; a later supported-game smoke is required before replacing it. World
+  enumeration and other SDK fields remain an explicit dependency. No original
+  code, header or complete native class was copied.
+
+- An additional no-save Alpha-look flight traveled 4,096 blocks and landed, then
+  completed its 145-simulation-second observation and exited normally. Wall time
+  was 163.79 seconds; sampled working/private peaks were 1406.7/1698.5 MiB. The final
+  scene was inspected and the test save retained its hash. This adds one longer
+  default-seed streaming case; it does not close broad biome, forest-edge, native
+  parity or sustained-soak acceptance. The original Steam game stayed closed.
+
 - Sprite buffer identification now uses the independently traced ordinary D3D11
   wrapper fields, guarded copies and concrete-type/link rechecks. It distinguishes
   the native wrapper from the COM buffer and invokes no native binding method.

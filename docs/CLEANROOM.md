@@ -1808,3 +1808,14 @@ Output routing is project policy: modified captures stay separate from vanilla
 candidates, and a session label does not certify historical files. No generator
 formula or expected value was changed to accommodate modified references. All
 original images, records, traces, DLL backups and save data remain private.
+
+### Independent active terrain-buffer view, 2026-11-04
+
+The native-only author finalized steam-terrain-buffer-resources.md without reading
+engine, SDK, exporter, tests or owner data. The implementer read the full prose and
+owned code, authored a linked-list byte view and explicit ordered capture guards,
+and extended the shared ordinary-wrapper reader. Allocation ceilings and malformed-
+data rejection are capture policies. Tests use synthetic, noncontiguous pointer
+fixtures; they are not a native runtime oracle. No original/SDK implementation or
+class declaration was copied. Other SDK-dependent views and live integration
+validation remain open. No owner capture or original asset enters either package.

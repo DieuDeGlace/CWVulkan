@@ -807,6 +807,12 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   and all region types exactly; full CPU/owner checks pass with that reference.
   Historical mixed exports are retained and their provenance is not inferred.
 
+- [x] Independently implement bounded active terrain-group traversal and shared
+  vertex-buffer views with the documented lock pair held through each capture.
+  Linked/cyclic/corrupt/changed-publication fixtures and CPU/owner checks pass.
+  Supported-game live validation of this new path remains a release gate; other
+  World views still depend on the SDK.
+
 ## Host source-window continuation, 2026-11-03
 
 - [x] Replace host square source demand with the independently verified per-player
@@ -839,7 +845,9 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   full runtime comparisons. Two additional 35-simulation-second Alpha-look flights
   using default/123 seeds cross positive/negative parent boundaries and land with
   normal exits; the original test save is unchanged. They add two bounded travel
-  cases and do not close the broader acceptance item.
+  cases and do not close the broader acceptance item. A further 4,096-block flight
+  lands and completes 145 simulation seconds with exit 0 in 163.79 seconds wall; the
+  inspected final scene and unchanged test save add one longer streaming case.
 - [x] Read-only initial-surface column adapter: explicit material/flag translation,
   four-parent crops, native indexing and finite-domain coverage. All 4096 columns
   in an asymmetric fixture retain their geometry and RGB. The runtime composition

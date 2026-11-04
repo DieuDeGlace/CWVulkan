@@ -292,3 +292,10 @@ byte-identical. The second run encountered ordinary hostile creatures; undying w
 enabled, and this is not combat acceptance. These are two configured streaming
 checks, not exhaustive forest/biome/transition coverage, a long soak, native runtime
 parity or a whole-process memory cap. Reference images stay local.
+
+A further default-seed Alpha-look run requested a 4,096-block X flight and 145
+simulation seconds. It landed, finished the observation and exited 0 in 163.79
+seconds wall, with sampled working/private peaks 1406.7/1698.5 MiB. The final
+terrain/character scene was inspected; the original test save hash was unchanged.
+This is one longer cache/streaming observation, not an exhaustive soak or a
+verification of every intervening biome, seam or native scheduling detail.
