@@ -830,7 +830,14 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   Alpha ready-parent retention now has64 entries and a384 MiB estimated payload
   budget, eliminating observed repeat generation in the diagnostic. The previously
   failing full default-distance capture completes in113.808 seconds wall. Full
-  CPU/GPU checks pass; broader cold/travel/memory/cache-role acceptance remains open.
+  CPU/GPU checks pass. Full-distance Alpha-look captures also complete for the
+  default seed and seed123 at another location; broader cold/travel/memory/cache-role
+  acceptance remains open.
+- [x] Preserve native float32 roughness-gate operation chains in raw Alpha H,
+  using separate scalar fixtures and conditional base-height words. Landscape
+  identity v2 keeps changed geometry/profile/peer state separate from v1. Full
+  CPU/GPU checks and fresh full-distance v2 Alpha/Steam-look captures pass; these
+  are not final-surface, whole-region or broader runtime parity claims.
 - [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,
   preserving its shoreline/water fixes and respecting its separate source license.
 - [ ] Add verified Alpha-only location variants alongside Steam layouts. The first

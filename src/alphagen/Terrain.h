@@ -36,7 +36,7 @@ struct ReliefStage {
 // Hybrid terrain continuation after relief: boulders and the voxel-tree grid.
 // Alpha towns/dungeons/camps are omitted for the planned Steam layout overlay.
 struct LandscapeStage {
-    static constexpr uint32_t VERSION = 1;
+    static constexpr uint32_t VERSION = 2;
     std::unique_ptr<const Zone> zone;
     Random random;
 };
@@ -49,6 +49,8 @@ struct VegetationStage {
     std::vector<StaticObject> statics;
     Random random;
 };
+// Native H uses a separately staged smooth/square gate, not the shared easing helper.
+float heightRoughnessGate(float roughness);
 enum class FormationTest { Mound, MesaGuard, MesaFill };
 int32_t formationTop(int32_t x, int32_t y, int32_t z, int32_t rz, bool mesa);
 glm::vec2 formationUV(FormationTest, int32_t X, int32_t Y, int32_t Z, int32_t x, int32_t y, int32_t rx, int32_t ry);

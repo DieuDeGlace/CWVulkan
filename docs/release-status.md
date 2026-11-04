@@ -10,12 +10,37 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha base-height roughness gating now preserves the independently verified
+  float32 multiplication-chain order. Synthetic scalar inputs expose differences
+  from the generic easing expression; the shared easing helper is unchanged.
+  Two independently derived raw-H words and their explicit partial-world state
+  also pass. These are not generated-surface or fully prepared-region oracles.
+  Alpha generation identity is now v2: existing v1 profile folders are retained,
+  while v2 saves/caches and peer agreement use the separate corrected identity.
+  The actual landscape-store one-byte-budget test confirms oversized results keep
+  valid caller leases and identical geometry without being retained in ready cache.
+  All five targets build, the Alpha suite and full CPU/owner-data suite pass, and
+  every image suite passes. A fresh full-distance v2 Alpha-look capture also passes
+  in25.836 seconds wall; the corresponding v2 Steam-look capture also exits0 in
+  131.453 seconds wall. Both retain the existing internal observation logic and
+  external180-second guard, not a promised120-second whole-process runtime. Their
+  sampled working/private peaks are1206/1620 and1636/2534 MiB. Broader generation,
+  timing variability and runtime acceptance remain open.
+
+- Full-distance Alpha-look captures now also pass on this owner's installation:
+  the default-seed forest view completes in26.554 seconds wall, and seed123 at a
+  second location completes in40.674 seconds. Both use fresh processes, no-save
+  mode and the existing capture deadline. The corresponding sampled whole-process
+  working/private peaks are approximately1067/1617 and986/1425 MiB. Both new images
+  were inspected locally and remain excluded from source/runtime packages. These
+  are bounded streaming/rendering checks with imported owner settings, not native
+  pixel parity, travel testing or a fresh-machine acceptance result.
+
 - Alpha cold streaming now retains up to64 immutable landscape parents with a
   384 MiB budget for their estimated allocated ready-stage payloads. A private
   count-only65-second run previously generated563 parents for49 coordinates;
   the64-entry diagnostic completed56 generations for56 coordinates with no
-  repeats. The production
-  bounded-cache full default Steam-distance capture now completes: exit0,
+  repeats. The production bounded-cache full default Steam-distance capture now completes: exit0,
   113.808 seconds wall, preserving setting50/radius15 and the existing deadline.
   Its sampled whole-process working/private peaks were approximately1612/2542 MiB;
   caller leases, in-flight work, allocator overhead and other engine data are not

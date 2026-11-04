@@ -38,6 +38,15 @@ glm::vec3 colourOf(Block b) {
 
 } // namespace
 
+float heightRoughnessGate(float roughness) {
+    // alpha-base-height-vectors.md §5: each multiplication rounds to float32.
+    const float value = std::min(roughness * 4.f, 1.f);
+    const float threeTimes = (value * 3.f) * value;
+    const float twice = ((value * 2.f) * value) * value;
+    const float difference = threeTimes - twice;
+    return difference * difference;
+}
+
 float Terrain::noiseAt(uint32_t ox, uint32_t oy, double k, int32_t x, int32_t y) const {
     return noise((double)w.offsets()[ox] + k * x, (double)w.offsets()[oy] + k * y);
 }
@@ -156,7 +165,7 @@ float Terrain::height(int32_t x, int32_t y) const {
     const float s3 = squared(unit(noiseAt(0x19c, 0x1a0, 0.001, x, y)));
     const float s4 = squared(unit(noiseAt(0x1a4, 0x1a8, 0.001, x, y)));
     const float s5 = squared(unit(noiseAt(0x1ac, 0x1b0, 0.002, x, y)));
-    const float g = squared(smooth(std::min(4 * roughness(x, y), 1.f)));
+    const float g = heightRoughnessGate(roughness(x, y));
     const float m3 = g * s3, m4 = g * s4;
     float m5 = g * s5;
 

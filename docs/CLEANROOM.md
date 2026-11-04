@@ -1729,3 +1729,15 @@ prose and owned sources for literal returned-word checks. Full CPU/owner-data an
 image suites pass. Neither conditional arithmetic fixtures nor one successful
 full-distance capture certify whole-world/native-runtime parity. Owner imagery,
 probes, exports, SDK implementation and game content remain out of packages.
+
+## Alpha raw height staging, 2026-11-03
+
+The independent native-only author wrote alpha-base-height-vectors.md sections1–7
+from original Alpha evidence and independent prose, without engine or output
+access. The implementer read that stable note and owned sources only. A dedicated
+H gate now follows the specified float32 operation chains, with literal synthetic
+scalar-stage and conditional raw-H references; the generic easing helper is not
+changed. No new runtime capture or final-surface oracle is inferred. Landscape
+version2 keeps potentially changed terrain/profile/peer identities separate.
+The actual ready-budget lease test uses wholly engine-generated deterministic
+terrain; runtime screenshots and private probes remain local and unbundled.

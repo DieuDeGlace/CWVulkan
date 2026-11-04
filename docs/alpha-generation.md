@@ -166,7 +166,10 @@ On first writable use only, characters may be copied from the engine's canonical
 save or configured read-only import. Identity, appearance, equipment, level and
 recipes carry over; coordinates, discoveries, missions, flight points and other
 geographic state start fresh. Subsequent progression is independent in each
-profile. Existing profile characters are never recopied. `--no-save` creates no
+profile. The native height-gate precision correction advances the landscape
+identity to v2. Existing v1 folders are retained; the corrected generator selects
+its own v2 profile and compatible peers must agree on that identity. This does not
+migrate an existing v1 world's geographic state. Existing profile characters are never recopied. `--no-save` creates no
 profile or imported database. The original game's Save directory is rejected.
 
 Alpha multiplayer requires compatible CubeVulkan peers with matching mode, seeds,
@@ -235,6 +238,19 @@ float words at four lattice inputs, seed123 noise offsets and six raw
 rock-color float-word results with pinned synthetic cached climate. They are not
 native world captures; the existing generation math passes unchanged.
 
+Independent raw-H references pin seed123 offsets, nine cells, a missing link
+neighbor and absent region/location/Zone state. Both literal returned words match;
+they are conditional raw-height checks, not final generated surfaces. Synthetic
+roughness inputs additionally verify the native two-chain smooth/square staging.
+The H path now uses its own small helper to retain that rounding order, leaving
+other easing consumers unchanged. Its potentially changed terrain receives the
+separate v2 generation/profile identity described above. Full CPU/owner-data and
+all image checks pass; the v2 full-distance Alpha-look capture completes in25.836
+seconds wall. The corresponding v2 Steam-look capture exits0 in131.453 seconds
+wall with the same observation logic and view distance. Whole-process wall time
+includes startup/shutdown and is not identical to the loop's observation clock.
+Wider locations/prepared regions/nonlattice inputs and timing variability remain open.
+
 Formula vectors, worked tree output, synthetic palm rotations, finite-domain and
 cache-lifetime checks validate the independent contracts. Composition tests check
 whole construction tiles, source isolation, spawn/collision agreement, reader forks
@@ -247,6 +263,11 @@ rendered correctly. The previously failing full default Steam-distance capture
 now completes in113.808 seconds wall with the bounded parent-cache continuation
 below. Wider cold-load/travel, constrained-memory and multi-GPU acceptance remains
 open; Steam view-distance settings and the observation deadline were not weakened.
+Fresh full-distance Alpha-look captures also pass:26.554 seconds for the default
+seed's forest view and40.674 seconds for seed123 at another location. Their
+sampled whole-process working/private peaks were1067/1617 and986/1425 MiB. Owner
+settings were imported, both images were inspected locally, and no imagery is
+packaged. These are bounded observations, not native-image or travel certification.
 
 TerrainVariance remains a separately MIT-licensed Steam height/column translation
 mod. Its shared coordinate/rule checks do not make its wrapper a full Alpha voxel

@@ -124,6 +124,30 @@ int alphaTerrainTests() {
         const auto *replacement = second->makeCell(512, 512);
         check(replacement && second->cell(512, 512) == replacement, "replacement world publishes its own cell");
     }
+    {
+        // Independent conditional H and synthetic scalar-stage references:
+        // alpha-base-height-vectors.md §§1–7. These are not generated surfaces.
+        alphagen::World heightWorld(123);
+        for (int i = 511; i <= 513; ++i)
+            for (int j = 511; j <= 513; ++j)
+                heightWorld.makeCell(i, j);
+        check(!heightWorld.region(512, 512) && !heightWorld.cell(510, 512),
+              "raw-height fixture keeps its location object and extra link neighbor absent");
+        alphagen::Terrain rawHeight(heightWorld);
+        const float seaHeight = rawHeight.height(8390000, 8390000);
+        const float landHeight = rawHeight.height(8400000, 8390000);
+        check(std::bit_cast<uint32_t>(seaHeight) == 0xc2ba0407u &&
+                  std::bit_cast<uint32_t>(landHeight) == 0x4381b884u,
+              "native raw H float words preserve coarse, detail and elevation stage order");
+        check(std::floor(seaHeight) == -94 && int32_t(seaHeight) == -93 && std::floor(landHeight) == 259,
+              "raw H arithmetic floor and truncation remain distinct from generated surface heights");
+        check(std::bit_cast<uint32_t>(alphagen::heightRoughnessGate(std::bit_cast<float>(0x3cf5c28fu))) == 0x3acf0a16u &&
+                  std::bit_cast<uint32_t>(alphagen::heightRoughnessGate(std::bit_cast<float>(0x3e2e147bu))) == 0x3f133803u,
+              "native H gate rounds its two multiplication chains before subtraction and square");
+        check(std::bit_cast<uint32_t>(alphagen::heightRoughnessGate(std::bit_cast<float>(0x3dbd8dadu))) == 0x3dc46fdeu &&
+                  alphagen::heightRoughnessGate(std::bit_cast<float>(0x3f3a6231u)) == 1.f,
+              "natural-point gate diagnostics include the upper-clamped case");
+    }
     alphagen::World world(123);
     // Independent lattice references cover crossed axes and repeated/interleaved inputs.
     struct DisplacementFixture { int32_t x, y; std::array<uint32_t, 2> words; };
@@ -575,6 +599,13 @@ int alphaTerrainTests() {
         const auto parent = source.parent(32800, 32800);
         check(parent && landscape && fingerprint(*parent->zone) == fingerprint(*landscape->zone),
               "cached landscape generation reproduces uncached terrain and forests");
+        alphagen::LandscapeStore uncached(123, {}, 4, true, {}, 1);
+        const auto oversizedFirst = uncached.parent(32800, 32800);
+        const auto oversizedSecond = uncached.parent(32800, 32800);
+        check(oversizedFirst && oversizedSecond && oversizedFirst != oversizedSecond && parent &&
+                  fingerprint(*oversizedFirst->zone) == fingerprint(*parent->zone) &&
+                  fingerprint(*oversizedSecond->zone) == fingerprint(*parent->zone),
+              "landscape ready-byte limits preserve oversized caller leases and deterministic geometry");
         const auto native = alphagen::steamTile(source, 0, 0, why);
         const auto home = source.column(0, 0);
         check(native && home && why.empty() && native->columns()[0].base == home->raw().bottom &&
