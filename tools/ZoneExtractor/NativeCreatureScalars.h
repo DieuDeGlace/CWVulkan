@@ -45,8 +45,11 @@ class CreatureScalars {
     std::uint8_t specialization() const { return record[0x14d]; }
     float yaw() const { return read<float>(0x30); }
     std::uint32_t movementFlags() const { return read<std::uint32_t>(0x5c); }
+    std::uint32_t race() const { return read<std::uint32_t>(0x64); }
+    std::uint32_t appearanceFlags() const { return read<std::uint32_t>(0x80); }
     std::uint8_t ability() const { return record[0x68]; }
     float abilityClock() const { return read<float>(0x6c); }
+    std::int32_t gold() const { return read<std::int32_t>(0xaac); }
     float health() const { return read<float>(0x180); }
     float mana() const { return read<float>(0x188); }
     std::array<char, 16> name() const { return read<std::array<char, 16>>(0x958); }

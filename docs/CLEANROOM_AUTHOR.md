@@ -11,6 +11,12 @@ the replacement engine, exporter, SDK headers/implementations, compiler layout
 dumps, third-party reconstructions, implementation logs, tests, owner captures,
 probe outputs or packages. A task handoff must not include implementation history.
 
+A directory name or FINAL label does not establish that an older document is
+suitable for this role. Older prose may mix native facts with implementation or
+verification material. Default to original evidence only unless a document or
+excerpt has been individually checked for author-only suitability; task-specific
+stricter source restrictions take precedence.
+
 The author describes observable contracts in plain language: inputs, outputs,
 decision and random-draw order, constants, identifiers, field offsets and widths,
 ownership, protection scopes and explicit limits. Cite original routines by RVA

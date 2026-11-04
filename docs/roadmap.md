@@ -24,8 +24,13 @@ individual feature documents.
   recording and AI traces now use the independent registration reader, retaining
   the guard throughout pointer use.
   Busy/malformed/changed capture defers recording without false despawn cleanup.
-  Remaining client and host consumer migration stays open. Byte preservation, signed extremes, sentinel exclusion, malformed/
-  change/budget cases and actual Win32 contention/unwinding checks pass with all
+  All direct SDK creature-registration consumers are replaced, including the
+  conversation exporter under the independently observed generation scope.
+  Inventory tabs/164-byte slots and script results use owned values; malformed
+  captures defer without resetting baselines, gear checks stale slots, and native
+  output disposal/day restoration have mock ABI regressions. Other fields and
+  collections remain. Byte preservation, signed extremes, sentinel exclusion,
+  malformed/change/budget cases and actual Win32 contention/unwinding checks pass with all
   five targets and full CPU/owner checks. The extractor still requires SDK headers;
   see the [independence workboard](extractor-independence.md). New native execution,
   remaining views and the complete independent build remain release gates.

@@ -21,7 +21,7 @@ int nativeCreatureScalarsTests() {
             ++failures;
         }
     };
-    std::array<uint8_t, 0x980> record;
+    std::array<uint8_t, 0xb00> record;
     record.fill(0xa5);
     set(record.data(), 8, int64_t(-42));
     set(record.data(), 0x10, INT64_MIN);
@@ -29,6 +29,8 @@ int nativeCreatureScalarsTests() {
     set(record.data(), 0x20, INT64_MAX);
     set(record.data(), 0x30, -15.5f);
     set(record.data(), 0x5c, uint32_t(0x80000005));
+    set(record.data(), 0x64, uint32_t(0xf0000001));
+    set(record.data(), 0x80, uint32_t(0x80002000));
     record[0x68] = 0xfe;
     set(record.data(), 0x6c, 2.75f);
     set(record.data(), 0x34, -0.0f);
@@ -40,6 +42,7 @@ int nativeCreatureScalarsTests() {
     set(record.data(), 0x180, 50.0f);
     set(record.data(), 0x184, 0.25f); // block power, not mana
     set(record.data(), 0x188, 0.75f);
+    set(record.data(), 0xaac, int32_t(INT32_MIN));
     const std::array<char, 16> name{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
     std::memcpy(record.data() + 0x958, name.data(), name.size());
     captureabi::CreatureScalars values(record.data());
@@ -48,14 +51,14 @@ int nativeCreatureScalarsTests() {
     check(values.id() == -42 && position.x == INT64_MIN && position.y == -1 && position.z == INT64_MAX &&
               read<uint32_t>(reinterpret_cast<const uint8_t *>(&velocity), 0) == 0x80000000 && velocity.y == -2 &&
               velocity.z == 3 && values.level() == -7 && values.classId() == 3 && values.specialization() == 1 &&
-              values.health() == 50 && values.mana() == 0.75f && values.name() == name,
+              values.health() == 50 && values.mana() == 0.75f && values.gold() == INT32_MIN && values.name() == name,
           "independent record bytes decode fixed/scalar values and full unterminated name");
     check(captureabi::fixedFromBlocks(-1) == -65536 && captureabi::fixedFromBlocks(1) == 65536 &&
               captureabi::fixedFromBlocks(INT64_MIN) == 0 && captureabi::fixedFromBlocks(INT64_MAX) == -65536 &&
               captureabi::fixedFromBlocks(-(int64_t(1) << 47)) == INT64_MIN,
           "negative and boundary block coordinates scale without signed-shift overflow");
     check(values.yaw() == -15.5f && values.movementFlags() == 0x80000005 && values.ability() == 0xfe &&
-              values.abilityClock() == 2.75f,
+              values.abilityClock() == 2.75f && values.race() == 0xf0000001 && values.appearanceFlags() == 0x80002000,
           "recording metadata retains yaw, full flag bits, unsigned ability byte and float clock");
     const auto before = record;
     values.setPosition({11, -12, 13});

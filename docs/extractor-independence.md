@@ -49,6 +49,15 @@ This workboard does not grant rights or certify final redistribution.
   matrices; the older fourteen/thirty-three CWA2 wire shape retains explicit
   absent/zero padding instead of copying adjacent native state. Raw float-clock
   bits and frame metadata survive. See [recording compatibility](extractor-animation-recordings.md).
+- Ordered inventory tabs/164-byte slots now use owned raw values, retaining
+  empties, signed quantities, item bytes and padding. Gear surveys use bounded
+  captured slots and defer/skip unavailable/changed inputs. Loot diagnostics
+  preserve their valid baseline on failed capture and read signed gold directly.
+- Conversation generation uses the independently observed client actor scope,
+  original result disposal, bounded owned token decoding and temporary-day RAII.
+  Formatting uses copied data after release; completed exports are marked only
+  after output succeeds. Native runtime/RNG side effects are explicit. See
+  [owned buffer capture](extractor-owned-buffers.md) for limits and checks.
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
@@ -73,15 +82,17 @@ This workboard does not grant rights or certify final redistribution.
 
 ## In progress and remaining
 
-- Remaining SDK registration-list consumers need migration with their complete
-  borrowed-pointer use scopes. Registration order, duplicate list values and
-  ID-tree ordering are distinct. The independent
+- Direct SDK registration-list consumers have been replaced. Other World
+  collections and raw diagnostic paths still require their own views/protection
+  audit. Registration order, duplicate list values and ID-tree ordering remain
+  distinct. The independent
   [host/AI protection audit](specs/steam-world-actor-protection.md) establishes
   host-before-World locking for the named host phases and separate AI/worker
   scopes; neither guard alone covers all named host writers. The client capture
   helper must not be reused as a host capture or generic quiescence API.
 - Remaining creature scalar/appearance consumers, additional pose-related fields
-  and dynamic inventory/auxiliary buffers.
+  and auxiliary buffers. Inventory SDK member accesses are removed; complete
+  creature/controller lifetime and transitive writer audits remain separate.
 - Remaining World fields, collections, region/material sidecars and record views.
 - Remaining Game renderer/camera/Speech fields and native vector aliases.
 - Server-update list locations and payload decoding.

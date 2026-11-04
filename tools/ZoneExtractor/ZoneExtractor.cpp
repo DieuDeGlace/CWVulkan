@@ -12,6 +12,9 @@
 #include "ZoneTerrainCapture.h"
 #include "NativeNameFragments.h"
 #include "NativeItemRecord.h"
+#include "NativeInventory.h"
+#include "NativeConversation.h"
+#include <memory>
 #include "NativeCreatureViews.h"
 #include "NativeCreatureScalars.h"
 #include "NativeCreaturePose.h"
@@ -1443,6 +1446,7 @@ struct Step {
     int slot;         // equipment slot (Equipment order above)
     int tab = -1, index = -1; // inventory position; -1 = empty the slot (baseline), -2 = original, -3 = test item
     int category = 0, id = 0, material = 0; // test item
+    captureabi::ItemRecord expected; // Exact capture identity for a later survey step.
 };
 // Catalogue: test items of every equippable category and id. Materials tried
 // in turn until the game draws a model for the type (a type only exists in
@@ -1484,16 +1488,28 @@ static void itemText(FILE *f, const captureabi::ItemRecord &item) {
 }
 
 static void begin(cube::World *w) {
+    const captureabi::WorldActorLease held(reinterpret_cast<uintptr_t>(w));
+    if (!held)
+        return;
     cube::Creature *p = localCreature(w);
+    captureabi::Inventory inventory;
+    if (!p || !captureabi::readInventory(reinterpret_cast<uintptr_t>(p), inventory, readNative)) {
+        extract::log("Gear survey inventory unavailable; try F8 again");
+        return;
+    }
     original = captureabi::copyEquipment(p);
     steps.clear();
     for (int slot : {2, 3, 4, 5, 7, 1, 8}) {
         steps.push_back({slot});
-        for (int t = 0; t < (int)p->inventory_tabs.size(); t++)
-            for (int i = 0; i < (int)p->inventory_tabs[t].size(); i++) {
-                const auto item = captureabi::ItemRecord::copy(&p->inventory_tabs[t][i].item);
-                if (slotFor(item.category()) == slot)
-                    steps.push_back({slot, t, i});
+        for (size_t t = 0; t < inventory.size(); t++)
+            for (size_t i = 0; i < inventory[t].size(); i++) {
+                const auto &stack = inventory[t][i];
+                const auto item = stack.item();
+                if (stack.quantity() != 0 && slotFor(item.category()) == slot) {
+                    Step candidate{slot, int(t), int(i)};
+                    candidate.expected = item;
+                    steps.push_back(candidate);
+                }
             }
         // What was equipped there originally.
         steps.push_back({slot, -2, -2});
@@ -1512,14 +1528,15 @@ static void begin(cube::World *w) {
     }
     fopen_s(&out, (characterFolder(p) + "\\gear.txt").c_str(), "w");
     if (out) {
-        fprintf(out, "# Gear survey: player class=%u specialization=%d level=%u\n", p->entity_data.classType,
-                p->entity_data.specialization, p->entity_data.level);
-        for (int t = 0; t < (int)p->inventory_tabs.size(); t++)
-            for (int i = 0; i < (int)p->inventory_tabs[t].size(); i++) {
-                const auto &s = p->inventory_tabs[t][i];
-                fprintf(out, "inventory tab=%d index=%d quantity=%d ", t, i, s.quantity);
-                itemText(out, captureabi::ItemRecord::copy(&s.item));
-                fprintf(out, " price=%d\n", ((int (*)(const void *))(base() + ITEM_PRICE))(&s.item));
+        const captureabi::CreatureScalars data(p);
+        fprintf(out, "# Gear survey: player class=%u specialization=%d level=%d\n", data.classId(), data.specialization(), data.level());
+        for (size_t t = 0; t < inventory.size(); t++)
+            for (size_t i = 0; i < inventory[t].size(); i++) {
+                const auto &stack = inventory[t][i];
+                const auto item = stack.item();
+                fprintf(out, "inventory tab=%zu index=%zu quantity=%d ", t, i, stack.quantity());
+                itemText(out, item);
+                fprintf(out, " price=%d\n", ((int (*)(const void *))(base() + ITEM_PRICE))(&item));
             }
         for (int s = 0; s < 11; s++) {
             const auto &it = original[size_t(s)];
@@ -1538,6 +1555,9 @@ static void begin(cube::World *w) {
 }
 
 static void finish(cube::World *w, const char *why) {
+    const captureabi::WorldActorLease held(reinterpret_cast<uintptr_t>(w));
+    if (!held || !localCreature(w))
+        return;
     std::memcpy(slotItem(localCreature(w), 0), original.data(), sizeof original);
     if (out)
         fclose(out);
@@ -1546,10 +1566,11 @@ static void finish(cube::World *w, const char *why) {
     extract::log(std::string("Gear survey ") + why + "; original equipment restored");
 }
 
-static void apply(cube::Creature *p, const Step &s) {
+enum class ApplyResult { Applied, Unavailable, Changed };
+static ApplyResult apply(cube::Creature *p, const Step &s) {
     auto *target = slotItem(p, s.slot);
     if (!target)
-        return;
+        return ApplyResult::Changed;
     captureabi::ItemRecord item;
     if (s.tab == -2)
         item = original[size_t(s.slot)];
@@ -1560,22 +1581,34 @@ static void apply(cube::Creature *p, const Step &s) {
         item.setSubtype(s.id);
         item.setMaterial(uint8_t(s.material));
         item.setRegion(p->entity_data.current_region.x, p->entity_data.current_region.y);
-    } else if (s.tab >= 0)
-        item = captureabi::ItemRecord::copy(&p->inventory_tabs[s.tab][s.index].item);
+    } else if (s.tab >= 0) {
+        captureabi::Inventory inventory;
+        if (!captureabi::readInventory(reinterpret_cast<uintptr_t>(p), inventory, readNative))
+            return ApplyResult::Unavailable;
+        const auto *stack = captureabi::inventorySlot(inventory, s.tab, s.index);
+        if (!stack || !stack->quantity() || stack->item().bytes != s.expected.bytes)
+            return ApplyResult::Changed; // Conservative capture identity, not native semantic equality.
+        item = stack->item();
+    }
     std::memcpy(target, item.bytes.data(), captureabi::ITEM_BYTES);
+    return ApplyResult::Applied;
 }
 
 static void tick(cube::World *w) {
     if (!active)
         return;
+    const captureabi::WorldActorLease held(reinterpret_cast<uintptr_t>(w));
+    if (!held)
+        return;
     cube::Creature *p = localCreature(w);
+    if (!p)
+        return;
     if (step >= steps.size()) {
         finish(w, "finished");
         return;
     }
     Step s = steps[step];
     if (fresh) {
-        fresh = false;
         wait = s.tab == -3 ? TEST_TICKS : SETTLE_TICKS;
         if (s.tab == -3 && s.id >= 0 && found.count({s.category, s.id})) {
             step++; // Already catalogued in another material.
@@ -1593,7 +1626,15 @@ static void tick(cube::World *w) {
             steps[step].tab = -4; // material sweep (logged as such)
             s.tab = -3;
         }
-        apply(p, s);
+        const auto applied = apply(p, s);
+        if (applied == ApplyResult::Unavailable)
+            return;
+        if (applied == ApplyResult::Changed) {
+            extract::log("Gear survey skipped a changed or empty inventory slot");
+            ++step;
+            return;
+        }
+        fresh = false;
         waited = 0;
     }
     waited++;
@@ -1865,28 +1906,35 @@ static void tick(cube::Game *g) {
         lastMp = pe.MP, lastStamina = player->stamina, lastCharge = pe.charge;
     }
     // Loot: what the player gains (picking up a monster's pouch), item by item, and gold.
-    static std::map<std::string, int> carried;
-    static int lastGold = INT_MIN;
-    std::map<std::string, int> now;
-    for (auto &tab : player->inventory_tabs)
-        for (auto &stack : tab) {
-            const auto item = captureabi::ItemRecord::copy(&stack.item);
-            char key[128];
-            snprintf(key, sizeof key, "category=%d id=%d material=%d rarity=%d modifier=%u level-region=%d,%d",
-                     item.category(), item.subtype(), item.material(), item.rarity(), item.modifier(), item.regionX(), item.regionY());
-            now[key] += stack.quantity;
+    static std::map<std::string, int64_t> carried;
+    static int32_t lastGold = 0;
+    static bool haveLootBaseline = false;
+    captureabi::Inventory inventory;
+    if (captureabi::readInventory(reinterpret_cast<uintptr_t>(player), inventory, readNative)) {
+        std::map<std::string, int64_t> now;
+        for (const auto &tab : inventory)
+            for (const auto &stack : tab) {
+                const auto item = stack.item();
+                char key[128];
+                snprintf(key, sizeof key, "category=%d id=%d material=%d rarity=%d modifier=%u level-region=%d,%d",
+                         item.category(), item.subtype(), item.material(), item.rarity(), item.modifier(), item.regionX(), item.regionY());
+                now[key] += stack.quantity();
+            }
+        const auto gold = captureabi::CreatureScalars(player).gold();
+        if (haveLootBaseline) {
+            for (const auto &[key, count] : now) {
+                const int64_t before = carried.count(key) ? carried[key] : 0;
+                if (count > before)
+                    fprintf(log, "t=%llu loot +%lld %s\n", (unsigned long long)GetTickCount64(),
+                            (long long)(count - before), key.c_str());
+            }
+            if (gold != lastGold)
+                fprintf(log, "t=%llu gold %d->%d\n", (unsigned long long)GetTickCount64(), lastGold, gold);
         }
-    if (lastGold != INT_MIN) {
-        for (auto &[key, count] : now) {
-            int before = carried.count(key) ? carried[key] : 0;
-            if (count > before)
-                fprintf(log, "t=%llu loot +%d %s\n", (unsigned long long)GetTickCount64(), count - before, key.c_str());
-        }
-        if (player->gold != lastGold)
-            fprintf(log, "t=%llu gold %d->%d\n", (unsigned long long)GetTickCount64(), lastGold, player->gold);
+        carried = std::move(now);
+        lastGold = gold;
+        haveLootBaseline = true;
     }
-    carried = now;
-    lastGold = player->gold;
     float maxHp = ((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(player);
     if (pe.HP < maxHp * .3f) {
         pe.HP = maxHp;
@@ -4485,12 +4533,6 @@ static void dump(cube::Game *g) {
 } // namespace genoracle
 
 namespace talkscripts {
-struct GameString { // MSVC std::string as the game lays it out
-    union { char buffer[16]; char *pointer; };
-    size_t size, capacity;
-    std::string text() const { return std::string(capacity >= 16 ? pointer : buffer, size); }
-};
-struct GameVector { GameString *first, *last, *end; };
 struct GameWString { // MSVC std::wstring
     union { wchar_t buffer[8]; wchar_t *pointer; };
     size_t size, capacity;
@@ -4520,89 +4562,175 @@ static std::string locationName(int x, int y, int type) {
     return generatedName(seed, style);
 }
 
-// onlyNew: just the townspeople not written yet today (checked every 2 s, so tours
-// collect them); otherwise all loaded ones (K). The game reseeds each script with the
-// world's day (world + 8), so each person is written for SCRIPT_DAYS days from today:
-// the day is set for the call and put back at once, on the game's own thread.
+// Conversation generation is not read-only: native runtime initialization and
+// RNG side effects remain. Use an isolated reference session. Actor accesses and
+// generation mirror the observed client-frame guard; formatting uses owned data.
 constexpr int SCRIPT_DAYS = 64;
+constexpr size_t MAX_SCRIPT_BATCH_BYTES = 32 * 1024 * 1024;
+constexpr size_t MAX_SCRIPT_BATCH_TOKENS = 262144;
+constexpr size_t MAX_SCRIPT_BATCH_PEOPLE = 256;
+struct CapturedScript {
+    int64_t id;
+    int32_t day;
+    uint32_t race, flags, appearanceFlags;
+    uint8_t classId, specialization;
+    captureabi::FixedPosition position;
+    std::vector<std::string> tokens;
+};
+struct CapturedPerson {
+    std::pair<long long, int> key;
+    std::vector<CapturedScript> scripts;
+};
 static std::string itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material);
-static void exportScript(cube::Game *g, FILE *out, cube::Creature *c, int day);
-static void exportAll(cube::Game *g, bool onlyNew) {
-    cube::World *w = clientWorld(g);
-    static std::set<std::pair<long long, int>> written;
-    CreateDirectoryA("Extract", nullptr);
-    FILE *out = _fsopen("Extract\\talk-scripts.txt", "a", _SH_DENYNO);
-    if (!out)
-        return;
-    int n = 0, today = *(int *)((uint8_t *)w + 8);
-    for (cube::Creature *c : w->creatures) {
-        if (!c || c == localCreature(w) || c->entity_data.hostility_type != 3)
-            continue;
-        if (!written.insert({(long long)c->id, today}).second && onlyNew)
-            continue;
-        if (n == 0)
-            fprintf(out, "# t=%llu day=%d\n", (unsigned long long)GetTickCount64(), today);
-        for (int day = today; day < today + SCRIPT_DAYS; day++)
-            exportScript(g, out, c, day);
-        n++;
-    }
-    fclose(out);
-    if (n)
-        extract::log("Conversation scripts: " + std::to_string(n) + " townspeople written to Extract\\talk-scripts.txt (" +
-                     std::to_string(SCRIPT_DAYS) + " days each)");
+
+// Caller keeps the client actor lease through generation, token copying and
+// native result disposal. The temporary day is restored before further work.
+static bool captureScript(cube::World *w, cube::Creature *c, int32_t day, CapturedScript &record) {
+    auto &worldDay = *reinterpret_cast<int32_t *>(reinterpret_cast<uint8_t *>(w) + 8);
+    const auto result = [&] {
+        const captureabi::ScopedScriptDay temporary(worldDay, day);
+        return captureabi::ScriptResult(w, c, reinterpret_cast<captureabi::GenerateScript>(base() + 0x2d9480),
+                                        reinterpret_cast<captureabi::DestroyScript>(base() + 0x81790));
+    }();
+    if (!captureabi::readScriptTokens(result.address(), record.tokens, readNative))
+        return false;
+    const captureabi::CreatureScalars data(c);
+    record.id = data.id();
+    record.day = day;
+    record.race = data.race();
+    record.flags = data.movementFlags();
+    record.appearanceFlags = data.appearanceFlags();
+    record.classId = data.classId();
+    record.specialization = data.specialization();
+    record.position = data.position();
+    return true;
 }
-static void exportScript(cube::Game *g, FILE *out, cube::Creature *c, int day) {
-    cube::World *w = clientWorld(g);
-    auto script = (void (*)(cube::World *, GameVector *, cube::Creature *))(base() + 0x2d9480);
-    auto destroy = (void (*)(GameVector *))(base() + 0x81790);
-    int &worldDay = *(int *)((uint8_t *)w + 8);
-    const int today = worldDay;
-    {
-        GameVector v{};
-        worldDay = day;
-        script(w, &v, c);
-        worldDay = today;
-        auto &e = c->entity_data;
-        // speaker: the name the game gives them (generator seeded with the id's low 32 bits, race as style).
-        fprintf(out, "id=%lld day=%d race=%u class=%d spec=%d flags=%08x flags2=%08x speaker=%s pos=%.1f,%.1f,%.1f :",
-                (long long)c->id, day, e.race, (int)e.classType, (int)e.specialization, e.flags, e.appearance.flags2,
-                generatedName((int)(uint32_t)c->id, (int)e.race).c_str(), e.position.x / 65536.0,
-                e.position.y / 65536.0, e.position.z / 65536.0);
-        std::vector<std::string> tokens;
-        for (GameString *s = v.first; s && s != v.last; s++)
-            tokens.push_back(s->text());
-        for (size_t i = 0; i < tokens.size(); i++) {
-            fprintf(out, " %s |", tokens[i].c_str());
-            // define_location x y type: add the game's name for it as "name=<proper>".
-            if (tokens[i] == "define_location" && i + 3 < tokens.size()) {
-                int x = atoi(tokens[i + 1].c_str()), y = atoi(tokens[i + 2].c_str()), type = atoi(tokens[i + 3].c_str());
-                for (int j = 1; j <= 3; j++)
-                    fprintf(out, " %s |", tokens[i + j].c_str());
-                fprintf(out, " name=%s |", locationName(x, y, type).c_str());
-                i += 3;
-            } else if (tokens[i] == "define_item" && i + 5 < tokens.size()) {
-                // define_item category id modifier rarity material: the game's name for it and
-                // its dictionary key (Speech::item_identifier_map), for the grammar.
-                int v[5];
-                for (int j = 0; j < 5; j++)
-                    v[j] = (int)strtol(tokens[i + 1 + j].c_str(), nullptr, 10), fprintf(out, " %s |", tokens[i + 1 + j].c_str());
-                std::string key;
-                auto found = g->speech.item_identifier_map.find({(uint32_t)v[0], (uint32_t)v[1]});
-                if (found != g->speech.item_identifier_map.end())
-                    for (wchar_t ch : found->second) key += (char)ch;
-                fprintf(out, " item=%s | key=%s |", itemName(g, v[0], v[1], (unsigned)v[2], v[3], v[4]).c_str(), key.c_str());
-                i += 5;
-            } else if (tokens[i] == "define_mob" && i + 2 < tokens.size()) { // define_mob id race: its name too
-                for (int j = 1; j <= 2; j++)
-                    fprintf(out, " %s |", tokens[i + j].c_str());
-                fprintf(out, " name=%s |",
-                        generatedName((int)strtoul(tokens[i + 1].c_str(), nullptr, 10), atoi(tokens[i + 2].c_str())).c_str());
-                i += 2;
-            }
+static bool exportScript(cube::Game *g, FILE *out, const CapturedScript &record) {
+    // speaker: the name the game gives them (generator seeded with the id's low 32 bits, race as style).
+    fprintf(out, "id=%lld day=%d race=%u class=%d spec=%d flags=%08x flags2=%08x speaker=%s pos=%.1f,%.1f,%.1f :",
+            (long long)record.id, record.day, record.race, int(record.classId), int(record.specialization),
+            record.flags, record.appearanceFlags, generatedName((int)(uint32_t)record.id, (int)record.race).c_str(),
+            record.position.x / 65536.0, record.position.y / 65536.0, record.position.z / 65536.0);
+    const auto &tokens = record.tokens;
+    for (size_t i = 0; i < tokens.size(); i++) {
+        fprintf(out, " %s |", tokens[i].c_str());
+        // define_location x y type: add the game's name for it as "name=<proper>".
+        if (tokens[i] == "define_location" && i + 3 < tokens.size()) {
+            int x = atoi(tokens[i + 1].c_str()), y = atoi(tokens[i + 2].c_str()), type = atoi(tokens[i + 3].c_str());
+            for (int j = 1; j <= 3; j++)
+                fprintf(out, " %s |", tokens[i + j].c_str());
+            fprintf(out, " name=%s |", locationName(x, y, type).c_str());
+            i += 3;
+        } else if (tokens[i] == "define_item" && i + 5 < tokens.size()) {
+            // define_item category id modifier rarity material: the game's name for it and
+            // its dictionary key (Speech::item_identifier_map), for the grammar.
+            int v[5];
+            for (int j = 0; j < 5; j++)
+                v[j] = (int)strtol(tokens[i + 1 + j].c_str(), nullptr, 10),
+                fprintf(out, " %s |", tokens[i + 1 + j].c_str());
+            std::string key;
+            auto found = g->speech.item_identifier_map.find({(uint32_t)v[0], (uint32_t)v[1]});
+            if (found != g->speech.item_identifier_map.end())
+                for (wchar_t ch : found->second)
+                    key += (char)ch;
+            fprintf(out, " item=%s | key=%s |", itemName(g, v[0], v[1], (unsigned)v[2], v[3], v[4]).c_str(),
+                    key.c_str());
+            i += 5;
+        } else if (tokens[i] == "define_mob" && i + 2 < tokens.size()) { // define_mob id race: its name too
+            for (int j = 1; j <= 2; j++)
+                fprintf(out, " %s |", tokens[i + j].c_str());
+            fprintf(
+                out, " name=%s |",
+                generatedName((int)strtoul(tokens[i + 1].c_str(), nullptr, 10), atoi(tokens[i + 2].c_str())).c_str());
+            i += 2;
         }
-        fprintf(out, "\n");
-        destroy(&v);
     }
+    fprintf(out, "\n");
+    return ferror(out) == 0;
+}
+
+static void exportAll(cube::Game *g, bool onlyNew) {
+    static std::set<std::pair<long long, int>> written;
+    std::vector<CapturedPerson> people;
+    bool limited = false;
+    int32_t today = 0;
+    {
+        const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+        if (!actors.ready())
+            return;
+        auto *w = reinterpret_cast<cube::World *>(actors.world());
+        auto *player = localCreature(w);
+        if (!player || !readNative(actors.world() + 8, &today, sizeof today))
+            return;
+        size_t bytes = 0, tokens = 0;
+        std::set<std::pair<long long, int>> pending;
+        for (auto address : actors.addresses()) {
+            auto *c = reinterpret_cast<cube::Creature *>(address);
+            if (!c || c == player || c->entity_data.hostility_type != 3)
+                continue;
+            const std::pair<long long, int> key{captureabi::CreatureScalars(c).id(), today};
+            if (onlyNew && (written.count(key) || pending.count(key)))
+                continue;
+            if (people.size() == MAX_SCRIPT_BATCH_PEOPLE) {
+                limited = true;
+                break;
+            }
+            CapturedPerson person{key, {}};
+            bool complete = true;
+            for (uint32_t offset = 0; offset < SCRIPT_DAYS; ++offset) {
+                CapturedScript record{};
+                if (!captureScript(w, c, captureabi::captureScriptDay(today, offset), record)) {
+                    complete = false;
+                    break;
+                }
+                size_t textBytes = 0;
+                for (const auto &token : record.tokens)
+                    textBytes += token.size();
+                if (textBytes > MAX_SCRIPT_BATCH_BYTES - bytes ||
+                    record.tokens.size() > MAX_SCRIPT_BATCH_TOKENS - tokens) {
+                    limited = true;
+                    complete = false;
+                    break;
+                }
+                bytes += textBytes;
+                tokens += record.tokens.size();
+                person.scripts.push_back(std::move(record));
+            }
+            if (!complete) {
+                limited = true;
+                break;
+            }
+            people.push_back(std::move(person));
+            pending.insert(key);
+        }
+    } // No actor pointers or native result allocations reach the formatting phase.
+    if (limited)
+        extract::log("Conversation capture deferred unavailable or over-budget data; completed people remain eligible "
+                     "for export");
+    if (people.empty())
+        return;
+    CreateDirectoryA("Extract", nullptr);
+    std::unique_ptr<FILE, decltype(&fclose)> file(_fsopen("Extract\\talk-scripts.txt", "a", _SH_DENYNO), fclose);
+    if (!file)
+        return;
+    fprintf(file.get(), "# t=%llu day=%d\n", (unsigned long long)GetTickCount64(), today);
+    size_t completed = 0;
+    for (const auto &person : people) {
+        bool complete = true;
+        for (const auto &record : person.scripts)
+            if (!exportScript(g, file.get(), record)) {
+                complete = false;
+                break;
+            }
+        if (!complete || fflush(file.get()) != 0)
+            break;
+        written.insert(person.key);
+        ++completed;
+    }
+    if (completed)
+        extract::log("Conversation scripts: " + std::to_string(completed) +
+                     " townspeople written to Extract\\talk-scripts.txt (" + std::to_string(SCRIPT_DAYS) +
+                     " days each)");
 }
 // Speech::GenerateItemName (RVA 0x1628b0: speech, std::wstring* out, Item*), the name the
 // game shows, e.g. "Hang Glider" or a weapon with its quality word.
