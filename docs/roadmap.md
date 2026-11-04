@@ -948,6 +948,15 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   aligned-allocator execution or full live SDK-independent acceptance.
   See [native text ownership](extractor-generated-text.md).
 
+- [x] Replace SDK event queues and Creature core/effect reads with independently
+  specified bounded copies. Separate received/client-produced/host-produced
+  queues, retain the observed guard order through copying, then format owned data.
+  Keep unsigned16 pickup quantity, list duplicates, raw gaps and unresolved
+  field meanings distinct. Fix the unbounded townsperson-name diagnostic and
+  preserve vertical velocity during axis-only capture writes. Sparse/byte/guard
+  fixtures and CPU checks cover these views; SDK removal and live acceptance
+  remain open. See [event/effect capture](extractor-event-and-effect-capture.md).
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the

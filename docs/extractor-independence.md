@@ -75,6 +75,14 @@ This workboard does not grant rights or certify final redistribution.
   accesses are removed. See [text ownership](extractor-generated-text.md);
   complete resource-writer protection and failing-construction cleanup are not
   established.
+- Simple native event queues and Creature effect lists now use bounded owned
+  copies under their independently observed client/host guard scopes. Game
+  received queues remain distinct from produced World queues. Explicit field
+  decoders retain raw gaps and unsigned16 pickup quantity. ServerUpdates,
+  entity_data and buffs SDK usages are removed; unresolved scalar labels and
+  constructor padding are no longer interpreted as known diagnostic fields.
+  Axis-only velocity writes and bounded townsperson names retain other bytes.
+  See [event/effect capture](extractor-event-and-effect-capture.md).
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
@@ -107,12 +115,12 @@ This workboard does not grant rights or certify final redistribution.
   host-before-World locking for the named host phases and separate AI/worker
   scopes; neither guard alone covers all named host writers. The client capture
   helper must not be reused as a host capture or generic quiescence API.
-- Remaining creature scalar/additional pose-related fields
-  and auxiliary buffers. Inventory SDK member accesses are removed; complete
-  creature/controller lifetime and transitive writer audits remain separate.
+- Complete creature/controller lifetime and transitive writer audits remain
+  separate from the replaced core, appearance, pose, inventory and effect views.
 - Remaining World fields, collections, region/material sidecars and record views.
 - Remaining Game renderer/camera fields and native vector aliases.
-- Server-update list locations and payload decoding.
+- Keyed event-list and owning-string event behavior remain outside the simple
+  capture adapter; broader native event-production comparisons remain open.
 - Remove the SDK include/configuration after the final consumer is replaced;
   compile the extractor without the sibling SDK checkout.
 - Run supported-game startup, title and loaded-world extraction comparisons;

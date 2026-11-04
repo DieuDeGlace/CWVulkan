@@ -168,6 +168,7 @@ int nativeCreatureViewsTests(); // tests/NativeCreatureViewsTests.cpp
 int nativeCreatureScalarsTests(); // tests/NativeCreatureScalarsTests.cpp
 int nativeCreatureAppearanceTests(); // tests/NativeCreatureAppearanceTests.cpp
 int nativeGeneratedTextTests(); // tests/NativeGeneratedTextTests.cpp
+int nativeEventQueueTests(); // tests/NativeEventQueueTests.cpp
 int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int nativeInventoryTests(); // tests/NativeInventoryTests.cpp
 int nativeConversationTests(); // tests/NativeConversationTests.cpp
@@ -9412,6 +9413,8 @@ int main(int argc, char **argv) {
         return featTextTests();
     if (argc == 2 && std::string(argv[1]) == "lootwindows")
         return lootWindowTests();
+    if (argc == 2 && std::string(argv[1]) == "eventqueuecapture")
+        return nativeEventQueueTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "generatedtextcapture")
         return nativeGeneratedTextTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "conversationcapture")
@@ -10796,6 +10799,7 @@ int main(int argc, char **argv) {
     failures += nativeCreatureScalarsTests();
     failures += nativeCreatureAppearanceTests();
     failures += nativeGeneratedTextTests();
+    failures += nativeEventQueueTests();
     failures += nativeCreaturePoseTests();
     failures += nativeInventoryTests();
     failures += nativeConversationTests();

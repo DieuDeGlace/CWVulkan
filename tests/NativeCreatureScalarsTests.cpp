@@ -1,4 +1,5 @@
 #include "../tools/ZoneExtractor/NativeCreatureScalars.h"
+#include <cmath>
 #include <cstring>
 #include <iostream>
 
@@ -35,6 +36,12 @@ int nativeCreatureScalarsTests() {
     set(record.data(), 0x80, uint32_t(0x80002000));
     record[0x60] = 0xf3;
     record[0x68] = 0xfe;
+    record[0x74] = 0xf5;
+    set(record.data(), 0x70, INT32_MIN);
+    set(record.data(), 0x128, uint16_t(0xff08));
+    set(record.data(), 0x130, -3000.25f);
+    set(record.data(), 0x140, -0.f);
+    set(record.data(), 0x158, 0.5f);
     set(record.data(), 0x6c, 2.75f);
     set(record.data(), 0x34, -0.0f);
     set(record.data(), 0x38, -2.0f);
@@ -42,9 +49,12 @@ int nativeCreatureScalarsTests() {
     set(record.data(), 0x144, int32_t(-7));
     record[0x14c] = 3;
     record[0x14d] = 1;
+    set(record.data(), 0x150, INT32_MIN);
+    set(record.data(), 0x154, INT32_MAX);
     set(record.data(), 0x180, 50.0f);
     set(record.data(), 0x184, 0.25f); // block power, not mana
     set(record.data(), 0x188, 0.75f);
+    set(record.data(), 0x9a0, 0.625f);
     set(record.data(), 0xaac, int32_t(INT32_MIN));
     const std::array<char, 16> name{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
     std::memcpy(record.data() + 0x958, name.data(), name.size());
@@ -70,6 +80,21 @@ int nativeCreatureScalarsTests() {
               captureabi::fixedDelta(INT64_MIN, INT64_MAX) == -18446744073709551616.0 &&
               captureabi::fixedDelta(-65536, 65536) == -131072 && captureabi::fixedDelta(-1, -1) == 0,
           "diagnostic signed64 differences retain nearby precision without signed subtraction overflow");
+    check(values.stamina() == 0.625f && values.playerRegion() == std::array<int32_t, 2>{INT32_MIN, INT32_MAX},
+          "player item-region coordinates retain both signed32 extremes");
+    check(values.state74() == 0xf5 && values.actionCounter() == INT32_MIN && values.physicalFlags() == 0xff08 &&
+              values.stunTimer() == -3000.25f && values.charge158() == 0.5f && values.mana() == 0.75f &&
+              std::signbit(values.timer140()),
+          "documented state byte, word, counter and float timers remain separate from mana/charge accumulator");
+    const auto beforePartialVelocity = record;
+    values.setVelocityX(7);
+    values.setVelocityY(-8);
+    bool partialVelocityRetained = true;
+    for (size_t i = 0; i < record.size(); ++i)
+        if (i < 0x34 || i >= 0x3c)
+            partialVelocityRetained &= record[i] == beforePartialVelocity[i];
+    check(values.velocity().x == 7 && values.velocity().y == -8 && values.velocity().z == 3 && partialVelocityRetained,
+          "axis-only recorder writes preserve vertical velocity and every other byte");
     const auto before = record;
     values.setPosition({11, -12, 13});
     values.setVelocity({});

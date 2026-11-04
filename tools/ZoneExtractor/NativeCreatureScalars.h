@@ -1,7 +1,8 @@
 #pragma once
 // Primitive values: player-control.md record table, creature-upkeep.md section0,
 // native-saves.md section3.3, steam-world-creature-views.md section2 and
-// creature-physics.md section2.1 (pitch and bank).
+// creature-physics.md section2.1, creature-hit.md section0.1 and
+// steam-creature-core-and-effects.md (unresolved scalars retain offset names).
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -60,14 +61,24 @@ class CreatureScalars {
     std::uint32_t race() const { return read<std::uint32_t>(0x64); }
     std::uint32_t appearanceFlags() const { return read<std::uint32_t>(0x80); }
     std::uint8_t ability() const { return record[0x68]; }
+    std::uint8_t state74() const { return record[0x74]; }
+    std::int32_t actionCounter() const { return read<std::int32_t>(0x70); }
+    std::uint16_t physicalFlags() const { return read<std::uint16_t>(0x128); }
+    float stunTimer() const { return read<float>(0x130); }
+    float timer140() const { return read<float>(0x140); }
+    float charge158() const { return read<float>(0x158); }
     float abilityClock() const { return read<float>(0x6c); }
     std::int32_t gold() const { return read<std::int32_t>(0xaac); }
     float health() const { return read<float>(0x180); }
     float mana() const { return read<float>(0x188); }
+    float stamina() const { return read<float>(0x9a0); }
+    std::array<int32_t, 2> playerRegion() const { return read<std::array<int32_t, 2>>(0x150); }
     std::array<char, 16> name() const { return read<std::array<char, 16>>(0x958); }
 
     void setPosition(FixedPosition value) { write(0x10, value); }
     void setVelocity(Velocity value) { write(0x34, value); }
+    void setVelocityX(float value) { write(0x34, value); }
+    void setVelocityY(float value) { write(0x38, value); }
     void setLevel(std::int32_t value) { write(0x144, value); }
     void setSpecialization(std::uint8_t value) { record[0x14d] = value; }
     void setHealth(float value) { write(0x180, value); }

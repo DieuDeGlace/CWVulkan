@@ -355,7 +355,8 @@ target_sources(EngineTests PRIVATE
     tests/NativeCreaturePoseTests.cpp
     tests/NativeInventoryTests.cpp
     tests/NativeConversationTests.cpp
-    tests/NativeGeneratedTextTests.cpp)
+    tests/NativeGeneratedTextTests.cpp
+    tests/NativeEventQueueTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)

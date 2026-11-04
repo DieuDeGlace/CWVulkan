@@ -8,9 +8,11 @@
 #include "CaptureWorldSections.h"
 #include "NativeConversation.h"
 #include "NativeCreatureAppearance.h"
+#include "NativeCreatureEffects.h"
 #include "NativeCreaturePose.h"
 #include "NativeCreatureScalars.h"
 #include "NativeCreatureViews.h"
+#include "NativeEventQueues.h"
 #include "NativeGeneratedText.h"
 #include "NativeInventory.h"
 #include "NativeItemRecord.h"
@@ -1583,7 +1585,8 @@ static ApplyResult apply(cube::Creature *p, const Step &s) {
         item.setCategory(uint8_t(s.category));
         item.setSubtype(s.id);
         item.setMaterial(uint8_t(s.material));
-        item.setRegion(p->entity_data.current_region.x, p->entity_data.current_region.y);
+        const auto region = captureabi::CreatureScalars(p).playerRegion();
+        item.setRegion(region[0], region[1]);
     } else if (s.tab >= 0) {
         captureabi::Inventory inventory;
         if (!captureabi::readInventory(reinterpret_cast<uintptr_t>(p), inventory, readNative))
@@ -1829,7 +1832,7 @@ static void tick(cube::Game *g) {
     cube::Creature *player = localCreature(w);
     if (!player)
         return;
-    auto &pe = player->entity_data;
+    const captureabi::CreatureScalars playerData(player);
     // Keep the camera (attacks follow it) on the target, or the nearest living monster.
     {
         cube::Creature *target = nullptr;
@@ -1845,8 +1848,10 @@ static void tick(cube::Game *g) {
         }
         if (target) {
             targetId = captureabi::CreatureScalars(target).id();
-            double dx = captureabi::fixedDelta(captureabi::CreatureScalars(target).position().x, pe.position.x),
-                   dy = captureabi::fixedDelta(captureabi::CreatureScalars(target).position().y, pe.position.y);
+            double dx = captureabi::fixedDelta(captureabi::CreatureScalars(target).position().x,
+                                               playerData.position().x),
+                   dy = captureabi::fixedDelta(captureabi::CreatureScalars(target).position().y,
+                                               playerData.position().y);
             double yaw = std::atan2(dy, dx) * 180 / 3.14159265358979 +
                          GetPrivateProfileIntA("Fight", "YawOffset", 90, ".\\Mods\\ZoneExtractor.ini");
             g->camera_angle.z = g->target_camera_angle.z = yaw;
@@ -1872,11 +1877,12 @@ static void tick(cube::Game *g) {
                     "nearest id=%lld race=%u ability=%d since=%.0f dist=%.2f\n",
                     (unsigned long long)GetTickCount64(), c == player ? "player" : "creature",
                     (long long)captureabi::CreatureScalars(c).id(), captureabi::CreatureScalars(c).race(),
-                    uint32_t(captureabi::CreatureScalars(c).level()), it->second, hp, pe.current_ability,
-                    pe.time_since_ability, closest ? (long long)captureabi::CreatureScalars(closest).id() : -1LL,
+                    uint32_t(captureabi::CreatureScalars(c).level()), it->second, hp, playerData.ability(),
+                    playerData.abilityClock(), closest ? (long long)captureabi::CreatureScalars(closest).id() : -1LL,
                     closest ? captureabi::CreatureScalars(closest).race() : 0u,
-                    closest ? closest->entity_data.current_ability : 0,
-                    closest ? closest->entity_data.time_since_ability : 0.f, closest ? distance(closest, c) : -1.0);
+                    closest ? captureabi::CreatureScalars(closest).ability() : 0,
+                    closest ? captureabi::CreatureScalars(closest).abilityClock() : 0.f,
+                    closest ? distance(closest, c) : -1.0);
             fflush(log);
         }
         lastHp[captureabi::CreatureScalars(c).id()] = hp;
@@ -1911,12 +1917,18 @@ static void tick(cube::Game *g) {
     }
     // MP, stamina and charge: how hits fill them and skills spend them.
     static float lastMp = -1, lastStamina = -1;
-    static int lastCharge = -1;
-    if (std::abs(pe.MP - lastMp) > .005f || std::abs(player->stamina - lastStamina) > .005f || pe.charge != lastCharge) {
-        fprintf(log, "t=%llu resources mp=%.4f stamina=%.4f charge=%d ability=%d since=%.0f\n",
-                (unsigned long long)GetTickCount64(), pe.MP, player->stamina, (int)pe.charge, pe.current_ability,
-                pe.time_since_ability);
-        lastMp = pe.MP, lastStamina = player->stamina, lastCharge = pe.charge;
+    static int lastFlag74 = -1;
+    static float lastChargeAmount = -1;
+    if (std::abs(playerData.mana() - lastMp) > .005f || std::abs(playerData.stamina() - lastStamina) > .005f ||
+        playerData.state74() != lastFlag74 || std::abs(playerData.charge158() - lastChargeAmount) > .005f) {
+        fprintf(log, "t=%llu resources mp=%.4f stamina=%.4f flag74=%u charge158=%.4f ability=%d since=%.0f\n",
+                (unsigned long long)GetTickCount64(), playerData.mana(), playerData.stamina(),
+                unsigned(playerData.state74()), playerData.charge158(), playerData.ability(),
+                playerData.abilityClock());
+        lastMp = playerData.mana();
+        lastStamina = playerData.stamina();
+        lastFlag74 = playerData.state74();
+        lastChargeAmount = playerData.charge158();
     }
     // Loot: what the player gains (picking up a monster's pouch), item by item, and gold.
     static std::map<std::string, int64_t> carried;
@@ -1949,8 +1961,8 @@ static void tick(cube::Game *g) {
         haveLootBaseline = true;
     }
     float maxHp = ((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(player);
-    if (pe.HP < maxHp * .3f) {
-        pe.HP = maxHp;
+    if (playerData.health() < maxHp * .3f) {
+        captureabi::CreatureScalars(player).setHealth(maxHp);
         lastHp[captureabi::CreatureScalars(player).id()] = maxHp;
         fprintf(log, "# player refilled\n");
     }
@@ -4424,8 +4436,8 @@ static void dump(cube::Game *g) {
                "lava swamp high a44 b59 veg | height0 height4\n");
     // Points: a grid around the player, around the world's origin, and scattered far out.
     std::vector<std::pair<int, int>> points;
-    auto &e = localCreature(w)->entity_data;
-    int px = (int)(e.position.x >> 16), py = (int)(e.position.y >> 16);
+    const auto position = captureabi::CreatureScalars(localCreature(w)).position();
+    int px = (int)(position.x >> 16), py = (int)(position.y >> 16);
     for (int j = -10; j <= 10; j++)
         for (int i = -10; i <= 10; i++)
             points.push_back({px + i * 37, py + j * 41});
@@ -4801,7 +4813,7 @@ static bool itemName(cube::Game *g, int category, int id, unsigned modifier, int
 // 0 toggles it. Every 100 ms, each creature within 120 blocks of the player (and the
 // player) is written to Extract\ai-trace.txt: hostility, level, position, velocity,
 // ability and its time, health, combo, the unnamed words at +0x9a8..+0x9d0 (the
-// creature's target is among them), and its effects (type:value:time left). Read-only.
+// creature's target is among them), and its effects (kind:value:time:source). Read-only.
 namespace aitrace {
 static bool active = false;
 static FILE *log = nullptr;
@@ -4838,10 +4850,10 @@ static void tick(cube::Game *g) {
         auto *c = reinterpret_cast<cube::Creature *>(address);
         if (!c)
             continue;
-        auto &e = c->entity_data;
-        double dx = captureabi::fixedDelta(e.position.x, captureabi::CreatureScalars(player).position().x) / 65536,
-               dy = captureabi::fixedDelta(e.position.y, captureabi::CreatureScalars(player).position().y) / 65536,
-               dz = captureabi::fixedDelta(e.position.z, captureabi::CreatureScalars(player).position().z) / 65536;
+        const captureabi::CreatureScalars data(c);
+        double dx = captureabi::fixedDelta(data.position().x, captureabi::CreatureScalars(player).position().x) / 65536,
+               dy = captureabi::fixedDelta(data.position().y, captureabi::CreatureScalars(player).position().y) / 65536,
+               dz = captureabi::fixedDelta(data.position().z, captureabi::CreatureScalars(player).position().z) / 65536;
         double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
         if (c != player && distance > 120)
             continue;
@@ -4849,15 +4861,21 @@ static void tick(cube::Game *g) {
         fprintf(
             log,
             " id=%lld race=%u host=%d lvl=%u d=%.2f pos=%.2f,%.2f,%.2f vel=%.2f,%.2f,%.2f yaw=%.1f ab=%d since=%.0f "
-            "hp=%.1f combo=%d sincehit=%.0f stun=%.0f flags=%08x w=%llx,%llx,%llx,%llx,%llx,%llx fx=",
-            (long long)captureabi::CreatureScalars(c).id(), e.race, (int)e.hostility_type, e.level, distance,
-            blocks(e.position.x), blocks(e.position.y), blocks(e.position.z), e.velocity.x, e.velocity.y, e.velocity.z,
-            e.yaw, e.current_ability, e.time_since_ability, e.HP, *(int *)(raw + 0x70), e.time_since_hit, e.stun_time,
-            e.flags, *(unsigned long long *)(raw + 0x9a8), *(unsigned long long *)(raw + 0x9b0),
+            "hp=%.1f combo=%d timer140=%.0f stun=%.0f flags=%08x w=%llx,%llx,%llx,%llx,%llx,%llx fx=",
+            (long long)captureabi::CreatureScalars(c).id(), data.race(), (int)data.hostility(), uint32_t(data.level()),
+            distance, blocks(data.position().x), blocks(data.position().y), blocks(data.position().z),
+            data.velocity().x, data.velocity().y, data.velocity().z, data.yaw(), data.ability(), data.abilityClock(),
+            data.health(), data.actionCounter(), data.timer140(), data.stunTimer(), data.movementFlags(),
+            *(unsigned long long *)(raw + 0x9a8), *(unsigned long long *)(raw + 0x9b0),
             *(unsigned long long *)(raw + 0x9b8), *(unsigned long long *)(raw + 0x9c0),
             *(unsigned long long *)(raw + 0x9c8), *(unsigned long long *)(raw + 0x9d0));
-        for (auto &b : c->buffs)
-            fprintf(log, "%d:%.3f:%.0f,", (int)b.type, b.unk, b.time_remaining);
+        std::vector<captureabi::CreatureEffect> effects;
+        if (captureabi::readCreatureEffects(reinterpret_cast<uintptr_t>(c), effects, readNative)) {
+            for (const auto &effect : effects)
+                fprintf(log, "%u:%.3f:%.0f:%lld,", unsigned(effect.kind()), effect.magnitude(), effect.time(),
+                        (long long)effect.source());
+        } else
+            fprintf(log, "unavailable");
         fprintf(log, "%s\n", c == player ? " PLAYER" : "");
     }
     fflush(log);
@@ -4907,12 +4925,16 @@ static void approach(cube::World *w) {
         phase = 0;
         return;
     }
-    auto &me = m->entity_data, &pe = player->entity_data;
-    double dx = captureabi::fixedDelta(pe.position.x, me.position.x) / 65536, dy = captureabi::fixedDelta(pe.position.y, me.position.y) / 65536;
+    const captureabi::CreatureScalars monster(m);
+    captureabi::CreatureScalars playerData(player);
+    const auto monsterPosition = monster.position();
+    const auto playerPosition = playerData.position();
+    double dx = captureabi::fixedDelta(playerPosition.x, monsterPosition.x) / 65536,
+           dy = captureabi::fixedDelta(playerPosition.y, monsterPosition.y) / 65536;
     double real = std::max(1e-6, std::sqrt(dx * dx + dy * dy));
     ULONGLONG now = GetTickCount64();
-    if ((phase == 1 || phase == 2) && me.current_ability != 0) {
-        fprintf(log, "approach engaged gap=%.1f real=%.2f ability=%d\n", gap, real, me.current_ability);
+    if ((phase == 1 || phase == 2) && monster.ability() != 0) {
+        fprintf(log, "approach engaged gap=%.1f real=%.2f ability=%d\n", gap, real, monster.ability());
         phase = 3, phaseStart = now;
     }
     if (now < nextStep)
@@ -4939,13 +4961,12 @@ static void approach(cube::World *w) {
         }
     }
     if (place) { // `gap` blocks from it, on the side the player is now
-        pe.position.x = me.position.x + (int64_t)(dx / real * gap * 65536);
-        pe.position.y = me.position.y + (int64_t)(dy / real * gap * 65536);
-        pe.position.z = me.position.z + (2 << 16);
+        playerData.setPosition({monsterPosition.x + (int64_t)(dx / real * gap * 65536),
+                                monsterPosition.y + (int64_t)(dy / real * gap * 65536), monsterPosition.z + 2 * 65536});
         captureabi::CreatureScalars(player).setVelocity({});
     }
-    fprintf(log, "approach phase=%d gap=%.1f real=%.2f ability=%d vel=%.2f,%.2f\n", phase, gap, real, me.current_ability,
-            me.velocity.x, me.velocity.y);
+    fprintf(log, "approach phase=%d gap=%.1f real=%.2f ability=%d vel=%.2f,%.2f\n", phase, gap, real, monster.ability(),
+            monster.velocity().x, monster.velocity().y);
 }
 // - (minus): stands the player 2.5 blocks from the nearest townsperson (hostility 3)
 // not visited yet this session, facing them, and logs who it is, so they can be
@@ -4975,17 +4996,20 @@ static void visitTownsperson(cube::Game *g) {
     if (!best)
         return;
     visited.push_back(captureabi::CreatureScalars(best).id());
-    auto &be = best->entity_data, &pe = player->entity_data;
-    double yaw = be.yaw * 3.14159265358979 / 180;
-    pe.position.x = be.position.x + (int64_t)(std::cos(yaw) * 2.5 * 65536);
-    pe.position.y = be.position.y + (int64_t)(std::sin(yaw) * 2.5 * 65536);
-    pe.position.z = be.position.z + (1 << 16);
+    const captureabi::CreatureScalars townsperson(best);
+    const auto position = townsperson.position();
+    const auto name = townsperson.name();
+    const double yaw = townsperson.yaw() * 3.14159265358979 / 180;
+    captureabi::CreatureScalars(player).setPosition({position.x + (int64_t)(std::cos(yaw) * 2.5 * 65536),
+                                                     position.y + (int64_t)(std::sin(yaw) * 2.5 * 65536),
+                                                     position.z + 65536});
     captureabi::CreatureScalars(player).setVelocity({});
-    g->camera_angle.z = g->target_camera_angle.z = be.yaw + 180 + 90;
+    g->camera_angle.z = g->target_camera_angle.z = townsperson.yaw() + 180 + 90;
     if (log)
-        fprintf(log, "visit townsperson id=%lld race=%u level=%u name=%s\n",
-                (long long)captureabi::CreatureScalars(best).id(), be.race, be.level, be.name);
-    extract::log("Visiting townsperson race " + std::to_string(be.race));
+        fprintf(log, "visit townsperson id=%lld race=%u level=%u name=%.16s\n",
+                (long long)captureabi::CreatureScalars(best).id(), townsperson.race(), uint32_t(townsperson.level()),
+                name.data());
+    extract::log("Visiting townsperson race " + std::to_string(townsperson.race()));
 }
 } // namespace aitrace
 
@@ -5420,68 +5444,70 @@ static cube::Zone *zoneAt(cube::World *w, captureabi::FixedPosition at) {
     return nullptr;
 }
 
-// The game's update lists (cube::ServerUpdates): what the local server tells the
-// client to show (particles, pick-ups, sounds, hits). Another thread fills them, so
-// each list is walked with guarded reads; new entries are logged raw and decoded.
+// Bounded queue snapshots are formatted after the corresponding owner leases
+// end. Raw payloads retain transmitted gaps without assigning meaning to them.
 static std::set<std::string> seenUpdates;
-static void pollUpdates(FILE *f, const char *who, cube::ServerUpdates &u) {
-    struct ListInfo {
-        const char *name;
-        void *list;
-        size_t size;
-    };
-    ListInfo lists[] = {{"hit", &u.hit_packet_list, sizeof(cube::ServerUpdates::SU_HitPacket)},
-                        {"sound", &u.sound_packet_list, sizeof(cube::ServerUpdates::SU_SoundPacket)},
-                        {"particle", &u.particle_packet_list, sizeof(cube::ServerUpdates::SU_ParticlePacket)},
-                        {"pickup", &u.pickup_item_packet_list, sizeof(cube::ServerUpdates::SU_PickupItemPacket)},
-                        {"p9", &u.packet_list_9, sizeof(cube::ServerUpdates::SU_Packet9)},
-                        {"p10", &u.packet_list_10, sizeof(cube::ServerUpdates::SU_Packet10)},
-                        {"p11", &u.packet_list_11, sizeof(cube::ServerUpdates::SU_Packet11)},
-                        {"p13", &u.packet_list_13, sizeof(cube::ServerUpdates::SU_Packet13)},
-                        {"p14", &u.packet_list_14, sizeof(cube::ServerUpdates::SU_Packet14)}};
-    for (auto &l : lists) {
-        uintptr_t head = 0;
-        if (!readable((uintptr_t)l.list, &head, 8) || !head)
+static void pollUpdates(FILE *f, const char *who, const std::vector<captureabi::CapturedEvent> &events) {
+    for (const auto &event : events) {
+        const char *label = "unknown";
+        for (const auto &layout : captureabi::SIMPLE_EVENT_LAYOUTS)
+            if (layout.slot == event.slot)
+                label = layout.label;
+        std::string key(who);
+        key.push_back(char(event.slot));
+        key.append(reinterpret_cast<const char *>(event.bytes.data()), event.bytes.size());
+        if (!seenUpdates.insert(key).second)
             continue;
-        uintptr_t node = 0;
-        if (!readable(head, &node, 8))
-            continue;
-        for (int n = 0; n < 256 && node && node != head; n++) {
-            unsigned char value[0x200];
-            size_t bytes = std::min(l.size, sizeof value);
-            if (!readable(node + 16, value, bytes))
-                break;
-            std::string key(l.name);
-            key.append((const char *)value, bytes);
-            if (seenUpdates.insert(key).second) {
-                fprintf(f, "t=%llu %s %s:", (unsigned long long)GetTickCount64(), who, l.name);
-                if (!strcmp(l.name, "particle")) {
-                    auto *p = (cube::ServerUpdates::SU_ParticlePacket *)value;
-                    fprintf(f, " pos=%.3f %.3f %.3f accel=%.3f %.3f %.3f color=%.3f %.3f %.3f %.3f f34=%d count=%d type=%d f40=%d",
-                            p->pos.x / 65536.0, p->pos.y / 65536.0, p->pos.z / 65536.0, p->accel_maybe.x, p->accel_maybe.y,
-                            p->accel_maybe.z, p->color.red, p->color.green, p->color.blue, p->color.alpha, p->field_34,
-                            p->count, p->particle_type, p->field_40);
-                } else if (!strcmp(l.name, "pickup")) {
-                    auto *p = (cube::ServerUpdates::SU_PickupItemPacket *)value;
-                    fprintf(f, " guid=%lld item=%d:%d:%d:%d quantity=%d pos=%.3f %.3f %.3f flags=%08x", (long long)p->guid,
-                            (int)p->unk_item.category, p->unk_item.id, (int)p->unk_item.material, (int)p->unk_item.rarity,
-                            p->quantity, p->pos.x / 65536.0, p->pos.y / 65536.0, p->pos.z / 65536.0, p->some_flag_things);
-                } else if (!strcmp(l.name, "sound")) {
-                    auto *p = (cube::ServerUpdates::SU_SoundPacket *)value;
-                    fprintf(f, " id=%d pos=%.3f %.3f %.3f a=%.3f b=%.3f guid=%lld", p->sound_id, p->pos.x / 65536.0,
-                            p->pos.y / 65536.0, p->pos.z / 65536.0, p->some_float_1, p->some_float_2, (long long)p->guid);
-                }
-                fprintf(f, " raw=");
-                for (size_t i = 0; i < bytes; i++)
-                    fprintf(f, "%02x", value[i]);
-                fprintf(f, "\n");
-            }
-            if (!readable(node, &node, 8))
-                break;
-        }
+        fprintf(f, "t=%llu %s %s:", (unsigned long long)GetTickCount64(), who, label);
+        captureabi::SoundEvent sound;
+        captureabi::ParticleBurstEvent particle;
+        captureabi::PickupEvent pickup;
+        if (captureabi::decodeSoundEvent(event, sound))
+            fprintf(f, " id=%d pos=%.3f %.3f %.3f a=%.3f b=%.3f guid=%lld", sound.selector, sound.position.x / 65536.0,
+                    sound.position.y / 65536.0, sound.position.z / 65536.0, sound.parameter1c, sound.volume20,
+                    (long long)sound.owner);
+        else if (captureabi::decodeParticleBurstEvent(event, particle))
+            fprintf(f,
+                    " pos=%.3f %.3f %.3f vector18=%.3f %.3f %.3f vector24=%.3f %.3f %.3f %.3f "
+                    "f34=%08x count=%d type=%d f40=%08x",
+                    particle.position.x / 65536.0, particle.position.y / 65536.0, particle.position.z / 65536.0,
+                    particle.vector18[0], particle.vector18[1], particle.vector18[2], particle.vector24[0],
+                    particle.vector24[1], particle.vector24[2], particle.vector24[3], particle.field34, particle.count,
+                    particle.selector, particle.field40);
+        else if (captureabi::decodePickupEvent(event, pickup))
+            fprintf(f, " guid=%lld item=%d:%d:%d:%d quantity=%u pos=%.3f %.3f %.3f flags=%08x", (long long)pickup.actor,
+                    pickup.item.category(), pickup.item.subtype(), pickup.item.material(), pickup.item.rarity(),
+                    unsigned(pickup.quantity), pickup.position.x / 65536.0, pickup.position.y / 65536.0,
+                    pickup.position.z / 65536.0, pickup.flags);
+        fprintf(f, " raw=");
+        for (uint8_t byte : event.bytes)
+            fprintf(f, "%02x", unsigned(byte));
+        fprintf(f, "\n");
     }
     if (seenUpdates.size() > 20000)
-        seenUpdates.clear();
+        seenUpdates.clear(); // Existing bounded diagnostic suppression, not an event counter.
+}
+
+static void recordUpdates(cube::Game *g, FILE *out) {
+    std::vector<captureabi::CapturedEvent> client, received, hosted;
+    {
+        const auto world = reinterpret_cast<uintptr_t>(clientWorld(g));
+        const captureabi::WorldActorLease held(world);
+        if (held && reinterpret_cast<uintptr_t>(clientWorld(g)) == world) {
+            captureabi::readEventQueues(captureabi::worldEventBundle(world), client, readNative);
+            captureabi::readEventQueues(captureabi::receivedEventBundle(reinterpret_cast<uintptr_t>(g)), received,
+                                        readNative);
+        }
+    }
+    {
+        const captureabi::HostWorldActorLease held(reinterpret_cast<uintptr_t>(g));
+        if (held)
+            captureabi::readEventQueues(captureabi::worldEventBundle(held.world()), hosted, readNative);
+    }
+    // These are separate owner observations, not one cross-world transaction.
+    pollUpdates(out, "client", client);
+    pollUpdates(out, "received", received);
+    pollUpdates(out, "server", hosted);
 }
 
 // Native body particles are nodes in Game+0x2090, not a contiguous array in
@@ -5584,8 +5610,7 @@ static void tick(cube::Game *g) {
     }
     if (drops) {
         recordParticles(g);
-        pollUpdates(drops, "client", w->server_updates);
-        pollUpdates(drops, "server", embeddedHostWorld(g)->server_updates);
+        recordUpdates(g, drops);
     }
     const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
     if (!actors.ready())
@@ -5644,21 +5669,20 @@ static void tick(cube::Game *g) {
             it = watching.erase(it);
             continue;
         }
-        auto &e = c->entity_data;
+        const captureabi::CreatureScalars data(c);
         const captureabi::CreaturePose s(c);
         if (it->frames)
             character::writeFrame(it->frames, c);
-        fprintf(
-            text,
-            "t=%llu id=%lld +%llu hp=%.2f flags=%08x toggles=%04x pos=%.3f %.3f %.3f pitch=%.3f roll=%.3f yaw=%.3f "
-            "vel=%.3f %.3f %.3f anim=%d/%d ability=%d since=%.0f hit=%.0f stun=%.0f f61=%d f62=%d f63=%d flags2=%08x "
-            "gscale=%.4f\n",
-            (unsigned long long)now, (long long)it->id, (unsigned long long)(now - it->start), e.HP, e.flags,
-            (unsigned)(uint16_t)e.binary_toggles, e.position.x / 65536.0, e.position.y / 65536.0,
-            e.position.z / 65536.0, e.pitch, e.roll, e.yaw, e.velocity.x, e.velocity.y, e.velocity.z, s.state(),
-            s.clockBits(), e.current_ability, e.time_since_ability, e.time_since_hit, e.stun_time, e.field_61,
-            e.field_62, e.field_63, captureabi::CreatureAppearance(c).flags(),
-            captureabi::CreatureAppearance(c).extents()[0]);
+        fprintf(text,
+                "t=%llu id=%lld +%llu hp=%.2f flags=%08x toggles=%04x pos=%.3f %.3f %.3f pitch=%.3f roll=%.3f yaw=%.3f "
+                "vel=%.3f %.3f %.3f anim=%d/%d ability=%d since=%.0f timer140=%.0f stun=%.0f flags2=%08x "
+                "gscale=%.4f\n",
+                (unsigned long long)now, (long long)it->id, (unsigned long long)(now - it->start), data.health(),
+                data.movementFlags(), (unsigned)data.physicalFlags(), data.position().x / 65536.0,
+                data.position().y / 65536.0, data.position().z / 65536.0, data.pitch(), data.roll(), data.yaw(),
+                data.velocity().x, data.velocity().y, data.velocity().z, s.state(), s.clockBits(), data.ability(),
+                data.abilityClock(), data.timer140(), data.stunTimer(), captureabi::CreatureAppearance(c).flags(),
+                captureabi::CreatureAppearance(c).extents()[0]);
         ++it;
     }
     // The world's containers: what grows when something is dropped.
@@ -7176,8 +7200,8 @@ static void tick(cube::Game *g) {
             return false;
         };
         if (down7key && !pushKey && TryEnterCriticalSection(&cw->zones_critical_section)) {
-            auto &e = localCreature(cw)->entity_data;
-            double px = e.position.x / 65536.0, py = e.position.y / 65536.0, pz = e.position.z / 65536.0;
+            const auto position = captureabi::CreatureScalars(localCreature(cw)).position();
+            double px = position.x / 65536.0, py = position.y / 65536.0, pz = position.z / 65536.0;
             int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py), feet = (int64_t)std::floor(pz) - 1;
             int best = 99;
             pushDx = pushDy = 0;
@@ -7198,11 +7222,11 @@ static void tick(cube::Game *g) {
         }
         pushKey = down7key;
         if (GetTickCount64() < pushUntil) {
-            auto &v = localCreature(cw)->entity_data.velocity;
+            captureabi::CreatureScalars player(localCreature(cw));
             if (pushDx)
-                v.x = 4.f * pushDx;
+                player.setVelocityX(4.f * pushDx);
             if (pushDy)
-                v.y = 4.f * pushDy;
+                player.setVelocityY(4.f * pushDy);
         }
         static bool collide = false, logging = false;
         bool down9 = extract::hotkeyDown('9');
@@ -7226,8 +7250,9 @@ static void tick(cube::Game *g) {
         bool downG = extract::hotkeyDown('G');
         if (downG && !dropKey) {
             cube::World *w = clientWorld(g);
-            auto &e = localCreature(w)->entity_data;
-            int64_t px = e.position.x >> 16, py = e.position.y >> 16;
+            captureabi::CreatureScalars player(localCreature(w));
+            const auto position = player.position();
+            int64_t px = position.x >> 16, py = position.y >> 16;
             int64_t best = -1, bx = 0, by = 0, bz = 0;
             EnterCriticalSection(&w->zones_critical_section); // the game streams zones meanwhile
             for (auto &[key, zone] : w->zones) {
@@ -7282,11 +7307,10 @@ static void tick(cube::Game *g) {
                     s += " type " + std::to_string(t) + ": " + std::to_string(count[t]) + " at z " + std::to_string(r.first) +
                          ".." + std::to_string(r.second) + ";";
                 log("Drop test: no water in the " + std::to_string(w->zones.size()) + " loaded zones. Blocks:" + s +
-                    " player z " + std::to_string(e.position.z >> 16));
+                    " player z " + std::to_string(position.z >> 16));
             } else {
-                e.position.x = (bx << 16) + 32768;
-                e.position.y = (by << 16) + 32768;
-                e.position.z = (bz + 30) << 16;
+                player.setPosition({captureabi::fixedFromBlocks(bx) + 32768, captureabi::fixedFromBlocks(by) + 32768,
+                                    captureabi::fixedFromBlocks(bz + 30)});
                 captureabi::CreatureScalars(localCreature(w)).setVelocity({});
                 if (collisionLog)
                     fprintf(collisionLog, "# drop over water: column %lld %lld, water surface z=%lld\n", (long long)bx,
@@ -7300,8 +7324,9 @@ static void tick(cube::Game *g) {
         if (logging && collisionLog) {
             static captureabi::FixedPosition last{};
             cube::World *w = clientWorld(g);
-            auto &e = localCreature(w)->entity_data;
-            if (e.position.x != last.x || e.position.y != last.y || e.position.z != last.z) {
+            const captureabi::CreatureScalars player(localCreature(w));
+            const auto position = player.position();
+            if (position.x != last.x || position.y != last.y || position.z != last.z) {
                 // The game's own blocks (zone columns): solid unless air or liquid.
                 auto solid = [&](int64_t bx, int64_t by, int64_t bz) -> bool {
                     int zx = (int)std::floor(bx / 64.0), zy = (int)std::floor(by / 64.0);
@@ -7318,7 +7343,7 @@ static void tick(cube::Game *g) {
                         }
                     return false;
                 };
-                double px = e.position.x / 65536.0, py = e.position.y / 65536.0, pz = e.position.z / 65536.0;
+                double px = position.x / 65536.0, py = position.y / 65536.0, pz = position.z / 65536.0;
                 int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py), bz = (int64_t)std::floor(pz);
                 // Distance from the centre to the nearest solid face, within 3 blocks
                 // (9 = none): sideways at the levels z+0.5 and z+1.5, then above and below.
@@ -7352,9 +7377,10 @@ static void tick(cube::Game *g) {
                     LeaveCriticalSection(&w->zones_critical_section);
                 }
                 fprintf(collisionLog,
-                        "t=%llu pos=%.5f %.5f %.5f vel=%.3f %.3f %.3f flags=%08x gaps +x=%.4f -x=%.4f +y=%.4f -y=%.4f up=%.4f down=%.4f levels%s\n",
-                        (unsigned long long)GetTickCount64(), px, py, pz, e.velocity.x, e.velocity.y, e.velocity.z, e.flags,
-                        gx1, gx0, gy1, gy0, up, down, levels.c_str());
+                        "t=%llu pos=%.5f %.5f %.5f vel=%.3f %.3f %.3f flags=%08x gaps +x=%.4f -x=%.4f +y=%.4f -y=%.4f "
+                        "up=%.4f down=%.4f levels%s\n",
+                        (unsigned long long)GetTickCount64(), px, py, pz, player.velocity().x, player.velocity().y,
+                        player.velocity().z, player.movementFlags(), gx1, gx0, gy1, gy0, up, down, levels.c_str());
                 last = captureabi::CreatureScalars(localCreature(w)).position();
             }
         }

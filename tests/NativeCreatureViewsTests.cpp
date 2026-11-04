@@ -278,6 +278,12 @@ int nativeCreatureViewsTests() {
               "host capture uses the embedded World and retains both distinct guards through pointer use");
     }
     check(canEnter(outerSection) && canEnter(innerSection), "host capture releases both guards after use");
+    {
+        const captureabi::HostWorldActorLease lease(hostGameAddress);
+        check(bool(lease) && lease.world() == hostWorld && !canEnter(outerSection) && !canEnter(innerSection),
+              "queue owner lease holds both host/World guards without requiring registry enumeration");
+    }
+    check(canEnter(outerSection) && canEnter(innerSection), "standalone host owner lease releases both guards");
     for (auto *busySection : {outerSection, innerSection}) {
         std::promise<void> acquired, finish;
         auto finishSignal = finish.get_future();

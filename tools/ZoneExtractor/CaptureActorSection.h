@@ -65,7 +65,7 @@ class ClientCreatureCapture {
 // host writers require the outer host guard as well as the World guard, in that
 // order (steam-world-actor-protection.md sections1–6). This does not pin Game or
 // World, quiesce every worker, or make every nested field an atomic snapshot.
-class HostCreatureCapture {
+class HostWorldActorLease {
     static constexpr std::size_t WORLD_OFFSET = 0x6e8 + 8;
     static constexpr std::size_t SECTION_OFFSET = 0x6e8 + 0x5f8;
     class OuterLease {
@@ -91,18 +91,28 @@ class HostCreatureCapture {
     OuterLease outer;
     std::uintptr_t worldAddress;
     WorldActorLease held; // Declared after outer: World releases before host.
+
+  public:
+    explicit HostWorldActorLease(std::uintptr_t game)
+        : outer(game), worldAddress(outer ? game + WORLD_OFFSET : 0), held(worldAddress) {}
+    HostWorldActorLease(const HostWorldActorLease &) = delete;
+    HostWorldActorLease &operator=(const HostWorldActorLease &) = delete;
+    explicit operator bool() const { return bool(held); }
+    std::uintptr_t world() const { return held ? worldAddress : 0; }
+};
+
+class HostCreatureCapture {
+    HostWorldActorLease held;
     std::vector<std::uintptr_t> values;
     bool readable = false;
 
   public:
-    template <class Read>
-    HostCreatureCapture(std::uintptr_t game, Read read)
-        : outer(game), worldAddress(outer ? game + WORLD_OFFSET : 0), held(worldAddress) {
+    template <class Read> HostCreatureCapture(std::uintptr_t game, Read read) : held(game) {
         if (held)
-            readable = readRegisteredCreatures(worldAddress, values, read);
+            readable = readRegisteredCreatures(held.world(), values, read);
     }
     bool ready() const { return readable; }
-    std::uintptr_t world() const { return readable ? worldAddress : 0; }
+    std::uintptr_t world() const { return readable ? held.world() : 0; }
     const std::vector<std::uintptr_t> &addresses() const { return values; }
 };
 } // namespace captureabi
