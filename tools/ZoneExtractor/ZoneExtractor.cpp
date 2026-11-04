@@ -9,6 +9,7 @@
 #include "CaptureWorldSections.h"
 #include "CapturePlugin.h"
 #include "ZoneTerrainCapture.h"
+#include "NativeNameFragments.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -284,31 +285,30 @@ static void writeSpriteTable(cube::World *w) {
         log("Sprite table: " + std::to_string(sprites.size()) + " slots, " + std::to_string(named) + " named, " +
             std::to_string(names.size()) + " loads seen");
     }
-    // The syllables of the game's generated names (randomName, 0x611d0): the function loads
-    // its 380 string literals in table order (the default first and second halves, 30 each,
-    // then the races' halves, 10 each), each by "lea rdx, [rip+literal]". They are read
-    // from the running game's own code here, so CubeVulkan carries no copy of them.
-    if (fopen_s(&f, "Extract\\names.txt", "w") == 0 && f) {
-        const unsigned char *code = (const unsigned char *)base();
-        int count = 0;
-        for (uintptr_t rva = 0x611d0; rva + 7 <= 0x64565; rva++)
-            if (code[rva] == 0x48 && code[rva + 1] == 0x8d && code[rva + 2] == 0x15) {
-                int32_t displacement;
-                memcpy(&displacement, code + rva + 3, 4);
-                const uintptr_t target = rva + 7 + (intptr_t)displacement;
-                if (target < 0x430000 || target >= 0x440000) // (its string literals sit in .rdata there)
-                    continue;
-                const wchar_t *s = (const wchar_t *)(code + target);
-                std::string text;
-                for (int i = 0; i < 32 && s[i]; i++)
-                    text.push_back((char)s[i]);
-                fprintf(f, "%s\n", text.c_str());
-                count++;
-                rva += 6;
+    // Capture only verified literal data; no runtime instruction scan or lazy
+    // native string initialization is needed. Keep the existing file on failure.
+    std::vector<std::string> fragments;
+    if (captureabi::readNameFragments(base(), fragments, readNative)) {
+        std::string payload;
+        for (const auto &fragment : fragments) {
+            payload += fragment;
+            payload += '\n';
+        }
+        constexpr const char *temporary = "Extract\\names.txt.capture-tmp";
+        if (fopen_s(&f, temporary, "w") == 0 && f) {
+            bool complete = fwrite(payload.data(), 1, payload.size(), f) == payload.size();
+            if (fclose(f) != 0)
+                complete = false;
+            if (complete && MoveFileExA(temporary, "Extract\\names.txt", MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                log("Name syllables: " + std::to_string(fragments.size()) + " written to Extract\\names.txt");
+            else {
+                DeleteFileA(temporary);
+                log("Name syllables: write failed; previous file retained");
             }
-        fclose(f);
-        log("Name syllables: " + std::to_string(count) + " written to Extract\\names.txt");
-    }
+        } else
+            log("Name syllables: temporary file unavailable; previous file retained");
+    } else
+        log("Name syllables: literal capture rejected; previous file retained");
     // Environment object types: SpriteManager+0x28 is a std::map<uint8_t,
     // std::vector<Sprite*>> (type -> variant sprites); +0x38/+0x50/+0x68 are
     // the environment, building-part and cage sprite vectors.

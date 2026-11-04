@@ -286,3 +286,24 @@ new native session stopped before launch; setup restored Save/Mods/ReShade and
 verified their exact hashes. This terrain/callback integration remains pending
 live acceptance. Other exporter paths still use SDK views. Owner data remains
 private and absent from source/runtime packages.
+
+## Data-only proper-name fragments, 2026-11-04
+
+The extractor now uses the independently traced 380 literal RVA/UTF-16-length
+entries, in the existing names.txt order. It reads only those data spans, including
+known terminators, and no longer scans the generator's instruction bytes. Literal
+contents still come from the owner's supported image; addresses and lengths do
+not bundle the vocabulary. Runtime lazy string initialization is not required.
+
+The existing line-based format is Latin-1. Its reader rejects embedded NUL, line
+controls and units above 255 rather than silently truncating or emitting partial
+output; that file policy is not a restriction on native UTF-16 strings. Completed
+capture writes a temporary file and replaces names.txt only after successful
+write/close. Capture or publication failure retains the previous valid table.
+
+All 380 source entries match the finalized independent manifest. Existing owner
+output agrees with 380 expected lengths and 89 repeated-address aliases, without
+recording its text in source. Guarded-read, encoding/terminator/failure cases and
+14 contract-derived name-index examples pass, as do all five targets and the full
+CPU/owner suite. These checks do not establish new native execution or complete
+name-output parity; the new extractor still needs its own supported-game smoke.

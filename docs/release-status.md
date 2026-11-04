@@ -10,6 +10,18 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Proper-name generation now shares the verified unsigned R hash and explicit
+  32-bit seed/selector arithmetic, removing a signed-overflow expression. Shared
+  fragment-table aliases retain their original hash inputs. Fourteen independently
+  derived index cases, extreme-selector and data-reader cases pass with all five
+  targets and the full CPU/owner suite. Fragment capture now reads 380 verified
+  literal-data RVA/length entries instead of scanning instruction bytes, retains
+  the legacy file order, and publishes through a temporary file. The source
+  manifest matches every finalized prose entry; existing owner output agrees on
+  all 380 lengths and 89 repeated-address aliases. No vocabulary is bundled. These
+  are contract/legacy-output checks, not new native execution or full name-output
+  parity. The new extractor still needs supported-game live acceptance.
+
 - Full item naming now starts with the independently specified semantic record
   copy. The four special gear stand-ins reach their actual gear dictionary branch,
   including when nested in a formula. The shared conversion retains the wrapped
@@ -420,7 +432,7 @@ older successful runs; none of these bounded changes establishes complete parity
   Eleven new Vulkan cases cover mask modes, nonrectangular geometry, unlayered
   control, nested composition, reused full clears, null-depth/restoration, atlas
   replacement and uncaptured frames in flight. Owner-HUD callback/cut checks pass.
-  All five targets build warning-free; full CPU/owner and89 shader,2 camera,
+  All five targets build warning-free; full CPU/owner and 89 shader,2 camera,
   42 GUI,17 map/shared-water/Alpha-scenery checks pass. Five no-save captures exit0
   and are reviewed, with the save database unchanged. These bounded checks do not
   certify complete native UI or rendering parity.
@@ -455,7 +467,7 @@ older successful runs; none of these bounded changes establishes complete parity
   CPU cases check fixed fractions, unequal header dimensions, source-home Z and
   the Alpha path. An actual Vulkan coverage case preserves a quarter block at
   block2^24 and matches the near scene; its old home-rounding negative control
-  loses that offset. All five targets build warning-free. Full CPU/owner and89
+  loses that offset. All five targets build warning-free. Full CPU/owner and 89
   shader,2 camera,28 GUI,17 map/shared-water/Alpha-scenery checks pass. Five no-save
   captures exit0 and are reviewed, with the save database unchanged. This closes
   the specified particle-coordinate binding, not all producer/CRT/visual parity.

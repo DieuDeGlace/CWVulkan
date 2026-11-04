@@ -1892,3 +1892,21 @@ unsigned 128..131 material bytes, generic keys, quality macro context and unchan
 output under different ordinary tallies. Three fallback regressions fail before
 the correction and pass afterward. Full CPU/owner checks pass. Proper-name
 family-specific data and native-output/visual acceptance remain unqualified.
+
+### Generated proper names and fragment-data access, 2026-11-04
+
+The native-only author finalized steam-generated-proper-names.md sections 1–7 and
+held. The implementer read all 145 lines, including every 380-entry RVA/length fact,
+before changing code. The owned shared R function supplies the exact unsigned
+word hash; selector dispatch preserves original bits instead of collapsing table
+aliases. Source includes numeric address/length metadata only. Literal characters
+remain owner data. The new guarded reader replaces instruction scanning and keeps
+legacy file order; a source/prose audit verifies all 380 tuples. The legacy owner's
+output matches lengths and repeated-literal identity, with no text placed in the
+report or either package. This uses output data, not original code inspection.
+
+The 14 arithmetic examples are explicitly independent contract-derived fixtures,
+not native runtime captures. New data-reader failure/format cases and full CPU/
+owner checks pass. No original/SDK implementation or header was read by the
+implementer. Native live/output, alternate builds, malformed/concurrent records
+and broader upstream caller/grammar coverage remain separate boundaries.

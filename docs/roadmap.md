@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Independently verify proper-name selector dispatch, 32-bit hash inputs and
+  unsigned index reductions; share the existing R implementation and retain raw
+  selector bits across table aliases. Derived index/extreme-selector fixtures pass.
+  Replace fragment instruction scanning with guarded literal-data reads from the
+  complete 380-entry RVA/length manifest. Legacy output matches every length and
+  repeated-address alias; source metadata contains no vocabulary. All five targets
+  and CPU/owner checks pass. New extractor live execution, wider original-name
+  output and caller/grammar acceptance remain separate.
+
+
 - [x] Full item naming starts from a shared complete semantic copy, preserving all
   attribute/count/padding bytes and converting the four special gear stand-ins,
   including recursive formulas. Unlisted material bytes use the generic Material

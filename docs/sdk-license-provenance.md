@@ -193,3 +193,10 @@ was inferred. The grant/revision/complete-replacement gate remains open.
 Sources: [the inspected upstream tree](https://github.com/coremaze/CWSDK/tree/083e67b5e301483c4a222989c046fc2041d134a8),
 [its README](https://github.com/coremaze/CWSDK/blob/083e67b5e301483c4a222989c046fc2041d134a8/README.md)
 and [the official issue-search endpoint](https://api.github.com/search/issues?q=repo%3Acoremaze%2FCWSDK%20license).
+
+
+Proper-name fragment capture also now uses an original guarded data-only reader
+and the independent literal RVA/length manifest. It includes no SDK header or
+fragment text and performs no instruction scan. This bounded asset-access path
+does not supply the missing SDK grant/revision or a complete replacement. Other
+exporter views remain SDK-dependent; its new live integration is unqualified.

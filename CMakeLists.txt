@@ -344,7 +344,8 @@ target_sources(EngineTests PRIVATE
     tests/CaptureWorldSectionTests.cpp
     tests/CapturePluginTests.cpp
     tests/NativeZoneTerrainTests.cpp
-    tests/ItemNameTests.cpp)
+    tests/ItemNameTests.cpp
+    tests/ProperNameTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
