@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Eagle travel now binds generated-world source/mesh preparation to the existing
+  actor's signed block destination only during ability0x9c. Physical retention,
+  title flight0x9d and arrival gliding0x78 remain separate; destination fields are
+  not implicitly cleared or rejected by a new sentinel/age rule. Current terrain
+  remains available while the destination view is prepared, under the replacement
+  cache policy. The adaptive camera scan also uses the verified narrowed-block
+  producer, including wrapped negative reconstruction. Four independent native
+  displacement word pairs are now regression references; the displacement routine
+  itself is unchanged. All five targets build. Full CPU/owner-data and all image
+  suites pass for the anchor integration; the final camera change additionally
+  passes focused range and both camera-style image checks. Live travel/network
+  cache-lifetime acceptance and the full-distance performance gate remain open.
+
 - Generated Steam-look worlds now use the independently specified client source
   window, full neighboring-zone admission, signed distance-key ordering and a
   separate mesh-preparation budget. Installed and pending costs contribute, and

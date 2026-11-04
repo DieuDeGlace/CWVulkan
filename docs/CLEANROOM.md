@@ -1680,3 +1680,16 @@ and synchronized publication contract. Successful thread-local reads are bounded
 and keyed by distinct world lifetimes; misses still use the original synchronization.
 No native numeric formula, asset or generation stream was replaced. Local sampler
 sources and outputs remain private under build and outside publication.
+
+
+## Eagle source anchors and displacement vectors, 2026-11-03
+
+The separate native-only author supplied steam-source-window-ability-anchor.md
+and alpha-region-displacement-vectors.md. The implementer read both complete
+notes and the engine's own code, not original game/SDK implementation or captures.
+Generated-world preparation consumes the existing owned actor's raw destination
+only for ability0x9c; physical retention, title0x9d and arrival0x78 stay distinct.
+Four independent arithmetic float-word fixtures guard displacement axes/staging.
+The established displacement formula remains unchanged.
+The geometry-cache lifetime policy is explicitly the replacement backend's policy.
+No original assets, executable code or recorded owner data were added.

@@ -78,6 +78,18 @@ int alphaTerrainTests() {
         check(replacement && second->cell(512, 512) == replacement, "replacement world publishes its own cell");
     }
     alphagen::World world(123);
+    // Independent lattice references cover crossed axes and repeated/interleaved inputs.
+    struct DisplacementFixture { int32_t x, y; std::array<uint32_t, 2> words; };
+    constexpr DisplacementFixture displacement[] = {
+        {0, 0, {0x433c3906u, 0x44372074u}}, {2000, 0, {0x433c3906u, 0xc1cf4c02u}},
+        {0, 2000, {0xc38147abu, 0x44372074u}}, {4000, 2000, {0xc38147abu, 0x42a4be4au}},
+    };
+    for (const int index : {0, 1, 1, 2, 3, 3, 0, 2, 0}) {
+        const auto &fixture = displacement[index];
+        const auto value = world.displacement(fixture.x, fixture.y);
+        check(std::bit_cast<uint32_t>(value.x) == fixture.words[0] && std::bit_cast<uint32_t>(value.y) == fixture.words[1],
+              "native crossed-axis displacement words match repeated and interleaved inputs");
+    }
     const auto *home = world.makeCell(512, 512);
     check(home && home->x == 8397824 && home->y == 8397824 && home->elevation == 74 && home->moisture == 0.4915097653865814f &&
               home->warmth == 0.5601367354393005f,

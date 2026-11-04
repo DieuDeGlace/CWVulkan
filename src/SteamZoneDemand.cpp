@@ -1,4 +1,5 @@
 #include "SteamZoneDemand.h"
+#include "GameMath.h"
 #include <bit>
 
 namespace zonedemand {
@@ -9,7 +10,15 @@ int32_t floorZone(int32_t block) {
 }
 int32_t signedBits(uint32_t bits) { return std::bit_cast<int32_t>(bits); }
 }
-ClientWindow clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance) {
+std::optional<BlockPoint> eagleAnchor(uint8_t ability, const BlockPoint &destination) {
+    return ability == 0x9c ? std::optional<BlockPoint>(destination) : std::nullopt;
+}
+BlockPoint preparationCenter(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor) {
+    return anchor ? BlockPoint{floorZone((*anchor)[0]), floorZone((*anchor)[1])}
+                  : BlockPoint{gamemath::floorFixedZone(physical[0]), gamemath::floorFixedZone(physical[1])};
+}
+ClientWindow clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
+                          const std::optional<BlockPoint> &anchor) {
     int32_t radius = signedBits(uint32_t(renderDistance) * 1920u) / 100;
     if (radius <= 64)
         radius = 64;
@@ -18,7 +27,7 @@ ClientWindow clientWindow(const std::array<int64_t, 3> &physical, int32_t render
     result.radiusSquared = signedBits(zones * zones);
     for (int axis = 0; axis < 2; ++axis) {
         // Source demand truncates and narrows; it has no mesh/camera negative correction.
-        const int32_t block = signedBits(uint32_t(physical[axis] / 65536));
+        const int32_t block = anchor ? (*anchor)[axis] : signedBits(uint32_t(physical[axis] / 65536));
         result.center[axis] = floorZone(block);
         result.minimum[axis] = floorZone(signedBits(uint32_t(block) - uint32_t(radius)));
         result.maximum[axis] = floorZone(signedBits(uint32_t(block) + uint32_t(radius)));

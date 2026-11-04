@@ -810,7 +810,9 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   microbenchmarks are not whole-game performance acceptance.
 - [x] Steam-look preparation distinguishes the generated-source footprint, full
   neighbor admission and native cost budget from the draw window. Captured patches
-  retain replay compatibility. Bounded immutable Alpha reads preserve publication
+  retain replay compatibility. Ordinary eagle source/mesh anchors and narrowed
+  camera-zone conversion follow independent contracts; current/destination cache
+  retention remains replacement policy. Bounded immutable Alpha reads preserve publication
   and world lifetimes. Native-reference and full CPU/GPU checks pass; full-distance
   cold-streaming and broader runtime/cache-role acceptance remain open above.
 - [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,

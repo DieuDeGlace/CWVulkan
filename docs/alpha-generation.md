@@ -193,8 +193,12 @@ are unchanged by this scheduling work.
 The replacement backend materializes immutable sources lazily. Its cached-source
 fallback uses the native steady retention boundary; it does not replay the original
 four-job source worker, eight-job preparation cadence or incremental eviction. Its
-shared reader/cache roles, ability-specific source anchor and host demand lifetimes
-still need broader comparison. Arithmetic footprint checks are not that acceptance.
+shared reader/cache roles and host demand lifetimes still need broader comparison.
+Ordinary eagle travel now selects its raw block destination for preparation,
+keeps physical retention separate, and stops that substitution on arrival. The
+title eagle state does not select a destination. During travel the replacement
+keeps both current and destination terrain windows; exact native worker cadence
+and transient eviction order are separate from this cache policy. Arithmetic footprint checks are not that acceptance.
 
 Published Alpha cells and regions use bounded per-thread read caches. A distinct
 world-lifetime identity prevents pointers from carrying over when an object address
@@ -203,7 +207,8 @@ lookup. Region initialization still publishes once. No climate arithmetic, seed
 stream or voxel bytes change. Publication, concurrent-reader and lifetime tests
 cover this optimization.
 
-Separate native-instruction references verify seed123 noise offsets and six raw
+Separate native-instruction references verify crossed-axis region displacement
+float words at four lattice inputs, seed123 noise offsets and six raw
 rock-color float-word results with pinned synthetic cached climate. They are not
 native world captures; the existing generation math passes unchanged.
 

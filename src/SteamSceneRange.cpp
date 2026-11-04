@@ -33,7 +33,7 @@ glm::vec3 groundColour(Point physical) {
 }
 std::optional<float> candidate(const Frame &frame) {
     if (!frame.zone) return {};
-    const int64_t x = frame.camera[0] >> 22, y = frame.camera[1] >> 22;
+    const int64_t x = gamemath::floorFixedZone(frame.camera[0]), y = gamemath::floorFixedZone(frame.camera[1]);
     const int64_t n = frame.zoneRadius;
     const float width = zoneWidth(frame.zoneRadius);
     float bound = width * width;

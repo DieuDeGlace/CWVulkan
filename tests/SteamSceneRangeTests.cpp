@@ -116,6 +116,20 @@ int steamSceneRangeTests() {
               countSource(zonedemand::clientWindow({32LL * 65536, 32LL * 65536, 0}, 5)) == 11 &&
               countSource(zonedemand::clientWindow({0, 0, 0}, 0)) == 9,
           "source distance minimum remains distinct from the scene's minimum radius");
+    const zonedemand::BlockPoint destination{6400, -64};
+    const auto sourceFlight = zonedemand::eagleAnchor(0x9c, destination);
+    const auto inFlight = zonedemand::clientWindow({0, 0, 0}, 50, sourceFlight);
+    check(sourceFlight && inFlight.center == zonedemand::BlockPoint{100, -1} &&
+              zonedemand::preparationCenter({0, 0, 0}, sourceFlight) == zonedemand::BlockPoint{100, -1},
+          "eagle source and mesh preparation use the raw signed block destination");
+    check(zonedemand::preparationCenter({0, 0, 0}) == zonedemand::BlockPoint{0, 0},
+          "physical retention center remains independent of the eagle destination");
+    check(!zonedemand::eagleAnchor(0x9d, destination) && !zonedemand::eagleAnchor(0x78, destination),
+          "title eagle and arrival glider ignore retained destination fields");
+    check(zonedemand::eagleAnchor(0x9c, {INT32_MAX, INT32_MAX}).has_value(),
+          "native eagle substitution does not invent an age or sentinel repair gate");
+    const auto afterArrival = zonedemand::clientWindow({0, 0, 0}, 50, zonedemand::eagleAnchor(0x78, destination));
+    check(afterArrival.center == zonedemand::BlockPoint{0, 0}, "arrival returns source demand to the physical position");
     PreparationBudget preparation(15);
     check(preparation.consider(14155776) && preparation.consider(0),
           "preparation retains a zero-cost candidate at the exact native budget");
@@ -129,6 +143,27 @@ int steamSceneRangeTests() {
     check(minimumPreparation.consider(566231) && minimumPreparation.consider(0) &&
               minimumPreparation.consider(1) && !minimumPreparation.consider(0),
           "minimum-window preparation keeps the separately rounded float budget");
+    {
+        Frame narrowed;
+        narrowed.zoneRadius = 3;
+        std::vector<std::pair<int64_t, int64_t>> visited;
+        narrowed.zone = [&](int64_t x, int64_t y) -> std::optional<scenevisibility::Bounds> {
+            visited.emplace_back(x, y);
+            scenevisibility::Bounds bounds;
+            bounds.meshed = true;
+            bounds.triangleCost = 0;
+            return bounds;
+        };
+        narrowed.camera = {(1LL << 48) + 64LL * 65536, 0, 0};
+        candidate(narrowed);
+        check(!visited.empty() && visited.front() == std::pair<int64_t, int64_t>{-2, -3},
+              "camera window narrows positive blocks before selecting its native zone");
+        visited.clear();
+        narrowed.camera[0] = -(1LL << 48);
+        candidate(narrowed);
+        check(!visited.empty() && visited.front() == std::pair<int64_t, int64_t>{-4, -3},
+              "camera negative reconstruction follows narrowing even at a wrapped exact block");
+    }
     Frame frame;
     frame.zoneRadius = 3;
     auto available = [](int64_t x, int64_t y) -> std::optional<scenevisibility::Bounds> {

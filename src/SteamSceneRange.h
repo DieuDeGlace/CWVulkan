@@ -13,6 +13,7 @@ struct Player {
     float abilityMs = 0;
     bool effect13 = false;
     uint8_t blockFlags = 0;
+    std::array<int32_t, 2> eagleDestination{0x7fffffff, 0x7fffffff}; // blocks; active only for ability0x9c
 };
 struct Frame {
     Point camera{};

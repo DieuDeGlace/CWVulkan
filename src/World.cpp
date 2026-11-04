@@ -636,7 +636,7 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
     }
 }
 
-void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Point &physical) const {
+void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Player &player) const {
     struct Candidate {
         Key key;
         int32_t distance;
@@ -644,7 +644,12 @@ void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, con
     std::vector<Candidate> candidates;
     const size_t side = size_t(viewZones) * 2 + 1;
     candidates.reserve(side * side);
-    const auto window = zonedemand::clientWindow(physical, sourceRenderDistance);
+    const auto anchor = zonedemand::eagleAnchor(player.ability, player.eagleDestination);
+    const auto window = zonedemand::clientWindow(player.physical, sourceRenderDistance, anchor);
+    // Eviction/retention keeps the physical center even while preparation targets the destination.
+    const auto retention = zonedemand::preparationCenter(player.physical);
+    const int64_t retentionX = int64_t(retention[0]) - extracted->originZoneX();
+    const int64_t retentionY = int64_t(retention[1]) - extracted->originZoneY();
     std::map<Key, bool> sourceAvailability;
     auto available = [&](int64_t x, int64_t y) {
         const Key key{int(x), int(y)};
@@ -660,7 +665,7 @@ void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, con
             // neighbors remain available outside the fresh-demand footprint.
             entry->second = extracted->has(key.first, key.second) &&
                 (window.contains(absoluteX, absoluteY) ||
-                 (zonedemand::withinRetention(x - cx, y - cy, viewZones) &&
+                 (zonedemand::withinRetention(x - retentionX, y - retentionY, viewZones) &&
                   (zones.contains(key) || extracted->gameZoneLoaded(int32_t(absoluteX), int32_t(absoluteY)))));
         }
         return entry->second;
@@ -694,13 +699,32 @@ void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, con
 
 void World::update(glm::vec3 focus) {
     int cx = (int)std::floor(focus.x / ZONE), cy = (int)std::floor(focus.y / ZONE);
-    scenerange::Point physical{};
-    if (extracted && renderStyle() == RenderStyle::Steam) {
-        physical[0] = gamemath::addFixed(int64_t(double(focus.x) * 65536), extracted->originDotsX());
-        physical[1] = gamemath::addFixed(int64_t(double(focus.y) * 65536), extracted->originDotsY());
-        cx = gamemath::floorFixedZone(physical[0]) - extracted->originZoneX();
-        cy = gamemath::floorFixedZone(physical[1]) - extracted->originZoneY();
+    scenerange::Player streaming;
+    std::optional<zonedemand::BlockPoint> anchor;
+    int physicalCx = cx, physicalCy = cy;
+    if (extracted) {
+        streaming.physical[0] = gamemath::addFixed(int64_t(double(focus.x) * 65536), extracted->originDotsX());
+        streaming.physical[1] = gamemath::addFixed(int64_t(double(focus.y) * 65536), extracted->originDotsY());
+        if (extracted->generated() && scenePlayerProvider)
+            if (const auto player = scenePlayerProvider())
+                streaming = *player;
+        const auto physicalCenter = zonedemand::preparationCenter(streaming.physical);
+        physicalCx = physicalCenter[0] - extracted->originZoneX();
+        physicalCy = physicalCenter[1] - extracted->originZoneY();
+        anchor = extracted->generated() ? zonedemand::eagleAnchor(streaming.ability, streaming.eagleDestination) : std::nullopt;
+        if (renderStyle() == RenderStyle::Steam || anchor) {
+            const auto center = zonedemand::preparationCenter(streaming.physical, anchor);
+            cx = center[0] - extracted->originZoneX();
+            cy = center[1] - extracted->originZoneY();
+        }
     }
+    auto inWindow = [&](const Key &key, int x, int y) {
+        return std::max(std::abs(int64_t(key.first) - x), std::abs(int64_t(key.second) - y)) <= int64_t(viewZones) + 1;
+    };
+    // Travel retains current terrain while the destination view is prepared.
+    auto retained = [&](const Key &key) {
+        return inWindow(key, cx, cy) || (anchor && inWindow(key, physicalCx, physicalCy));
+    };
     // Finish completed jobs, nearest first, a few per frame to keep frames smooth.
     int integrated = 0;
     for (auto it = jobs.begin(); it != jobs.end() && integrated < 6;) {
@@ -712,7 +736,7 @@ void World::update(glm::vec3 focus) {
         Key key = it->first;
         it = jobs.erase(it);
         pendingBounds.erase(key);
-        if (std::max(std::abs(key.first - cx), std::abs(key.second - cy)) > viewZones + 1)
+        if (!retained(key))
             continue;                                         // Walked away meanwhile.
         if (auto old = zones.find(key); old != zones.end()) { // meshed again
             releaseTerrain(old->second);
@@ -784,7 +808,7 @@ void World::update(glm::vec3 focus) {
     staleModels.clear();
     // Drop zones out of range.
     for (auto it = zones.begin(); it != zones.end();) {
-        if (std::max(std::abs(it->first.first - cx), std::abs(it->first.second - cy)) > viewZones + 1) {
+        if (!retained(it->first)) {
             releaseTerrain(it->second);
             it = zones.erase(it);
         } else
@@ -812,7 +836,7 @@ void World::update(glm::vec3 focus) {
     }
     if (extracted && renderStyle() == RenderStyle::Steam) {
         if (jobs.size() < workers)
-            orderNativePreparation(wanted, cx, cy, physical);
+            orderNativePreparation(wanted, cx, cy, streaming);
     } else {
         std::stable_sort(wanted.begin(), wanted.end(), [&](const Key &a, const Key &b) {
             auto d = [&](const Key &k) { return (k.first - cx) * (k.first - cx) + (k.second - cy) * (k.second - cy); };

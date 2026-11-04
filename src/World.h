@@ -190,7 +190,7 @@ class World {
     std::set<Key> staleObjects;
     std::set<Key> stale; // zones to mesh again
     std::vector<Instance> instances;
-    void orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Point &physical) const;
+    void orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Player &player) const;
     DrawItem instanceDraw(const Instance &i) const;
     // The Alpha look's questions (Renderer's WorldProbe).
     bool waterAt(glm::vec3 p) const;

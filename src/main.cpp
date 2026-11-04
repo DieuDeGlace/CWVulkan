@@ -1776,6 +1776,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         std::memcpy(player.physical.data(),record+0x10,24);
         player.ability = record[0x68];
         std::memcpy(&player.abilityMs,record+0x6c,4);
+        std::memcpy(player.eagleDestination.data(),record+0x1b0,8);
         float strength, remaining;
         player.effect13 = spawned.playerBuff(0x13,strength,remaining);
         return player;
