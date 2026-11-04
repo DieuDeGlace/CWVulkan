@@ -8,8 +8,10 @@ namespace alphagen {
 class LandscapeStore {
   public:
     using Parent = std::shared_ptr<const LandscapeStage>;
+    static constexpr std::size_t DEFAULT_CACHE_BYTES = 384 * 1024 * 1024;
     explicit LandscapeStore(uint32_t seed, alphacoords::Mapping frame = {}, std::size_t cachedParents = 4, bool named = true,
-                            std::shared_ptr<const TreeModels> palms = {});
+                            std::shared_ptr<const TreeModels> palms = {},
+                            std::size_t cachedBytes = DEFAULT_CACHE_BYTES);
     // Generation failures reach all waiters and are not retained as completed stages.
     Parent parent(int32_t alphaZoneX, int32_t alphaZoneY);
     std::shared_ptr<const VegetationStage> vegetationParent(int32_t alphaZoneX, int32_t alphaZoneY);

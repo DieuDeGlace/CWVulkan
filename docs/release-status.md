@@ -10,6 +10,26 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Alpha cold streaming now retains up to64 immutable landscape parents with a
+  384 MiB budget for their estimated allocated ready-stage payloads. A private
+  count-only65-second run previously generated563 parents for49 coordinates;
+  the64-entry diagnostic completed56 generations for56 coordinates with no
+  repeats. The production
+  bounded-cache full default Steam-distance capture now completes: exit0,
+  113.808 seconds wall, preserving setting50/radius15 and the existing deadline.
+  Its sampled whole-process working/private peaks were approximately1612/2542 MiB;
+  caller leases, in-flight work, allocator overhead and other engine data are not
+  covered by the ready-cache budget. Weighted LRU/exact-budget/oversized/retry
+  checks, the full CPU/owner-data suite and all image suites pass. No generation
+  math, asset data, view distance or source-role lifetime rules were changed.
+  This closes that observed capture failure, not wider cold/travel/low-memory or
+  multi-GPU acceptance. Private diagnostic logging was removed before packaging.
+
+- Two additional independent Alpha references now cover a natural positive-fire
+  cell and an actually mixed fire/nonfire boundary: eight literal float words,
+  with exact cell and absent-location prerequisites. The Alpha suite passes;
+  these conditional arithmetic fixtures are separate from runtime/oasis acceptance.
+
 - Independent Alpha climate references now check twelve literal float words across
   land, a mixed land/sea boundary and sea under the native seed123 nine-cell state.
   Removing any one required cell also checks the specified defaults, including a

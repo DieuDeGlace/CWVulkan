@@ -52,8 +52,7 @@ int alphaTerrainTests() {
         // Independent arithmetic references, not game captures:
         // alpha-climate-blend-vectors.md (seed123, nine cells, no prepared region).
         using Words = std::array<uint32_t, 4>;
-        const auto words = [](const alphagen::World &sample, int32_t x) -> Words {
-            constexpr int32_t y = 8396800;
+        const auto words = [](const alphagen::World &sample, int32_t x, int32_t y = 8396800) -> Words {
             return {std::bit_cast<uint32_t>(sample.warmth(x, y)),
                     std::bit_cast<uint32_t>(sample.moisture(x, y)),
                     std::bit_cast<uint32_t>(sample.seaShare(x, y)),
@@ -84,6 +83,16 @@ int alphaTerrainTests() {
         }
         check(words(climate, 8402400) == fixtures[1].expected,
               "incomplete windows from other World lifetimes cannot replace the full boundary result");
+        // Separate seed-derived fire window: alpha-climate-fire-blend-vectors.md.
+        alphagen::World fire(123);
+        for (int i = 510; i <= 512; ++i)
+            for (int j = 514; j <= 516; ++j)
+                fire.makeCell(i, j);
+        check(!fire.region(511, 515), "fire fixtures exclude the separate oasis/location region");
+        check(words(fire, 8383600, 8449200) == Words{0x3f69dd6eu, 0x3ef6c1eeu, 0, 0x3f800000u},
+              "native seed123 pure positive-fire climate words");
+        check(words(fire, 8376800, 8448000) == Words{0x3f2b41ccu, 0x3ef9f842u, 0, 0x3efcd0acu},
+              "native seed123 mixed fire/nonfire climate words");
     }
     {
         alphagen::World published(321);
@@ -392,6 +401,20 @@ int alphaTerrainTests() {
         check(treeChecked, "giant-tree terrain fixture is exercised");
     }
     {
+        alphagen::detail::ParentStages<int> weighted(4, 10);
+        int loads = 0;
+        const auto getWeighted = [&](int key, int size) {
+            return weighted.get(key, 0, [&] { ++loads; return std::make_shared<const int>(size); },
+                                [](int size) { return std::size_t(size); });
+        };
+        const auto first = getWeighted(0, 6), second = getWeighted(1, 4);
+        check(getWeighted(0, 99) == first && loads == 2, "parent cache retains the exact weight-budget boundary");
+        getWeighted(2, 1);
+        check(getWeighted(0, 99) == first && getWeighted(1, 4) != second && loads == 4,
+              "weighted cache eviction preserves LRU order and externally held parents");
+        const auto oversized = getWeighted(3, 11);
+        check(getWeighted(3, 11) != oversized && getWeighted(0, 99) == first && loads == 6,
+              "oversized parent results are returned without caching or evicting useful entries");
         alphagen::detail::ParentStages<int> cache(1);
         int attempts = 0;
         bool failed = false;

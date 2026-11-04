@@ -9,6 +9,9 @@
 namespace worldgen {
 namespace {
 constexpr int BLEND = 32;
+// Parallel terrain/neighbor requests need more than sixteen Alpha parents.
+// LandscapeStore also bounds the estimated allocated ready-stage payload.
+constexpr std::size_t LANDSCAPE_CACHE_PARENTS = 64;
 struct Box {
     int64_t x0, y0, x1, y1;
 };
@@ -70,7 +73,7 @@ int32_t transition(float alpha, float native, float weight) {
 } // namespace
 AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeModels> palms, int32_t steamSeed,
                            std::shared_ptr<const alphagen::PlantModels> plants)
-    : seed(seed), steamSeed(steamSeed), source(seed, {}, 16, true, std::move(palms)), plantModels(std::move(plants)) {
+    : seed(seed), steamSeed(steamSeed), source(seed, {}, LANDSCAPE_CACHE_PARENTS, true, std::move(palms)), plantModels(std::move(plants)) {
 }
 std::string AlphaTerrain::identity(double scale) const {
     return "alpha-v" + std::to_string(alphagen::LandscapeStage::VERSION) + "-compose-v1-seed-" + std::to_string(seed) + "-steam-seed-" +

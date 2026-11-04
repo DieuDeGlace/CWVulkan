@@ -1716,3 +1716,16 @@ fixture check the change, including instance-death release while a separate read
 pins the old terrain. The replacement retains its own background loader and cache;
 this does not establish native concurrent scheduling or every network demand path.
 No native or SDK implementation was read, and no owner data is added to packages.
+
+## Alpha parent retention and positive-fire references, 2026-11-03
+
+The parent-cache continuation is an engine policy derived from count-only probes
+of owned code, not original implementation or native cache reconstruction. Private
+logging was removed; ready data has entry and estimated-payload budgets, while
+leases/in-flight state retain the existing lifetime semantics. No generation math
+or content was replaced. The separate native-only author wrote the positive-fire
+supplement without engine/output access. The implementer used only that stable
+prose and owned sources for literal returned-word checks. Full CPU/owner-data and
+image suites pass. Neither conditional arithmetic fixtures nor one successful
+full-distance capture certify whole-world/native-runtime parity. Owner imagery,
+probes, exports, SDK implementation and game content remain out of packages.

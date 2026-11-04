@@ -824,10 +824,13 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   camera-zone conversion follow independent contracts; current/destination cache
   retention remains replacement policy. Bounded immutable Alpha reads preserve publication
   and world lifetimes. Twelve additional independent direct climate words cover
-  land, mixed land/sea and sea, with missing-cell defaults; formulas stay unchanged.
-  These conditional arithmetic checks do not establish positive-fire/oasis or
-  native-runtime comparisons. Native-reference and full CPU/GPU checks pass; full-distance
-  cold-streaming and broader runtime/cache-role acceptance remain open above.
+  land, mixed land/sea and sea, with missing-cell defaults; two more references cover
+  natural positive-fire and mixed fire/nonfire. Formulas stay unchanged. These
+  conditional arithmetic checks do not establish oasis or native-runtime parity.
+  Alpha ready-parent retention now has64 entries and a384 MiB estimated payload
+  budget, eliminating observed repeat generation in the diagnostic. The previously
+  failing full default-distance capture completes in113.808 seconds wall. Full
+  CPU/GPU checks pass; broader cold/travel/memory/cache-role acceptance remains open.
 - [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,
   preserving its shoreline/water fixes and respecting its separate source license.
 - [ ] Add verified Alpha-only location variants alongside Steam layouts. The first

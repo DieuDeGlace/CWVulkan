@@ -3,9 +3,29 @@
 #include <cmath>
 
 namespace alphagen {
+namespace {
+// Allocated vector payloads; caller leases, in-flight work and allocator overhead
+// are separate from the cache's ready-stage budget.
+std::size_t landscapeBytes(const LandscapeStage &stage) {
+    const auto allocated = [](const auto &values) { return values.capacity() * sizeof(values[0]); };
+    const auto &zone = *stage.zone;
+    std::size_t bytes = sizeof(stage) + sizeof(zone) + allocated(zone.columns) + allocated(zone.plants) +
+        allocated(zone.trees) + allocated(zone.items) + allocated(zone.statics) + allocated(zone.objectList) +
+        allocated(zone.spawns) + allocated(zone.sprites) + allocated(zone.drops) + allocated(zone.markers) +
+        allocated(zone.leafSources) + allocated(zone.songPosts) + allocated(zone.houses) +
+        allocated(zone.townPlots) + allocated(zone.shadedLight);
+    for (const auto &column : zone.columns)
+        bytes += allocated(column.blocks);
+    for (const auto &spawn : zone.spawns)
+        bytes += allocated(spawn.inventory) + allocated(spawn.schedule) + allocated(spawn.route) + allocated(spawn.specials);
+    for (const auto &house : zone.houses)
+        bytes += allocated(house.storeys) + allocated(house.seats) + allocated(house.beds);
+    return bytes;
+}
+} // namespace
 LandscapeStore::LandscapeStore(uint32_t seed, alphacoords::Mapping frame, std::size_t cachedParents, bool named,
-                               std::shared_ptr<const TreeModels> palms)
-    : world(seed), terrain(world, std::move(palms)), frame(frame), cache(cachedParents), foliage(cachedParents) {
+                               std::shared_ptr<const TreeModels> palms, std::size_t cachedBytes)
+    : world(seed), terrain(world, std::move(palms)), frame(frame), cache(cachedParents, cachedBytes), foliage(cachedParents) {
     world.named = named;
 }
 LandscapeStore::Parent LandscapeStore::parent(int32_t zx, int32_t zy) {
@@ -17,7 +37,7 @@ LandscapeStore::Parent LandscapeStore::parent(int32_t zx, int32_t zy) {
         if (!stage)
             throw std::runtime_error(error);
         return stage;
-    });
+    }, landscapeBytes);
 }
 std::shared_ptr<const VegetationStage> LandscapeStore::vegetationParent(int32_t zx, int32_t zy) {
     if (zx < 0 || zy < 0 || zx >= 65536 || zy >= 65536)

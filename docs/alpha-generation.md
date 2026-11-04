@@ -207,6 +207,18 @@ lookup. Region initialization still publishes once. No climate arithmetic, seed
 stream or voxel bytes change. Publication, concurrent-reader and lifetime tests
 cover this optimization.
 
+Parallel source requests exposed repeated landscape generation: a65-second private
+run completed563 parent generations for49 coordinates. The64-parent diagnostic
+completed56 for56, with no repeats. Runtime Alpha composition now retains up to64
+parents with a384 MiB estimated allocated ready-payload budget. Vector capacities,
+including column blocks and nested records, supply the weights; caller leases,
+in-flight results, allocator overhead and other World data remain separate. An
+oversized result reaches callers without displacing useful cached entries. Generic
+surface/relief users preserve their count-only policy. No terrain formula, RNG draw
+or immutable stage contents change. Exact-budget, LRU, oversize/retry and owner-data
+checks pass, followed by all image suites. One full default-distance Steam-look
+capture now settles; that is not an FPS ratio or broader runtime certification.
+
 Independent direct climate references also pin seed123's nine-cell state and
 check twelve float words at land, a mixed land/sea boundary and sea. Missing-cell
 checks retain the native defaults even when the absent cell would have zero
@@ -214,7 +226,9 @@ weight. The separate region/location object is absent, so these are not oasis
 or prepared-world samples; fire follows the specified no-fire branch. The
 independent derivation accounts for the stored shortened-pi constant and bounds
 nonlattice displacement before integer conversion. It does not claim unproved
-individual noise/displacement words or native runtime captures.
+individual noise/displacement words or native runtime captures. A separate natural
+positive-fire window adds pure and mixed fire/nonfire four-field references; its
+stored-angle enclosures also preserve the final integer sample points.
 
 Separate native-instruction references verify crossed-axis region displacement
 float words at four lattice inputs, seed123 noise offsets and six raw
@@ -229,8 +243,10 @@ updates and acknowledgement ordering. These checks do not establish full native
 runtime parity; broader seeds, seams, transitions, live terrain edits, weather,
 map views and long gameplay still need owner-runtime comparisons. Default Alpha
 lighting captures passed at128 and400 blocks, and a bounded Steam-lighting view
-rendered correctly. Full Steam-option streaming exceeded the capture deadline;
-cold-load performance remains open, without weakening the Steam mode's settings.
+rendered correctly. The previously failing full default Steam-distance capture
+now completes in113.808 seconds wall with the bounded parent-cache continuation
+below. Wider cold-load/travel, constrained-memory and multi-GPU acceptance remains
+open; Steam view-distance settings and the observation deadline were not weakened.
 
 TerrainVariance remains a separately MIT-licensed Steam height/column translation
 mod. Its shared coordinate/rule checks do not make its wrapper a full Alpha voxel
