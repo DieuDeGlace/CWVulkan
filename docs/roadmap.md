@@ -778,9 +778,15 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   controller and reject quit/unreadable/overflow paths before typed access. Pure
   memory-fixture admission tests and the full CPU/owner-data suite pass. All five
   targets build. The existing-owner title startup/resource-refresh/normal-close
-  smoke check passes: two byte-identical exports,332 owner volumes matching and
-  game exit code0. Loaded-world/recording/clean-install coverage and the SDK rights/
+  smoke check passes: two byte-identical exports, 332 owner volumes matching and
+  game exit code 0. Loaded-world/recording/clean-install coverage and the SDK rights/
   full replacement gates remain open; title identity does not imply readiness.
+
+- [x] Provide a bounded request-file alternative to extractor F10, including the
+  title menu, so short automated keypresses are unnecessary. Live checks produced
+  six frames and two queued batches totaling twelve more; all eighteen decoded,
+  and the game exited normally. Original reference frames stay private. Broader
+  loaded-world/recording and vanilla visual acceptance remain separate.
 
 ## Host source-window continuation, 2026-11-03
 

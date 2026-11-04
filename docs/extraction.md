@@ -62,6 +62,14 @@ Quick mode checks the executable's x64 PE header and supported extractor timesta
 - Estimated object sizes: collect native transforms for the listed types. A fallback size is not evidence of native size.
 - Missing native title scene: follow [menu.md](menu.md). `--play` can test gameplay directly.
 - Missing HUD exports: capture a frame with extractor F10 and process it with `HudExtract`, as described in the README.
+  Alternatively, with the supported game and extractor running, create an empty
+  `Extract/ui.request` file. The extractor consumes it and queues the same six
+  frames, 300 ms apart, under `Extract/ui`; this also works at the title menu
+  without a loaded character. Requests wait for an active capture batch to finish.
+  Check `Mods/ZoneExtractor.log` for six saved frames; a consumed request alone is
+  not proof that the game presented or that frame saving succeeded. The request
+  accepts no output path and changes no gameplay or save state. Keep these original-game
+  images local; they do not belong in source or release packages.
 
 Close the original game before installing or updating the extractor. Setup checks that the supported game is closed, checks its x64 loader/DLL prerequisites, stages the new DLL, and only then replaces the old extractor. Existing exports can be checked repeatedly without reinstalling or running the game.
 

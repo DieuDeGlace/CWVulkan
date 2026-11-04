@@ -1248,6 +1248,36 @@ static void install() {
         extract::log("Interface capture unavailable: no dummy swap chain");
     DestroyWindow(window);
 }
+
+static void requestFrames() {
+    install();
+    if (!originalPresent) {
+        extract::log("Interface capture request failed: swap-chain hook unavailable");
+        return;
+    }
+    folder = "Extract\\ui";
+    spacing = 300;
+    pending = 6;
+    extract::log("Interface capture: saving 6 frames");
+}
+
+// A one-shot alternative to F10, including at the title menu. Keep the output
+// path and frame count fixed; a request never names another file or game action.
+static void pollRequest() {
+    static ULONGLONG nextPoll = 0;
+    const ULONGLONG now = GetTickCount64();
+    if (now < nextPoll)
+        return;
+    nextPoll = now + 250;
+    constexpr const char *request = "Extract\\ui.request";
+    const DWORD attributes = GetFileAttributesA(request);
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) || pending > 0)
+        return;
+    // Leave an unconsumed request alone if it cannot be removed. Consume only
+    // after an earlier frame batch finishes, including a death recording.
+    if (DeleteFileA(request))
+        requestFrames();
+}
 } // namespace uicapture
 
 // Each character's recordings go to their own folder, Extract\characters\<name>-<class>
@@ -6592,6 +6622,7 @@ static void tick(cube::Game *game) {
 
 static void tick(cube::Game *g) {
     netrecorder::poll(); // also outside a world, so a recording can start before joining
+    uicapture::pollRequest(); // frame capture does not require a loaded character
     if (!g || !g->world || !supported())
         return;
     proceduralcapture::tick(g);
@@ -7006,10 +7037,8 @@ static void tick(cube::Game *g) {
         uicapture::install();
         static bool f10 = false;
         bool down10 = extract::hotkeyDown(VK_F10);
-        if (down10 && !f10) {
-            uicapture::folder = "Extract\\ui", uicapture::spacing = 300, uicapture::pending = 6;
-            log("Interface capture: saving 6 frames");
-        }
+        if (down10 && !f10)
+            uicapture::requestFrames();
         f10 = down10;
     }
     // F3: creature tour. Stops around home, CREATURE_STOP_MS each, recording

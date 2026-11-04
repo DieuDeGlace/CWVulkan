@@ -1770,3 +1770,14 @@ stable sections1–5 without implementation access. Array/record cleanup and ret
 factory pointers are distinct facts; no loader-owned release, full SDK class,
 eternal lifetime or safe external unload policy is inferred. No independent adapter
 was implemented by this checkpoint, and the SDK permission gate remains open.
+
+### Extractor frame-request trigger, 2026-11-03
+
+The implementer reused the project's existing F10 frame-capture action behind a
+fixed `Extract/ui.request` flag. This change consulted only owned extractor code
+and Windows/D3D interfaces already used by that code; it added no native layout
+or SDK implementation. Existing-owner live validation produced eighteen decoded
+title-menu frames, including correctly queued batches, and a normal game exit.
+The reference images and capture logs remain owner-local. This is capture-plumbing
+validation with existing mods retained, not a vanilla pixel-parity claim or a
+resolution of the existing SDK redistribution/revision gate.

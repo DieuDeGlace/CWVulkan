@@ -10,13 +10,26 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The existing interface-frame capture action now has a fixed-path, one-shot
+  `Extract/ui.request` alternative to F10. It polls at most four times per second,
+  waits for an active capture batch, and queues six frames without requiring a
+  loaded character. Live title-menu validation on the existing modded owner
+  installation saved all six 1920x1080 frames; two overlapping requests correctly
+  waited and saved twelve more. All eighteen BMPs decoded, had nonuniform content
+  and distinct hashes; the first was visually checked as the actual title menu.
+  The callback guard and 332 owner-resource comparisons pass, and the game closed
+  normally with exit code 0. These images remain local, with no original asset in
+  the source package. This verifies capture plumbing, not unmodified visual parity
+  or loaded-world/recording/clean-machine acceptance. No SDK layout or new native
+  implementation was consulted for this trigger.
+
 - Live validation of the guarded extractor now passes on the existing owner
   installation. The verified rebuilt DLL was installed while Cube World was
   closed, with the prior DLL retained in a checked backup. Startup refreshed the
   sprite exports; a title-menu request captured two existing full-key procedural
   resources with zero lookup/write failures and byte-identical output. The owner
-  resource check then compared332 volumes with zero mismatches. Cube World closed
-  through its normal window command and returned exit code0. No character was
+  resource check then compared 332 volumes with zero mismatches. Cube World closed
+  through its normal window command and returned exit code 0. No character was
   loaded for this check and no other mod was changed. Direct Windows window
   capture timed out; a fresh Steam screenshot verified the title menu instead.
   The F10 automation attempt produced no capture and is not counted as passing.
