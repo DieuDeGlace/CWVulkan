@@ -8,6 +8,32 @@ struct VertexBufferView {
     std::uintptr_t wrapper = 0, context = 0, buffer = 0;
 };
 constexpr std::uintptr_t VERTEX_BUFFER_TABLE_RVA = 0x438390;
+constexpr std::uintptr_t GRAPHICS_BACKEND_TABLE_RVA = 0x4383d0;
+
+// Catalog -> ordinary native backend -> borrowed immediate context. No COM
+// call, AddRef, readiness or ownership transfer. Rechecks detect changed links,
+// not concurrent teardown; caller retains the owners and supported-image scope.
+template <class Read>
+bool readCatalogContext(std::uintptr_t module, std::uintptr_t world, std::uintptr_t &output, Read read) {
+    output = 0;
+    if (!module || module > std::numeric_limits<std::uintptr_t>::max() - GRAPHICS_BACKEND_TABLE_RVA)
+        return false;
+    std::uintptr_t catalog = 0, backend = 0, table = 0, context = 0;
+    const auto expectedTable = module + GRAPHICS_BACKEND_TABLE_RVA;
+    if (!readField(world, 0x70, &catalog, sizeof catalog, read) || !catalog ||
+        !readField(catalog, 8, &backend, sizeof backend, read) || !backend ||
+        !readField(backend, 0, &table, sizeof table, read) || table != expectedTable ||
+        !readField(backend, 0x10, &context, sizeof context, read))
+        return false;
+    std::uintptr_t currentCatalog = 0, currentBackend = 0, currentContext = 0;
+    if (!readField(world, 0x70, &currentCatalog, sizeof currentCatalog, read) || currentCatalog != catalog ||
+        !readField(catalog, 8, &currentBackend, sizeof currentBackend, read) || currentBackend != backend ||
+        !readField(backend, 0, &table, sizeof table, read) || table != expectedTable ||
+        !readField(backend, 0x10, &currentContext, sizeof currentContext, read) || currentContext != context)
+        return false;
+    output = context;
+    return true;
+}
 
 inline bool vertexBufferModuleFits(std::uintptr_t module) {
     return module && module <= std::numeric_limits<std::uintptr_t>::max() - VERTEX_BUFFER_TABLE_RVA;

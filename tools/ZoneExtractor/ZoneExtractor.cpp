@@ -13,6 +13,7 @@
 #include "NativeItemRecord.h"
 #include "NativeCreatureViews.h"
 #include "NativeCreatureScalars.h"
+#include "NativeCreaturePose.h"
 #include "CaptureActorSection.h"
 #include "../../src/ItemValue.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
@@ -711,10 +712,11 @@ static void install(cube::World *w) {
     const auto module = base();
     // The game's main context (a global, as tools/MenuProbe.cpp finds it): creatures,
     // sprites and effects are drawn there.
-    if (auto main = *(ID3D11DeviceContext **)(module + 0x551a98))
-        hookContext(main);
-    if (w->spritemanager && w->spritemanager->gfx_D3D11Graphics)
-        hookContext(w->spritemanager->gfx_D3D11Graphics->pImmediateContext);
+    uintptr_t main = 0, catalogContext = 0;
+    if (captureabi::readField(module, 0x551a98, &main, sizeof main, readNative))
+        hookContext(reinterpret_cast<ID3D11DeviceContext *>(main));
+    if (captureabi::readCatalogContext(module, reinterpret_cast<uintptr_t>(w), catalogContext, readNative))
+        hookContext(reinterpret_cast<ID3D11DeviceContext *>(catalogContext));
     std::vector<captureabi::PrimarySprite> primary;
     if (captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), primary, readNative))
         for (const auto &sprite : primary) {
@@ -1621,7 +1623,7 @@ static void tick(cube::World *w) {
         return;
     }
     // Then until the rebuilt character has its sprites and health again.
-    bool rebuilt = p->animation_state.face_sprite && p->entity_data.HP > 0;
+    bool rebuilt = captureabi::CreaturePose(p).sprites()[0] && captureabi::CreatureScalars(p).health() > 0;
     if (!rebuilt && waited < MAX_TICKS)
         return;
     wait = 0;
@@ -1636,7 +1638,7 @@ static void tick(cube::World *w) {
         auto armor = ((float (*)(const void *, cube::Creature *))(base() + ITEM_ARMOR))(it, p);
         auto hp = ((float (*)(const void *, cube::Creature *))(base() + ITEM_HP))(it, p);
         fprintf(out, " item_armor=%.3f item_hp=%.3f | player %s | sprites", armor, hp, statsText(p).c_str());
-        int64_t *sprites = &p->animation_state.face_sprite;
+        const auto sprites = captureabi::CreaturePose(p).sprites();
         for (int i = 0; i < 12; i++) {
             std::string n;
             if (sprites[i]) {
@@ -1653,9 +1655,9 @@ static void tick(cube::World *w) {
         // weapon right, weapon left, left hand, right hand).
         if (s.slot == 7 || s.slot == 6) {
             fprintf(out, " | matrices");
-            const Matrix4 *m = &p->animation_state.body_with_head_matrix;
+            const auto m = captureabi::CreaturePose(p).matrices();
             for (int k = 7; k <= 10; k++) {
-                const float *f = &m[k]._11;
+                const float *f = m[k].data();
                 for (int j = 0; j < 16; j++)
                     fprintf(out, " %.5f", f[j]);
             }
@@ -4830,11 +4832,10 @@ static void visitTownsperson(cube::Game *g) {
 } // namespace aitrace
 
 namespace character {
-constexpr int SPRITES = 14, MATRICES = 33;
+constexpr int SPRITES = int(captureabi::POSE_SPRITES), MATRICES = int(captureabi::POSE_MATRICES);
 static const char *spriteNames[SPRITES] = {"face",   "hair",         "chest",       "unk",
                                            "hands",  "wings",        "tail",        "feet",
-                                           "weapon_right", "weapon_left", "shoulder", "neck",
-                                           "?", "?"};
+                                           "weapon_right", "weapon_left", "shoulder", "neck"};
 static bool recording = false;
 static FILE *file = nullptr;
 static uint32_t recorded = 0;
@@ -4849,8 +4850,7 @@ static bool slotMap(cube::World *w, std::unordered_map<void *, int> &output) {
     output = std::move(slots);
     return true;
 }
-static int64_t *spritePointers(cube::Creature *c) { return &c->animation_state.face_sprite; }
-static const Matrix4 *matrices(cube::Creature *c) { return &c->animation_state.body_with_head_matrix; }
+static auto spriteAddresses(cube::Creature *c) { return captureabi::CreaturePose(c).sprites(); }
 
 static std::string nameOf(void *sprite) {
     std::lock_guard lock(namesMutex);
@@ -4901,20 +4901,20 @@ static void snapshot(cube::World *w, cube::Creature *c) {
     for (int i = 0; i < 11; i++)
         fprintf(f, "equip %s category=%d id=%d material=%d rarity=%d modifier=%u\n", slots[i], items[i].category(),
                 items[i].subtype(), items[i].material(), items[i].rarity(), items[i].modifier());
-    auto &s = c->animation_state;
-    fprintf(f, "anim state=%d timer=%d\n", s.current_animation_state_id, s.current_animation_state_timer);
-    int64_t *sprites = spritePointers(c);
+    const captureabi::CreaturePose pose(c);
+    fprintf(f, "anim state=%d timer=%d clock_ms=%.4f\n", pose.state(), pose.clockBits(), pose.clock());
+    const auto sprites = spriteAddresses(c);
     for (int i = 0; i < SPRITES; i++) {
         void *p = (void *)sprites[i];
         auto it = slotOf.find(p);
         fprintf(f, "sprite %s slot=%d %s\n", spriteNames[i], it == slotOf.end() ? -1 : it->second,
                 p ? nameOf(p).c_str() : "");
     }
-    const Matrix4 *m = matrices(c);
+    const auto m = pose.matrices();
     for (int i = 0; i < MATRICES; i++)
         fprintf(f, "matrix %d: %.4f %.4f %.4f %.4f | %.4f %.4f %.4f %.4f | %.4f %.4f %.4f %.4f | %.4f %.4f %.4f %.4f\n", i,
-                m[i]._11, m[i]._12, m[i]._13, m[i]._14, m[i]._21, m[i]._22, m[i]._23, m[i]._24, m[i]._31, m[i]._32,
-                m[i]._33, m[i]._34, m[i]._41, m[i]._42, m[i]._43, m[i]._44);
+                m[i][0], m[i][1], m[i][2], m[i][3], m[i][4], m[i][5], m[i][6], m[i][7], m[i][8], m[i][9],
+                m[i][10], m[i][11], m[i][12], m[i][13], m[i][14], m[i][15]);
     fclose(f);
     log("Character snapshot written to " + folder + "\\snapshot.txt");
 }
@@ -4933,25 +4933,30 @@ static bool refreshSlots(cube::World *w) {
     return true;
 }
 static void writeFrame(FILE *file, cube::Creature *c) {
-    auto &e = c->entity_data;
-    auto &s = c->animation_state;
-    uint64_t ms = GetTickCount64();
-    int32_t head[4] = {s.current_animation_state_id, s.current_animation_state_timer, (int32_t)e.flags,
-                       (int32_t)e.current_ability};
-    float values[5] = {e.time_since_ability, e.yaw, e.velocity.x, e.velocity.y, e.velocity.z};
-    int32_t slots[SPRITES];
-    int64_t *sprites = spritePointers(c);
-    for (int i = 0; i < SPRITES; i++) {
-        auto it = slotOf.find((void *)sprites[i]);
+    recording::Frame frame;
+    frame.ms = GetTickCount64();
+    const captureabi::CreatureScalars data(c);
+    const auto position = data.position();
+    const auto velocity = data.velocity();
+    std::memcpy(frame.position, &position, sizeof position);
+    const auto flags = data.movementFlags();
+    std::memcpy(&frame.flags, &flags, sizeof flags);
+    frame.ability = data.ability();
+    frame.sinceAbility = data.abilityClock();
+    frame.yaw = data.yaw();
+    std::memcpy(frame.velocity, &velocity, sizeof velocity);
+    const captureabi::CreaturePose pose(c);
+    const auto sprites = pose.sprites();
+    std::array<int32_t, captureabi::POSE_SPRITES> slots;
+    for (size_t i = 0; i < sprites.size(); ++i) {
+        auto it = slotOf.find(reinterpret_cast<void *>(sprites[i]));
         slots[i] = it == slotOf.end() ? -1 : it->second;
     }
-    fwrite(&ms, 8, 1, file);
-    fwrite(&e.position, 8, 3, file);
-    fwrite(head, 4, 4, file);
-    fwrite(values, 4, 5, file);
-    fwrite(slots, 4, SPRITES, file);
-    fwrite(matrices(c), sizeof(Matrix4), MATRICES, file);
+    captureabi::copyRecordedPose(pose, slots, frame);
+    const auto bytes = recording::encodePositioned(frame);
+    fwrite(bytes.data(), 1, bytes.size(), file);
 }
+
 static void record(cube::World *w, cube::Creature *c) {
     if (!file || !refreshSlots(w))
         return;
@@ -5010,8 +5015,7 @@ static std::string spriteFile(void *sprite) {
 static bool usablePose(cube::Creature *c) {
     // Newly spawned/offscreen creatures can have uninitialized AnimationState
     // data. Do not turn those into empty ten-second recordings.
-    float m[16];
-    memcpy(m, matrices(c), sizeof m);
+    const auto m = captureabi::CreaturePose(c).matrix(0);
     for (float v : m)
         if (!std::isfinite(v))
             return false;
@@ -5021,7 +5025,7 @@ static bool usablePose(cube::Creature *c) {
         std::abs(m[15] - 1) > .001f)
         return false;
     for (int axis = 0; axis < 3; axis++) {
-        const float *v = m + axis * 4;
+        const float *v = m.data() + axis * 4;
         float length = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
         if (!(length > .005f && length < 1.f))
             return false;
@@ -5030,7 +5034,7 @@ static bool usablePose(cube::Creature *c) {
 }
 
 static bool namedAppearance(cube::Creature *c) {
-    auto sprites = spritePointers(c);
+    auto sprites = spriteAddresses(c);
     // A named head or body is enough; several animals have just one of them.
     for (int slot : {0, 2})
         if (sprites[slot] && !nameOf((void *)sprites[slot]).empty())
@@ -5059,7 +5063,7 @@ static void describe(cube::Creature *c) {
         fprintf(f, "%s%d:%d:%d:%d:%u", i ? "," : "", gear[i].category(), gear[i].subtype(), gear[i].material(),
                 gear[i].rarity(), gear[i].modifier());
     fprintf(f, " sprites=");
-    int64_t *sprites = spritePointers(c);
+    const auto sprites = spriteAddresses(c);
     for (int i = 0; i < SPRITES; i++)
         fprintf(f, "%s%s", i ? "," : "", spriteFile((void *)sprites[i]).c_str());
     fprintf(f, "\n");
@@ -5456,7 +5460,7 @@ static void tick(cube::Game *g) {
             continue;
         }
         auto &e = c->entity_data;
-        auto &s = c->animation_state;
+        const captureabi::CreaturePose s(c);
         if (it->frames)
             character::writeFrame(it->frames, c);
         fprintf(text,
@@ -5466,7 +5470,7 @@ static void tick(cube::Game *g) {
                 (unsigned long long)now, (long long)it->id, (unsigned long long)(now - it->start), e.HP, e.flags,
                 (unsigned)(uint16_t)e.binary_toggles, e.position.x / 65536.0, e.position.y / 65536.0,
                 e.position.z / 65536.0, e.pitch, e.roll, e.yaw, e.velocity.x, e.velocity.y, e.velocity.z,
-                s.current_animation_state_id, s.current_animation_state_timer, e.current_ability, e.time_since_ability,
+                s.state(), s.clockBits(), e.current_ability, e.time_since_ability,
                 e.time_since_hit, e.stun_time, e.field_61, e.field_62, e.field_63, e.appearance.flags2,
                 e.appearance.graphics_scale);
         ++it;
@@ -6912,10 +6916,16 @@ static void tick(cube::Game *g) {
             else
                 hold(clientWorld(g), localCreature(clientWorld(g)), (p.x >> 16) + (int64_t)(100 * std::cos(yaw)),
                      (p.y >> 16) + (int64_t)(100 * std::sin(yaw)));
-            int monsters = 0;
-            for (cube::Creature *c : clientWorld(g)->creatures)
-                monsters += c && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0;
-            log("Hunt step: " + std::to_string(monsters) + " monsters simulated");
+            const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+            if (actors.ready()) {
+                int monsters = 0;
+                for (auto address : actors.addresses()) {
+                    auto *c = reinterpret_cast<cube::Creature *>(address);
+                    monsters += c && c->entity_data.hostility_type == 1 && captureabi::CreatureScalars(c).health() > 0;
+                }
+                log("Hunt step: " + std::to_string(monsters) + " monsters simulated");
+            } else
+                log("Hunt step: monster count unavailable");
         }
         hunt = downH;
         // V: for 6 s, fight mode's target kept at 0.01 HP, so the player's next hit kills
@@ -7168,22 +7178,30 @@ static void tick(cube::Game *g) {
         static bool weakest = false; // F: next to the weakest monster the game simulates (fight mode's target)
         bool downF = extract::hotkeyDown('F');
         if (downF && !weakest) {
-            auto maxHp = (float (*)(cube::Creature *))(base() + MAX_HP_RVA);
-            cube::Creature *best = nullptr;
-            for (cube::Creature *c : clientWorld(g)->creatures)
-                if (c && c != localCreature(clientWorld(g)) && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0 &&
-                    (!best || maxHp(c) < maxHp(best)))
-                    best = c;
-            if (best) {
-                auto &p = localCreature(clientWorld(g))->entity_data;
-                p.position = best->entity_data.position;
-                p.position.x += 3 << 16;
-                p.velocity = FloatVector3(0, 0, 0);
-                combat::targetId = best->id;
-                log("Weakest monster: race " + std::to_string(best->entity_data.race) + ", " +
-                    std::to_string(best->entity_data.level) + " stars, max HP " + std::to_string(maxHp(best)));
-            } else
-                log("Weakest monster: none simulated");
+            const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+            if (!actors.ready())
+                log("Weakest monster: client capture unavailable");
+            else {
+                auto *player = localCreature(reinterpret_cast<cube::World *>(actors.world()));
+                auto maxHp = (float (*)(cube::Creature *))(base() + MAX_HP_RVA);
+                cube::Creature *best = nullptr;
+                for (auto address : actors.addresses()) {
+                    auto *c = reinterpret_cast<cube::Creature *>(address);
+                    if (c && c != player && c->entity_data.hostility_type == 1 && captureabi::CreatureScalars(c).health() > 0 &&
+                        (!best || maxHp(c) < maxHp(best)))
+                        best = c;
+                }
+                if (best && player) {
+                    auto position = captureabi::CreatureScalars(best).position();
+                    position.x += 3 << 16;
+                    captureabi::CreatureScalars(player).setPosition(position);
+                    captureabi::CreatureScalars(player).setVelocity({});
+                    combat::targetId = captureabi::CreatureScalars(best).id();
+                    log("Weakest monster: race " + std::to_string(best->entity_data.race) + ", " +
+                        std::to_string(captureabi::CreatureScalars(best).level()) + " stars, max HP " + std::to_string(maxHp(best)));
+                } else
+                    log("Weakest monster: none simulated");
+            }
         }
         weakest = downF;
         static bool arm = false; // U: the player takes fight mode's target's weapons (recording only)

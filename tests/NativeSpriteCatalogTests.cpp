@@ -154,6 +154,49 @@ int nativeSpriteCatalogTests() {
     store(first + 0x70, maximum - 8);
     store(maximum - 8, module + captureabi::VERTEX_BUFFER_TABLE_RVA);
     check(!vertexCapture() && !vertex.wrapper, "the complete context/buffer span must fit the address space");
+    constexpr uintptr_t backend = 0x900000;
+    const auto graphicsFixture = [&] {
+        memory.clear();
+        reads.clear();
+        store(world + 0x70, catalog);
+        store(catalog + 8, backend);
+        store(backend, module + captureabi::GRAPHICS_BACKEND_TABLE_RVA);
+        store(backend + 0x10, context);
+    };
+    uintptr_t graphics = 123;
+    const auto graphicsCapture = [&] { return captureabi::readCatalogContext(module, world, graphics, read); };
+    graphicsFixture();
+    check(graphicsCapture() && graphics == context,
+          "catalog backend context is a borrowed data field, with no COM or virtual method call");
+    store(backend + 0x10, uintptr_t(0));
+    check(graphicsCapture() && !graphics, "readable null context is not invented GPU readiness");
+    graphicsFixture();
+    store(backend, module + captureabi::GRAPHICS_BACKEND_TABLE_RVA + 8);
+    check(!graphicsCapture() && !graphics, "unproved graphics backend rejected without stale context output");
+    graphicsFixture();
+    memory.erase(backend + 0x10);
+    check(!graphicsCapture() && !graphics, "unreadable context does not publish partial identity");
+    for (const auto field : {world + 0x70, catalog + 8, backend, backend + 0x10}) {
+        graphicsFixture();
+        unsigned fieldReads = 0;
+        const auto changingGraphics = [&](uintptr_t address, void *destination, size_t count) {
+            if (address == field && ++fieldReads == 2)
+                store(field, uintptr_t(0));
+            return read(address, destination, count);
+        };
+        check(!captureabi::readCatalogContext(module, world, graphics, changingGraphics) && !graphics,
+              "changed catalog/backend/table/context identity rejects publication");
+    }
+    graphicsFixture();
+    check(!captureabi::readCatalogContext(maximum, world, graphics, read) && !graphics && reads.empty(),
+          "graphics module identity arithmetic cannot wrap");
+    graphicsFixture();
+    check(!captureabi::readCatalogContext(module, maximum, graphics, read) && !graphics && reads.empty(),
+          "graphics World link span cannot wrap");
+    graphicsFixture();
+    store(catalog + 8, maximum - 8);
+    store(maximum - 8, module + captureabi::GRAPHICS_BACKEND_TABLE_RVA);
+    check(!graphicsCapture() && !graphics, "graphics backend context span cannot wrap into low memory");
     std::cout << "Native sprite catalog: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;
 }

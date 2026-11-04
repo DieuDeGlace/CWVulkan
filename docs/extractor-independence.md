@@ -16,7 +16,11 @@ This workboard does not grant rights or certify final redistribution.
   discovery, calibration naming and animation/snapshot slot maps now use guarded
   primary reads. An unavailable map defers recording and preserves previous
   snapshots/calibration rather than publishing unknown slot IDs. Other catalog
-  side records and tour/graphics consumers remain in the remaining-view scope.
+  side records and tour consumers remain in the remaining-view scope.
+- Ordinary catalog/backend/immediate-context lookup uses independently specified
+  guarded fields and backend table identity, with changed-link/context rechecks.
+  The main context global is guarded too. SDK graphics members are no longer used;
+  no AddRef, COM call or readiness guarantee is implied by the borrowed metadata.
 - Loaded-zone enumeration, active terrain buffers and their scoped lock pair.
 - Stored Zone terrain and the original CWZ1 codec.
 - Proper-name fragment data reads from a verified RVA/length manifest.
@@ -30,11 +34,16 @@ This workboard does not grant rights or certify final redistribution.
   records check signed extrema, negative zero, untouched bytes and the separate
   block-power/mana fields. Block-to-fixed conversion uses defined unsigned scaling
   for negative coordinates. Other scalar consumers remain to be migrated.
+- Independent animation-state/sprite/matrix reads replace SDK animation members
+  and the `Matrix4` alias. Capture reads twelve sprite pointers and eighteen part
+  matrices; the older fourteen/thirty-three CWA2 wire shape retains explicit
+  absent/zero padding instead of copying adjacent native state. Raw float-clock
+  bits and frame metadata survive. See [recording compatibility](extractor-animation-recordings.md).
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
-  townsperson visits, combat selection/health/resource recording and client AI
-  traces. Capture resolves the separate client World from Game,
+  townsperson visits, combat selection/health/resource recording, client AI
+  traces, hunt counts and weakest-monster selection. Capture resolves the separate client World from Game,
   acquires its frame guard, rechecks that identity and retains the guard through
   every borrowed-pointer use. Busy, malformed or changed captures defer the pass;
   only a successfully read empty list can represent an empty observation.
@@ -60,10 +69,10 @@ This workboard does not grant rights or certify final redistribution.
   host-before-World locking for the named host phases and separate AI/worker
   scopes; neither guard alone covers all named host writers. The client capture
   helper must not be reused as a host capture or generic quiescence API.
-- Remaining creature scalar consumers, appearance/pose fields and dynamic
-  inventory/auxiliary buffers.
+- Remaining creature scalar/appearance consumers, additional pose-related fields
+  and dynamic inventory/auxiliary buffers.
 - Remaining World fields, collections, region/material sidecars and record views.
-- Remaining Game renderer/camera/Speech fields and native vector/matrix aliases.
+- Remaining Game renderer/camera/Speech fields and native vector aliases.
 - Server-update list locations and payload decoding.
 - Remove the SDK include/configuration after the final consumer is replaced;
   compile the extractor without the sibling SDK checkout.

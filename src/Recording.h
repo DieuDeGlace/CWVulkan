@@ -3,6 +3,7 @@
 // the sprite and world matrix of every body part, once per tick.
 //   CWA1: player recordings without a position.
 //   CWA2: adds the creature's position (dots, 65536 per block).
+#include "RecordingFormat.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cmath>
@@ -13,8 +14,6 @@
 #include <vector>
 
 namespace recording {
-constexpr int SPRITES = 14, MATRICES = 33;
-
 // Sprite slots (in animation state order) and the matrices the game draws them
 // with. Unused or absent parts hold garbage matrices, which isPart() rejects.
 // face, hair, chest, unk, hands, wings, tail, feet, weapon R, weapon L, shoulder, neck.
@@ -25,15 +24,6 @@ inline const int SLOT_MATRICES[SPRITES][2] = {
     {15, 16}, {7, -1}, {8, -1}, {11, -1}, {12, -1}, {-1, -1}, {-1, -1},
 };
 constexpr int HAIR_SLOT = 1, FEET_SLOT = 7;
-
-struct Frame {
-    uint64_t ms = 0;
-    int64_t position[3] = {0, 0, 0}; // dots; zero in CWA1
-    int32_t state = 0, timer = 0, flags = 0, ability = 0;
-    float sinceAbility = 0, yaw = 0, velocity[3] = {0, 0, 0};
-    int32_t slots[SPRITES]{};
-    float matrices[MATRICES][16]{};
-};
 
 // The game's matrices are row-vector (D3D): in memory order they are glm's
 // column-major columns. X/Y translations are relative to the creature, Z is

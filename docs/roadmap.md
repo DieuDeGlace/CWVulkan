@@ -12,6 +12,10 @@ individual feature documents.
   and Game/client-World/local-player links with independent guarded field reads.
   Signed-ID lookup now serves two recorder consumers under the observed frame
   guard through their use scope; contention defers rather than retires a subject.
+  Animation capture now reads the native twelve sprite pointers/eighteen matrices
+  with owned types, retaining legacy CWA2 shape through explicit padding. Adjacent
+  trails/state are no longer interpreted as surplus poses; float-clock bits and
+  old playback compatibility have direct fixture/round-trip checks.
   Primitive creature views now cover identity, position/velocity, class, level,
   specialization, health, mana and fixed-size names; recorder helpers migrate in
   stages. Tests preserve unrelated bytes, distinguish mana from block power and

@@ -166,6 +166,7 @@ int vehicleTests(); // tests/VehicleTests.cpp
 int nativeItemRecordTests(); // tests/NativeItemRecordTests.cpp
 int nativeCreatureViewsTests(); // tests/NativeCreatureViewsTests.cpp
 int nativeCreatureScalarsTests(); // tests/NativeCreatureScalarsTests.cpp
+int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
@@ -9407,6 +9408,8 @@ int main(int argc, char **argv) {
         return featTextTests();
     if (argc == 2 && std::string(argv[1]) == "lootwindows")
         return lootWindowTests();
+    if (argc == 2 && std::string(argv[1]) == "creatureposecapture")
+        return nativeCreaturePoseTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "creaturescalars")
         return nativeCreatureScalarsTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "creatureviews")
@@ -10779,6 +10782,7 @@ int main(int argc, char **argv) {
     failures += nativeItemRecordTests();
     failures += nativeCreatureViewsTests();
     failures += nativeCreatureScalarsTests();
+    failures += nativeCreaturePoseTests();
     failures += steamSceneRangeTests();
     failures += steamMeshCostTests();
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp

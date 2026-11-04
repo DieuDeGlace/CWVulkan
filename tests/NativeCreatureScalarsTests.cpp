@@ -27,6 +27,10 @@ int nativeCreatureScalarsTests() {
     set(record.data(), 0x10, INT64_MIN);
     set(record.data(), 0x18, int64_t(-1));
     set(record.data(), 0x20, INT64_MAX);
+    set(record.data(), 0x30, -15.5f);
+    set(record.data(), 0x5c, uint32_t(0x80000005));
+    record[0x68] = 0xfe;
+    set(record.data(), 0x6c, 2.75f);
     set(record.data(), 0x34, -0.0f);
     set(record.data(), 0x38, -2.0f);
     set(record.data(), 0x3c, 3.0f);
@@ -50,6 +54,9 @@ int nativeCreatureScalarsTests() {
               captureabi::fixedFromBlocks(INT64_MIN) == 0 && captureabi::fixedFromBlocks(INT64_MAX) == -65536 &&
               captureabi::fixedFromBlocks(-(int64_t(1) << 47)) == INT64_MIN,
           "negative and boundary block coordinates scale without signed-shift overflow");
+    check(values.yaw() == -15.5f && values.movementFlags() == 0x80000005 && values.ability() == 0xfe &&
+              values.abilityClock() == 2.75f,
+          "recording metadata retains yaw, full flag bits, unsigned ability byte and float clock");
     const auto before = record;
     values.setPosition({11, -12, 13});
     values.setVelocity({});
