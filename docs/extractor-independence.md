@@ -16,7 +16,15 @@ This workboard does not grant rights or certify final redistribution.
   discovery, calibration naming and animation/snapshot slot maps now use guarded
   primary reads. An unavailable map defers recording and preserves previous
   snapshots/calibration rather than publishing unknown slot IDs. Other catalog
-  side records and tour consumers remain in the remaining-view scope.
+  owner/primary lookup in the calibration tour no longer uses SDK members.
+- Three indexed side-resource vectors use the independent
+  [catalog side-resource contract](specs/steam-catalog-indexed-side-resources.md).
+  Group export and tour lookup preserve index order, nulls and aliases, read live
+  elements rather than capacity, and reject bounded malformed/unreadable/changed
+  metadata. The obsolete procedural-cache type-map walk is removed. The legacy
+  group-file labels remain compatible with engine readers. Ordinary native
+  mappings/consumers/cleanup are documented; complete writer coverage and a
+  concurrent lifetime/protection protocol remain unproved. Rechecks are not pins.
 - Ordinary catalog/backend/immediate-context lookup uses independently specified
   guarded fields and backend table identity, with changed-link/context rechecks.
   The main context global is guarded too. SDK graphics members are no longer used;
@@ -33,7 +41,9 @@ This workboard does not grant rights or certify final redistribution.
   sweep/tour, specialization, mana and level helpers use these views. Synthetic
   records check signed extrema, negative zero, untouched bytes and the separate
   block-power/mana fields. Block-to-fixed conversion uses defined unsigned scaling
-  for negative coordinates. Other scalar consumers remain to be migrated.
+  for negative coordinates. Recorded death/collision positions also use owned
+  fixed values, and zero-velocity helpers use the same scalar writer. The
+  `LongVector3` alias is removed; other scalar consumers remain to be migrated.
 - Independent animation-state/sprite/matrix reads replace SDK animation members
   and the `Matrix4` alias. Capture reads twelve sprite pointers and eighteen part
   matrices; the older fourteen/thirty-three CWA2 wire shape retains explicit
@@ -43,7 +53,8 @@ This workboard does not grant rights or certify final redistribution.
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
   townsperson visits, combat selection/health/resource recording, client AI
-  traces, hunt counts and weakest-monster selection. Capture resolves the separate client World from Game,
+  traces, hunt counts, weakest-monster selection and death/spawn recording.
+  Failed death capture leaves watches intact instead of falsely retiring them. Capture resolves the separate client World from Game,
   acquires its frame guard, rechecks that identity and retains the guard through
   every borrowed-pointer use. Busy, malformed or changed captures defer the pass;
   only a successfully read empty list can represent an empty observation.

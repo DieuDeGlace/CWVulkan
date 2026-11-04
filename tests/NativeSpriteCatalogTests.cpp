@@ -1,8 +1,10 @@
 #include "../tools/ZoneExtractor/NativeSpriteBuffers.h"
 #include "../tools/ZoneExtractor/NativeSpriteCatalog.h"
+#include "../tools/ZoneExtractor/NativeSpriteGroups.h"
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <tuple>
 
 int nativeSpriteCatalogTests() {
     int failures = 0;
@@ -38,6 +40,17 @@ int nativeSpriteCatalogTests() {
         store(first + 0x88, captureabi::SpriteDimensions{10, 8, 10});
         store(last + 0x88, captureabi::SpriteDimensions{0, 0, 0});
     };
+    uintptr_t catalogAddress = 123;
+    fixture();
+    check(captureabi::readCatalogAddress(world, catalogAddress, read) && catalogAddress == catalog,
+          "primitive World catalog link retains its independently specified identity");
+    store(world + 0x70, uintptr_t(0));
+    check(captureabi::readCatalogAddress(world, catalogAddress, read) && catalogAddress == 0,
+          "readable null owner link is distinct from capture readiness");
+    memory.erase(world + 0x70);
+    catalogAddress = 123;
+    check(!captureabi::readCatalogAddress(world, catalogAddress, read) && catalogAddress == 0,
+          "unreadable catalog owner link clears stale identity");
     std::vector<captureabi::PrimarySprite> output;
     const auto capture = [&] { return captureabi::readPrimarySprites(world, output, read); };
     fixture();
@@ -197,6 +210,81 @@ int nativeSpriteCatalogTests() {
     store(catalog + 8, maximum - 8);
     store(maximum - 8, module + captureabi::GRAPHICS_BACKEND_TABLE_RVA);
     check(!graphicsCapture() && !graphics, "graphics backend context span cannot wrap into low memory");
+    captureabi::IndexedSpriteGroups groups;
+    const auto groupFixture = [&] {
+        memory.clear();
+        reads.clear();
+        store(world + 0x70, catalog);
+        store(catalog + 0x38, std::array<uintptr_t, 3>{array, array + 24, array + 40});
+        store(catalog + 0x50, std::array<uintptr_t, 3>{array + 0x100, array + 0x110, array + 0x130});
+        store(catalog + 0x68, std::array<uintptr_t, 3>{0, 0, 0});
+        store(array, std::array<uintptr_t, 3>{first, 0, first});
+        store(array + 0x100, std::array<uintptr_t, 2>{last, first});
+        // No cache nodes, sprite objects, capacity contents or payloads exist.
+    };
+    const auto groupCapture = [&] { return captureabi::readIndexedSpriteGroups(world, groups, read); };
+    groupFixture();
+    check(
+        groupCapture() && groups.catalog == catalog && groups.entries[0] == std::vector<uintptr_t>{first, 0, first} &&
+            groups.entries[1] == std::vector<uintptr_t>{last, first} && groups.entries[2].empty(),
+        "side indices preserve aliases/nulls and only read live pointer entries, never cache nodes or sprite payloads");
+    groupFixture();
+    std::array<uintptr_t, 100> environment{};
+    std::array<uintptr_t, 134> parts{}, components{};
+    environment[0] = first;
+    environment[99] = last;
+    parts[0x15] = parts[0x16] = first;
+    parts[133] = last;
+    components[0x54] = last;
+    components[0x82] = first;
+    for (const auto &[offset, at, size] :
+         {std::tuple{0x38, array, sizeof environment}, std::tuple{0x50, array + 0x1000, sizeof parts},
+          std::tuple{0x68, array + 0x2000, sizeof components}})
+        store(catalog + offset, std::array<uintptr_t, 3>{at, at + size, at + size});
+    store(array, environment);
+    store(array + 0x1000, parts);
+    store(array + 0x2000, components);
+    check(groupCapture() && groups.entries[0].size() == 100 && groups.entries[1].size() == 134 &&
+              groups.entries[2].size() == 134 && groups.entries[0][99] == last && groups.entries[1][0x15] == first &&
+              groups.entries[1][0x16] == first && groups.entries[2][0x81] == 0 && groups.entries[2][0x82] == first,
+          "ordinary-length tables retain sparse late components and distinct aliased record-type indices");
+    for (const auto offset : captureabi::SPRITE_GROUP_OFFSETS)
+        for (const auto &bad : malformed) {
+            groupFixture();
+            store(catalog + offset, bad);
+            check(!groupCapture() && !groups.catalog && groups.entries[0].empty() && groups.entries[1].empty() &&
+                      groups.entries[2].empty(),
+                  "any malformed side wrapper rejects the whole capture without partial output");
+        }
+    groupFixture();
+    memory.erase(array + 0x100);
+    check(!groupCapture() && !groups.catalog && groups.entries[0].empty(),
+          "unreadable later side vector discards earlier values");
+    groupFixture();
+    const auto changedSibling = [&](uintptr_t address, void *destination, size_t count) {
+        if (address == catalog + 0x68)
+            store(catalog + 0x38, std::array<uintptr_t, 3>{array, array + 16, array + 40});
+        return read(address, destination, count);
+    };
+    check(!captureabi::readIndexedSpriteGroups(world, groups, changedSibling) && !groups.catalog,
+          "all sibling vector wrappers are rechecked after collecting entries");
+    groupFixture();
+    unsigned ownerReads = 0;
+    const auto changedGroupOwner = [&](uintptr_t address, void *destination, size_t count) {
+        if (address == world + 0x70 && ++ownerReads == 2)
+            store(world + 0x70, uintptr_t(0));
+        return read(address, destination, count);
+    };
+    check(!captureabi::readIndexedSpriteGroups(world, groups, changedGroupOwner) && !groups.catalog,
+          "changed side-table owner cannot publish predecessor arrays");
+    groupFixture();
+    for (auto offset : captureabi::SPRITE_GROUP_OFFSETS)
+        store(catalog + offset, std::array<uintptr_t, 3>{0, 0, 0});
+    check(groupCapture() && groups.catalog == catalog && groups.entries[0].empty() && groups.entries[2].empty(),
+          "constructed empty side wrappers remain readable metadata, not a readiness claim");
+    groupFixture();
+    store(world + 0x70, maximum - 0x38);
+    check(!groupCapture() && !groups.catalog, "side-wrapper spans cannot wrap into low memory");
     std::cout << "Native sprite catalog: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;
 }

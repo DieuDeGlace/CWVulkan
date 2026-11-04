@@ -3,6 +3,7 @@
 #include "ObjectRewardCapture.h"
 #include "CaptureTickContext.h"
 #include "NativeSpriteCatalog.h"
+#include "NativeSpriteGroups.h"
 #include "NativeSpriteBuffers.h"
 #include "NativeTerrainBuffers.h"
 #include "NativeLoadedZones.h"
@@ -382,9 +383,11 @@ static void writeSpriteTable(cube::World *w) {
             log("Name syllables: temporary file unavailable; previous file retained");
     } else
         log("Name syllables: literal capture rejected; previous file retained");
-    // Environment object types: SpriteManager+0x28 is a std::map<uint8_t,
-    // std::vector<Sprite*>> (type -> variant sprites); +0x38/+0x50/+0x68 are
-    // the environment, building-part and cage sprite vectors.
+    // Side indices are aliases into separate scene-record domains; the
+    // procedural item cache is not a type map. Retain the legacy file labels.
+    captureabi::IndexedSpriteGroups groups;
+    if (!captureabi::readIndexedSpriteGroups(reinterpret_cast<uintptr_t>(w), groups, readNative))
+        return; // Keep the previous group file if its metadata cannot be captured.
     auto nameOf = [&](void *s) -> std::string {
         for (auto it = names.rbegin(); it != names.rend(); ++it)
             if (it->first == s)
@@ -392,41 +395,12 @@ static void writeSpriteTable(cube::World *w) {
         return "?";
     };
     if (fopen_s(&f, "Extract\\sprite-groups.txt", "w") == 0 && f) {
-        auto manager = (unsigned char *)w->spritemanager;
-        struct Node {
-            Node *left, *parent, *right;
-            char color, isnil, pad[6];
-            uint8_t key, pad2[7];
-            void **begin, **end, **capacity;
-        };
-        Node *head = *(Node **)(manager + 0x28);
-        size_t size = *(size_t *)(manager + 0x30);
-        fprintf(f, "# type map (%zu entries)\n", size);
-        // In-order walk of the red-black tree.
-        std::vector<Node *> stack;
-        Node *n = head ? head->parent : nullptr; // Root.
-        size_t visited = 0;
-        while ((n && !n->isnil) || !stack.empty()) {
-            while (n && !n->isnil && stack.size() < 64) {
-                stack.push_back(n);
-                n = n->left;
-            }
-            n = stack.back();
-            stack.pop_back();
-            fprintf(f, "type %u:", n->key);
-            for (void **s = n->begin; s && s < n->end && s - n->begin < 256; s++)
-                fprintf(f, " %s", nameOf(*s).c_str());
-            fprintf(f, "\n");
-            if (++visited > 1024)
-                break;
-            n = n->right;
-        }
+        fprintf(f, "# Indexed sprite groups; procedural item cache is not a type map\n");
         const char *vectors[] = {"environment", "building-part", "cage"};
-        for (int v = 0; v < 3; v++) {
-            void ***vec = (void ***)(manager + 0x38 + v * 0x18);
+        for (size_t v = 0; v < groups.entries.size(); ++v) {
             fprintf(f, "# %s sprites\n", vectors[v]);
-            for (void **s = vec[0]; s && s < vec[1] && s - vec[0] < 4096; s++)
-                fprintf(f, "%zd %s\n", s - vec[0], nameOf(*s).c_str());
+            for (size_t i = 0; i < groups.entries[v].size(); ++i)
+                fprintf(f, "%zu %s\n", i, nameOf(reinterpret_cast<void *>(groups.entries[v][i])).c_str());
         }
         fclose(f);
     }
@@ -1076,13 +1050,18 @@ constexpr ULONGLONG TOUR_SIDE_MS = 4000;
 
 static void buildTour(cube::World *w) {
     tour.clear();
-    if (!w->spritemanager)
+    captureabi::IndexedSpriteGroups groups;
+    std::vector<captureabi::PrimarySprite> primary;
+    if (!captureabi::readIndexedSpriteGroups(reinterpret_cast<uintptr_t>(w), groups, readNative) ||
+        !captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), primary, readNative))
         return;
-    auto manager = (unsigned char *)w->spritemanager;
-    void ***parts = (void ***)(manager + 0x50); // building-part sprite vector
+    uintptr_t currentCatalog = 0;
+    if (!captureabi::readCatalogAddress(reinterpret_cast<uintptr_t>(w), currentCatalog, readNative) || currentCatalog != groups.catalog)
+        return;
+    const auto &parts = groups.entries[1];
     std::unordered_map<void *, int> slotOf;
-    for (size_t i = 0; i < w->spritemanager->sprites.size(); i++)
-        slotOf[w->spritemanager->sprites[i]] = (int)i;
+    for (size_t i = 0; i < primary.size(); i++)
+        slotOf[reinterpret_cast<void *>(primary[i].address)] = static_cast<int>(i);
     std::vector<std::pair<void *, std::string>> names;
     {
         std::lock_guard lock(namesMutex);
@@ -1121,9 +1100,9 @@ static void buildTour(cube::World *w) {
                     int64_t p[3];
                     memcpy(&id, r, 4);
                     memcpy(p, r + position, 24);
-                    if (id < 0 || parts[0] + id >= parts[1] || (!p[0] && !p[1]))
+                    if (id < 0 || size_t(id) >= parts.size() || (!p[0] && !p[1]))
                         continue;
-                    auto slot = slotOf.find(parts[0][id]);
+                    auto slot = slotOf.find(reinterpret_cast<void *>(parts[id]));
                     if (slot == slotOf.end() || calibration::measured(slot->second))
                         continue;
                     int64_t x = p[0] >> 16, y = p[1] >> 16;
@@ -1133,7 +1112,7 @@ static void buildTour(cube::World *w) {
                         continue;
                     std::string name = "?";
                     for (auto &n : names)
-                        if (n.first == parts[0][id])
+                        if (n.first == reinterpret_cast<void *>(parts[id]))
                             name = n.second;
                     best[slot->second] = {slot->second, name, x, y, p[2] >> 16};
                     bestDistance[slot->second] = d;
@@ -1852,7 +1831,7 @@ static void tick(cube::Game *g) {
     }
     // A monster that just died: step onto where it fell a second later, so its
     // pouch is picked up and logged below.
-    static LongVector3 fell;
+    static captureabi::FixedPosition fell;
     static ULONGLONG fellAt = 0;
     static std::unordered_map<int64_t, bool> alive;
     for (auto address : actors.addresses()) {
@@ -1863,7 +1842,7 @@ static void tick(cube::Game *g) {
         bool was = alive.count(c->id) ? alive[c->id] : living;
         alive[c->id] = living;
         if (was && !living) {
-            fell = c->entity_data.position;
+            fell = captureabi::CreatureScalars(c).position();
             fellAt = GetTickCount64();
             if (c->id == targetId)
                 targetDiedAt = fellAt;
@@ -1872,8 +1851,8 @@ static void tick(cube::Game *g) {
         }
     }
     if (fellAt && GetTickCount64() - fellAt > 7000) {
-        pe.position = fell;
-        pe.velocity = FloatVector3(0, 0, 0);
+        captureabi::CreatureScalars(player).setPosition(fell);
+        captureabi::CreatureScalars(player).setVelocity({});
         fellAt = 0;
     }
     // MP, stamina and charge: how hits fill them and skills spend them.
@@ -4788,7 +4767,7 @@ static void approach(cube::World *w) {
         pe.position.x = me.position.x + (int64_t)(dx / real * gap * 65536);
         pe.position.y = me.position.y + (int64_t)(dy / real * gap * 65536);
         pe.position.z = me.position.z + (2 << 16);
-        pe.velocity = FloatVector3(0, 0, 0);
+        captureabi::CreatureScalars(player).setVelocity({});
     }
     fprintf(log, "approach phase=%d gap=%.1f real=%.2f ability=%d vel=%.2f,%.2f\n", phase, gap, real, me.current_ability,
             me.velocity.x, me.velocity.y);
@@ -4822,7 +4801,7 @@ static void visitTownsperson(cube::Game *g) {
     pe.position.x = be.position.x + (int64_t)(std::cos(yaw) * 2.5 * 65536);
     pe.position.y = be.position.y + (int64_t)(std::sin(yaw) * 2.5 * 65536);
     pe.position.z = be.position.z + (1 << 16);
-    pe.velocity = FloatVector3(0, 0, 0);
+    captureabi::CreatureScalars(player).setVelocity({});
     g->camera_angle.z = g->target_camera_angle.z = be.yaw + 180 + 90;
     if (log)
         fprintf(log, "visit townsperson id=%lld race=%u level=%u name=%s\n", (long long)best->id, be.race, be.level,
@@ -5187,13 +5166,13 @@ struct Watch {
     int64_t id = 0;
     FILE *frames = nullptr;
     ULONGLONG start = 0;
-    LongVector3 at{};
+    captureabi::FixedPosition at{};
 };
 static std::vector<Watch> watching;
 static std::unordered_map<int64_t, bool> alive;
 static FILE *text = nullptr, *drops = nullptr;
 static ULONGLONG lastDeath = 0;
-static LongVector3 lastAt{};
+static captureabi::FixedPosition lastAt{};
 static std::set<uintptr_t> knownPointers, knownNodes;
 static std::set<int64_t> knownCreatures;
 static std::map<uintptr_t, ULONGLONG> dumping; // address of a new entry -> when it appeared
@@ -5237,7 +5216,7 @@ static void dump(FILE *f, const char *what, uintptr_t address, ULONGLONG since) 
     }
     fprintf(f, "\n");
 }
-static cube::Zone *zoneAt(cube::World *w, LongVector3 at) {
+static cube::Zone *zoneAt(cube::World *w, captureabi::FixedPosition at) {
     IntVector2 key((int)(at.x >> 22), (int)(at.y >> 22)); // dots -> blocks (65536) -> zones (64)
     for (auto &[k, z] : w->zones)
         if (z && z->position.x == key.x && z->position.y == key.y)
@@ -5412,6 +5391,10 @@ static void tick(cube::Game *g) {
         pollUpdates(drops, "client", w->server_updates);
         pollUpdates(drops, "server", embeddedHostWorld(g)->server_updates);
     }
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready())
+        return; // An unavailable pass must not retire a watched death as "removed".
+    w = reinterpret_cast<cube::World *>(actors.world());
     cube::Creature *player = localCreature(w);
     open();
     if (!text || !drops)
@@ -5420,7 +5403,8 @@ static void tick(cube::Game *g) {
     if (!character::refreshSlots(w))
         return;
     // Newly dead monsters.
-    for (cube::Creature *c : w->creatures) {
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (!c || c == player || c->entity_data.hostility_type != 1)
             continue;
         bool living = c->entity_data.HP > 0;
@@ -5430,7 +5414,7 @@ static void tick(cube::Game *g) {
             Watch watch;
             watch.id = c->id;
             watch.start = now;
-            watch.at = c->entity_data.position;
+            watch.at = captureabi::CreatureScalars(c).position();
             std::string path = "Extract\\death\\d_" + std::to_string(c->entity_data.race) + "_" + std::to_string(c->id) + ".cwa";
             if (fopen_s(&watch.frames, path.c_str(), "wb") == 0 && watch.frames)
                 fwrite("CWA2", 1, 4, watch.frames);
@@ -5448,9 +5432,11 @@ static void tick(cube::Game *g) {
     // The dying, tick by tick, until the game removes them.
     for (auto it = watching.begin(); it != watching.end();) {
         cube::Creature *c = nullptr;
-        for (cube::Creature *o : w->creatures)
+        for (auto address : actors.addresses()) {
+            auto *o = reinterpret_cast<cube::Creature *>(address);
             if (o && o->id == it->id)
                 c = o;
+        }
         if (!c || now - it->start > 30000) {
             fprintf(text, "t=%llu %s id=%lld after %llu ms\n", (unsigned long long)now, c ? "still-there" : "removed",
                     (long long)it->id, (unsigned long long)(now - it->start));
@@ -5483,7 +5469,7 @@ static void tick(cube::Game *g) {
              "creatures=%zu list18=%zu projectiles=%zu dead=%zu rewards=%zu zones=%zu m190=%zu m1a0=%zu uv=%zu,%zu,%zu "
              "v360=%zu m378=%zu v388=%zu v3a0=%zu v4a0=%zu v4b8=%zu v4d0=%zu v4e8=%zu v500=%zu v518=%zu v530=%zu "
              "zone_list=%zu zone_list2=%zu",
-             w->creatures.size(), w->unk_list_size_0x18.size(), w->projectiles.size(), w->state.some_map_size_0x28.size(),
+             actors.addresses().size(), w->unk_list_size_0x18.size(), w->projectiles.size(), w->state.some_map_size_0x28.size(),
              w->state.some_map_size_0x28_1.size(), w->state.some_map_size_0x88.size(), w->unk_map_0x190.size(),
              w->unk_map_0x1A0.size(), bytes(w->unk_vectors.unk_vec_0), bytes(w->unk_vectors.unk_vec_1),
              bytes(w->unk_vectors.unk_vec_2), bytes(w->unk_vec_0x360), w->unk_map_0x378.size(), bytes(w->field_388),
@@ -5508,18 +5494,20 @@ static void tick(cube::Game *g) {
                             l == &zone->some_list ? "list" : "list2", (void *)&value);
     if (locked)
         LeaveCriticalSection(&w->zones_critical_section);
-    for (cube::Creature *c : w->creatures)
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (c && knownCreatures.insert(c->id).second && lastDeath && now - lastDeath < 5000) {
             fprintf(drops, "t=%llu new creature id=%lld race=%u hostility=%d pos=%.3f %.3f %.3f\n", (unsigned long long)now,
                     (long long)c->id, c->entity_data.race, c->entity_data.hostility_type, c->entity_data.position.x / 65536.0,
                     c->entity_data.position.y / 65536.0, c->entity_data.position.z / 65536.0);
             Watch watch;
-            watch.id = c->id, watch.start = now, watch.at = c->entity_data.position;
+            watch.id = c->id, watch.start = now, watch.at = captureabi::CreatureScalars(c).position();
             std::string path = "Extract\\death\\spawn_" + std::to_string(c->entity_data.race) + "_" + std::to_string(c->id) + ".cwa";
             if (fopen_s(&watch.frames, path.c_str(), "wb") == 0 && watch.frames)
                 fwrite("CWA2", 1, 4, watch.frames);
             watching.push_back(watch);
         }
+    }
     for (auto it = dumping.begin(); it != dumping.end();) {
         if (now - it->second > 10000) {
             it = dumping.erase(it);
@@ -7095,7 +7083,7 @@ static void tick(cube::Game *g) {
                 e.position.x = (bx << 16) + 32768;
                 e.position.y = (by << 16) + 32768;
                 e.position.z = (bz + 30) << 16;
-                e.velocity = FloatVector3(0, 0, 0);
+                captureabi::CreatureScalars(localCreature(w)).setVelocity({});
                 if (collisionLog)
                     fprintf(collisionLog, "# drop over water: column %lld %lld, water surface z=%lld\n", (long long)bx,
                             (long long)by, (long long)bz);
@@ -7106,7 +7094,7 @@ static void tick(cube::Game *g) {
         }
         dropKey = downG;
         if (logging && collisionLog) {
-            static LongVector3 last{};
+            static captureabi::FixedPosition last{};
             cube::World *w = clientWorld(g);
             auto &e = localCreature(w)->entity_data;
             if (e.position.x != last.x || e.position.y != last.y || e.position.z != last.z) {
@@ -7163,7 +7151,7 @@ static void tick(cube::Game *g) {
                         "t=%llu pos=%.5f %.5f %.5f vel=%.3f %.3f %.3f flags=%08x gaps +x=%.4f -x=%.4f +y=%.4f -y=%.4f up=%.4f down=%.4f levels%s\n",
                         (unsigned long long)GetTickCount64(), px, py, pz, e.velocity.x, e.velocity.y, e.velocity.z, e.flags,
                         gx1, gx0, gy1, gy0, up, down, levels.c_str());
-                last = e.position;
+                last = captureabi::CreatureScalars(localCreature(w)).position();
             }
         }
         static bool slay = false; // Z: fight mode's target to 0 HP (the game then kills it and drops loot its own way)

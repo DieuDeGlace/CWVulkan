@@ -17,6 +17,17 @@ struct PrimarySprite {
 // Exporter allocation ceiling, not a native count or an exhaustive resource list.
 constexpr std::size_t MAX_PRIMARY_SPRITES = 65536;
 
+// Primitive owner link only: readable null is distinct from an unreadable field.
+// Neither value establishes readiness or retains the catalog allocation.
+template <class Read> bool readCatalogAddress(std::uintptr_t world, std::uintptr_t &output, Read read) {
+    output = 0;
+    std::uintptr_t catalog = 0;
+    if (!readField(world, 0x70, &catalog, sizeof catalog, read))
+        return false;
+    output = catalog;
+    return true;
+}
+
 // The caller validates the supported image and copies through a guarded reader.
 // Only borrowed addresses and raw dimensions are captured: no RGB/GPU readiness,
 // scale, resource ownership, or complete SDK replacement is implied. Rechecking
@@ -26,7 +37,7 @@ template <class Read> bool readPrimarySprites(std::uintptr_t world, std::vector<
     static_assert(sizeof(SpriteDimensions) == 12);
     output.clear();
     std::uintptr_t catalog = 0;
-    if (!readField(world, 0x70, &catalog, sizeof catalog, read) || !catalog)
+    if (!readCatalogAddress(world, catalog, read) || !catalog)
         return false;
     std::array<std::uintptr_t, 3> bounds{};
     if (!readField(catalog, 0x10, bounds.data(), sizeof bounds, read))
@@ -48,7 +59,7 @@ template <class Read> bool readPrimarySprites(std::uintptr_t world, std::vector<
     }
     std::uintptr_t currentCatalog = 0;
     std::array<std::uintptr_t, 3> currentBounds{};
-    if (!readField(world, 0x70, &currentCatalog, sizeof currentCatalog, read) || currentCatalog != catalog ||
+    if (!readCatalogAddress(world, currentCatalog, read) || currentCatalog != catalog ||
         !readField(catalog, 0x10, currentBounds.data(), sizeof currentBounds, read) || currentBounds != bounds)
         return false;
     output = std::move(result);
