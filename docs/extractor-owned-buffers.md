@@ -33,9 +33,11 @@ records, handling inline and heap representations, explicit lengths and embedded
 NUL bytes. It rejects changed/unreadable/bounded malformed metadata without partial
 tokens. Its per-result budgets are 16,384 tokens and 8 MiB of text.
 
-The formatting phase uses owned actor metadata and tokens after the actor lease
-ends. It invokes name/dictionary helpers and writes the existing text format without
-retaining actor pointers or native result allocations. Capture batches are bounded
+The formatting phase uses owned actor metadata and tokens after the capture
+lease ends. Native name/key enrichment now has its own observed caller guard
+interval; its owning text results are disposed before file formatting. Only
+owned strings reach output. See [text ownership](extractor-generated-text.md).
+It retains no actor pointers or native result allocations. Capture batches are bounded
 to 256 people, 262,144 tokens and 32 MiB of text. Completed people are marked exported
 only after successful output and flushing; deferred people remain eligible for
 later capture. The 64-day window uses defined signed32 wrapping.

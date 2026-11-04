@@ -940,6 +940,14 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   Byte fixtures and CPU/owner checks do not close live validation or SDK removal.
   See [appearance capture](extractor-appearance-values.md).
 
+- [x] Replace manual native wide-buffer deletion and SDK text-key lookup with
+  independently specified owning results, original object disposal and native
+  raw-pair key lookup. Bound UTF16 copies, reject unrepresentable line text and
+  resolve record enrichment before output under an observed caller guard.
+  Scope/byte/UTF8 fixtures and CPU checks cover this adapter, not original
+  aligned-allocator execution or full live SDK-independent acceptance.
+  See [native text ownership](extractor-generated-text.md).
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the

@@ -67,6 +67,14 @@ This workboard does not grant rights or certify final redistribution.
   Formatting uses copied data after release; completed exports are marked only
   after output succeeds. Native runtime/RNG side effects are explicit. See
   [owned buffer capture](extractor-owned-buffers.md) for limits and checks.
+- Native proper/item/key text uses scoped owning wide-string results and the
+  original object cleanup, including native aligned-allocation handling. Bounded
+  UTF16 decoding and strict line UTF8 conversion precede output; native key lookup
+  replaces the SDK resource-table walk. Enrichment mirrors an observed client
+  actor-guard interval, with file writes after release. GameWString and SDK Speech
+  accesses are removed. See [text ownership](extractor-generated-text.md);
+  complete resource-writer protection and failing-construction cleanup are not
+  established.
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
@@ -103,7 +111,7 @@ This workboard does not grant rights or certify final redistribution.
   and auxiliary buffers. Inventory SDK member accesses are removed; complete
   creature/controller lifetime and transitive writer audits remain separate.
 - Remaining World fields, collections, region/material sidecars and record views.
-- Remaining Game renderer/camera/Speech fields and native vector aliases.
+- Remaining Game renderer/camera fields and native vector aliases.
 - Server-update list locations and payload decoding.
 - Remove the SDK include/configuration after the final consumer is replaced;
   compile the extractor without the sibling SDK checkout.

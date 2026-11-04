@@ -3,6 +3,7 @@
 #include "../../src/SceneCapture.h"
 #include "CaptureActorSection.h"
 #include "CapturePlugin.h"
+#include "CaptureTextUtf8.h"
 #include "CaptureTickContext.h"
 #include "CaptureWorldSections.h"
 #include "NativeConversation.h"
@@ -10,6 +11,7 @@
 #include "NativeCreaturePose.h"
 #include "NativeCreatureScalars.h"
 #include "NativeCreatureViews.h"
+#include "NativeGeneratedText.h"
 #include "NativeInventory.h"
 #include "NativeItemRecord.h"
 #include "NativeLoadedZones.h"
@@ -4546,39 +4548,46 @@ static void dump(cube::Game *g) {
 } // namespace genoracle
 
 namespace talkscripts {
-struct GameWString { // MSVC std::wstring
-    union { wchar_t buffer[8]; wchar_t *pointer; };
-    size_t size, capacity;
-};
+// The original constructs fresh storage. Completed results retain native
+// ownership until decoding/conversion ends, including C++ exception unwinding.
+template <class Generate> static bool generatedText(Generate generate, std::string &output) {
+    output.clear();
+    const captureabi::WideTextResult result(
+        generate, reinterpret_cast<captureabi::DestroyWideText>(base() + captureabi::DESTROY_WIDE_TEXT_RVA));
+    std::u16string text;
+    if (!captureabi::readWideText(result.address(), text, readNative))
+        return false;
+    return captureabi::exportUtf8(text, output);
+}
 
-// The game's name generator, RVA 0x611d0(out, seed, style). People: seed = the low 32
-// bits of the creature id, style = race (as define_mob and the chat's speaker name).
-// Places: see locationName. UTF-8.
-static std::string generatedName(int seed, int style) {
-    GameWString name{};
-    ((GameWString * (*)(GameWString *, int, int))(base() + 0x611d0))(&name, seed, style);
-    const wchar_t *text = name.capacity >= 8 ? name.pointer : name.buffer;
-    int n = WideCharToMultiByte(CP_UTF8, 0, text, (int)name.size, nullptr, 0, nullptr, nullptr);
-    std::string utf8(n, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text, (int)name.size, utf8.data(), n, nullptr, nullptr);
-    if (name.capacity >= 8)
-        ((void (*)(void *))(base() + 0x392be8))(name.pointer); // the game's operator delete
-    return utf8;
+static bool generatedName(int seed, int style, std::string &output) {
+    const auto generate = reinterpret_cast<captureabi::GenerateProperName>(base() + captureabi::GENERATE_NAME_RVA);
+    return generatedText([&](captureabi::WideTextStorage *out) { generate(out, uint32_t(seed), style); }, output);
 }
 
 // The game's proper name for the location in 1024-block cell (x, y) of `type`: style
 // 0x2ba810(x, y, type), seed 0x2ba7c0(x, y), as its speech system does for
 // define_location (RVA 0x160d10).
-static std::string locationName(int x, int y, int type) {
+static bool locationName(int x, int y, int type, std::string &output) {
     int style = ((int (*)(int, int, int))(base() + 0x2ba810))(x, y, type);
     int seed = ((int (*)(int, int))(base() + 0x2ba7c0))(x, y);
-    return generatedName(seed, style);
+    return generatedName(seed, style, output);
+}
+
+static bool itemKey(cube::Game *g, int category, int subtype, std::string &output) {
+    auto *owner = reinterpret_cast<void *>(captureabi::textResourceOwner(reinterpret_cast<uintptr_t>(g)));
+    if (!owner)
+        return false;
+    const auto lookup = reinterpret_cast<captureabi::LookupItemTextKey>(base() + captureabi::ITEM_TEXT_KEY_RVA);
+    // Raw-pair key lookup is separate from full item-name normalization.
+    return generatedText([&](captureabi::WideTextStorage *out) { lookup(owner, out, category, subtype); }, output);
 }
 
 // Conversation generation is not read-only: native runtime initialization and
 // RNG side effects remain. Use an isolated reference session. Actor accesses and
 // generation mirror the observed client-frame guard; formatting uses owned data.
 constexpr int SCRIPT_DAYS = 64;
+constexpr size_t MAX_SCRIPT_EXTRA_BYTES = 8 * 1024 * 1024;
 constexpr size_t MAX_SCRIPT_BATCH_BYTES = 32 * 1024 * 1024;
 constexpr size_t MAX_SCRIPT_BATCH_TOKENS = 262144;
 constexpr size_t MAX_SCRIPT_BATCH_PEOPLE = 256;
@@ -4594,7 +4603,7 @@ struct CapturedPerson {
     std::pair<long long, int> key;
     std::vector<CapturedScript> scripts;
 };
-static std::string itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material);
+static bool itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material, std::string &output);
 
 // Caller keeps the client actor lease through generation, token copying and
 // native result disposal. The temporary day is restored before further work.
@@ -4619,44 +4628,69 @@ static bool captureScript(cube::World *w, cube::Creature *c, int32_t day, Captur
     return true;
 }
 static bool exportScript(cube::Game *g, FILE *out, const CapturedScript &record) {
-    // speaker: the name the game gives them (generator seeded with the id's low 32 bits, race as style).
-    fprintf(out, "id=%lld day=%d race=%u class=%d spec=%d flags=%08x flags2=%08x speaker=%s pos=%.1f,%.1f,%.1f :",
-            (long long)record.id, record.day, record.race, int(record.classId), int(record.specialization),
-            record.flags, record.appearanceFlags, generatedName((int)(uint32_t)record.id, (int)record.race).c_str(),
-            record.position.x / 65536.0, record.position.y / 65536.0, record.position.z / 65536.0);
+    // Preflight fallible native text before starting an output record. Only
+    // owned UTF8 survives these calls, with a combined per-record budget.
+    std::string name;
     const auto &tokens = record.tokens;
-    for (size_t i = 0; i < tokens.size(); i++) {
-        fprintf(out, " %s |", tokens[i].c_str());
-        // define_location x y type: add the game's name for it as "name=<proper>".
-        if (tokens[i] == "define_location" && i + 3 < tokens.size()) {
-            int x = atoi(tokens[i + 1].c_str()), y = atoi(tokens[i + 2].c_str()), type = atoi(tokens[i + 3].c_str());
-            for (int j = 1; j <= 3; j++)
-                fprintf(out, " %s |", tokens[i + j].c_str());
-            fprintf(out, " name=%s |", locationName(x, y, type).c_str());
-            i += 3;
-        } else if (tokens[i] == "define_item" && i + 5 < tokens.size()) {
-            // define_item category id modifier rarity material: the game's name for it and
-            // its dictionary key (Speech::item_identifier_map), for the grammar.
-            int v[5];
-            for (int j = 0; j < 5; j++)
-                v[j] = (int)strtol(tokens[i + 1 + j].c_str(), nullptr, 10),
-                fprintf(out, " %s |", tokens[i + 1 + j].c_str());
-            std::string key;
-            auto found = g->speech.item_identifier_map.find({(uint32_t)v[0], (uint32_t)v[1]});
-            if (found != g->speech.item_identifier_map.end())
-                for (wchar_t ch : found->second)
-                    key += (char)ch;
-            fprintf(out, " item=%s | key=%s |", itemName(g, v[0], v[1], (unsigned)v[2], v[3], v[4]).c_str(),
-                    key.c_str());
-            i += 5;
-        } else if (tokens[i] == "define_mob" && i + 2 < tokens.size()) { // define_mob id race: its name too
-            for (int j = 1; j <= 2; j++)
-                fprintf(out, " %s |", tokens[i + j].c_str());
-            fprintf(
-                out, " name=%s |",
-                generatedName((int)strtoul(tokens[i + 1].c_str(), nullptr, 10), atoi(tokens[i + 2].c_str())).c_str());
-            i += 2;
+    std::vector<std::string> extras(tokens.size());
+    {
+        const auto world = reinterpret_cast<uintptr_t>(clientWorld(g));
+        const captureabi::WorldActorLease held(world);
+        if (!held || reinterpret_cast<uintptr_t>(clientWorld(g)) != world)
+            return false;
+        // Mirror the observed caller interval through result use and disposal.
+        // This guard does not prove protection of every resource-owner writer.
+        if (!generatedName((int)(uint32_t)record.id, (int)record.race, name) || name.size() > MAX_SCRIPT_EXTRA_BYTES)
+            return false;
+        size_t extraBytes = name.size();
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            std::string value;
+            int operands = 0;
+            if (tokens[i] == "define_location" && i + 3 < tokens.size()) {
+                if (!locationName(atoi(tokens[i + 1].c_str()), atoi(tokens[i + 2].c_str()), atoi(tokens[i + 3].c_str()),
+                                  value))
+                    return false;
+                extras[i] = " name=" + value + " |";
+                operands = 3;
+            } else if (tokens[i] == "define_item" && i + 5 < tokens.size()) {
+                int v[5];
+                for (int j = 0; j < 5; ++j)
+                    v[j] = (int)strtol(tokens[i + 1 + j].c_str(), nullptr, 10);
+                std::string key;
+                if (!itemName(g, v[0], v[1], (unsigned)v[2], v[3], v[4], value) || !itemKey(g, v[0], v[1], key))
+                    return false;
+                extras[i] = " item=" + value + " | key=" + key + " |";
+                operands = 5;
+            } else if (tokens[i] == "define_mob" && i + 2 < tokens.size()) {
+                if (!generatedName((int)strtoul(tokens[i + 1].c_str(), nullptr, 10), atoi(tokens[i + 2].c_str()),
+                                   value))
+                    return false;
+                extras[i] = " name=" + value + " |";
+                operands = 2;
+            }
+            if (extras[i].size() > MAX_SCRIPT_EXTRA_BYTES - extraBytes)
+                return false;
+            extraBytes += extras[i].size();
+            i += operands;
         }
+    }
+    fprintf(out, "id=%lld day=%d race=%u class=%d spec=%d flags=%08x flags2=%08x name=%s pos=%.1f %.1f %.1f :",
+            (long long)record.id, record.day, record.race, int(record.classId), int(record.specialization),
+            record.flags, record.appearanceFlags, name.c_str(), record.position.x / 65536.0,
+            record.position.y / 65536.0, record.position.z / 65536.0);
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        fprintf(out, " %s |", tokens[i].c_str());
+        int operands = 0;
+        if (tokens[i] == "define_location" && i + 3 < tokens.size())
+            operands = 3;
+        else if (tokens[i] == "define_item" && i + 5 < tokens.size())
+            operands = 5;
+        else if (tokens[i] == "define_mob" && i + 2 < tokens.size())
+            operands = 2;
+        for (int j = 1; j <= operands; ++j)
+            fprintf(out, " %s |", tokens[i + j].c_str());
+        fprintf(out, "%s", extras[i].c_str());
+        i += operands;
     }
     fprintf(out, "\n");
     return ferror(out) == 0;
@@ -4745,24 +4779,21 @@ static void exportAll(cube::Game *g, bool onlyNew) {
                      " townspeople written to Extract\\talk-scripts.txt (" + std::to_string(SCRIPT_DAYS) +
                      " days each)");
 }
-// Speech::GenerateItemName (RVA 0x1628b0: speech, std::wstring* out, Item*), the name the
-// game shows, e.g. "Hang Glider" or a weapon with its quality word.
-static std::string itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material) {
+// Native formatting normalizes its own full item copy. Key lookup above
+// deliberately uses the raw pair, preserving the existing export distinction.
+static bool itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material,
+                     std::string &output) {
     captureabi::ItemRecord item;
     item.setCategory(uint8_t(category));
     item.setSubtype(id);
     item.setModifier(modifier);
     item.setRarity(uint8_t(rarity));
     item.setMaterial(uint8_t(material));
-    GameWString name{};
-    ((GameWString * (*)(cube::Speech *, GameWString *, void *))(base() + 0x1628b0))(&g->speech, &name, &item);
-    const wchar_t *text = name.capacity >= 8 ? name.pointer : name.buffer;
-    int n = WideCharToMultiByte(CP_UTF8, 0, text, (int)name.size, nullptr, 0, nullptr, nullptr);
-    std::string utf8(n, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text, (int)name.size, utf8.data(), n, nullptr, nullptr);
-    if (name.capacity >= 8)
-        ((void (*)(void *))(base() + 0x392be8))(name.pointer);
-    return utf8;
+    auto *owner = reinterpret_cast<void *>(captureabi::textResourceOwner(reinterpret_cast<uintptr_t>(g)));
+    if (!owner)
+        return false;
+    const auto generate = reinterpret_cast<captureabi::GenerateItemText>(base() + captureabi::GENERATE_ITEM_TEXT_RVA);
+    return generatedText([&](captureabi::WideTextStorage *out) { generate(owner, out, &item); }, output);
 }
 } // namespace talkscripts
 
