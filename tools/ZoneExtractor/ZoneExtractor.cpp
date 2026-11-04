@@ -1,6 +1,7 @@
 ﻿#include "../../src/SceneCapture.h"
 #include "../../src/ProceduralItemData.h"
 #include "ObjectRewardCapture.h"
+#include "CaptureTickContext.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -103,6 +104,24 @@ static bool supported() {
     auto nt = (IMAGE_NT_HEADERS64 *)(b + ((IMAGE_DOS_HEADER *)b)->e_lfanew);
     return nt->FileHeader.TimeDateStamp == SUPPORTED_TIMESTAMP;
 }
+static bool copyNative(const void *source, void *destination, size_t count) {
+    __try {
+        memcpy(destination, source, count);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+static cube::Game *checkedTickContext(cube::Game *reported) {
+    if (!supported())
+        return nullptr;
+    const auto controller = captureabi::acceptedTickContext(base(), reinterpret_cast<uintptr_t>(reported),
+        [](uintptr_t address, void *destination, size_t count) {
+            return copyNative(reinterpret_cast<const void *>(address), destination, count);
+        });
+    return reinterpret_cast<cube::Game *>(controller);
+}
+
 static void log(const std::string &s) {
     FILE *f = nullptr;
     fopen_s(&f, "Mods\\ZoneExtractor.log", "a");
@@ -6426,14 +6445,6 @@ static int queued = 0, lookupFailed = 0;
 static bool active = false;
 static ULONGLONG nextStatus = 0;
 
-static bool copyNative(const void *source, void *destination, size_t count) {
-    __try {
-        memcpy(destination, source, count);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
-}
 static void *lookup(void *store, Key key) {
     using Function = void *(__fastcall *)(void *, int32_t, uint32_t);
     __try {
@@ -7209,7 +7220,10 @@ class ZoneExtractor : public GenericMod {
         std::thread(extract::writer).detach();
         extract::log("ZoneExtractor loaded (F11 sweep around home, F6 calibration tour, F9 home, F5 character snapshot, F4 record animation)");
     }
-    void OnGameTick(cube::Game *g) override { extract::tick(g); }
+    void OnGameTick(cube::Game *g) override {
+        if (auto *verified = extract::checkedTickContext(g))
+            extract::tick(verified);
+    }
 };
 EXPORT GenericMod *MakeMod() { return new ZoneExtractor(); }
 // Earliest entry point: the hook must be in place before the game loads sprites.

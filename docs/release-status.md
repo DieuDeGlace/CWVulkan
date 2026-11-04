@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The extractor now checks its callback argument against the supported image's
+  published native controller and reads the quit byte through a guarded copy
+  before any typed controller/World access. The independent native trace proves
+  normal context identity but leaves post-PostQuitMessage RAX unproved; those
+  calls are rejected even if the register happens to retain the controller.
+  Pure SDK-independent guard tests cover poisoned/null/unreadable pointers,
+  address overflow, quit handling and title admission without requiring a World.
+  All five targets build and the full CPU/owner-data suite passes; final focused
+  checks also pass after formatting. The rebuilt DLL was not installed into the
+  running original game, so live startup/quit and capture acceptance remain open.
+  The DLL still has its existing SDK dependency; no full replacement, permission
+  grant or loader/object-lifetime guarantee is inferred from this guard.
+
 - Alpha base-height roughness gating now preserves the independently verified
   float32 multiplication-chain order. Synthetic scalar inputs expose differences
   from the generic easing expression; the shared easing helper is unchanged.

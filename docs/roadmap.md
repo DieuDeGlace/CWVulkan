@@ -772,6 +772,14 @@ individual feature documents.
 The independently authored [runtime-gap specification](specs/remaining-runtime-gaps.md)
 resolves several questions in older specs. Remaining checkboxes are intentional.
 
+## Extractor callback admission, 2026-11-03
+
+- [x] Validate the loader tick value against the independently traced published
+  controller and reject quit/unreadable/overflow paths before typed access. Pure
+  memory-fixture admission tests and the full CPU/owner-data suite pass. All five
+  targets build. Live supported-game startup/quit/capture validation and the SDK
+  rights/full replacement gates remain open; title identity does not imply readiness.
+
 ## Host source-window continuation, 2026-11-03
 
 - [x] Replace host square source demand with the independently verified per-player

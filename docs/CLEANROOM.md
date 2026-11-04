@@ -1741,3 +1741,16 @@ changed. No new runtime capture or final-surface oracle is inferred. Landscape
 version2 keeps potentially changed terrain/profile/peer identities separate.
 The actual ready-budget lease test uses wholly engine-generated deterministic
 terrain; runtime screenshots and private probes remain local and unbundled.
+
+## Extractor tick-context guard, 2026-11-03
+
+The native-only author independently traced the installed loader and original
+Steam image to write steam-mod-loader-tick-context.md, without SDK, engine,
+exporter or capture access. The implementer used only that prose and owned code
+for a small SDK-independent admission helper. Synthetic guarded-memory fixtures
+verify read ordering and rejection without executing the game. The existing
+owned safe-copy helper was moved to shared extractor scope; no SDK implementation
+or full SDK class layout was introduced. The actual DLL still depends on the
+previous SDK build and has not been live-validated after this change. No new
+redistribution right or unproved teardown/cadence/readiness policy is asserted.
+Owner data and private artifacts stay outside source and runtime packages.
