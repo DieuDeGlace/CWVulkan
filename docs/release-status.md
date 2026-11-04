@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Full item naming now starts with the independently specified semantic record
+  copy. The four special gear stand-ins reach their actual gear dictionary branch,
+  including when nested in a formula. The shared conversion retains the wrapped
+  type, material, all 32 attribute records/count and unlisted bytes; naming leaves
+  the caller's live item unchanged. A synthetic regression first reproduced four
+  wrong names plus one recursive-formula failure, then passed with the fix. Build
+  and CPU/owner-data checks pass. The completed native-only material/quality audit
+  also corrected unlisted material bytes to use the generic Material key. Three
+  additional fallback failures were reproduced before that fix. Unsigned spirit
+  material, quality-context and unused attribute-tally regressions pass. The tally
+  adds no visible suffix in the traced helper. Proper-name family/fragment data,
+  malformed-input and native visual acceptance remain separate boundaries.
+
 - Stored terrain export now uses an independently specified Zone identity/column
   reader and the project's CWZ1 encoder, replacing SDK position/column access.
   Zone enumeration and capture leases are also independent in this export path.

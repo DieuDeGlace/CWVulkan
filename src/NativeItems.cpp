@@ -154,6 +154,15 @@ ModelFields fieldsOf(const uint8_t *item) {
     return normalised(f, readI32(item + ITEM_STANDS_FOR));
 }
 
+std::array<uint8_t, 0xa0> normalisedRecord(const uint8_t *item) {
+    std::array<uint8_t, 0xa0> result;
+    std::memcpy(result.data(), item, result.size());
+    const auto fields = fieldsOf(result.data());
+    result[ITEM_CATEGORY] = fields.category;
+    std::memcpy(result.data() + ITEM_ID, &fields.id, sizeof fields.id);
+    return result;
+}
+
 // --- the rules -----------------------------------------------------------------------
 
 const CategoryRule &categoryRule(uint8_t category) {

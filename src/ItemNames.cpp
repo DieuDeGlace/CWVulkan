@@ -1,5 +1,6 @@
 #include "ItemNames.h"
 #include "NativeControl.h"
+#include "NativeItems.h"
 
 #include <cstring>
 #include <map>
@@ -44,10 +45,14 @@ std::string materialKey(int material) {
     for (const auto &m : MATERIAL_KEYS)
         if (m.material == material)
             return m.key;
-    return "";
+    return "Material";
 }
 
 std::string name(const Speech &speech, const GameNames &names, const uint8_t *item) {
+    // Normalize the full record before choosing a naming branch. Keep the wrapped
+    // type and attribute payload available to recursive formula names.
+    const auto normalized = nativeitems::normalisedRecord(item);
+    item = normalized.data();
     const int category = item[0], id = at32(item, 4), material = item[0x1c], rarity = (int8_t)item[0x14];
     const int32_t modifier = at32(item, 8), formulaCategory = at32(item, 0x18);
     const int nameRace = (int)((uint32_t)modifier * 7u % 11u);
@@ -73,6 +78,8 @@ std::string name(const Speech &speech, const GameNames &names, const uint8_t *it
         return speech.text(key, {}, {{"", names.name(modifier, nameRace)}});
     if (category == 1 || category == 15 || category == 19 || material == 0)
         return speech.text(key, {"default"}, {});
+    // The native attribute tally has no visible naming consumer. Material comes
+    // from the item's own byte (steam-item-full-name.md sections3–6).
     std::map<std::string, std::string> macros = {{"name", names.name(modifier, nameRace)}, {"item", key}};
     if ((category >= 3 && category <= 9) || category == 26) {
         if (speech.hasEntry(key) && rarity >= 0 && rarity <= 4) {

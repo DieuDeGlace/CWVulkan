@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Full item naming starts from a shared complete semantic copy, preserving all
+  attribute/count/padding bytes and converting the four special gear stand-ins,
+  including recursive formulas. Unlisted material bytes use the generic Material
+  key. Independent material/quality/unused-tally facts are documented; synthetic
+  regressions reproduce five normalization and three fallback failures before
+  their respective fixes and pass afterward, with all five targets/full CPU-owner
+  checks. This does not certify family-specific proper-name data, every dictionary
+  failure path or original-game visual/name-output parity.
+
+
 - [x] Steam map-region pixel stages share the full WORLD color/fog implementation,
   including base-two exponent, Fog/SkySun fourth-power blend and inherited raw
   sky/sun/gradient inputs. Synthetic far/partial/sun cases pass alongside the full

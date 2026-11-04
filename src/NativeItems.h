@@ -60,6 +60,10 @@ struct ModelFields {
 ModelFields fieldsOf(const uint8_t *item);
 ModelFields normalised(ModelFields fields, int32_t standsFor);
 
+// Full semantic copy (steam-inventory-refresh-events §6): normalize only the
+// stand-in category/id, retaining every other byte, including all 32 attributes.
+std::array<uint8_t, 0xa0> normalisedRecord(const uint8_t *item);
+
 // What a category's models depend on (spec §2.4). Fields a category never reads can be
 // left out of its lookup.
 struct CategoryRule {

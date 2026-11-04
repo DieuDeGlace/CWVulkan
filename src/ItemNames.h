@@ -14,7 +14,8 @@ namespace itemnames {
 // The dictionary key of an item (the item naming keys), "" if none.
 std::string itemKey(int category, int id);
 std::string materialKey(int material);
-// the item naming.
+// Full-name decision boundary: docs/specs/steam-item-full-name.md.
+// Dictionary/fragment data remain owner-supplied.
 std::string name(const Speech &speech, const GameNames &names, const uint8_t *item);
 
 } // namespace itemnames

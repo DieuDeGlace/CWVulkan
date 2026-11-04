@@ -821,7 +821,7 @@ separate. Owner items, models and exports stay out of source/runtime packages.
 ## Retained water/particle state and point lifetime, 2026-11-02
 
 The implementer read steam-world-pass-controls section3, steam-particle-bursts
-section6, the independent point-table-state-lifetime supplement and engine sources
+section 6, the independent point-table-state-lifetime supplement and engine sources
 only. The native-only author traced construction, early sky, late overlays and
 shared GUI point setters without implementation access. Uninitialized native
 sky-table inputs do not define a numeric oracle: the engine deliberately uses
@@ -836,7 +836,7 @@ faded-resource setter followed by each consumer, without native model bytes.
 
 The native-only author separately wrote steam-fog-scale-state-lifetime sections1–5
 and corrected the earlier conflicting nonpositive-distance description. The
-implementer read that prose, character-card-preview section6, ring-selector
+implementer read that prose, character-card-preview section 6, ring-selector
 section5 and engine code only. No original code, instructions or shader binary
 was read by the implementer. FogScale, the explicit map admission and nonnull
 empty-card request preserve reached setup independently of visible pixels.
@@ -871,7 +871,7 @@ counts remain distinct from resource readiness under valid header lifetimes.
 
 ## Map WORLD/view normal and composition precision, 2026-11-02
 
-The implementer read independently authored map-contract section6, the corrected
+The implementer read independently authored map-contract section 6, the corrected
 worldmap precision links and engine sources only. The native-only author inspected
 no implementation or captures. A project-owned shared frame matrix and typed map
 controls preserve independent WORLD/VIEW inputs; GPU composition is expressed
@@ -886,7 +886,7 @@ were removed while the CPU color helpers actually used by coin previews remain.
 ## Shared WORLD vertex composition, 2026-11-02
 
 The implementer read steam-world-vertex-composition-applicability.md sections1–5,
-its WORLD-output/pass-control links, the existing map section6 and engine sources
+its WORLD-output/pass-control links, the existing map section 6 and engine sources
 only. The independent native-only author inspected no engine, tests, exporter,
 owner data or captures. The shared vertex stage reuses the project-owned matrix
 helper to compose GPU coefficients before local dots, with separate WORLD lighting
@@ -1175,7 +1175,7 @@ No original code, native instructions, owner artwork or extracted data is packag
 ## Root HUD queue identity and signed money, 2026-11-02
 
 The implementer used the already independently authored/read HUD-model-overlays
-section6, Ring-rendering resource order and HUD-money section4, plus engine sources
+section 6, Ring-rendering resource order and HUD-money section4, plus engine sources
 only. No new native tracing or access to original implementations was used. The
 renderer orders its admitted root opaque screen prefix by its own resource handles
 and keeps FIFO within one handle. It leaves explicit interior layer/cache cuts,
@@ -1866,3 +1866,29 @@ implementation was read or copied by the implementer. CPU/build checks pass;
 new native integration remains unvalidated after the pre-launch control stop.
 Owner Save/Mods/ReShade restoration was hash-verified. No original assets or
 owner test data enter either package; other SDK dependencies remain open.
+
+### Full item-copy naming boundary, 2026-11-04
+
+The implementer used steam-inventory-refresh-events section 6 and owned code to
+reuse the existing independent stand-in normalization in a complete 160-byte item
+copy. Only category/subtype change; wrapped type, material, 32 attributes/count and
+unlisted bytes remain. Naming performs that copy before choosing a branch and
+retains the existing recursive formula rule. Tests use an invented dictionary,
+compare full copied records and verify caller immutability. Five naming failures
+were reproduced before the fix, then passed. No original assets, dictionary text,
+SDK/header or original implementation was read or copied. Broader naming rules
+remain subject to the separate native-only specification process.
+
+### Full-name material and attribute audit, 2026-11-04
+
+The native-only author finalized steam-item-full-name.md sections 1–7 without
+engine, SDK, exporter, tests, owner data or execution access, then held. The
+implementer read all 229 lines before changing the generic material fallback.
+The existing own-material table and quality selector already matched the traced
+ordinary boundary. The unused attribute tally supplies no dominant-spirit rule;
+no visible suffix or override was invented. Original fragment/dictionary contents
+remain owner data and were not included. Tests use synthetic definitions to check
+unsigned 128..131 material bytes, generic keys, quality macro context and unchanged
+output under different ordinary tallies. Three fallback regressions fail before
+the correction and pass afterward. Full CPU/owner checks pass. Proper-name
+family-specific data and native-output/visual acceptance remain unqualified.
