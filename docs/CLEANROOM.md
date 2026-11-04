@@ -1923,3 +1923,16 @@ assignment complement, signed ordering, selection and actual prompt cut point;
 no native implementation or game content is included. Defined project defaults
 are not asserted to prove native padding initialization. Unknown transition,
 persistence, other consumer, concurrency and large-count behavior remains open.
+
+## Derived vehicle selection, 2026-11-04
+
+The independent native-only author finalized steam-selected-vehicle.md without
+reading the engine, tests, exporter, SDK or owner outputs. The implementer read
+all 122 lines of that prose, existing item/coordinate/frame contracts and owned
+sources only. NativeVehicle, the World/control/prompt bindings and shared ItemValue
+assignment use that bounded contract. Synthetic inventory/object/block records
+and an asset-free zero-time World facade check the actual producer and consumer.
+No original game code, vocabulary or assets enter either package. The unresolved
+native missing-zone fallback initialization is not assigned guessed flags: the
+engine defers new boat/glider candidates for an unavailable block, retaining any
+active provisional selection. This is explicit replacement policy, not parity.

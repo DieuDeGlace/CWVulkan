@@ -10,6 +10,25 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Vehicle prompts now read a World-step cache generated from availability,
+  nearby objects and environment state, replacing the first-carried-item stand-in.
+  The implementation follows the independent exact candidate order, physical
+  fixed-coordinate probes, signed32 regional quantity query and timing gates.
+  Availability cancellations moved out of the early-control shortcut to their
+  World cut point, including riding; pet-key ownership uses the same value query.
+  The synthetic selected record has zero semantic metadata/region, while direct
+  inventory use retains the original region. Shared fieldwise item assignment
+  preserves padding, and fresh-character reset initializes both derived caches.
+  Regressions reproduce the missing actual-World production and held-padding
+  overwrite before their fixes. Focused World/Use/collection checks, all five
+  targets and full CPU/owner checks pass; the save fixture is unchanged. Unknown
+  missing-zone fallback flags defer new boat/glider choices as replacement policy.
+  Wider original-game runtime and alternate-writer acceptance remain open.
+
+- The legacy extractor build command now delegates to the maintained CMake target
+  and keeps output under build, using the same configuration as the root build.
+  Its functional check passes; obsolete single-file outputs were removed locally.
+
 - The two previously unfinished use-prompt completions, abilities 0x96/0x97,
   now add/update and remove independently owned creature copies. A separate
   application-lifetime owner survives menu/world sessions without inventing a

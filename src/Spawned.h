@@ -143,6 +143,7 @@ class SpawnedCreatures {
         contextInventory = inventory;
     }
     const hudcontext::State &hudContext() const { return contextState; }
+    const nativesaves::Item &vehicleItem() const { return vehicleSelection; }
     void setClock(int32_t day, float timeOfDayMs) { dayCount = day, dayMs = timeOfDayMs; }
     void setClockRate(double gameMsPerMs) { clockRate = gameMsPerMs; }
     void advanceClock(double dtMs);
@@ -196,6 +197,8 @@ class SpawnedCreatures {
     void resetPlayer() {
         player.side = nativeai::Creature{};
         player.registration = 0;
+        contextState = {};
+        vehicleSelection = {}; // fresh CharacterData caches, not restored save fields
         hasPlayer = placed = false;
     }
     // A creature's record stands about a block above the surface its drawn feet are on
@@ -299,7 +302,6 @@ class SpawnedCreatures {
     int specialSkill(float &cooldownMs) const;
     // Which special items (category 24) the player carries for the region it is in
     // (the special item check, 0x5e890): the hang glider (1) and the boat (2).
-    void setSpecialItems(bool glider, bool boat) { hasGlider = glider, hasBoat = boat; }
     // The native player's artifact skills (the level and artifact skills, +0xb5c..+0xb74):
     // climbing, swimming, diving stamina, riding, gliding, sailing and lamp radius, one for
     // each artifact of that kind (its modifier % 7) it carries.
@@ -558,7 +560,6 @@ class SpawnedCreatures {
     void settle(std::list<Creature> &born);
     uint8_t lastPlayerMove = 0;
     bool placed = false; // the native player has been put where the save had it
-    bool hasGlider = false, hasBoat = false;
     worldgen::CreatureRecord gearRecord; // what setPlayerGear gave, applied as the player is made
     nativecontrol::World controlWorld();
     void noteControlMove();
@@ -570,6 +571,7 @@ class SpawnedCreatures {
     uint32_t aiRand = 1;                                  // separate engine AI state; native worker-entry state is unverified
     float dayMs = 0;                                      // the time of day (world+0xc) at the last tick
     hudcontext::State contextState;
+    nativesaves::Item vehicleSelection{}; // derived CharacterData+0x148; not a saved equipment slot
     const hudcontext::Tabs *contextInventory = nullptr; // borrowed canonical session inventory
     bool contextNamedWorld = false;
     float elapsedWorldMs = 0; // float world+0x440, separate from AI/GUI/calendar clocks

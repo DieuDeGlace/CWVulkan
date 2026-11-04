@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Replace the first-carried-vehicle stand-in with the independently specified
+  World-step derived item. Exact nearby-object priority, regional full-item equality,
+  signed32 quantities, cancellation-before-duration and boat/glider flag/block
+  checks now drive the retained cache before ordinary creature traversal. Use
+  consumes the synthetic zero-region value; direct inventory use keeps its original
+  regional value. Shared semantic assignment preserves held/copy item padding.
+  Fresh-character reset initializes both derived CharacterData caches. Pure and
+  actual zero-time World/Use regressions, all five targets and CPU/owner checks pass.
+  Unknown missing-zone fallback flags defer new travel selections as explicit
+  replacement policy; wider native runtime/alternate-writer acceptance stays open.
+
 - [x] Automatic abilities 0x96/0x97 now update a controller-owned creature-copy
   collection at the effect threshold, after prompt suppression/Climb and before
   Revive. Copies retain constructor/prior values outside the specified semantic

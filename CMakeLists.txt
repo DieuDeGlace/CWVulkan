@@ -305,13 +305,13 @@ if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
     # Native voxel, fixed-coordinate and preparation-budget paths depend on numeric staging.
     set_source_files_properties(
-        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
+        src/NativeVehicle.cpp src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
         PROPERTIES COMPILE_OPTIONS /fp:strict)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
     target_compile_definitions(engine PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     set_source_files_properties(
-        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
+        src/NativeVehicle.cpp src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
         PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
@@ -346,7 +346,8 @@ target_sources(EngineTests PRIVATE
     tests/NativeZoneTerrainTests.cpp
     tests/ItemNameTests.cpp
     tests/ProperNameTests.cpp
-    tests/UseCreatureCollectionTests.cpp)
+    tests/UseCreatureCollectionTests.cpp
+    tests/VehicleTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
@@ -390,7 +391,7 @@ add_executable(HudExtract tools/HudExtract.cpp)
 target_include_directories(HudExtract PRIVATE ${stb_SOURCE_DIR})
 set_target_properties(HudExtract PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
 
-target_sources(engine PRIVATE src/LightBeam.cpp src/UseCreatureCollection.cpp)
+target_sources(engine PRIVATE src/LightBeam.cpp src/UseCreatureCollection.cpp src/NativeVehicle.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp tests/WorldObjectTests.cpp tests/DeadCreatureTests.cpp tests/BlockMutationTests.cpp)
 target_sources(engine PRIVATE src/SteamScenery.cpp)
 target_sources(EngineTests PRIVATE tests/SceneCaptureTests.cpp)

@@ -72,6 +72,7 @@
 #include "ProceduralItems.h"
 #include "UsePrompt.h"
 #include "UseCreatureCollection.h"
+#include "NativeVehicle.h"
 #include "ItemSelector.h"
 #include "Renderer.h"
 #include "HudCoin.h"
@@ -3384,12 +3385,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     };
     spawned.setControlHooks(
         [&](int id) {
-            if (id == 4)
-                return true;
-            const auto here = regionHere();
-            return std::any_of(bag.begin(), bag.end(), [&](const Carried &entry) {
-                return entry.item.category == 24 && entry.item.id == id && entry.item.region[0] == here.x && entry.item.region[1] == here.y;
-            });
+            return nativevehicle::ownsSpecialItem(spawned.playerRecord(),
+                                                  nativeInventory ? &nativeInventory->inventory.tabs : nullptr, id);
         },
         [&](int number) { audio.playInterface(number); });
     auto describePreview = [&](const Gear::Item &original, Hud::Inventory &preview, const nativesaves::Item *comparison = nullptr,
@@ -3937,13 +3934,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             controlInput.lamp = gameInput.held(LAMP);
             controlInput.pet = gameInput.held(CALL_PET);
             controlInput.ultimate = gameInput.held(ULTIMATE_SKILL);
-            { // the special items carried for this region (the special item check, 0x5e890)
-                const worldgen::Int2 here = regionHere();
-                bool glider = false, boat = false;
-                for (const Carried &c : bag)
-                    if (c.item.category == 24 && c.item.region[0] == here.x && c.item.region[1] == here.y)
-                        glider = glider || c.item.id == 1, boat = boat || c.item.id == 2;
-                spawned.setSpecialItems(glider, boat);
+            {
                 // The artifacts carried give the player their skill points and, in the game's own
                 // progression, its level (Pyro's progression keeps its experience levels).
                 const lore::ArtifactProgress artifacts = carriedArtifacts();
@@ -5481,17 +5472,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 sceneLoot.push_back(&l);
             }
 
-            // The equipped vehicle (chardata +0x148): CubeVulkan has no such slot, so the first
-            // special item (category 0x18) carried for this region stands in for it.
-            const worldgen::Int2 region = regionHere();
-            const Carried *vehicle = nullptr;
-            for (const Carried &c : bag)
-                if (c.item.category == 0x18 && c.item.region[0] == region.x && c.item.region[1] == region.y && (!vehicle || c.item.id < vehicle->item.id))
-                    vehicle = &c;
-            if (vehicle) {
-                scene.vehicle = rawItem(vehicle->item);
-                scene.vehicleName = itemName(vehicle->item);
-            }
+            // Retain the admitted World pass's generated selection; inventory
+            // mutations and local input do not trigger another rebuild here.
+            scene.vehicle = spawned.vehicleItem();
+            if (scene.vehicle[0])
+                scene.vehicleName = itemnames::name(speech, itemNameParts, scene.vehicle.data());
 
             if (!mapOpen)
                 flightmasterMode = false; // Early frame clear; an admitted flight-master use can reopen it below.

@@ -1,4 +1,5 @@
 #include "UseCreatureCollection.h"
+#include "ItemValue.h"
 #include <cstring>
 #include <iterator>
 
@@ -16,10 +17,7 @@ void copySpan(uint8_t *destination, const uint8_t *source, size_t offset, size_t
     std::memmove(destination + offset, source + offset, bytes);
 }
 void copyItemValues(uint8_t *destination, const uint8_t *source, size_t base) {
-    copySpan(destination, source, base, 1);
-    copySpan(destination, source, base + 4, 16);
-    copySpan(destination, source, base + 0x14, 1);
-    copySpan(destination, source, base + 0x18, 0x86); // type-specific word, material, all 32 attributes and count
+    itemvalue::assign(destination + base, source + base);
 }
 void copyValues(uint8_t *destination, const uint8_t *source) {
     // Contiguous assigned scalars are grouped; unassigned padding is retained.

@@ -162,6 +162,7 @@ int nativeZoneTerrainTests(); // tests/NativeZoneTerrainTests.cpp
 int itemNameTests(); // tests/ItemNameTests.cpp
 int properNameTests(); // tests/ProperNameTests.cpp
 int useCreatureCollectionTests(); // tests/UseCreatureCollectionTests.cpp
+int vehicleTests(); // tests/VehicleTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
@@ -9403,6 +9404,8 @@ int main(int argc, char **argv) {
         return featTextTests();
     if (argc == 2 && std::string(argv[1]) == "lootwindows")
         return lootWindowTests();
+    if (argc == 2 && std::string(argv[1]) == "vehicles")
+        return vehicleTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "usecollection")
         return useCreatureCollectionTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "propernames")
@@ -10763,6 +10766,7 @@ int main(int argc, char **argv) {
     failures += itemNameTests();
     failures += properNameTests();
     failures += useCreatureCollectionTests();
+    failures += vehicleTests();
     failures += steamSceneRangeTests();
     failures += steamMeshCostTests();
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp

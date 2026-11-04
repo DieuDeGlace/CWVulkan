@@ -1,4 +1,5 @@
 #include "UsePrompt.h"
+#include "ItemValue.h"
 #include "GameMath.h"
 #include "NativeKeyOrder.h"
 
@@ -829,7 +830,7 @@ void applyToPlayer(const Prompt &p, const Scene &s, nativeai::Creature &player) 
         if (putAway)
             r[worldgen::creature::ABILITY] = 0;
         else if (type != 0) {
-            std::memcpy(r + HELD_ITEM, s.vehicle.data(), s.vehicle.size());
+            itemvalue::assign(r + HELD_ITEM, s.vehicle.data());
             startAbility(r, subtype == 1 ? GLIDING : subtype == 2 ? SAILING : OTHER_VEHICLE);
         }
         break;

@@ -336,6 +336,24 @@ int worldObjectTests() {
             actors.simulate(terrain, 0);
             check(actors.hudContext().item[0] == 0 && actors.hudContext().count == 0,
                   "the next zero-time World pass clears the unavailable selected requirement");
+            auto glider = nativesaves::makeItem(24, 1);
+            std::memcpy(glider.data() + 0x0c, actors.localRecord() + 0x150, 8);
+            inventory[1].push_back({1, glider});
+            put(actors.localPlayer()->record, 0x5c, uint32_t(0));
+            put(actors.localPlayer()->record, 0x6c, 1000.0f);
+            actors.simulate(terrain, 0);
+            check(actors.vehicleItem()[0] == 24 && get<int32_t>(actors.vehicleItem().data(), 4) == 1,
+                  "actual zero-time World facade derives the vehicle before local input");
+            inventory[1].back().count = 0;
+            check(actors.vehicleItem()[0] == 24, "inventory changes do not replace the retained vehicle cache");
+            actors.simulate(terrain, 0);
+            check(actors.vehicleItem()[0] == 0, "next World pass clears an unavailable provisional-free vehicle");
+            inventory[1].back().count = 1;
+            actors.simulate(terrain, 0);
+            check(actors.vehicleItem()[0] == 24, "availability can repopulate the admitted cache");
+            actors.resetPlayer();
+            check(actors.vehicleItem()[0] == 0 && actors.hudContext().item[0] == 0 && actors.hudContext().count == 0,
+                  "fresh-character reset initializes both derived CharacterData item caches");
         }
         {
             ExtractedWorld terrain;

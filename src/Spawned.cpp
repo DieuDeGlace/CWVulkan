@@ -1,4 +1,5 @@
 #include "Spawned.h"
+#include "NativeVehicle.h"
 #include "SteamZoneDemand.h"
 #include "NativeWorldObjects.h"
 #include "NativeDeadCreatures.h"
@@ -1328,6 +1329,22 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         nativepet::step(pets);
         worldEvents.buffs.insert(worldEvents.buffs.end(), pets.buffNotes.begin(), pets.buffNotes.end());
         pets.buffNotes.clear();
+        nativevehicle::Environment vehicle;
+        vehicle.player = hasPlayer && nativePlayer ? player.record.data() : nullptr;
+        vehicle.namedWorld = contextNamedWorld;
+        vehicle.inventory = contextInventory;
+        vehicle.wholeDuration = [&] { return playerAbilityDuration(); };
+        vehicle.loadedObjects = [&](nativesaves::Cell key) -> std::span<const nativesaves::Record> {
+            const auto *lists = zoneStates.find(key);
+            return lists ? std::span<const nativesaves::Record>(lists->staticObjects)
+                         : std::span<const nativesaves::Record>{};
+        };
+        vehicle.blockFlags = [&](nativevehicle::BlockPosition at) -> std::optional<uint8_t> {
+            bool loaded = false;
+            const auto block = ew.gameBlock(at[0], at[1], at[2], &loaded);
+            return loaded ? std::optional<uint8_t>(block[5]) : std::nullopt;
+        };
+        nativevehicle::rebuild(vehicleSelection, vehicle);
         hudcontext::Environment context;
         context.player = hasPlayer && nativePlayer ? player.record.data() : nullptr;
         context.namedWorld = contextNamedWorld;
@@ -1678,11 +1695,7 @@ void SpawnedCreatures::noteControlMove() {
 bool SpawnedCreatures::prepareControl(const nativecontrol::Input &in, double dtMs) {
     if (!nativePlayer || !hasPlayer)
         return false;
-    // An ability needing a special item ends without it, as in the existing bridge.
-    worldgen::CreatureRecord &record = player.record;
-    if ((record[0x68] == 0x78 && (get<uint32_t>(record, 0x5c) & 1) && !hasGlider) || (record[0x68] == 0x79 && !hasBoat))
-        record[0x68] = 0;
-    player.side.record = record.data();
+    player.side.record = player.record.data();
     auto world = controlWorld();
     const bool admitted = nativecontrol::beginFrame(in, controlState, player.side, dtMs, world);
     worldEvents.buffs.insert(worldEvents.buffs.end(), world.buffNotes.begin(), world.buffNotes.end());

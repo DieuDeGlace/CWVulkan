@@ -307,3 +307,11 @@ recording its text in source. Guarded-read, encoding/terminator/failure cases an
 14 contract-derived name-index examples pass, as do all five targets and the full
 CPU/owner suite. These checks do not establish new native execution or complete
 name-output parity; the new extractor still needs its own supported-game smoke.
+
+## Extractor developer build
+
+`tools\ZoneExtractor\build.cmd` delegates to the maintained CMake target and
+keeps its DLL and intermediate files under `build`, alongside the main build.
+For example, `tools\ZoneExtractor\build.cmd -j4` forwards `-j4` to the build
+backend. It uses the same separately obtained SDK headers and configuration as
+the root build; the [build requirements](../README.md) apply to both entry points.
