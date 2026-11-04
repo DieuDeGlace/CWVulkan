@@ -38,6 +38,15 @@ This workboard does not grant rights or certify final redistribution.
   acquires its frame guard, rechecks that identity and retains the guard through
   every borrowed-pointer use. Busy, malformed or changed captures defer the pass;
   only a successfully read empty list can represent an empty observation.
+- Recording-only target-health helpers capture client and host registration
+  sequences in separate scopes, preserving every matching duplicate-ID entry.
+  Host capture nonblockingly takes the outer host guard before the World guard;
+  reverse member destruction releases World before host. Both remain held through
+  health access. An unavailable capture reports incomplete/deferred work rather
+  than silently treating it as an empty actor set. Actual Win32 tests cover each
+  guard's contention, acquisition order, held use scope and constructor unwinding.
+  This excludes the named cooperating native phases; callback owner lifetimes
+  remain required, with no general worker quiescence or whole-record transaction.
 - Signed-ID tree lookup in the two recorder consumers. The observed client frame
   guard remains held through their pointer-use scope. A busy/unreadable lookup
   defers the approach recorder; it is not a missing-subject observation.

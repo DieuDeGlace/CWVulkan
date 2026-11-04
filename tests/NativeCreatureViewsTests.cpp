@@ -240,6 +240,85 @@ int nativeCreatureViewsTests() {
     }
     check(otherThreadCanEnter(), "failed collection construction unwinds the acquired guard");
     DeleteCriticalSection(section);
+
+    alignas(8) std::array<uint8_t, 0x1000> hostGame{};
+    const auto hostGameAddress = reinterpret_cast<uintptr_t>(hostGame.data());
+    const auto hostWorld = hostGameAddress + 0x6f0;
+    auto *outerSection = reinterpret_cast<CRITICAL_SECTION *>(hostGame.data() + 0xce0);
+    auto *innerSection = reinterpret_cast<CRITICAL_SECTION *>(hostGame.data() + 0xab8);
+    InitializeCriticalSectionAndSpinCount(outerSection, 16);
+    InitializeCriticalSectionAndSpinCount(innerSection, 16);
+    std::memcpy(hostGame.data() + 0x730, &headAddress, 8);
+    std::memcpy(hostGame.data() + 0x738, &one, 8);
+    head = {nodeAddress, nodeAddress, 0};
+    node = {headAddress, headAddress, 0x9000};
+    const auto hostRead = [&](uintptr_t at, void *destination, size_t count) {
+        if (at >= hostGameAddress && at - hostGameAddress <= hostGame.size() &&
+            count <= hostGame.size() - (at - hostGameAddress)) {
+            std::memcpy(destination, reinterpret_cast<const void *>(at), count);
+            return true;
+        }
+        return clientRead(at, destination, count);
+    };
+    const auto canEnter = [](CRITICAL_SECTION *lock) {
+        return std::async(std::launch::async,
+                          [=] {
+                              const bool acquired = TryEnterCriticalSection(lock) != 0;
+                              if (acquired)
+                                  LeaveCriticalSection(lock);
+                              return acquired;
+                          })
+            .get();
+    };
+    {
+        captureabi::HostCreatureCapture captured(hostGameAddress, hostRead);
+        check(captured.ready() && captured.world() == hostWorld &&
+                  captured.addresses() == std::vector<uintptr_t>{0x9000} && !canEnter(outerSection) &&
+                  !canEnter(innerSection),
+              "host capture uses the embedded World and retains both distinct guards through pointer use");
+    }
+    check(canEnter(outerSection) && canEnter(innerSection), "host capture releases both guards after use");
+    for (auto *busySection : {outerSection, innerSection}) {
+        std::promise<void> acquired, finish;
+        auto finishSignal = finish.get_future();
+        auto owner = std::async(std::launch::async, [&] {
+            EnterCriticalSection(busySection);
+            acquired.set_value();
+            finishSignal.wait();
+            LeaveCriticalSection(busySection);
+        });
+        acquired.get_future().wait();
+        {
+            captureabi::HostCreatureCapture busy(hostGameAddress, hostRead);
+            check(!busy.ready() && !busy.world() && busy.addresses().empty(),
+                  "either busy host guard produces unavailable rather than an empty observation");
+            if (busySection == outerSection)
+                check(canEnter(innerSection), "busy outer host guard prevents taking the World guard");
+            else
+                check(!canEnter(outerSection), "outer guard is acquired before attempting the busy World guard");
+        }
+        if (busySection == innerSection)
+            check(canEnter(outerSection), "failed inner acquisition releases the outer guard on scope exit");
+        finish.set_value();
+        owner.get();
+    }
+    try {
+        const auto throwingHostRead = [&](uintptr_t at, void *destination, size_t count) {
+            if (at == hostWorld + 0x40)
+                throw 1;
+            return hostRead(at, destination, count);
+        };
+        captureabi::HostCreatureCapture interrupted(hostGameAddress, throwingHostRead);
+    } catch (int) {
+    }
+    check(canEnter(outerSection) && canEnter(innerSection), "host construction unwinds both acquired guards");
+    {
+        captureabi::HostCreatureCapture missing(0, hostRead);
+        captureabi::HostCreatureCapture overflow(std::numeric_limits<uintptr_t>::max() - 1, hostRead);
+        check(!missing.ready() && !overflow.ready(), "invalid host owner arithmetic never reaches a section");
+    }
+    DeleteCriticalSection(innerSection);
+    DeleteCriticalSection(outerSection);
     std::cout << "Native creature registry views: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;
 }

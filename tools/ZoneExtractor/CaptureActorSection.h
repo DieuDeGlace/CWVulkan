@@ -60,4 +60,49 @@ class ClientCreatureCapture {
     std::uintptr_t world() const { return readable ? worldAddress : 0; }
     const std::vector<std::uintptr_t> &addresses() const { return values; }
 };
+
+// Bounded recording access to the embedded host registry. The named native
+// host writers require the outer host guard as well as the World guard, in that
+// order (steam-world-actor-protection.md sections1–6). This does not pin Game or
+// World, quiesce every worker, or make every nested field an atomic snapshot.
+class HostCreatureCapture {
+    static constexpr std::size_t WORLD_OFFSET = 0x6e8 + 8;
+    static constexpr std::size_t SECTION_OFFSET = 0x6e8 + 0x5f8;
+    class OuterLease {
+        CRITICAL_SECTION *held = nullptr;
+
+      public:
+        explicit OuterLease(std::uintptr_t game) {
+            constexpr auto maximum = std::numeric_limits<std::uintptr_t>::max();
+            if (!game || game > maximum - SECTION_OFFSET - (sizeof(CRITICAL_SECTION) - 1))
+                return;
+            auto *section = reinterpret_cast<CRITICAL_SECTION *>(game + SECTION_OFFSET);
+            if (TryEnterCriticalSection(section))
+                held = section;
+        }
+        ~OuterLease() {
+            if (held)
+                LeaveCriticalSection(held);
+        }
+        OuterLease(const OuterLease &) = delete;
+        OuterLease &operator=(const OuterLease &) = delete;
+        explicit operator bool() const { return held != nullptr; }
+    };
+    OuterLease outer;
+    std::uintptr_t worldAddress;
+    WorldActorLease held; // Declared after outer: World releases before host.
+    std::vector<std::uintptr_t> values;
+    bool readable = false;
+
+  public:
+    template <class Read>
+    HostCreatureCapture(std::uintptr_t game, Read read)
+        : outer(game), worldAddress(outer ? game + WORLD_OFFSET : 0), held(worldAddress) {
+        if (held)
+            readable = readRegisteredCreatures(worldAddress, values, read);
+    }
+    bool ready() const { return readable; }
+    std::uintptr_t world() const { return readable ? worldAddress : 0; }
+    const std::vector<std::uintptr_t> &addresses() const { return values; }
+};
 } // namespace captureabi

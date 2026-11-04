@@ -181,6 +181,33 @@ static cube::World *embeddedHostWorld(const cube::Game *game) {
         return nullptr;
     return reinterpret_cast<cube::World *>(address + 0x6f0);
 }
+// Recording-only health ceiling, applied to each matching registration entry.
+// Client and host scopes are sequential; their different guards never overlap.
+static bool limitRecordedTargetHealth(cube::Game *game, int64_t id, float ceiling) {
+    const auto apply = [&](const auto &actors) {
+        if (!actors.ready())
+            return false;
+        for (auto address : actors.addresses()) {
+            if (!address)
+                continue;
+            captureabi::CreatureScalars data(reinterpret_cast<void *>(address));
+            if (data.id() == id && data.health() > ceiling)
+                data.setHealth(ceiling);
+        }
+        return true;
+    };
+    bool clientReady;
+    {
+        const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(game), readNative);
+        clientReady = apply(actors);
+    }
+    bool hostReady;
+    {
+        const captureabi::HostCreatureCapture actors(reinterpret_cast<uintptr_t>(game), readNative);
+        hostReady = apply(actors);
+    }
+    return clientReady && hostReady;
+}
 static cube::Game *checkedTickContext(cube::Game *reported) {
     if (!supported())
         return nullptr;
@@ -6899,12 +6926,9 @@ static void tick(cube::Game *g) {
         if (downV && !weaken)
             weakUntil = GetTickCount64() + 6000;
         if (GetTickCount64() < weakUntil && combat::targetId) {
-            for (cube::World *world : {clientWorld(g), embeddedHostWorld(g)}) // the local server's copy decides
-                for (cube::Creature *c : world->creatures)
-                    if (c && c->id == combat::targetId && c->entity_data.HP > .01f)
-                        c->entity_data.HP = .01f;
+            const bool captured = limitRecordedTargetHealth(g, combat::targetId, .01f);
             if (!weaken)
-                log("Holding the target at 0.01 HP");
+                log(captured ? "Holding the target at 0.01 HP" : "Target health capture deferred; retrying during hold");
         }
         weaken = downV;
         // 9: collision log (read-only). Every tick the player moves: position (blocks),
@@ -7135,11 +7159,10 @@ static void tick(cube::Game *g) {
         static bool slay = false; // Z: fight mode's target to 0 HP (the game then kills it and drops loot its own way)
         bool downZ = extract::hotkeyDown('Z');
         if (downZ && !slay && combat::targetId) {
-            for (cube::World *world : {clientWorld(g), embeddedHostWorld(g)})
-                for (cube::Creature *c : world->creatures)
-                    if (c && c->id == combat::targetId && c->entity_data.HP > 0)
-                        c->entity_data.HP = 0;
-            log("Target set to 0 HP");
+            if (limitRecordedTargetHealth(g, combat::targetId, 0))
+                log("Target set to 0 HP");
+            else
+                log("Target health capture incomplete; try Z again");
         }
         slay = downZ;
         static bool weakest = false; // F: next to the weakest monster the game simulates (fight mode's target)
