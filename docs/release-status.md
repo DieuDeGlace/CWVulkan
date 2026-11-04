@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Climbing upkeep now uses the same wrapped signed32 special-item quantity
+  total as the verified availability query, replacing a widened total. A regression
+  through actual upkeep reproduces the overflow-admission failure and passes after
+  the fix, alongside positive/negative count cases. Ordinary unequip now requests
+  native sound0x5b after its inventory refresh. All five targets and full CPU/owner
+  checks pass; the save fixture is unchanged. Cached-widget/crafting completion and
+  audible original-game acceptance remain separate gaps.
+
 - Vehicle prompts now read a World-step cache generated from availability,
   nearby objects and environment state, replacing the first-carried-item stand-in.
   The implementation follows the independent exact candidate order, physical

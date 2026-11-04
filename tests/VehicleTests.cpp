@@ -1,4 +1,5 @@
 #include "InventorySlots.h"
+#include "NativeUpkeep.h"
 #include "NativeVehicle.h"
 #include "UsePrompt.h"
 #include "worldgen/Residents.h"
@@ -92,6 +93,34 @@ int vehicleTests() {
     availability.inventory[5][0].count = 1;
     check(!nativevehicle::ownsSpecialItem(availability.player.data(), &availability.inventory, 1),
           "positive signed32 overflow wraps negative instead of widening");
+
+    const auto climbStamina = [](const std::vector<int32_t> &counts) {
+        auto record = worldgen::newCreature(200);
+        record[0x68] = 0x7a;
+        set(record.data(), 0x5c, uint32_t(4));
+        set(record.data(), 0x40, 1.0f);
+        set(record.data(), 0x9a0, 1.0f);
+        nativeai::Creature actor;
+        actor.record = record.data();
+        actor.inventory.resize(1);
+        auto item = nativesaves::makeItem(24, 18);
+        std::memcpy(item.data() + 0x0c, record.data() + 0x150, 8);
+        for (int32_t count : counts) {
+            std::array<uint8_t, 0xa4> slot{};
+            set(slot.data(), 0, count);
+            std::copy(item.begin(), item.end(), slot.begin() + 4);
+            actor.inventory[0].push_back(slot);
+        }
+        nativeupkeep::World world;
+        world.local = record.data();
+        nativeupkeep::upkeep(world, &actor, 100.0f);
+        return read<float>(record.data(), 0x9a0);
+    };
+    const float drain = climbStamina({});
+    const float protectedStamina = climbStamina({1});
+    check(protectedStamina > drain && climbStamina({INT32_MAX, 1}) == drain &&
+              climbStamina({2, -1}) == protectedStamina,
+          "actual climbing upkeep uses the same wrapped signed32 ownership total as vehicle selection");
 
     Fixture priority;
     set(priority.player.data(), 0x180, 0.0f); // no HP gate on the World producer

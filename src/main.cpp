@@ -5133,6 +5133,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                                 rebuildInventoryViews();
                                 applyGear(true);
                                 refreshInventory();
+                                audio.playInterface(0x5b);
                             }
                         }
                         rebuildInventoryViews();

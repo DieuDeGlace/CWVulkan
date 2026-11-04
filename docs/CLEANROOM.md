@@ -1936,3 +1936,12 @@ No original game code, vocabulary or assets enter either package. The unresolved
 native missing-zone fallback initialization is not assigned guessed flags: the
 engine defers new boat/glider candidates for an unavailable block, retaining any
 active provisional selection. This is explicit replacement policy, not parity.
+
+## Special-item query and unequip completion follow-up, 2026-11-04
+
+The implementer used the finalized vehicle contract section4, creature-upkeep4.6
+and inventory-refresh-events5 with owned code only. The existing raw-inventory
+climbing consumer now keeps signed32 word accumulation; the actual upkeep test
+compares no ownership, positive totals and wrapped overflow. The ordinary unequip
+sound follows the existing independent completion order. No new native tracing,
+SDK access, assets or inferred universal widget refresh was introduced.

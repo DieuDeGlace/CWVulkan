@@ -8,6 +8,12 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Align climbing upkeep's special-item ownership with the independently verified
+  signed32 quantity accumulator. Actual upkeep distinguishes wrapped-overflow
+  unavailability from a positive signed total before/after the correction. Restore
+  ordinary unequip's0x5b completion sound after its refresh. All five targets and
+  CPU/owner checks pass; broader widget/crafting and native audio acceptance remain.
+
 - [x] Replace the first-carried-vehicle stand-in with the independently specified
   World-step derived item. Exact nearby-object priority, regional full-item equality,
   signed32 quantities, cancellation-before-duration and boat/glider flag/block

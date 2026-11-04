@@ -10,6 +10,7 @@
 #include "NativeRules.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 #include <xmmintrin.h>
@@ -309,12 +310,12 @@ bool carriesSpecialItem(const nativeai::Creature &c, uint32_t subtype) {
                 return false;
         return std::memcmp(item + 0x20, &wanted[0x20], 4 * (size_t)item[0x9d]) == 0;
     };
-    int64_t count = 0;
+    uint32_t count = 0;
     for (const auto &tab : c.inventory)
         for (const auto &slot : tab)
             if (same(slot.data() + 4))
-                count += get<int32_t>(slot.data(), 0);
-    return count > 0;
+                count += uint32_t(get<int32_t>(slot.data(), 0));
+    return std::bit_cast<int32_t>(count) > 0;
 }
 
 // The reward for evading an attack (0x4ee50), given to the one who evaded: a dodging
