@@ -1795,3 +1795,16 @@ view, not a complete class, exhaustive live registry or SDK replacement. Raw own
 images, records and the loaded-world modded generator results remain private.
 Prior generator baseline files were restored exactly after the separate loaded-
 world capture/light-reader check; that run is not a vanilla parity oracle.
+
+### Sprite buffer view and capture provenance, 2026-11-03
+
+The native-only author supplied steam-sprite-buffer-resources.md and qualified the
+primary catalog's readiness wording without reading SDK, engine, tests, exporter
+or owner data. The implementer read those completed prose contracts and owned
+code only, then authored a guarded ordinary-backend field view and failure-path
+fixtures. No original or SDK implementation/header was read or copied. Live native
+buffer identification and exact loaded terrain samples use owner-local evidence.
+Output routing is project policy: modified captures stay separate from vanilla
+candidates, and a session label does not certify historical files. No generator
+formula or expected value was changed to accommodate modified references. All
+original images, records, traces, DLL backups and save data remain private.

@@ -798,6 +798,15 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   neighborhoods. Existing mods were retained; vanilla comparison baselines were
   restored exactly. This does not close animation recording or vanilla visual parity.
 
+- [x] Read primary sprite vertex-buffer identities through an independent guarded
+  ordinary-backend view; reject unknown types/changed links and avoid native bind
+  calls. Focused fixtures, full CPU/owner checks and live 3,230-buffer capture pass.
+  This is one further data view, not full SDK independence.
+- [x] Separate modified zone/reference outputs and support a terrain-only pinned
+  native reference. The same four isolated loaded/lit zones match 106,380 blocks
+  and all region types exactly; full CPU/owner checks pass with that reference.
+  Historical mixed exports are retained and their provenance is not inferred.
+
 ## Host source-window continuation, 2026-11-03
 
 - [x] Replace host square source demand with the independently verified per-player
@@ -827,7 +836,10 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   rules. Formula/import/integration checks and live foliage captures pass.
 - [ ] Broader labeled native height/surface/biome comparisons and forest-edge,
   transition, live-edit and cold-streaming acceptance. Contract tests are not those
-  full runtime comparisons.
+  full runtime comparisons. Two additional 35-simulation-second Alpha-look flights
+  using default/123 seeds cross positive/negative parent boundaries and land with
+  normal exits; the original test save is unchanged. They add two bounded travel
+  cases and do not close the broader acceptance item.
 - [x] Read-only initial-surface column adapter: explicit material/flag translation,
   four-parent crops, native indexing and finite-domain coverage. All 4096 columns
   in an asymmetric fixture retain their geometry and RGB. The runtime composition
@@ -853,11 +865,11 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   land, mixed land/sea and sea, with missing-cell defaults; two more references cover
   natural positive-fire and mixed fire/nonfire. Formulas stay unchanged. These
   conditional arithmetic checks do not establish oasis or native-runtime parity.
-  Alpha ready-parent retention now has64 entries and a384 MiB estimated payload
+  Alpha ready-parent retention now has64 entries and a 384 MiB estimated payload
   budget, eliminating observed repeat generation in the diagnostic. The previously
   failing full default-distance capture completes in113.808 seconds wall. Full
   CPU/GPU checks pass. Full-distance Alpha-look captures also complete for the
-  default seed and seed123 at another location; broader cold/travel/memory/cache-role
+  default seed and seed 123 at another location; broader cold/travel/memory/cache-role
   acceptance remains open.
 - [x] Preserve native float32 roughness-gate operation chains in raw Alpha H,
   using separate scalar fixtures and conditional base-height words. Landscape

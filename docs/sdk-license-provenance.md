@@ -132,3 +132,9 @@ layout source is [the independent catalog contract](specs/steam-native-sprite-ca
 Malformed-memory tests and live byte-identical owner metadata exports pass. This
 component includes no SDK header, but other extractor code still does. It does
 not resolve the existing SDK-wide grant, local revision or complete-adapter gate.
+
+The sprite vertex-buffer view is now independently authored from
+[ordinary-backend facts](specs/steam-sprite-buffer-resources.md). It reads the
+wrapper's context and actual COM buffer fields without invoking its bind methods.
+This further component does not include SDK headers; the rest of the extractor
+still does, so the grant/revision/complete-adapter gate remains open.

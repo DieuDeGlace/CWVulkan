@@ -1,3 +1,4 @@
+#include "../tools/ZoneExtractor/NativeSpriteBuffers.h"
 #include "../tools/ZoneExtractor/NativeSpriteCatalog.h"
 #include <cstring>
 #include <iostream>
@@ -98,6 +99,61 @@ int nativeSpriteCatalogTests() {
     fixture();
     store(array, std::array<std::uintptr_t, 3>{maximum - 0x88, 0, last});
     check(!capture(), "the complete dimensions span must fit the address space");
+    // Native wrapper and COM buffer are distinct identities. No callable vtable
+    // memory or RGB/mesh payload is supplied by this fixture.
+    constexpr std::uintptr_t module = 0x10000000, wrapper = 0x600000, context = 0x700000, buffer = 0x800000;
+    const auto vertexFixture = [&] {
+        memory.clear();
+        reads.clear();
+        store(first + 0x70, wrapper);
+        store(wrapper, module + captureabi::VERTEX_BUFFER_TABLE_RVA);
+        store(wrapper + 8, std::array<std::uintptr_t, 2>{context, buffer});
+    };
+    captureabi::SpriteVertexBuffer vertex;
+    const auto vertexCapture = [&] { return captureabi::readSpriteVertexBuffer(module, first, vertex, read); };
+    vertexFixture();
+    check(vertexCapture() && vertex.wrapper == wrapper && vertex.context == context && vertex.buffer == buffer,
+          "the native wrapper yields its actual context/buffer fields without invoking a binding method");
+    store(first + 0x80, std::array<std::uint32_t, 2>{0, 0});
+    check(vertexCapture() && vertex.buffer == buffer, "zero mesh counts can retain previous wrappers");
+    store(wrapper + 8, std::array<std::uintptr_t, 2>{context, 0});
+    check(vertexCapture() && vertex.wrapper == wrapper && !vertex.buffer,
+          "null buffer metadata does not invent successful creation or GPU readiness");
+    store(first + 0x70, std::uintptr_t(0));
+    check(vertexCapture() && !vertex.wrapper && !vertex.context && !vertex.buffer,
+          "an absent wrapper clears an earlier resource identity");
+    vertexFixture();
+    store(wrapper, module + captureabi::VERTEX_BUFFER_TABLE_RVA + 32);
+    check(!vertexCapture() && !vertex.wrapper, "an unproved wrapper implementation is rejected before field capture");
+    vertexFixture();
+    memory.erase(wrapper + 8);
+    check(!vertexCapture() && !vertex.context && !vertex.buffer,
+          "unreadable resource fields publish no partial identity");
+    vertexFixture();
+    unsigned wrapperReads = 0;
+    const auto remeshingRead = [&](std::uintptr_t address, void *destination, std::size_t count) {
+        if (address == first + 0x70 && ++wrapperReads == 2)
+            store(first + 0x70, std::uintptr_t(0));
+        return read(address, destination, count);
+    };
+    check(!captureabi::readSpriteVertexBuffer(module, first, vertex, remeshingRead) && !vertex.wrapper,
+          "a replaced wrapper is rejected before publication");
+    vertexFixture();
+    unsigned typeReads = 0;
+    const auto reusingRead = [&](std::uintptr_t address, void *destination, std::size_t count) {
+        if (address == wrapper && ++typeReads == 2)
+            store(wrapper, std::uintptr_t(0));
+        return read(address, destination, count);
+    };
+    check(!captureabi::readSpriteVertexBuffer(module, first, vertex, reusingRead) && !vertex.wrapper,
+          "a changed wrapper type is rejected before publication");
+    vertexFixture();
+    reads.clear();
+    check(!captureabi::readSpriteVertexBuffer(maximum, first, vertex, read) && reads.empty(),
+          "module-relative type identity cannot wrap into low memory");
+    store(first + 0x70, maximum - 8);
+    store(maximum - 8, module + captureabi::VERTEX_BUFFER_TABLE_RVA);
+    check(!vertexCapture() && !vertex.wrapper, "the complete context/buffer span must fit the address space");
     std::cout << "Native sprite catalog: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;
 }

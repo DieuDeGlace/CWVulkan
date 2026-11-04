@@ -111,12 +111,11 @@ it writes terrain reference values and refreshes loaded zone/light snapshots,
 even when those zones were already exported. The title flyover is sufficient;
 loading a character and timed key presses are unnecessary. F5 and O remain
 available for manual refreshes while Cube World is the foreground application.
-Queued file requests still run on game ticks in the background. When another DLL
-is present in `Mods`, generator dumps go to `Extract/gen-oracle-modded.txt` instead
-of overwriting `gen-oracle.txt`; an incomplete DLL scan uses that separate file too.
+Queued file requests still run on game ticks in the background. When another DLL or legacy `.cwmod`
+is present in `Mods`, generator, block and cell dumps go under
+`Extract/modded-reference/`; scan failures use that separate directory too.
 The header records the build, detected mod filenames and scan error. File presence
-is a conservative provenance check, not proof that each
-mod loaded. Use the isolated session for a vanilla world reference.
+is a conservative provenance check, not proof that each mod loaded. Use the isolated session for a vanilla world reference.
 Allow the writer a few seconds to finish, close
 the game, then use `--setup-restore --game "<Cube World folder>"` to restore Save,
 Mods and ReShade. A pending journal is also detected after an interruption.
@@ -177,3 +176,35 @@ concurrent lifetime synchronization. No RGB allocation or GPU readiness is requi
 for this metadata, and the dimensions are not a per-object scale. Procedural and
 other resource families remain separate; the whole extractor still depends on SDK
 views. Use `EngineTests extractorcatalog` for the portable memory-fixture checks.
+
+## Keep modified captures separate
+
+Ordinary zone exports now use `Extract/modded_seed_<n>` when the Mods inventory
+contains another DLL, a legacy `.cwmod`, or cannot be completed. An extractor-only
+session retains `Extract/seed_<n>`. Each session writes `capture-source.txt`, whose
+classification covers **new writes in that session only**; it does not certify
+older retained files. Existing exports are neither moved nor deleted. Historical
+`seed_<n>` folders can already contain mixed data and need independently recorded
+references for strict comparisons.
+
+Automatic extracted-world selection considers `seed_<n>` folders. To deliberately
+replay modified captures, set `World.ExtractedPath` to their full directory and
+choose `World.Source=Extracted`. Alpha and Steam generated modes remain separate.
+
+In a modified session, height/block/cell reports and block-writer diagnostics use
+`Extract/modded-reference/`. Requested generation uses its `gen/` subdirectory;
+the extractor-only path remains `Extract/oracle/gen/`. The formats and native
+actions are unchanged. Neither a file inventory nor a directory name proves a
+pristine runtime; use the journaled isolation workflow for vanilla candidates.
+
+`CW_TERRAIN_ZONES_DIR` optionally selects a separate, owner-local reference folder
+for **only** the terrain comparison in EngineTests. Other owner/spawn datasets
+stay unchanged. Its leaf should retain `seed_<n>` for seed parsing. An unavailable
+explicit directory fails the check. The override does not certify provenance or
+relax any region, geometry, color or lighting assertion. Clear it after use.
+
+Generated-on-request zones have not passed mesh-time lighting. Keep those files
+separate from loaded, lit snapshots; comparing the former to a lit terrain oracle
+can produce legitimate air/water-light differences. The isolated loaded reference
+for four coordinates compared all 106,380 blocks and all four region types exactly.
+Captures and this pinned reference remain local and are excluded from packages.

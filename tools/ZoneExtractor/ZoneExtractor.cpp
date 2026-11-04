@@ -3,6 +3,7 @@
 #include "ObjectRewardCapture.h"
 #include "CaptureTickContext.h"
 #include "NativeSpriteCatalog.h"
+#include "NativeSpriteBuffers.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -84,13 +85,16 @@ static std::vector<std::string> otherModFiles(DWORD &scanError) {
     scanError = ERROR_SUCCESS;
     std::vector<std::string> result;
     WIN32_FIND_DATAA entry{};
-    const HANDLE search = FindFirstFileA("Mods\\*.dll", &entry);
+    const HANDLE search = FindFirstFileA("Mods\\*", &entry);
     if (search == INVALID_HANDLE_VALUE) {
         scanError = GetLastError();
         return result;
     }
     do {
-        if (!(entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _stricmp(entry.cFileName, "ZoneExtractor.dll"))
+        const char *extension = strrchr(entry.cFileName, '.');
+        if (!(entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && extension &&
+            (!_stricmp(extension, ".dll") || !_stricmp(extension, ".cwmod")) &&
+            _stricmp(entry.cFileName, "ZoneExtractor.dll"))
             result.emplace_back(entry.cFileName);
     } while (FindNextFileA(search, &entry));
     const DWORD lastError = GetLastError();
@@ -99,6 +103,16 @@ static std::vector<std::string> otherModFiles(DWORD &scanError) {
         scanError = lastError;
     std::sort(result.begin(), result.end());
     return result;
+}
+// A conservative file inventory labels references; it does not prove which
+// modules are active. The isolated setup workflow supplies vanilla candidates.
+static std::string referenceFolder() {
+    DWORD error = ERROR_SUCCESS;
+    const auto mods = otherModFiles(error);
+    const std::string directory = mods.empty() && !error ? "Extract" : "Extract\\modded-reference";
+    CreateDirectoryA("Extract", nullptr);
+    CreateDirectoryA(directory.c_str(), nullptr);
+    return directory;
 }
 static bool supported() {
     auto b = (unsigned char *)base();
@@ -113,13 +127,13 @@ static bool copyNative(const void *source, void *destination, size_t count) {
         return false;
     }
 }
+static bool readNative(uintptr_t address, void *destination, size_t count) {
+    return copyNative(reinterpret_cast<const void *>(address), destination, count);
+}
 static cube::Game *checkedTickContext(cube::Game *reported) {
     if (!supported())
         return nullptr;
-    const auto controller = captureabi::acceptedTickContext(base(), reinterpret_cast<uintptr_t>(reported),
-        [](uintptr_t address, void *destination, size_t count) {
-            return copyNative(reinterpret_cast<const void *>(address), destination, count);
-        });
+    const auto controller = captureabi::acceptedTickContext(base(), reinterpret_cast<uintptr_t>(reported), readNative);
     return reinterpret_cast<cube::Game *>(controller);
 }
 
@@ -232,10 +246,7 @@ static void writeSpriteTable(cube::World *w) {
     if (namesWritten)
         return;
     std::vector<captureabi::PrimarySprite> sprites;
-    if (!captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), sprites,
-            [](uintptr_t address, void *destination, size_t count) {
-                return copyNative(reinterpret_cast<const void *>(address), destination, count);
-            }) || sprites.empty())
+    if (!captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), sprites, readNative) || sprites.empty())
         return;
     std::vector<std::pair<void *, std::string>> names;
     {
@@ -605,18 +616,22 @@ static void keepHooked() {
 }
 static void install(cube::World *w) {
     keepHooked();
+    const auto module = base();
     // The game's main context (a global, as tools/MenuProbe.cpp finds it): creatures,
     // sprites and effects are drawn there.
-    if (auto main = *(ID3D11DeviceContext **)(base() + 0x551a98))
+    if (auto main = *(ID3D11DeviceContext **)(module + 0x551a98))
         hookContext(main);
     if (w->spritemanager && w->spritemanager->gfx_D3D11Graphics)
         hookContext(w->spritemanager->gfx_D3D11Graphics->pImmediateContext);
     if (w->spritemanager)
-        for (auto s : w->spritemanager->sprites)
-            if (s && s->gfx_D3D11VertexBuffer) {
-                hookContext(s->gfx_D3D11VertexBuffer->pImmediateContext);
+        for (auto s : w->spritemanager->sprites) {
+            captureabi::SpriteVertexBuffer resource;
+            if (s && captureabi::readSpriteVertexBuffer(module, reinterpret_cast<uintptr_t>(s), resource, readNative) &&
+                resource.wrapper) {
+                hookContext(reinterpret_cast<ID3D11DeviceContext *>(resource.context));
                 break;
             }
+        }
     if (TryEnterCriticalSection(&w->zones_mesh_critical_section)) {
         for (auto &[key, zone] : w->zones)
             if (zone)
@@ -632,11 +647,14 @@ static void install(cube::World *w) {
 // Refreshes the buffer -> sprite and chunk tables (game thread).
 static void refresh(cube::World *w) {
     std::unordered_map<ID3D11Buffer *, int> sprites;
-    if (w->spritemanager)
-        for (size_t i = 0; i < w->spritemanager->sprites.size(); i++) {
-            auto s = w->spritemanager->sprites[i];
-            if (s && s->gfx_D3D11VertexBuffer && s->gfx_D3D11VertexBuffer->buffer)
-                sprites[s->gfx_D3D11VertexBuffer->buffer] = (int)i;
+    const auto module = base();
+    std::vector<captureabi::PrimarySprite> primary;
+    if (captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), primary, readNative))
+        for (size_t i = 0; i < primary.size(); ++i) {
+            captureabi::SpriteVertexBuffer resource;
+            if (primary[i].address &&
+                captureabi::readSpriteVertexBuffer(module, primary[i].address, resource, readNative) && resource.buffer)
+                sprites[reinterpret_cast<ID3D11Buffer *>(resource.buffer)] = static_cast<int>(i);
         }
     std::unordered_set<ID3D11Buffer *> terrain;
     if (TryEnterCriticalSection(&w->zones_mesh_critical_section)) {
@@ -894,8 +912,18 @@ static void startSession(cube::World *w, cube::Creature *player) {
     home = player->entity_data.position;
     saved.clear();
     CreateDirectoryA("Extract", nullptr);
-    folder = "Extract\\seed_" + std::to_string(w->seed);
+    DWORD scanError = ERROR_SUCCESS;
+    const auto mods = otherModFiles(scanError);
+    const bool modified = !mods.empty() || scanError;
+    folder = std::string("Extract\\") + (modified ? "modded_seed_" : "seed_") + std::to_string(w->seed);
     CreateDirectoryA(folder.c_str(), nullptr);
+    if (FILE *provenance = _fsopen((folder + "\\capture-source.txt").c_str(), "w", _SH_DENYNO)) {
+        fprintf(provenance, "source_timestamp=%08x\nclassification=%s\nscope=new-writes-this-session\nother_mod_scan_error=%lu\n",
+                SUPPORTED_TIMESTAMP, modified ? "modded" : "vanilla-candidate", static_cast<unsigned long>(scanError));
+        for (const auto &name : mods)
+            fprintf(provenance, "other_mod_file=%s\n", name.c_str());
+        fclose(provenance);
+    }
     // Zones saved in an earlier session are kept.
     WIN32_FIND_DATAA data;
     // A zone counts as extracted once its records were saved too (version 2).
@@ -1927,7 +1955,8 @@ static void hook(void *zone, int x, int y, int z, uint8_t *block) {
 }
 
 static void dump() {
-    FILE *f = _fsopen("Extract\\block-writers.txt", "w", _SH_DENYNO);
+    const auto path = referenceFolder() + "\\block-writers.txt";
+    FILE *f = _fsopen(path.c_str(), "w", _SH_DENYNO);
     if (!f)
         return;
     std::lock_guard lock(mutex);
@@ -4234,8 +4263,9 @@ static void dump(cube::Game *g) {
     CreateDirectoryA("Extract", nullptr);
     DWORD modScanError = ERROR_SUCCESS;
     const auto mods = otherModFiles(modScanError);
-    const char *destination = mods.empty() && !modScanError ? "Extract\\gen-oracle.txt" : "Extract\\gen-oracle-modded.txt";
-    FILE *f = _fsopen(destination, "w", _SH_DENYNO);
+    const auto directory = referenceFolder();
+    const auto destination = directory + "\\gen-oracle.txt";
+    FILE *f = _fsopen(destination.c_str(), "w", _SH_DENYNO);
     if (!f)
         return;
     fprintf(f, "# source_timestamp %08x other_mod_files %zu other_mod_scan_error %lu\n", SUPPORTED_TIMESTAMP, mods.size(),
@@ -4304,7 +4334,7 @@ static void dump(cube::Game *g) {
     auto snowColour = (float *(*)(cube::World *, float *, int, int))(b + 0x2d3d90);
     auto bedColour = (float *(*)(cube::World *, float *, int, int, int))(b + 0xbd110);
     auto waterTop = (float (*)(cube::World *, int, int, float, Pl *))(b + 0x2e6420);
-    FILE *k = _fsopen("Extract\\gen-blocks.txt", "w", _SH_DENYNO);
+    FILE *k = _fsopen((directory + "\\gen-blocks.txt").c_str(), "w", _SH_DENYNO);
     if (!k)
         return;
     fprintf(k, "# world+0x330 %d world+0x334 %d world+0x244 %d seed %d\n", *(int *)((uint8_t *)w + 0x330),
@@ -4343,12 +4373,12 @@ static void dump(cube::Game *g) {
         fprintf(k, "\n");
     }
     fclose(k);
-    extract::log("Generator oracle: blocks written to Extract\\gen-blocks.txt");
+    extract::log("Generator oracle: blocks written to " + directory + "\\gen-blocks.txt");
 
     // Structures: the object of each 16-block cell (0x69c60: trees, rocks, buildings...)
     // over a square around the player and scattered far out.
     auto cellObject = (int (*)(cube::World *, int, int))(b + 0x69c60);
-    FILE *c = _fsopen("Extract\\gen-cells.txt", "w", _SH_DENYNO);
+    FILE *c = _fsopen((directory + "\\gen-cells.txt").c_str(), "w", _SH_DENYNO);
     if (!c)
         return;
     fprintf(c, "# cx cy object\n");
@@ -4365,7 +4395,7 @@ static void dump(cube::Game *g) {
         fprintf(c, "%d %d %d\n", cx, cy, cellObject(w, cx, cy));
     }
     fclose(c);
-    extract::log("Generator oracle: cell objects written to Extract\\gen-cells.txt");
+    extract::log("Generator oracle: cell objects written to " + directory + "\\gen-cells.txt");
 }
 } // namespace genoracle
 
@@ -6126,6 +6156,7 @@ static void writeZone(cube::World *w, unsigned char *zone, const std::string &st
 }
 static std::deque<std::pair<int, int>> genQueue; // a few a tick, so the game keeps running
 static int genDone = 0;
+static std::string genDirectory;
 static void queueGeneration(cube::World *w) {
     FILE *f = nullptr;
     if (fopen_s(&f, "Extract\\gen.request", "r") != 0 || !f)
@@ -6135,15 +6166,18 @@ static void queueGeneration(cube::World *w) {
         genQueue.push_back({x, y});
     fclose(f);
     DeleteFileA("Extract\\gen.request");
-    CreateDirectoryA("Extract\\oracle", nullptr);
-    CreateDirectoryA("Extract\\oracle\\gen", nullptr);
-    CreateDirectoryA("Extract\\oracle\\gen\\refreshed", nullptr);
-    if (fopen_s(&f, "Extract\\oracle\\gen\\day.txt", "w") == 0 && f) {
+    const auto root = referenceFolder();
+    const auto parent = root == "Extract" ? root + "\\oracle" : root;
+    CreateDirectoryA(parent.c_str(), nullptr);
+    genDirectory = parent + "\\gen";
+    CreateDirectoryA(genDirectory.c_str(), nullptr);
+    CreateDirectoryA((genDirectory + "\\refreshed").c_str(), nullptr);
+    if (fopen_s(&f, (genDirectory + "\\day.txt").c_str(), "w") == 0 && f) {
         fprintf(f, "%d\n", *(int *)((unsigned char *)w + 8));
         fclose(f);
     }
     genDone = 0;
-    log("Oracle: generating " + std::to_string(genQueue.size()) + " zones into Extract\\oracle\\gen");
+    log("Oracle: generating " + std::to_string(genQueue.size()) + " zones into " + genDirectory);
 }
 static void generate(cube::World *w) {
     for (int n = 0; n < 2 && !genQueue.empty(); n++) {
@@ -6162,7 +6196,7 @@ static void generate(cube::World *w) {
             continue;
         }
         const std::string name = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
-        writeZone(w, zone, "Extract\\oracle\\gen\\" + name);
+        writeZone(w, zone, genDirectory + "\\" + name);
         // The same zone after the refresh the game gives it on loading, in gen\refreshed.
         traced.clear();
         const bool tracing2 = hook(true);
@@ -6172,7 +6206,7 @@ static void generate(cube::World *w) {
         if (tracing2)
             hook(false);
         if (refreshed)
-            writeZone(w, zone, "Extract\\oracle\\gen\\refreshed\\" + name);
+            writeZone(w, zone, genDirectory + "\\refreshed\\" + name);
         else
             log("Oracle: refreshing zone " + std::to_string(zx) + " " + std::to_string(zy) + " failed");
         if (++genDone % 25 == 0 || genQueue.empty())

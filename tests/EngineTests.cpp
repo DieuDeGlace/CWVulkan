@@ -3141,6 +3141,18 @@ static int genZonesMatchExtracted(bool verbose, int maxZones) {
     if (!a.locate(""))
         return 0;
     std::filesystem::path dir = zonesDir(a.gameDir());
+    // Keep the general owner dataset and creature oracles unchanged when a
+    // separately captured vanilla terrain reference is selected for this check.
+    if (const char *reference = std::getenv("CW_TERRAIN_ZONES_DIR"); reference && *reference) {
+        dir = std::filesystem::path(reference);
+        std::error_code error;
+        if (!std::filesystem::is_directory(dir, error)) {
+            std::printf("Terrain reference directory is unavailable\n");
+            CHECK(false);
+            return 1;
+        }
+        std::printf("Terrain oracle: explicit vanilla reference %s\n", dir.string().c_str());
+    }
     if (dir.empty())
         return 0;
     struct B { uint8_t r, g, b, glow, type, flags; };

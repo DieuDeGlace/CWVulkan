@@ -74,8 +74,10 @@ Steam64 requests also coalesce by source/settings/options identity, sharing fail
 with waiters and allowing retry. A flush retires older pending generations. The
 world reader budgets96 unpinned entries separately from explicit player keeps, so
 the native121-zone neighborhood cannot starve the streaming cache. The runtime
-hybrid retains up to16 ready landscape parents. Leases keep const voxel storage
-alive through eviction without retaining a mutable generator pointer.
+hybrid retains up to 64 ready landscape parents with a 384 MiB estimated allocated
+ready-payload budget. Caller-held leases, in-flight work, allocator overhead and
+World metadata remain outside that budget. Leases keep const voxel storage alive
+through eviction without retaining a mutable generator pointer.
 
 `SteamBridge` converts four-byte Alpha materials into six-byte engine blocks with
 explicit type and flag rules. It transposes XY indexing, preserves original RGB,
@@ -212,8 +214,8 @@ cover this optimization.
 
 Parallel source requests exposed repeated landscape generation: a65-second private
 run completed563 parent generations for49 coordinates. The64-parent diagnostic
-completed56 for56, with no repeats. Runtime Alpha composition now retains up to64
-parents with a384 MiB estimated allocated ready-payload budget. Vector capacities,
+completed56 for56, with no repeats. Runtime Alpha composition now retains up to 64
+parents with a 384 MiB estimated allocated ready-payload budget. Vector capacities,
 including column blocks and nested records, supply the weights; caller leases,
 in-flight results, allocator overhead and other World data remain separate. An
 oversized result reaches callers without displacing useful cached entries. Generic
@@ -222,7 +224,7 @@ or immutable stage contents change. Exact-budget, LRU, oversize/retry and owner-
 checks pass, followed by all image suites. One full default-distance Steam-look
 capture now settles; that is not an FPS ratio or broader runtime certification.
 
-Independent direct climate references also pin seed123's nine-cell state and
+Independent direct climate references also pin seed 123's nine-cell state and
 check twelve float words at land, a mixed land/sea boundary and sea. Missing-cell
 checks retain the native defaults even when the absent cell would have zero
 weight. The separate region/location object is absent, so these are not oasis
@@ -234,11 +236,11 @@ positive-fire window adds pure and mixed fire/nonfire four-field references; its
 stored-angle enclosures also preserve the final integer sample points.
 
 Separate native-instruction references verify crossed-axis region displacement
-float words at four lattice inputs, seed123 noise offsets and six raw
+float words at four lattice inputs, seed 123 noise offsets and six raw
 rock-color float-word results with pinned synthetic cached climate. They are not
 native world captures; the existing generation math passes unchanged.
 
-Independent raw-H references pin seed123 offsets, nine cells, a missing link
+Independent raw-H references pin seed 123 offsets, nine cells, a missing link
 neighbor and absent region/location/Zone state. Both literal returned words match;
 they are conditional raw-height checks, not final generated surfaces. Synthetic
 roughness inputs additionally verify the native two-chain smooth/square staging.
@@ -264,7 +266,7 @@ now completes in113.808 seconds wall with the bounded parent-cache continuation
 below. Wider cold-load/travel, constrained-memory and multi-GPU acceptance remains
 open; Steam view-distance settings and the observation deadline were not weakened.
 Fresh full-distance Alpha-look captures also pass:26.554 seconds for the default
-seed's forest view and40.674 seconds for seed123 at another location. Their
+seed's forest view and40.674 seconds for seed 123 at another location. Their
 sampled whole-process working/private peaks were1067/1617 and986/1425 MiB. Owner
 settings were imported, both images were inspected locally, and no imagery is
 packaged. These are bounded observations, not native-image or travel certification.
@@ -278,3 +280,15 @@ No original executable code, assets, sprites, terrain exports, saves or captures
 are included in the source or development packages. Steam account/license checks
 remain mandatory. This architecture and the clean-room process do not themselves
 establish legal clearance; see PUBLICATION.md.
+
+## Bounded travel checks, 2026-11-03
+
+Two no-save Alpha-look runs completed 35 simulation seconds with a test character:
+a 512-block X flight using the default seed, and a negative 512-block X/Y flight
+using seed 123. Both crossed parent boundaries, landed, produced inspected captures
+and exited normally. Wall times were 53.12/53.60 seconds; sampled working peaks were
+1027.9/1134.4 MiB and private peaks 1308.0/1421.7 MiB. The original test save stayed
+byte-identical. The second run encountered ordinary hostile creatures; undying was
+enabled, and this is not combat acceptance. These are two configured streaming
+checks, not exhaustive forest/biome/transition coverage, a long soak, native runtime
+parity or a whole-process memory cap. Reference images stay local.

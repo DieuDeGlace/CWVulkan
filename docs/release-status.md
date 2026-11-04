@@ -10,6 +10,33 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Sprite buffer identification now uses the independently traced ordinary D3D11
+  wrapper fields, guarded copies and concrete-type/link rechecks. It distinguishes
+  the native wrapper from the COM buffer and invokes no native binding method.
+  Null, unreadable, unknown-type, remeshing and overflow fixtures pass. Live
+  extractor-only capture identified 3,230 sprite buffers and exited normally.
+  The native specification also corrects earlier abstract readiness terminology:
+  these concrete methods bind IA state and return success; they are not fence polls.
+  Other SDK views, ownership/readback and full replacement remain open.
+
+- Captures now separate modified zone exports and generator diagnostics from
+  extractor-only paths, including legacy `.cwmod` inventory and scan failures.
+  Session labels qualify new writes, not historical mixed files. Four region-header
+  failures after a modded refresh were resolved by independently recapturing those
+  same coordinates in an isolated loaded/lit vanilla session. All106,380 compared
+  blocks and all four region types match. A terrain-only reference override keeps
+  the full CPU/owner suite strict and its other datasets unchanged; that suite
+  passes. Generator formulas and expected values were not changed. Raw unlit
+  requested zones remain separate from lit samples. Save, 54 original mod files
+  and ReShade were restored and independently hash-verified; prior requested-zone
+  outputs were restored too. No owner data enters the upload. Modified-path routing
+  has build/inspection coverage; a later modified-session smoke remains useful.
+
+- Two additional no-save Alpha-look flights cross positive and negative parent
+  boundaries, land and exit normally. The default seed and seed 123 checks take
+  about 53 seconds wall each and retain the test save bytes. Inspected captures
+  add bounded travel evidence, not full-world, forest-edge or sustained-soak parity.
+
 - Primary sprite-table export now uses a small SDK-independent, guarded byte
   reader based on the independently traced native catalog contract. It preserves
   catalog-ID order, null/unready slots and raw dimensions, rejects corrupt or
@@ -89,7 +116,7 @@ older successful runs; none of these bounded changes establishes complete parity
   timing variability and runtime acceptance remain open.
 
 - Full-distance Alpha-look captures now also pass on this owner's installation:
-  the default-seed forest view completes in26.554 seconds wall, and seed123 at a
+  the default-seed forest view completes in26.554 seconds wall, and seed 123 at a
   second location completes in40.674 seconds. Both use fresh processes, no-save
   mode and the existing capture deadline. The corresponding sampled whole-process
   working/private peaks are approximately1067/1617 and986/1425 MiB. Both new images
@@ -97,7 +124,7 @@ older successful runs; none of these bounded changes establishes complete parity
   are bounded streaming/rendering checks with imported owner settings, not native
   pixel parity, travel testing or a fresh-machine acceptance result.
 
-- Alpha cold streaming now retains up to64 immutable landscape parents with a
+- Alpha cold streaming now retains up to 64 immutable landscape parents with a
   384 MiB budget for their estimated allocated ready-stage payloads. A private
   count-only65-second run previously generated563 parents for49 coordinates;
   the64-entry diagnostic completed56 generations for56 coordinates with no
@@ -117,7 +144,7 @@ older successful runs; none of these bounded changes establishes complete parity
   these conditional arithmetic fixtures are separate from runtime/oasis acceptance.
 
 - Independent Alpha climate references now check twelve literal float words across
-  land, a mixed land/sea boundary and sea under the native seed123 nine-cell state.
+  land, a mixed land/sea boundary and sea under the native seed 123 nine-cell state.
   Removing any one required cell also checks the specified defaults, including a
   cell whose complete-window weight was zero. The full CPU/owner-data suite passes;
   no generation formula was changed. These are conditional arithmetic references,
@@ -164,7 +191,7 @@ older successful runs; none of these bounded changes establishes complete parity
   not an FPS result or completed cold-streaming acceptance. Lazy backend cache roles,
   ability-specific source anchors and broader native-runtime comparisons remain open.
 
-- Independently derived Alpha Rk references now check seed123's original offset
+- Independently derived Alpha Rk references now check seed 123's original offset
   draw positions, its lattice-noise word and six raw RGB float-word results with
   synthetic cached climate. The existing generation math matches all six exactly;
   no replacement color formula was introduced. The Alpha terrain suite passes.
@@ -1000,7 +1027,7 @@ older successful runs; none of these bounded changes establishes complete parity
   final petrification pass includes local, network, dead and new registered actors.
   Resident transfer retains native16-block home cells with the specified coordinate
   narrowing, truncates copied position toward zero for region lookup, zero-extends
-  style32 into64 bits, and preserves low64 altitude addition. The shared fixed-block
+  style32 into 64 bits, and preserves low64 altitude addition. The shared fixed-block
   conversion also drives terrain rays. Asset-free tests cover collection/permissions,
   moving storage, admission ordering, inclusive range edges, extreme coordinate
   narrowing, field-copy widths and constructor/postprocessing order. Owner-data

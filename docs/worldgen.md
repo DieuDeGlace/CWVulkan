@@ -241,3 +241,10 @@ Unlike the BigRegions mod, which only renames which region a point belongs to, t
 
 Found with the generated zones: place kind 4's cells are objects 0x23-0x26 but 0x25 (`(t - 0x23) & ~3`, not `t & ~3`); 0x140490's travellers are {2, 9, 0, 13, 7} (the 0 is a register); 0x1241b0 keeps max(n / 8, 8) of its shuffled cells (growing the list with cell 0 0); crop fields add kind-21 spots one time in four (zone+0x100 is the spot map), which the crops to pick then take; houses of building kind 6 blend their colours relative to the ground. The world seed of a zones folder is the number after its last underscore.
 Not yet: castle room detail codes 11 and 12 (the halls of big structure 42 and the like: their pieces use a pattern-0 scheme, so their ceilings show as a few lighter blocks), the mason's ground pattern (2, 0xbe8d0). The lamp objects' +0x20 byte is never written by the game (stack left-overs): 0 on its worker threads, as ours.
+
+For strict terrain checks, use an extractor-only isolated session as described in
+[extraction](extraction.md#isolated-reference-recapture). Modded sessions now write
+separate zone and generator directories; historical default folders may be mixed.
+`CW_TERRAIN_ZONES_DIR` selects a pinned loaded/lit reference for the terrain test
+without changing other owner oracles. Fresh out-of-world `gen.request` output is
+unlit and belongs to a different verification stage. Keep both sets owner-local.

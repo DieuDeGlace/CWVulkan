@@ -137,10 +137,14 @@ a payload allocation without changing the outer sprite pointer.
 Nonnull primary membership is not a successful-load or readiness predicate.
 Constructor 0x16e6b0 starts the raw RGB pointer and dimension fields at zero. A
 failed first file-open route in 0x16f320 can return with that empty resource still
-occupying its catalog slot. Separately, **0x16eba0** requires nonnull backend
-resource pointers at **sprite+0x70/+0x78** and successful readiness results from
-both. Lookup 0x17190 does not perform that test. Raw voxel availability, completed
-file loading, mesh creation and backend readiness must not be conflated.
+occupying its catalog slot. Separately, **0x16eba0** requires nonnull buffer-wrapper
+pointers at **sprite+0x70/+0x78** and nonzero results from both virtual+0x08 calls.
+On the reached ordinary D3D11 backend, those concrete methods **bind vertex/index
+buffers and return byte 1 unconditionally**; they are not GPU-fence/readiness polls.
+Their side effects, underlying buffer fields and limits are established in
+[sprite buffer resources §4](steam-sprite-buffer-resources.md#4-binding-calls-and-the-readiness-qualification).
+Lookup 0x17190 performs neither call. Raw voxel availability, completed file
+loading, mesh creation, buffer binding and GPU readiness must not be conflated.
 
 The primary vector is **not an exhaustive registry of all live sprites**.
 Procedural category **0x17/23** items demonstrably use the separate cache at
