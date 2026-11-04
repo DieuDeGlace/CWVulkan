@@ -7,6 +7,7 @@
 #include "NativeTerrainBuffers.h"
 #include "NativeLoadedZones.h"
 #include "CaptureWorldSections.h"
+#include "CapturePlugin.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -7294,20 +7295,23 @@ static void tick(cube::Game *g) {
 }
 } // namespace extract
 
-class ZoneExtractor : public GenericMod {
-  public:
-    void Initialize() override {
-        std::thread(extract::writer).detach();
-        extract::log("ZoneExtractor loaded (F11 sweep around home, F6 calibration tour, F9 home, F5 character snapshot, F4 record animation)");
-    }
-    void OnGameTick(cube::Game *g) override {
-        if (auto *verified = extract::checkedTickContext(g))
-            extract::tick(verified);
-    }
-};
-EXPORT GenericMod *MakeMod() { return new ZoneExtractor(); }
+namespace {
+void initializeCapture(void *) {
+    std::thread(extract::writer).detach();
+    extract::log("ZoneExtractor loaded (F11 sweep around home, F6 calibration tour, F9 home, F5 character snapshot, F4 record animation)");
+}
+void tickCapture(void *, std::uintptr_t reported) {
+    if (auto *verified = extract::checkedTickContext(reinterpret_cast<cube::Game *>(reported)))
+        extract::tick(verified);
+}
+} // namespace
+extern "C" __declspec(dllexport) void *MakeMod() {
+    // The observed loader retains this pointer. No delete/unregister protocol is
+    // established; callback storage remains available for the process session.
+    return new captureabi::CapturePlugin(nullptr, initializeCapture, tickCapture);
+}
 // Earliest entry point: the hook must be in place before the game loads sprites.
-EXPORT void ModPreInitialize() {
+extern "C" __declspec(dllexport) void ModPreInitialize() {
     extract::hookSpriteLoading();
     extract::hitprobe::install();
     extract::blockprobe::install();
@@ -7320,5 +7324,5 @@ EXPORT void ModPreInitialize() {
     extract::aiprobe::install();
     extract::netrecorder::install();
 }
-EXPORT int ModMajorVersion() { return 7; }
-EXPORT int ModMinorVersion() { return 3; }
+extern "C" __declspec(dllexport) int ModMajorVersion() { return 7; }
+extern "C" __declspec(dllexport) int ModMinorVersion() { return 3; }

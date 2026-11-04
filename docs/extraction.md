@@ -245,3 +245,21 @@ Win32 critical-section contention and scope/unwinding release on synthetic stora
 `CaptureMemory.h` centralizes the AMD64 guarded-reader arithmetic contract. These
 checks complement, rather than replace, the pending supported-game smoke. Other
 extractor paths still use SDK fields, and the known live-installed DLL is retained.
+
+## Independent loader callback record, 2026-11-04
+
+The DLL factory now returns an explicit project-owned callback record instead of
+inheriting SDK GenericMod. The independent installed-loader ABI note supplies its
+30 function-pointer positions, 29 priority bytes and opaque argument shapes. Integer
+interception callbacks return 0; unused callbacks preserve existing out-state.
+Capture policy admits tick in priority pass0 and marks other events 255, outside
+the loader's five passes. These choices are not recovered SDK defaults. The four
+required entry points use explicit C exports; native context admission is retained.
+
+All five targets, raw-ABI fixtures, exported-name checks and the full CPU/owner
+suite pass. This callback replacement has not yet had its own supported-game live
+smoke. Earlier native title captures qualify the prior buffer/list/lock build.
+The returned object is retained for the process session; no destructor slot,
+unregister or safe external-unload protocol is invented. Other exporter code
+still uses SDK game views, so this is not a complete adapter or final SDK-free
+release. Original assets and test captures remain owner-local.

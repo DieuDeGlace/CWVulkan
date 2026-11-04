@@ -10,6 +10,17 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The extractor factory now returns an original explicit 30-slot callback record,
+  replacing SDK GenericMod inheritance and its export macro. Its layout, opaque
+  register shapes and neutral results come only from the independent loader ABI
+  and lifetime notes. Capture policy enables tick at priority 0 and disables unused
+  events; this is not a recovered SDK default. Raw-host fixtures cover every slot,
+  priority bytes, initialization/context delivery and preserved mutable state.
+  All five targets, DLL export-name checks and the full CPU/owner suite pass.
+  This new callback integration needs its own supported-game live check; earlier
+  title results qualify the prior buffer/list/lock build, not this change. Other
+  SDK game views and release rights/revision/replacement gates remain open.
+
 - Loaded-zone enumeration in terrain-buffer capture now uses an independently
   specified sentinel-linked byte view. It preserves current forward order, counts
   null entries without treating them as Zones, ignores keys/buckets, and rejects
@@ -555,7 +566,7 @@ older successful runs; none of these bounded changes establishes complete parity
 
 - Generated static-object records now preserve the signed64 user/link ID and
   unsigned required-item count rather than losing both during conversion to the
-  live format. The default count remains1; explicit0 and255 remain unchanged.
+  live format. The default count remains1; explicit0 and 255 remain unchanged.
   Save/restore integration coverage follows these fields from generation through
   recorded zone state back into a live list. All five targets build warning-free;
   full CPU/owner and77 shader,2 camera,24 GUI,6 map/shared-water/Alpha-scenery

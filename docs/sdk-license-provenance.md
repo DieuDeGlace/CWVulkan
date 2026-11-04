@@ -150,3 +150,13 @@ Terrain-buffer capture now also replaces its SDK loaded-zone iterator with the
 ordered capture lease is original project code using documented native lock
 addresses and Windows APIs. Other extractor paths remain SDK-dependent; this
 change does not establish the missing SDK grant, revision or complete replacement.
+
+
+The DLL factory's callback record is also independently authored from the complete
+[loader ABI](specs/steam-mod-loader-capture-abi.md) and its separate
+[lifetime observations](specs/steam-mod-loader-object-lifetime.md). Its header uses
+only standard library types; the exporter no longer inherits SDK GenericMod or
+uses its export macro. The rest of the exporter still includes SDK game views.
+Raw-host tests and required export checks pass; this new callback integration is
+not yet live-validated. No SDK-wide grant, exact revision or complete replacement
+is established by this bounded change.

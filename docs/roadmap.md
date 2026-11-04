@@ -774,6 +774,15 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 
 ## Extractor callback admission, 2026-11-03
 
+- [x] Replace SDK GenericMod inheritance with an independently authored explicit
+  callback record covering all 30 reached positions and 29 priority bytes. Raw-host
+  tests verify initialization, tick routing, neutral interception and unchanged
+  caller-owned mutable state. All five targets, required DLL exports and full
+  CPU/owner checks pass. Project policy uses tick priority 0 and disables unused
+  events; no SDK default was inferred. A new supported-game integration smoke and
+  all other SDK dependency/provenance gates remain open.
+
+
 - [x] Validate the loader tick value against the independently traced published
   controller and reject quit/unreadable/overflow paths before typed access. Pure
   memory-fixture admission tests and the full CPU/owner-data suite pass. All five
@@ -810,8 +819,8 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 - [x] Independently implement bounded active terrain-group traversal and shared
   vertex-buffer views with the documented lock pair held through each capture.
   Linked/cyclic/corrupt/changed-publication fixtures and CPU/owner checks pass.
-  Supported-game live validation of this new path remains a release gate; other
-  World views still depend on the SDK.
+  The later loaded-zone checkpoint supplies a bounded original-game title smoke;
+  other World views still depend on the SDK.
 
 - [x] Replace the remaining SDK loaded-zone iterator in terrain-buffer capture
   with the independently traced element-sequence view. Synthetic noncontiguous,

@@ -1835,3 +1835,16 @@ and CPU checks, the implementer ran an isolated, extractor-only native title smo
 The native-only author did not read these outputs. Owner Save/Mods/ReShade were
 restored and hash-checked; only bounded integration is established. No owner data
 or original asset is added to source/runtime packages.
+
+### Independent loader callback record, 2026-11-04
+
+The implementer used the full native-only loader ABI and factory-lifetime prose,
+plus owned source, to author an explicit callback record and its neutral handlers.
+It does not inherit an SDK class. Its complete numeric table and byte priorities
+represent independently traced machine facts, not a reconstructed SDK declaration.
+Priority0 for tick and 255 for unused events are original capture policy. Synthetic
+host tests invoke every reached signature and check initialization, routing,
+neutral results and unchanged caller state; own DLL exports are also inspected.
+No original or SDK implementation/header was read or copied. The new integration
+still needs native execution validation, and other SDK dependencies remain open.
+No owner captures or original assets enter either package.
