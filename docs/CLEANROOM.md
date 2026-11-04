@@ -1754,3 +1754,19 @@ or full SDK class layout was introduced. The actual DLL still depends on the
 previous SDK build and has not been live-validated after this change. No new
 redistribution right or unproved teardown/cadence/readiness policy is asserted.
 Owner data and private artifacts stay outside source and runtime packages.
+
+## Live extractor validation and loader lifetime facts, 2026-11-03
+
+The implementer validated the owned guarded DLL through Cube World's title menu,
+existing request-file protocol and normal close. Two refreshed resources retained
+their previous bytes, the owner volume comparator passed, and the process exited0.
+Only that game's window was controlled; screenshots, owner resource copies and
+logs remain private and unbundled. This was the existing modified installation,
+not a fresh setup or proof of every native quit branch.
+
+The separate native-only author wrote steam-mod-loader-object-lifetime.md from
+the scoped original loader and independent prose only. The implementer read its
+stable sections1–5 without implementation access. Array/record cleanup and retained
+factory pointers are distinct facts; no loader-owned release, full SDK class,
+eternal lifetime or safe external unload policy is inferred. No independent adapter
+was implemented by this checkpoint, and the SDK permission gate remains open.

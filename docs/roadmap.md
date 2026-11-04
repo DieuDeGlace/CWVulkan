@@ -777,8 +777,10 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 - [x] Validate the loader tick value against the independently traced published
   controller and reject quit/unreadable/overflow paths before typed access. Pure
   memory-fixture admission tests and the full CPU/owner-data suite pass. All five
-  targets build. Live supported-game startup/quit/capture validation and the SDK
-  rights/full replacement gates remain open; title identity does not imply readiness.
+  targets build. The existing-owner title startup/resource-refresh/normal-close
+  smoke check passes: two byte-identical exports,332 owner volumes matching and
+  game exit code0. Loaded-world/recording/clean-install coverage and the SDK rights/
+  full replacement gates remain open; title identity does not imply readiness.
 
 ## Host source-window continuation, 2026-11-03
 

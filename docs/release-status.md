@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Live validation of the guarded extractor now passes on the existing owner
+  installation. The verified rebuilt DLL was installed while Cube World was
+  closed, with the prior DLL retained in a checked backup. Startup refreshed the
+  sprite exports; a title-menu request captured two existing full-key procedural
+  resources with zero lookup/write failures and byte-identical output. The owner
+  resource check then compared332 volumes with zero mismatches. Cube World closed
+  through its normal window command and returned exit code0. No character was
+  loaded for this check and no other mod was changed. Direct Windows window
+  capture timed out; a fresh Steam screenshot verified the title menu instead.
+  The F10 automation attempt produced no capture and is not counted as passing.
+  This closes the observed startup/resource/normal-close smoke check, not loaded-
+  world recording, every quit branch, clean-machine recovery or SDK release rights.
+
 - The extractor now checks its callback argument against the supported image's
   published native controller and reads the quit byte through a guarded copy
   before any typed controller/World access. The independent native trace proves

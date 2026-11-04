@@ -107,3 +107,19 @@ revision/content scope would be additional evidence, not a conclusion implied
 by the existing copied notice. Work stops at this metadata boundary; no
 implementation reuse, source modification or contact action is authorized by
 this document itself.
+
+## 5. Additional upstream history metadata, 2026-11-03
+
+A follow-up public metadata query records coremaze/CWSDK's only returned branch,
+master, at `083e67b5e301483c4a222989c046fc2041d134a8`. Repository metadata marks it
+archived and returns no detected license identifier. A separate bare clone used
+`blob:none` filtering with no checkout. A rename-disabled, names-only history
+inventory covered50 reachable commits and found no added/modified path whose
+filename begins with the common UNLICENSE/LICENSE/LICENCE/LICENSING/COPYING/NOTICE/
+COPYRIGHT names, including nested paths. No SDK implementation or header content
+was read. This is bounded path/commit metadata, not an exhaustive search of every
+possible prose grant or a proof that permission cannot exist. It neither pins the
+local vendor snapshot to this upstream revision nor resolves the permission gate.
+No author was contacted and no additional SDK implementation reuse was authorized.
+The public source is the [upstream repository](https://github.com/coremaze/CWSDK)
+and its [repository metadata](https://api.github.com/repos/coremaze/CWSDK).
