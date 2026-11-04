@@ -772,6 +772,16 @@ individual feature documents.
 The independently authored [runtime-gap specification](specs/remaining-runtime-gaps.md)
 resolves several questions in older specs. Remaining checkboxes are intentional.
 
+## Host source-window continuation, 2026-11-03
+
+- [x] Replace host square source demand with the independently verified per-player
+  270-block box/radius-5 union, including eagle destinations. Keep physical resident
+  admission separate and unload logical residents outside the wanted union even
+  if a reader retains their source terrain. Native 77/78/79 phase, multiplayer
+  overlap, negative/narrowed coordinates and owner-data instance-death travel
+  regressions pass, together with the full CPU/owner-data suite. Exact concurrent
+  cache/job scheduling and all packet-request demand paths remain unqualified.
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the

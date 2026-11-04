@@ -7,6 +7,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <set>
 
 int steamMeshCostTests() {
     Assets assets;
@@ -105,7 +106,7 @@ int steamSceneRangeTests() {
           "source truncation and corrected mesh centers differ at negative fractional boundaries");
     const auto wrapped = zonedemand::clientWindow({(1LL << 48) + 64LL * 65536, 0, 0}, 50);
     check(wrapped.center[0] == 1, "source narrows fixed blocks before selecting a zone");
-    auto countSource = [](const zonedemand::ClientWindow &window) {
+    auto countSource = [](const zonedemand::Window &window) {
         int count = 0;
         for (int x = window.minimum[0]; x <= window.maximum[0]; ++x)
             for (int y = window.minimum[1]; y <= window.maximum[1]; ++y)
@@ -116,9 +117,36 @@ int steamSceneRangeTests() {
               countSource(zonedemand::clientWindow({32LL * 65536, 32LL * 65536, 0}, 5)) == 11 &&
               countSource(zonedemand::clientWindow({0, 0, 0}, 0)) == 9,
           "source distance minimum remains distinct from the scene's minimum radius");
+    const auto hostEdge = zonedemand::hostWindow({0, 0, 0});
+    const auto hostMiddle = zonedemand::hostWindow({14LL * 65536, 14LL * 65536, 0});
+    const auto hostMixed = zonedemand::hostWindow({0, 14LL * 65536, 0});
+    check(countSource(hostEdge) == 79 && countSource(hostMiddle) == 77 && countSource(hostMixed) == 78 &&
+              countSource(zonedemand::hostWindow({50LL * 65536, 50LL * 65536, 0})) == 79,
+          "host source demand retains its native phase-dependent 77/78/79 footprint");
+    check(hostEdge.minimum == zonedemand::BlockPoint{-5, -5} && hostEdge.maximum == zonedemand::BlockPoint{4, 4} &&
+              hostMiddle.minimum == zonedemand::BlockPoint{-4, -4} && hostMiddle.maximum == zonedemand::BlockPoint{4, 4},
+          "host demand floors the fixed 270-block box before its radius-5 gate");
+    check(zonedemand::hostWindow({-65536 / 2, -64LL * 65536 - 65536 / 2, 0}).center ==
+              zonedemand::BlockPoint{0, -1} &&
+              zonedemand::hostWindow({(1LL << 48) + 64LL * 65536, 0, 0}).center[0] == 1,
+          "host demand truncates negative fractions and narrows blocks before its tile conversion");
+    std::set<zonedemand::BlockPoint> hostUnion;
+    auto addHost = [&](const zonedemand::Window &window) {
+        for (int x = window.minimum[0]; x <= window.maximum[0]; ++x)
+            for (int y = window.minimum[1]; y <= window.maximum[1]; ++y)
+                if (window.contains(x, y))
+                    hostUnion.insert({x, y});
+    };
+    addHost(hostEdge);
+    addHost(hostEdge);
+    check(hostUnion.size() == 79, "multiple colocated players do not duplicate host demand");
+    addHost(zonedemand::hostWindow({64LL * 65536, 0, 0}));
+    check(hostUnion.size() == 89, "adjacent player host windows form the native overlapping union");
     const zonedemand::BlockPoint destination{6400, -64};
     const auto sourceFlight = zonedemand::eagleAnchor(0x9c, destination);
     const auto inFlight = zonedemand::clientWindow({0, 0, 0}, 50, sourceFlight);
+    check(zonedemand::hostWindow({0, 0, 0}, sourceFlight).center == zonedemand::BlockPoint{100, -1},
+          "host source demand selects the same active eagle block destination");
     check(sourceFlight && inFlight.center == zonedemand::BlockPoint{100, -1} &&
               zonedemand::preparationCenter({0, 0, 0}, sourceFlight) == zonedemand::BlockPoint{100, -1},
           "eagle source and mesh preparation use the raw signed block destination");

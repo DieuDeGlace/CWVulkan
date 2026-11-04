@@ -17,12 +17,12 @@ BlockPoint preparationCenter(const std::array<int64_t, 3> &physical, const std::
     return anchor ? BlockPoint{floorZone((*anchor)[0]), floorZone((*anchor)[1])}
                   : BlockPoint{gamemath::floorFixedZone(physical[0]), gamemath::floorFixedZone(physical[1])};
 }
-ClientWindow clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
-                          const std::optional<BlockPoint> &anchor) {
+Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
+                    const std::optional<BlockPoint> &anchor) {
     int32_t radius = signedBits(uint32_t(renderDistance) * 1920u) / 100;
     if (radius <= 64)
         radius = 64;
-    ClientWindow result;
+    Window result;
     const uint32_t zones = uint32_t(radius / 64 + 1);
     result.radiusSquared = signedBits(zones * zones);
     for (int axis = 0; axis < 2; ++axis) {
@@ -34,11 +34,22 @@ ClientWindow clientWindow(const std::array<int64_t, 3> &physical, int32_t render
     }
     return result;
 }
+Window hostWindow(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor) {
+    Window result;
+    result.radiusSquared = 25;
+    for (int axis = 0; axis < 2; ++axis) {
+        const int32_t block = anchor ? (*anchor)[axis] : signedBits(uint32_t(physical[axis] / 65536));
+        result.center[axis] = floorZone(block);
+        result.minimum[axis] = floorZone(signedBits(uint32_t(block) - 270u));
+        result.maximum[axis] = floorZone(signedBits(uint32_t(block) + 270u));
+    }
+    return result;
+}
 bool withinRetention(int64_t dx, int64_t dy, int32_t sceneRadius) {
     const double x = double(dx), y = double(dy), radius = double(int64_t(sceneRadius) + 1);
     return x * x + y * y <= radius * radius;
 }
-bool ClientWindow::contains(int64_t x, int64_t y) const {
+bool Window::contains(int64_t x, int64_t y) const {
     if (x < minimum[0] || x > maximum[0] || y < minimum[1] || y > maximum[1])
         return false;
     const double dx = double(x - center[0]), dy = double(y - center[1]);

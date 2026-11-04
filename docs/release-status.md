@@ -10,6 +10,17 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Host source demand now follows the independently specified per-player union:
+  a 270-block box clipped to the radius-5 disk, with phase-dependent 77/78/79
+  single-player candidates. Ability 0x9c selects the raw block destination;
+  physical player positions remain the resident-admission input. Logical host
+  unloads and instance-death release follow this wanted set even when another
+  reader retains departure terrain. Mirror-client behavior is unchanged. All five
+  targets build and the full CPU/owner-data suite passes, including native phase,
+  negative/narrowed coordinates, overlapping-player union and cached-terrain travel
+  regressions. Background cache/job timing and broader packet-request producers
+  remain qualified; no exact concurrent native cache lifetime is asserted.
+
 - Eagle travel now binds generated-world source/mesh preparation to the existing
   actor's signed block destination only during ability0x9c. Physical retention,
   title flight0x9d and arrival gliding0x78 remain separate; destination fields are

@@ -1,4 +1,5 @@
 #include "Spawned.h"
+#include "SteamZoneDemand.h"
 #include "NativeWorldObjects.h"
 #include "NativeDeadCreatures.h"
 #include "SteamCreatureLights.h"
@@ -154,10 +155,17 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     });
     forEachWorldCreature([&](const uint8_t *record) { participants.collect(record); });
     std::vector<worldgen::ResidentWorld::Player> at;
+    std::vector<zonedemand::Window> sourceWindows;
     for (const uint8_t *record : participants.players()) {
         int64_t position[3];
         std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
         at.push_back({position[0], position[1], position[2]});
+        if (!client) {
+            zonedemand::BlockPoint destination;
+            std::memcpy(destination.data(), record + worldgen::creature::HOME_PLACE, sizeof destination);
+            sourceWindows.push_back(zonedemand::hostWindow({position[0], position[1], position[2]},
+                zonedemand::eagleAnchor(record[worldgen::creature::ABILITY], destination)));
+        }
     }
     // Before a player arrives, the engine can stream terrain around its stand-in.
     // That position is not a native player and cannot admit or refresh residents.
@@ -169,13 +177,31 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     std::vector<std::pair<int, int>> centres;
     for (const auto &p : streaming)
         centres.push_back({floorDiv(gamemath::floorFixedBlock(p.x), 64), floorDiv(gamemath::floorFixedBlock(p.y), 64)});
+    // Host source lifetimes follow the per-player wanted union, not the renderer's
+    // source cache or resident admission around the physical player positions.
+    std::set<std::pair<int, int>> wantedSources;
+    if (!client) {
+        if (sourceWindows.empty())
+            for (const auto &p : streaming)
+                sourceWindows.push_back(zonedemand::hostWindow({p.x, p.y, p.z}));
+        for (const auto &window : sourceWindows)
+            for (int x = window.minimum[0]; x <= window.maximum[0]; ++x)
+                for (int y = window.minimum[1]; y <= window.maximum[1]; ++y)
+                    if (window.contains(x, y))
+                        wantedSources.emplace(x, y);
+    }
     auto near = [&](int zx, int zy, int reach) {
+        if (!client)
+            return wantedSources.contains({zx, zy});
         for (const auto &[cx, cy] : centres)
             if (std::abs(zx - cx) <= reach && std::abs(zy - cy) <= reach)
                 return true;
         return false;
     };
-    ew.keepAround(this, centres, NEAR_ZONES + 1);
+    if (client)
+        ew.keepAround(this, centres, NEAR_ZONES + 1);
+    else
+        ew.keepAround(this, std::vector<std::pair<int, int>>(wantedSources.begin(), wantedSources.end()), 0);
     // A zone that leaves memory has its state recorded (0x2d3e20) and its lists let go.
     for (const nativesaves::Cell &zone : zoneStates.zonesInMemory())
         if (!near(zone[0], zone[1], NEAR_ZONES + 1)) {
@@ -210,8 +236,9 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     // runtime Zone objects alive and order their unsigned identities, not XY keys.
     std::vector<residentpass::Zone> selected;
     for (const auto key : worldgen::residentZones(at))
-        if (auto zone = ew.gameZoneToken(key.x, key.y))
-            selected.push_back({zone->order, {key.x, key.y}, std::move(zone->keepAlive)});
+        if (wantedSources.contains({key.x, key.y}))
+            if (auto zone = ew.gameZoneToken(key.x, key.y))
+                selected.push_back({zone->order, {key.x, key.y}, std::move(zone->keepAlive)});
     residentpass::orderZones(selected);
     std::vector<std::pair<int, int>> fresh;
     const worldgen::ResidentWorld resident = residentWorld(participants);

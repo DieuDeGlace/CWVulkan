@@ -1693,3 +1693,15 @@ Four independent arithmetic float-word fixtures guard displacement axes/staging.
 The established displacement formula remains unchanged.
 The geometry-cache lifetime policy is explicitly the replacement backend's policy.
 No original assets, executable code or recorded owner data were added.
+
+## Host source-demand union, 2026-11-03
+
+The implementer used steam-world-zone-window-demand.md section 7, the separate
+steam-source-window-ability-anchor.md contract and owned engine code only. Host
+requested-zone geometry, player-union membership and logical resident unloads now
+follow those facts. Physical resident admission remains distinct from the travel
+source anchor. Synthetic geometry references and the existing owner-data lifecycle
+fixture check the change, including instance-death release while a separate reader
+pins the old terrain. The replacement retains its own background loader and cache;
+this does not establish native concurrent scheduling or every network demand path.
+No native or SDK implementation was read, and no owner data is added to packages.

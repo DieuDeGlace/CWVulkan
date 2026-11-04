@@ -225,6 +225,26 @@ void generatedEnemy() {
     placePlayer(host, home);
     host.update(blocks, home);
     CHECK_RESPAWN(host.record(id) && health(host.record(id)) > 0);
+    // Eagle demand leaves the physical position unchanged. Even a separately
+    // pinned client source must not keep host residents/deaths alive or re-admit
+    // them while the host wants only the distant destination.
+    host.takeDeaths(blocks);
+    setHealth(host.record(id), 0);
+    host.takeDeaths(blocks);
+    CHECK_RESPAWN(host.isWorldDead(id));
+    uint8_t *traveller = host.record(1);
+    int64_t departure[3];
+    std::memcpy(departure, traveller + worldgen::creature::POSITION, sizeof departure);
+    const int32_t destination[2]{int32_t(departure[0] / 65536 + 1280), int32_t(departure[1] / 65536)};
+    std::memcpy(traveller + worldgen::creature::HOME_PLACE, destination, sizeof destination);
+    traveller[worldgen::creature::ABILITY] = 0x9c;
+    host.update(blocks, home);
+    CHECK_RESPAWN(!host.isWorldDead(id) && !host.record(id));
+    CHECK_RESPAWN(blocks.gameZoneToken(targetZone.first, targetZone.second).has_value());
+    CHECK_RESPAWN(std::memcmp(traveller + worldgen::creature::POSITION, departure, sizeof departure) == 0);
+    traveller[worldgen::creature::ABILITY] = 0x78; // retained destination is no longer selected
+    host.update(blocks, home);
+    CHECK_RESPAWN(host.record(id) && health(host.record(id)) > 0);
     // A permanent old death is respected in native mode, recovered in respawn
     // modes, and unrelated saved ids are retained.
     SpawnedCreatures permanentSave;
