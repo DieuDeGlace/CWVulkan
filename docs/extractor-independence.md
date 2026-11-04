@@ -5,12 +5,18 @@ The [provenance audit](sdk-license-provenance.md) has not established a grant fo
 the exact SDK snapshot. Independent replacements use original project code and
 the separately authored contracts in `specs/`; SDK headers, implementations,
 compiler layout dumps and third-party reconstructions are not implementation
-references. This workboard does not grant rights or certify final redistribution.
+references. Native-only authors use the standalone
+[author policy](CLEANROOM_AUTHOR.md), which contains no implementation history.
+This workboard does not grant rights or certify final redistribution.
 
 ## Completed adapters
 
 - Loader callback record and forwarded-context validation.
-- Primary sprite catalog and ordinary vertex-buffer metadata.
+- Primary sprite catalog and ordinary vertex-buffer metadata. Calibration context
+  discovery, calibration naming and animation/snapshot slot maps now use guarded
+  primary reads. An unavailable map defers recording and preserves previous
+  snapshots/calibration rather than publishing unknown slot IDs. Other catalog
+  side records and tour/graphics consumers remain in the remaining-view scope.
 - Loaded-zone enumeration, active terrain buffers and their scoped lock pair.
 - Stored Zone terrain and the original CWZ1 codec.
 - Proper-name fragment data reads from a verified RVA/length manifest.

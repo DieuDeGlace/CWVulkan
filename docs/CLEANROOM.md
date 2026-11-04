@@ -1,5 +1,9 @@
 # Clean-room process
 
+**Role boundary:** this document includes implementation history below the process
+rules. Native-only specification authors must read the standalone
+[author policy](CLEANROOM_AUTHOR.md) instead and must not read this combined file.
+
 CubeVulkan is to Cube World what OpenMW is to Morrowind: its own engine, written from a
 description of how the game behaves, that reads the content of the owner's own copy. To keep
 source provenance separate it follows a clean-room process: the people (or agents) who read the game's code don't write
@@ -15,11 +19,10 @@ CubeVulkan's code, and those who write the code don't read the game's code.
    `release` and its Alpha `alpha` folders alike). Alpha specs come from the Alpha decompile
    (`disassembled alpha cube world`). Routines are cited by RVA.
 
-   The spec writer may look at the reconstructions to cross-check a reading: a misread
-   offset, a stuck routine, or a guess about what something is for. It takes nothing from
-   them. Whatever the cross-check suggests is confirmed in the decompile and written in the
-   spec's own words, citing the decompile, with none of the reconstruction's names, comments
-   or structure. They have no license, so all rights stay with their authors.
+   The spec writer reads only original native evidence and finalized independent prose.
+   It must not inspect reconstructions, SDK source, engine/exporter code, tests, owner
+   outputs, probes or implementation history. Unproved facts remain unresolved. Follow
+   the separate [author policy](CLEANROOM_AUTHOR.md), including its exposure-stop rule.
 2. **Implementation.** A second agent reads only the spec and CubeVulkan's own sources. It
    never opens the decompile, the binary's code or Infinite-Cubes. It writes the code with
    CubeVulkan's structure and names, readable on its own, commented in plain words.

@@ -688,10 +688,11 @@ static void install(cube::World *w) {
         hookContext(main);
     if (w->spritemanager && w->spritemanager->gfx_D3D11Graphics)
         hookContext(w->spritemanager->gfx_D3D11Graphics->pImmediateContext);
-    if (w->spritemanager)
-        for (auto s : w->spritemanager->sprites) {
+    std::vector<captureabi::PrimarySprite> primary;
+    if (captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), primary, readNative))
+        for (const auto &sprite : primary) {
             captureabi::VertexBufferView resource;
-            if (s && captureabi::readSpriteVertexBuffer(module, reinterpret_cast<uintptr_t>(s), resource, readNative) &&
+            if (sprite.address && captureabi::readSpriteVertexBuffer(module, sprite.address, resource, readNative) &&
                 resource.wrapper) {
                 hookContext(reinterpret_cast<ID3D11DeviceContext *>(resource.context));
                 break;
@@ -761,6 +762,9 @@ static void write(const std::vector<std::pair<void *, std::string>> &names, cube
         ", chunk buffers " + std::to_string(chunks.size()) + ", cached matrices " + std::to_string(matrices.size()));
     if (unit <= 0)
         return; // No terrain reference yet; keep the existing file.
+    std::vector<captureabi::PrimarySprite> primary;
+    if (!captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), primary, readNative))
+        return; // An unavailable catalog must not replace the previous calibration.
     FILE *f = nullptr;
     if (fopen_s(&f, "Extract\\sprite-scales.txt", "w") != 0 || !f)
         return;
@@ -768,9 +772,9 @@ static void write(const std::vector<std::pair<void *, std::string>> &names, cube
             chunkSamples.size());
     for (auto &[slot, list] : samples) {
         std::string name = "?";
-        if (w->spritemanager && slot < (int)w->spritemanager->sprites.size())
+        if (slot >= 0 && size_t(slot) < primary.size())
             for (auto it = names.rbegin(); it != names.rend(); ++it)
-                if (it->first == w->spritemanager->sprites[slot]) {
+                if (it->first == reinterpret_cast<void *>(primary[slot].address)) {
                     name = it->second;
                     break;
                 }
@@ -4782,12 +4786,15 @@ static bool recording = false;
 static FILE *file = nullptr;
 static uint32_t recorded = 0;
 
-static std::unordered_map<void *, int> slotMap(cube::World *w) {
-    std::unordered_map<void *, int> slotOf;
-    if (w->spritemanager)
-        for (size_t i = 0; i < w->spritemanager->sprites.size(); i++)
-            slotOf[w->spritemanager->sprites[i]] = (int)i;
-    return slotOf;
+static bool slotMap(cube::World *w, std::unordered_map<void *, int> &output) {
+    std::vector<captureabi::PrimarySprite> primary;
+    if (!captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), primary, readNative))
+        return false;
+    std::unordered_map<void *, int> slots;
+    for (size_t i = 0; i < primary.size(); ++i)
+        slots[reinterpret_cast<void *>(primary[i].address)] = static_cast<int>(i);
+    output = std::move(slots);
+    return true;
 }
 static int64_t *spritePointers(cube::Creature *c) { return &c->animation_state.face_sprite; }
 static const Matrix4 *matrices(cube::Creature *c) { return &c->animation_state.body_with_head_matrix; }
@@ -4801,6 +4808,9 @@ static std::string nameOf(void *sprite) {
 }
 
 static void snapshot(cube::World *w, cube::Creature *c) {
+    std::unordered_map<void *, int> slotOf;
+    if (!slotMap(w, slotOf))
+        return; // Keep the previous snapshot if its resource IDs cannot be captured.
     std::string folder = characterFolder(c);
     FILE *f = nullptr;
     if (fopen_s(&f, (folder + "\\snapshot.txt").c_str(), "w") != 0 || !f)
@@ -4840,7 +4850,6 @@ static void snapshot(cube::World *w, cube::Creature *c) {
                 items[i].subtype(), items[i].material(), items[i].rarity(), items[i].modifier());
     auto &s = c->animation_state;
     fprintf(f, "anim state=%d timer=%d\n", s.current_animation_state_id, s.current_animation_state_timer);
-    auto slotOf = slotMap(w);
     int64_t *sprites = spritePointers(c);
     for (int i = 0; i < SPRITES; i++) {
         void *p = (void *)sprites[i];
@@ -4862,11 +4871,13 @@ static void snapshot(cube::World *w, cube::Creature *c) {
 // float yaw, float[3] velocity, int32[14] sprite slots, float[33*16] matrices.
 static std::unordered_map<void *, int> slotOf;
 static ULONGLONG nextMap = 0;
-static void refreshSlots(cube::World *w) {
+static bool refreshSlots(cube::World *w) {
     if (GetTickCount64() >= nextMap) {
-        slotOf = slotMap(w);
+        if (!slotMap(w, slotOf))
+            return false; // Retain the prior table and retry on the next pass.
         nextMap = GetTickCount64() + 5000;
     }
+    return true;
 }
 static void writeFrame(FILE *file, cube::Creature *c) {
     auto &e = c->entity_data;
@@ -4889,9 +4900,8 @@ static void writeFrame(FILE *file, cube::Creature *c) {
     fwrite(matrices(c), sizeof(Matrix4), MATRICES, file);
 }
 static void record(cube::World *w, cube::Creature *c) {
-    if (!file)
+    if (!file || !refreshSlots(w))
         return;
-    refreshSlots(w);
     writeFrame(file, c);
     recorded++;
 }
@@ -5029,7 +5039,8 @@ static void recordCreatures(cube::Game *g) {
             seenNamed += posed && namedAppearance(c);
         }
     }
-    refreshSlots(w);
+    if (!refreshSlots(w))
+        return;
     for (auto &[id, t] : tracked)
         t.seen = false;
     for (auto address : actors.addresses()) {
@@ -5349,7 +5360,8 @@ static void tick(cube::Game *g) {
     if (!text || !drops)
         return;
     ULONGLONG now = GetTickCount64();
-    character::refreshSlots(w);
+    if (!character::refreshSlots(w))
+        return;
     // Newly dead monsters.
     for (cube::Creature *c : w->creatures) {
         if (!c || c == player || c->entity_data.hostility_type != 1)
