@@ -12,8 +12,14 @@ individual feature documents.
   and Game/client-World/local-player links with independent guarded field reads.
   Signed-ID lookup now serves two recorder consumers under the observed frame
   guard through their use scope; contention defers rather than retires a subject.
-  Registration-list layout/reader tests are implemented, with consumer migration
-  still open. Byte preservation, signed extremes, sentinel exclusion, malformed/
+  Primitive creature views now cover identity, position/velocity, class, level,
+  specialization, health, mana and fixed-size names; recorder helpers migrate in
+  stages. Tests preserve unrelated bytes, distinguish mana from block power and
+  exercise negative-coordinate conversion without signed-shift overflow.
+  Client creature recordings, approach selection and townsperson visits now use
+  the independent registration reader, retaining the guard throughout pointer use.
+  Busy/malformed/changed capture defers recording without false despawn cleanup.
+  Remaining client and host consumer migration stays open. Byte preservation, signed extremes, sentinel exclusion, malformed/
   change/budget cases and actual Win32 contention/unwinding checks pass with all
   five targets and full CPU/owner checks. The extractor still requires SDK headers;
   see the [independence workboard](extractor-independence.md). New native execution,

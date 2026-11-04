@@ -12,6 +12,7 @@
 #include "NativeNameFragments.h"
 #include "NativeItemRecord.h"
 #include "NativeCreatureViews.h"
+#include "NativeCreatureScalars.h"
 #include "CaptureActorSection.h"
 #include "../../src/ItemValue.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
@@ -856,7 +857,7 @@ static cube::World *session = nullptr;
 static int sessionSeed = 0;
 static std::string folder;
 static std::set<std::pair<int, int>> saved;
-static LongVector3 home;
+static captureabi::FixedPosition home;
 
 template <class T> static void put(std::vector<unsigned char> &out, T v) {
     auto p = (unsigned char *)&v;
@@ -956,7 +957,7 @@ static void saveZones(cube::World *w) {
 static void startSession(cube::World *w, cube::Creature *player) {
     session = w;
     sessionSeed = w->seed;
-    home = player->entity_data.position;
+    home = captureabi::CreatureScalars(player).position();
     saved.clear();
     CreateDirectoryA("Extract", nullptr);
     DWORD scanError = ERROR_SUCCESS;
@@ -1017,11 +1018,11 @@ static void hold(cube::World *w, cube::Creature *player, int64_t bx, int64_t by)
     float ground = ((float (*)(cube::World *, int, int, int))(base() + GROUND_HEIGHT_RVA))(w, (int)bx, (int)by, 0);
     if (!std::isfinite(ground))
         ground = 0;
-    player->entity_data.position.x = bx << 16;
-    player->entity_data.position.y = by << 16;
-    player->entity_data.position.z = (int64_t)((std::max(ground, 0.f) + 2) * 65536);
-    player->entity_data.velocity = FloatVector3(0, 0, 0);
-    player->entity_data.HP = ((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(player);
+    captureabi::CreatureScalars data(player);
+    data.setPosition({captureabi::fixedFromBlocks(bx), captureabi::fixedFromBlocks(by),
+                      int64_t((std::max(ground, 0.f) + 2) * 65536)});
+    data.setVelocity({});
+    data.setHealth(((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(player));
 }
 
 // --- Calibration tour ---------------------------------------------------------
@@ -1119,19 +1120,19 @@ static void buildTour(cube::World *w) {
 static void tourTick(cube::World *w, cube::Creature *player) {
     if (tourIndex >= tour.size()) {
         touring = false;
-        player->entity_data.position = home;
-        player->entity_data.velocity = FloatVector3(0, 0, 0);
+        captureabi::CreatureScalars(player).setPosition(home);
+        captureabi::CreatureScalars(player).setVelocity({});
         log("Calibration tour finished; returned home");
         return;
     }
     const TourStop &s = tour[tourIndex];
     static const int sides[4][2] = {{0, -4}, {4, 0}, {0, 4}, {-4, 0}};
     // Stand at the object's own height (indoors and underground objects too).
-    player->entity_data.position.x = (s.x + sides[tourSide][0]) << 16;
-    player->entity_data.position.y = (s.y + sides[tourSide][1]) << 16;
-    player->entity_data.position.z = (s.z + 1) << 16;
-    player->entity_data.velocity = FloatVector3(0, 0, 0);
-    player->entity_data.HP = ((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(player);
+    captureabi::CreatureScalars data(player);
+    data.setPosition({captureabi::fixedFromBlocks(s.x + sides[tourSide][0]),
+                      captureabi::fixedFromBlocks(s.y + sides[tourSide][1]), captureabi::fixedFromBlocks(s.z + 1)});
+    data.setVelocity({});
+    data.setHealth(((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(player));
     ULONGLONG now = GetTickCount64();
     bool done = calibration::measured(s.slot);
     if (done || now - tourSideStarted > TOUR_SIDE_MS) {
@@ -1158,7 +1159,7 @@ static std::string statsText(cube::Creature *c) {
     float critical = ((float (*)(cube::Creature *, cube::Creature *, bool))(base() + 0x50D30))(c, nullptr, true);
     char s[360];
     sprintf_s(s, "hp=%.2f maxhp=%.2f attack=%.3f spell=%.3f armor=%.3f resistance=%.3f critical=%.4f haste=%.4f regen=%.4f managen=%.4f",
-              c->entity_data.HP, call(MAX_HP_RVA), callBool(0x4FA70), callBool(0x65C70), call(0x4F080), call(0x64D90),
+              captureabi::CreatureScalars(c).health(), call(MAX_HP_RVA), callBool(0x4FA70), callBool(0x65C70), call(0x4F080), call(0x64D90),
               critical, call(0x66460), call(0x647B0), call(0x5F8D0));
     return s;
 }
@@ -1378,8 +1379,9 @@ static const char *className(unsigned c) {
 static std::string specializationName(cube::Creature *c) {
     static const char *names[5][2] = {
         {"class", "class"}, {"berserker", "guardian"}, {"sniper", "scout"}, {"fire", "water"}, {"assassin", "ninja"}};
-    unsigned k = c->entity_data.classType;
-    int s = c->entity_data.specialization;
+    const captureabi::CreatureScalars data(c);
+    unsigned k = data.classId();
+    int s = data.specialization();
     if (k > 4 || s < 0 || s > 1)
         return std::string(className(k)) + "-" + std::to_string(s);
     return names[k][s];
@@ -1388,20 +1390,21 @@ static std::string specializationName(cube::Creature *c) {
 // receptionist does, so its skills can be recorded with the game's own
 // animations. F7 again switches back (do so before leaving: the game saves it).
 static void switchSpecialization(cube::Creature *c) {
-    char &s = c->entity_data.specialization;
-    s = s == 0 ? 1 : 0;
+    captureabi::CreatureScalars data(c);
+    data.setSpecialization(data.specialization() == 0 ? 1 : 0);
     extract::log("Specialization switched to " + specializationName(c) + " (F7 again switches back)");
 }
 // X (unused by the game): fills the player's MP (the game keeps it as 0..1), so skills that spend
 // MP, which the game only grants for hits on enemies, can be recorded without
 // a fight. MP is not kept between sessions.
 static void fillMana(cube::Creature *c) {
-    c->entity_data.MP = 1.f;
+    captureabi::CreatureScalars(c).setMana(1.f);
     extract::log("MP filled for recording");
 }
 static std::string characterFolder(cube::Creature *c) {
     std::string name;
-    for (char ch : std::string(c->entity_data.name, strnlen(c->entity_data.name, sizeof c->entity_data.name)))
+    const auto savedName = captureabi::CreatureScalars(c).name();
+    for (char ch : std::string(savedName.data(), strnlen(savedName.data(), savedName.size())))
         name += isalnum((unsigned char)ch) || ch == '-' || ch == '_' ? (char)tolower((unsigned char)ch) : '_';
     if (name.empty())
         name = "unnamed";
@@ -1737,7 +1740,7 @@ static void toggle(cube::World *w) {
         targetId = best->id;
         player->entity_data.position = best->entity_data.position;
         player->entity_data.position.x += 3 << 16;
-        player->entity_data.velocity = FloatVector3(0, 0, 0);
+        captureabi::CreatureScalars(player).setVelocity({});
         if (log)
             fprintf(log, "# target id=%lld race=%u level=%u %s\n", (long long)best->id, best->entity_data.race,
                     best->entity_data.level, statsText(best).c_str());
@@ -4658,16 +4661,22 @@ static int phase = 0; // 0 off, 1 closing in, 2 waiting (it approached), 3 engag
 static int64_t subject = 0;
 static double gap = 50;
 static ULONGLONG phaseStart = 0, nextStep = 0;
-static void startApproach(cube::World *w) {
+static void startApproach(cube::Game *g) {
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready())
+        return;
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
     cube::Creature *player = localCreature(w), *best = nullptr;
     auto spread = [&](cube::Creature *c) {
         double dx = double(c->entity_data.position.x - player->entity_data.position.x),
                dy = double(c->entity_data.position.y - player->entity_data.position.y);
         return dx * dx + dy * dy;
     };
-    for (cube::Creature *c : w->creatures)
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (c && c != player && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0 && (!best || spread(c) < spread(best)))
             best = c;
+    }
     if (!best || !log)
         return;
     subject = best->id, gap = 50, phase = 1, phaseStart = nextStep = GetTickCount64();
@@ -4730,17 +4739,22 @@ static void approach(cube::World *w) {
 // spoken to (E) to see what the game does with quests.
 static void visitTownsperson(cube::Game *g) {
     static std::vector<int64_t> visited;
-    cube::World *w = clientWorld(g);
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready())
+        return;
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
     cube::Creature *player = localCreature(w), *best = nullptr;
     auto spread = [&](cube::Creature *c) {
         double dx = double(c->entity_data.position.x - player->entity_data.position.x),
                dy = double(c->entity_data.position.y - player->entity_data.position.y);
         return dx * dx + dy * dy;
     };
-    for (cube::Creature *c : w->creatures)
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (c && c != player && c->entity_data.hostility_type == 3 && c->entity_data.HP > 0 &&
             std::find(visited.begin(), visited.end(), c->id) == visited.end() && (!best || spread(c) < spread(best)))
             best = c;
+    }
     if (!best)
         return;
     visited.push_back(best->id);
@@ -4998,21 +5012,28 @@ static void stopTracking(int64_t id, Tracked &t) {
 
 // Diagnostics for the latest pass: creatures present, posed by the game, and named.
 static size_t seenPresent = 0, seenPosed = 0, seenNamed = 0;
-static void recordCreatures(cube::World *w) {
+static void recordCreatures(cube::Game *g) {
     if (!creatureMode || (++creatureTick & 1))
         return;
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready())
+        return; // A failed capture must not mark tracked recordings as despawned.
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
     seenPresent = seenPosed = seenNamed = 0;
-    for (cube::Creature *c : w->creatures)
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (c && c != localCreature(w)) {
             seenPresent++;
             bool posed = usablePose(c);
             seenPosed += posed;
             seenNamed += posed && namedAppearance(c);
         }
+    }
     refreshSlots(w);
     for (auto &[id, t] : tracked)
         t.seen = false;
-    for (cube::Creature *c : w->creatures) {
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (!c || c == localCreature(w) || finished.count(c->id))
             continue;
         auto it = tracked.find(c->id);
@@ -6757,7 +6778,7 @@ static void tick(cube::Game *g) {
         static bool equals = false;
         bool downEquals = extract::hotkeyDown(VK_OEM_PLUS);
         if (downEquals && !equals && aitrace::active)
-            aitrace::startApproach(clientWorld(g));
+            aitrace::startApproach(g);
         equals = downEquals;
         static bool minus = false;
         bool downMinus = extract::hotkeyDown(VK_OEM_MINUS);
@@ -7122,8 +7143,9 @@ static void tick(cube::Game *g) {
         if (downL && !levelKey) {
             cube::Creature *player = localCreature(clientWorld(g));
             std::string before = statsText(player);
-            player->entity_data.level = GetPrivateProfileIntA("Record", "Level", 1, ".\\Mods\\ZoneExtractor.ini");
-            log("Level " + std::to_string(player->entity_data.level) + ": " + before + " -> " + statsText(player));
+            captureabi::CreatureScalars data(player);
+            data.setLevel(GetPrivateProfileIntA("Record", "Level", 1, ".\\Mods\\ZoneExtractor.ini"));
+            log("Level " + std::to_string(data.level()) + ": " + before + " -> " + statsText(player));
         }
         levelKey = downL;
         static bool turn = false; // J: the camera (and H's direction) a quarter turn
@@ -7206,7 +7228,7 @@ static void tick(cube::Game *g) {
             } else {
                 creatureStop = -1;
                 character::setCreatureMode(false, clientWorld(g)->seed);
-                player->entity_data.position = home;
+                captureabi::CreatureScalars(player).setPosition(home);
             }
         }
         f3 = down3;
@@ -7214,8 +7236,8 @@ static void tick(cube::Game *g) {
             if (creatureStop >= (int)creatureStops.size()) {
                 creatureStop = -1;
                 character::setCreatureMode(false, clientWorld(g)->seed);
-                player->entity_data.position = home;
-                player->entity_data.velocity = FloatVector3(0, 0, 0);
+                captureabi::CreatureScalars(player).setPosition(home);
+                captureabi::CreatureScalars(player).setVelocity({});
                 log("Creature tour finished; returned home");
             } else {
                 int64_t hx = floorDiv(tourX, 64), hy = floorDiv(tourY, 64);
@@ -7249,7 +7271,7 @@ static void tick(cube::Game *g) {
                 }
             }
         }
-        character::recordCreatures(clientWorld(g));
+        character::recordCreatures(g);
     }
     cube::World *w = clientWorld(g);
     cube::Creature *player = localCreature(w);
@@ -7298,8 +7320,8 @@ static void tick(cube::Game *g) {
         if (sweeping)
             log("Sweep finished; " + std::to_string(saved.size()) + " zones extracted");
         sweeping = false;
-        player->entity_data.position = home;
-        player->entity_data.velocity = FloatVector3(0, 0, 0);
+        captureabi::CreatureScalars(player).setPosition(home);
+        captureabi::CreatureScalars(player).setVelocity({});
         log("Returned home");
     }
     f11 = down11;

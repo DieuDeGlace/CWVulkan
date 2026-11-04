@@ -349,7 +349,8 @@ target_sources(EngineTests PRIVATE
     tests/UseCreatureCollectionTests.cpp
     tests/VehicleTests.cpp
     tests/NativeItemRecordTests.cpp
-    tests/NativeCreatureViewsTests.cpp)
+    tests/NativeCreatureViewsTests.cpp
+    tests/NativeCreatureScalarsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)

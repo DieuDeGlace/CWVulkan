@@ -134,6 +134,29 @@ int nativeCreatureViewsTests() {
     auto *section = reinterpret_cast<CRITICAL_SECTION *>(guardedWorld.data() + captureabi::WORLD_ACTOR_SECTION);
     InitializeCriticalSectionAndSpinCount(section, 16);
     const auto worldAddress = reinterpret_cast<uintptr_t>(guardedWorld.data());
+    std::array<uint8_t, 16> game{};
+    std::array<uintptr_t, 3> head{}, node{};
+    const auto gameAddress = reinterpret_cast<uintptr_t>(game.data());
+    const auto headAddress = reinterpret_cast<uintptr_t>(head.data());
+    const auto nodeAddress = reinterpret_cast<uintptr_t>(node.data());
+    std::memcpy(game.data() + 8, &worldAddress, 8);
+    std::memcpy(guardedWorld.data() + 0x40, &headAddress, 8);
+    const uint64_t one = 1;
+    std::memcpy(guardedWorld.data() + 0x48, &one, 8);
+    head = {nodeAddress, nodeAddress, 0};
+    node = {headAddress, headAddress, 0x7000};
+    const std::array<std::pair<uintptr_t, size_t>, 4> spans{{{gameAddress, game.size()},
+                                                             {worldAddress, guardedWorld.size()},
+                                                             {headAddress, sizeof head},
+                                                             {nodeAddress, sizeof node}}};
+    const auto clientRead = [&](uintptr_t at, void *destination, size_t count) {
+        for (const auto &[start, size] : spans)
+            if (at >= start && at - start <= size && count <= size - (at - start)) {
+                std::memcpy(destination, reinterpret_cast<const void *>(at), count);
+                return true;
+            }
+        return false;
+    };
     std::promise<void> entered, release;
     auto releaseSignal = release.get_future();
     auto worker = std::async(std::launch::async, [&] {
@@ -146,6 +169,9 @@ int nativeCreatureViewsTests() {
     {
         captureabi::WorldActorLease contended(worldAddress);
         check(!contended, "native frame guard capture is nonblocking when another thread owns it");
+        captureabi::ClientCreatureCapture unavailable(gameAddress, clientRead);
+        check(!unavailable.ready() && !unavailable.world() && unavailable.addresses().empty(),
+              "busy client capture is unavailable, not a valid empty actor observation");
     }
     release.set_value();
     worker.get();
@@ -170,6 +196,49 @@ int nativeCreatureViewsTests() {
     } catch (int) {
     }
     check(otherThreadCanEnter(), "exception unwinding releases the frame guard");
+    {
+        captureabi::ClientCreatureCapture captured(gameAddress, clientRead);
+        check(captured.ready() && captured.world() == worldAddress &&
+                  captured.addresses() == std::vector<uintptr_t>{0x7000} && !otherThreadCanEnter(),
+              "client collection retains the guard after copying addresses and through consumer use");
+    }
+    check(otherThreadCanEnter(), "client collection releases its guard after consumer scope");
+    int gameReads = 0;
+    const auto changedClient = [&](uintptr_t at, void *destination, size_t count) {
+        if (at == gameAddress + 8 && ++gameReads == 2) {
+            std::memset(destination, 0, count);
+            return true;
+        }
+        return clientRead(at, destination, count);
+    };
+    {
+        captureabi::ClientCreatureCapture changed(gameAddress, changedClient);
+        check(!changed.ready() && !changed.world() && changed.addresses().empty(),
+              "changed client World identity does not publish actor pointers");
+    }
+    node[1] = 0;
+    {
+        captureabi::ClientCreatureCapture malformed(gameAddress, clientRead);
+        check(!malformed.ready() && malformed.addresses().empty(), "malformed client list remains unavailable");
+    }
+    const uint64_t zero = 0;
+    std::memcpy(guardedWorld.data() + 0x48, &zero, 8);
+    head = {headAddress, headAddress, 0};
+    {
+        captureabi::ClientCreatureCapture empty(gameAddress, clientRead);
+        check(empty.ready() && empty.world() == worldAddress && empty.addresses().empty() && !otherThreadCanEnter(),
+              "a valid empty client list is distinguishable from unavailable capture");
+    }
+    try {
+        const auto throwsDuringRead = [&](uintptr_t at, void *destination, size_t count) {
+            if (at == worldAddress + 0x40)
+                throw 1;
+            return clientRead(at, destination, count);
+        };
+        captureabi::ClientCreatureCapture interrupted(gameAddress, throwsDuringRead);
+    } catch (int) {
+    }
+    check(otherThreadCanEnter(), "failed collection construction unwinds the acquired guard");
     DeleteCriticalSection(section);
     std::cout << "Native creature registry views: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;

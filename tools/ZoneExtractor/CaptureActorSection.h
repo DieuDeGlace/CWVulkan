@@ -32,4 +32,32 @@ class WorldActorLease {
     WorldActorLease &operator=(const WorldActorLease &) = delete;
     explicit operator bool() const { return held != nullptr; }
 };
+
+// Only the separate client World: the host registry also has writers under a
+// different outer guard (steam-world-actor-protection.md). The active callback
+// must retain Game/World lifetimes. This is not an asynchronous capture API or a
+// transaction across every nested creature allocation/field.
+class ClientCreatureCapture {
+    std::uintptr_t worldAddress;
+    WorldActorLease held;
+    std::vector<std::uintptr_t> values;
+    bool readable = false;
+
+    template <class Read> static std::uintptr_t resolveWorld(std::uintptr_t game, Read read) {
+        std::uintptr_t world = 0;
+        readClientWorld(game, world, read);
+        return world;
+    }
+
+  public:
+    template <class Read>
+    ClientCreatureCapture(std::uintptr_t game, Read read) : worldAddress(resolveWorld(game, read)), held(worldAddress) {
+        std::uintptr_t current = 0;
+        if (held && readClientWorld(game, current, read) && current == worldAddress)
+            readable = readRegisteredCreatures(worldAddress, values, read);
+    }
+    bool ready() const { return readable; }
+    std::uintptr_t world() const { return readable ? worldAddress : 0; }
+    const std::vector<std::uintptr_t> &addresses() const { return values; }
+};
 } // namespace captureabi

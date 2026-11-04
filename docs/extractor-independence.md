@@ -18,18 +18,34 @@ references. This workboard does not grant rights or certify final redistribution
   attributes, count and padding remain byte-preserving capture data. Native
   semantic item assignment remains a distinct operation. Naming/class-rule
   probes, equipment diagnostics and recording helpers use the owned record.
+- Independent creature scalar views for ID, fixed position, velocity, level,
+  class/specialization, health, mana and the full sixteen-byte name. Recorder home,
+  sweep/tour, specialization, mana and level helpers use these views. Synthetic
+  records check signed extrema, negative zero, untouched bytes and the separate
+  block-power/mana fields. Block-to-fixed conversion uses defined unsigned scaling
+  for negative coordinates. Other scalar consumers remain to be migrated.
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
+- Client registration capture for creature recordings, approach selection and
+  townsperson visits. Capture resolves the separate client World from Game,
+  acquires its frame guard, rechecks that identity and retains the guard through
+  every borrowed-pointer use. Busy, malformed or changed captures defer the pass;
+  only a successfully read empty list can represent an empty observation.
 - Signed-ID tree lookup in the two recorder consumers. The observed client frame
   guard remains held through their pointer-use scope. A busy/unreadable lookup
   defers the approach recorder; it is not a missing-subject observation.
 
 ## In progress and remaining
 
-- The registration-list reader is implemented and tested. Existing SDK list
-  consumers still need migration with their complete borrowed-pointer use scopes.
-  Registration order, duplicate list values and ID-tree ordering are distinct.
-- Creature scalar/appearance/pose fields and dynamic inventory/auxiliary buffers.
+- Remaining SDK registration-list consumers need migration with their complete
+  borrowed-pointer use scopes. Registration order, duplicate list values and
+  ID-tree ordering are distinct. The independent
+  [host/AI protection audit](specs/steam-world-actor-protection.md) establishes
+  host-before-World locking for the named host phases and separate AI/worker
+  scopes; neither guard alone covers all named host writers. The client capture
+  helper must not be reused as a host capture or generic quiescence API.
+- Remaining creature scalar consumers, appearance/pose fields and dynamic
+  inventory/auxiliary buffers.
 - Remaining World fields, collections, region/material sidecars and record views.
 - Remaining Game renderer/camera/Speech fields and native vector/matrix aliases.
 - Server-update list locations and payload decoding.
