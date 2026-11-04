@@ -16,8 +16,9 @@ individual feature documents.
   specialization, health, mana and fixed-size names; recorder helpers migrate in
   stages. Tests preserve unrelated bytes, distinguish mana from block power and
   exercise negative-coordinate conversion without signed-shift overflow.
-  Client creature recordings, approach selection and townsperson visits now use
-  the independent registration reader, retaining the guard throughout pointer use.
+  Client creature recordings, approach selection, townsperson visits, combat
+  recording and AI traces now use the independent registration reader, retaining
+  the guard throughout pointer use.
   Busy/malformed/changed capture defers recording without false despawn cleanup.
   Remaining client and host consumer migration stays open. Byte preservation, signed extremes, sentinel exclusion, malformed/
   change/budget cases and actual Win32 contention/unwinding checks pass with all

@@ -32,8 +32,9 @@ This workboard does not grant rights or certify final redistribution.
   for negative coordinates. Other scalar consumers remain to be migrated.
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
-- Client registration capture for creature recordings, approach selection and
-  townsperson visits. Capture resolves the separate client World from Game,
+- Client registration capture for creature recordings, approach selection,
+  townsperson visits, combat selection/health/resource recording and client AI
+  traces. Capture resolves the separate client World from Game,
   acquires its frame guard, rechecks that identity and retains the guard through
   every borrowed-pointer use. Busy, malformed or changed captures defer the pass;
   only a successfully read empty list can represent an empty observation.

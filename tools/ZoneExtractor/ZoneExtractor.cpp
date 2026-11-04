@@ -1719,25 +1719,36 @@ static double distance(cube::Creature *a, cube::Creature *b) {
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-static void toggle(cube::World *w) {
-    active = !active;
-    cube::Creature *player = localCreature(w);
-    if (!active) {
+static void toggle(cube::Game *g) {
+    if (active) {
+        active = false;
         if (log)
             fclose(log);
         log = nullptr;
         extract::log("Fight mode off");
         return;
     }
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready()) {
+        extract::log("Fight mode start unavailable; try F2 again after the client capture is ready");
+        return;
+    }
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
+    cube::Creature *player = localCreature(w);
+    if (!player)
+        return;
+    active = true;
     CreateDirectoryA("Extract", nullptr);
     log = _fsopen("Extract\\combat-log.txt", "a", _SH_DENYNO); // readable while the game runs
     lastHp.clear();
     // Nearest monster (hostility 1) the game is simulating.
     cube::Creature *best = nullptr;
-    for (cube::Creature *c : w->creatures)
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (c && c != player && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0 &&
             (!best || distance(c, player) < distance(best, player)))
             best = c;
+    }
     if (log)
         fprintf(log, "# fight start; player %s\n", statsText(player).c_str());
     if (best) {
@@ -1755,19 +1766,26 @@ static void toggle(cube::World *w) {
 }
 
 static void tick(cube::Game *g) {
-    cube::World *w = clientWorld(g);
     if (!active || !log)
         return;
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready())
+        return;
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
     cube::Creature *player = localCreature(w);
+    if (!player)
+        return;
     auto &pe = player->entity_data;
     // Keep the camera (attacks follow it) on the target, or the nearest living monster.
     {
         cube::Creature *target = nullptr;
-        for (cube::Creature *c : w->creatures)
+        for (auto address : actors.addresses()) {
+            auto *c = reinterpret_cast<cube::Creature *>(address);
             if (c && c != player && c->entity_data.hostility_type == 1 &&
                 (c->entity_data.HP > 0 || (c->id == targetId && GetTickCount64() - targetDiedAt < 7000)) &&
                 (c->id == targetId || !target || (target->id != targetId && distance(c, player) < distance(target, player))))
                 target = c;
+        }
         if (target) {
             targetId = target->id;
             double dx = double(target->entity_data.position.x - pe.position.x), dy = double(target->entity_data.position.y - pe.position.y);
@@ -1777,7 +1795,8 @@ static void tick(cube::Game *g) {
             g->camera_angle.x = g->target_camera_angle.x = 75;
         }
     }
-    for (cube::Creature *c : w->creatures) {
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (!c || (c != player && distance(c, player) > 30))
             continue;
         float hp = c->entity_data.HP;
@@ -1785,9 +1804,11 @@ static void tick(cube::Game *g) {
         if (it != lastHp.end() && std::abs(it->second - hp) > .001f) {
             // Who was acting: the nearest other creature, and the player.
             cube::Creature *closest = nullptr;
-            for (cube::Creature *o : w->creatures)
+            for (auto other : actors.addresses()) {
+                auto *o = reinterpret_cast<cube::Creature *>(other);
                 if (o && o != c && (!closest || distance(o, c) < distance(closest, c)))
                     closest = o;
+            }
             fprintf(log,
                     "t=%llu target=%s id=%lld race=%u level=%u hp=%.2f->%.2f | player ability=%d since=%.0f | "
                     "nearest id=%lld race=%u ability=%d since=%.0f dist=%.2f\n",
@@ -1805,7 +1826,8 @@ static void tick(cube::Game *g) {
     static LongVector3 fell;
     static ULONGLONG fellAt = 0;
     static std::unordered_map<int64_t, bool> alive;
-    for (cube::Creature *c : w->creatures) {
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (!c || c == player || c->entity_data.hostility_type != 1)
             continue;
         bool living = c->entity_data.HP > 0;
@@ -4622,14 +4644,18 @@ static void toggle() {
 static void tick(cube::Game *g) {
     if (!active || !log || GetTickCount64() < next)
         return;
+    const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
+    if (!actors.ready())
+        return;
     next = GetTickCount64() + 100;
-    cube::World *w = clientWorld(g);
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
     cube::Creature *player = localCreature(w);
     if (!player)
         return;
     auto blocks = [](int64_t v) { return double(v) / 65536; };
     fprintf(log, "t=%llu\n", (unsigned long long)GetTickCount64());
-    for (cube::Creature *c : w->creatures) {
+    for (auto address : actors.addresses()) {
+        auto *c = reinterpret_cast<cube::Creature *>(address);
         if (!c)
             continue;
         auto &e = c->entity_data;
@@ -6779,7 +6805,7 @@ static void tick(cube::Game *g) {
         static bool f2 = false;
         bool down2 = extract::hotkeyDown(VK_F2);
         if (down2 && !f2)
-            combat::toggle(clientWorld(g));
+            combat::toggle(g);
         f2 = down2;
         combat::tick(g);
         static bool zero = false;
