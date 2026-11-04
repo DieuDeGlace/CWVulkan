@@ -164,3 +164,16 @@ matching blocks and manifest. Old block files remain readable; generated worlds
 retain their own inputs. The new codec/reader and synthetic cases are verified;
 a fresh original-game sidecar capture/comparison is still an acceptance check.
 Exports remain owner-local and are not distributed in either package.
+
+## Primary sprite metadata
+
+The primary `sprites.txt` exporter uses the independently specified native catalog
+view in [the bounded registry contract](specs/steam-native-sprite-catalog.md). It
+reads catalog-ID order and raw voxel dimensions through guarded byte copies, with
+an exporter ceiling of 65,536 entries. Empty/unready records retain their slots.
+Capacity entries are not exported, and changing ranges or unreadable fields abort
+the table rather than publishing partial metadata. A range recheck does not supply
+concurrent lifetime synchronization. No RGB allocation or GPU readiness is required
+for this metadata, and the dimensions are not a per-object scale. Procedural and
+other resource families remain separate; the whole extractor still depends on SDK
+views. Use `EngineTests extractorcatalog` for the portable memory-fixture checks.

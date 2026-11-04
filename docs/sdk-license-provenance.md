@@ -123,3 +123,12 @@ local vendor snapshot to this upstream revision nor resolves the permission gate
 No author was contacted and no additional SDK implementation reuse was authorized.
 The public source is the [upstream repository](https://github.com/coremaze/CWSDK)
 and its [repository metadata](https://api.github.com/repos/coremaze/CWSDK).
+
+## 6. Bounded independent data-view progress
+
+Primary sprite-table export now reads its catalog pointer range and raw dimension
+fields through an independently authored guarded byte view. Its sole native
+layout source is [the independent catalog contract](specs/steam-native-sprite-catalog.md).
+Malformed-memory tests and live byte-identical owner metadata exports pass. This
+component includes no SDK header, but other extractor code still does. It does
+not resolve the existing SDK-wide grant, local revision or complete-adapter gate.

@@ -2,6 +2,7 @@
 #include "../../src/ProceduralItemData.h"
 #include "ObjectRewardCapture.h"
 #include "CaptureTickContext.h"
+#include "NativeSpriteCatalog.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -228,7 +229,13 @@ static void hookSpriteLoading() {
 
 // After loading, the breakpoint is removed and the slot -> file table written.
 static void writeSpriteTable(cube::World *w) {
-    if (namesWritten || !w->spritemanager || w->spritemanager->sprites.empty())
+    if (namesWritten)
+        return;
+    std::vector<captureabi::PrimarySprite> sprites;
+    if (!captureabi::readPrimarySprites(reinterpret_cast<uintptr_t>(w), sprites,
+            [](uintptr_t address, void *destination, size_t count) {
+                return copyNative(reinterpret_cast<const void *>(address), destination, count);
+            }) || sprites.empty())
         return;
     std::vector<std::pair<void *, std::string>> names;
     {
@@ -243,10 +250,10 @@ static void writeSpriteTable(cube::World *w) {
     std::string path = "Extract\\sprites.txt";
     FILE *f = nullptr;
     if (fopen_s(&f, path.c_str(), "w") == 0 && f) {
-        const auto &sprites = w->spritemanager->sprites;
         int named = 0;
         for (size_t i = 0; i < sprites.size(); i++) {
-            auto s = sprites[i];
+            const auto &sprite = sprites[i];
+            const auto s = reinterpret_cast<void *>(sprite.address);
             std::string name;
             for (auto it = names.rbegin(); it != names.rend(); ++it)
                 if (it->first == s) {
@@ -254,8 +261,8 @@ static void writeSpriteTable(cube::World *w) {
                     break;
                 }
             named += !name.empty();
-            fprintf(f, "%zu\t%s\t%d\t%d\t%d\n", i, name.empty() ? "?" : name.c_str(), s ? s->something_with_offset_1 : 0,
-                    s ? s->something_with_offset_2 : 0, s ? s->lowering_this_makes_plants_go_fast : 0);
+            fprintf(f, "%zu\t%s\t%d\t%d\t%d\n", i, name.empty() ? "?" : name.c_str(), sprite.dimensions.x,
+                    sprite.dimensions.y, sprite.dimensions.z);
         }
         fclose(f);
         log("Sprite table: " + std::to_string(sprites.size()) + " slots, " + std::to_string(named) + " named, " +

@@ -10,6 +10,28 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Primary sprite-table export now uses a small SDK-independent, guarded byte
+  reader based on the independently traced native catalog contract. It preserves
+  catalog-ID order, null/unready slots and raw dimensions, rejects corrupt or
+  excessive pointer spans, and discards a changed range/catalog before publication.
+  The 65,536-entry ceiling is exporter policy, not a native count. All five targets
+  build; malformed-memory fixtures and the full CPU/owner-data suite pass. A fresh
+  supported-game startup exported all 3,652 rows and sprite groups byte-identically
+  to the prior extractor, then closed normally with exit code 0. This replaces one
+  metadata read, not the remaining SDK views, a complete adapter or its release gate.
+
+- Loaded-world validation of the request-trigger build also passes on the existing
+  modded owner installation: six decoded 1904x1041 character/HUD frames and 1,101
+  refreshed zone records with both auxiliary light lists. All 20 model and 7 static
+  lights across 18 nonempty zones match the engine reader and neighboring-zone
+  light solve, with zero mismatches or incomplete neighborhoods. The game closed
+  normally with exit code 0. The existing scene-reference request performed the
+  refresh; the short automated F5 pulse produced no snapshot and is not counted.
+  Prior generator comparison files were backed up, the modded results kept private,
+  and every prior file restored byte-for-byte. This is loaded-world capture/reader
+  validation, not a vanilla generation or lighting-parity claim. Character animation
+  recording, broader gameplay and clean-machine acceptance remain separate.
+
 - The existing interface-frame capture action now has a fixed-path, one-shot
   `Extract/ui.request` alternative to F10. It polls at most four times per second,
   waits for an active capture batch, and queues six frames without requiring a

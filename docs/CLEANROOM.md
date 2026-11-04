@@ -1781,3 +1781,17 @@ title-menu frames, including correctly queued batches, and a normal game exit.
 The reference images and capture logs remain owner-local. This is capture-plumbing
 validation with existing mods retained, not a vanilla pixel-parity claim or a
 resolution of the existing SDK redistribution/revision gate.
+
+### Independent primary sprite-catalog view, 2026-11-03
+
+A native-only spec author traced the original catalog ownership, ordered pointer
+range and raw dimension fields, then finalized
+[the bounded registry note](specs/steam-native-sprite-catalog.md). The implementer
+read that prose and owned extractor code, authored a small guarded byte reader and
+malformed-memory fixtures, and compared fresh owner exports with the prior output.
+All 3,652 primary rows and sprite groups were byte-identical; no original or SDK
+implementation/header was read by the implementer. This is one independent data
+view, not a complete class, exhaustive live registry or SDK replacement. Raw owner
+images, records and the loaded-world modded generator results remain private.
+Prior generator baseline files were restored exactly after the separate loaded-
+world capture/light-reader check; that run is not a vanilla parity oracle.

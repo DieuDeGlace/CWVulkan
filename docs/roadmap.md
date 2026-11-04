@@ -788,6 +788,16 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   and the game exited normally. Original reference frames stay private. Broader
   loaded-world/recording and vanilla visual acceptance remain separate.
 
+- [x] Replace primary sprite-table metadata access with an independently specified,
+  guarded catalog reader. Corrupt-span, unreadable-memory, overflow and changed-
+  catalog/range fixtures pass, as does the full CPU/owner-data suite. Live startup
+  preserves all 3,652 rows and groups byte-for-byte and closes normally. Remaining
+  SDK-dependent views and the complete independent adapter are still open.
+- [x] Validate a loaded-world request capture: 1,101 fresh records, both light lists,
+  and all 20 model/7 static lights in 18 nonempty zones match with no incomplete
+  neighborhoods. Existing mods were retained; vanilla comparison baselines were
+  restored exactly. This does not close animation recording or vanilla visual parity.
+
 ## Host source-window continuation, 2026-11-03
 
 - [x] Replace host square source demand with the independently verified per-player

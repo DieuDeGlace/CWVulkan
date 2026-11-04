@@ -334,7 +334,11 @@ target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
 target_sources(EngineTests PRIVATE tests/AlphaSceneryTests.cpp)
 target_sources(EngineTests PRIVATE tests/InventorySlotTests.cpp tests/HudContextTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)
-target_sources(EngineTests PRIVATE tests/GamepadUiTests.cpp tests/SteamSceneRangeTests.cpp tests/CaptureTickContextTests.cpp)
+target_sources(EngineTests PRIVATE
+    tests/GamepadUiTests.cpp
+    tests/SteamSceneRangeTests.cpp
+    tests/CaptureTickContextTests.cpp
+    tests/NativeSpriteCatalogTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
