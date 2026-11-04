@@ -83,6 +83,11 @@ This workboard does not grant rights or certify final redistribution.
   constructor padding are no longer interpreted as known diagnostic fields.
   Axis-only velocity writes and bounded townsperson names retain other bytes.
   See [event/effect capture](extractor-event-and-effect-capture.md).
+- Ordinary object allocation spans now have a separate original-only contract.
+  Creature trace readers share the verified0x15f8 storage constant. Unverified
+  SDK-container counters, pointer-shape scans and arbitrary-entry walks are
+  removed from death diagnostics; documented native captures remain. The SDK
+  Renderer-member read is removed. See [allocation boundaries](extractor-allocation-boundaries.md).
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
@@ -118,7 +123,7 @@ This workboard does not grant rights or certify final redistribution.
 - Complete creature/controller lifetime and transitive writer audits remain
   separate from the replaced core, appearance, pose, inventory and effect views.
 - Remaining World fields, collections, region/material sidecars and record views.
-- Remaining Game renderer/camera fields and native vector aliases.
+- Remaining Game camera fields and native vector aliases.
 - Keyed event-list and owning-string event behavior remain outside the simple
   capture adapter; broader native event-production comparisons remain open.
 - Remove the SDK include/configuration after the final consumer is replaced;

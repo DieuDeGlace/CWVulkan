@@ -18,6 +18,7 @@
 #include "NativeItemRecord.h"
 #include "NativeLoadedZones.h"
 #include "NativeNameFragments.h"
+#include "NativeObjectSpans.h"
 #include "NativeSpriteBuffers.h"
 #include "NativeSpriteCatalog.h"
 #include "NativeSpriteGroups.h"
@@ -2234,9 +2235,9 @@ static void install() {
 // Each record is preceded by its size. Read-only: the original runs unchanged.
 namespace animprobe {
 constexpr uintptr_t POSE_RVA = 0x17ab0;
-constexpr size_t CREATURE_SIZE = 0x15f8, MODEL_BYTES = 0xa0;
-using Pose = void (*)(void *, void *, void *, float, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
-                      uint64_t);
+constexpr size_t CREATURE_SIZE = captureabi::CREATURE_STORAGE_BYTES, MODEL_BYTES = 0xa0;
+using Pose = void (*)(void *, void *, void *, float, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
+                      uint64_t, uint64_t);
 static Pose original = nullptr;
 static std::atomic<int> remaining{0};
 static FILE *out = nullptr;
@@ -2605,7 +2606,7 @@ namespace updateprobe {
 // step after them and its upkeep. "update.request" picks one ("<count> [rva hex]").
 constexpr uintptr_t UPDATE_RVA = 0x2bb8e0, ABILITY_RVA = 0x2c5250, STEP_RVA = 0x2c3710, UPKEEP_RVA = 0x2de4c0;
 static std::atomic<uintptr_t> which{UPDATE_RVA};
-constexpr size_t CREATURE_SIZE = 0x15f8;
+constexpr size_t CREATURE_SIZE = captureabi::CREATURE_STORAGE_BYTES;
 using Update = void(__fastcall *)(void *world, void *creature, float dt);
 static Update original = nullptr, originalAbility = nullptr, originalStep = nullptr, originalUpkeep = nullptr;
 static std::atomic<int> remaining{0};
@@ -5377,26 +5378,21 @@ static void setCreatureMode(bool on, int seed) {
 // How the game shows a monster dying and what it drops, for CubeVulkan to match:
 // from the moment a monster's HP reaches 0 until the game removes it, every tick
 // of its pose (Extract\death\d_<race>_<id>.cwa, frames as the creature
-// recordings) and its state (death-log.txt). Anything new the world holds after a
-// death (pouches, coins) is found by watching the sizes of the world's containers
-// and dumping new entries tick by tick (drops-log.txt), with screenshots
-// (Extract\death\frame-*.bmp) over the first four seconds.
+// recordings) and its state (death-log.txt). Bounded native event snapshots and
+// particle observations go to drops-log.txt/particles.txt, with screenshots over
+// the first four seconds. Unverified SDK-container and pointer-shape scans are
+// intentionally not part of the capture path.
 namespace deathprobe {
 struct Watch {
     int64_t id = 0;
     FILE *frames = nullptr;
     ULONGLONG start = 0;
-    captureabi::FixedPosition at{};
 };
 static std::vector<Watch> watching;
 static std::unordered_map<int64_t, bool> alive;
 static FILE *text = nullptr, *drops = nullptr;
 static ULONGLONG lastDeath = 0;
-static captureabi::FixedPosition lastAt{};
-static std::set<uintptr_t> knownPointers, knownNodes;
 static std::set<int64_t> knownCreatures;
-static std::map<uintptr_t, ULONGLONG> dumping; // address of a new entry -> when it appeared
-static std::string lastSizes;
 
 static void open() {
     if (text)
@@ -5406,10 +5402,6 @@ static void open() {
     text = _fsopen("Extract\\death\\death-log.txt", "a", _SH_DENYNO); // readable while the game runs
     drops = _fsopen("Extract\\death\\drops-log.txt", "a", _SH_DENYNO);
 }
-template <class T> static size_t bytes(const std::vector<T> &v) {
-    auto raw = (char *const *)&v; // first, last, end
-    return raw[1] - raw[0];
-}
 static bool readable(uintptr_t address, void *out, size_t n) {
     __try {
         memcpy(out, (const void *)address, n);
@@ -5418,32 +5410,6 @@ static bool readable(uintptr_t address, void *out, size_t n) {
         return false;
     }
 }
-static void dump(FILE *f, const char *what, uintptr_t address, ULONGLONG since) {
-    unsigned char p[0x140];
-    if (!readable(address, p, sizeof p))
-        return;
-    fprintf(f, "t=%llu %s %p +%llu:", (unsigned long long)GetTickCount64(), what, (void *)address,
-            (unsigned long long)(GetTickCount64() - since));
-    for (int i = 0; i < 0x140; i += 4) {
-        float fv;
-        int32_t iv;
-        memcpy(&fv, p + i, 4);
-        memcpy(&iv, p + i, 4);
-        if (std::isfinite(fv) && std::abs(fv) > 1e-4f && std::abs(fv) < 1e7f)
-            fprintf(f, " %x:%g", i, fv);
-        else
-            fprintf(f, " %x:#%d", i, iv);
-    }
-    fprintf(f, "\n");
-}
-static cube::Zone *zoneAt(cube::World *w, captureabi::FixedPosition at) {
-    IntVector2 key((int)(at.x >> 22), (int)(at.y >> 22)); // dots -> blocks (65536) -> zones (64)
-    for (auto &[k, z] : w->zones)
-        if (z && z->position.x == key.x && z->position.y == key.y)
-            return z;
-    return nullptr;
-}
-
 // Bounded queue snapshots are formatted after the corresponding owner leases
 // end. Raw payloads retain transmitted gaps without assigning meaning to them.
 static std::set<std::string> seenUpdates;
@@ -5565,61 +5531,21 @@ static void recordParticles(cube::Game *g) {
     fflush(file);
 }
 
-// Unnamed objects (the renderer, the game): every field shaped like a std::vector
-// (begin <= end <= capacity, within 64 MB), its byte size logged when it changes in
-// the seconds after a death, to find where the client keeps death effects.
-static std::map<std::string, uint64_t> vectorSizes;
-static void scanVectors(FILE *f, const char *name, uintptr_t object, size_t bytes, long long sinceDeath) {
-    std::vector<uint64_t> v(bytes / 8);
-    if (!object || !readable(object, v.data(), v.size() * 8))
-        return;
-    for (size_t i = 0; i + 2 < v.size(); i++) {
-        uint64_t b = v[i], e = v[i + 1], c = v[i + 2];
-        if (!b || b > e || e > c || c - b > (64ull << 20) || b < 0x10000 || (b & 7))
-            continue;
-        std::string key = std::string(name) + "+" + std::to_string(i * 8);
-        auto it = vectorSizes.find(key);
-        if (it != vectorSizes.end() && it->second != e - b && sinceDeath >= 0 && sinceDeath < 4000) {
-            fprintf(f, "t=%llu since-death=%lld vector %s+0x%zx %llu -> %llu bytes\n", (unsigned long long)GetTickCount64(),
-                    sinceDeath, name, i * 8, (unsigned long long)it->second, (unsigned long long)(e - b));
-            // A vector of pointers that grew: what its new entries point to.
-            if (e - b > it->second && e - b <= 4096 * 8) {
-                std::vector<uint64_t> entries((e - b) / 8);
-                if (readable(b, entries.data(), entries.size() * 8))
-                    for (size_t k = it->second / 8; k < entries.size(); k++)
-                        if (entries[k] > 0x10000 && !(entries[k] & 7) && !dumping.count(entries[k]))
-                            dumping[entries[k]] = GetTickCount64(),
-                            fprintf(f, "t=%llu new %s+0x%zx[%zu] -> %p\n", (unsigned long long)GetTickCount64(), name,
-                                    i * 8, k, (void *)entries[k]);
-            }
-        }
-        vectorSizes[key] = e - b;
-    }
-}
-
 static void tick(cube::Game *g) {
     if (!combat::active)
         return;
-    cube::World *w = clientWorld(g);
     open();
-    if (drops) {
-        long long since = lastDeath ? (long long)(GetTickCount64() - lastDeath) : -1;
-        scanVectors(drops, "renderer", (uintptr_t)g->renderer, 0xA48, since);
-        scanVectors(drops, "game", (uintptr_t)g, 0x2288, since);
-        scanVectors(drops, "world", (uintptr_t)w, 0x548, since);
-    }
-    if (drops) {
-        recordParticles(g);
+    if (drops)
         recordUpdates(g, drops);
-    }
     const captureabi::ClientCreatureCapture actors(reinterpret_cast<uintptr_t>(g), readNative);
     if (!actors.ready())
         return; // An unavailable pass must not retire a watched death as "removed".
-    w = reinterpret_cast<cube::World *>(actors.world());
+    auto *w = reinterpret_cast<cube::World *>(actors.world());
     cube::Creature *player = localCreature(w);
     open();
     if (!text || !drops)
         return;
+    recordParticles(g); // Retain the observed client frame guard through the node reads.
     ULONGLONG now = GetTickCount64();
     if (!character::refreshSlots(w))
         return;
@@ -5636,13 +5562,11 @@ static void tick(cube::Game *g) {
             Watch watch;
             watch.id = captureabi::CreatureScalars(c).id();
             watch.start = now;
-            watch.at = captureabi::CreatureScalars(c).position();
             std::string path = "Extract\\death\\d_" + std::to_string(captureabi::CreatureScalars(c).race()) + "_" + std::to_string(captureabi::CreatureScalars(c).id()) + ".cwa";
             if (fopen_s(&watch.frames, path.c_str(), "wb") == 0 && watch.frames)
                 fwrite("CWA2", 1, 4, watch.frames);
             watching.push_back(watch);
             lastDeath = now;
-            lastAt = watch.at;
             fprintf(text, "t=%llu death id=%lld race=%u stars=%u name=%.16s scale=%.4f file=%s\n",
                     (unsigned long long)now, (long long)captureabi::CreatureScalars(c).id(),
                     captureabi::CreatureScalars(c).race(), uint32_t(captureabi::CreatureScalars(c).level()),
@@ -5685,39 +5609,6 @@ static void tick(cube::Game *g) {
                 captureabi::CreatureAppearance(c).extents()[0]);
         ++it;
     }
-    // The world's containers: what grows when something is dropped.
-    char sizes[512];
-    bool locked = TryEnterCriticalSection(&w->zones_critical_section);
-    cube::Zone *zone = locked && lastDeath ? zoneAt(w, lastAt) : nullptr;
-    snprintf(sizes, sizeof sizes,
-             "creatures=%zu list18=%zu projectiles=%zu dead=%zu rewards=%zu zones=%zu m190=%zu m1a0=%zu uv=%zu,%zu,%zu "
-             "v360=%zu m378=%zu v388=%zu v3a0=%zu v4a0=%zu v4b8=%zu v4d0=%zu v4e8=%zu v500=%zu v518=%zu v530=%zu "
-             "zone_list=%zu zone_list2=%zu",
-             actors.addresses().size(), w->unk_list_size_0x18.size(), w->projectiles.size(), w->state.some_map_size_0x28.size(),
-             w->state.some_map_size_0x28_1.size(), w->state.some_map_size_0x88.size(), w->unk_map_0x190.size(),
-             w->unk_map_0x1A0.size(), bytes(w->unk_vectors.unk_vec_0), bytes(w->unk_vectors.unk_vec_1),
-             bytes(w->unk_vectors.unk_vec_2), bytes(w->unk_vec_0x360), w->unk_map_0x378.size(), bytes(w->field_388),
-             bytes(w->field_3A0), bytes(w->field_4A0), bytes(w->field_4B8), bytes(w->field_4D0), bytes(w->field_4E8),
-             bytes(w->field_500), bytes(w->field_518), bytes(w->field_530), zone ? zone->some_list.size() : 0,
-             zone ? zone->some_list_2.size() : 0);
-    if (sizes != lastSizes) {
-        fprintf(drops, "t=%llu since-death=%lld %s\n", (unsigned long long)now,
-                lastDeath ? (long long)(now - lastDeath) : -1LL, sizes);
-        lastSizes = sizes;
-    }
-    // New entries: in the world's pointer list, the zone's lists, and new creatures near the corpse.
-    for (void *p : w->unk_list_size_0x18)
-        if (knownPointers.insert((uintptr_t)p).second && lastDeath)
-            dumping[(uintptr_t)p] = now, fprintf(drops, "t=%llu new list18 entry %p\n", (unsigned long long)now, p);
-    if (zone)
-        for (auto *l : {&zone->some_list, &zone->some_list_2})
-            for (auto &value : *l)
-                if (knownNodes.insert((uintptr_t)&value).second && lastDeath)
-                    dumping[(uintptr_t)&value] = now,
-                    fprintf(drops, "t=%llu new zone %s entry %p\n", (unsigned long long)now,
-                            l == &zone->some_list ? "list" : "list2", (void *)&value);
-    if (locked)
-        LeaveCriticalSection(&w->zones_critical_section);
     for (auto address : actors.addresses()) {
         auto *c = reinterpret_cast<cube::Creature *>(address);
         if (c && knownCreatures.insert(captureabi::CreatureScalars(c).id()).second && lastDeath && now - lastDeath < 5000) {
@@ -5728,21 +5619,14 @@ static void tick(cube::Game *g) {
                     captureabi::CreatureScalars(c).position().y / 65536.0,
                     captureabi::CreatureScalars(c).position().z / 65536.0);
             Watch watch;
-            watch.id = captureabi::CreatureScalars(c).id(), watch.start = now, watch.at = captureabi::CreatureScalars(c).position();
+            watch.id = captureabi::CreatureScalars(c).id();
+            watch.start = now;
             std::string path = "Extract\\death\\spawn_" + std::to_string(captureabi::CreatureScalars(c).race()) + "_" +
                                std::to_string(captureabi::CreatureScalars(c).id()) + ".cwa";
             if (fopen_s(&watch.frames, path.c_str(), "wb") == 0 && watch.frames)
                 fwrite("CWA2", 1, 4, watch.frames);
             watching.push_back(watch);
         }
-    }
-    for (auto it = dumping.begin(); it != dumping.end();) {
-        if (now - it->second > 10000) {
-            it = dumping.erase(it);
-            continue;
-        }
-        dump(drops, "entry", it->first, it->second);
-        ++it;
     }
     fflush(text);
     fflush(drops);

@@ -957,6 +957,12 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   fixtures and CPU checks cover these views; SDK removal and live acceptance
   remain open. See [event/effect capture](extractor-event-and-effect-capture.md).
 
+- [x] Verify native object allocation spans independently and centralize the
+  Creature trace extent. Remove unverified SDK-container/pointer-shape death
+  probes and retain documented event/actor/particle captures. Allocation extent
+  does not establish initialized contents, deep-copy ownership or live safety.
+  See [allocation boundaries](extractor-allocation-boundaries.md).
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the
