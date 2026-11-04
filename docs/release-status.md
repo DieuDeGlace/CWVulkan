@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Extractor independence is now the first work priority. Owned byte records
+  replace explicit SDK Item/Equipment types, native pointer overlays and equipment
+  field access in recording/naming/class-rule helpers. Independent primitive links
+  replace the SDK Game/client-World/local-player fields and embedded host identity.
+  Two recorder consumers now resolve IDs through the signed native tree; their
+  nonblocking native frame guard survives through pointer use, while busy/failed
+  reads defer tracking work. A registration-list reader is tested but its legacy
+  consumers are not yet migrated. Byte/layout, signed lookup, invalid/change/budget
+  and Win32 contention/unwinding cases pass with all five targets and full CPU/
+  owner checks. This does not remove every SDK-dependent field/container or the
+  CMake requirement, establish universal snapshot safety or qualify the new DLL
+  in the original game. The [workboard](extractor-independence.md) tracks the rest.
+
 - The independent effective-block audit verifies original CRT initialization of
   the shared solid/air/water defaults, their ordinary lookup copies and direct
   writer scope. The World vehicle producer now uses the initialized missing-zone

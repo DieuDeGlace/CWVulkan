@@ -10,6 +10,10 @@
 #include "CapturePlugin.h"
 #include "ZoneTerrainCapture.h"
 #include "NativeNameFragments.h"
+#include "NativeItemRecord.h"
+#include "NativeCreatureViews.h"
+#include "CaptureActorSection.h"
+#include "../../src/ItemValue.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -135,6 +139,46 @@ static bool copyNative(const void *source, void *destination, size_t count) {
 }
 static bool readNative(uintptr_t address, void *destination, size_t count) {
     return copyNative(reinterpret_cast<const void *>(address), destination, count);
+}
+// These primitive links do not assert gameplay readiness or retain allocation
+// lifetimes. The validated callback context and the caller's use scope still apply.
+static cube::World *clientWorld(const cube::Game *game) {
+    uintptr_t world = 0;
+    if (!captureabi::readClientWorld(reinterpret_cast<uintptr_t>(game), world, readNative))
+        return nullptr;
+    return reinterpret_cast<cube::World *>(world);
+}
+static cube::Creature *localCreature(const cube::World *world) {
+    uintptr_t creature = 0;
+    if (!captureabi::readLocalCreature(reinterpret_cast<uintptr_t>(world), creature, readNative))
+        return nullptr;
+    return reinterpret_cast<cube::Creature *>(creature);
+}
+class CreatureSelection {
+    captureabi::WorldActorLease held;
+    cube::Creature *value = nullptr;
+    bool readable = false;
+
+  public:
+    CreatureSelection(const cube::World *world, int64_t id) : held(reinterpret_cast<uintptr_t>(world)) {
+        captureabi::CreatureLookup result;
+        readable = held && captureabi::lookupCreature(reinterpret_cast<uintptr_t>(world), id, result, readNative);
+        if (readable)
+            value = reinterpret_cast<cube::Creature *>(result.creature);
+    }
+    bool ready() const { return readable; }
+    cube::Creature *get() const { return value; }
+    explicit operator bool() const { return value != nullptr; }
+};
+static CreatureSelection creatureById(const cube::World *world, int64_t id) {
+    return CreatureSelection(world, id);
+}
+static cube::World *embeddedHostWorld(const cube::Game *game) {
+    // Independent in-place identity: steam-local-world-zone-ownership.md section1.
+    const auto address = reinterpret_cast<uintptr_t>(game);
+    if (!address || address > std::numeric_limits<uintptr_t>::max() - 0x6f0)
+        return nullptr;
+    return reinterpret_cast<cube::World *>(address + 0x6f0);
 }
 static cube::Game *checkedTickContext(cube::Game *reported) {
     if (!supported())
@@ -1392,7 +1436,7 @@ constexpr int TEST_IDS = 26, TEST_MATERIALS = 41;
 static const int TRY_MATERIALS[] = {1, 2, 11, 12, 25, 26, 27, 28, 29, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15};
 static int catalogueCategory = 0, catalogueId = 0, catalogueTry = 0;
 static bool active = false;
-static unsigned char original[sizeof(cube::Equipment)];
+static captureabi::EquipmentRecord original;
 static std::vector<Step> steps;
 static size_t step = 0;
 static int wait = 0, waited = 0;
@@ -1401,7 +1445,7 @@ static std::set<std::pair<int, int>> found; // (category, id) the game drew a mo
 static std::map<int, int> firstId;           // category -> first id with a model
 static FILE *out = nullptr;
 
-static cube::Item *slotItem(cube::Creature *c, int slot) { return &c->entity_data.equipment.unk_item + slot; }
+static uint8_t *slotItem(cube::Creature *c, int slot) { return captureabi::equipmentItem(c, slot); }
 
 // Equipment slot for an item category, as the game uses them (checked by the
 // sprite each one makes the game draw; logged either way).
@@ -1418,22 +1462,22 @@ static int slotFor(int category) {
     }
 }
 
-static void itemText(FILE *f, const cube::Item &it) {
+static void itemText(FILE *f, const captureabi::ItemRecord &item) {
     fprintf(f, "category=%d id=%d material=%d rarity=%d modifier=%u region=%d,%d formula=%d spirits=%d",
-            it.category, it.id, it.material, it.rarity, it.modifier, it.region.x, it.region.y, it.formula_category,
-            it.num_spirits);
+            item.category(), item.subtype(), item.material(), item.rarity(), item.modifier(), item.regionX(), item.regionY(),
+            item.representedType(), item.attributeCount());
 }
 
 static void begin(cube::World *w) {
-    cube::Creature *p = w->local_creature;
-    memcpy(original, &p->entity_data.equipment, sizeof original);
+    cube::Creature *p = localCreature(w);
+    original = captureabi::copyEquipment(p);
     steps.clear();
     for (int slot : {2, 3, 4, 5, 7, 1, 8}) {
         steps.push_back({slot});
         for (int t = 0; t < (int)p->inventory_tabs.size(); t++)
             for (int i = 0; i < (int)p->inventory_tabs[t].size(); i++) {
-                const cube::Item &it = p->inventory_tabs[t][i].item;
-                if (slotFor(it.category) == slot)
+                const auto item = captureabi::ItemRecord::copy(&p->inventory_tabs[t][i].item);
+                if (slotFor(item.category()) == slot)
                     steps.push_back({slot, t, i});
             }
         // What was equipped there originally.
@@ -1459,11 +1503,11 @@ static void begin(cube::World *w) {
             for (int i = 0; i < (int)p->inventory_tabs[t].size(); i++) {
                 const auto &s = p->inventory_tabs[t][i];
                 fprintf(out, "inventory tab=%d index=%d quantity=%d ", t, i, s.quantity);
-                itemText(out, s.item);
-                fprintf(out, " price=%d\n", ((int (*)(const cube::Item *))(base() + ITEM_PRICE))(&s.item));
+                itemText(out, captureabi::ItemRecord::copy(&s.item));
+                fprintf(out, " price=%d\n", ((int (*)(const void *))(base() + ITEM_PRICE))(&s.item));
             }
         for (int s = 0; s < 11; s++) {
-            const cube::Item &it = ((const cube::Item *)original)[s];
+            const auto &it = original[size_t(s)];
             fprintf(out, "equipped slot=%s ", SLOT_NAMES[s]);
             itemText(out, it);
             fprintf(out, "\n");
@@ -1479,7 +1523,7 @@ static void begin(cube::World *w) {
 }
 
 static void finish(cube::World *w, const char *why) {
-    memcpy(&w->local_creature->entity_data.equipment, original, sizeof original);
+    std::memcpy(slotItem(localCreature(w), 0), original.data(), sizeof original);
     if (out)
         fclose(out);
     out = nullptr;
@@ -1488,26 +1532,28 @@ static void finish(cube::World *w, const char *why) {
 }
 
 static void apply(cube::Creature *p, const Step &s) {
-    cube::Item *target = slotItem(p, s.slot);
+    auto *target = slotItem(p, s.slot);
+    if (!target)
+        return;
+    captureabi::ItemRecord item;
     if (s.tab == -2)
-        memcpy(target, &((const cube::Item *)original)[s.slot], sizeof(cube::Item));
-    else if (s.tab < 0)
-        memset(target, 0, sizeof(cube::Item)); // empty slot (category 0)
+        item = original[size_t(s.slot)];
     else if (s.tab == -3) {
-        // A test item: only its type and material; region where the player is.
-        memset(target, 0, sizeof(cube::Item));
-        target->category = (char)s.category;
-        target->id = s.id;
-        target->material = (char)s.material;
-        target->region = p->entity_data.current_region;
-    } else
-        memcpy(target, &p->inventory_tabs[s.tab][s.index].item, sizeof(cube::Item));
+        // The catalogue planner is disabled; keep its synthetic branch distinct
+        // from the negative-tab clear operation if it is enabled again.
+        item.setCategory(uint8_t(s.category));
+        item.setSubtype(s.id);
+        item.setMaterial(uint8_t(s.material));
+        item.setRegion(p->entity_data.current_region.x, p->entity_data.current_region.y);
+    } else if (s.tab >= 0)
+        item = captureabi::ItemRecord::copy(&p->inventory_tabs[s.tab][s.index].item);
+    std::memcpy(target, item.bytes.data(), captureabi::ITEM_BYTES);
 }
 
 static void tick(cube::World *w) {
     if (!active)
         return;
-    cube::Creature *p = w->local_creature;
+    cube::Creature *p = localCreature(w);
     if (step >= steps.size()) {
         finish(w, "finished");
         return;
@@ -1551,10 +1597,10 @@ static void tick(cube::World *w) {
         fprintf(out, "%s slot=%s waited=%d ", kind, SLOT_NAMES[s.slot], waited);
         if (s.tab >= 0)
             fprintf(out, "tab=%d index=%d ", s.tab, s.index);
-        const cube::Item *it = slotItem(p, s.slot);
-        itemText(out, *it);
-        auto armor = ((float (*)(const cube::Item *, cube::Creature *))(base() + ITEM_ARMOR))(it, p);
-        auto hp = ((float (*)(const cube::Item *, cube::Creature *))(base() + ITEM_HP))(it, p);
+        const auto *it = slotItem(p, s.slot);
+        itemText(out, captureabi::ItemRecord::copy(it));
+        auto armor = ((float (*)(const void *, cube::Creature *))(base() + ITEM_ARMOR))(it, p);
+        auto hp = ((float (*)(const void *, cube::Creature *))(base() + ITEM_HP))(it, p);
         fprintf(out, " item_armor=%.3f item_hp=%.3f | player %s | sprites", armor, hp, statsText(p).c_str());
         int64_t *sprites = &p->animation_state.face_sprite;
         for (int i = 0; i < 12; i++) {
@@ -1634,16 +1680,15 @@ static void classRules(cube::Creature *p) {
         fprintf(f, "# class check not hooked (vanilla)\n");
     fprintf(f, "# player class=%u; columns: category id material then may-use for classes 1 2 3 4\n",
             p->entity_data.classType);
-    using Check = bool (*)(const cube::Item *, int);
+    using Check = bool (*)(const void *, int);
     auto check = (Check)(base() + CLASS_CHECK);
     for (int category = 1; category <= 30; category++)
         for (int id = 0; id < 40; id++)
             for (int material = 0; material < 41; material++) {
-                alignas(cube::Item) unsigned char raw[sizeof(cube::Item)] = {};
-                cube::Item &item = *(cube::Item *)raw; // plain data; the SDK constructor is not linked
-                item.category = (char)category;
-                item.id = id;
-                item.material = (char)material;
+                captureabi::ItemRecord item;
+                item.setCategory(uint8_t(category));
+                item.setSubtype(id);
+                item.setMaterial(uint8_t(material));
                 fprintf(f, "%d %d %d %d %d %d %d\n", category, id, material, (int)check(&item, 1),
                         (int)check(&item, 2), (int)check(&item, 3), (int)check(&item, 4));
             }
@@ -1669,7 +1714,7 @@ static double distance(cube::Creature *a, cube::Creature *b) {
 
 static void toggle(cube::World *w) {
     active = !active;
-    cube::Creature *player = w->local_creature;
+    cube::Creature *player = localCreature(w);
     if (!active) {
         if (log)
             fclose(log);
@@ -1703,10 +1748,10 @@ static void toggle(cube::World *w) {
 }
 
 static void tick(cube::Game *g) {
-    cube::World *w = g->world;
+    cube::World *w = clientWorld(g);
     if (!active || !log)
         return;
-    cube::Creature *player = w->local_creature;
+    cube::Creature *player = localCreature(w);
     auto &pe = player->entity_data;
     // Keep the camera (attacks follow it) on the target, or the nearest living monster.
     {
@@ -1788,10 +1833,10 @@ static void tick(cube::Game *g) {
     std::map<std::string, int> now;
     for (auto &tab : player->inventory_tabs)
         for (auto &stack : tab) {
-            const cube::Item &it = stack.item;
+            const auto item = captureabi::ItemRecord::copy(&stack.item);
             char key[128];
             snprintf(key, sizeof key, "category=%d id=%d material=%d rarity=%d modifier=%u level-region=%d,%d",
-                     (int)it.category, it.id, (int)it.material, (int)it.rarity, it.modifier, it.region.x, it.region.y);
+                     item.category(), item.subtype(), item.material(), item.rarity(), item.modifier(), item.regionX(), item.regionY());
             now[key] += stack.quantity;
         }
     if (lastGold != INT_MIN) {
@@ -4164,7 +4209,7 @@ static void poll(cube::World *w) {
         extract::log("Write watch: done, " + std::to_string(hits.size()) + " writers");
         return;
     }
-    if (GetFileAttributesA("Extract\\watch.request") == INVALID_FILE_ATTRIBUTES || !w || !w->local_creature)
+    if (GetFileAttributesA("Extract\\watch.request") == INVALID_FILE_ATTRIBUTES || !w || !localCreature(w))
         return;
     int offset = 0x40, seconds = 10, server = 0, player = 0; // fourth number 1: the local player itself
     if (FILE *f = nullptr; fopen_s(&f, "Extract\\watch.request", "r") == 0 && f) {
@@ -4173,7 +4218,7 @@ static void poll(cube::World *w) {
         fclose(f);
     }
     DeleteFileA("Extract\\watch.request");
-    auto *self = (uint8_t *)w->local_creature;
+    auto *self = (uint8_t *)localCreature(w);
     const int64_t px = *(int64_t *)(self + 0x10), py = *(int64_t *)(self + 0x18);
     uint8_t *best = nullptr;
     double bestD = 1e300;
@@ -4244,7 +4289,7 @@ struct Pl { // 0x35ce0's structure
 };
 static_assert(sizeof(Nb) == 0x58 && sizeof(Pl) == 0x20, "generator structures");
 static void dump(cube::Game *g) {
-    cube::World *w = g->world;
+    cube::World *w = clientWorld(g);
     uintptr_t b = base();
     auto nb = (void (*)(cube::World *, int, int, Nb *))(b + 0x358e0);
     auto pl = (void (*)(cube::World *, int, int, Pl *))(b + 0x35ce0);
@@ -4279,7 +4324,7 @@ static void dump(cube::Game *g) {
                "lava swamp high a44 b59 veg | height0 height4\n");
     // Points: a grid around the player, around the world's origin, and scattered far out.
     std::vector<std::pair<int, int>> points;
-    auto &e = w->local_creature->entity_data;
+    auto &e = localCreature(w)->entity_data;
     int px = (int)(e.position.x >> 16), py = (int)(e.position.y >> 16);
     for (int j = -10; j <= 10; j++)
         for (int i = -10; i <= 10; i++)
@@ -4446,7 +4491,7 @@ constexpr int SCRIPT_DAYS = 64;
 static std::string itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material);
 static void exportScript(cube::Game *g, FILE *out, cube::Creature *c, int day);
 static void exportAll(cube::Game *g, bool onlyNew) {
-    cube::World *w = g->world;
+    cube::World *w = clientWorld(g);
     static std::set<std::pair<long long, int>> written;
     CreateDirectoryA("Extract", nullptr);
     FILE *out = _fsopen("Extract\\talk-scripts.txt", "a", _SH_DENYNO);
@@ -4454,7 +4499,7 @@ static void exportAll(cube::Game *g, bool onlyNew) {
         return;
     int n = 0, today = *(int *)((uint8_t *)w + 8);
     for (cube::Creature *c : w->creatures) {
-        if (!c || c == w->local_creature || c->entity_data.hostility_type != 3)
+        if (!c || c == localCreature(w) || c->entity_data.hostility_type != 3)
             continue;
         if (!written.insert({(long long)c->id, today}).second && onlyNew)
             continue;
@@ -4470,7 +4515,7 @@ static void exportAll(cube::Game *g, bool onlyNew) {
                      std::to_string(SCRIPT_DAYS) + " days each)");
 }
 static void exportScript(cube::Game *g, FILE *out, cube::Creature *c, int day) {
-    cube::World *w = g->world;
+    cube::World *w = clientWorld(g);
     auto script = (void (*)(cube::World *, GameVector *, cube::Creature *))(base() + 0x2d9480);
     auto destroy = (void (*)(GameVector *))(base() + 0x81790);
     int &worldDay = *(int *)((uint8_t *)w + 8);
@@ -4525,12 +4570,14 @@ static void exportScript(cube::Game *g, FILE *out, cube::Creature *c, int day) {
 // Speech::GenerateItemName (RVA 0x1628b0: speech, std::wstring* out, Item*), the name the
 // game shows, e.g. "Hang Glider" or a weapon with its quality word.
 static std::string itemName(cube::Game *g, int category, int id, unsigned modifier, int rarity, int material) {
-    alignas(8) uint8_t raw[sizeof(cube::Item)] = {}; // an Item with no spirits
-    auto &item = *(cube::Item *)raw;
-    item.category = (char)category, item.id = id;
-    item.modifier = modifier, item.rarity = (char)rarity, item.material = (char)material;
+    captureabi::ItemRecord item;
+    item.setCategory(uint8_t(category));
+    item.setSubtype(id);
+    item.setModifier(modifier);
+    item.setRarity(uint8_t(rarity));
+    item.setMaterial(uint8_t(material));
     GameWString name{};
-    ((GameWString * (*)(cube::Speech *, GameWString *, cube::Item *))(base() + 0x1628b0))(&g->speech, &name, &item);
+    ((GameWString * (*)(cube::Speech *, GameWString *, void *))(base() + 0x1628b0))(&g->speech, &name, &item);
     const wchar_t *text = name.capacity >= 8 ? name.pointer : name.buffer;
     int n = WideCharToMultiByte(CP_UTF8, 0, text, (int)name.size, nullptr, 0, nullptr, nullptr);
     std::string utf8(n, '\0');
@@ -4569,8 +4616,8 @@ static void tick(cube::Game *g) {
     if (!active || !log || GetTickCount64() < next)
         return;
     next = GetTickCount64() + 100;
-    cube::World *w = g->world;
-    cube::Creature *player = w->local_creature;
+    cube::World *w = clientWorld(g);
+    cube::Creature *player = localCreature(w);
     if (!player)
         return;
     auto blocks = [](int64_t v) { return double(v) / 65536; };
@@ -4612,7 +4659,7 @@ static int64_t subject = 0;
 static double gap = 50;
 static ULONGLONG phaseStart = 0, nextStep = 0;
 static void startApproach(cube::World *w) {
-    cube::Creature *player = w->local_creature, *best = nullptr;
+    cube::Creature *player = localCreature(w), *best = nullptr;
     auto spread = [&](cube::Creature *c) {
         double dx = double(c->entity_data.position.x - player->entity_data.position.x),
                dy = double(c->entity_data.position.y - player->entity_data.position.y);
@@ -4629,10 +4676,10 @@ static void startApproach(cube::World *w) {
 static void approach(cube::World *w) {
     if (!phase)
         return;
-    cube::Creature *player = w->local_creature, *m = nullptr;
-    for (cube::Creature *c : w->creatures)
-        if (c && c->id == subject)
-            m = c;
+    const auto subjectView = creatureById(w, subject);
+    if (!subjectView.ready())
+        return; // Busy/unreadable is not evidence that a recorded subject disappeared.
+    cube::Creature *player = localCreature(w), *m = subjectView.get();
     if (!m || m->entity_data.HP <= 0) {
         fprintf(log, "approach end (subject gone)\n");
         phase = 0;
@@ -4683,8 +4730,8 @@ static void approach(cube::World *w) {
 // spoken to (E) to see what the game does with quests.
 static void visitTownsperson(cube::Game *g) {
     static std::vector<int64_t> visited;
-    cube::World *w = g->world;
-    cube::Creature *player = w->local_creature, *best = nullptr;
+    cube::World *w = clientWorld(g);
+    cube::Creature *player = localCreature(w), *best = nullptr;
     auto spread = [&](cube::Creature *c) {
         double dx = double(c->entity_data.position.x - player->entity_data.position.x),
                dy = double(c->entity_data.position.y - player->entity_data.position.y);
@@ -4771,12 +4818,12 @@ static void snapshot(cube::World *w, cube::Creature *c) {
     v3("feet_position", a.feet_position);
     v3("unknown_position", a.unknown_position);
     v3("wings_position", a.wings_position);
-    const cube::Item *items = &e.equipment.unk_item;
+    const auto items = captureabi::copyEquipment(c);
     static const char *slots[] = {"unk", "neck", "chest", "feet", "hands", "shoulder", "weapon_left",
                                   "weapon_right", "ring_left", "ring_right", "pet"};
     for (int i = 0; i < 11; i++)
-        fprintf(f, "equip %s category=%d id=%d material=%d rarity=%d modifier=%u\n", slots[i], items[i].category,
-                items[i].id, items[i].material, items[i].rarity, items[i].modifier);
+        fprintf(f, "equip %s category=%d id=%d material=%d rarity=%d modifier=%u\n", slots[i], items[i].category(),
+                items[i].subtype(), items[i].material(), items[i].rarity(), items[i].modifier());
     auto &s = c->animation_state;
     fprintf(f, "anim state=%d timer=%d\n", s.current_animation_state_id, s.current_animation_state_timer);
     auto slotOf = slotMap(w);
@@ -4930,9 +4977,10 @@ static void describe(cube::Creature *c) {
     // The creature's own gear (11 slots: category:id:material:rarity:modifier),
     // which pairs the game's item ids with the sprites it draws for them.
     fprintf(f, "%s equip=", statsText(c).c_str());
-    const cube::Item *gear = &c->entity_data.equipment.unk_item;
+    const auto gear = captureabi::copyEquipment(c);
     for (int i = 0; i < 11; i++)
-        fprintf(f, "%s%d:%d:%d:%d:%u", i ? "," : "", gear[i].category, gear[i].id, gear[i].material, gear[i].rarity, gear[i].modifier);
+        fprintf(f, "%s%d:%d:%d:%d:%u", i ? "," : "", gear[i].category(), gear[i].subtype(), gear[i].material(),
+                gear[i].rarity(), gear[i].modifier());
     fprintf(f, " sprites=");
     int64_t *sprites = spritePointers(c);
     for (int i = 0; i < SPRITES; i++)
@@ -4955,7 +5003,7 @@ static void recordCreatures(cube::World *w) {
         return;
     seenPresent = seenPosed = seenNamed = 0;
     for (cube::Creature *c : w->creatures)
-        if (c && c != w->local_creature) {
+        if (c && c != localCreature(w)) {
             seenPresent++;
             bool posed = usablePose(c);
             seenPosed += posed;
@@ -4965,7 +5013,7 @@ static void recordCreatures(cube::World *w) {
     for (auto &[id, t] : tracked)
         t.seen = false;
     for (cube::Creature *c : w->creatures) {
-        if (!c || c == w->local_creature || finished.count(c->id))
+        if (!c || c == localCreature(w) || finished.count(c->id))
             continue;
         auto it = tracked.find(c->id);
         if (it != tracked.end())
@@ -5262,7 +5310,7 @@ static void scanVectors(FILE *f, const char *name, uintptr_t object, size_t byte
 static void tick(cube::Game *g) {
     if (!combat::active)
         return;
-    cube::World *w = g->world;
+    cube::World *w = clientWorld(g);
     open();
     if (drops) {
         long long since = lastDeath ? (long long)(GetTickCount64() - lastDeath) : -1;
@@ -5273,9 +5321,9 @@ static void tick(cube::Game *g) {
     if (drops) {
         recordParticles(g);
         pollUpdates(drops, "client", w->server_updates);
-        pollUpdates(drops, "server", g->host.world.server_updates);
+        pollUpdates(drops, "server", embeddedHostWorld(g)->server_updates);
     }
-    cube::Creature *player = w->local_creature;
+    cube::Creature *player = localCreature(w);
     open();
     if (!text || !drops)
         return;
@@ -6289,7 +6337,7 @@ static void statsSample(cube::World *w) {
     if (GetFileAttributesA("Extract\\stats.request") == INVALID_FILE_ATTRIBUTES)
         return;
     DeleteFileA("Extract\\stats.request");
-    cube::Creature *c = w->local_creature;
+    cube::Creature *c = localCreature(w);
     if (!c)
         return;
     CreateDirectoryA("Extract\\oracle", nullptr);
@@ -6624,7 +6672,7 @@ static void tick(cube::Game *game) {
         return;
     }
     void *store = nullptr, *device = nullptr;
-    if (!copyNative(reinterpret_cast<const uint8_t *>(game->world) + 0x70, &store, sizeof store) || !store ||
+    if (!copyNative(reinterpret_cast<const uint8_t *>(clientWorld(game)) + 0x70, &store, sizeof store) || !store ||
         !copyNative(static_cast<const uint8_t *>(store) + 8, &device, sizeof device) || !device)
         return;
     if (!active) {
@@ -6672,33 +6720,33 @@ static void tick(cube::Game *game) {
 static void tick(cube::Game *g) {
     netrecorder::poll(); // also outside a world, so a recording can start before joining
     uicapture::pollRequest(); // frame capture does not require a loaded character
-    if (!g || !g->world || !supported())
+    if (!g || !clientWorld(g) || !supported())
         return;
     proceduralcapture::tick(g);
-    if (!g->world->local_creature)
+    if (!localCreature(clientWorld(g)))
         return;
-    oracle::run(g->world);
+    oracle::run(clientWorld(g));
     soundlist::run(g);
     {
         static bool f5 = false, f4 = false;
         bool down5 = extract::hotkeyDown(VK_F5), down4 = extract::hotkeyDown(VK_F4);
         if (down5 && !f5) {
-            character::snapshot(g->world, g->world->local_creature);
+            character::snapshot(clientWorld(g), localCreature(clientWorld(g)));
             // Refresh older exports too: current auxiliary lists and mesh-time
             // metadata must accompany this character/world snapshot.
             saved.clear();
             log("Zone snapshot refresh queued (including native light lists)");
         }
         if (down4 && !f4)
-            character::toggle(g->world->local_creature);
+            character::toggle(localCreature(clientWorld(g)));
         f5 = down5;
         f4 = down4;
         if (character::recording)
-            character::record(g->world, g->world->local_creature);
+            character::record(clientWorld(g), localCreature(clientWorld(g)));
         static bool f2 = false;
         bool down2 = extract::hotkeyDown(VK_F2);
         if (down2 && !f2)
-            combat::toggle(g->world);
+            combat::toggle(clientWorld(g));
         f2 = down2;
         combat::tick(g);
         static bool zero = false;
@@ -6709,7 +6757,7 @@ static void tick(cube::Game *g) {
         static bool equals = false;
         bool downEquals = extract::hotkeyDown(VK_OEM_PLUS);
         if (downEquals && !equals && aitrace::active)
-            aitrace::startApproach(g->world);
+            aitrace::startApproach(clientWorld(g));
         equals = downEquals;
         static bool minus = false;
         bool downMinus = extract::hotkeyDown(VK_OEM_MINUS);
@@ -6734,52 +6782,52 @@ static void tick(cube::Game *g) {
             nextScripts = GetTickCount64() + 2000;
             talkscripts::exportAll(g, true);
         }
-        aitrace::approach(g->world);
+        aitrace::approach(clientWorld(g));
         deathprobe::tick(g);
         static bool f8 = false;
         bool down8 = extract::hotkeyDown(VK_F8);
         if (down8 && !f8) {
             if (gear::active)
-                gear::finish(g->world, "stopped");
+                gear::finish(clientWorld(g), "stopped");
             else {
-                gear::classRules(g->world->local_creature);
-                gear::begin(g->world);
+                gear::classRules(localCreature(clientWorld(g)));
+                gear::begin(clientWorld(g));
             }
         }
         f8 = down8;
-        gear::tick(g->world);
+        gear::tick(clientWorld(g));
         static bool f7 = false;
         bool down7 = extract::hotkeyDown(VK_F7);
         if (down7 && !f7)
-            switchSpecialization(g->world->local_creature);
+            switchSpecialization(localCreature(clientWorld(g)));
         f7 = down7;
         static bool ins = false;
         bool downIns = extract::hotkeyDown('X');
         if (downIns && !ins)
-            fillMana(g->world->local_creature);
+            fillMana(localCreature(clientWorld(g)));
         ins = downIns;
         static bool noon = false; // N: midday, for recordings that need daylight
         bool downN = extract::hotkeyDown('N');
         if (downN && !noon) {
-            g->world->state.time = g->host.world.state.time = 12 * 60 * 60 * 1000.f; // the local server keeps the clock
+            clientWorld(g)->state.time = embeddedHostWorld(g)->state.time = 12 * 60 * 60 * 1000.f; // the local server keeps the clock
             log("Time set to 12:00");
         }
         noon = downN;
         static bool hunt = false; // H: 100 blocks on along the camera, onto the ground, to find monsters
         bool downH = extract::hotkeyDown('H');
         if (downH && !hunt) {
-            auto &p = g->world->local_creature->entity_data.position;
+            auto &p = localCreature(clientWorld(g))->entity_data.position;
             double yaw = (g->camera_angle.z - 90) * 3.14159265358979 / 180;
             char gx[32] = {}, gy[32] = {}; // [Hunt] X, Y (blocks): go straight there instead
             GetPrivateProfileStringA("Hunt", "X", "", gx, sizeof gx, ".\\Mods\\ZoneExtractor.ini");
             GetPrivateProfileStringA("Hunt", "Y", "", gy, sizeof gy, ".\\Mods\\ZoneExtractor.ini");
             if (gx[0] && gy[0])
-                hold(g->world, g->world->local_creature, _atoi64(gx), _atoi64(gy));
+                hold(clientWorld(g), localCreature(clientWorld(g)), _atoi64(gx), _atoi64(gy));
             else
-                hold(g->world, g->world->local_creature, (p.x >> 16) + (int64_t)(100 * std::cos(yaw)),
+                hold(clientWorld(g), localCreature(clientWorld(g)), (p.x >> 16) + (int64_t)(100 * std::cos(yaw)),
                      (p.y >> 16) + (int64_t)(100 * std::sin(yaw)));
             int monsters = 0;
-            for (cube::Creature *c : g->world->creatures)
+            for (cube::Creature *c : clientWorld(g)->creatures)
                 monsters += c && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0;
             log("Hunt step: " + std::to_string(monsters) + " monsters simulated");
         }
@@ -6792,7 +6840,7 @@ static void tick(cube::Game *g) {
         if (downV && !weaken)
             weakUntil = GetTickCount64() + 6000;
         if (GetTickCount64() < weakUntil && combat::targetId) {
-            for (cube::World *world : {g->world, &g->host.world}) // the local server's copy decides
+            for (cube::World *world : {clientWorld(g), embeddedHostWorld(g)}) // the local server's copy decides
                 for (cube::Creature *c : world->creatures)
                     if (c && c->id == combat::targetId && c->entity_data.HP > .01f)
                         c->entity_data.HP = .01f;
@@ -6813,7 +6861,7 @@ static void tick(cube::Game *g) {
         }
         guardKey = down8key;
         if (guarding) {
-            cube::Creature *p = g->world->local_creature;
+            cube::Creature *p = localCreature(clientWorld(g));
             float full = ((float (*)(cube::Creature *))(base() + MAX_HP_RVA))(p);
             if (p->entity_data.HP > 0 && p->entity_data.HP < full)
                 p->entity_data.HP = full;
@@ -6826,7 +6874,7 @@ static void tick(cube::Game *g) {
         static ULONGLONG pushUntil = 0;
         static int pushDx = 0, pushDy = 0;
         bool down7key = extract::hotkeyDown('7');
-        cube::World *cw = g->world;
+        cube::World *cw = clientWorld(g);
         auto blockSolid = [&](int64_t bx, int64_t by, int64_t bz) -> bool { // block-space z
             int zx = (int)std::floor(bx / 64.0), zy = (int)std::floor(by / 64.0);
             for (auto &[key, zone] : cw->zones)
@@ -6843,7 +6891,7 @@ static void tick(cube::Game *g) {
             return false;
         };
         if (down7key && !pushKey && TryEnterCriticalSection(&cw->zones_critical_section)) {
-            auto &e = cw->local_creature->entity_data;
+            auto &e = localCreature(cw)->entity_data;
             double px = e.position.x / 65536.0, py = e.position.y / 65536.0, pz = e.position.z / 65536.0;
             int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py), feet = (int64_t)std::floor(pz) - 1;
             int best = 99;
@@ -6865,7 +6913,7 @@ static void tick(cube::Game *g) {
         }
         pushKey = down7key;
         if (GetTickCount64() < pushUntil) {
-            auto &v = cw->local_creature->entity_data.velocity;
+            auto &v = localCreature(cw)->entity_data.velocity;
             if (pushDx)
                 v.x = 4.f * pushDx;
             if (pushDy)
@@ -6879,7 +6927,7 @@ static void tick(cube::Game *g) {
                 CreateDirectoryA("Extract", nullptr);
                 collisionLog = _fsopen("Extract\\collision.txt", "a", _SH_DENYNO);
             }
-            auto &a = g->world->local_creature->entity_data.appearance;
+            auto &a = localCreature(clientWorld(g))->entity_data.appearance;
             if (collisionLog)
                 fprintf(collisionLog, "# %s t=%llu scales graphics=%.4f hitbox=%.4f physics=%.4f\n", logging ? "start" : "stop",
                         (unsigned long long)GetTickCount64(), a.graphics_scale, a.hitbox_scale, a.physics_scale);
@@ -6892,8 +6940,8 @@ static void tick(cube::Game *g) {
         static bool dropKey = false;
         bool downG = extract::hotkeyDown('G');
         if (downG && !dropKey) {
-            cube::World *w = g->world;
-            auto &e = w->local_creature->entity_data;
+            cube::World *w = clientWorld(g);
+            auto &e = localCreature(w)->entity_data;
             int64_t px = e.position.x >> 16, py = e.position.y >> 16;
             int64_t best = -1, bx = 0, by = 0, bz = 0;
             EnterCriticalSection(&w->zones_critical_section); // the game streams zones meanwhile
@@ -6966,8 +7014,8 @@ static void tick(cube::Game *g) {
         dropKey = downG;
         if (logging && collisionLog) {
             static LongVector3 last{};
-            cube::World *w = g->world;
-            auto &e = w->local_creature->entity_data;
+            cube::World *w = clientWorld(g);
+            auto &e = localCreature(w)->entity_data;
             if (e.position.x != last.x || e.position.y != last.y || e.position.z != last.z) {
                 // The game's own blocks (zone columns): solid unless air or liquid.
                 auto solid = [&](int64_t bx, int64_t by, int64_t bz) -> bool {
@@ -7028,7 +7076,7 @@ static void tick(cube::Game *g) {
         static bool slay = false; // Z: fight mode's target to 0 HP (the game then kills it and drops loot its own way)
         bool downZ = extract::hotkeyDown('Z');
         if (downZ && !slay && combat::targetId) {
-            for (cube::World *world : {g->world, &g->host.world})
+            for (cube::World *world : {clientWorld(g), embeddedHostWorld(g)})
                 for (cube::Creature *c : world->creatures)
                     if (c && c->id == combat::targetId && c->entity_data.HP > 0)
                         c->entity_data.HP = 0;
@@ -7040,12 +7088,12 @@ static void tick(cube::Game *g) {
         if (downF && !weakest) {
             auto maxHp = (float (*)(cube::Creature *))(base() + MAX_HP_RVA);
             cube::Creature *best = nullptr;
-            for (cube::Creature *c : g->world->creatures)
-                if (c && c != g->world->local_creature && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0 &&
+            for (cube::Creature *c : clientWorld(g)->creatures)
+                if (c && c != localCreature(clientWorld(g)) && c->entity_data.hostility_type == 1 && c->entity_data.HP > 0 &&
                     (!best || maxHp(c) < maxHp(best)))
                     best = c;
             if (best) {
-                auto &p = g->world->local_creature->entity_data;
+                auto &p = localCreature(clientWorld(g))->entity_data;
                 p.position = best->entity_data.position;
                 p.position.x += 3 << 16;
                 p.velocity = FloatVector3(0, 0, 0);
@@ -7059,20 +7107,20 @@ static void tick(cube::Game *g) {
         static bool arm = false; // U: the player takes fight mode's target's weapons (recording only)
         bool downU = extract::hotkeyDown('U');
         if (downU && !arm && combat::targetId) {
-            cube::Creature *player = g->world->local_creature;
-            for (cube::Creature *c : g->world->creatures)
-                if (c && c->id == combat::targetId) {
-                    std::string before = statsText(player);
-                    player->entity_data.equipment.weapon_right = c->entity_data.equipment.weapon_right;
-                    player->entity_data.equipment.weapon_left = c->entity_data.equipment.weapon_left;
-                    log("Armed with the target's weapons: " + before + " -> " + statsText(player));
-                }
+            cube::Creature *player = localCreature(clientWorld(g));
+            if (const auto targetView = creatureById(clientWorld(g), combat::targetId)) {
+                auto *target = targetView.get();
+                std::string before = statsText(player);
+                for (int slot : {6, 7})
+                    itemvalue::assign(captureabi::equipmentItem(player, slot), captureabi::equipmentItem(target, slot));
+                log("Armed with the target's weapons: " + before + " -> " + statsText(player));
+            }
         }
         arm = downU;
         static bool levelKey = false; // L: the player's level from [Record] Level (recording only)
         bool downL = extract::hotkeyDown('L');
         if (downL && !levelKey) {
-            cube::Creature *player = g->world->local_creature;
+            cube::Creature *player = localCreature(clientWorld(g));
             std::string before = statsText(player);
             player->entity_data.level = GetPrivateProfileIntA("Record", "Level", 1, ".\\Mods\\ZoneExtractor.ini");
             log("Level " + std::to_string(player->entity_data.level) + ": " + before + " -> " + statsText(player));
@@ -7099,11 +7147,11 @@ static void tick(cube::Game *g) {
         static std::vector<std::pair<int, int>> creatureStops;
         static int64_t tourX = 0, tourY = 0; // blocks: the centre of the tour
         bool down3 = extract::hotkeyDown(VK_F3);
-        cube::Creature *player = g->world->local_creature;
+        cube::Creature *player = localCreature(clientWorld(g));
         if (down3 && !f3) {
             if (!character::creatureMode) {
-                if (session != g->world)
-                    startSession(g->world, player);
+                if (session != clientWorld(g))
+                    startSession(clientWorld(g), player);
                 // The tour goes around the extraction's home (manifest.txt, the first
                 // session's home), which CubeVulkan plays, wherever this character lives.
                 tourX = home.x >> 16, tourY = home.y >> 16;
@@ -7127,7 +7175,7 @@ static void tick(cube::Game *g) {
                 creatureStops.push_back({0, 0});
                 int64_t hx = floorDiv(tourX, 64), hy = floorDiv(tourY, 64);
                 auto ground = [&](int64_t x, int64_t y) {
-                    return ((float (*)(cube::World *, int, int, int))(base() + GROUND_HEIGHT_RVA))(g->world, (int)x,
+                    return ((float (*)(cube::World *, int, int, int))(base() + GROUND_HEIGHT_RVA))(clientWorld(g), (int)x,
                                                                                                     (int)y, 0);
                 };
                 std::vector<std::pair<int, std::pair<int, int>>> land;
@@ -7154,10 +7202,10 @@ static void tick(cube::Game *g) {
                     std::to_string((2 * R + 1) * (2 * R + 1)) + " candidates)");
                 creatureStop = 0;
                 stopStart = GetTickCount64();
-                character::setCreatureMode(true, g->world->seed);
+                character::setCreatureMode(true, clientWorld(g)->seed);
             } else {
                 creatureStop = -1;
-                character::setCreatureMode(false, g->world->seed);
+                character::setCreatureMode(false, clientWorld(g)->seed);
                 player->entity_data.position = home;
             }
         }
@@ -7165,7 +7213,7 @@ static void tick(cube::Game *g) {
         if (character::creatureMode && creatureStop >= 0) {
             if (creatureStop >= (int)creatureStops.size()) {
                 creatureStop = -1;
-                character::setCreatureMode(false, g->world->seed);
+                character::setCreatureMode(false, clientWorld(g)->seed);
                 player->entity_data.position = home;
                 player->entity_data.velocity = FloatVector3(0, 0, 0);
                 log("Creature tour finished; returned home");
@@ -7173,9 +7221,9 @@ static void tick(cube::Game *g) {
                 int64_t hx = floorDiv(tourX, 64), hy = floorDiv(tourY, 64);
                 int64_t zx = hx + creatureStops[creatureStop].first, zy = hy + creatureStops[creatureStop].second;
                 if (creatureStop == 0) // the home itself
-                    hold(g->world, player, tourX, tourY);
+                    hold(clientWorld(g), player, tourX, tourY);
                 else
-                    hold(g->world, player, zx * 64 + 32, zy * 64 + 32);
+                    hold(clientWorld(g), player, zx * 64 + 32, zy * 64 + 32);
                 // The game only poses creatures it draws: turn the camera once around
                 // during each stop, pulled back, so everything nearby is drawn.
                 double turn = double(GetTickCount64() - stopStart) / character::CREATURE_STOP_MS * 360.0;
@@ -7201,10 +7249,10 @@ static void tick(cube::Game *g) {
                 }
             }
         }
-        character::recordCreatures(g->world);
+        character::recordCreatures(clientWorld(g));
     }
-    cube::World *w = g->world;
-    cube::Creature *player = w->local_creature;
+    cube::World *w = clientWorld(g);
+    cube::Creature *player = localCreature(w);
     if (session != w || sessionSeed != w->seed)
         startSession(w, player);
     if (DeleteFileA("Extract\\scene-reference.request")) {

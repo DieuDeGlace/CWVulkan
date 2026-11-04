@@ -1962,3 +1962,18 @@ corrected without dropping the independent implicit-water marking checks. The
 six-byte defaults are compatibility facts, not bundled terrain/art assets. No
 native instructions or implementation expression entered the engine. Native
 writer/startup scope remains bounded as the specification states.
+
+## Extractor item and creature views, 2026-11-04
+
+The native-only author finalized steam-world-creature-views.md without reading
+engine/exporter/tests/SDK, owner outputs or reconstructed implementations. The
+implementer read its complete 121-line prose, the independent host ownership
+identity and existing item/equipment contracts, then authored the views from
+those facts and owned code. The item record is initialized project storage;
+byte-preserving capture and native semantic assignment remain distinct.
+Client/local links and signed ID resolution no longer obtain their layouts from
+SDK classes. The observed native frame guard is held for the new consumers' use
+scope, with no invented lifetime pin or universal snapshot claim. Registration
+list/header/tree fixtures and actual Win32 guard tests are synthetic and asset-free.
+No SDK implementation, headers or compiler layout was inspected. Remaining
+SDK fields/containers, complete independence and new native acceptance stay open.

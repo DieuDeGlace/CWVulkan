@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Replace explicit extractor SDK item/equipment types with owned byte records,
+  and Game/client-World/local-player links with independent guarded field reads.
+  Signed-ID lookup now serves two recorder consumers under the observed frame
+  guard through their use scope; contention defers rather than retires a subject.
+  Registration-list layout/reader tests are implemented, with consumer migration
+  still open. Byte preservation, signed extremes, sentinel exclusion, malformed/
+  change/budget cases and actual Win32 contention/unwinding checks pass with all
+  five targets and full CPU/owner checks. The extractor still requires SDK headers;
+  see the [independence workboard](extractor-independence.md). New native execution,
+  remaining views and the complete independent build remain release gates.
+
 - [x] Verify effective fallback globals through original CRT startup and their
   native direct-writer census. Use the initialized missing-zone flags in the actual
   World vehicle producer, replacing its earlier deferral. Effective empty columns
