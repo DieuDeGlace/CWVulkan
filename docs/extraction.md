@@ -263,3 +263,26 @@ The returned object is retained for the process session; no destructor slot,
 unregister or safe external-unload protocol is invented. Other exporter code
 still uses SDK game views, so this is not a complete adapter or final SDK-free
 release. Original assets and test captures remain owner-local.
+
+## Independent stored terrain export, 2026-11-04
+
+The primary CWZ1 path reads the ordinary Zone's verified table/owner/whole-Zone
+coordinates and its in-place columns through the independent primitive view.
+It copies only live six-byte stored records, retaining auxiliary light, type and
+flags. Empty allocation capacity is not exported; uninitialized climate cache
+fields are not read by this view. Biome is still a separate World-derived query
+at the existing point, before column copying. No inline theme field is invented.
+
+Column/base/header and identity rechecks reject observed changes, not every
+possible in-place edit or light-solver race. The documented World locks retain
+reached container/publication lifetimes; neither they nor active meshes prove
+atomic terrain or one completed generation phase. Capture ceilings are 131,072
+blocks per column, 96 MiB live block bytes per Zone and 128 MiB encoded CWZ1, not
+native height/world limits. Rejected terrain is not queued as an empty file.
+
+All five targets, guarded-memory cases, exact stored bytes, 65535-run splitting,
+the existing engine file consumer and the full CPU/owner suite pass. The attempted
+new native session stopped before launch; setup restored Save/Mods/ReShade and
+verified their exact hashes. This terrain/callback integration remains pending
+live acceptance. Other exporter paths still use SDK views. Owner data remains
+private and absent from source/runtime packages.

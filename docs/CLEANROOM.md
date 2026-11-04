@@ -1732,7 +1732,7 @@ probes, exports, SDK implementation and game content remain out of packages.
 
 ## Alpha raw height staging, 2026-11-03
 
-The independent native-only author wrote alpha-base-height-vectors.md sections1–7
+The independent native-only author wrote alpha-base-height-vectors.md sections 1–7
 from original Alpha evidence and independent prose, without engine or output
 access. The implementer read that stable note and owned sources only. A dedicated
 H gate now follows the specified float32 operation chains, with literal synthetic
@@ -1848,3 +1848,21 @@ neutral results and unchanged caller state; own DLL exports are also inspected.
 No original or SDK implementation/header was read or copied. The new integration
 still needs native execution validation, and other SDK dependencies remain open.
 No owner captures or original assets enter either package.
+
+### Independent primitive Zone storage, 2026-11-04
+
+The same native-only author finalized steam-zone-terrain-storage.md sections 1–7
+using only native evidence and independent prose, then held. The implementer read
+all sections and owned code before authoring a primitive identity/column byte view
+and original CWZ1 encoder. Complete classes, caches, effective fallbacks and an
+unproved inline theme header were not reconstructed. Resource budgets, malformed-
+data rejection and metadata rechecks are project capture policy, not native limits
+or a universal concurrent snapshot protocol. Opaque SDK path/blob metadata used
+for provenance supplied no behavioral implementation information.
+
+Synthetic fixtures leave unlisted caches nonzero, exercise changing/invalid spans,
+and feed the original project's existing file consumer. No original/SDK header or
+implementation was read or copied by the implementer. CPU/build checks pass;
+new native integration remains unvalidated after the pre-launch control stop.
+Owner Save/Mods/ReShade restoration was hash-verified. No original assets or
+owner test data enter either package; other SDK dependencies remain open.

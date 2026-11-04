@@ -160,3 +160,36 @@ uses its export macro. The rest of the exporter still includes SDK game views.
 Raw-host tests and required export checks pass; this new callback integration is
 not yet live-validated. No SDK-wide grant, exact revision or complete replacement
 is established by this bounded change.
+
+The stored-terrain export path now also reads primitive Zone identity/column
+fields through [independent native-only prose](specs/steam-zone-terrain-storage.md)
+and an original guarded view. Its enumeration/lease no longer uses SDK members.
+The owner-format encoder is project code, and its fixtures pass the actual engine
+consumer. Other sidecar and game views still depend on the SDK. This further
+bounded change supplies neither a grant/revision nor complete replacement; its
+new native integration is not yet live-validated.
+
+## 7. Opaque snapshot comparison and README follow-up, 2026-11-04
+
+A further metadata-only comparison hashed all 248 local vendor files and compared
+path/blob identities against all 50 commits reachable in the isolated upstream
+metadata clone. It did not display or interpret SDK implementation/header text.
+Raw byte hashes and a separate CRLF-to-LF-only comparison were retained. No
+complete file-set/byte match was found. Seven commits tie for the maximum overlap:
+204 raw matching paths among 229 common paths, 25 different common paths, 19 local-only
+paths and 5 upstream-only paths. The current master has 149 raw matching paths.
+These counts include dependency files; they are not a claim that 204 core SDK
+implementations were identified or that the most similar tree is the local origin.
+A partial match does not establish an exact upstream revision or acquisition chain.
+
+The official README at the previously recorded master revision was also checked
+for licensing paragraphs, with fenced code suppressed. None matched license,
+copyright, permission, public-domain or SPDX terms. An official GitHub issue
+search for this repository and `license` returned zero results. These bounded
+queries do not prove that no permission statement exists elsewhere. No SDK source
+or header content was used for behavior, no author was contacted, and no new grant
+was inferred. The grant/revision/complete-replacement gate remains open.
+
+Sources: [the inspected upstream tree](https://github.com/coremaze/CWSDK/tree/083e67b5e301483c4a222989c046fc2041d134a8),
+[its README](https://github.com/coremaze/CWSDK/blob/083e67b5e301483c4a222989c046fc2041d134a8/README.md)
+and [the official issue-search endpoint](https://api.github.com/search/issues?q=repo%3Acoremaze%2FCWSDK%20license).

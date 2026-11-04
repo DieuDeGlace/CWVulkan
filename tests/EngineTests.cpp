@@ -158,6 +158,7 @@ int nativeTerrainBufferTests(); // tests/NativeTerrainBufferTests.cpp
 int nativeLoadedZoneTests(); // tests/NativeLoadedZoneTests.cpp
 int captureWorldSectionTests(); // tests/CaptureWorldSectionTests.cpp
 int capturePluginTests(); // tests/CapturePluginTests.cpp
+int nativeZoneTerrainTests(); // tests/NativeZoneTerrainTests.cpp
 int playerHitTests();      // tests/PlayerHitTests.cpp
 int dialoguePageTests();   // tests/DialoguePageTests.cpp
 int petTests();            // tests/PetTests.cpp
@@ -9399,6 +9400,8 @@ int main(int argc, char **argv) {
         return featTextTests();
     if (argc == 2 && std::string(argv[1]) == "lootwindows")
         return lootWindowTests();
+    if (argc == 2 && std::string(argv[1]) == "extractorterrain")
+        return nativeZoneTerrainTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "extractorabi")
         return capturePluginTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "extractorlocks")
@@ -10747,6 +10750,7 @@ int main(int argc, char **argv) {
     failures += nativeLoadedZoneTests();
     failures += captureWorldSectionTests();
     failures += capturePluginTests();
+    failures += nativeZoneTerrainTests();
     failures += steamSceneRangeTests();
     failures += steamMeshCostTests();
     failures += gamepadUiTests();      // tests/GamepadUiTests.cpp

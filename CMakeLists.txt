@@ -342,7 +342,8 @@ target_sources(EngineTests PRIVATE
     tests/NativeTerrainBufferTests.cpp
     tests/NativeLoadedZoneTests.cpp
     tests/CaptureWorldSectionTests.cpp
-    tests/CapturePluginTests.cpp)
+    tests/CapturePluginTests.cpp
+    tests/NativeZoneTerrainTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)

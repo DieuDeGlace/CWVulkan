@@ -774,6 +774,15 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
 
 ## Extractor callback admission, 2026-11-03
 
+- [x] Replace stored terrain export's SDK identity/column access with the independent
+  primitive Zone view and an original CWZ1 codec. Capture enumeration/leases also
+  use the independent views. Synthetic malformed/change/budget cases and exact
+  six-byte/65535-run-boundary checks pass; the actual engine accepts the fixture.
+  All five targets and full CPU/owner suite pass. New native integration is not
+  yet live-validated; no atomic snapshot or completed-light-phase guarantee is
+  inferred from mesh presence or metadata rechecks. Other SDK views remain open.
+
+
 - [x] Replace SDK GenericMod inheritance with an independently authored explicit
   callback record covering all 30 reached positions and 29 priority bytes. Raw-host
   tests verify initialization, tick routing, neutral interception and unchanged

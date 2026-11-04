@@ -10,6 +10,20 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Stored terrain export now uses an independently specified Zone identity/column
+  reader and the project's CWZ1 encoder, replacing SDK position/column access.
+  Zone enumeration and capture leases are also independent in this export path.
+  Guarded ranges preserve all six stored bytes, distinguish capacity from live
+  records and reject observed base/header/identity changes. No effective water
+  substitution or climate default is manufactured. Biome remains a separate
+  World query, in its existing order before column copying. Resource ceilings
+  are capture policy. Malformed-memory, exact-byte, long-run and actual engine
+  file-consumer tests pass, alongside all five targets and the full CPU/owner
+  suite. Its new native integration and the callback replacement below still
+  need live acceptance; the attempted session was stopped before launch and all
+  owner files restored exactly. Rechecks and mesh admission do not establish an
+  atomic whole-Zone snapshot. Other SDK views and final-release gates remain open.
+
 - The extractor factory now returns an original explicit 30-slot callback record,
   replacing SDK GenericMod inheritance and its export macro. Its layout, opaque
   register shapes and neutral results come only from the independent loader ABI

@@ -8,6 +8,7 @@
 #include "NativeLoadedZones.h"
 #include "CaptureWorldSections.h"
 #include "CapturePlugin.h"
+#include "ZoneTerrainCapture.h"
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
 // generates (every block's exact colour and type: terrain, trees, buildings)
 // so CubeVulkan can render the identical world.
@@ -786,8 +787,6 @@ static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCa
     }
     if (meshCacheLocked) {
         // saveZones holds this exact native lock and the zone-map lifetime lock.
-        static_assert(offsetof(cube::World, zones_mesh_critical_section) == 0x3c8,
-                      "Mesh-cache capture requires the supported native world layout");
         const auto *raw = (const unsigned char *)zone;
         scenecapture::MeshCache cache;
         std::memcpy(&cache.activeGroups, raw + 0x1d0, 8);
@@ -826,35 +825,20 @@ static int regionType(cube::World *w, int64_t x, int64_t y) {
     return ((int (*)(cube::World *, int, int))(base() + BIOME_AT_RVA))(w, region.x, region.y);
 }
 
-// Serialises a fully generated zone (caller holds the zone locks).
+// Caller retains Zone lifetime. Stored-byte rechecks do not freeze physical
+// edits or the solver; a nonempty mesh list is only our capture admission policy.
 static std::vector<unsigned char> serialise(cube::World *w, cube::Zone *zone) {
-    std::vector<unsigned char> out;
-    out.reserve(256 * 1024);
-    out.insert(out.end(), {'C', 'W', 'Z', '1'});
-    put<int32_t>(out, zone->position.x);
-    put<int32_t>(out, zone->position.y);
-    put<int32_t>(out, regionType(w, (int64_t)zone->position.x * 64 + 32, (int64_t)zone->position.y * 64 + 32));
-    put<int32_t>(out, 0);
-    for (int i = 0; i < 4096; i++) {
-        const cube::Field &field = zone->fields[i];
-        put<int32_t>(out, field.base_z);
-        size_t runsAt = out.size();
-        put<uint32_t>(out, 0);
-        uint32_t runs = 0;
-        const auto &blocks = field.blocks;
-        for (size_t j = 0; j < blocks.size();) {
-            size_t k = j + 1;
-            while (k < blocks.size() && k - j < 65535 && memcmp(&blocks[k], &blocks[j], sizeof(cube::Block)) == 0)
-                k++;
-            put<uint16_t>(out, (uint16_t)(k - j));
-            auto p = (const unsigned char *)&blocks[j];
-            out.insert(out.end(), p, p + sizeof(cube::Block));
-            runs++;
-            j = k;
-        }
-        memcpy(&out[runsAt], &runs, sizeof(runs));
-    }
-    return out;
+    std::array<int32_t, 2> coordinates{};
+    if (!captureabi::readZoneIdentity(base(), reinterpret_cast<uintptr_t>(w), reinterpret_cast<uintptr_t>(zone), coordinates,
+                                      readNative))
+        return {};
+    // Preserve the existing query-before-column-copy order.
+    const int biome = regionType(w, int64_t(coordinates[0]) * 64 + 32, int64_t(coordinates[1]) * 64 + 32);
+    captureabi::ZoneTerrain terrain;
+    if (!captureabi::readZoneTerrain(base(), reinterpret_cast<uintptr_t>(w), reinterpret_cast<uintptr_t>(zone), terrain,
+                                     readNative) || terrain.coordinates != coordinates)
+        return {};
+    return zonecapture::encode(terrain, biome);
 }
 
 // Cached material inputs used by the full setter's downward gap fill.
@@ -885,26 +869,36 @@ static std::vector<unsigned char> serialiseMaterials(cube::World *w, cube::Zone 
     return out;
 }
 
-// Saves every newly generated zone. Zones with chunk meshes are complete.
+// Captures newly observed zones with active meshes, at most four per tick.
+// This is a scheduling/readiness policy, not an atomic completed-generation proof.
 static void saveZones(cube::World *w) {
-    if (!TryEnterCriticalSection(&w->zones_critical_section))
+    captureabi::WorldBufferLease locked(reinterpret_cast<uintptr_t>(w));
+    if (!locked)
         return;
-    if (!TryEnterCriticalSection(&w->zones_mesh_critical_section)) {
-        LeaveCriticalSection(&w->zones_critical_section);
+    std::vector<uintptr_t> zones;
+    if (!captureabi::readLoadedZones(reinterpret_cast<uintptr_t>(w), zones, readNative))
         return;
-    }
     int count = 0;
-    for (auto &[key, zone] : w->zones) {
-        if (!zone || count >= 4)
-            continue; // At most four per tick keeps frames smooth.
-        std::pair<int, int> id{zone->position.x, zone->position.y};
-        if (saved.count(id) || zone->chunk.chunkbuffers.empty())
+    for (const auto address : zones) {
+        if (count >= 4)
+            break;
+        std::array<int32_t, 2> coordinates{};
+        if (!captureabi::readZoneIdentity(base(), reinterpret_cast<uintptr_t>(w), address, coordinates, readNative))
+            continue;
+        const std::pair<int, int> id{coordinates[0], coordinates[1]};
+        std::uint64_t activeGroups = 0;
+        if (saved.count(id) || !captureabi::readField(address, 0x1d0, &activeGroups, sizeof activeGroups, readNative) ||
+            !activeGroups || activeGroups > captureabi::MAX_TERRAIN_GROUPS)
+            continue;
+        auto *zone = reinterpret_cast<cube::Zone *>(address); // other sidecar views remain SDK-dependent
+        auto terrain = serialise(w, zone);
+        if (terrain.empty())
             continue;
         std::string stem = folder + "\\z_" + std::to_string(id.first) + "_" + std::to_string(id.second);
-        Job blocks{stem + ".cwz", serialise(w, zone)}, records{stem + ".rec", serialiseRecords(zone, true)},
+        Job blocks{stem + ".cwz", std::move(terrain)}, records{stem + ".rec", serialiseRecords(zone, true)},
             materials{stem + ".cwm", serialiseMaterials(w, zone)};
         saved.insert(id);
-        count++;
+        ++count;
         {
             std::lock_guard lock(jobsMutex);
             jobs.push_back(std::move(blocks));
@@ -913,8 +907,6 @@ static void saveZones(cube::World *w) {
         }
         jobsReady.notify_one();
     }
-    LeaveCriticalSection(&w->zones_mesh_critical_section);
-    LeaveCriticalSection(&w->zones_critical_section);
 }
 
 static void startSession(cube::World *w, cube::Creature *player) {
@@ -6154,7 +6146,12 @@ static bool refreshOnce(unsigned char *zone) {
 }
 // A zone's blocks, records, spawn points and the rand() calls just traced, at stem.*.
 static void writeZone(cube::World *w, unsigned char *zone, const std::string &stem) {
-    writeFile(stem + ".cwz", extract::serialise(w, (cube::Zone *)zone));
+    const auto terrain = extract::serialise(w, (cube::Zone *)zone);
+    if (terrain.empty()) {
+        log("Oracle: terrain capture rejected; no new zone files written at " + stem);
+        return;
+    }
+    writeFile(stem + ".cwz", terrain);
     writeFile(stem + ".cwm", extract::serialiseMaterials(w, (cube::Zone *)zone));
     writeFile(stem + ".rec", extract::serialiseRecords((cube::Zone *)zone));
     writeSpawns(zone, stem + ".spawns");
