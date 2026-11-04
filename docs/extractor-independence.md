@@ -43,7 +43,16 @@ This workboard does not grant rights or certify final redistribution.
   block-power/mana fields. Block-to-fixed conversion uses defined unsigned scaling
   for negative coordinates. Recorded death/collision positions also use owned
   fixed values, and zero-velocity helpers use the same scalar writer. The
-  `LongVector3` alias is removed; other scalar consumers remain to be migrated.
+  `LongVector3` alias is removed. Additional diagnostics now use documented
+  ID, hostility, name, position, level and health fields; diagnostic coordinate
+  differences avoid signed overflow and retain nearby signed64-edge deltas.
+- Appearance reads now use the independent
+  [record contract](specs/steam-creature-appearance-record.md), retaining distinct
+  physical extents, eight signed model IDs, eight model scalars, controls and
+  placement inputs. No native padding is treated as color alpha. Legacy text
+  labels remain compatible; uncertain native meanings stay explicit. SDK
+  appearance and FloatVector3 overlays are removed. See
+  [captured appearance values](extractor-appearance-values.md).
 - Independent animation-state/sprite/matrix reads replace SDK animation members
   and the `Matrix4` alias. Capture reads twelve sprite pointers and eighteen part
   matrices; the older fourteen/thirty-three CWA2 wire shape retains explicit
@@ -90,7 +99,7 @@ This workboard does not grant rights or certify final redistribution.
   host-before-World locking for the named host phases and separate AI/worker
   scopes; neither guard alone covers all named host writers. The client capture
   helper must not be reused as a host capture or generic quiescence API.
-- Remaining creature scalar/appearance consumers, additional pose-related fields
+- Remaining creature scalar/additional pose-related fields
   and auxiliary buffers. Inventory SDK member accesses are removed; complete
   creature/controller lifetime and transitive writer audits remain separate.
 - Remaining World fields, collections, region/material sidecars and record views.

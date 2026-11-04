@@ -351,6 +351,7 @@ target_sources(EngineTests PRIVATE
     tests/NativeItemRecordTests.cpp
     tests/NativeCreatureViewsTests.cpp
     tests/NativeCreatureScalarsTests.cpp
+    tests/NativeCreatureAppearanceTests.cpp
     tests/NativeCreaturePoseTests.cpp
     tests/NativeInventoryTests.cpp
     tests/NativeConversationTests.cpp)

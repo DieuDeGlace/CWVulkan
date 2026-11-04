@@ -27,10 +27,13 @@ int nativeCreatureScalarsTests() {
     set(record.data(), 0x10, INT64_MIN);
     set(record.data(), 0x18, int64_t(-1));
     set(record.data(), 0x20, INT64_MAX);
+    set(record.data(), 0x28, 17.25f);
+    set(record.data(), 0x2c, -45.5f);
     set(record.data(), 0x30, -15.5f);
     set(record.data(), 0x5c, uint32_t(0x80000005));
     set(record.data(), 0x64, uint32_t(0xf0000001));
     set(record.data(), 0x80, uint32_t(0x80002000));
+    record[0x60] = 0xf3;
     record[0x68] = 0xfe;
     set(record.data(), 0x6c, 2.75f);
     set(record.data(), 0x34, -0.0f);
@@ -57,9 +60,16 @@ int nativeCreatureScalarsTests() {
               captureabi::fixedFromBlocks(INT64_MIN) == 0 && captureabi::fixedFromBlocks(INT64_MAX) == -65536 &&
               captureabi::fixedFromBlocks(-(int64_t(1) << 47)) == INT64_MIN,
           "negative and boundary block coordinates scale without signed-shift overflow");
-    check(values.yaw() == -15.5f && values.movementFlags() == 0x80000005 && values.ability() == 0xfe &&
-              values.abilityClock() == 2.75f && values.race() == 0xf0000001 && values.appearanceFlags() == 0x80002000,
+    check(values.pitch() == 17.25f && values.roll() == -45.5f && values.yaw() == -15.5f &&
+              values.movementFlags() == 0x80000005 && values.ability() == 0xfe && values.abilityClock() == 2.75f &&
+              values.race() == 0xf0000001 && values.appearanceFlags() == 0x80002000 && values.hostility() == 0xf3,
           "recording metadata retains yaw, full flag bits, unsigned ability byte and float clock");
+    check(captureabi::fixedDelta(INT64_MAX, INT64_MAX - 1) == 1 &&
+              captureabi::fixedDelta(INT64_MIN, INT64_MIN + 1) == -1 &&
+              captureabi::fixedDelta(INT64_MAX, INT64_MIN) == 18446744073709551616.0 &&
+              captureabi::fixedDelta(INT64_MIN, INT64_MAX) == -18446744073709551616.0 &&
+              captureabi::fixedDelta(-65536, 65536) == -131072 && captureabi::fixedDelta(-1, -1) == 0,
+          "diagnostic signed64 differences retain nearby precision without signed subtraction overflow");
     const auto before = record;
     values.setPosition({11, -12, 13});
     values.setVelocity({});

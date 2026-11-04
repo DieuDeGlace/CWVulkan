@@ -1,6 +1,7 @@
 #pragma once
 // Primitive values: player-control.md record table, creature-upkeep.md section0,
-// native-saves.md section3.3 and steam-world-creature-views.md section2.
+// native-saves.md section3.3, steam-world-creature-views.md section2 and
+// creature-physics.md section2.1 (pitch and bank).
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +25,14 @@ inline std::int64_t fixedFromBlocks(std::int64_t blocks) {
     return result;
 }
 
+// Project diagnostic difference in fixed units. Subtract unsigned magnitudes
+// before converting, retaining small differences near either signed64 limit.
+inline double fixedDelta(std::int64_t lhs, std::int64_t rhs) {
+    if (lhs >= rhs)
+        return double(static_cast<std::uint64_t>(lhs) - static_cast<std::uint64_t>(rhs));
+    return -double(static_cast<std::uint64_t>(rhs) - static_cast<std::uint64_t>(lhs));
+}
+
 // A borrowed native record, not an overlay C++ class or an allocation owner.
 // Caller supplies a valid retained readable/writable span for every field used.
 class CreatureScalars {
@@ -43,8 +52,11 @@ class CreatureScalars {
     std::int32_t level() const { return read<std::int32_t>(0x144); }
     std::uint8_t classId() const { return record[0x14c]; }
     std::uint8_t specialization() const { return record[0x14d]; }
+    float pitch() const { return read<float>(0x28); }
+    float roll() const { return read<float>(0x2c); }
     float yaw() const { return read<float>(0x30); }
     std::uint32_t movementFlags() const { return read<std::uint32_t>(0x5c); }
+    std::uint8_t hostility() const { return record[0x60]; }
     std::uint32_t race() const { return read<std::uint32_t>(0x64); }
     std::uint32_t appearanceFlags() const { return read<std::uint32_t>(0x80); }
     std::uint8_t ability() const { return record[0x68]; }

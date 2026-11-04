@@ -166,6 +166,7 @@ int vehicleTests(); // tests/VehicleTests.cpp
 int nativeItemRecordTests(); // tests/NativeItemRecordTests.cpp
 int nativeCreatureViewsTests(); // tests/NativeCreatureViewsTests.cpp
 int nativeCreatureScalarsTests(); // tests/NativeCreatureScalarsTests.cpp
+int nativeCreatureAppearanceTests(); // tests/NativeCreatureAppearanceTests.cpp
 int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int nativeInventoryTests(); // tests/NativeInventoryTests.cpp
 int nativeConversationTests(); // tests/NativeConversationTests.cpp
@@ -9416,6 +9417,8 @@ int main(int argc, char **argv) {
         return nativeInventoryTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "creatureposecapture")
         return nativeCreaturePoseTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "appearancecapture")
+        return nativeCreatureAppearanceTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "creaturescalars")
         return nativeCreatureScalarsTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "creatureviews")
@@ -10788,6 +10791,7 @@ int main(int argc, char **argv) {
     failures += nativeItemRecordTests();
     failures += nativeCreatureViewsTests();
     failures += nativeCreatureScalarsTests();
+    failures += nativeCreatureAppearanceTests();
     failures += nativeCreaturePoseTests();
     failures += nativeInventoryTests();
     failures += nativeConversationTests();

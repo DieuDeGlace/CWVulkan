@@ -932,6 +932,14 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   regressions pass, together with the full CPU/owner-data suite. Exact concurrent
   cache/job scheduling and all packet-request demand paths remain unqualified.
 
+- [x] Replace SDK appearance reads with independently specified scalar accessors.
+  Preserve signed model IDs, eight transform scalars, distinct physical extents,
+  controls and placement triples. Legacy text labels retain compatibility; the
+  tint alpha token is explicit format opacity rather than native padding. Extra
+  primitive diagnostics now use owned fields and overflow-safe distance math.
+  Byte fixtures and CPU/owner checks do not close live validation or SDK removal.
+  See [appearance capture](extractor-appearance-values.md).
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the
