@@ -12,6 +12,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <tuple>
 
 namespace {
 constexpr int64_t BLOCK = 65536;
@@ -75,7 +76,7 @@ struct Scene {
     }
 };
 
-void writeFixture(const std::filesystem::path &root, uint8_t type) {
+void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t columnBase = 0, bool empty = false) {
     std::filesystem::create_directories(root);
     std::ofstream(root / "manifest.txt") << "seed=123\nhomeX=0\nhomeY=0\nhomeZ=1\n";
     std::ofstream out(root / "z_0_0.cwz", std::ios::binary);
@@ -83,14 +84,16 @@ void writeFixture(const std::filesystem::path &root, uint8_t type) {
     const int32_t header[] = {0, 0, 0, 0};
     out.write(reinterpret_cast<const char *>(header), sizeof header);
     for (int i = 0; i < 4096; ++i) {
-        const int32_t base = 0;
-        const uint32_t runs = 1;
+        const int32_t base = columnBase;
+        const uint32_t runs = empty ? 0 : 1;
         const uint16_t count = 1;
         const uint8_t block[] = {50, 60, 70, 0, type, 0};
         out.write(reinterpret_cast<const char *>(&base), sizeof base);
         out.write(reinterpret_cast<const char *>(&runs), sizeof runs);
-        out.write(reinterpret_cast<const char *>(&count), sizeof count);
-        out.write(reinterpret_cast<const char *>(block), sizeof block);
+        if (!empty) {
+            out.write(reinterpret_cast<const char *>(&count), sizeof count);
+            out.write(reinterpret_cast<const char *>(block), sizeof block);
+        }
     }
 }
 } // namespace
@@ -351,6 +354,16 @@ int worldObjectTests() {
             inventory[1].back().count = 1;
             actors.simulate(terrain, 0);
             check(actors.vehicleItem()[0] == 24, "availability can repopulate the admitted cache");
+            put(actors.localPlayer()->record, 0x10, int64_t(128 * 65536));
+            put(actors.localPlayer()->record, 0x5c, uint32_t(0));
+            put(actors.localPlayer()->record, 0x6c, 1000.0f);
+            bool loaded = true;
+            const auto missing = terrain.gameBlock(128, 0, 1, &loaded);
+            check(!loaded && missing == ExtractedWorld::GameBlock{200, 200, 200, 0, 1, 0},
+                  "missing-zone effective lookup returns the initialized gray-solid copy");
+            actors.simulate(terrain, 0);
+            check(actors.vehicleItem()[0] == 24 && get<int32_t>(actors.vehicleItem().data(), 4) == 1,
+                  "actual World vehicle selection uses missing-zone fallback flags instead of deferring");
             actors.resetPlayer();
             check(actors.vehicleItem()[0] == 0 && actors.hudContext().item[0] == 0 && actors.hudContext().count == 0,
                   "fresh-character reset initializes both derived CharacterData item caches");
@@ -392,6 +405,20 @@ int worldObjectTests() {
             actors.simulate(terrain, 200);
             check(actors.elapsedWorldTime() == 200 && actors.playerHealth() < before && !actors.events().damageNumbers.empty(),
                   "facade physics receives the advanced world clock for200ms lava damage");
+        }
+        for (const auto [base, z, type] : {std::tuple{0, -1, 1}, {0, 0, 2}, {0, 1, 0},
+                                           {4, 0, 1}, {4, 3, 1}, {4, 4, 0}, {4, 5, 0},
+                                           {-4, -5, 1}, {-4, -4, 2}, {-4, -3, 2}, {-4, 0, 2}, {-4, 1, 0}}) {
+            writeFixture(root, 0, base, true);
+            ExtractedWorld terrain;
+            std::string why;
+            check(terrain.open(root, why), "empty-column fallback fixture opens");
+            terrain.propsAbsolute(0, 0); // load only this physical zero-record zone
+            bool loaded = false;
+            const auto result = terrain.gameBlock(0, 0, z, &loaded);
+            const uint8_t color = type == 1 ? 200 : 255;
+            check(loaded && result == ExtractedWorld::GameBlock{color, color, color, 0, uint8_t(type), 0},
+                  "empty effective columns preserve base-before-sea ordering and exact fallback bytes");
         }
         std::filesystem::remove_all(root);
     }

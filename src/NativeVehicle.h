@@ -14,8 +14,8 @@ struct Environment {
     const Tabs *inventory = nullptr;
     std::function<float()> wholeDuration; // signed32 native result already converted to float32
     std::function<std::span<const nativesaves::Record>(nativesaves::Cell)> loadedObjects;
-    // Unknown fallback flags defer new boat/glider selection, without erasing
-    // an active ability's provisional selection. This is replacement policy.
+    // An unavailable provider defers new travel selection without erasing an
+    // active provisional item. The World adapter includes its verified fallback.
     std::function<std::optional<uint8_t>(BlockPosition)> blockFlags;
 };
 

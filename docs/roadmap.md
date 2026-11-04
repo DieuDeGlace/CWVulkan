@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Verify effective fallback globals through original CRT startup and their
+  native direct-writer census. Use the initialized missing-zone flags in the actual
+  World vehicle producer, replacing its earlier deferral. Effective empty columns
+  now test retained base before sea/span handling; twelve exact boundary cases
+  reproduce four old failures. Correct the old mutation-test assumption while
+  preserving real at-base water coverage. All five targets, CPU/owner and automated
+  Vulkan image checks pass. This is the ordinary supported-image contract, not a
+  guarantee about bypassed startup, modified code or external memory writers.
+
 - [x] Align climbing upkeep's special-item ownership with the independently verified
   signed32 quantity accumulator. Actual upkeep distinguishes wrapped-overflow
   unavailability from a positive signed total before/after the correction. Restore
@@ -22,8 +31,9 @@ individual feature documents.
   regional value. Shared semantic assignment preserves held/copy item padding.
   Fresh-character reset initializes both derived CharacterData caches. Pure and
   actual zero-time World/Use regressions, all five targets and CPU/owner checks pass.
-  Unknown missing-zone fallback flags defer new travel selections as explicit
-  replacement policy; wider native runtime/alternate-writer acceptance stays open.
+  The later independent startup audit closes ordinary missing-zone fallback flags;
+  an unavailable external provider remains distinct. Wider native runtime and
+  alternate-writer acceptance stays open.
 
 - [x] Automatic abilities 0x96/0x97 now update a controller-owned creature-copy
   collection at the effect threshold, after prompt suppression/Climb and before

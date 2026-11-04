@@ -402,17 +402,19 @@ int blockMutationTests() {
         check(terrain.gameBlock(2, 3, 5)[5] == 0, "publication clears its pending set rather than marking every frame");
         float surface = 0;
         terrain.surface(128, 0, surface);
-        check(terrain.gameBlock(128, 0, -3) == ExtractedWorld::GameBlock{255, 255, 255, 0, 2, 0},
-              "an empty stored column exposes implicit water below its unused base");
+        check(terrain.gameBlock(128, 0, -3) == ExtractedWorld::GameBlock{200, 200, 200, 0, 1, 0},
+              "an empty stored column retains solid effective terrain below its base");
+        check(terrain.gameBlock(128, 0, -1) == ExtractedWorld::GameBlock{255, 255, 255, 0, 2, 0},
+              "an empty stored column exposes implicit water at its nonpositive base");
         object.x = 128 * 65536;
         object.y = 0;
-        object.z = -3 * 65536;
+        object.z = -1 * 65536;
         const auto underwater = zonestates::staticObjectRecord(object);
         terrain.markObjectBlocks(2, 0, std::array<nativesaves::Record, 1>{underwater});
-        check(terrain.gameBlock(128, 0, -3) == ExtractedWorld::GameBlock{255, 255, 255, 0, 2, 0xc0},
+        check(terrain.gameBlock(128, 0, -1) == ExtractedWorld::GameBlock{255, 255, 255, 0, 2, 0xc0},
               "implicit sea water is marked as effective water and retains coverage");
         terrain.markObjectBlocks(2, 0, {});
-        check(terrain.gameBlock(128, 0, -3)[5] == 0x80 && actors.events().blockChanges.empty() && terrain.takeChangedZones().empty(),
+        check(terrain.gameBlock(128, 0, -1)[5] == 0x80 && actors.events().blockChanges.empty() && terrain.takeChangedZones().empty(),
               "coverage removal preserves0x80 without block notices or mesh requests");
         object.x = 64 * 65536;
         terrain.markObjectBlocks(0, 0, std::array<nativesaves::Record, 1>{zonestates::staticObjectRecord(object)});

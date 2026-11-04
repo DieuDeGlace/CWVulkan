@@ -1340,9 +1340,9 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
                          : std::span<const nativesaves::Record>{};
         };
         vehicle.blockFlags = [&](nativevehicle::BlockPosition at) -> std::optional<uint8_t> {
-            bool loaded = false;
-            const auto block = ew.gameBlock(at[0], at[1], at[2], &loaded);
-            return loaded ? std::optional<uint8_t>(block[5]) : std::nullopt;
+            // Ordinary startup initializes the missing-zone solid's flags to0.
+            // Keep the effective accessor's returned copy for loaded and missing zones.
+            return ew.gameBlock(at[0], at[1], at[2])[5];
         };
         nativevehicle::rebuild(vehicleSelection, vehicle);
         hudcontext::Environment context;

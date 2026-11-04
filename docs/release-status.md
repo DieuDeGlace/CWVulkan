@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The independent effective-block audit verifies original CRT initialization of
+  the shared solid/air/water defaults, their ordinary lookup copies and direct
+  writer scope. The World vehicle producer now uses the initialized missing-zone
+  flags, superseding the earlier missing-zone deferral. A missing-zone actual-World
+  regression reproduces that failure before the binding fix. The same audit
+  establishes that an empty column still returns solid below its retained base,
+  before sea handling; twelve exact accessor vectors reproduce four failures
+  before correction. Two older mutation assertions rested on the disproven
+  empty-means-water assumption; their fixture now separately checks below-base
+  solid and at-base implicit-water coverage. All five targets, full CPU/owner and
+  automated Vulkan image checks pass; the owner save fixture is unchanged. This
+  does not certify alternate builds, bypassed startup or arbitrary external writes.
+
 - Climbing upkeep now uses the same wrapped signed32 special-item quantity
   total as the verified availability query, replacing a widened total. A regression
   through actual upkeep reproduces the overflow-admission failure and passes after

@@ -680,7 +680,8 @@ ExtractedWorld::GameBlock ExtractedWorld::readGameBlock(const Zone &zone, int32_
     if (lx < 0 || lx >= 64 || ly < 0 || ly >= 64)
         return stone;
     const Column &c = zone.columns[size_t(lx * 64 + ly)];
-    if (!c.empty() && z < c.base)
+    // Native effective lookup tests base before the live span, including empty columns.
+    if (z < c.base)
         return stone;
     const size_t i = size_t(int64_t(z) - c.base);
     if (i < c.blocks.size()) {

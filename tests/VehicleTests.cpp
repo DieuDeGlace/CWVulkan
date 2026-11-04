@@ -200,7 +200,7 @@ int vehicleTests() {
     protectedAir.world.blockFlags = [](auto) -> std::optional<uint8_t> { return std::nullopt; };
     protectedAir.player[0x68] = 0;
     protectedAir.rebuild();
-    check(protectedAir.subtype() == -1, "unknown fallback flags are not guessed to admit travel");
+    check(protectedAir.subtype() == -1, "unavailable provider flags are not guessed to admit travel");
     protectedAir.world.blockFlags = [](auto) -> std::optional<uint8_t> { return 0; };
     protectedAir.player[0x68] = 0x53;
     protectedAir.rebuild();

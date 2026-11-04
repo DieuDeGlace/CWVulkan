@@ -1934,8 +1934,10 @@ assignment use that bounded contract. Synthetic inventory/object/block records
 and an asset-free zero-time World facade check the actual producer and consumer.
 No original game code, vocabulary or assets enter either package. The unresolved
 native missing-zone fallback initialization is not assigned guessed flags: the
-engine defers new boat/glider candidates for an unavailable block, retaining any
-active provisional selection. This is explicit replacement policy, not parity.
+engine initially deferred new boat/glider candidates for an unavailable block,
+retaining any active provisional selection. That checkpoint's replacement policy
+is superseded for ordinary missing zones by the later effective-fallback audit
+below; genuinely unavailable external providers remain distinct.
 
 ## Special-item query and unequip completion follow-up, 2026-11-04
 
@@ -1945,3 +1947,18 @@ climbing consumer now keeps signed32 word accumulation; the actual upkeep test
 compares no ownership, positive totals and wrapped overflow. The ordinary unequip
 sound follows the existing independent completion order. No new native tracing,
 SDK access, assets or inferred universal widget refresh was introduced.
+
+## Effective fallback startup and empty columns, 2026-11-04
+
+The native-only author finalized steam-effective-block-fallback.md and its empty
+column supplement without engine, test, exporter, SDK or owner-output access.
+The implementer read the complete 100-line prose and owned sources only. The
+startup/data/lookup facts qualify the earlier missing-zone uncertainty; production
+vehicle selection now uses the effective accessor's initialized returned record.
+A real World-facade regression and twelve synthetic empty-column boundary cases
+exercise that binding and the base-before-sea correction. Two former test
+expectations were explicitly contradicted by the newly traced branch and were
+corrected without dropping the independent implicit-water marking checks. The
+six-byte defaults are compatibility facts, not bundled terrain/art assets. No
+native instructions or implementation expression entered the engine. Native
+writer/startup scope remains bounded as the specification states.
