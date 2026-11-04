@@ -1,4 +1,5 @@
 #include "SteamSceneRange.h"
+#include "SteamZoneDemand.h"
 #include "Assets.h"
 #include "Extracted.h"
 #include "AlphaLook.h"
@@ -70,6 +71,64 @@ int steamSceneRangeTests() {
     auto check = [&](bool pass, const char *what) {
         if (!pass) { std::cout << "FAIL Steam scene range: " << what << '\n'; ++failures; }
     };
+    const auto source = zonedemand::clientWindow({0, 0, 0}, 50);
+    int fresh = 0, withNeighbors = 0;
+    for (int x = -15; x <= 15; ++x)
+        for (int y = -15; y <= 15; ++y) {
+            fresh += source.contains(x, y);
+            withNeighbors += zonedemand::neighborhood(x, y, [&](int64_t xx, int64_t yy) { return source.contains(xx, yy); });
+        }
+    check(fresh == 793 && withNeighbors == 673, "default native source footprint and conditional nine-neighbor mesh count");
+    check(source.contains(15, 5) && !source.contains(15, 6) && !source.contains(16, 0),
+          "source admission combines the inclusive circle with its narrower tile box");
+    check(!zonedemand::neighborhood(15, 0, [&](int64_t x, int64_t y) { return source.contains(x, y); }) &&
+              zonedemand::neighborhood(15, 0, [&](int64_t x, int64_t y) {
+                  return source.contains(x, y) || (x == 16 && y >= -1 && y <= 1);
+              }),
+          "previously loaded source neighbors remain eligible outside fresh demand");
+    check(zonedemand::withinRetention(16, 0, 15) && !zonedemand::withinRetention(16, 1, 15),
+          "native source retention keeps the exact radius and excludes positions beyond it");
+    int retainedMeshCenters = 0;
+    for (int x = -15; x <= 15; ++x)
+        for (int y = -15; y <= 15; ++y)
+            retainedMeshCenters += zonedemand::neighborhood(x, y, [&](int64_t xx, int64_t yy) {
+                return source.contains(xx, yy) || zonedemand::withinRetention(xx, yy, 15);
+            });
+    check(retainedMeshCenters == 673, "an entirely cached world cannot expand the steady default mesh footprint");
+    const auto shifted = zonedemand::clientWindow({6400LL * 65536, 6400LL * 65536, 0}, 50);
+    check(shifted.center == std::array<int32_t, 2>{100, 100} && shifted.minimum == std::array<int32_t, 2>{85, 85} &&
+              shifted.maximum == std::array<int32_t, 2>{115, 115},
+          "source window retains absolute block-to-zone bounds");
+    const auto negative = zonedemand::clientWindow({-65536 / 2, -64LL * 65536 - 65536 / 2, 0}, 50);
+    check(negative.center == std::array<int32_t, 2>{0, -1} && gamemath::floorFixedZone(-65536 / 2) == -1 &&
+              gamemath::floorFixedZone(-64LL * 65536 - 65536 / 2) == -2,
+          "source truncation and corrected mesh centers differ at negative fractional boundaries");
+    const auto wrapped = zonedemand::clientWindow({(1LL << 48) + 64LL * 65536, 0, 0}, 50);
+    check(wrapped.center[0] == 1, "source narrows fixed blocks before selecting a zone");
+    auto countSource = [](const zonedemand::ClientWindow &window) {
+        int count = 0;
+        for (int x = window.minimum[0]; x <= window.maximum[0]; ++x)
+            for (int y = window.minimum[1]; y <= window.maximum[1]; ++y)
+                count += window.contains(x, y);
+        return count;
+    };
+    check(countSource(zonedemand::clientWindow({0, 0, 0}, 5)) == 11 &&
+              countSource(zonedemand::clientWindow({32LL * 65536, 32LL * 65536, 0}, 5)) == 11 &&
+              countSource(zonedemand::clientWindow({0, 0, 0}, 0)) == 9,
+          "source distance minimum remains distinct from the scene's minimum radius");
+    PreparationBudget preparation(15);
+    check(preparation.consider(14155776) && preparation.consider(0),
+          "preparation retains a zero-cost candidate at the exact native budget");
+    check(preparation.consider(1) && !preparation.consider(0),
+          "preparation rejects a new zero-cost candidate only strictly above budget");
+    check(preparation.consider(100) && !preparation.consider(0),
+          "known mesh cost remains admitted and counted above the preparation budget");
+    check(preparation.consider(-101) && preparation.consider(0),
+          "preparation accumulates the signed cached cost before later candidates");
+    PreparationBudget minimumPreparation(3);
+    check(minimumPreparation.consider(566231) && minimumPreparation.consider(0) &&
+              minimumPreparation.consider(1) && !minimumPreparation.consider(0),
+          "minimum-window preparation keeps the separately rounded float budget");
     Frame frame;
     frame.zoneRadius = 3;
     auto available = [](int64_t x, int64_t y) -> std::optional<scenevisibility::Bounds> {

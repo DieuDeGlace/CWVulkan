@@ -1656,3 +1656,27 @@ implementation, SDK, reconstructions or owner captures. Six conditional RGB-word
 checks use independently derived seed123 offsets and synthetic cached climate.
 The existing math passes unchanged. No original world sample or additional
 runtime parity claim follows from these arithmetic fixtures.
+
+
+## Native source windows and mesh preparation, 2026-11-03
+
+The separate native-only author supplied steam-world-zone-window-demand.md,
+including its sorter addendum, from original native evidence and independent
+prose. The implementer read that complete note and the engine's own code only.
+The original game implementation, SDK and reconstructed game code were not
+inspected or copied by the implementer. Existing independent key-only ordering
+is reused with signed preparation keys. New source-window, neighbor, retention
+and budget helpers implement the bounded facts; backend timing/cache-role
+limits remain explicit. Temporary local counters were removed before the normal
+rebuild. No owner assets, exports, captures or original executable bytes are added.
+
+
+## Immutable Alpha reads and local profiling, 2026-11-03
+
+CPU sampling targeted only the engine's own built executable, with an exact path
+check. No original game or SDK implementation was read by the implementer. The
+read optimization uses the existing owned code's immutable cell/region lifetime
+and synchronized publication contract. Successful thread-local reads are bounded
+and keyed by distinct world lifetimes; misses still use the original synchronization.
+No native numeric formula, asset or generation stream was replaced. Local sampler
+sources and outputs remain private under build and outside publication.

@@ -10,6 +10,22 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Generated Steam-look worlds now use the independently specified client source
+  window, full neighboring-zone admission, signed distance-key ordering and a
+  separate mesh-preparation budget. Installed and pending costs contribute, and
+  deferred edits keep their dirty state. Partial captured-world replay preserves
+  its existing missing-neighbor behavior and passes object/reward regression checks.
+  Alpha immutable cell/region reads now use bounded thread-local caches with
+  distinct world lifetimes; misses and late publication retain synchronization.
+  No generation arithmetic, geometry bytes or owner assets were replaced.
+  All five targets build and the full CPU/owner-data suite passes, followed by
+  92 Vulkan,2 camera,102 GUI and17 map image checks plus shared water and Alpha
+  scenery checks. The full-distance capture still exceeds its120-second observation
+  limit: the latest run reached502 prepared zones/15 pending at128.851 seconds wall,
+  versus280/15 at140.348 before the immutable-read change. This is diagnostic progress,
+  not an FPS result or completed cold-streaming acceptance. Lazy backend cache roles,
+  ability-specific source anchors and broader native-runtime comparisons remain open.
+
 - Independently derived Alpha Rk references now check seed123's original offset
   draw positions, its lattice-noise word and six raw RGB float-word results with
   synthetic cached climate. The existing generation math matches all six exactly;

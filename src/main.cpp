@@ -811,6 +811,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         }
     }
     World world(terrain, assets, renderer, viewZones, useExtracted ? &extractedWorld : nullptr);
+    world.setSourceRenderDistance(gameOptions.renderDistance);
     // The zones' stored states in Save/world.db go on the zones as they are made, and what changed
     // goes back when they leave memory (ZoneStates.h).
     // (The title shows the client world with the stored states; once play starts they are the host
@@ -865,6 +866,7 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
         if (!setOnCommandLine("graphics.viewdistance")) {
             renderer.settings.fogDistance = renderSettings.fogDistance = o.viewDistance();
             world.setViewZones(renderSettings.style == RenderStyle::Steam ? o.zonesDrawn() : (int)std::ceil(renderSettings.fogDistance / ZONE));
+            world.setSourceRenderDistance(o.renderDistance);
         }
     };
     const nativeprogress::Frame saveFrame{useExtracted ? extractedWorld.originDotsX() : 0, useExtracted ? extractedWorld.originDotsY() : 0};
@@ -8342,7 +8344,8 @@ static int runSession(int argc, char **argv, bool returningToMenu) {
             if (settledFrames == 32)
                 break;
             if (time > 120 + runSeconds) {
-                logLine("Capture failed: the world did not settle before the observation deadline.");
+                logLine("Capture failed: the world did not settle before the observation deadline (" +
+                        std::to_string(world.zoneCount()) + " prepared zones, " + std::to_string(world.pendingCount()) + " pending jobs).");
                 exitCode = 1;
                 break;
             }

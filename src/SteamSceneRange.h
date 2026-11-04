@@ -23,6 +23,16 @@ struct Frame {
     std::function<std::optional<scenevisibility::Bounds>(int64_t x, int64_t y)> zone;
     std::function<bool(const scenevisibility::Bounds &, float radius)> visible;
 };
+// Native worker preparation uses a separate budget from the frame's draw range.
+// Consider every distance-ordered candidate, including clean or already pending ones.
+class PreparationBudget {
+  public:
+    explicit PreparationBudget(int32_t zoneRadius);
+    bool consider(int32_t cost); // the outer cost branch only; dirty/readiness gates follow
+  private:
+    int64_t limit = 0, used = 0;
+};
+
 struct Ranges { float scene = 0, models = 0, abilities = 0; };
 int32_t triangleCost(size_t opaqueIndices, size_t waterIndices, size_t lavaIndices);
 glm::vec3 groundColour(Point physical); // unnormalized native RGB, truncating XY to blocks

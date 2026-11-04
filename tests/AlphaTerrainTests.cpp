@@ -13,6 +13,7 @@
 #include "worldgen/MapModel.h"
 #include "Extracted.h"
 #include <bit>
+#include <optional>
 #include <stdexcept>
 #include <future>
 #include <barrier>
@@ -46,6 +47,36 @@ int alphaTerrainTests() {
     check(alphagen::noise(0, 0) == -0.28179097175598145f && alphagen::noise(1.25, 2.75) == 0.14833128452301025f &&
               alphagen::noise(-0.3, 0) == -0.3548884093761444f,
           "float noise words including negative fractional truncation");
+    {
+        alphagen::World published(321);
+        check(!published.cell(100, 100), "a missing immutable cell is not cached as a lasting miss");
+        const auto *cell = published.makeCell(100, 100);
+        check(cell && published.cell(100, 100) == cell, "cell publication becomes visible after a previous miss");
+        std::vector<std::future<bool>> readers;
+        for (int thread = 0; thread < 4; ++thread)
+            readers.push_back(std::async(std::launch::async, [&] {
+                for (int read = 0; read < 1000; ++read)
+                    if (published.cell(100, 100) != cell)
+                        return false;
+                return true;
+            }));
+        for (auto &reader : readers)
+            check(reader.get(), "concurrent immutable readers retain the published cell");
+        check(!published.region(512, 512), "a region awaiting publication remains absent");
+        alphagen::Terrain prepared(published);
+        prepared.prepareRegion(512, 512);
+        const auto *region = published.region(512, 512);
+        check(region && published.region(512, 512) == region, "late region publication is visible and stable");
+
+        std::optional<alphagen::World> reused;
+        auto *first = &reused.emplace(123);
+        check(first->makeCell(512, 512) && first->cell(512, 512), "first world lifetime warms immutable reads");
+        reused.reset();
+        auto *second = &reused.emplace(456);
+        check(first == second && !second->cell(512, 512), "reusing a World address cannot retain a previous lifetime's cell");
+        const auto *replacement = second->makeCell(512, 512);
+        check(replacement && second->cell(512, 512) == replacement, "replacement world publishes its own cell");
+    }
     alphagen::World world(123);
     const auto *home = world.makeCell(512, 512);
     check(home && home->x == 8397824 && home->y == 8397824 && home->elevation == 74 && home->moisture == 0.4915097653865814f &&

@@ -58,6 +58,7 @@ class World {
     void setGroundLightProvider(GroundLightProvider provider) { groundLightProvider = std::move(provider); }
     // How many zones are drawn each way around the focus (the view distance changed).
     void setViewZones(int zones) { viewZones = zones; }
+    void setSourceRenderDistance(int setting) { sourceRenderDistance = setting; }
     int viewZoneCount() const { return viewZones; }
     // Zone (zx, zy)'s blocks changed: it is meshed again, the old mesh drawn until then.
     void refreshZone(int zx, int zy);
@@ -168,6 +169,7 @@ class World {
     const Assets &assets;
     Renderer &renderer;
     int viewZones;
+    int sourceRenderDistance = 50;
     class ExtractedWorld *extracted;
     uint32_t beamMesh = 0;
     std::vector<Model> models;
@@ -188,6 +190,7 @@ class World {
     std::set<Key> staleObjects;
     std::set<Key> stale; // zones to mesh again
     std::vector<Instance> instances;
+    void orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Point &physical) const;
     DrawItem instanceDraw(const Instance &i) const;
     // The Alpha look's questions (Renderer's WorldProbe).
     bool waterAt(glm::vec3 p) const;

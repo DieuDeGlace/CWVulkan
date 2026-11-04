@@ -7,6 +7,8 @@
 #include "ProceduralItems.h"
 #include "Extracted.h"
 #include "GameMath.h"
+#include "NativeKeyOrder.h"
+#include "SteamZoneDemand.h"
 #include "StaticObjectScene.h"
 #include "worldgen/BlockColours.h"
 #include "alphagen/Coordinates.h"
@@ -634,8 +636,71 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
     }
 }
 
+void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Point &physical) const {
+    struct Candidate {
+        Key key;
+        int32_t distance;
+    };
+    std::vector<Candidate> candidates;
+    const size_t side = size_t(viewZones) * 2 + 1;
+    candidates.reserve(side * side);
+    const auto window = zonedemand::clientWindow(physical, sourceRenderDistance);
+    std::map<Key, bool> sourceAvailability;
+    auto available = [&](int64_t x, int64_t y) {
+        const Key key{int(x), int(y)};
+        const auto [entry, inserted] = sourceAvailability.try_emplace(key, false);
+        if (inserted) {
+            if (!extracted->generated()) {
+                // Partial owner captures retain their existing missing-neighbor replay policy.
+                entry->second = extracted->has(key.first, key.second);
+                return entry->second;
+            }
+            const int64_t absoluteX = x + extracted->originZoneX(), absoluteY = y + extracted->originZoneY();
+            // Immutable source data can be materialized lazily. Previously loaded
+            // neighbors remain available outside the fresh-demand footprint.
+            entry->second = extracted->has(key.first, key.second) &&
+                (window.contains(absoluteX, absoluteY) ||
+                 (zonedemand::withinRetention(x - cx, y - cy, viewZones) &&
+                  (zones.contains(key) || extracted->gameZoneLoaded(int32_t(absoluteX), int32_t(absoluteY)))));
+        }
+        return entry->second;
+    };
+    for (int dx = -viewZones; dx <= viewZones; ++dx)
+        for (int dy = -viewZones; dy <= viewZones; ++dy) {
+            const Key key{cx + dx, cy + dy};
+            if (available(key.first, key.second))
+                candidates.push_back({key, dx * dx + dy * dy});
+        }
+    keyorder::sort(candidates, [](const Candidate &candidate) { return candidate.distance; });
+    const std::set<Key> needed(wanted.begin(), wanted.end());
+    wanted.clear();
+    scenerange::PreparationBudget budget(viewZones);
+    for (const auto &candidate : candidates) {
+        int32_t cost = 0;
+        const auto installed = zones.find(candidate.key);
+        if (installed != zones.end() && installed->second.nativeBounds)
+            cost = installed->second.nativeBounds->triangleCost.value_or(0);
+        const auto pending = pendingBounds.find(candidate.key);
+        if (pending != pendingBounds.end())
+            if (const auto bounds = pending->second->read(); bounds && bounds->triangleCost)
+                cost = *bounds->triangleCost;
+        // Clean and pending meshes contribute too. A nonzero cached cost remains
+        // eligible above budget; new zero-cost work waits, without losing its dirtiness.
+        if (budget.consider(cost) && needed.contains(candidate.key) &&
+            (!extracted->generated() || zonedemand::neighborhood(candidate.key.first, candidate.key.second, available)))
+            wanted.push_back(candidate.key);
+    }
+}
+
 void World::update(glm::vec3 focus) {
     int cx = (int)std::floor(focus.x / ZONE), cy = (int)std::floor(focus.y / ZONE);
+    scenerange::Point physical{};
+    if (extracted && renderStyle() == RenderStyle::Steam) {
+        physical[0] = gamemath::addFixed(int64_t(double(focus.x) * 65536), extracted->originDotsX());
+        physical[1] = gamemath::addFixed(int64_t(double(focus.y) * 65536), extracted->originDotsY());
+        cx = gamemath::floorFixedZone(physical[0]) - extracted->originZoneX();
+        cy = gamemath::floorFixedZone(physical[1]) - extracted->originZoneY();
+    }
     // Finish completed jobs, nearest first, a few per frame to keep frames smooth.
     int integrated = 0;
     for (auto it = jobs.begin(); it != jobs.end() && integrated < 6;) {
@@ -734,25 +799,29 @@ void World::update(glm::vec3 focus) {
             if (!zones.count(k) && !jobs.count(k))
                 wanted.push_back(k);
         }
-    // Zones whose blocks changed are meshed again, before any other.
+    // Keep dirty installed zones pending until a replacement job is actually queued.
     for (auto it = stale.begin(); it != stale.end();) {
         if (jobs.count(*it)) {
             ++it;
-            continue;
-        }
-        if (zones.count(*it))
+        } else if (zones.count(*it)) {
             wanted.push_back(*it);
-        it = stale.erase(it);
+            ++it;
+        } else {
+            it = stale.erase(it); // a missing zone already has a fresh request above
+        }
     }
-    std::stable_sort(wanted.begin(), wanted.end(), [&](const Key &a, const Key &b) {
-        auto d = [&](const Key &k) {
-            return (k.first - cx) * (k.first - cx) + (k.second - cy) * (k.second - cy);
-        };
-        const bool firstMeshed = zones.count(a) != 0, secondMeshed = zones.count(b) != 0;
-        if (firstMeshed != secondMeshed)
-            return firstMeshed;
-        return d(a) < d(b);
-    });
+    if (extracted && renderStyle() == RenderStyle::Steam) {
+        if (jobs.size() < workers)
+            orderNativePreparation(wanted, cx, cy, physical);
+    } else {
+        std::stable_sort(wanted.begin(), wanted.end(), [&](const Key &a, const Key &b) {
+            auto d = [&](const Key &k) { return (k.first - cx) * (k.first - cx) + (k.second - cy) * (k.second - cy); };
+            const bool firstMeshed = zones.count(a) != 0, secondMeshed = zones.count(b) != 0;
+            if (firstMeshed != secondMeshed)
+                return firstMeshed;
+            return d(a) < d(b);
+        });
+    }
     // The nearest ground not drawn yet, for the Alpha look's fog: the nearest corner of a
     // zone in the window that is not loaded.
     float nearest2 = -1;
@@ -774,6 +843,7 @@ void World::update(glm::vec3 focus) {
     for (auto &k : wanted) {
         if (jobs.size() >= workers)
             break;
+        stale.erase(k);
         const Terrain *t = &land;
         if (extracted) {
             if (!extracted->has(k.first, k.second)) {

@@ -303,15 +303,15 @@ target_sources(engine PRIVATE src/GamepadUi.cpp)
 target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
-    # Procedural voxel bytes and fixed cloud positions depend on float/double staging.
+    # Native voxel, fixed-coordinate and preparation-budget paths depend on numeric staging.
     set_source_files_properties(
-        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp ${ALPHA_TERRAIN_SOURCES}
+        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
         PROPERTIES COMPILE_OPTIONS /fp:strict)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
     target_compile_definitions(engine PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     set_source_files_properties(
-        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp ${ALPHA_TERRAIN_SOURCES}
+        src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
         PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
@@ -383,7 +383,7 @@ target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp tests/WorldObjectT
 target_sources(engine PRIVATE src/SteamScenery.cpp)
 target_sources(EngineTests PRIVATE tests/SceneCaptureTests.cpp)
 
-target_sources(engine PRIVATE src/RegionLevels.cpp src/SceneVisibility.cpp src/SteamSceneRange.cpp)
+target_sources(engine PRIVATE src/RegionLevels.cpp src/SceneVisibility.cpp src/SteamSceneRange.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp)
 target_sources(EngineTests PRIVATE tests/RegionLevelsTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SceneVisibilityTests.cpp)

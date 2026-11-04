@@ -8,6 +8,35 @@
 namespace alphagen {
 namespace {
 
+std::atomic<uint64_t> nextReadIdentity{1};
+
+// Published cells/regions never change or leave their World. Cache only successful
+// reads, so a missing cell or a not-yet-published region is retried normally.
+template <class Value> class ImmutableReads {
+  public:
+    template <class Lookup> const Value *get(uint64_t identity, uint32_t key, Lookup lookup) {
+        if (owner != identity) {
+            entries.fill({});
+            next = 0;
+            owner = identity;
+        }
+        for (const auto &entry : entries)
+            if (entry.value && entry.key == key)
+                return entry.value;
+        const Value *value = lookup();
+        if (value) {
+            entries[next] = {key, value};
+            next = (next + 1) % entries.size();
+        }
+        return value;
+    }
+  private:
+    struct Entry { uint32_t key = 0; const Value *value = nullptr; };
+    std::array<Entry, 32> entries{};
+    uint64_t owner = 0;
+    size_t next = 0;
+};
+
 constexpr int32_t GRID = 1024; // regions per side
 constexpr float TWO_POW_MINUS_16 = 1.f / 65536.f;
 
@@ -49,15 +78,20 @@ float segmentDistance(glm::dvec2 a, glm::dvec2 b, glm::dvec2 p) {
 
 } // namespace
 
-World::World(uint32_t seed) : worldSeed(seed), o(makeSeedOffsets(seed)) {
+World::World(uint32_t seed)
+    : worldSeed(seed), o(makeSeedOffsets(seed)), readIdentity(nextReadIdentity.fetch_add(1, std::memory_order_relaxed)) {
 }
 
 const RegionCell *World::cell(int32_t rx, int32_t ry) const {
     if (!inWorld(rx, ry))
         return nullptr;
-    std::shared_lock lock(cellsLock);
-    const auto it = cells.find(keyOf(rx, ry));
-    return it == cells.end() ? nullptr : it->second.get();
+    static thread_local ImmutableReads<RegionCell> recent;
+    const uint32_t key = keyOf(rx, ry);
+    return recent.get(readIdentity, key, [&]() -> const RegionCell * {
+        std::shared_lock lock(cellsLock);
+        const auto it = cells.find(key);
+        return it == cells.end() ? nullptr : it->second.get();
+    });
 }
 
 const RegionCell *World::makeCell(int32_t rx, int32_t ry) const {
@@ -135,7 +169,7 @@ void World::makeCells(int32_t rx, int32_t ry) const {
 }
 
 void World::prepareRegion(int32_t rx, int32_t ry, const std::function<float(int32_t, int32_t)> &height) const {
-    if (!inWorld(rx, ry))
+    if (!inWorld(rx, ry) || region(rx, ry))
         return;
     std::shared_ptr<RegionSlot> slot;
     {
@@ -154,9 +188,13 @@ void World::prepareRegion(int32_t rx, int32_t ry, const std::function<float(int3
 const Region *World::region(int32_t rx, int32_t ry) const {
     if (!inWorld(rx, ry))
         return nullptr;
-    std::shared_lock lock(regionsLock);
-    const auto it = regions.find(keyOf(rx, ry));
-    return it == regions.end() ? nullptr : it->second->ready.load();
+    static thread_local ImmutableReads<Region> recent;
+    const uint32_t key = keyOf(rx, ry);
+    return recent.get(readIdentity, key, [&]() -> const Region * {
+        std::shared_lock lock(regionsLock);
+        const auto it = regions.find(key);
+        return it == regions.end() ? nullptr : it->second->ready.load();
+    });
 }
 
 const ZoneEntry *World::zoneEntry(int32_t zx, int32_t zy) const {

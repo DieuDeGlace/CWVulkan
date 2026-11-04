@@ -808,6 +808,11 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   native-only specifications. Byte/float/fixed vectors and full CPU/GPU checks pass.
   Bounded corner-light reuse and converged floods retain their checked outputs;
   microbenchmarks are not whole-game performance acceptance.
+- [x] Steam-look preparation distinguishes the generated-source footprint, full
+  neighbor admission and native cost budget from the draw window. Captured patches
+  retain replay compatibility. Bounded immutable Alpha reads preserve publication
+  and world lifetimes. Native-reference and full CPU/GPU checks pass; full-distance
+  cold-streaming and broader runtime/cache-role acceptance remain open above.
 - [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,
   preserving its shoreline/water fixes and respecting its separate source license.
 - [ ] Add verified Alpha-only location variants alongside Steam layouts. The first

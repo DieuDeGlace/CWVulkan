@@ -128,6 +128,7 @@ class World {
 
     uint32_t worldSeed;
     SeedOffsets o;
+    const uint64_t readIdentity; // distinguishes lifetimes even when a World address is reused
     mutable std::shared_mutex cellsLock;
     // (Caches of what the seed decides: filling them does not change the world.)
     mutable std::unordered_map<uint32_t, std::unique_ptr<RegionCell>> cells; // key rx * 1024 + ry
