@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Independent Alpha climate references now check twelve literal float words across
+  land, a mixed land/sea boundary and sea under the native seed123 nine-cell state.
+  Removing any one required cell also checks the specified defaults, including a
+  cell whose complete-window weight was zero. The full CPU/owner-data suite passes;
+  no generation formula was changed. These are conditional arithmetic references,
+  with the separate region/location object absent and the zero-fire branch pinned;
+  they do not establish positive-fire, oasis or full native-world runtime parity.
+
 - Host source demand now follows the independently specified per-player union:
   a 270-block box clipped to the radius-5 disk, with phase-dependent 77/78/79
   single-player candidates. Ability 0x9c selects the raw block destination;

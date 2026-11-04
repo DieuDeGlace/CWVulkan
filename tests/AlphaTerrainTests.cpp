@@ -12,6 +12,7 @@
 #include "worldgen/AlphaTerrain.h"
 #include "worldgen/MapModel.h"
 #include "Extracted.h"
+#include <array>
 #include <bit>
 #include <optional>
 #include <stdexcept>
@@ -47,6 +48,43 @@ int alphaTerrainTests() {
     check(alphagen::noise(0, 0) == -0.28179097175598145f && alphagen::noise(1.25, 2.75) == 0.14833128452301025f &&
               alphagen::noise(-0.3, 0) == -0.3548884093761444f,
           "float noise words including negative fractional truncation");
+    {
+        // Independent arithmetic references, not game captures:
+        // alpha-climate-blend-vectors.md (seed123, nine cells, no prepared region).
+        using Words = std::array<uint32_t, 4>;
+        const auto words = [](const alphagen::World &sample, int32_t x) -> Words {
+            constexpr int32_t y = 8396800;
+            return {std::bit_cast<uint32_t>(sample.warmth(x, y)),
+                    std::bit_cast<uint32_t>(sample.moisture(x, y)),
+                    std::bit_cast<uint32_t>(sample.seaShare(x, y)),
+                    std::bit_cast<uint32_t>(sample.fireShare(x, y))};
+        };
+        struct ClimateFixture { int32_t x; Words expected; const char *label; };
+        constexpr ClimateFixture fixtures[] = {
+            {8396800, {0x3f0f651fu, 0x3efba72bu, 0, 0}, "native seed123 land climate words"},
+            {8402400, {0x3f29d20au, 0x3f048146u, 0x3f07c95bu, 0}, "native seed123 mixed land/sea climate words"},
+            {8402800, {0x3f41371cu, 0x3f0a6ae2u, 0x3f800000u, 0}, "native seed123 sea climate words"},
+        };
+        alphagen::World climate(123);
+        for (int i = 511; i <= 513; ++i)
+            for (int j = 511; j <= 513; ++j)
+                climate.makeCell(i, j);
+        check(!climate.region(512, 512), "climate fixture excludes a prepared oasis/location region");
+        for (int index : {0, 1, 2, 1, 0})
+            check(words(climate, fixtures[index].x) == fixtures[index].expected, fixtures[index].label);
+        for (int missing = 0; missing < 9; ++missing) {
+            alphagen::World partial(123);
+            int index = 0;
+            for (int i = 511; i <= 513; ++i)
+                for (int j = 511; j <= 513; ++j)
+                    if (index++ != missing)
+                        partial.makeCell(i, j);
+            check(words(partial, 8402400) == Words{0x3f000000u, 0x3f000000u, 0, 0},
+                  "any missing climate cell, including a zero-weight cell, gives native defaults");
+        }
+        check(words(climate, 8402400) == fixtures[1].expected,
+              "incomplete windows from other World lifetimes cannot replace the full boundary result");
+    }
     {
         alphagen::World published(321);
         check(!published.cell(100, 100), "a missing immutable cell is not cached as a lasting miss");

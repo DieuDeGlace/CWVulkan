@@ -1694,6 +1694,17 @@ The established displacement formula remains unchanged.
 The geometry-cache lifetime policy is explicitly the replacement backend's policy.
 No original assets, executable code or recorded owner data were added.
 
+## Direct Alpha climate arithmetic references, 2026-11-03
+
+The existing native-only author independently wrote alpha-climate-blend-vectors.md
+from original Alpha code/constants and independent prose. The implementer used
+only that note, its prerequisite contracts and owned code to check literal
+four-field outputs and missing-cell defaults. The shortened-pi constant's rounding
+bounds were separately reviewed without sending engine results to the author.
+No generation implementation was replaced. These conditional arithmetic fixtures
+are not runtime captures, prepared-world or positive-fire/oasis acceptance.
+No owner assets, native implementation or SDK implementation enter the source.
+
 ## Host source-demand union, 2026-11-03
 
 The implementer used steam-world-zone-window-demand.md section 7, the separate

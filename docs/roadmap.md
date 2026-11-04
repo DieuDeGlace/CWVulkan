@@ -823,7 +823,10 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   retain replay compatibility. Ordinary eagle source/mesh anchors and narrowed
   camera-zone conversion follow independent contracts; current/destination cache
   retention remains replacement policy. Bounded immutable Alpha reads preserve publication
-  and world lifetimes. Native-reference and full CPU/GPU checks pass; full-distance
+  and world lifetimes. Twelve additional independent direct climate words cover
+  land, mixed land/sea and sea, with missing-cell defaults; formulas stay unchanged.
+  These conditional arithmetic checks do not establish positive-fire/oasis or
+  native-runtime comparisons. Native-reference and full CPU/GPU checks pass; full-distance
   cold-streaming and broader runtime/cache-role acceptance remain open above.
 - [ ] Carry compatible height changes into TerrainVariance in SteamCubeWorldMods,
   preserving its shoreline/water fixes and respecting its separate source license.

@@ -207,6 +207,15 @@ lookup. Region initialization still publishes once. No climate arithmetic, seed
 stream or voxel bytes change. Publication, concurrent-reader and lifetime tests
 cover this optimization.
 
+Independent direct climate references also pin seed123's nine-cell state and
+check twelve float words at land, a mixed land/sea boundary and sea. Missing-cell
+checks retain the native defaults even when the absent cell would have zero
+weight. The separate region/location object is absent, so these are not oasis
+or prepared-world samples; fire follows the specified no-fire branch. The
+independent derivation accounts for the stored shortened-pi constant and bounds
+nonlattice displacement before integer conversion. It does not claim unproved
+individual noise/displacement words or native runtime captures.
+
 Separate native-instruction references verify crossed-axis region displacement
 float words at four lattice inputs, seed123 noise offsets and six raw
 rock-color float-word results with pinned synthetic cached climate. They are not
