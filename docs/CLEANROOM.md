@@ -2058,3 +2058,20 @@ return. Inventory-backed negative/overflow/order tests exercise the count path.
 This arithmetic change does not claim persistent derived-collection, selected-
 button lifetime, native RNG-role or full GUI callback completion. No native code,
 SDK or reconstruction was read by the implementer; no original assets are bundled.
+
+## Inventory region-choice cache, 2026-11-04
+
+The independent original-only author supplied steam-inventory-region-choice-cache.md.
+The implementer read the final prose, previously finalized event/layout contracts
+and owned engine sources only. The owned value cache rebuilds from the canonical
+carried tab on bound inventory refreshes, preserves skipped/non-inventory updates,
+includes nonzero negative counts and the player region, and does not repair the
+separate selected region. Invalid engine tab headers defer safely; no native
+successful invalid access is asserted. Native-backed drawing consumes this cache;
+recording-only compatibility remains separate. Ordinary collection assignment now
+runs independently of panel visibility and does not replay skipped refreshes.
+Tab changes refresh before selection/thumb work, with the shop's second rebuild
+stage afterwards. Synthetic lifecycle/quantity/order fixtures and the full CPU/
+owner suite plus102 Vulkan GUI images pass. Complete frontend/persistent binding,
+derived collections, cached row/range state and live callback/hardware acceptance
+remain open. No native source, SDK, reconstruction or original assets were added.

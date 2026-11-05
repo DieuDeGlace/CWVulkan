@@ -10,6 +10,16 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Native inventory region choices now persist between explicit refresh events,
+  rather than rebuilding during drawing. They read the canonical carried tab,
+  include every nonzero count and the player region, and preserve the old cache
+  on unbound/non-inventory refreshes. Collection binding runs while panels are
+  hidden; binding itself does not replay an earlier skipped refresh. Tab changes
+  refresh before selection/thumb placement, with the shop's additional rebuild
+  afterwards. All five targets, full CPU/owner-data suite and 102 Vulkan GUI image
+  checks pass. Persistent frontend binding, complete cached row/range state,
+  derived collections and live callback/hardware acceptance remain open.
+
 - An extractor-only CMake configuration now builds the Windows DLL before
   renderer/dependency setup. A fresh build passed with no FetchContent cache
   entries or dependency directory; compiler/header audit and four required exports

@@ -393,7 +393,12 @@ individual feature documents.
   separate visits; a clamp done by refresh is not a row-movement sound. Region
   arrows request sound first; next-region adds its explicit canonical sort before
   refresh, including missing-choice paths. Event handlers update the actual
-  scrollbar using their refreshed count. Native full cached-range/thumb lifetime and callback/hardware acceptance remain open.
+  scrollbar using their refreshed count. Native bag region choices now rebuild on
+  explicit inventory refreshes from the canonical carried tab, including negative
+  counts and the player region; unbound/other-panel refreshes retain prior choices.
+  Drawing no longer reconstructs that cache. Hidden-panel collection binding and
+  tab refresh/selection/thumb ordering are integrated. Complete frontend binding,
+  cached row/range/thumb lifetime and callback/hardware acceptance remain open.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
   hooks, full camera/focus integration and hardware comparisons remain. Creature selection now runs once before early control;
   separate minimum depth, post-movement aim, early assistance, later speaker

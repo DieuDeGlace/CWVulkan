@@ -2009,7 +2009,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 bag.push_back({std::move(item), stack.count});
             }
     };
-    auto sortInventory = [&](bool pickup = false) {
+    auto sortInventory = [&] {
         if (!nativeInventory)
             return;
         const auto fallback = nativeRecord(-1, nullptr);
@@ -2021,11 +2021,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         context.usable = [actor](const auto &item) { return nativerules::mayUse(actor, item.data()); };
         context.power = [actor](const auto &item) { return nativerules::itemPower(item.data(), actor); };
         nativeInventory->inventory.refresh(context);
-        if (pickup) // local pickup performs an explicit refresh, then the bound widget refresh
-            nativeInventory->inventory.refresh(context);
     };
-    auto refreshInventory = [&](bool pickup = false) {
-        sortInventory(pickup);
+    auto refreshInventory = [&](bool pickup = false, inventoryui::Panel panel = inventoryui::Panel::Inventory) {
+        if (pickup)
+            sortInventory(); // Explicit pickup sort precedes the bound-widget refresh.
+        if (nativeInventory && inventoryView.canonicalTabs) {
+            const auto here = regionHere();
+            inventoryui::refreshRegionCache(true, panel, inventoryView.regionChoices, nativeInventory->inventory.tabs,
+                                            inventoryView.tab, {here.x, here.y});
+            sortInventory();
+        }
         rebuildInventoryViews();
     };
     auto consumeCarried = [&](size_t row) {
@@ -3645,9 +3650,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 bagShown = false;
             inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
             if (nativeInventory && !nativeInventory->inventory.tabs.empty())
-                refreshInventory();
+                refreshInventory(false, inventoryui::Panel::Crafting);
             if (craftingOpen)
-                refreshInventory();
+                refreshInventory(false, inventoryui::Panel::Crafting);
             if (!inventoryOpen)
                 craftingOpen = false, bagShown = true;
         }
@@ -4283,6 +4288,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             chat.stopEditing();
             itemSelector.hide();
         };
+        // Ordinary interface binding is independent of panel visibility. It only
+        // assigns the collection; it does not catch up a skipped early refresh.
+        inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
@@ -4303,7 +4311,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             };
             listed.clear();
             inventoryView.items.clear();
-            inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
+
             const worldgen::Int2 here = regionHere();
             if (!inventoryRegionActive) {
                 inventoryView.activeRegion = {here.x, here.y};
@@ -4358,9 +4366,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     if (entry.tab == inventoryView.tab && entry.count != 0)
                         regions.push_back(entry.region);
                 inventoryView.regionChoices = inventoryui::regionChoices(std::move(regions), {here.x, here.y});
-                inventoryView.regionName = landNameOf({inventoryView.activeRegion[0], inventoryView.activeRegion[1]});
             };
-            refreshRegions();
+            if (!nativeInventory) // Recording-only compatibility view, without native collection bindings.
+                refreshRegions();
+            inventoryView.regionName = landNameOf({inventoryView.activeRegion[0], inventoryView.activeRegion[1]});
             // The vendor (the vendor update): its offers, or what was sold to it, newest first.
             std::vector<gameshop::Item> vendorRaws;
             inventoryView.vendor.open = vendorTrade.open;
@@ -4884,13 +4893,24 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     if (panel.tab == next)
                         return;
                     panel.selectTab(next);
-                    if (which == 0)
-                        refreshRegions();
-                    else if (which == 1)
-                        refreshVendor();
-                    panel.scroll = std::clamp(panel.scroll, 0, std::max(0, hud.inventoryRowCount(inventoryView, which) - 1));
+                    refreshInventory(false, static_cast<inventoryui::Panel>(which));
+                    const auto clampRange = [&] {
+                        const int available = hud.inventoryRowCount(inventoryView, which);
+                        if (!available)
+                            panel.scroll = 0;
+                        else if (panel.scroll > available - 1)
+                            panel.scroll = available - 1;
+                        return available;
+                    };
+                    const int available = clampRange();
                     panel.selected = hud.inventoryFirstItem(inventoryView, which);
+                    hud.updateInventoryThumb(inventoryView, which, available);
                     audio.playInterface(soundrules::soundid::MENU_TAB);
+                    if (which == 1) {
+                        refreshVendor(); // Shop rebuild follows the first selection/thumb/sound.
+                        refreshInventory(false, inventoryui::Panel::Shop);
+                        hud.updateInventoryThumb(inventoryView, which, clampRange());
+                    }
                 };
                 if (which == 0)
                     change(inventoryView);
@@ -4903,10 +4923,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 inventoryui::requestRegion(
                     inventoryView.activeRegion, inventoryView.regionChoices, direction,
                     [&] { audio.playInterface(soundrules::soundid::MENU_TAB); }, [&] { sortInventory(); },
-                    [&] {
-                        refreshRegions();
-                        refreshInventory();
-                    },
+                    [&] { refreshInventory(); },
                     [&] {
                         const int available = hud.inventoryRowCount(inventoryView);
                         if (!available)
@@ -4923,7 +4940,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 const bool moved = inventoryui::requestRow(offset, step, [&] {
                     // Every admitted InventoryWidget row callback refreshes/sorts
                     // local canonical inventory, including attempts at a boundary.
-                    refreshInventory();
+                    refreshInventory(false, static_cast<inventoryui::Panel>(which));
                     available = hud.inventoryRowCount(inventoryView, which);
                     if (!available)
                         offset = 0; // Physically empty tab, unlike nonempty holes.
@@ -4973,9 +4990,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             trade.inventory = [&] { refreshInventory(); };
             trade.shop = [&] {
                 refreshVendor();
-                refreshInventory();
+                refreshInventory(false, inventoryui::Panel::Shop);
             };
-            trade.crafting = [&] { refreshInventory(); }; // collection contents are regenerated on the next frame
+            trade.crafting = [&] { refreshInventory(false, inventoryui::Panel::Crafting); }; // derived collection migration remains
             trade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
             trade.announce = [&](const auto &item) {
                 const auto view = Gear::fromRecord(item);
@@ -5142,7 +5159,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                             refreshInventory();
                             audio.playInterface(0x5b);
                             if (outcome.action == Action::WeaponEquipped && !nativeInventory->inventory.tabs.empty())
-                                refreshInventory();
+                                refreshInventory(false, inventoryui::Panel::Crafting);
                         } else if (outcome.action == Action::PetFood)
                             inventoryOpen = false;
                         else if (outcome.action == Action::Map) {
@@ -5577,7 +5594,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     bagShown = true;
                     craftingOpen = false;
                     refreshBagOpening();
-                    refreshInventory(); // shop rebuild's bound widget refresh
+                    refreshInventory(false, inventoryui::Panel::Shop); // shop rebuild's bound widget refresh
                     if (!nativeInventory)
                         inventoryView.vendor.tab = 0, inventoryView.vendor.scroll = 0;
                     logLine("Use: trading with " + std::to_string(p.creature) + " (class " + std::to_string(vendorTrade.shop.cls) + ")");

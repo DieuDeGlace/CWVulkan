@@ -5,10 +5,12 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace inventoryui {
 using Region = std::array<int32_t, 2>;
+enum class Panel { Inventory = 0, Shop = 1, Crafting = 2 };
 
 // Each wheel message supplies one row attempt; opposing messages remain separate.
 struct WheelEvent {
@@ -40,6 +42,25 @@ inline std::vector<Region> regionChoices(std::vector<Region> regions, Region her
     };
     keyorder::sort(regions, distance);
     return regions;
+}
+
+// Native2806a0 reads the player's canonical tab, not the bound collection.
+// Missing engine source headers defer the update; no native success is claimed
+// for an invalid carried-tab access. Binding/mode skips preserve cached choices.
+template <class Tabs>
+bool refreshRegionCache(bool bound, Panel panel, std::vector<Region> &cache, const Tabs &carried, int tab, Region playerRegion) {
+    if (!bound || panel != Panel::Inventory || tab < 0 || size_t(tab) >= carried.size())
+        return false;
+    std::vector<Region> regions;
+    for (const auto &stack : carried[size_t(tab)]) {
+        if (stack.count == 0)
+            continue;
+        Region region;
+        std::memcpy(region.data(), stack.item.data() + 0x0c, sizeof region);
+        regions.push_back(region);
+    }
+    cache = regionChoices(std::move(regions), playerRegion);
+    return true;
 }
 
 inline void changeRegion(Region &active, const std::vector<Region> &choices, int direction) {
