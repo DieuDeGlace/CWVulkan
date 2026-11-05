@@ -12,6 +12,7 @@
 #include "Assets.h"
 #include "Extracted.h"
 #include "WorldgenObjectOracle.h"
+#include "../tools/ZoneExtractor/DungeonCapture.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/BuildingBuilder.h"
 #include "worldgen/Structures.h"
@@ -875,6 +876,104 @@ int worldgenDungeonCoverage(const fs::path &directory, int seed) {
     std::printf("  requested labels present in engine predictions: 42/detail11 %s, 44/detail12 %s, style1 %s\n",
                 detail11 ? "yes" : "no", detail12 ? "yes" : "no", style1 ? "yes" : "no");
     return zoneFiles == 0;
+}
+
+int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirectory) {
+    using namespace dungeoncapture;
+    const auto read = [](const fs::path &file, size_t limit) {
+        std::ifstream input(file, std::ios::binary | std::ios::ate);
+        if (!input || input.tellg() < 0 || uint64_t(input.tellg()) > limit)
+            return std::string{};
+        std::string bytes(size_t(input.tellg()), '\0');
+        input.seekg(0);
+        if (!input.read(bytes.data(), bytes.size()))
+            return std::string{};
+        return bytes;
+    };
+    Plan expected;
+    if (read(directory / "complete.txt", Completed.size()) != Completed ||
+        !plan(read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes),
+              capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected)) {
+        std::puts("Dungeon oracle requires a completed capture with a valid target list");
+        return 1;
+    }
+    wg::CreatureTables tables;
+    std::string error;
+    if (!tables.load(tablesDirectory, &error)) {
+        std::printf("Dungeon oracle requires owner creature tables: %s\n", error.c_str());
+        return 1;
+    }
+
+    std::optional<Context> batch;
+    size_t decisionDifferences = 0, columnDifferences = 0;
+    for (const auto &[coordinate, cells] : expected) {
+        const auto [zx, zy] = coordinate;
+        const auto stem = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
+        const auto bytes = read(directory / (stem + ".cwd"), PrefixSize + 16 * RowSize);
+        Zone labels;
+        if (!decode(reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size(), labels) ||
+            labels.zone != coordinate || (batch && *batch != labels.context) || labels.decisions.size() != cells.size()) {
+            std::printf("%s: invalid or mismatched dungeon labels\n", stem.c_str());
+            return 1;
+        }
+        if (!batch)
+            std::printf("Dungeon capture source: %s\n", labels.context.vanillaCandidate ? "vanilla candidate" : "modified or unclassified");
+        batch = labels.context;
+        const auto world = wg::worldValues(std::bit_cast<int32_t>(batch->seed));
+        if (world.zoneSeed() != batch->derivedSeed || world.sandX() != batch->sandX || world.sandY() != batch->sandY) {
+            std::printf("%s: engine world seed or sand context differs from capture\n", stem.c_str());
+            return 1;
+        }
+        wg::CellObjects cellObjects(world);
+        wg::BuildingRules rules(cellObjects);
+        for (const auto &native : labels.decisions) {
+            const auto [cx, cy] = native.cell;
+            if (!cells.contains(native.cell)) {
+                std::printf("%s: unexpected queried cell %d %d\n", stem.c_str(), cx, cy);
+                return 1;
+            }
+            const Point place{wg::floorDiv(cx, 6), wg::floorDiv(cy, 6)};
+            const auto [px, py] = place;
+            const auto context = wg::cellPlace(px, py);
+            const auto castle = rules.castleCell(cx, cy);
+            const uint32_t packed = uint32_t(castle.kind) | (uint32_t(castle.detail) << 8) |
+                                    (uint32_t(castle.style) << 16) | (uint32_t(castle.steps) << 24);
+            const Decision engine{native.cell, place, context.big ? Point{px & ~1, py & ~1} : place,
+                                  context.big, context.kind, wg::bigStructure(px, py, context.kind, context.big),
+                                  rules.type(cx, cy), packed, rules.castleBlockTop(cx, cy), rules.castleFloor(cx, cy)};
+            if (native != engine) {
+                ++decisionDifferences;
+                std::printf("%s: cell %d %d differs (native/engine kind %d/%d structure %d/%d building %d/%d "
+                            "castle %08x/%08x top %d/%d floor %d/%d)\n",
+                            stem.c_str(), cx, cy, native.kind, engine.kind, native.structure, engine.structure,
+                            native.building, engine.building, native.castle, engine.castle, native.top, engine.top,
+                            native.floor, engine.floor);
+            }
+        }
+        const auto captured = ExtractedWorld::readStoredZoneColumns(directory / (stem + ".cwz"), error);
+        if (captured.size() != wg::ZONE_COLUMNS) {
+            std::printf("%s: %s\n", stem.c_str(), error.c_str());
+            return 1;
+        }
+        const auto generated = wg::generateZoneWithCreatures(world, tables, batch->day, zx, zy);
+        size_t changed = 0;
+        for (size_t i = 0; i < captured.size(); ++i) {
+            const auto &native = captured[i];
+            const auto &engine = generated.terrain.columns[i];
+            if (native.blocks == engine.blocks && (native.empty() || native.base == engine.base))
+                continue;
+            if (changed++ < 4)
+                std::printf("%s: stored column %zu %zu differs (base %d/%d, count %zu/%zu)\n",
+                            stem.c_str(), i / wg::ZONE_SIZE, i % wg::ZONE_SIZE, native.base, engine.base,
+                            native.blocks.size(), engine.blocks.size());
+        }
+        columnDifferences += changed;
+        std::printf("%s: %zu helper rows, %zu of %zu stored columns match\n",
+                    stem.c_str(), labels.decisions.size(), captured.size() - changed, captured.size());
+    }
+    std::printf("Dungeon oracle: %zu zones, %zu differing helper rows, %zu differing stored columns\n",
+                expected.size(), decisionDifferences, columnDifferences);
+    return decisionDifferences || columnDifferences || !batch->vanillaCandidate ? 1 : 0;
 }
 
 // Search the engine's decisions for two future capture targets. Only the

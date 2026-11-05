@@ -27,6 +27,8 @@ class WorldMetadata {
     uint32_t seedBits() const { return read<uint32_t>(0x220); }
     int32_t seedLabel() const { return read<int32_t>(0x220); } // Project signed path/cache convention.
     int32_t derivedGenerationValue() const { return read<int32_t>(0x244); }
+    int32_t sandX() const { return read<int32_t>(0x330); }
+    int32_t sandY() const { return read<int32_t>(0x334); }
     int32_t day() const { return read<int32_t>(8); }
     float time() const { return read<float>(0x0c); }
     void setTime(float value) { std::memcpy(world + 0x0c, &value, sizeof value); }

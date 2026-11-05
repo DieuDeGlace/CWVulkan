@@ -1,4 +1,5 @@
 #include "../tools/ZoneExtractor/GenerationRequest.h"
+#include "../tools/ZoneExtractor/DungeonCapture.h"
 #include "../tools/ZoneExtractor/GenerationSnapshotFile.h"
 #include <filesystem>
 #include <fstream>
@@ -65,6 +66,32 @@ int generationRequestTests() {
               snapshot.find("seed-bits 4294967295\nderived-seed -2147483648\nday -7\n") != std::string::npos &&
               snapshot.ends_with("coordinates 3\n1 -2\n1 -2\n-2147483648 2147483647\nEND\n"),
           "snapshot retains full context bits, signed extrema, coordinate order and duplicates");
+    dungeoncapture::Plan dungeon;
+    check(dungeoncapture::plan("194 715\n-862 154\n194 715\n", 3, dungeon) && dungeon.size() == 3 &&
+              dungeon.at({48, 178}).size() == 6 && dungeon.at({48, 179}).size() == 3 &&
+              dungeon.at({-216, 38}).size() == 9,
+          "dungeon neighborhoods use signed floor division and deduplicate cells and zones");
+    const auto savedPlan = dungeon;
+    check(!dungeoncapture::plan("194 715\n-862 154", 2, dungeon) && dungeon == savedPlan &&
+              !dungeoncapture::plan("2147483647 0", 32, dungeon) && dungeon == savedPlan,
+          "dungeon planning rejects budget and coordinate overflow without truncating the request");
+    dungeoncapture::Zone labels{{dungeoncapture::SourceTimestamp, 0x500000, UINT32_MAX, INT32_MIN, -7, 3, 4, 1},
+                               {-216, 38},
+                               {{{-862, 154}, {-14, 2}, {-14, 2}, 1, 44, 44, 9, 0x00020c09, -35, -34}}};
+    auto encoded = dungeoncapture::encode(labels);
+    dungeoncapture::Zone decoded;
+    const auto readLabels = [&](const auto &bytes) { return dungeoncapture::decode(bytes.data(), bytes.size(), decoded); };
+    check(readLabels(encoded) && labels.zone == decoded.zone &&
+              labels.context == decoded.context && labels.decisions == decoded.decisions,
+          "dungeon sidecar preserves signed context, coordinates and packed native decisions");
+    encoded.push_back(0);
+    check(!readLabels(encoded), "trailing data invalidates the sidecar");
+    encoded.pop_back();
+    encoded[5] = 0;
+    check(!readLabels(encoded), "helper-query provenance is required");
+    labels.decisions.push_back(labels.decisions.front());
+    check(!readLabels(dungeoncapture::encode(labels)), "duplicate decision cells invalidate the sidecar");
+
 #ifdef _WIN32
     const auto directory =
         std::filesystem::temp_directory_path() /

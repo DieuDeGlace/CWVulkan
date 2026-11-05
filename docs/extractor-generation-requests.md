@@ -63,6 +63,39 @@ original game or writing a request. See the [dungeon
 oracle](specs/steam-dungeon-oracle.md) for the native decision and block evidence
 needed to confirm the labels.
 
+## Labeled dungeon captures
+
+`Extract/gen-dungeon.request` opts into the dungeon diagnostic. Supply up to
+16 signed **16-block cell** coordinate pairs, one pair per line. The extractor
+includes each target's 3×3 neighborhood and deduplicates cells and 64-block zones.
+The process-wide retained-Zone attempt limit still applies. This mode also caps
+expanded stored block data at 256 MiB per batch. The request stays in place when
+admission fails. Ordinary `gen.request` takes precedence when both exist.
+
+For the two seed-123 candidates, the target lines are `194 715` and `-862 154`.
+These coordinates come from the engine's prediction and require native
+confirmation. The batch writes to a new `dungeon_<process>_<tick>_<sequence>`
+directory beneath the session's reference root. It retains the original target
+list, the resolved zone request and the capture day. Each zone contains a
+freshly generated `.cwz` file and a `.cwd` label file. The exporter copies
+stored blocks before querying the helpers and skips the daily refresh in this
+mode. `complete.txt` appears only after the whole batch succeeds.
+
+The label file records the loaded PE timestamp and image size, public seed
+bits, derived seed, day, sand parameters, the mod-file classification at
+admission and selected coordinates. It keeps raw and rounded place coordinates,
+big flag, place and structure kind, building type, all four castle bytes, raw
+top and final floor. These are helper-query results, with stage tags distinct
+from the fresh stored block payload. The format does not claim instruction-site
+room, floor-branch or decorative observations. The vanilla-candidate label
+comes from the mod-file inventory and does not attest active modules.
+
+Run `EngineTests wgdungeon <batch-directory> <owner-Extract/oracle-directory>`.
+It requires a complete batch and consistent world context, then compares the
+helper labels and exact stored block sequences, including nonempty column bases
+and lengths. It reports modified or unclassified captures as diagnostic results
+with a failing exit code. No captured files belong in the source or release.
+
 `EngineTests generationrequest` checks parser bounds, sticky context changes,
 full-width snapshot values, exclusive input ownership/consumption and actual
 Windows file publication/no-overwrite

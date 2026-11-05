@@ -56,6 +56,8 @@ class ExtractedWorld {
     // Strict exporter filename and structural validation, shared with DataCheck.
     static bool zoneCoordinates(const std::filesystem::path &file, int &x, int &y);
     static bool validateZoneFile(const std::filesystem::path &file, std::string &error);
+    // Exact stored spans, before effective block substitution, lighting or edits.
+    static std::vector<worldgen::TerrainColumn> readStoredZoneColumns(const std::filesystem::path &file, std::string &error);
 
     int seed() const { return seedValue; }
     size_t zoneCount() const { return zones.size(); }
@@ -299,6 +301,6 @@ class ExtractedWorld {
     void applyBlockChanges(int ax, int ay, Zone &zone) const;
     std::shared_ptr<Zone> cached(int ax, int ay); // as load, but only from the cache
     static std::shared_ptr<const std::vector<ModelRecord>> readModels(const std::filesystem::path &file);
-    static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error);
+    static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error, bool storedOnly = false);
     static std::shared_ptr<Zone> generateZone(int ax, int ay);
 };

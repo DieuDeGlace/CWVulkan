@@ -10,6 +10,12 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The extractor has a separate opt-in dungeon request. It plans bounded 3×3
+  cell neighborhoods, saves fresh zone blocks and independently queried dungeon
+  decisions, and marks only complete batches. The offline comparator checks
+  world context, decision fields and exact stored columns. The two named
+  targets still require a supported-game capture with the updated DLL.
+
 - The experimental generation recorder now pauses on a failed terrain, material,
   record, spawn, trace or day-file write. It retains the unfinished coordinate
   and counts it only after both fresh and refreshed outputs close successfully.

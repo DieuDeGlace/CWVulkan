@@ -100,6 +100,20 @@ int nativeZoneTerrainTests() {
         std::string reason;
         check(ExtractedWorld::validateZoneFile(file, reason),
               "the actual engine accepts the captured terrain encoding");
+        const auto stored = ExtractedWorld::readStoredZoneColumns(file, reason);
+        check(stored.size() == 4096 && stored[0].base == terrain.columns[0].baseZ && stored[0].blocks.size() == 3 &&
+                  std::memcmp(stored[0].blocks.data(), terrain.columns[0].blocks.data(), 18) == 0,
+              "dungeon comparison reads exact stored bytes and column spans");
+        terrain.columns.back().baseZ = INT32_MIN;
+        const auto emptyBase = zonecapture::encode(terrain, 7);
+        {
+            std::ofstream stream(file, std::ios::binary | std::ios::trunc);
+            stream.write(reinterpret_cast<const char *>(emptyBase.data()), std::streamsize(emptyBase.size()));
+        }
+        const auto raw = ExtractedWorld::readStoredZoneColumns(file, reason);
+        check(raw.size() == 4096 && raw.back().empty() && raw.back().base == INT32_MIN &&
+                  !ExtractedWorld::validateZoneFile(file, reason),
+              "stored-only reader retains raw empty base without changing playable validation");
         fs::remove(file, error);
         fs::remove(directory, error); // remove only the empty directory created above, never recursively
     }

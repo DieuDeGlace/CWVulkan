@@ -264,6 +264,13 @@ bool ExtractedWorld::validateZoneFile(const fs::path &file, std::string &error) 
     return bool(readZone(file, false, error));
 }
 
+std::vector<worldgen::TerrainColumn> ExtractedWorld::readStoredZoneColumns(const fs::path &file, std::string &error) {
+    auto zone = readZone(file, true, error, true);
+    if (!zone)
+        return {};
+    return {std::make_move_iterator(std::begin(zone->columns)), std::make_move_iterator(std::end(zone->columns))};
+}
+
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     if (generatedMode && !worldgen::terrainZoneAvailable(ax, ay))
         return nullptr;
@@ -847,7 +854,7 @@ std::shared_ptr<const std::vector<ExtractedWorld::ModelRecord>> ExtractedWorld::
     return result;
 }
 
-std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &file, bool decode, std::string &error) {
+std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &file, bool decode, std::string &error, bool storedOnly) {
     error.clear();
     auto fail = [&](const char *why) -> std::shared_ptr<Zone> { error = why; return nullptr; };
     int ax, ay;
@@ -882,7 +889,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &f
         uint32_t runs = 0;
         if (!read(at, baseZ) || !read(at, runs))
             return fail("truncated column header");
-        if (baseZ == INT32_MIN || baseZ > INT32_MAX - Z_OFFSET - 1)
+        if (!storedOnly && (baseZ == INT32_MIN || baseZ > INT32_MAX - Z_OFFSET - 1))
             return fail("column height overflows engine coordinates");
         if (runs > (data.size() - at) / 8)
             return fail("truncated column runs");
@@ -897,13 +904,15 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &f
             totalBlocks += count;
             // Resource limits for damaged exports, not gameplay height rules.
             if (!count || columnBlocks > 1024 * 1024 || totalBlocks > 16 * 1024 * 1024 ||
-                (int64_t)baseZ + (int64_t)columnBlocks > INT32_MAX - Z_OFFSET - 1)
+                (!storedOnly && int64_t(baseZ) + int64_t(columnBlocks) > INT32_MAX - Z_OFFSET - 1))
                 return fail("invalid or excessive expanded block count");
             if (decode) column.blocks.insert(column.blocks.end(), count, block);
         }
     }
     if (at != data.size())
         return fail("unexpected trailing zone data");
+    if (storedOnly)
+        return zone;
     if (decode)
         zone->models = readModels(file);
     fs::path materialFile = file;

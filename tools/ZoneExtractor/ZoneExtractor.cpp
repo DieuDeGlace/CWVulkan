@@ -7,6 +7,7 @@
 #include "CaptureTickContext.h"
 #include "CaptureWorldSections.h"
 #include "GenerationRequest.h"
+#include "DungeonCapture.h"
 #include "GenerationSnapshotFile.h"
 #include "NativeConversation.h"
 #include "NativeCreatureAppearance.h"
@@ -106,7 +107,7 @@ constexpr uintptr_t REGION_AT_RVA = 0x2ada20;    // void (World*, captureabi::Co
 constexpr uintptr_t BIOME_AT_RVA = 0x2b9080;     // int (World*, regionX, regionY)
 constexpr uintptr_t GROUND_HEIGHT_RVA = 0x35ea0; // float (World*, x, y, mode)
 constexpr uintptr_t MAX_HP_RVA = 0x5fac0;        // float (Creature*)
-constexpr DWORD SUPPORTED_TIMESTAMP = 0x5d93ab0d;
+constexpr DWORD SUPPORTED_TIMESTAMP = dungeoncapture::SourceTimestamp;
 constexpr int SWEEP_RADIUS = 8;   // Stops in each direction (17 x 17 stops, about 6,500 blocks across).
 constexpr int SWEEP_STEP = 6;     // Zones between stops.
 constexpr int SETTLE_RADIUS = 3;  // Zones around a stop that must be saved before moving on.
@@ -899,7 +900,7 @@ static int regionType(cube::World *w, int64_t x, int64_t y) {
 
 // Caller retains Zone lifetime. Stored-byte rechecks do not freeze physical
 // edits or the solver; a nonempty mesh list is only our capture admission policy.
-static std::vector<unsigned char> serialise(cube::World *w, cube::Zone *zone) {
+static std::vector<unsigned char> serialise(cube::World *w, cube::Zone *zone, size_t *storedBudget = nullptr) {
     std::array<int32_t, 2> coordinates{};
     if (!captureabi::readZoneIdentity(base(), reinterpret_cast<uintptr_t>(w), reinterpret_cast<uintptr_t>(zone), coordinates,
                                       readNative))
@@ -907,9 +908,13 @@ static std::vector<unsigned char> serialise(cube::World *w, cube::Zone *zone) {
     // Preserve the existing query-before-column-copy order.
     const int biome = regionType(w, int64_t(coordinates[0]) * 64 + 32, int64_t(coordinates[1]) * 64 + 32);
     captureabi::ZoneTerrain terrain;
+    const size_t limit = storedBudget ? std::min(*storedBudget, captureabi::MAX_ZONE_BLOCK_BYTES) : captureabi::MAX_ZONE_BLOCK_BYTES;
     if (!captureabi::readZoneTerrain(base(), reinterpret_cast<uintptr_t>(w), reinterpret_cast<uintptr_t>(zone), terrain,
-                                     readNative) || terrain.coordinates != coordinates)
+                                     readNative, limit) || terrain.coordinates != coordinates)
         return {};
+    if (storedBudget)
+        for (const auto &column : terrain.columns)
+            *storedBudget -= column.blocks.size() * sizeof(captureabi::StoredBlock);
     return zonecapture::encode(terrain, biome);
 }
 
@@ -6438,6 +6443,65 @@ static bool writeZone(cube::World *w, unsigned char *zone, const std::string &st
     }
     return writeOracleFile(stem + ".rtrace", trace); // (uint32 caller RVA, uint16 value) per call
 }
+// These are query results from documented helpers, not observations of
+// intermediate generator state. Capture the blocks before making the queries.
+static bool queryDungeonCell(cube::World *world, dungeoncapture::Decision &d) {
+    using CellValue = int32_t (*)(cube::World *, int32_t, int32_t);
+    using PlaceRecord = void (*)(cube::World *, int32_t, int32_t, void *);
+    using CastleRecord = void *(*)(cube::World *, uint32_t *, int32_t, int32_t);
+    using StructureKind = int32_t (*)(cube::World *, int32_t, int32_t, int32_t, bool);
+    const auto module = base();
+    const auto [x, y] = d.cell;
+    d.place = {x >> 6, y >> 6};
+    const auto [px, py] = d.place;
+    alignas(8) uint8_t place[32]{};
+    __try {
+        reinterpret_cast<PlaceRecord>(module + 0x31a5d0)(world, px, py, place);
+        memcpy(&d.kind, place, sizeof d.kind);
+        d.big = place[4];
+        if (d.big > 1)
+            return false;
+        d.roundedPlace = d.big ? dungeoncapture::Point{px & ~1, py & ~1} : d.place;
+        d.structure = reinterpret_cast<StructureKind>(module + 0x2aa270)(world, px, py, d.kind, d.big != 0);
+        d.building = reinterpret_cast<CellValue>(module + 0x69c60)(world, x, y);
+        reinterpret_cast<CastleRecord>(module + 0x2a8290)(world, &d.castle, x, y);
+        d.top = reinterpret_cast<CellValue>(module + 0x2aadd0)(world, x, y);
+        d.floor = reinterpret_cast<CellValue>(module + 0x2ab0a0)(world, x, y);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+static dungeoncapture::Context dungeonContext(cube::World *world, uint32_t vanillaCandidate) {
+    const auto *image = reinterpret_cast<const uint8_t *>(base());
+    const auto *nt = reinterpret_cast<const IMAGE_NT_HEADERS64 *>(image + reinterpret_cast<const IMAGE_DOS_HEADER *>(image)->e_lfanew);
+    const captureabi::WorldMetadata meta(world);
+    return {nt->FileHeader.TimeDateStamp, nt->OptionalHeader.SizeOfImage, meta.seedBits(),
+            meta.derivedGenerationValue(), meta.day(), meta.sandX(), meta.sandY(), vanillaCandidate};
+}
+
+static dungeoncapture::Plan genDungeonPlan;
+static dungeoncapture::Context genDungeonContext;
+static size_t genDungeonBudget = 0;
+static bool writeDungeonZone(cube::World *world, unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
+    if (dungeonContext(world, genDungeonContext.vanillaCandidate) != genDungeonContext)
+        return false;
+    const auto blocks = extract::serialise(world, reinterpret_cast<cube::Zone *>(zone), &genDungeonBudget);
+    if (blocks.empty())
+        return false;
+    dungeoncapture::Zone labels{genDungeonContext, coordinate, {}};
+    for (const auto cell : genDungeonPlan.at(coordinate)) {
+        dungeoncapture::Decision decision{};
+        decision.cell = cell;
+        if (!queryDungeonCell(world, decision))
+            return false;
+        labels.decisions.push_back(decision);
+    }
+    return dungeonContext(world, genDungeonContext.vanillaCandidate) == genDungeonContext && writeOracleFile(stem + ".cwz", blocks) &&
+           writeOracleFile(stem + ".cwd", dungeoncapture::encode(labels));
+}
+
 static capturepolicy::GenerationCoordinates genQueue; // a few a tick, so the game keeps running
 static capturepolicy::RetainedGenerationBudget genBudget;
 static bool genRequestNotice = false;
@@ -6461,16 +6525,19 @@ static bool generationContextMatches(cube::World *world, size_t inFlight = 0) {
 }
 static int genDone = 0;
 static std::string genDirectory;
-static void queueGeneration(cube::World *w) {
+static void queueGeneration(cube::World *w, bool dungeon) {
     if (genContextGate.paused() || !genQueue.empty())
         return; // Do not redirect an active batch or consume another request.
-    capturepolicy::GenerationRequestInput request("Extract\\gen.request");
+    capturepolicy::GenerationRequestInput request(dungeon ? "Extract\\gen-dungeon.request" : "Extract\\gen.request");
     if (!request)
         return;
     std::string bytes;
     const bool readComplete = request.read(bytes);
     capturepolicy::GenerationCoordinates pending;
-    if (!readComplete || !capturepolicy::parseGenerationRequest(bytes, genBudget.remaining(), pending)) {
+    dungeoncapture::Plan dungeonPlan;
+    const bool valid = readComplete && (dungeon ? dungeoncapture::plan(bytes, genBudget.remaining(), dungeonPlan)
+                                               : capturepolicy::parseGenerationRequest(bytes, genBudget.remaining(), pending));
+    if (!valid) {
         if (!genRequestNotice) {
             log("Oracle: gen.request deferred (invalid/oversized or exceeds remaining " +
                 std::to_string(genBudget.remaining()) + " retained-Zone attempts); request preserved");
@@ -6478,15 +6545,24 @@ static void queueGeneration(cube::World *w) {
         }
         return;
     }
+    for (const auto &[zone, cells] : dungeonPlan)
+        pending.push_back(zone);
     const auto context = generationContextOf(w);
     const auto root = referenceFolder();
     const auto parent = root == "Extract" ? root + "\\oracle" : root;
-    const auto directory = parent + "\\gen";
+    const auto batch = std::to_string(GetCurrentProcessId()) + "_" + std::to_string(GetTickCount64()) + "_" +
+                       std::to_string(++genSnapshotSerial);
+    const auto directory = parent + (dungeon ? "\\dungeon_" + batch : "\\gen");
     CreateDirectoryA(parent.c_str(), nullptr);
-    CreateDirectoryA(directory.c_str(), nullptr);
-    CreateDirectoryA((directory + "\\refreshed").c_str(), nullptr);
-    const auto snapshot = directory + "\\request_" + std::to_string(GetCurrentProcessId()) + "_" +
-                          std::to_string(GetTickCount64()) + "_" + std::to_string(++genSnapshotSerial) + ".txt";
+    const bool created = CreateDirectoryA(directory.c_str(), nullptr) != 0;
+    if (dungeon && (!created || !capturepolicy::publishGenerationSnapshot(directory + "\\targets.txt", bytes))) {
+        genContextGate.stop();
+        log("Oracle: dungeon target snapshot failed; request preserved");
+        return;
+    }
+    if (!dungeon)
+        CreateDirectoryA((directory + "\\refreshed").c_str(), nullptr);
+    const auto snapshot = directory + "\\request_" + batch + ".txt";
     if (!capturepolicy::publishGenerationSnapshot(snapshot, capturepolicy::generationRequestSnapshot(context, pending))) {
         genContextGate.stop();
         log("Oracle: generation paused; request snapshot failed; gen.request preserved");
@@ -6501,6 +6577,11 @@ static void queueGeneration(cube::World *w) {
     genContextGate.bind(context);
     genSnapshot = snapshot;
     genQueue.swap(pending);
+    genDungeonPlan = std::move(dungeonPlan);
+    if (dungeon) {
+        genDungeonContext = dungeonContext(w, root == "Extract");
+        genDungeonBudget = dungeoncapture::MaxStoredBytes;
+    }
     genDirectory = directory;
     genDone = 0;
     if (!capturepolicy::writeGenerationArtifact(genDirectory + "\\day.txt", [&](FILE *file) {
@@ -6526,9 +6607,10 @@ static void generate(cube::World *w) {
             log(std::string("Oracle: ") + reason + "; batch paused with pending work and snapshot: " + genSnapshot);
         };
         unsigned char *zone = nullptr;
+        const bool dungeon = !genDungeonPlan.empty();
         traced.clear();
-        const bool tracing = hook(true);
-        traceThread = GetCurrentThreadId();
+        const bool tracing = !dungeon && hook(true);
+        traceThread = tracing ? GetCurrentThreadId() : 0;
         const bool made = generateOnce(w, zx, zy, zone);
         traceThread = 0;
         if (tracing)
@@ -6542,6 +6624,20 @@ static void generate(cube::World *w) {
             return;
         }
         const std::string name = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
+        if (dungeon) {
+            if (!writeDungeonZone(w, zone, {zx, zy}, genDirectory + "\\" + name) || !generationContextMatches(w, 1)) {
+                pause("fresh dungeon capture incomplete");
+                return;
+            }
+            if (genQueue.empty()) {
+                if (!capturepolicy::publishGenerationSnapshot(genDirectory + "\\complete.txt", std::string(dungeoncapture::Completed))) {
+                    pause("dungeon completion marker could not be published");
+                    return;
+                }
+                log("Oracle: fresh dungeon capture complete: " + genDirectory);
+            }
+            continue;
+        }
         if (!writeZone(w, zone, genDirectory + "\\" + name)) {
             pause("fresh zone output incomplete");
             return;
@@ -6685,7 +6781,9 @@ static void run(cube::World *w) {
     aiprobe::poll(w);
     writewatch::poll(w);
     if (GetFileAttributesA("Extract\\gen.request") != INVALID_FILE_ATTRIBUTES)
-        queueGeneration(w);
+        queueGeneration(w, false);
+    else if (GetFileAttributesA("Extract\\gen-dungeon.request") != INVALID_FILE_ATTRIBUTES)
+        queueGeneration(w, true);
     generate(w);
     if (GetFileAttributesA("Extract\\items.request") != INVALID_FILE_ATTRIBUTES) {
         DeleteFileA("Extract\\items.request");
