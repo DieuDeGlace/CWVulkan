@@ -10,6 +10,13 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- `EngineTests castles` now reports which castle cells the engine predicts
+  inside the owner's captured zone coordinates. `castles --targets` searches
+  nearby big places for the two missing decorative cases. For seed 123 it
+  identifies zone (48, 178) for structure 42/detail 11 and zone (-216, 38)
+  for structure 44/detail 12. These are engine-side target predictions.
+  Neither label has been confirmed by a new original-game capture.
+
 - The strict generation comparison now matches all 2,800 tested object
   placements across 789 overlapping seed-123 snapshots. The only previous
   differences were 11 captured street-lamp turn bytes. The comparison still

@@ -813,6 +813,118 @@ int worldgenStructureTests() {
     return failures;
 }
 
+// Classify only cells whose zone coordinates are present. This is an engine-side
+// target selection report for a native capture, not a comparison of captured bytes.
+int worldgenDungeonCoverage(const fs::path &directory, int seed) {
+    if (!fs::is_directory(directory)) {
+        std::puts("No zone directory for dungeon coverage");
+        return 1;
+    }
+    const auto world = wg::worldValues(seed);
+    wg::CellObjects cells(world);
+    wg::BuildingRules rules(cells);
+    using Label = std::tuple<int, int, int, int, int>; // place, structure, castle kind, detail, style
+    struct Coverage {
+        int cells = 0;
+        std::tuple<int, int, int, int> representative; // zone x/y and cell x/y
+    };
+    std::map<Label, Coverage> coverage;
+    int zoneFiles = 0, dungeonZones = 0;
+    for (const auto &entry : fs::directory_iterator(directory)) {
+        int zx, zy;
+        if (!entry.is_regular_file() || !ExtractedWorld::zoneCoordinates(entry.path(), zx, zy) ||
+            zx < -100000 || zx > 100000 || zy < -100000 || zy > 100000)
+            continue;
+        ++zoneFiles;
+        const int px = wg::floorDiv(zx, wg::PLACE_SHIFT - wg::ZONE_SHIFT);
+        const int py = wg::floorDiv(zy, wg::PLACE_SHIFT - wg::ZONE_SHIFT);
+        const auto place = wg::cellPlace(px, py);
+        const int structure = wg::bigStructure(px, py, place.kind, place.big);
+        if (!structure)
+            continue;
+        bool hasCastleCell = false;
+        for (int dy = 0; dy < 4; ++dy) {
+            for (int dx = 0; dx < 4; ++dx) {
+                const int cx = zx * 4 + dx, cy = zy * 4 + dy;
+                const auto castle = rules.castleCell(cx, cy);
+                if (!castle.kind)
+                    continue;
+                hasCastleCell = true;
+                auto &group = coverage[{place.kind, structure, castle.kind, castle.detail, castle.style}];
+                const auto coordinate = std::tuple(zx, zy, cx, cy);
+                if (group.cells == 0 || coordinate < group.representative)
+                    group.representative = coordinate;
+                ++group.cells;
+            }
+        }
+        dungeonZones += hasCastleCell;
+    }
+
+    std::printf("Dungeon capture candidates for seed %d: %d zone files, %d with predicted castle cells\n", seed, zoneFiles, dungeonZones);
+    bool detail11 = false, detail12 = false, style1 = false;
+    for (const auto &[label, group] : coverage) {
+        const auto [place, structure, kind, detail, style] = label;
+        const auto [zx, zy, cx, cy] = group.representative;
+        std::printf("  place %d structure %d castle %d detail %d style %d: %d cells; zone %d %d, cell %d %d, top %d, floor %d\n",
+                    place, structure, kind, detail, style, group.cells, zx, zy, cx, cy,
+                    rules.castleBlockTop(cx, cy), rules.castleFloor(cx, cy));
+        detail11 |= structure == 42 && detail == 11;
+        detail12 |= structure == 44 && detail == 12;
+        style1 |= style == 1;
+    }
+    std::printf("  requested labels present in engine predictions: 42/detail11 %s, 44/detail12 %s, style1 %s\n",
+                detail11 ? "yes" : "no", detail12 ? "yes" : "no", style1 ? "yes" : "no");
+    return zoneFiles == 0;
+}
+
+// Search the engine's decisions for two future capture targets. Only the
+// original game can confirm the predicted labels and supply their stored blocks.
+int worldgenDungeonTargets(int seed) {
+    const auto world = wg::worldValues(seed);
+    wg::CellObjects cells(world);
+    wg::BuildingRules rules(cells);
+    constexpr int radius = 64;
+    constexpr int cellsPerPlace = (1 << wg::PLACE_SHIFT) / 16;
+    auto findDetail = [&](int px, int py, int detail) -> std::optional<wg::Int2> {
+        const int startX = px * cellsPerPlace, startY = py * cellsPerPlace;
+        for (int cy = startY; cy < startY + 2 * cellsPerPlace; ++cy)
+            for (int cx = startX; cx < startX + 2 * cellsPerPlace; ++cx)
+                if (const auto castle = rules.castleCell(cx, cy); castle.kind && castle.detail == detail)
+                    return wg::Int2{cx, cy};
+        return std::nullopt;
+    };
+
+    std::printf("Engine-predicted dungeon targets for seed %d in place cells [%d, %d] on both axes\n", seed, -radius, radius);
+    bool found11 = false, found12 = false;
+    for (int distance = 0; distance <= radius && !(found11 && found12); distance += 2) {
+        for (int py = -distance; py <= distance; py += 2) {
+            for (int px = -distance; px <= distance; px += 2) {
+                if (std::max(std::abs(px), std::abs(py)) != distance)
+                    continue;
+                const auto place = wg::cellPlace(px, py);
+                const int structure = wg::bigStructure(px, py, place.kind, place.big);
+                if ((structure != 42 || found11) && (structure != 44 || found12))
+                    continue;
+                const int detail = structure == 42 ? 11 : 12;
+                if (const auto cell = findDetail(px, py, detail)) {
+                    const auto castle = rules.castleCell(cell->x, cell->y);
+                    std::printf("  structure %d detail %d style %d: cell %d %d, zone %d %d, top %d, floor %d\n",
+                                structure, detail, castle.style, cell->x, cell->y,
+                                wg::floorDiv(cell->x, 2), wg::floorDiv(cell->y, 2),
+                                rules.castleBlockTop(cell->x, cell->y), rules.castleFloor(cell->x, cell->y));
+                    if (structure == 42)
+                        found11 = true;
+                    else
+                        found12 = true;
+                }
+            }
+        }
+    }
+    if (!found11 || !found12)
+        std::printf("  missing predicted labels: 42/detail11 %s, 44/detail12 %s\n", found11 ? "no" : "yes", found12 ? "no" : "yes");
+    return found11 && found12 ? 0 : 1;
+}
+
 // `EngineTests wgstructures [zones]`; WS_COMPLETE=1 checks full generation in all four owner sets.
 int worldgenStructureCommand(int maxZones) {
     failures = 0;

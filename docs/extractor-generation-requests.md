@@ -51,6 +51,15 @@ generator escape lifetime remains unproved. The 32-attempt limit is not a fixed
 byte-memory bound. Supported-game startup/capture/recovery still needs live
 validation for the current DLL.
 
+For dungeon reference work, `EngineTests castles` reports engine-predicted
+castle cells in the selected zone directory. Set `CW_ZONES_DIR` to choose a
+captured `seed_<n>` or `gen_seed_<n>` directory. Add `--targets` to search a
+bounded area around the origin for structure 42/detail 11 and structure
+44/detail 12. This produces candidate coordinates without starting the
+original game or writing a request. See the [dungeon
+oracle](specs/steam-dungeon-oracle.md) for the native decision and block evidence
+needed to confirm the labels.
+
 `EngineTests generationrequest` checks parser bounds, sticky context changes,
 full-width snapshot values, exclusive input ownership/consumption and actual
 Windows file publication/no-overwrite

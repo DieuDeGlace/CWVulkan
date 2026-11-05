@@ -234,6 +234,8 @@ int netDecodeCommand(int argc, char **argv);
 int makeTestSave(const char *folder, const char *recording, const glm::vec2 *nearHome = nullptr);
 int worldgenTerrainTests(); // tests/WorldgenTerrainTests.cpp: the new generator's terrain, fast subset
 int worldgenTerrainCommand(int maxZones);
+int worldgenDungeonCoverage(const std::filesystem::path &, int seed);
+int worldgenDungeonTargets(int seed);
 int worldgenStructureTests(); // tests/WorldgenStructureTests.cpp: the new generator's structures, fast subset
 int worldgenStructureCommand(int maxZones);
 int worldgenCreatureTests(); // tests/WorldgenCreatureTests.cpp: the new generator's creatures, fast subset
@@ -10418,31 +10420,16 @@ int main(int argc, char **argv) {
         const glm::vec2 offset((float)std::atof(argv[5]), (float)std::atof(argv[6]));
         return makeTestSave(argv[2], argv[3], &offset);
     }
-    if (argc == 2 && std::string(argv[1]) == "castles") { // big structures that extracted zones cover
-        Assets a;
-        if (!a.locate(""))
+    if (argc >= 2 && std::string(argv[1]) == "castles") {
+        const bool targets = argc == 3 && std::string(argv[2]) == "--targets";
+        if (argc != 2 && !targets)
             return 1;
-        std::map<std::pair<int, int>, int> seen;
-        for (auto &e : std::filesystem::directory_iterator(zonesDir(a.gameDir()))) {
-            int ax, ay;
-            if (!ExtractedWorld::zoneCoordinates(e.path(), ax, ay) || std::abs(ax) > 100000 || std::abs(ay) > 100000)
-                continue;
-            int32_t c1x = worldgen::floorDiv(ax * 64, 10), c1y = worldgen::floorDiv(ay * 64, 10);
-            bool big = worldgen::bigCell(c1x, c1y);
-            if (!big)
-                continue;
-            c1x = worldgen::floorDiv(c1x, 1) * 2, c1y = worldgen::floorDiv(c1y, 1) * 2;
-            seen[{c1x, c1y}]++;
-        }
-        for (auto [c, n] : seen) {
-            int kind = worldgen::placeKind(c.first, c.second, true);
-            int cells = 0;
-            for (int j = 0; j < 128; j++)
-                for (int i = 0; i < 128; i++)
-                    cells += worldgen::castleCell(c.first * 64 + i, c.second * 64 + j).kind != 0;
-            std::printf("big cell %d %d: kind %d, %d extracted zones, %d castle cells\n", c.first, c.second, kind, n, cells);
-        }
-        return 0;
+        Assets assets;
+        if (!assets.locate(""))
+            return 1;
+        const auto directory = zonesDir(assets.gameDir());
+        const int seed = seedOf(directory);
+        return targets ? worldgenDungeonTargets(seed) : worldgenDungeonCoverage(directory, seed);
     }
     if (argc == 4 && std::string(argv[1]) == "gamecol") { // an extracted column, block by block
         int32_t x = std::atoi(argv[2]), y = std::atoi(argv[3]);
