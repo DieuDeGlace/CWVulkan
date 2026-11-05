@@ -23,9 +23,6 @@ std::wstring latin1(const std::string &s) {
 const char *const BAG_ICONS[] = {"equipment", "questitems", "consumables", "ingredients", "pets", "artifacts"};
 const char *const BAG_TITLES[] = {"Equipment", "Specials", "Items", "Ingredients", "Pets", "Artifacts"};
 const char *const VENDOR_ICONS[] = {"vendor-buy", "vendor-undo"};
-// The crafting tabs (the interface's class style): the class's weapons and armour, then the common
-// four.
-const char *const CRAFT_ICONS[] = {nullptr, nullptr, "craft-jewels", "craft-cooking", "craft-alchemy", "craft-ingredients"};
 const char *const CRAFT_TITLES[] = {"Weapons", "Armor", "Amulets", "Cooking", "Alchemy", "Ingredients"};
 const char *const SLOT_INFO[10] = {"Left\nWeapon", "Right\nWeapon", "Left Ring", "Right Ring", "Neck",
                                    "Shoulder", "Chest", "Hands", "Feet", "Pet"};
@@ -49,14 +46,27 @@ void Hud::buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons
         p.buttons[name] = s.instance(name, node);
     s.resizeTo(*node, size);
     layoutInvPanel(p);
-    // The tabs side by side above the widget, 2 units apart.
+    std::vector<std::string> icons((size_t)tabs);
+    for (int t = 0; t < tabs; ++t)
+        if (tabIcons && tabIcons[t])
+            icons[(size_t)t] = tabIcons[t];
+    replaceInvTabs(p, icons);
+}
+
+void Hud::replaceInvTabs(InvPanel &p, const std::vector<std::string> &icons) {
+    if (!scene || !p.tabParent)
+        return;
+    auto &s = *scene;
+    s.clearChildren(*p.tabParent);
+    p.tabs.clear();
+    // Replacing controls retains the separately owned selection/range state.
     float x = 4;
-    for (int t = 0; t < tabs; t++) {
+    for (const auto &icon : icons) {
         plasma::SceneNode *tab = s.instance("tab", p.tabParent);
         if (!tab || !tab->widget)
             break;
-        if (iconsLoaded && tabIcons && tabIcons[t])
-            s.setIcon(*tab, "background", iconsDoc, tabIcons[t]);
+        if (iconsLoaded && !icon.empty())
+            s.setIcon(*tab, "background", iconsDoc, icon);
         s.moveTo(*tab, glm::vec2(x, -s.viewSize(*tab).y - 3.0f));
         x = s.viewSize(*tab).x + 2.0f + x;
         p.tabs.push_back(tab);
@@ -84,7 +94,7 @@ void Hud::buildPanels() {
     panels.cellTemplate = cell;
 
     buildInvPanel(panels.bag, glm::vec2(400, 290), BAG_ICONS, 6);
-    buildInvPanel(panels.crafting, glm::vec2(400, 285), CRAFT_ICONS, 6, "itemselector");
+    buildInvPanel(panels.crafting, glm::vec2(400, 285), nullptr, 4, "itemselector");
     buildInvPanel(panels.vendor, glm::vec2(400, 285), VENDOR_ICONS, 2);
     if (!panels.bag.node)
         return;
@@ -432,14 +442,6 @@ void Hud::placePanels(const Inventory &inv) const {
         crafting->visible = c.open;
         const glm::vec2 view = s.viewSize(*crafting);
         s.setPosition(*crafting, glm::vec2(w / 2 - bagView.x * 0.5f - view.x, h / 2 - bagView.y), glm::vec2(-10, -50));
-        if (craftingClass != c.classType && iconsLoaded) { // the interface's class style
-            static const char *const classes[5] = {nullptr, "warrior", "ranger", "mage", "rogue"};
-            const char *name = c.classType >= 1 && c.classType <= 4 ? classes[c.classType] : nullptr;
-            for (int t = 0; t < 2 && name && t < (int)panels.crafting.tabs.size(); t++)
-                s.setIcon(*panels.crafting.tabs[(size_t)t], "background", iconsDoc,
-                          std::string("craft-") + name + (t ? "-armor" : "-weapons"));
-            craftingClass = c.classType;
-        }
         const InvList list = craftingList(inv);
         placeInvPanel(panels.crafting, list);
         // the inventory selection frame: the frame on the selected cell, hidden off the page.
@@ -975,6 +977,14 @@ int Hud::inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const {
 void Hud::updateInventoryThumb(const Inventory &inv, int which, int availableRows) const {
     if (hasPanels())
         placeInvThumb(invPanel(which), listOf(inv, which), availableRows);
+}
+
+int Hud::inventoryTabCount(int which) const {
+    return hasPanels() ? (int)invPanel(which).tabs.size() : 0;
+}
+void Hud::configureCraftingTabs(int playerClass) {
+    if (hasPanels())
+        replaceInvTabs(panels.crafting, inventoryui::craftingTabIcons(playerClass));
 }
 
 int Hud::inventoryRowCount(const Inventory &inv, int which) const {

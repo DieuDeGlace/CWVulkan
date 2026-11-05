@@ -92,7 +92,6 @@ class Hud {
         // (FormulaDetailsWidget).
         struct Crafting : inventoryui::Tabs<6> {
             bool open = false;
-            int classType = 0; // its first two tabs' icons are the class's
             const std::vector<std::vector<nativesaves::Stack>> *canonicalTabs = nullptr;
             std::vector<Entry> items;
             int hoverItem = -1, hoverTab = -1, hoverButton = 0;
@@ -301,6 +300,8 @@ class Hud {
     // The bag's rows to scroll through (the inventory rows: its row count), and the scroll
     // button under the mouse (1 up, 2 down, 0 none).
     int inventoryRowCount(const Inventory &inv, int which = 0) const;
+    int inventoryTabCount(int which) const;
+    void configureCraftingTabs(int playerClass); // Character selection/completion, not a draw-time observer.
     // Range/offset stage only; no canonical sort, region rebuild, selection or thumb.
     void refreshInventoryRange(Inventory &inv, int which = 0) const;
     // Uses current bound panel geometry and the caller's just-refreshed range A.
@@ -590,7 +591,6 @@ class Hud {
     } panels;
     mutable mapmarks::PreviewOutputs mapOutputs;
     mutable float previewLineSpacing = 4;
-    mutable int craftingClass = -1; // the class the crafting tabs' icons are for
     void layoutDetails();
     void drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) const;
     InvList craftingList(const Inventory &inv) const;
@@ -600,6 +600,7 @@ class Hud {
     void buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons, int tabs, const char *selection = nullptr);
     InvList listOf(const Inventory &inv, int which) const;
     void layoutInvPanel(InvPanel &p);
+    void replaceInvTabs(InvPanel &, const std::vector<std::string> &icons);
     void placeInvPanel(const InvPanel &p, const InvList &list) const;
     void placeInvThumb(const InvPanel &p, const InvList &list, int availableRows) const;
     int invRowCount(const InvPanel &p, const InvList &list) const;

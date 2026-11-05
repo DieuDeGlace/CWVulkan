@@ -420,6 +420,13 @@ individual feature documents.
   the cache. Missing merchants produce empty stock, and the earlier tab selection
   is not repaired after its later rebuild. Shop now also uses cached A/offset/thumb
   state. Full native RNG, callback/geometry closure and live acceptance remain open.
+  Crafting now starts with four blank controls and explicitly replaces them on
+  loaded-character setup with six class-prefix/common-suffix roots, or four common
+  roots for other class values. Repeated replacement does not append or reset
+  selection/range state. Drawing no longer observes class changes; controller
+  wrapping uses the actual root count. Manual tab/region/recipe selection now
+  requires left-down. Original dispatch confirms key2/down, correcting the earlier
+  release label; complete scene event/capture/hover bridging remains open.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
   hooks, full camera/focus integration and hardware comparisons remain. Creature selection now runs once before early control;
   separate minimum depth, post-movement aim, early assistance, later speaker

@@ -10,6 +10,29 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Crafting controls now start with four blank roots and are explicitly replaced
+  after character loading: recognized classes add their two native icons before
+  the four common controls; other class values use the common four. Replacement
+  neither accumulates roots nor repairs selection/range state. Class setup and the
+  startup crafting rebuild run before the first visible toggle; drawing no longer
+  changes class icons. Controller wrapping reads the actual control count. Manual
+  tab, region-arrow and recipe-selection paths now require left-down, preserving
+  right-click item actions. A new original-only dispatch trace corrects the older
+  tab-release label: registered event2 runs synchronously on the concrete down
+  path. All five targets, focused lifecycle/owner-GUI tests, full CPU/owner suite
+  and102 Vulkan GUI images pass; the owner save fixture is unchanged.
+  Complete scene callback/capture/hover routing, persistent frontend lifetime
+  and live hardware/visual acceptance remain open.
+
+- Published checkpoint5ae5c91 also passed a fresh isolated five-target build from
+  its exact frozen source, using ten verified cached pinned dependencies. All952
+  source payloads stayed unchanged;461 compiler commands and272 project dependency
+  paths were confined to the frozen source/build or dependency roots, with no
+  CWSDK or working-source inputs. All five x64 images and four extractor exports
+  passed, as did seven focused suites including owner-GUI checks without skips.
+  This checks source/build independence for that revision; dependency sources were
+  cached, not freshly downloaded, and it does not replace live-game acceptance.
+
 - Native-backed shop collections now persist between explicit rebuild events.
   Rebuild releases old inner rows and creates exactly two groups; buyback copies
   newest-first without filtering zero/negative/duplicate records, while stock uses

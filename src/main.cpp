@@ -1466,6 +1466,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     bool craftingOpen = false, bagShown = true;
     Hud::Inventory inventoryView;
     inventoryView.nativeCollections = nativeInventory != nullptr;
+    hud.configureCraftingTabs(gear.playerClass()); // The chosen character is loaded; replace startup controls now.
     // The world map (M, the game's the map button): open, or the minimap in the corner. Its
     // position follows the player until the map is dragged (Game's the zoom change); the
     // overlay moves and grows between the corner and the middle (the overlay position, Scale).
@@ -2117,6 +2118,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     rebuildInventoryViews();
     if (nativeInventory && haveGear)
         applyGear();
+    if (nativeInventory)
+        rebuildCrafting(); // Loaded-character setup precedes the first visible crafting toggle.
     if (inventoryOpen && bagShown)
         refreshBagOpening();
 
@@ -4547,7 +4550,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             // button held to make it.
             inventoryView.bagShown = bagShown;
             inventoryView.crafting.open = craftingOpen;
-            inventoryView.crafting.classType = gear.playerClass();
             inventoryView.crafting.items.clear();
             inventoryView.crafting.details = {};
             legacyCraftRows.clear();
@@ -5157,22 +5159,25 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 if ((button != GLFW_MOUSE_BUTTON_LEFT && !(nativeInventory && button == GLFW_MOUSE_BUTTON_RIGHT)) ||
                     inventoryView.hoverButton)
                     return;
-                if (const int region = hud.inventoryRegionButtonAt(mouse, inventoryView)) {
+                if (const int region =
+                        button == GLFW_MOUSE_BUTTON_LEFT ? hud.inventoryRegionButtonAt(mouse, inventoryView) : 0) {
                     changeRegion(region);
                     return;
                 }
-                if (craftingOpen && inventoryView.crafting.hoverTab >= 0) { // the crafting tabs
+                if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen &&
+                    inventoryView.crafting.hoverTab >= 0) { // the crafting tabs
                     changePanelTab(2, inventoryView.crafting.hoverTab);
                     return;
                 }
-                if (craftingOpen && inventoryView.crafting.hoverItem >= 0) { // the inventory selection frame(true)
+                if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen &&
+                    inventoryView.crafting.hoverItem >= 0) { // the inventory selection frame(true)
                     inventoryView.crafting.selected = inventoryView.crafting.hoverItem;
                     audio.playInterface(soundrules::soundid::MENU_SELECT);
                     return;
                 }
-                if (craftingOpen && inventoryView.crafting.hoverButton)
+                if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen && inventoryView.crafting.hoverButton)
                     return;
-                if (vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
+                if (button == GLFW_MOUSE_BUTTON_LEFT && vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
                     changePanelTab(1, inventoryView.vendor.hoverTab);
                     return;
                 }
@@ -5265,7 +5270,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     logLine("Vendor: sold " + itemName(it) + " for " + std::to_string(gameshop::sellPrice(raw)) + " gold");
                     return;
                 }
-                if (inventoryView.hoverTab >= 0) { // the inventory tab selection
+                if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverTab >= 0) { // the inventory tab selection
                     changePanelTab(0, inventoryView.hoverTab);
                     return;
                 }
@@ -5365,7 +5370,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             for (const auto &tab : input.gamepadPointer.tabs) {
                 const int which = tab.panel == 1 ? 2 : tab.panel == 2 ? 1 : 0;
                 const int current = which == 0 ? inventoryView.tab : which == 1 ? inventoryView.vendor.tab : inventoryView.crafting.tab;
-                changePanelTab(which, (current + tab.direction + (which == 1 ? 2 : 6)) % (which == 1 ? 2 : 6));
+                const int count = hud.inventoryTabCount(which);
+                if (count > 0)
+                    changePanelTab(which, (current + tab.direction + count) % count);
             }
             input.buttons.clear(); // No attacks while the inventory is open.
             // Slot icons: what is equipped (measured items, or the recorded sprite of

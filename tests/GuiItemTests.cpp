@@ -31,6 +31,14 @@ void equipmentCallbacks() {
     GUI_CHECK(hud.load(assets.gameDir(), error));
     if (!hud.hasPanels())
         return;
+    GUI_CHECK(hud.inventoryTabCount(2) == 4);
+    hud.configureCraftingTabs(1);
+    GUI_CHECK(hud.inventoryTabCount(2) == 6);
+    hud.configureCraftingTabs(1);
+    GUI_CHECK(hud.inventoryTabCount(2) == 6); // Replacement does not accumulate another six roots.
+    hud.configureCraftingTabs(255);
+    GUI_CHECK(hud.inventoryTabCount(2) == 4);
+    hud.configureCraftingTabs(1);
     Renderer renderer;
     renderer.initHeadless(RenderSettings{});
     CubModel cub;

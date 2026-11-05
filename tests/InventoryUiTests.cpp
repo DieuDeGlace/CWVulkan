@@ -111,6 +111,18 @@ int inventoryUiTests() {
     const auto wrappedThumb = inventoryui::thumbPlacement(INT32_MAX, 2, 4);
     check(wrappedThumb && wrappedThumb->y == 35, "thumb row product wraps to signed32 before division");
     check(!inventoryui::thumbPlacement(INT32_MIN, -1, 0), "unqualified native division fault safely defers in engine");
+    for (int playerClass = 1; playerClass <= 4; ++playerClass) {
+        const auto icons = inventoryui::craftingTabIcons(playerClass);
+        check(icons.size() == 6 && icons[2] == "craft-jewels" && icons[5] == "craft-ingredients",
+              "recognized classes prepend two controls before the common four");
+    }
+    check(inventoryui::craftingTabIcons(3)[0] == "craft-mage-weapons" &&
+              inventoryui::craftingTabIcons(3)[1] == "craft-mage-armor",
+          "class prefix uses the native named owner resources in order");
+    const auto common = inventoryui::craftingTabIcons(0);
+    check(common.size() == 4 && common[0] == "craft-jewels" && common[1] == "craft-cooking" &&
+              inventoryui::craftingTabIcons(255) == common,
+          "unrecognized class has four common controls without two empty prefix slots");
     inventoryui::PanelState range;
     check(range.availableRows == 1 && range.rowOffsets.empty(), "constructor retains A1 and no row headers");
     inventory.tabs.resize(3);

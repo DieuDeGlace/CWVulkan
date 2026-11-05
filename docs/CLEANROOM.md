@@ -2132,3 +2132,19 @@ policy rather than a native successful-null-source claim. Shared RNG and complet
 callback/geometry/frontend lifetime remain open. Synthetic insertion/history,
 canonical inventory and actual owner-GUI binding checks exercise the implementation.
 No native instructions, SDK, reconstruction or original assets were added.
+
+## Crafting control lifecycle and tab dispatch, 2026-11-04
+
+The independent original-only author supplied steam-inventory-tab-callback-dispatch
+and steam-crafting-tab-control-lifetime after original-evidence readback. The
+implementer read only those finalized notes and owned sources. Initial four blank
+roots and explicit class-dependent replacement now have separate stages, with
+owner resource identifiers and unchanged selected/range state. The completed
+character setup also requests the retained crafting rebuild. The draw-time icon
+observer and its unused class fields were removed; controller wrap uses actual
+logical controls. Manual tab/region/recipe selection is restricted to left-down.
+The older refresh-events prose's release label is corrected from the final direct
+key2/Windows0x201 proof, without reading native instructions. Asset-free class/icon
+contracts and actual owner-scene repeated replacement checks qualify these changes;
+full callback/capture/hover/frontend and hardware acceptance remain separate. No
+original code, SDK/reconstruction or game assets were added.

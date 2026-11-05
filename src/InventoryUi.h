@@ -7,11 +7,27 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace inventoryui {
 using Region = std::array<int32_t, 2>;
 enum class Panel { Inventory = 0, Shop = 1, Crafting = 2 };
+
+// Explicit class setup replaces the initial blank controls. It is independent of
+// the carried/crafting group count and does not repair any selected tab or row.
+inline std::vector<std::string> craftingTabIcons(int playerClass) {
+    std::vector<std::string> icons;
+    if (playerClass >= 1 && playerClass <= 4) {
+        static const char *const classes[] = {"warrior", "ranger", "mage", "rogue"};
+        const std::string prefix = std::string("craft-") + classes[playerClass - 1];
+        icons.push_back(prefix + "-weapons");
+        icons.push_back(prefix + "-armor");
+    }
+    for (const char *name : {"craft-jewels", "craft-cooking", "craft-alchemy", "craft-ingredients"})
+        icons.emplace_back(name);
+    return icons;
+}
 
 // Each wheel message supplies one row attempt; opposing messages remain separate.
 struct WheelEvent {

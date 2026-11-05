@@ -131,7 +131,7 @@ There is **no thumb call, tab sound or shop-rebuild callback** in this
 setter. It does not require the new tab to differ and does not replace
 selected slot0 with the retained row's first visible slot.
 
-**Mouse tab release0x27f980:**0x280440 registers event2 callbacks on
+**Mouse tab down0x27f980:**0x280440 registers event2 callbacks on
 the tab-label Widgets. Draw0x27d2b0 sets cached hovered-tab+0x2b0 when
 a label reports hover; it is initially−1 and not universally reset by
 that draw. The callback reads that stored value. Require collection
@@ -139,8 +139,10 @@ nonnull, hovered tab≥0 and below physical backing-tab count, and
 different from selected tab; otherwise this handler does nothing.
 On admission, write selected tab, refresh **0x27f9fa**, choose selection,
 selection-frame0x27fada, thumb0x27fae2, sound0x59 at0x27faf3, then
-shop-only rebuild gate0x9de90 at0x27fb02. Event2 is the ordinary release
-callback, not an immediate tab switch performed by the draw's hover.
+shop-only rebuild gate0x9de90 at0x27fb02. Event2 is the ordinary left-down
+callback, not an immediate tab switch performed by the draw's hover. The later
+original-only steam-inventory-tab-callback-dispatch audit corrects the former
+release label using the concrete0x340ec0 key2 lookup and Windows0x201 chain.
 
 **Next/previous tab0x27f830/0x2802f0:** change and wrap selected tab
 using own label count+0x268, then refresh **0x27f86e/0x28031f**. Unlike
