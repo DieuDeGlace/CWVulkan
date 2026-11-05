@@ -399,6 +399,14 @@ individual feature documents.
   Drawing no longer reconstructs that cache. Hidden-panel collection binding and
   tab refresh/selection/thumb ordering are integrated. Complete frontend binding,
   cached row/range/thumb lifetime and callback/hardware acceptance remain open.
+  Native crafting groups now persist across draws and rebuild on the connected
+  toggle/station, equipment, transaction, completed-craft and shown-pickup routes.
+  Details own a separate copied recipe; later left-down publication validates the
+  physical selected pair, while tab navigation alone leaves details unchanged.
+  An active craft owns its start-time recipe, and hiding clears that action value
+  without clearing details. Group/count/copy and physical GUI-binding regressions
+  pass. Full event/RNG closure, missing-resource eligibility, tab6 target actions,
+  persistent frontend binding and shop collection lifetime remain unfinished.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
   hooks, full camera/focus integration and hardware comparisons remain. Creature selection now runs once before early control;
   separate minimum depth, post-movement aim, early assistance, later speaker

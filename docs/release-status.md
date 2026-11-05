@@ -10,6 +10,20 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Native-backed crafting now retains physical count/item groups between explicit
+  rebuild events, with separately owned details and in-progress recipes. Generation
+  and count filling no longer run during native-backed drawing. Rebuilds preserve
+  skipped/unmatched state, keep duplicate/zero/negative rows, clear group6 without
+  truncating higher groups, and copy a matching full recipe before temporaries
+  expire. The later left-down tail publishes from the selected physical row, even
+  without a new hover; invalid/failed publication clears details. Tab navigation
+  alone does not republish. Toggle, station, equipment, trade, completed-craft and
+  shown-crafting pickup paths are connected. Physical collection binding is shared
+  by GUI count/navigation work. All five build targets, full CPU/owner-data suite
+  and102 Vulkan GUI images pass; the owner save fixture remains unchanged.
+  Full cached GUI state, action-pair/tab6 targets,
+  missing-resource eligibility, native RNG coupling and live acceptance remain open.
+
 - Native inventory region choices now persist between explicit refresh events,
   rather than rebuilding during drawing. They read the canonical carried tab,
   include every nonzero count and the player region, and preserve the old cache
@@ -18,7 +32,7 @@ older successful runs; none of these bounded changes establishes complete parity
   refresh before selection/thumb placement, with the shop's additional rebuild
   afterwards. All five targets, full CPU/owner-data suite and 102 Vulkan GUI image
   checks pass. Persistent frontend binding, complete cached row/range state,
-  derived collections and live callback/hardware acceptance remain open.
+  shop collection lifetime and live callback/hardware acceptance remain open.
 
 - An extractor-only CMake configuration now builds the Windows DLL before
   renderer/dependency setup. A fresh build passed with no FetchContent cache
@@ -30,7 +44,7 @@ older successful runs; none of these bounded changes establishes complete parity
   results, using wrapped carried totals without an extra final zero clamp. The
   actual inventory total feeds the live formula count query. Native division-fault
   inputs retain an explicit engine fallback; no native successful return is claimed
-  for those inputs. Cached collection/event lifetime and RNG coupling remain open.
+  for those inputs. Full callback coverage and native shared RNG coupling remain open.
 
 - Pickup notice quantities now reach gameplay as unsigned 16-bit values, preserving
   32,768 and 65,535 through packet decoding and inventory insertion. Regional and

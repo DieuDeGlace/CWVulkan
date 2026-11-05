@@ -92,6 +92,7 @@ class Hud {
         struct Crafting : inventoryui::Tabs<6> {
             bool open = false;
             int classType = 0; // its first two tabs' icons are the class's
+            const std::vector<std::vector<nativesaves::Stack>> *canonicalTabs = nullptr;
             std::vector<Entry> items;
             int hoverItem = -1, hoverTab = -1, hoverButton = 0;
             struct Ingredient {

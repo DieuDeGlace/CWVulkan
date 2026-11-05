@@ -150,6 +150,25 @@ void equipmentCallbacks() {
         inventory.crafting.items = inventory.vendor.items;
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 1); // crafting does too
+        // A bound derived collection counts physical rows independently of its
+        // presentation entries and quantities, just like the ordinary bag source.
+        inventoryslots::Tabs craftingTabs(7);
+        craftingTabs[0].assign(300, nativesaves::Stack{0, weapon});
+        inventory.crafting.canonicalTabs = &craftingTabs;
+        const int craftingRows = hud.inventoryRowCount(inventory, 2);
+        GUI_CHECK(craftingRows > 1);
+        const auto savedCraftingEntries = inventory.crafting.items;
+        inventory.crafting.items.clear();
+        GUI_CHECK(hud.inventoryRowCount(inventory, 2) == craftingRows);
+        inventory.crafting.items = savedCraftingEntries;
+        inventory.crafting.items[0].slotIndex = 0;
+        inventory.crafting.items[0].count = -7;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.itemDraws().size() == 1);
+        craftingTabs[0].clear();
+        GUI_CHECK(hud.inventoryRowCount(inventory, 2) == 0);
+        inventory.crafting.canonicalTabs = nullptr;
+        inventory.crafting.items = savedCraftingEntries;
         auto &details = inventory.crafting.details;
         details.valid = true;
         details.original = weapon;

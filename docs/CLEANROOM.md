@@ -2075,3 +2075,23 @@ stage afterwards. Synthetic lifecycle/quantity/order fixtures and the full CPU/
 owner suite plus102 Vulkan GUI images pass. Complete frontend/persistent binding,
 derived collections, cached row/range state and live callback/hardware acceptance
 remain open. No native source, SDK, reconstruction or original assets were added.
+
+## Retained crafting collection and recipe publication, 2026-11-04
+
+The same independent original-only author supplied the final
+steam-crafting-selected-recipe.md after inspecting only original native evidence.
+The implementer read that prose, steam-crafting-collection-rebuild, the earlier
+refresh/down-tail/station contracts and owned engine sources only. Collection
+storage owns count/item groups and a separately copied full selected recipe.
+Generation inputs are temporary; matching publication retains owned ingredients,
+unmatched/skipped rebuilds preserve state, and the specified left-down tail clears
+invalid/failed publication without repairing the independent list selection.
+Native-backed drawing reads retained rows/details, with live ingredient queries;
+tab changes alone do not republish. Connected rebuild events replace per-draw
+recipe generation/counts. The active craft copies details at its start and hiding
+clears that action value without destroying the details recipe. Legacy recordings
+retain their separate compatibility path. Synthetic canonical inventory/count,
+copy/reset and actual owner-GUI physical binding checks exercise the implementation.
+Full native shared RNG state, callback closure, cached range/thumb/eligibility,
+tab6 target actions and persistent frontend lifetime remain open. No native code,
+SDK/reconstruction or original assets were read or added by the implementer.

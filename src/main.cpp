@@ -59,6 +59,7 @@
 #include "GameShop.h"
 #include "ItemNames.h"
 #include "GameCraft.h"
+#include "CraftingCollection.h"
 #include "GroundItems.h"
 #include "NativeInteract.h"
 #include "WorldMap.h"
@@ -1570,7 +1571,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     saveGame.recipes = std::move(recipeSource.recipes);
     std::vector<gamecraft::Thing> knownFormulas;
     for (const auto &record : *saveGame.recipes) knownFormulas.push_back(gamecraft::fromRecord(record));
-    std::vector<gamecraft::Formula> craftRows; // the formula of each crafting row
+    gamecraft::RecipeGroups legacyCraftRecipes;
+    gamecraft::Collection craftingCollection;
+    inventoryslots::Index craftingSelection{0, 0};
+    std::vector<gamecraft::Formula> legacyCraftRows; // Legacy presentation lookup; native rows retain physical identities.
     gamecraft::Formula craftingFormula;
     gamecraft::CraftButton craftButton;
     auto spriteForPartMatrix = [&](int matrix) {
@@ -2032,6 +2036,21 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             sortInventory();
         }
         rebuildInventoryViews();
+    };
+    auto rebuildCrafting = [&] {
+        if (!nativeInventory || nativeInventory->inventory.tabs.empty())
+            return; // No group headers: retain prior rows and selected recipe.
+        int32_t region[2]{};
+        if (const auto *actor = spawned.playerRecord())
+            std::memcpy(region, actor + worldgen::creature::REGION, sizeof region);
+        const auto recipes =
+            gamecraft::formulas(knownFormulas, gear.playerClass(), region[0], region[1], [&](int rank) {
+                return gamecraft::rankUnlocked(rank, region[0], region[1], saveGame.solvedMissions);
+            });
+        craftingCollection.rebuild(nativeInventory->inventory, recipes, craftingSelection);
+        refreshInventory(false, inventoryui::Panel::Crafting);
+        if (inventoryView.crafting.canonicalTabs)
+            hud.updateInventoryThumb(inventoryView, 2, hud.inventoryRowCount(inventoryView, 2));
     };
     auto consumeCarried = [&](size_t row) {
         if (row >= bag.size())
@@ -2732,8 +2751,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 useprompt::holdUp(holder, adapted, r.holdUpAbility);
             }
         }
-        if (nativeInventory)
-            return 0; // the complete notice amount was applied once, before refresh/receipt presentation
+        if (nativeInventory) {
+            if (inventoryOpen && craftingOpen)
+                rebuildCrafting();
+            return 0; // The complete notice amount was applied once before refresh/receipt presentation.
+        }
         const glm::u8vec4 gold{255, 214, 64, 255};
         switch (r.into) {
         case grounditems::Into::RegionCounter:
@@ -3649,10 +3671,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             if (!wasOpen)
                 bagShown = false;
             inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
-            if (nativeInventory && !nativeInventory->inventory.tabs.empty())
+            rebuildCrafting(); // The ordinary toggle rebuilds in both directions.
+            if (craftingOpen) {
                 refreshInventory(false, inventoryui::Panel::Crafting);
-            if (craftingOpen)
-                refreshInventory(false, inventoryui::Panel::Crafting);
+                if (inventoryView.crafting.canonicalTabs)
+                    hud.updateInventoryThumb(inventoryView, 2, hud.inventoryRowCount(inventoryView, 2));
+            }
             if (!inventoryOpen)
                 craftingOpen = false, bagShown = true;
         }
@@ -4260,6 +4284,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         auto finishNativeDown = [&](int button, float oldMaximum, glm::vec2 point) {
             if (!nativeInventory || button < 0 || button >= 3)
                 return;
+            if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryOpen && craftingOpen) {
+                auto &view = inventoryView.crafting;
+                if (view.hoverItem >= 0 && (size_t)view.hoverItem < view.items.size()) {
+                    view.selected = view.hoverItem;
+                    const auto &entry = view.items[(size_t)view.hoverItem];
+                    craftingSelection = {entry.tab, entry.slotIndex};
+                }
+                craftingCollection.publish(craftingSelection, [](const auto &item, bool) {
+                    return gamecraft::recipeOf(gamecraft::fromRecord(item));
+                });
+            }
             if (button == GLFW_MOUSE_BUTTON_LEFT && nativeCustomization.edit.open) {
                 hud.customizationLayout(true);
                 const auto hand = nativeCustomization.edit.hand == 1 ? Gear::WeaponLeft : Gear::WeaponRight;
@@ -4291,6 +4326,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         // Ordinary interface binding is independent of panel visibility. It only
         // assigns the collection; it does not catch up a skipped early refresh.
         inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
+        inventoryView.crafting.canonicalTabs = nativeInventory ? &craftingCollection.rows : nullptr;
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
@@ -4447,6 +4483,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 craftingOpen = true, bagShown = false;
                 inventoryView.crafting.tab = std::clamp((int)craftTabTest, 0, 5);
                 inventoryView.crafting.selected = -1;
+                craftingSelection = {inventoryView.crafting.tab, 0};
+                rebuildCrafting();
                 craftTabTest = -1;
             }
             // Crafting (the crafting list, the crafting tab, the crafting update): the formulas by
@@ -4457,7 +4495,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             inventoryView.crafting.classType = gear.playerClass();
             inventoryView.crafting.items.clear();
             inventoryView.crafting.details = {};
-            craftRows.clear();
+            legacyCraftRows.clear();
             if (craftingOpen) {
                 int32_t region[2] = {0, 0};
                 if (const uint8_t *who = spawned.playerRecord())
@@ -4486,27 +4524,42 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 };
                 auto shownOf = [](const gamecraft::Thing &t) { return Gear::fromRecord(gamecraft::toRecord(t)); };
                 // (rank 0 always, a higher one once a crafting-book place of the region is solved)
-                const auto tabs = gamecraft::formulas(knownFormulas, gear.playerClass(), region[0], region[1], [&](int rank) {
-                    return gamecraft::rankUnlocked(rank, region[0], region[1], saveGame.solvedMissions);
-                });
+                if (!nativeInventory)
+                    legacyCraftRecipes = gamecraft::formulas(knownFormulas, gear.playerClass(), region[0], region[1], [&](int rank) {
+                        return gamecraft::rankUnlocked(rank, region[0], region[1], saveGame.solvedMissions);
+                    });
                 Hud::Inventory::Crafting &cv = inventoryView.crafting;
-                for (int t = 0; t < gamecraft::TABS; t++)
-                    for (const gamecraft::Formula &f : tabs[(size_t)t]) {
-                        const gameshop::Item raw = rawOfThing(f.result);
-                        const Gear::Item shown = shownOf(f.result);
+                const size_t groupCount = nativeInventory ? craftingCollection.rows.size() : legacyCraftRecipes.size();
+                for (size_t t = 0; t < groupCount; ++t) {
+                    const size_t count =
+                        nativeInventory ? craftingCollection.rows[t].size() : legacyCraftRecipes[t].size();
+                    for (size_t slot = 0; slot < count; ++slot) {
+                        const gameshop::Item raw = nativeInventory ? craftingCollection.rows[t][slot].item
+                                                                   : rawOfThing(legacyCraftRecipes[t][slot].result);
+                        const Gear::Item shown = Gear::fromRecord(raw);
                         Hud::Inventory::Entry e;
                         e.name = bagName(shown, itemName(shown)) + (gameshop::renowned(raw) ? "+" : "");
                         e.icon = iconOf(raw);
-                        e.count = gamecraft::times(f, held);
+                        e.count = nativeInventory ? craftingCollection.rows[t][slot].count
+                                                  : gamecraft::times(legacyCraftRecipes[t][slot], held);
+                        e.slotIndex = (int)slot;
                         e.allowed = nativerules::classMayUse(raw.data(), gear.playerClass());
-                        e.tab = t;
+                        e.tab = (int)t;
                         e.color = guiitem::textColour(raw, viewRegion);
                         e.original = raw;
                         cv.items.push_back(e);
-                        craftRows.push_back(f);
+                        if (!nativeInventory)
+                            legacyCraftRows.push_back(legacyCraftRecipes[t][slot]);
                     }
-                // The selection: kept, or the tab's first formula (the tab selection).
-                if (cv.selected < 0 || cv.selected >= (int)cv.items.size() || cv.items[(size_t)cv.selected].tab != cv.tab) {
+                }
+                // Native selection remains a canonical pair, independent of details.
+                if (nativeInventory) {
+                    cv.selected = -1;
+                    for (size_t k = 0; k < cv.items.size(); ++k)
+                        if (cv.items[k].tab == craftingSelection.tab && cv.items[k].slotIndex == craftingSelection.slot)
+                            cv.selected = (int)k;
+                } else if (cv.selected < 0 || cv.selected >= (int)cv.items.size() ||
+                           cv.items[(size_t)cv.selected].tab != cv.tab) {
                     cv.selected = -1;
                     for (size_t k = 0; k < cv.items.size() && cv.selected < 0; k++)
                         if (cv.items[k].tab == cv.tab)
@@ -4517,16 +4570,19 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 cv.hoverButton = hud.inventoryButtonAt(mouse, inventoryView, 2);
                 // the formula details drawing: the ingredients held and needed, the workstation
                 // (water where the player is in it; the others' static entity within 4 blocks).
-                if (cv.selected >= 0) {
-                    const gamecraft::Formula &f = craftRows[(size_t)cv.selected];
+                const gamecraft::Formula *detailsRecipe =
+                    nativeInventory ? (craftingCollection.button ? &craftingCollection.button->formula : nullptr)
+                                    : (cv.selected >= 0 ? &legacyCraftRows[(size_t)cv.selected] : nullptr);
+                if (detailsRecipe && detailsRecipe->result.category) {
+                    const auto &f = *detailsRecipe;
+                    const auto rawResult = rawOfThing(f.result);
+                    const auto shown = shownOf(f.result);
                     Hud::Inventory::Crafting::Details &d = cv.details;
                     d.valid = true;
-                    d.name = cv.items[(size_t)cv.selected].name;
-                    if (!d.name.empty() && d.name.back() == '+')
-                        d.name.pop_back(); // (the item naming alone)
-                    d.color = cv.items[(size_t)cv.selected].color;
-                    d.icon = cv.items[(size_t)cv.selected].icon;
-                    d.original = rawOfThing(f.result);
+                    d.name = bagName(shown, itemName(shown));
+                    d.color = guiitem::textColour(rawResult, viewRegion);
+                    d.icon = iconOf(rawResult);
+                    d.original = rawResult;
                     bool missing = false;
                     for (const gamecraft::Ingredient &in : f.ingredients) {
                         const auto raw = rawOfThing(in.item);
@@ -4555,7 +4611,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 bool started = false;
                 const bool made = craftButton.update((float)(dt * 1000.0), true, cv.details.buttonOver && held0, &started);
                 if (started) {
-                    craftingFormula = craftRows[(size_t)cv.selected];
+                    craftingFormula = *detailsRecipe; // Owned action snapshot; later selections do not replace it.
                     // Crafted gear is bound to the region the player stands in when it starts.
                     nativeplayer::Item result = rawOfThing(craftingFormula.result);
                     if (nativedrop::inRegionSet(result[0]))
@@ -4565,7 +4621,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     int32_t carried = 0;
                     for (const Carried &c : bag)
                         if (nativeinteract::sameItem(rawOf(c.item).data(), rawOfThing(craftingFormula.result).data()))
-                            carried += c.count;
+                            carried = gamemath::add32(carried, c.count);
                     if (!useprompt::mayCarryMore(craftingFormula.result.category, craftingFormula.result.id, carried)) {
                         texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "You can't carry more of these items.", {255, 51, 51, 255}});
                         audio.playInterface(gameshop::SOUND_REFUSED);
@@ -4592,12 +4648,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                         if (extra)
                             audio.playInterface(soundrules::soundid::CRAFT_SPECIAL);
                         receiveMany(rawOfThing(craftingFormula.result), extra + 1);
+                        rebuildCrafting();
                         logLine("Crafted " + itemName(shownOf(craftingFormula.result)) + (extra ? " (+" + std::to_string(extra) + ")" : ""));
                     }
                 }
                 cv.details.progress = craftButton.progress;
-            } else
-                craftButton.update((float)(dt * 1000.0), false, false);
+            }
             if (!nativeInventory) { // Older recording-only sessions retain their inventory-view source.
                 inventoryView.info.clear();
                 inventoryView.infoIcon.clear();
@@ -4904,6 +4960,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     };
                     const int available = clampRange();
                     panel.selected = hud.inventoryFirstItem(inventoryView, which);
+                    if (which == 2) {
+                        craftingSelection = {-1, -1};
+                        if (panel.selected >= 0 && (size_t)panel.selected < inventoryView.crafting.items.size()) {
+                            const auto &entry = inventoryView.crafting.items[(size_t)panel.selected];
+                            craftingSelection = {entry.tab, entry.slotIndex};
+                        }
+                    }
                     hud.updateInventoryThumb(inventoryView, which, available);
                     audio.playInterface(soundrules::soundid::MENU_TAB);
                     if (which == 1) {
@@ -4992,7 +5055,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 refreshVendor();
                 refreshInventory(false, inventoryui::Panel::Shop);
             };
-            trade.crafting = [&] { refreshInventory(false, inventoryui::Panel::Crafting); }; // derived collection migration remains
+            trade.crafting = [&] { rebuildCrafting(); };
             trade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
             trade.announce = [&](const auto &item) {
                 const auto view = Gear::fromRecord(item);
@@ -5158,8 +5221,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                             applyGear(true);
                             refreshInventory();
                             audio.playInterface(0x5b);
-                            if (outcome.action == Action::WeaponEquipped && !nativeInventory->inventory.tabs.empty())
-                                refreshInventory(false, inventoryui::Panel::Crafting);
+                            if (outcome.action == Action::WeaponEquipped)
+                                rebuildCrafting();
                         } else if (outcome.action == Action::PetFood)
                             inventoryOpen = false;
                         else if (outcome.action == Action::Map) {
@@ -5170,6 +5233,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                                 applyGear(true);
                                 refreshInventory();
                                 audio.playInterface(0x5b);
+                                rebuildCrafting();
                             }
                         }
                         rebuildInventoryViews();
@@ -5301,6 +5365,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     }
                 }
             }
+        }
+        if (!inventoryOpen || !craftingOpen) {
+            craftButton.update((float)(dt * 1000.0), false, false);
+            craftingFormula = {}; // Hiding clears the action snapshot, not the details recipe.
         }
         if (nativeInventory) {
             auto completed = completedDowns;
@@ -5628,6 +5696,20 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     if (!wasOpen)
                         bagShown = false;
                     inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
+                    const bool saw = p.object >= 0 && (size_t)p.object < scene.objects.size() &&
+                                     scene.objects[(size_t)p.object].type == 0x66;
+                    if (inventoryView.crafting.tab != p.station || saw) {
+                        inventoryView.crafting.selectTab(p.station);
+                        craftingSelection = {p.station, 0};
+                        inventoryView.crafting.hoverItem = -1;
+                        refreshInventory(false, inventoryui::Panel::Crafting);
+                    }
+                    rebuildCrafting();
+                    if (craftingOpen && p.object >= 0 && (size_t)p.object < scene.objects.size() &&
+                        scene.objects[(size_t)p.object].type == 0x62) {
+                        refreshInventory(false, inventoryui::Panel::Crafting);
+                        hud.updateInventoryThumb(inventoryView, 2, hud.inventoryRowCount(inventoryView, 2));
+                    }
                     if (!inventoryOpen)
                         craftingOpen = false, bagShown = true;
                     logLine("Use: crafting at station mode " + std::to_string(p.station));

@@ -926,7 +926,9 @@ Hud::InvList Hud::vendorList(const Inventory &inv) const {
 }
 Hud::InvList Hud::craftingList(const Inventory &inv) const {
     const Inventory::Crafting &c = inv.crafting;
-    return {&c.items, c.tab, c.scroll, c.hoverItem, c.hoverTab, c.hoverButton, true, c.selected};
+    InvList list{&c.items, c.tab, c.scroll, c.hoverItem, c.hoverTab, c.hoverButton, true, c.selected};
+    list.canonicalTabs = c.canonicalTabs;
+    return list;
 }
 Hud::InvList Hud::listOf(const Inventory &inv, int which) const {
     return which == 1 ? vendorList(inv) : which == 2 ? craftingList(inv) : bagList(inv);

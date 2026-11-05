@@ -249,6 +249,7 @@ add_library(engine STATIC
     src/HudFrontend.cpp
     src/GameShop.cpp
     src/GameCraft.cpp
+    src/CraftingCollection.cpp
     src/GroundItems.cpp
     src/IdentifyWindow.cpp
     src/UpgradeWidget.cpp
