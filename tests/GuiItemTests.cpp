@@ -172,6 +172,39 @@ void equipmentCallbacks() {
         inventory.pointer = points.back();
         hud.draw(state, vertices);
         GUI_CHECK(hud.cachedInventoryCell(0) == inventoryslots::Index{}); // Unoccupied tail cell.
+
+        // Find interior points in two owner tabs above the first grid cell.
+        const auto tabPoint = [&](int tab) -> std::optional<glm::vec2> {
+            for (int y = -68; y >= -120; y -= 4)
+                for (int x = -24; x <= 110; x += 4) {
+                    const auto point = points[10] + glm::vec2(x, y);
+                    if (hud.inventoryTabAt(point, inventory) == tab &&
+                        hud.inventoryTabAt(point - glm::vec2(8), inventory) == tab &&
+                        hud.inventoryTabAt(point + glm::vec2(8), inventory) == tab)
+                        return point;
+                }
+            return {};
+        };
+        const auto firstTab = tabPoint(0), secondTab = tabPoint(1);
+        GUI_CHECK(firstTab && secondTab);
+        if (firstTab && secondTab) {
+            GUI_CHECK(hud.nativeInventoryTabForPress(*firstTab, inventory, 0) == -1);
+            inventory.pointer = *firstTab;
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == 0);
+            GUI_CHECK(hud.nativeInventoryTabForPress(points[10], inventory, 0) == -1);
+            inventory.pointer = points[10];
+            hud.draw(state, vertices); // Missing all tabs does not clear the retained ordinal.
+            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == 0);
+            inventory.canonicalTabs = nullptr;
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == -1);
+            inventory.canonicalTabs = &tabs;
+            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == 0);
+            inventory.tab = 0;
+            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == -1);
+            inventory.tab = 2;
+        }
         inventory.nativeCollections = false;
         inventory.pointer = points[11];
         hud.draw(state, vertices);

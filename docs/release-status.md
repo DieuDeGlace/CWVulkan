@@ -10,6 +10,15 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Bound draws now retain a separate tab ordinal. The native-backed bag, shop
+  and crafting left-down adapters require an enabled tab hit but read the last
+  ordinal published by drawing. A missed or unbound draw preserves that value;
+  invalid or already selected ordinals do not change tabs. Owner-GUI tests
+  distinguish the hit tab from the cached ordinal and verify that misses and
+  rebinding preserve the cache. The same tests exposed and verified a fix for
+  missing event-target initialization on cloned tab descendants. This remains
+  within existing panel admission; global callback/capture routing is open.
+
 - Bound inventory-shaped widgets now publish a physical hovered group/row during
   drawing. Hidden or unbound draws preserve the pair. Gameplay readers recheck
   current panel geometry and live source bounds, with separate bag, shop and

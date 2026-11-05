@@ -63,6 +63,13 @@ that raw pair before attempting to publish a recipe. The independent
 [hover contract](specs/steam-inventory-hover-publication.md) separates this
 state from movement targets, tab hover and visual highlighting.
 
+A bound draw also stores the last successful tab ordinal. A miss or an unbound
+pass preserves it. The left-down adapter separately checks the hit tab's owner
+and enabled state, then uses the stored ordinal if valid and different from
+selection. Cloned tabs initialize their event target for decorative descendants.
+The adapter still runs within existing panel admission; global registered
+callbacks and capture are separate work.
+
 ## Font resolution
 
 Immediate widgets request resource1.dat without a face substitution. Template

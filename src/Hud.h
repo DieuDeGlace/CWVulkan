@@ -293,6 +293,7 @@ class Hud {
     void clearInventoryCellHover(int which) const { invPanel(which).hoveredCell = {}; }
     int inventorySlotAt(glm::vec2 mouse, const Inventory &inv) const;
     int inventoryTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 0); }
+    int nativeInventoryTabForPress(glm::vec2, const Inventory &, int which) const;
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
     int vendorTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 1); }
@@ -335,6 +336,7 @@ class Hud {
         std::vector<plasma::SceneNode *> cells, tabs;
         int columns = 1, rows = 1;
         mutable inventoryslots::Index hoveredCell; // Physical group/row, published by the bound widget draw.
+        mutable int hoveredTab = -1; // Last successful tab test, retained across misses and replacement.
     };
     struct InvList {
         const std::vector<Inventory::Entry> *items = nullptr;

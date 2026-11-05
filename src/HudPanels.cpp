@@ -68,6 +68,7 @@ void Hud::replaceInvTabs(InvPanel &p, const std::vector<std::string> &icons) {
         if (iconsLoaded && !icon.empty())
             s.setIcon(*tab, "background", iconsDoc, icon);
         s.moveTo(*tab, glm::vec2(x, -s.viewSize(*tab).y - 3.0f));
+        tab->initializeWidgets(); // Decorative hits route to this tab's own Widget.
         x = s.viewSize(*tab).x + 2.0f + x;
         p.tabs.push_back(tab);
     }
@@ -493,8 +494,13 @@ void Hud::drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const
     const glm::vec2 position = s.contentPosition(node), content = s.contentSize(node);
     const int cw = panels.cellWidth, ch = panels.cellHeight, columns = p.columns, rows = p.rows;
     const bool bound = list.canonicalTabs != nullptr;
-    if (bound)
+    if (bound) {
         p.hoveredCell = {};
+        const auto textHit = frontTextHit();
+        for (size_t index = 0; index < p.tabs.size(); ++index)
+            if (s.hitTest(*p.tabs[index], pointer, textHit))
+                p.hoveredTab = (int)index;
+    }
     if (columns <= 0 || rows <= 0 || list.scroll < 0)
         return;
     const std::vector<int> shown = shownOf(list, columns * list.scroll);
@@ -1177,6 +1183,29 @@ int Hud::panelSlotAt(glm::vec2 m, const Inventory &inv) const {
             return (int)i;
     }
     return -1;
+}
+
+int Hud::nativeInventoryTabForPress(glm::vec2 point, const Inventory &inv, int which) const {
+    if (!hasPanels() || !panels.inGame->visible)
+        return -1;
+    const auto &panel = invPanel(which);
+    const auto list = listOf(inv, which);
+    const int tab = panel.hoveredTab;
+    if (!list.canonicalTabs || !panel.node || !panel.tabParent || tab < 0 || tab == list.tab ||
+        (size_t)tab >= list.canonicalTabs->size())
+        return -1;
+    placePanels(inv);
+    if (!panel.node->visible)
+        return -1;
+    // This is the existing panel admission path. A matching tab target enables
+    // the action; its position in the tab list is not the callback argument.
+    const auto *hit = scene->hitTest(*panel.tabParent, point, frontTextHit());
+    if (!hit || (hit->flags & plx::NODE_PASSIVE))
+        return -1;
+    const auto *target = hit->widgetOwner;
+    if (!target || !target->widget || !target->widget->enabled)
+        return -1;
+    return std::find(panel.tabs.begin(), panel.tabs.end(), target) != panel.tabs.end() ? tab : -1;
 }
 
 int Hud::panelTabAt(glm::vec2 m, const Inventory &inv, int which) const {
