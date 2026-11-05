@@ -914,23 +914,27 @@ void Hud::drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) c
 
 Hud::InvList Hud::bagList(const Inventory &inv) const {
     InvList list{&inv.items,
-            inv.tab,
-            inv.scroll,
-            inv.hoverItem,
-            inv.hoverTab,
-            inv.hoverButton,
-            false,
-            inv.selected,
-            inv.tab < 2 ? &inv.activeRegion : nullptr,
-            inv.tab < 2 && inv.regionChoices.size() > 1,
-            inv.canonicalTabs};
+                 inv.tab,
+                 inv.scroll,
+                 inv.hoverItem,
+                 inv.hoverTab,
+                 inv.hoverButton,
+                 false,
+                 inv.selected,
+                 inv.tab < 2 ? &inv.activeRegion : nullptr,
+                 inv.tab < 2 && inv.regionChoices.size() > 1,
+                 inv.canonicalTabs};
     if (inv.nativeCollections || inv.canonicalTabs)
         list.range = &inv;
     return list;
 }
 Hud::InvList Hud::vendorList(const Inventory &inv) const {
-    InvList list{&inv.vendor.items, inv.vendor.tab, inv.vendor.scroll, inv.vendor.hoverItem, inv.vendor.hoverTab, inv.vendor.hoverButton};
+    InvList list{&inv.vendor.items,    inv.vendor.tab,      inv.vendor.scroll,
+                 inv.vendor.hoverItem, inv.vendor.hoverTab, inv.vendor.hoverButton};
     list.includeZeroQuantity = true;
+    list.canonicalTabs = inv.vendor.canonicalTabs;
+    if (inv.nativeCollections || inv.vendor.canonicalTabs)
+        list.range = &inv.vendor;
     return list;
 }
 Hud::InvList Hud::craftingList(const Inventory &inv) const {
@@ -979,8 +983,8 @@ int Hud::inventoryRowCount(const Inventory &inv, int which) const {
 }
 
 void Hud::refreshInventoryRange(Inventory &inv, int which) const {
-    if (!hasPanels() || which == 1)
-        return; // Shop still uses its recording-style presentation collection.
+    if (!hasPanels())
+        return;
     const auto &panel = invPanel(which);
     const auto list = listOf(inv, which);
     if (!panel.node || !list.range)
@@ -988,8 +992,9 @@ void Hud::refreshInventoryRange(Inventory &inv, int which) const {
     const auto size = scene->contentSize(*panel.node);
     const int columns = (int)((size.x - 10.0f) / (float)(panels.cellWidth + 5));
     const int rows = (int)((size.y - 40.0f) / (float)(panels.cellHeight + 5));
-    auto &state = which == 2 ? static_cast<inventoryui::PanelState &>(inv.crafting)
-                            : static_cast<inventoryui::PanelState &>(inv);
+    auto &state = which == 0   ? static_cast<inventoryui::PanelState &>(inv)
+                  : which == 1 ? static_cast<inventoryui::PanelState &>(inv.vendor)
+                               : static_cast<inventoryui::PanelState &>(inv.crafting);
     inventoryui::refreshRange(state, list.canonicalTabs, columns, rows, list.region);
 }
 

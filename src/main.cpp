@@ -57,6 +57,7 @@
 #include "SoundRules.h"
 #include "GameNames.h"
 #include "GameShop.h"
+#include "ShopCollection.h"
 #include "ItemNames.h"
 #include "GameCraft.h"
 #include "CraftingCollection.h"
@@ -1562,6 +1563,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     };
     std::map<int64_t, std::vector<gameshop::Item>> &boughtFromVendor = saveGame.purchases;
     gameshop::BuyBack soldItems;
+    gameshop::Collection shopCollection;
     std::vector<size_t> listed; // gear item index of each list row
     // Startup adds missing defaults to the saved list; regional gear stays transient.
     // Preserve every original raw record, including recipes absent from the crafting tabs.
@@ -2038,10 +2040,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     auto refreshInventory = [&](bool pickup = false, inventoryui::Panel panel = inventoryui::Panel::Inventory) {
         if (pickup)
             sortInventory(); // Explicit pickup sort precedes the bound-widget refresh.
-        if (nativeInventory && inventoryView.canonicalTabs) {
+        const bool bound = panel == inventoryui::Panel::Inventory ? inventoryView.canonicalTabs != nullptr
+                           : panel == inventoryui::Panel::Shop    ? inventoryView.vendor.canonicalTabs != nullptr
+                                                                  : inventoryView.crafting.canonicalTabs != nullptr;
+        if (nativeInventory && bound) {
             if (const auto region = inventoryPlayerRegion())
-                inventoryui::refreshRegionCache(true, panel, inventoryView.regionChoices, nativeInventory->inventory.tabs,
-                                                inventoryView.tab, *region);
+                inventoryui::refreshRegionCache(true, panel, inventoryView.regionChoices,
+                                                nativeInventory->inventory.tabs, inventoryView.tab, *region);
             sortInventory();
             hud.refreshInventoryRange(inventoryView, (int)panel);
         }
@@ -2065,6 +2070,26 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         refreshInventory(false, inventoryui::Panel::Crafting);
         if (inventoryView.crafting.canonicalTabs)
             hud.updateInventoryThumb(inventoryView, 2, hud.inventoryRowCount(inventoryView, 2));
+    };
+    auto rebuildShop = [&] {
+        if (!nativeInventory)
+            return;
+        shopCollection.rebuild(inventoryView.vendor.tab, soldItems, [&] {
+            const auto *merchant = spawned.record(vendorTrade.shop.id);
+            const auto region = inventoryPlayerRegion();
+            if (!merchant || !region)
+                return std::vector<gameshop::Offer>{}; // Missing merchant never preserves previous stock.
+            auto input = shopkeeperOf(vendorTrade.shop.id);
+            input.cls = vendorTrade.shop.cls; // Dispatch uses the role retained by the opening event.
+            if (input.cls == gameshop::WEAPON_SHOP || input.cls == gameshop::ARMOUR_SHOP)
+                std::memcpy(&input.id, merchant + worldgen::creature::ID, sizeof input.id);
+            const int tier = gameshop::shopTier((*region)[0], (*region)[1], saveGame.solvedMissions);
+            const auto &bought = boughtFromVendor[vendorTrade.shop.id];
+            return gameshop::stock(input, day, gear.playerClass(), tier,
+                                   [&](const auto &item) { return gameshop::boughtCount(bought, item); });
+        });
+        refreshInventory(false, inventoryui::Panel::Shop);
+        hud.updateInventoryThumb(inventoryView, 1, hud.inventoryRowCount(inventoryView, 1));
     };
     auto consumeCarried = [&](size_t row) {
         if (row >= bag.size())
@@ -4250,6 +4275,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             if (vendorTrade.open) {
                 inventoryOpen = hud.hasInventoryArt() && haveGear;
                 bagShown = true;
+                refreshBagOpening();
+                rebuildShop();
                 logLine("Vendor test: class " + std::to_string(vendorTrade.shop.cls) + " id " + std::to_string(vendorTrade.shop.id) + " home " +
                         std::to_string(vendorTrade.shop.home[0] >> 16) + " " + std::to_string(vendorTrade.shop.home[1] >> 16));
             } else
@@ -4348,6 +4375,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         // assigns the collection; it does not catch up a skipped early refresh.
         inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
         inventoryView.crafting.canonicalTabs = nativeInventory ? &craftingCollection.rows : nullptr;
+        inventoryView.vendor.canonicalTabs = nativeInventory ? &shopCollection.rows : nullptr;
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
@@ -4430,15 +4458,20 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             // The vendor (the vendor update): its offers, or what was sold to it, newest first.
             std::vector<gameshop::Item> vendorRaws;
             inventoryView.vendor.open = vendorTrade.open;
-            auto refreshVendor = [&] {
+            auto updateVendorView = [&] {
                 vendorRaws.clear();
                 inventoryView.vendor.items.clear();
                 if (vendorTrade.open) {
                     std::vector<gameshop::Offer> offers;
-                    if (inventoryView.vendor.tab == 1)
+                    if (nativeInventory) {
+                        const int tab = inventoryView.vendor.tab;
+                        if (tab >= 0 && (size_t)tab < shopCollection.rows.size())
+                            for (const auto &row : shopCollection.rows[(size_t)tab])
+                                offers.push_back({row.item, row.count});
+                    } else if (inventoryView.vendor.tab == 1) {
                         for (auto it = soldItems.rbegin(); it != soldItems.rend(); ++it)
                             offers.push_back({it->first, it->second});
-                    else {
+                    } else {
                         const worldgen::Int2 region = regionHere();
                         const int tier = gameshop::shopTier(region.x, region.y, saveGame.solvedMissions);
                         const std::vector<gameshop::Item> &bought = boughtFromVendor[vendorTrade.shop.id];
@@ -4455,6 +4488,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                         e.count = o.count;
                         e.allowed = nativerules::classMayUse(o.item.data(), gear.playerClass());
                         e.tab = inventoryView.vendor.tab;
+                        e.slotIndex = (int)vendorRaws.size();
                         e.color = guiitem::textColour(o.item, viewRegion);
                         e.price = inventoryView.vendor.tab == 1 ? gameshop::sellPrice(o.item) : gameshop::price(o.item);
                         e.original = o.item;
@@ -4473,7 +4507,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     }
                 }
             };
-            refreshVendor();
+            updateVendorView();
             // Mouse in framebuffer pixels (the window may be scaled).
             double cx, cy;
             pointerPosition(&cx, &cy);
@@ -4969,11 +5003,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 auto change = [&](auto &panel) {
                     if (panel.tab == next)
                         return;
-                    panel.selectTab(next, nativeInventory && which != 1);
+                    panel.selectTab(next, nativeInventory != nullptr);
                     refreshInventory(false, static_cast<inventoryui::Panel>(which));
                     const auto clampRange = [&] {
                         const int available = hud.inventoryRowCount(inventoryView, which);
-                        if (nativeInventory && which != 1)
+                        if (nativeInventory)
                             return available; // The explicit refresh owns native clamping, including skipped paths.
                         if (!available)
                             panel.scroll = 0;
@@ -4993,9 +5027,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     hud.updateInventoryThumb(inventoryView, which, available);
                     audio.playInterface(soundrules::soundid::MENU_TAB);
                     if (which == 1) {
-                        refreshVendor(); // Shop rebuild follows the first selection/thumb/sound.
-                        refreshInventory(false, inventoryui::Panel::Shop);
-                        hud.updateInventoryThumb(inventoryView, which, clampRange());
+                        rebuildShop(); // Its own pair follows the first selection/thumb/sound.
+                        updateVendorView();
+                        if (!nativeInventory) {
+                            refreshInventory(false, inventoryui::Panel::Shop);
+                            hud.updateInventoryThumb(inventoryView, which, clampRange());
+                        }
                     }
                 };
                 if (which == 0)
@@ -5030,7 +5067,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     // local canonical inventory, including attempts at a boundary.
                     refreshInventory(false, static_cast<inventoryui::Panel>(which));
                     available = hud.inventoryRowCount(inventoryView, which);
-                    if (!nativeInventory || which == 1) {
+                    if (!nativeInventory) {
                         if (!available)
                             offset = 0; // Physically empty tab, unlike nonempty holes.
                         else if (offset > available - 1)
@@ -5083,8 +5120,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             gameshop::TradeHooks trade;
             trade.inventory = [&] { refreshBagAndThumb(); };
             trade.shop = [&] {
-                refreshVendor();
-                refreshInventory(false, inventoryui::Panel::Shop);
+                rebuildShop();
+                updateVendorView();
             };
             trade.crafting = [&] { rebuildCrafting(); };
             trade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
@@ -5693,7 +5730,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     bagShown = true;
                     craftingOpen = false;
                     refreshBagOpening();
-                    refreshInventory(false, inventoryui::Panel::Shop); // shop rebuild's bound widget refresh
+                    rebuildShop();
                     if (!nativeInventory)
                         inventoryView.vendor.tab = 0, inventoryView.vendor.scroll = 0;
                     logLine("Use: trading with " + std::to_string(p.creature) + " (class " + std::to_string(vendorTrade.shop.cls) + ")");

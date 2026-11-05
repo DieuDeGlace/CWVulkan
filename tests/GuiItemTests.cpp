@@ -152,6 +152,19 @@ void equipmentCallbacks() {
         inventory.vendor.items[0].count = 0;
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 1); // shop icons admit zero quantity
+        inventoryslots::Tabs vendorTabs(2);
+        vendorTabs[0].assign(300, nativesaves::Stack{-1, weapon});
+        inventory.vendor.canonicalTabs = &vendorTabs;
+        inventory.vendor.items[0].slotIndex = 0;
+        hud.refreshInventoryRange(inventory, 1);
+        const int vendorRows = hud.inventoryRowCount(inventory, 1);
+        GUI_CHECK(vendorRows > 1 && inventory.vendor.rowOffsets.size() == 2);
+        vendorTabs[0].clear();
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.inventoryRowCount(inventory, 1) == vendorRows);
+        hud.refreshInventoryRange(inventory, 1);
+        GUI_CHECK(hud.inventoryRowCount(inventory, 1) == 0);
+        inventory.vendor.canonicalTabs = nullptr;
         inventory.vendor.open = false;
         inventory.crafting.open = true;
         inventory.crafting.items = inventory.vendor.items;

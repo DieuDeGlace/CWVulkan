@@ -75,8 +75,8 @@ std::vector<Offer> gearStock(const Shopkeeper &shop, int day, int playerClass, i
             made.push_back(it);
         }
     }
-    // The game sorts by rarity; the list is made in rarity order and the sort is stable, so
-    // this keeps the order.
+    // Ordinary generation has at most 20 entries. The native small-span insertion
+    // keeps equal rarities in their generated order; no general stable-sort claim.
     std::stable_sort(made.begin(), made.end(), [](const Item &a, const Item &b) { return a[RARITY] < b[RARITY]; });
     std::vector<Offer> offers;
     for (const Item &it : made)

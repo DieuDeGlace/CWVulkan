@@ -88,7 +88,14 @@ std::optional<Index> Inventory::add(Item item, int32_t quantity, int tab) {
         fieldAb0 = plus(fieldAb0, quantity);
         return {};
     }
-    auto &list = tabs[(size_t)tab];
+    if (const auto row = insertRow(tabs[(size_t)tab], item, quantity))
+        return Index{tab, *row};
+    return {};
+}
+
+std::optional<int> insertRow(std::vector<Stack> &list, Item item, int32_t quantity) {
+    if (!quantity || !item[0])
+        return {};
     int empty = -1;
     for (size_t index = 0; index < list.size(); ++index) {
         auto &stack = list[index];
@@ -96,7 +103,7 @@ std::optional<Index> Inventory::add(Item item, int32_t quantity, int tab) {
             empty = (int)index;
         if (itemtypes::stackable(item[0]) && nativeinteract::sameItem(stack.item.data(), item.data())) {
             stack.count = quantity == -1 ? -1 : plus(stack.count, quantity);
-            return Index{tab, (int)index};
+            return (int)index;
         }
     }
     if (empty < 0) {
@@ -106,7 +113,7 @@ std::optional<Index> Inventory::add(Item item, int32_t quantity, int tab) {
     auto &added = list[(size_t)empty];
     added.count = quantity;
     copyItem(added.item, item);
-    return Index{tab, empty};
+    return empty;
 }
 
 void Inventory::takePage(Item item, int32_t quantity) {

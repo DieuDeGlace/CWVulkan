@@ -10,6 +10,20 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Native-backed shop collections now persist between explicit rebuild events.
+  Rebuild releases old inner rows and creates exactly two groups; buyback copies
+  newest-first without filtering zero/negative/duplicate records, while stock uses
+  the shared owned insertion rules. The inactive group is cleared and a missing
+  merchant leaves empty stock. Drawing reads retained rows and live presentation
+  values without regenerating stock. Opening, tab changes and trade hooks retain
+  their separate refresh/thumb stages; tab selection before rebuilding is not
+  repaired afterwards. Merchant role comes from the opening event and current
+  record/home inputs are resolved at rebuild. Shop range/offset/thumb now use the
+  same explicit cache path as bag/crafting. All five targets, focused inventory/
+  shop checks, full CPU/owner suite and102 Vulkan GUI images pass; the owner save
+  fixture is unchanged. Shared native RNG, complete GUI event/
+  geometry lifetime, persistent frontend state and live acceptance remain open.
+
 - Bag/crafting row range and dynamic per-tab offsets now persist between explicit
   refreshes. Unbound/nonpositive-column refreshes preserve prior state; physical
   emptiness writes A0/row0, while a nonempty regional group with no matches uses

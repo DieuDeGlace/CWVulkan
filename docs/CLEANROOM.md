@@ -2113,3 +2113,22 @@ Synthetic state/arithmetic fixtures and actual owner-GUI stale-range checks
 exercise the production helpers. Complete frontend/geometry callback closure,
 shop state and hardware/live visual acceptance remain outside this result. No
 original source, SDK, reconstruction or owner assets were added to either package.
+
+## Retained shop collection and shared insertion, 2026-11-04
+
+The independent original-only author supplied steam-shop-collection-rebuild.md.
+The implementer read the finalized note, prior inventory refresh/slot contracts
+and owned code only. Stock and history rebuilds replace two owned row groups;
+reverse history copies preserve order, duplicates and quantities, while generated
+stock shares the existing independently implemented row insertion. Canonical
+counter interception and tab selection remain outside that pure insertion helper.
+Native-backed drawing regenerates presentation from retained rows, not stock.
+Connected opening/tab/transaction rebuilds preserve refresh/selection/thumb order,
+clear inactive/missing-merchant stock and retain the selected tab/pair. Bound shop
+range/offset/thumb uses the existing event cache. Source buffers are released on
+rebuild; value copies keep engine readers safe without claiming native borrowed-
+pointer/race equivalence. Missing actor data has a defined engine-safe empty stock
+policy rather than a native successful-null-source claim. Shared RNG and complete
+callback/geometry/frontend lifetime remain open. Synthetic insertion/history,
+canonical inventory and actual owner-GUI binding checks exercise the implementation.
+No native instructions, SDK, reconstruction or original assets were added.

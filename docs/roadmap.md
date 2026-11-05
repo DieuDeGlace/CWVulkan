@@ -413,7 +413,13 @@ individual feature documents.
   An active craft owns its start-time recipe, and hiding clears that action value
   without clearing details. Group/count/copy and physical GUI-binding regressions
   pass. Full event/RNG closure, missing-resource eligibility, tab6 target actions,
-  persistent frontend binding and shop collection lifetime remain unfinished.
+  persistent frontend binding and complete callback/geometry lifetime remain unfinished.
+  Shop now retains two physical groups, clears inactive rows on rebuild, copies
+  reverse-order buyback records without filtering, and shares canonical insertion
+  for generated stock. Merchant opening/tab/trade events rebuild; drawing consumes
+  the cache. Missing merchants produce empty stock, and the earlier tab selection
+  is not repaired after its later rebuild. Shop now also uses cached A/offset/thumb
+  state. Full native RNG, callback/geometry closure and live acceptance remain open.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
   hooks, full camera/focus integration and hardware comparisons remain. Creature selection now runs once before early control;
   separate minimum depth, post-movement aim, early assistance, later speaker

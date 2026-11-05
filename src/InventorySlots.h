@@ -45,6 +45,10 @@ struct Inventory {
   private:
     bool contains(Index) const;
 };
+// Pure row insertion, shared by canonical inventory and generated shop stock.
+// Counter interception and destination-tab selection remain Inventory::add's job.
+std::optional<int> insertRow(std::vector<Stack> &, Item, int32_t quantity);
+
 struct PlayerState {
     Inventory inventory;
     std::array<Item, nativesaves::EQUIPMENT_SLOTS> equipment{};

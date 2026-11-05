@@ -83,6 +83,7 @@ class Hud {
         // player sold to it on tab 1 (buy back).
         struct Vendor : inventoryui::Tabs<2> {
             bool open = false;
+            const std::vector<std::vector<nativesaves::Stack>> *canonicalTabs = nullptr;
             std::vector<Entry> items;
             int hoverItem = -1, hoverTab = -1, hoverButton = 0;
         } vendor;
