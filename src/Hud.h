@@ -114,6 +114,7 @@ class Hud {
             } details;
         } crafting;
         bool bagShown = true; // the bag, its slots and the character (B); crafting alone hides them
+        bool nativeCollections = false; // Distinguish an unbound native widget from a recording-only list.
         int hoverTab = -1;
         inventoryui::Region activeRegion{};
         std::vector<inventoryui::Region> regionChoices;
@@ -299,6 +300,8 @@ class Hud {
     // The bag's rows to scroll through (the inventory rows: its row count), and the scroll
     // button under the mouse (1 up, 2 down, 0 none).
     int inventoryRowCount(const Inventory &inv, int which = 0) const;
+    // Range/offset stage only; no canonical sort, region rebuild, selection or thumb.
+    void refreshInventoryRange(Inventory &inv, int which = 0) const;
     // Uses current bound panel geometry and the caller's just-refreshed range A.
     void updateInventoryThumb(const Inventory &inv, int which, int availableRows) const;
     int inventoryButtonAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
@@ -335,6 +338,7 @@ class Hud {
         bool regionArrows = false;
         const std::vector<std::vector<nativesaves::Stack>> *canonicalTabs = nullptr;
         bool includeZeroQuantity = false;
+        const inventoryui::PanelState *range = nullptr;
     };
 
     void advanceGui(double milliseconds) { interfaceClock.advance(milliseconds); }

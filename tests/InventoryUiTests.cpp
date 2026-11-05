@@ -101,6 +101,54 @@ int inventoryUiTests() {
     check(!inventoryui::refreshRegionCache(true, inventoryui::Panel::Inventory, cache, inventory.tabs, -1, {0, 0}) &&
               cache == std::vector<inventoryui::Region>{{6, 7}},
           "engine defers invalid carried headers without claiming native safe access");
+    check(!inventoryui::thumbPlacement(130, 0, 9), "A0 leaves thumb geometry untouched");
+    const auto thumb = inventoryui::thumbPlacement(130, 4, 2);
+    check(thumb && thumb->height == 32 && thumb->y == 100, "thumb uses two truncating integer divisions");
+    const auto zeroHeight = inventoryui::thumbPlacement(2, 5, 0);
+    check(zeroHeight && zeroHeight->height == 0 && zeroHeight->y == 35, "thumb has no minimum pixel height");
+    const auto negativeTrack = inventoryui::thumbPlacement(-40, 3, 2);
+    check(negativeTrack && negativeTrack->height == -13 && negativeTrack->y == 8, "negative track is not clamped");
+    const auto wrappedThumb = inventoryui::thumbPlacement(INT32_MAX, 2, 4);
+    check(wrappedThumb && wrappedThumb->y == 35, "thumb row product wraps to signed32 before division");
+    check(!inventoryui::thumbPlacement(INT32_MIN, -1, 0), "unqualified native division fault safely defers in engine");
+    inventoryui::PanelState range;
+    check(range.availableRows == 1 && range.rowOffsets.empty(), "constructor retains A1 and no row headers");
+    inventory.tabs.resize(3);
+    inventory.tabs[0].assign(30, nativesaves::Stack{1, itemAt({0, 0})});
+    check(!inventoryui::refreshRange(range, (const inventoryslots::Tabs *)nullptr, 2, 3) && range.rowOffsets.empty(),
+          "unbound range refresh does not manufacture row headers");
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 3) && range.availableRows == 13 &&
+              range.rowOffsets.size() == 3,
+          "bound positive-column refresh sizes rows from physical source and computes available positions");
+    range.scroll = 11;
+    range.rowOffsets[1] = 19;
+    inventory.tabs[0].resize(2);
+    check(!inventoryui::refreshRange(range, &inventory.tabs, 0, 3) && range.availableRows == 13 && range.scroll == 11 &&
+              range.rowOffsets[1] == 19,
+          "zero-column refresh preserves stale range and every stored row");
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 3) && range.availableRows == 1 && range.scroll == 0 &&
+              range.rowOffsets[1] == 19,
+          "refresh clamps only the current row downward");
+    range.scroll = -3;
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 3) && range.scroll == -3,
+          "refresh adds no lower-zero clamp to a nonempty physical group");
+    for (auto &slot : inventory.tabs[0])
+        slot.count = 0;
+    const inventoryui::Region noMatches{77, 88};
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 0, &noMatches) && range.availableRows == 2,
+          "regional N0 uses signed minus-one division, distinct from physical emptiness");
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, INT32_MIN) && range.availableRows == 1,
+          "available-range subtraction wraps signed32 before the minimum-one comparison");
+    inventory.tabs[0].clear();
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 0) && range.availableRows == 0 && range.scroll == 0,
+          "physically empty group writes A0 and current row0");
+    range.tab = 8;
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 3) && range.availableRows == 1 &&
+              range.rowOffsets[1] == 19,
+          "invalid selected tab uses A1 without a replacement selection or other-row clamp");
+    inventory.tabs.clear();
+    check(inventoryui::refreshRange(range, &inventory.tabs, 2, 3) && range.rowOffsets.empty(),
+          "empty bound outer collection clears logical offset headers only after a positive-column refresh");
     std::cout << "Inventory UI actions: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;
 }

@@ -126,16 +126,23 @@ void equipmentCallbacks() {
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 1);
         const int matching = (int)tabs[0].size() - 1;
+        GUI_CHECK(hud.inventoryRowCount(inventory) == 1); // Drawing did not refresh constructor A.
+        hud.refreshInventoryRange(inventory);
         GUI_CHECK(hud.inventoryRowCount(inventory) == std::max(1, (matching - 1) / columns - rows + 2));
         inventory.scroll = 2; // the earlier mismatch must not cut a later viewport
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == (size_t)std::min(capacity, (int)tabs[0].size() - 2 * columns));
         for (auto &slot : tabs[0])
             slot.count = 0;
+        hud.refreshInventoryRange(inventory);
         GUI_CHECK(hud.inventoryRowCount(inventory) >= 1);
         tabs[0].clear();
-        GUI_CHECK(hud.inventoryRowCount(inventory) == 0);
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.inventoryRowCount(inventory) >= 1); // Empty draw preserves the prior range.
+        hud.refreshInventoryRange(inventory);
+        GUI_CHECK(hud.inventoryRowCount(inventory) == 0 && inventory.scroll == 0);
         inventory.tab = 6;
+        hud.refreshInventoryRange(inventory);
         GUI_CHECK(hud.inventoryRowCount(inventory) == 1);
         inventory.tab = 0;
 
@@ -155,6 +162,7 @@ void equipmentCallbacks() {
         inventoryslots::Tabs craftingTabs(7);
         craftingTabs[0].assign(300, nativesaves::Stack{0, weapon});
         inventory.crafting.canonicalTabs = &craftingTabs;
+        hud.refreshInventoryRange(inventory, 2);
         const int craftingRows = hud.inventoryRowCount(inventory, 2);
         GUI_CHECK(craftingRows > 1);
         const auto savedCraftingEntries = inventory.crafting.items;
@@ -166,6 +174,8 @@ void equipmentCallbacks() {
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 1);
         craftingTabs[0].clear();
+        GUI_CHECK(hud.inventoryRowCount(inventory, 2) == craftingRows);
+        hud.refreshInventoryRange(inventory, 2);
         GUI_CHECK(hud.inventoryRowCount(inventory, 2) == 0);
         inventory.crafting.canonicalTabs = nullptr;
         inventory.crafting.items = savedCraftingEntries;

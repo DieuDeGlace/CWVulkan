@@ -1464,6 +1464,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     // bag itself (B): the screen is open while either is.
     bool craftingOpen = false, bagShown = true;
     Hud::Inventory inventoryView;
+    inventoryView.nativeCollections = nativeInventory != nullptr;
     // The world map (M, the game's the map button): open, or the minimap in the corner. Its
     // position follows the player until the map is dragged (Game's the zoom change); the
     // overlay moves and grows between the corner and the middle (the overlay position, Scale).
@@ -2013,6 +2014,14 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 bag.push_back({std::move(item), stack.count});
             }
     };
+    auto inventoryPlayerRegion = [&]() -> std::optional<inventoryui::Region> {
+        const auto *actor = spawned.playerRecord();
+        if (!actor)
+            return std::nullopt; // Unavailable actor storage is an engine deferral, not a native empty source.
+        inventoryui::Region region;
+        std::memcpy(region.data(), actor + worldgen::creature::REGION, sizeof region);
+        return region;
+    };
     auto sortInventory = [&] {
         if (!nativeInventory)
             return;
@@ -2030,22 +2039,27 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         if (pickup)
             sortInventory(); // Explicit pickup sort precedes the bound-widget refresh.
         if (nativeInventory && inventoryView.canonicalTabs) {
-            const auto here = regionHere();
-            inventoryui::refreshRegionCache(true, panel, inventoryView.regionChoices, nativeInventory->inventory.tabs,
-                                            inventoryView.tab, {here.x, here.y});
+            if (const auto region = inventoryPlayerRegion())
+                inventoryui::refreshRegionCache(true, panel, inventoryView.regionChoices, nativeInventory->inventory.tabs,
+                                                inventoryView.tab, *region);
             sortInventory();
+            hud.refreshInventoryRange(inventoryView, (int)panel);
         }
         rebuildInventoryViews();
+    };
+    auto refreshBagAndThumb = [&](bool pickup = false) {
+        refreshInventory(pickup);
+        hud.updateInventoryThumb(inventoryView, 0, hud.inventoryRowCount(inventoryView));
     };
     auto rebuildCrafting = [&] {
         if (!nativeInventory || nativeInventory->inventory.tabs.empty())
             return; // No group headers: retain prior rows and selected recipe.
-        int32_t region[2]{};
-        if (const auto *actor = spawned.playerRecord())
-            std::memcpy(region, actor + worldgen::creature::REGION, sizeof region);
+        const auto region = inventoryPlayerRegion();
+        if (!region)
+            return;
         const auto recipes =
-            gamecraft::formulas(knownFormulas, gear.playerClass(), region[0], region[1], [&](int rank) {
-                return gamecraft::rankUnlocked(rank, region[0], region[1], saveGame.solvedMissions);
+            gamecraft::formulas(knownFormulas, gear.playerClass(), (*region)[0], (*region)[1], [&](int rank) {
+                return gamecraft::rankUnlocked(rank, (*region)[0], (*region)[1], saveGame.solvedMissions);
             });
         craftingCollection.rebuild(nativeInventory->inventory, recipes, craftingSelection);
         refreshInventory(false, inventoryui::Panel::Crafting);
@@ -2063,10 +2077,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             bag.erase(bag.begin() + (long long)row);
     };
     auto refreshBagOpening = [&] {
-        const auto region = regionHere();
-        inventoryView.activeRegion = {region.x, region.y};
-        inventoryRegionActive = true;
-        refreshInventory();
+        if (nativeInventory) {
+            if (const auto region = inventoryPlayerRegion()) {
+                inventoryView.activeRegion = *region;
+                inventoryRegionActive = true;
+            }
+        } else {
+            const auto region = regionHere();
+            inventoryView.activeRegion = {region.x, region.y};
+            inventoryRegionActive = true;
+        }
+        refreshBagAndThumb();
     };
     rebuildInventoryViews();
     if (nativeInventory && haveGear)
@@ -2463,7 +2484,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         l.toBag = l.slot == Gear::SLOTS;
         if (nativeInventory) {
             nativeInventory->inventory.add(raw, quantity);
-            refreshInventory();
+            refreshBagAndThumb();
             if (it.category == 24)
                 audio.startSuccess();
             texts.push_back({player.position + glm::vec3(0, 0, 3.1f), bagName(it, itemName(it)), {255, 255, 255, 255}});
@@ -2738,7 +2759,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 playerGold = gamemath::add32(playerGold, r.amount);
             else if (r.into == grounditems::Into::Inventory)
                 nativeInventory->inventory.add(adapted, r.amount);
-            refreshInventory(true);
+            refreshBagAndThumb(true);
         }
         if (r.markCell && usedCells.insert(r.cell).second)
             saveGame.usedCells.push_back(r.cell);
@@ -4349,7 +4370,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             inventoryView.items.clear();
 
             const worldgen::Int2 here = regionHere();
-            if (!inventoryRegionActive) {
+            if (!nativeInventory && !inventoryRegionActive) {
                 inventoryView.activeRegion = {here.x, here.y};
                 inventoryRegionActive = true;
             }
@@ -4948,10 +4969,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 auto change = [&](auto &panel) {
                     if (panel.tab == next)
                         return;
-                    panel.selectTab(next);
+                    panel.selectTab(next, nativeInventory && which != 1);
                     refreshInventory(false, static_cast<inventoryui::Panel>(which));
                     const auto clampRange = [&] {
                         const int available = hud.inventoryRowCount(inventoryView, which);
+                        if (nativeInventory && which != 1)
+                            return available; // The explicit refresh owns native clamping, including skipped paths.
                         if (!available)
                             panel.scroll = 0;
                         else if (panel.scroll > available - 1)
@@ -4989,10 +5012,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     [&] { refreshInventory(); },
                     [&] {
                         const int available = hud.inventoryRowCount(inventoryView);
-                        if (!available)
-                            inventoryView.scroll = 0;
-                        else if (inventoryView.scroll > available - 1)
-                            inventoryView.scroll = available - 1;
+                        if (!nativeInventory) {
+                            if (!available)
+                                inventoryView.scroll = 0;
+                            else if (inventoryView.scroll > available - 1)
+                                inventoryView.scroll = available - 1;
+                        }
                         hud.updateInventoryThumb(inventoryView, 0, available);
                     });
             };
@@ -5005,12 +5030,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     // local canonical inventory, including attempts at a boundary.
                     refreshInventory(false, static_cast<inventoryui::Panel>(which));
                     available = hud.inventoryRowCount(inventoryView, which);
-                    if (!available)
-                        offset = 0; // Physically empty tab, unlike nonempty holes.
-                    else if (offset > available - 1)
-                        offset = available - 1;
+                    if (!nativeInventory || which == 1) {
+                        if (!available)
+                            offset = 0; // Physically empty tab, unlike nonempty holes.
+                        else if (offset > available - 1)
+                            offset = available - 1;
+                    }
                     return available;
                 });
+                auto &state = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
+                              : which == 1 ? static_cast<inventoryui::PanelState &>(inventoryView.vendor)
+                                           : static_cast<inventoryui::PanelState &>(inventoryView.crafting);
+                state.retainScroll();
                 if (moved) {
                     audio.playInterface(soundrules::soundid::MENU_TAB);
                     hud.updateInventoryThumb(inventoryView, which, available);
@@ -5050,7 +5081,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                         scrollPanel(1, inventoryView.vendor.scroll, inventoryView.vendor.hoverButton == 1 ? -1 : 1);
             }
             gameshop::TradeHooks trade;
-            trade.inventory = [&] { refreshInventory(); };
+            trade.inventory = [&] { refreshBagAndThumb(); };
             trade.shop = [&] {
                 refreshVendor();
                 refreshInventory(false, inventoryui::Panel::Shop);
@@ -5219,7 +5250,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                         else if (outcome.action == Action::Equipped || outcome.action == Action::WeaponEquipped) {
                             rebuildInventoryViews();
                             applyGear(true);
-                            refreshInventory();
+                            refreshBagAndThumb();
                             audio.playInterface(0x5b);
                             if (outcome.action == Action::WeaponEquipped)
                                 rebuildCrafting();
@@ -5231,7 +5262,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                             if (nativeInventory->unequip((int)equipSlotOf(inventoryView.hoverSlot))) {
                                 rebuildInventoryViews();
                                 applyGear(true);
-                                refreshInventory();
+                                refreshBagAndThumb();
                                 audio.playInterface(0x5b);
                                 rebuildCrafting();
                             }
@@ -5699,7 +5730,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     const bool saw = p.object >= 0 && (size_t)p.object < scene.objects.size() &&
                                      scene.objects[(size_t)p.object].type == 0x66;
                     if (inventoryView.crafting.tab != p.station || saw) {
-                        inventoryView.crafting.selectTab(p.station);
+                        inventoryView.crafting.selectTab(p.station, nativeInventory != nullptr);
                         craftingSelection = {p.station, 0};
                         inventoryView.crafting.hoverItem = -1;
                         refreshInventory(false, inventoryui::Panel::Crafting);

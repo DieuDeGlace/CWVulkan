@@ -10,6 +10,19 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Bag/crafting row range and dynamic per-tab offsets now persist between explicit
+  refreshes. Unbound/nonpositive-column refreshes preserve prior state; physical
+  emptiness writes A0/row0, while a nonempty regional group with no matches uses
+  its separate signed division. Only the current row clamps downward. Native-backed
+  drawing no longer recomputes the range or places its thumb. Event pairs place
+  the thumb from cached A with integer truncation/wrapping, including zero-height
+  and negative-track cases; A0 preserves old geometry. Actual player-record region
+  supplies native inventory choices/opening and crafting generation; missing actor
+  storage defers those region-dependent stages. All five targets, full CPU/owner
+  checks and102 Vulkan GUI images pass; the owner save fixture is unchanged.
+  Full geometry/callback closure, persistent frontend state,
+  shop collection/range lifetime and hardware/native visual acceptance remain open.
+
 - Native-backed crafting now retains physical count/item groups between explicit
   rebuild events, with separately owned details and in-progress recipes. Generation
   and count filling no longer run during native-backed drawing. Rebuilds preserve

@@ -361,16 +361,21 @@ int Hud::invRowCount(const InvPanel &p, const InvList &list) const {
 void Hud::placeInvThumb(const InvPanel &p, const InvList &list, int rowCount) const {
     if (!p.node)
         return;
+    if (list.range) {
+        // Bounds failure is an engine-safe deferral; native assumes valid indexing.
+        if (!list.canonicalTabs || list.range->rowOffsets.empty() || list.tab < 0 ||
+            (size_t)list.tab >= list.range->rowOffsets.size())
+            return;
+        rowCount = list.range->availableRows;
+    }
     plasma::Scene &s = *scene;
     if (auto it = p.buttons.find("scrollbutton"); it != p.buttons.end() && it->second && it->second->widget) {
         plasma::SceneNode &button = *it->second;
         const glm::vec2 content = s.contentSize(*p.node);
-        if (rowCount) {
-            const int track = (int)(content.y - 70.0f), buttonHeight = track / rowCount;
-            const float y = rowCount > 1 ? (float)(list.scroll * (track - buttonHeight) / (rowCount - 1) + 35) : 35.0f;
+        if (const auto placement = inventoryui::thumbPlacement((int)(content.y - 70.0f), rowCount, list.scroll)) {
             const float width = s.contentSize(button).x;
-            s.moveTo(button, glm::vec2(content.x - 28.0f, y));
-            s.resizeTo(button, glm::vec2(width, (float)buttonHeight));
+            s.moveTo(button, glm::vec2(content.x - 28.0f, placement->y));
+            s.resizeTo(button, glm::vec2(width, (float)placement->height));
         }
     }
 }
@@ -387,7 +392,8 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
         if (plasma::SceneNode *frame = p.tabs[t]->find("frame"))
             frame->fill = over ? glm::vec4(0, 1, 1, 1) : chosen ? glm::vec4(0, 1, 0, 1) : glm::vec4(1);
     }
-    placeInvThumb(p, list, invRowCount(p, list));
+    if (!list.range) // Native draw consumes the retained geometry; events place its thumb.
+        placeInvThumb(p, list, invRowCount(p, list));
     for (auto [name, value] : {std::pair{"upbutton", 1}, std::pair{"downbutton", 2}})
         if (auto it = p.buttons.find(name); it != p.buttons.end() && it->second)
             it->second->fill = list.hoverButton == value ? glm::vec4(0, 1, 1, 1) : glm::vec4(1);
@@ -907,7 +913,7 @@ void Hud::drawCharacter(const Inventory &inv, std::vector<OverlayVertex> &out) c
 // --- What the pointer is on --------------------------------------------------------------
 
 Hud::InvList Hud::bagList(const Inventory &inv) const {
-    return {&inv.items,
+    InvList list{&inv.items,
             inv.tab,
             inv.scroll,
             inv.hoverItem,
@@ -918,6 +924,9 @@ Hud::InvList Hud::bagList(const Inventory &inv) const {
             inv.tab < 2 ? &inv.activeRegion : nullptr,
             inv.tab < 2 && inv.regionChoices.size() > 1,
             inv.canonicalTabs};
+    if (inv.nativeCollections || inv.canonicalTabs)
+        list.range = &inv;
+    return list;
 }
 Hud::InvList Hud::vendorList(const Inventory &inv) const {
     InvList list{&inv.vendor.items, inv.vendor.tab, inv.vendor.scroll, inv.vendor.hoverItem, inv.vendor.hoverTab, inv.vendor.hoverButton};
@@ -928,6 +937,8 @@ Hud::InvList Hud::craftingList(const Inventory &inv) const {
     const Inventory::Crafting &c = inv.crafting;
     InvList list{&c.items, c.tab, c.scroll, c.hoverItem, c.hoverTab, c.hoverButton, true, c.selected};
     list.canonicalTabs = c.canonicalTabs;
+    if (inv.nativeCollections || c.canonicalTabs)
+        list.range = &c;
     return list;
 }
 Hud::InvList Hud::listOf(const Inventory &inv, int which) const {
@@ -963,7 +974,23 @@ void Hud::updateInventoryThumb(const Inventory &inv, int which, int availableRow
 }
 
 int Hud::inventoryRowCount(const Inventory &inv, int which) const {
-    return hasPanels() ? invRowCount(invPanel(which), listOf(inv, which)) : 1;
+    const auto list = listOf(inv, which);
+    return list.range ? list.range->availableRows : hasPanels() ? invRowCount(invPanel(which), list) : 1;
+}
+
+void Hud::refreshInventoryRange(Inventory &inv, int which) const {
+    if (!hasPanels() || which == 1)
+        return; // Shop still uses its recording-style presentation collection.
+    const auto &panel = invPanel(which);
+    const auto list = listOf(inv, which);
+    if (!panel.node || !list.range)
+        return;
+    const auto size = scene->contentSize(*panel.node);
+    const int columns = (int)((size.x - 10.0f) / (float)(panels.cellWidth + 5));
+    const int rows = (int)((size.y - 40.0f) / (float)(panels.cellHeight + 5));
+    auto &state = which == 2 ? static_cast<inventoryui::PanelState &>(inv.crafting)
+                            : static_cast<inventoryui::PanelState &>(inv);
+    inventoryui::refreshRange(state, list.canonicalTabs, columns, rows, list.region);
 }
 
 std::vector<glm::vec2> Hud::inventoryNavigationPoints(const Inventory &inv, const std::vector<glm::vec2> &afterShop) const {

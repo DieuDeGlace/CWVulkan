@@ -2095,3 +2095,21 @@ copy/reset and actual owner-GUI physical binding checks exercise the implementat
 Full native shared RNG state, callback closure, cached range/thumb/eligibility,
 tab6 target actions and persistent frontend lifetime remain open. No native code,
 SDK/reconstruction or original assets were read or added by the implementer.
+
+## Cached inventory range and thumb state, 2026-11-04
+
+The implementer used the already finalized steam-inventory-grid-layout,
+steam-inventory-refresh-events, region-choice and crafting contracts plus owned
+sources only. A separate range stage owns A and dynamic tab offsets, with source/
+column skip preservation, physical-empty and regional-zero distinctions, current
+row-only downward clamping and defined low32 scalar arithmetic. Bound bag/crafting
+draws read state without refreshing or placing the thumb. Connected event pairs
+place it from retained A; null/missing headers and A0 preserve old geometry.
+Invalid engine indices and native division-fault inputs use explicit safe engine
+deferral rather than asserting successful native invalid access. The actor's
+actual stored region feeds choice refresh, bag opening and crafting generation;
+missing actor storage defers, and drawing does not invent an initial selection.
+Synthetic state/arithmetic fixtures and actual owner-GUI stale-range checks
+exercise the production helpers. Complete frontend/geometry callback closure,
+shop state and hardware/live visual acceptance remain outside this result. No
+original source, SDK, reconstruction or owner assets were added to either package.

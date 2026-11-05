@@ -398,7 +398,14 @@ individual feature documents.
   counts and the player region; unbound/other-panel refreshes retain prior choices.
   Drawing no longer reconstructs that cache. Hidden-panel collection binding and
   tab refresh/selection/thumb ordering are integrated. Complete frontend binding,
-  cached row/range/thumb lifetime and callback/hardware acceptance remain open.
+  geometry/callback closure and hardware acceptance remain open. Bag/crafting A
+  and dynamic per-tab offsets now persist across drawing: only explicit refresh
+  updates their source-sized vector/count, with null/C<=0 preservation, physical
+  empty A0 and current-row-only downward clamp. Thumb events consume cached A;
+  drawing leaves old geometry intact. Integer wrap/truncation and actual owner-GUI
+  stale-range tests pass. Native actor-record region replaces positional guesses
+  on inventory/crafting refresh. Shop lifetime and full frontend/resize integration
+  remain open.
   Native crafting groups now persist across draws and rebuild on the connected
   toggle/station, equipment, transaction, completed-craft and shown-pickup routes.
   Details own a separate copied recipe; later left-down publication validates the
