@@ -10,6 +10,17 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Bound inventory-shaped widgets now publish a physical hovered group/row during
+  drawing. Hidden or unbound draws preserve the pair. Gameplay readers recheck
+  current panel geometry and live source bounds, with separate bag, shop and
+  crafting item rules. Crafting left-down can adopt the raw pair separately
+  from resolving a recipe; the explicit station-tab setter clears cell hover.
+  Owner-HUD tests exercise zero-quantity rows, stale hover between draws, changed
+  source bounds and the empty grid tail. All five build targets, the full
+  CPU/owner-data suite and 102 Vulkan GUI image checks pass; the hidden inventory
+  capture shows the panel and exits normally. Cached tab publication, registered
+  input routing and full native event ordering remain open.
+
 - Start Menu now retains the CPU HUD scene and its existing branch/control
   identities across sessions. The outgoing renderer's item handles and queued
   draws are discarded so they cannot be reused by the replacement renderer.

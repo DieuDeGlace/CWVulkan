@@ -492,24 +492,32 @@ void Hud::drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const
     const float scaleNow = s.matrix(node)[0][0];
     const glm::vec2 position = s.contentPosition(node), content = s.contentSize(node);
     const int cw = panels.cellWidth, ch = panels.cellHeight, columns = p.columns, rows = p.rows;
-    if (columns <= 0 || rows <= 0)
+    const bool bound = list.canonicalTabs != nullptr;
+    if (bound)
+        p.hoveredCell = {};
+    if (columns <= 0 || rows <= 0 || list.scroll < 0)
         return;
     const std::vector<int> shown = shownOf(list, columns * list.scroll);
     const int first = columns * list.scroll, last = std::min((int)shown.size(), first + columns * rows);
-    for (int i = first; i < last; i++) {
-        if (shown[(size_t)i] < 0)
+    for (int i = first; i < last; ++i) {
+        const int entryIndex = shown[(size_t)i];
+        const auto *entry = entryIndex >= 0 ? &(*list.items)[(size_t)entryIndex] : nullptr;
+        if (!bound && !entry)
             continue;
         const int index = i - first;
-        const float x = std::floor(((float)(index % columns * (cw + 5) + 10)) * scaleNow + position.x);
-        const float y = std::floor(((float)(index / columns * (ch + 5) + 40)) * scaleNow + position.y);
-        const Inventory::Entry &e = (*list.items)[(size_t)shown[(size_t)i]];
-        if (e.count == 0 && !list.all && !vendor)
+        const int category = entry && entry->original ? (*entry->original)[0] : 0;
+        const auto cell =
+            guiitem::gridCell(position, scaleNow, {cw, ch}, {index % columns, index / columns}, category, pointer, guiClockMs);
+        if (bound && cell.hovered)
+            p.hoveredCell = {list.tab, i}; // A physical hole can publish hover without drawing an item.
+        if (!entry || (entry->count == 0 && !list.all && !vendor))
             continue;
+        const auto &e = *entry;
         if (e.original) {
-            const auto cell =
-                guiitem::gridCell(position, scaleNow, {cw, ch}, {index % columns, index / columns}, (*e.original)[0], pointer, guiClockMs);
             itemIcon(e.icon, *e.original, cell.icon, out.size());
         } else if (auto icon = icons.find(e.icon); icon != icons.end()) {
+            const float x = std::floor(((float)(index % columns * (cw + 5) + 10)) * scaleNow + position.x);
+            const float y = std::floor(((float)(index / columns * (ch + 5) + 40)) * scaleNow + position.y);
             const float side = (float)ch * scaleNow * 0.8f * (shown[(size_t)i] == list.hoverItem ? 1.25f : 1.0f);
             const float centre = (float)(ch / 2) * scaleNow;
             image(out, icon->second.atlas, {icon->second.w, icon->second.h}, std::round(x + centre - side / 2),
@@ -1069,23 +1077,10 @@ int Hud::inventoryButtonAt(glm::vec2 m, const Inventory &inv, int which) const {
 bool Hud::inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int which) const {
     const bool shown = which == 0 ? inv.bagShown : which == 1 ? inv.vendor.open : inv.crafting.open;
     const InvPanel &panel = invPanel(which);
-    if (!shown || !hasPanels() || !panel.node)
+    if (!shown || !hasPanels() || !panel.node || !panels.inGame->visible)
         return false;
     placePanels(inv);
-    if (!panel.node->visible)
-        return false;
-    auto textHit = [&](const plasma::SceneNode &node, glm::vec2 point) {
-        plasma::TextStyle style;
-        if (!node.doc || !plasma::textStyle(node.doc->shapes[(size_t)node.shape], node.doc->loaderFlags, style))
-            return false;
-        if (node.text)
-            style.string = *node.text;
-        const auto &font = plasmaFonts[fontIndex(style.font, style.templateFont)];
-        plasma::TextBox bounds;
-        return font.loaded() && plasma::textBounds(font, style, scene->matrix(node), bounds) && point.x >= bounds.minimum.x &&
-               point.y >= bounds.minimum.y && point.x <= bounds.maximum.x && point.y <= bounds.maximum.y;
-    };
-    return scene->hitTest(*panel.node, mouse, textHit) != nullptr;
+    return scene->hitTest(*panel.node, mouse, frontTextHit()) != nullptr;
 }
 
 int Hud::panelPhysicalAt(glm::vec2 m, const InvPanel &p, const InvList &list) const {
@@ -1106,18 +1101,44 @@ int Hud::panelPhysicalAt(glm::vec2 m, const InvPanel &p, const InvList &list) co
     return -1;
 }
 
+inventoryslots::Index Hud::nativeInventoryCellAt(glm::vec2 point, const Inventory &inv, int which) const {
+    const auto list = listOf(inv, which);
+    if (!list.canonicalTabs || !inventoryPanelEligible(point, inv, which))
+        return {};
+    const auto cell = cachedInventoryCell(which);
+    const auto &groups = *list.canonicalTabs;
+    if (cell.tab < 0 || cell.slot < 0 || (size_t)cell.tab >= groups.size() || (size_t)cell.slot >= groups[(size_t)cell.tab].size())
+        return {};
+    const auto &row = groups[(size_t)cell.tab][(size_t)cell.slot];
+    if ((which == 0 && row.count == 0) || (which == 2 && (row.count < 0 || row.item[0] == 0)))
+        return {};
+    return cell;
+}
+
 int Hud::panelItemAt(glm::vec2 m, const Inventory &inv, int which) const {
     if (!hasPanels())
         return -1;
+    const auto list = listOf(inv, which);
+    if (inv.nativeCollections) {
+        const auto cell = nativeInventoryCellAt(m, inv, which);
+        if (cell.slot < 0)
+            return -1;
+        const auto &items = *list.items;
+        const auto entry = std::find_if(items.begin(), items.end(), [&](const Inventory::Entry &item) {
+            return item.tab == cell.tab && item.slotIndex == cell.slot;
+        });
+        return entry == items.end() ? -1 : (int)(entry - items.begin());
+    }
     placePanels(inv);
     const auto &panel = invPanel(which);
-    const auto list = listOf(inv, which);
     const int physical = panelPhysicalAt(m, panel, list);
     const auto shown = shownOf(list, panel.columns * list.scroll);
     return physical >= 0 && (size_t)physical < shown.size() ? shown[(size_t)physical] : -1;
 }
 
 inventoryslots::Index Hud::inventorySourceAt(glm::vec2 mouse, const Inventory &inv) const {
+    if (inv.nativeCollections)
+        return nativeInventoryCellAt(mouse, inv, 0);
     if (!hasPanels() || !inv.canonicalTabs || !inv.bagShown)
         return {};
     placePanels(inv);

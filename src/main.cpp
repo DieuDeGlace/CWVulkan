@@ -4337,10 +4337,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 return;
             if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryOpen && craftingOpen) {
                 auto &view = inventoryView.crafting;
-                if (view.hoverItem >= 0 && (size_t)view.hoverItem < view.items.size()) {
-                    view.selected = view.hoverItem;
-                    const auto &entry = view.items[(size_t)view.hoverItem];
-                    craftingSelection = {entry.tab, entry.slotIndex};
+                const auto hover = hud.cachedInventoryCell(2);
+                if (view.canonicalTabs && hover.slot >= 0) {
+                    craftingSelection = hover;
+                    const auto entry = std::find_if(view.items.begin(), view.items.end(), [&](const Hud::Inventory::Entry &item) {
+                        return item.tab == hover.tab && item.slotIndex == hover.slot;
+                    });
+                    view.selected = entry == view.items.end() ? -1 : (int)(entry - view.items.begin());
                 }
                 craftingCollection.publish(craftingSelection, [](const auto &item, bool) {
                     return gamecraft::recipeOf(gamecraft::fromRecord(item));
@@ -5776,6 +5779,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (inventoryView.crafting.tab != p.station || saw) {
                         inventoryView.crafting.selectTab(p.station, nativeInventory != nullptr);
                         craftingSelection = {p.station, 0};
+                        hud.clearInventoryCellHover(2);
                         inventoryView.crafting.hoverItem = -1;
                         refreshInventory(false, inventoryui::Panel::Crafting);
                     }

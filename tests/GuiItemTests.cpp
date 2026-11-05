@@ -146,6 +146,34 @@ void equipmentCallbacks() {
         inventory.pointer = points[11];
         GUI_CHECK(hud.inventorySourceAt(points[11], inventory) == inventoryslots::Index{2, 1});
         GUI_CHECK(hud.inventorySourceAt(points.back(), inventory) == inventoryslots::Index{});
+        inventory.nativeCollections = true;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.cachedInventoryCell(0) == inventoryslots::Index{2, 1});
+        GUI_CHECK(hud.inventorySourceAt(points[11], inventory) == inventoryslots::Index{}); // Zero quantity.
+        inventory.pointer = points[12];
+        GUI_CHECK(hud.inventorySourceAt(points[12], inventory) == inventoryslots::Index{}); // Still the prior draw.
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.inventorySourceAt(points[10], inventory) == inventoryslots::Index{2, 2});
+        auto oldRows = std::move(tabs[2]);
+        tabs[2].assign(oldRows.begin(), oldRows.begin() + 2);
+        GUI_CHECK(hud.cachedInventoryCell(0) == inventoryslots::Index{2, 2});
+        GUI_CHECK(hud.inventorySourceAt(points[10], inventory) == inventoryslots::Index{}); // Live bounds changed.
+        tabs[2] = std::move(oldRows);
+        GUI_CHECK(hud.inventorySourceAt({-1000, -1000}, inventory) == inventoryslots::Index{});
+        inventory.bagShown = false;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.cachedInventoryCell(0) == inventoryslots::Index{2, 2});
+        GUI_CHECK(hud.inventorySourceAt(points[10], inventory) == inventoryslots::Index{});
+        inventory.bagShown = true;
+        inventory.canonicalTabs = nullptr;
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.cachedInventoryCell(0) == inventoryslots::Index{2, 2});
+        inventory.canonicalTabs = &tabs;
+        inventory.pointer = points.back();
+        hud.draw(state, vertices);
+        GUI_CHECK(hud.cachedInventoryCell(0) == inventoryslots::Index{}); // Unoccupied tail cell.
+        inventory.nativeCollections = false;
+        inventory.pointer = points[11];
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == (size_t)capacity - 2);
         if (hud.itemDraws().size() >= 2) {

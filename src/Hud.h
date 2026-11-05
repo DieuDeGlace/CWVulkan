@@ -289,6 +289,8 @@ class Hud {
     // The same on the game's own panels (gui.plx), when they are built; the tab under it.
     int inventoryItemAt(glm::vec2 mouse, const Inventory &inv) const;
     inventoryslots::Index inventorySourceAt(glm::vec2 mouse, const Inventory &inv) const;
+    inventoryslots::Index cachedInventoryCell(int which) const { return invPanel(which).hoveredCell; }
+    void clearInventoryCellHover(int which) const { invPanel(which).hoveredCell = {}; }
     int inventorySlotAt(glm::vec2 mouse, const Inventory &inv) const;
     int inventoryTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 0); }
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
@@ -332,6 +334,7 @@ class Hud {
         std::map<std::string, plasma::SceneNode *> buttons;
         std::vector<plasma::SceneNode *> cells, tabs;
         int columns = 1, rows = 1;
+        mutable inventoryslots::Index hoveredCell; // Physical group/row, published by the bound widget draw.
     };
     struct InvList {
         const std::vector<Inventory::Entry> *items = nullptr;
@@ -641,6 +644,7 @@ class Hud {
                      float lineSpacing = 1) const;
     void positionPreview(const Inventory &inv) const;
     void drawPreview(const Inventory &inv, std::vector<OverlayVertex> &out) const;
+    inventoryslots::Index nativeInventoryCellAt(glm::vec2, const Inventory &, int which) const;
     int panelItemAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
     int panelSlotAt(glm::vec2 mouse, const Inventory &inv) const;
     int panelTabAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;

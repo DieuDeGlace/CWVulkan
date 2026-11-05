@@ -55,6 +55,14 @@ before that teardown. Production pointer dispatch is not yet connected to
 input-model tests do not establish that live integration or full native lifetime
 parity. See the independent [root lifetime contract](specs/steam-interface-input-root-lifetime.md).
 
+The bound inventory, crafting and shop draws retain a physical cell index.
+Later item queries validate that index against the live collection and current
+panel geometry; they do not pick a replacement cell at the new cursor position.
+The raw index can still describe a zero-quantity cell. Crafting selection reads
+that raw pair before attempting to publish a recipe. The independent
+[hover contract](specs/steam-inventory-hover-publication.md) separates this
+state from movement targets, tab hover and visual highlighting.
+
 ## Font resolution
 
 Immediate widgets request resource1.dat without a face substitution. Template
