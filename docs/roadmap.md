@@ -963,6 +963,13 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   does not establish initialized contents, deep-copy ownership or live safety.
   See [allocation boundaries](extractor-allocation-boundaries.md).
 
+- [x] Replace SDK camera/World scalar and coordinate-pair accesses using
+  independent field/ABI contracts. Preserve angle/distance precision and seed
+  bits; keep time writes and owner scopes separate. Dispose successfully built
+  region-role results through the original routine before releasing caller
+  storage. Generated unpublished-Zone disposal remains explicitly unproved.
+  See [camera/World values](extractor-camera-world-values.md).
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the

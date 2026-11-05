@@ -13,16 +13,19 @@
 #include "NativeCreatureScalars.h"
 #include "NativeCreatureViews.h"
 #include "NativeEventQueues.h"
+#include "NativeGameCamera.h"
 #include "NativeGeneratedText.h"
 #include "NativeInventory.h"
 #include "NativeItemRecord.h"
 #include "NativeLoadedZones.h"
 #include "NativeNameFragments.h"
 #include "NativeObjectSpans.h"
+#include "NativeRoleLifetime.h"
 #include "NativeSpriteBuffers.h"
 #include "NativeSpriteCatalog.h"
 #include "NativeSpriteGroups.h"
 #include "NativeTerrainBuffers.h"
+#include "NativeWorldMetadata.h"
 #include "ObjectRewardCapture.h"
 #include "ZoneTerrainCapture.h"
 #include <memory>
@@ -85,7 +88,7 @@
 #include <sstream>
 
 namespace extract {
-constexpr uintptr_t REGION_AT_RVA = 0x2ada20;    // void (World*, IntVector2* out, x, y)
+constexpr uintptr_t REGION_AT_RVA = 0x2ada20;    // void (World*, captureabi::CoordinatePair* out, x, y)
 constexpr uintptr_t BIOME_AT_RVA = 0x2b9080;     // int (World*, regionX, regionY)
 constexpr uintptr_t GROUND_HEIGHT_RVA = 0x35ea0; // float (World*, x, y, mode)
 constexpr uintptr_t MAX_HP_RVA = 0x5fac0;        // float (Creature*)
@@ -881,8 +884,9 @@ template <class T> static void put(std::vector<unsigned char> &out, T v) {
 }
 
 static int regionType(cube::World *w, int64_t x, int64_t y) {
-    IntVector2 region{};
-    ((void (*)(cube::World *, IntVector2 *, int, int))(base() + REGION_AT_RVA))(w, &region, (int)x, (int)y);
+    captureabi::CoordinatePair region{};
+    ((void (*)(cube::World *, captureabi::CoordinatePair *, int, int))(base() + REGION_AT_RVA))(w, &region, (int)x,
+                                                                                                (int)y);
     return ((int (*)(cube::World *, int, int))(base() + BIOME_AT_RVA))(w, region.x, region.y);
 }
 
@@ -972,14 +976,15 @@ static void saveZones(cube::World *w) {
 
 static void startSession(cube::World *w, cube::Creature *player) {
     session = w;
-    sessionSeed = w->seed;
+    sessionSeed = captureabi::WorldMetadata(w).seedLabel();
     home = captureabi::CreatureScalars(player).position();
     saved.clear();
     CreateDirectoryA("Extract", nullptr);
     DWORD scanError = ERROR_SUCCESS;
     const auto mods = otherModFiles(scanError);
     const bool modified = !mods.empty() || scanError;
-    folder = std::string("Extract\\") + (modified ? "modded_seed_" : "seed_") + std::to_string(w->seed);
+    folder = std::string("Extract\\") + (modified ? "modded_seed_" : "seed_") +
+             std::to_string(captureabi::WorldMetadata(w).seedLabel());
     CreateDirectoryA(folder.c_str(), nullptr);
     if (FILE *provenance = _fsopen((folder + "\\capture-source.txt").c_str(), "w", _SH_DENYNO)) {
         fprintf(provenance, "source_timestamp=%08x\nclassification=%s\nscope=new-writes-this-session\nother_mod_scan_error=%lu\n",
@@ -1004,14 +1009,14 @@ static void startSession(cube::World *w, cube::Creature *player) {
     FILE *f = nullptr;
     if (fopen_s(&f, manifest.c_str(), "r") != 0) { // Keep the first home.
         if (fopen_s(&f, manifest.c_str(), "w") == 0 && f) {
-            fprintf(f, "seed=%d\nhomeX=%lld\nhomeY=%lld\nhomeZ=%lld\n", w->seed,
+            fprintf(f, "seed=%d\nhomeX=%lld\nhomeY=%lld\nhomeZ=%lld\n", captureabi::WorldMetadata(w).seedLabel(),
                     (long long)(home.x >> 16), (long long)(home.y >> 16), (long long)(home.z >> 16));
             fclose(f);
         }
     } else if (f)
         fclose(f);
-    log("Session: seed " + std::to_string(w->seed) + ", " + std::to_string(saved.size()) +
-        " zones already extracted, folder " + folder);
+    log("Session: seed " + std::to_string(captureabi::WorldMetadata(w).seedLabel()) + ", " +
+        std::to_string(saved.size()) + " zones already extracted, folder " + folder);
 }
 
 // Sweep state.
@@ -1855,8 +1860,8 @@ static void tick(cube::Game *g) {
                                                playerData.position().y);
             double yaw = std::atan2(dy, dx) * 180 / 3.14159265358979 +
                          GetPrivateProfileIntA("Fight", "YawOffset", 90, ".\\Mods\\ZoneExtractor.ini");
-            g->camera_angle.z = g->target_camera_angle.z = yaw;
-            g->camera_angle.x = g->target_camera_angle.x = 75;
+            captureabi::GameCamera(g).captureAngle(captureabi::CameraAxis::Yaw, yaw);
+            captureabi::GameCamera(g).captureAngle(captureabi::CameraAxis::Pitch, 75);
         }
     }
     for (auto address : actors.addresses()) {
@@ -3042,7 +3047,7 @@ static void poll(cube::World *w) {
     }
     fwrite("CWU4", 1, 4, out);
     which = rva;
-    const int32_t seed = w ? w->seed : 0;
+    const int32_t seed = w ? captureabi::WorldMetadata(w).seedLabel() : 0;
     fwrite(&seed, 4, 1, out);
     remaining = n;
     extract::log("Update oracle: recording " + std::to_string(n) + " creature updates");
@@ -4181,7 +4186,7 @@ static void poll(cube::World *w) {
         return;
     }
     fwrite("CAI2", 1, 4, out);
-    const int32_t seed = w ? w->seed : 0;
+    const int32_t seed = w ? captureabi::WorldMetadata(w).seedLabel() : 0;
     fwrite(&seed, 4, 1, out);
     every = gap < 1 ? 1 : gap, skipped = 0;
     remaining = n;
@@ -4420,7 +4425,7 @@ static void dump(cube::Game *g) {
     auto b59 = (float (*)(Nb *))(b + 0x2b5960);
     auto veg = (float (*)(cube::World *, int, int, float, float, float))(b + 0x2d36f0);
     auto ground = (float (*)(cube::World *, int, int, int))(b + GROUND_HEIGHT_RVA);
-    auto regionAt = (void (*)(cube::World *, IntVector2 *, int, int))(b + REGION_AT_RVA);
+    auto regionAt = (void (*)(cube::World *, captureabi::CoordinatePair *, int, int))(b + REGION_AT_RVA);
     CreateDirectoryA("Extract", nullptr);
     DWORD modScanError = ERROR_SUCCESS;
     const auto mods = otherModFiles(modScanError);
@@ -4469,7 +4474,7 @@ static void dump(cube::Game *g) {
         Pl p{};
         nb(w, x, y, &n);
         pl(w, x, y, &p);
-        IntVector2 r{};
+        captureabi::CoordinatePair r{};
         regionAt(w, &r, x, y);
         float lk = lake(&n), bh = baseH(&n, p.kind, p.weight), rd = roads(w, x, y, p.kind, p.weight);
         float v13 = w13(&n, p.kind, p.weight), v125 = w125(&n, p.kind, p.weight), v8 = w8(&n);
@@ -4499,9 +4504,10 @@ static void dump(cube::Game *g) {
     if (!k)
         return;
     fprintf(k, "# world+0x330 %d world+0x334 %d world+0x244 %d seed %d\n", *(int *)((uint8_t *)w + 0x330),
-            *(int *)((uint8_t *)w + 0x334), *(int *)((uint8_t *)w + 0x244), w->seed);
-    fprintf(k, "# x y | h hx- hx+ hy- hy+ | w9b wbb | snow snowR snowG snowB | bedR bedG bedB top | per depth 0 1 3 10 40: "
-               "r g b c type e\n");
+            *(int *)((uint8_t *)w + 0x334), *(int *)((uint8_t *)w + 0x244), captureabi::WorldMetadata(w).seedLabel());
+    fprintf(
+        k, "# x y | h hx- hx+ hy- hy+ | w9b wbb | snow snowR snowG snowB | bedR bedG bedB top | per depth 0 1 3 10 40: "
+           "r g b c type e\n");
     for (int j = -16; j < 16; j++)
         for (int i = -16; i < 16; i++)
             points.push_back({px + i, py + j});
@@ -5005,7 +5011,7 @@ static void visitTownsperson(cube::Game *g) {
                                                      position.y + (int64_t)(std::sin(yaw) * 2.5 * 65536),
                                                      position.z + 65536});
     captureabi::CreatureScalars(player).setVelocity({});
-    g->camera_angle.z = g->target_camera_angle.z = townsperson.yaw() + 180 + 90;
+    captureabi::GameCamera(g).captureAngle(captureabi::CameraAxis::Yaw, townsperson.yaw() + 180 + 90);
     if (log)
         fprintf(log, "visit townsperson id=%lld race=%u level=%u name=%.16s\n",
                 (long long)captureabi::CreatureScalars(best).id(), townsperson.race(), uint32_t(townsperson.level()),
@@ -6154,15 +6160,20 @@ struct MapNode {
     MapNode *left, *parent, *right;
     char colour, nil;
 };
-static bool rolesOnce(unsigned char *roles, cube::World *w, IntVector2 *region) {
+static bool rolesOnce(unsigned char *roles, cube::World *w, captureabi::CoordinatePair *region) {
     __try {
-        ((void (*)(void *, void *, IntVector2 *))(base() + 0x115df0))(roles, w, region);
+        ((void (*)(void *, void *, captureabi::CoordinatePair *))(base() + 0x115df0))(roles, w, region);
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
 }
 static void regionRoles(FILE *f, cube::World *w, const std::string &zones) {
+    static bool nativeConstructionFailed = false;
+    if (nativeConstructionFailed) {
+        log("Region-role capture disabled after a native construction failure; restart the reference session");
+        return;
+    }
     std::set<std::pair<int, int>> regions;
     WIN32_FIND_DATAA data;
     HANDLE h = FindFirstFileA((zones + "\\z_*.rec").c_str(), &data);
@@ -6170,18 +6181,29 @@ static void regionRoles(FILE *f, cube::World *w, const std::string &zones) {
         do {
             int x, y;
             if (sscanf_s(data.cFileName, "z_%d_%d.rec", &x, &y) == 2) {
-                IntVector2 r{};
-                ((void (*)(cube::World *, IntVector2 *, int, int))(base() + REGION_AT_RVA))(w, &r, x * 64 + 32, y * 64 + 32);
+                captureabi::CoordinatePair r{};
+                ((void (*)(cube::World *, captureabi::CoordinatePair *, int, int))(base() + REGION_AT_RVA))(
+                    w, &r, x * 64 + 32, y * 64 + 32);
                 regions.insert({r.x, r.y});
             }
         } while (FindNextFileA(h, &data));
         FindClose(h);
     }
     for (auto [rx, ry] : regions) {
-        auto *roles = (unsigned char *)calloc(1, 0x400); // leaked: its maps use the game's heap
-        IntVector2 region{rx, ry};
-        if (!roles || !rolesOnce(roles, w, &region))
-            continue;
+        struct alignas(16) Storage { std::array<unsigned char, 0xb0> bytes{}; };
+        auto storage = std::make_unique<Storage>();
+        auto *roles = storage->bytes.data();
+        captureabi::CoordinatePair region{rx, ry};
+        if (!rolesOnce(roles, w, &region)) {
+            // Partial native construction has no proved cleanup contract. Keep
+            // its destination alive and stop further attempts in this process.
+            (void)storage.release();
+            nativeConstructionFailed = true;
+            log("Region-role construction failed; partial storage retained and further capture disabled");
+            return;
+        }
+        const captureabi::RegionRolesLease owned(
+            roles, reinterpret_cast<captureabi::DestroyRegionRoles>(base() + captureabi::DESTROY_REGION_ROLES_RVA));
         fprintf(f, "region %d %d\n", rx, ry);
         for (int off : {0x10, 0x20, 0x60, 0x70}) {
             MapNode *head = *(MapNode **)(roles + off);
@@ -6345,7 +6367,7 @@ static int spawns(cube::World *w, const std::string &dir) {
 // live on the game's heap); a test run generates a few hundred at most.
 constexpr uintptr_t SRAND_IAT_RVA = 0x42cd38; // the exe's import slot for srand()
 constexpr uintptr_t NEW_RVA = 0x392bac;       // the game's operator new
-constexpr uintptr_t ZONE_CTOR_RVA = 0x2f9400; // Zone *(Zone *, World *, IntVector2 *)
+constexpr uintptr_t ZONE_CTOR_RVA = 0x2f9400; // Zone *(Zone *, World *, captureabi::CoordinatePair *)
 constexpr uintptr_t ZONE_GEN_RVA = 0x2ff6f0;  // void (Zone *)
 constexpr size_t ZONE_SIZE = 0x58518;
 static bool generateOnce(cube::World *w, int x, int y, unsigned char *&zone) {
@@ -6355,8 +6377,8 @@ static bool generateOnce(cube::World *w, int x, int y, unsigned char *&zone) {
         zone = (unsigned char *)((void *(*)(size_t))(base() + NEW_RVA))(ZONE_SIZE);
         if (!zone)
             return false;
-        IntVector2 pos{x, y};
-        ((void *(*)(void *, void *, IntVector2 *))(base() + ZONE_CTOR_RVA))(zone, w, &pos);
+        captureabi::CoordinatePair pos{x, y};
+        ((void *(*)(void *, void *, captureabi::CoordinatePair *))(base() + ZONE_CTOR_RVA))(zone, w, &pos);
         ((void (*)(void *))(base() + ZONE_GEN_RVA))(zone);
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -6596,7 +6618,7 @@ static void run(cube::World *w) {
         fclose(f);
     }
     if (fopen_s(&f, "Extract\\oracle\\regions.txt", "w") == 0 && f) {
-        regionRoles(f, w, "Extract\\seed_" + std::to_string(w->seed));
+        regionRoles(f, w, "Extract\\seed_" + std::to_string(captureabi::WorldMetadata(w).seedLabel()));
         fclose(f);
     }
     const int zones = spawns(w, "Extract\\oracle");
@@ -6999,15 +7021,30 @@ static void tick(cube::Game *g) {
         static bool noon = false; // N: midday, for recordings that need daylight
         bool downN = extract::hotkeyDown('N');
         if (downN && !noon) {
-            clientWorld(g)->state.time = embeddedHostWorld(g)->state.time = 12 * 60 * 60 * 1000.f; // the local server keeps the clock
-            log("Time set to 12:00");
+            bool complete = true;
+            {
+                const captureabi::HostWorldActorLease held(reinterpret_cast<uintptr_t>(g));
+                if (held)
+                    captureabi::WorldMetadata(reinterpret_cast<void *>(held.world())).setTime(12 * 60 * 60 * 1000.f);
+                else
+                    complete = false;
+            }
+            {
+                auto *world = clientWorld(g);
+                const captureabi::WorldActorLease held(reinterpret_cast<uintptr_t>(world));
+                if (held && clientWorld(g) == world)
+                    captureabi::WorldMetadata(world).setTime(12 * 60 * 60 * 1000.f);
+                else
+                    complete = false;
+            }
+            log(complete ? "Time set to 12:00" : "Time capture update incomplete; try N again");
         }
         noon = downN;
         static bool hunt = false; // H: 100 blocks on along the camera, onto the ground, to find monsters
         bool downH = extract::hotkeyDown('H');
         if (downH && !hunt) {
             const auto p = captureabi::CreatureScalars(localCreature(clientWorld(g))).position();
-            double yaw = (g->camera_angle.z - 90) * 3.14159265358979 / 180;
+            double yaw = (captureabi::GameCamera(g).angle(captureabi::CameraAxis::Yaw) - 90) * 3.14159265358979 / 180;
             char gx[32] = {}, gy[32] = {}; // [Hunt] X, Y (blocks): go straight there instead
             GetPrivateProfileStringA("Hunt", "X", "", gx, sizeof gx, ".\\Mods\\ZoneExtractor.ini");
             GetPrivateProfileStringA("Hunt", "Y", "", gy, sizeof gy, ".\\Mods\\ZoneExtractor.ini");
@@ -7333,7 +7370,7 @@ static void tick(cube::Game *g) {
         static bool turn = false; // J: the camera (and H's direction) a quarter turn
         bool downJ = extract::hotkeyDown('J');
         if (downJ && !turn)
-            g->camera_angle.z = g->target_camera_angle.z = g->camera_angle.z + 90;
+            captureabi::GameCamera(g).captureAngle(captureabi::CameraAxis::Yaw, captureabi::GameCamera(g).angle(captureabi::CameraAxis::Yaw) + 90);
         turn = downJ;
         uicapture::install();
         static bool f10 = false;
@@ -7406,10 +7443,10 @@ static void tick(cube::Game *g) {
                     std::to_string((2 * R + 1) * (2 * R + 1)) + " candidates)");
                 creatureStop = 0;
                 stopStart = GetTickCount64();
-                character::setCreatureMode(true, clientWorld(g)->seed);
+                character::setCreatureMode(true, captureabi::WorldMetadata(clientWorld(g)).seedLabel());
             } else {
                 creatureStop = -1;
-                character::setCreatureMode(false, clientWorld(g)->seed);
+                character::setCreatureMode(false, captureabi::WorldMetadata(clientWorld(g)).seedLabel());
                 captureabi::CreatureScalars(player).setPosition(home);
             }
         }
@@ -7417,7 +7454,7 @@ static void tick(cube::Game *g) {
         if (character::creatureMode && creatureStop >= 0) {
             if (creatureStop >= (int)creatureStops.size()) {
                 creatureStop = -1;
-                character::setCreatureMode(false, clientWorld(g)->seed);
+                character::setCreatureMode(false, captureabi::WorldMetadata(clientWorld(g)).seedLabel());
                 captureabi::CreatureScalars(player).setPosition(home);
                 captureabi::CreatureScalars(player).setVelocity({});
                 log("Creature tour finished; returned home");
@@ -7431,19 +7468,18 @@ static void tick(cube::Game *g) {
                 // The game only poses creatures it draws: turn the camera once around
                 // during each stop, pulled back, so everything nearby is drawn.
                 double turn = double(GetTickCount64() - stopStart) / character::CREATURE_STOP_MS * 360.0;
-                g->camera_angle.z = g->target_camera_angle.z = turn;
+                captureabi::GameCamera(g).captureAngle(captureabi::CameraAxis::Yaw, turn);
                 // Pitched toward the horizon and pulled back (Mods\ZoneExtractor.ini [Tour]
                 // Pitch, Distance; read live), so creatures around the stop are on screen.
-                g->camera_angle.x = g->target_camera_angle.x =
-                    (double)GetPrivateProfileIntA("Tour", "Pitch", 70, ".\\Mods\\ZoneExtractor.ini");
-                g->camera_distance = g->target_camera_distance =
-                    (float)GetPrivateProfileIntA("Tour", "Distance", 14, ".\\Mods\\ZoneExtractor.ini");
+                captureabi::GameCamera(g).captureAngle(captureabi::CameraAxis::Pitch, (double)GetPrivateProfileIntA("Tour", "Pitch", 70, ".\\Mods\\ZoneExtractor.ini"));
+                captureabi::GameCamera(g).captureDistance(
+                    (float)GetPrivateProfileIntA("Tour", "Distance", 14, ".\\Mods\\ZoneExtractor.ini"));
                 if (GetTickCount64() - stopStart > character::CREATURE_STOP_MS) {
                     {
                         char d[200];
                         sprintf_s(d, "  present %zu, posed %zu, named %zu; camera angle %.1f %.1f %.1f, distance %.1f",
                                   character::seenPresent, character::seenPosed, character::seenNamed,
-                                  g->camera_angle.x, g->camera_angle.y, g->camera_angle.z, g->camera_distance);
+                                  captureabi::GameCamera(g).angle(captureabi::CameraAxis::Pitch), captureabi::GameCamera(g).angle(captureabi::CameraAxis::Roll), captureabi::GameCamera(g).angle(captureabi::CameraAxis::Yaw), captureabi::GameCamera(g).distance());
                         log(d);
                     }
                     log("Creature stop " + std::to_string(creatureStop + 1) + "/" + std::to_string(creatureStops.size()) +
@@ -7457,7 +7493,7 @@ static void tick(cube::Game *g) {
     }
     cube::World *w = clientWorld(g);
     cube::Creature *player = localCreature(w);
-    if (session != w || sessionSeed != w->seed)
+    if (session != w || sessionSeed != captureabi::WorldMetadata(w).seedLabel())
         startSession(w, player);
     if (DeleteFileA("Extract\\scene-reference.request")) {
         // The request runs on the normal game tick after session initialization,

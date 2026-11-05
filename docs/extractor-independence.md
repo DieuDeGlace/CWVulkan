@@ -88,6 +88,13 @@ This workboard does not grant rights or certify final redistribution.
   SDK-container counters, pointer-shape scans and arbitrary-entry walks are
   removed from death diagnostics; documented native captures remain. The SDK
   Renderer-member read is removed. See [allocation boundaries](extractor-allocation-boundaries.md).
+- Native Game camera and World scalar views replace SDK camera/seed/time
+  members. CoordinatePair replaces SDK IntVector2 at the verified call
+  boundaries. Successfully constructed region-role results now use original
+  destination-only disposal before caller storage release; a native construction
+  failure quarantines its partial storage and disables further role capture.
+  See [camera/World values](extractor-camera-world-values.md). Safe disposal of
+  generated unpublished Zones remains unproved and their oracle retention is open.
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
@@ -123,7 +130,8 @@ This workboard does not grant rights or certify final redistribution.
 - Complete creature/controller lifetime and transitive writer audits remain
   separate from the replaced core, appearance, pose, inventory and effect views.
 - Remaining World fields, collections, region/material sidecars and record views.
-- Remaining Game camera fields and native vector aliases.
+- Remaining World/Zone collection and column views; replace final SDK type
+  declarations and include/configuration after their last member consumers.
 - Keyed event-list and owning-string event behavior remain outside the simple
   capture adapter; broader native event-production comparisons remain open.
 - Remove the SDK include/configuration after the final consumer is replaced;
