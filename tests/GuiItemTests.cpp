@@ -217,6 +217,14 @@ void equipmentCallbacks() {
             GUI_CHECK(tabForPress(*secondTab) == -1); // The common root picks the foreground control.
             hud.setInterfaceState({});
             GUI_CHECK(tabForPress(*secondTab) == 0); // Hidden foreground controls do not take the hit.
+            hud.setInterfaceShown(false);
+            GUI_CHECK(!hud.interfaceShown() && gameplayRoot && gameplayRoot->visible);
+            GUI_CHECK(tabForPress(*secondTab) == -1); // Fresh picking stops at the hidden principal root.
+            hud.setInterfaceState(overlays);
+            GUI_CHECK(!hud.interfaceShown() && optionsRoot && optionsRoot->visible);
+            hud.setInterfaceState({});
+            hud.setInterfaceShown(true);
+            GUI_CHECK(tabForPress(*secondTab) == 0); // No child selection or tab hover was cleared.
             hud.publishFrontendScreen({});
         }
         inventory.nativeCollections = false;

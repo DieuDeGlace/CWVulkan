@@ -48,6 +48,10 @@ implementation or owner-data access. A private data-only check of the installed
 `gui.plx` found an ordinary Button on the scrollbutton template root. This does
 not change the native audit's resource-evidence boundary or establish the class
 for modified resources. No original asset or game-derived capture is packaged.
+The same native-only author independently traced the root visibility writer,
+ordinary pointer admission and named Windows focus/capture message paths.
+The implementer used only that prose and engine sources to retain the F4 root
+state. Unproved cancellation and indirect writer behavior was not inferred.
 
 ## Alpha terrain integration
 

@@ -54,6 +54,13 @@ renderer and gameplay session are rebuilt, so renderer bindings are discarded
 before that teardown. An explicit interface reload detaches the input owner
 before replacing the scene. See the independent
 [root lifetime contract](specs/steam-interface-input-root-lifetime.md).
+F4 toggles this retained principal root before the pointer poll, including
+ordinary gameplay with no menu open. It does not change child branch flags or
+clear capture. A hidden root rejects a fresh tab pick; showing it restores the
+existing controls and their state. The separate
+[visibility and cancellation contract](specs/steam-interface-visibility-and-cancellation.md)
+bounds the original focus messages and distinguishes window capture from scene
+capture. The complete live pointer sequence remains unfinished.
 
 The bound inventory, crafting and shop draws retain a physical cell index.
 Later item queries validate that index against the live collection and current

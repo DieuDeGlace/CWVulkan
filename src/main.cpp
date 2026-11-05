@@ -5148,16 +5148,19 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                      {255, 51, 51, 255}});
                 audio.playInterface(gameshop::SOUND_REFUSED);
             };
-            auto handleInventoryDown = [&](int button) {
+            auto handleInventoryDown = [&](int button, glm::vec2 point) {
                 if (nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT) {
-                    if (const auto press = hud.nativeInventoryTabForPress(nativeDownPoint(button), inventoryView)) {
+                    if (const auto press = hud.nativeInventoryTabForPress(point, inventoryView)) {
                         changePanelTab(press->panel, press->tab);
                         return;
                     }
                 }
+                const auto pressedItem = nativeInventory && hoverTest < 0 ? hud.inventorySourceAt(point, inventoryView) : hoveredNative;
+                const int pressedOffer = nativeInventory && vendorTrade.open ? hud.vendorItemAt(point, inventoryView)
+                                                                            : inventoryView.vendor.hoverItem;
                 if (nativeInventory && button == GLFW_MOUSE_BUTTON_MIDDLE && !mapOpen) {
                     if (auto *actor = spawned.localPlayer())
-                        if (auto item = nativeInventory->inventory.dropOne(hoveredNative, actor->record)) {
+                        if (auto item = nativeInventory->inventory.dropOne(pressedItem, actor->record)) {
                             auto request = nativeinteract::fresh(nativeinteract::DROP);
                             std::memcpy(request.data() + nativeinteract::ITEM, item->data(), item->size());
                             actor->interactions.push_back(request);
@@ -5191,18 +5194,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 if (nativeInventory && vendorTrade.open) {
                     if (auto *actor = spawned.localPlayer()) {
-                        const auto *source = nativeInventory->inventory.slot(hoveredNative);
+                        const auto *source = nativeInventory->inventory.slot(pressedItem);
                         if (source && source->count != 0)
-                            gameshop::sellSlot(nativeInventory->inventory, hoveredNative, soldItems, trade);
+                            gameshop::sellSlot(nativeInventory->inventory, pressedItem, soldItems, trade);
                         else if (inventoryView.hoverSlot >= 0 &&
                                  nativeInventory->equipment[(size_t)equipSlotOf(inventoryView.hoverSlot)][0] != 0) {
                             gameshop::sellEquipment(*nativeInventory, (int)equipSlotOf(inventoryView.hoverSlot), soldItems, trade);
                             rebuildInventoryViews();
                             applyGear(true);
-                        } else if (inventoryView.vendor.hoverItem >= 0 && (size_t)inventoryView.vendor.hoverItem < vendorRaws.size()) {
-                            const auto offer = vendorRaws[(size_t)inventoryView.vendor.hoverItem];
+                        } else if (pressedOffer >= 0 && (size_t)pressedOffer < vendorRaws.size()) {
+                            const auto offer = vendorRaws[(size_t)pressedOffer];
                             if (inventoryView.vendor.tab == 1)
-                                gameshop::repurchase(nativeInventory->inventory, soldItems, (size_t)inventoryView.vendor.hoverItem, trade);
+                                gameshop::repurchase(nativeInventory->inventory, soldItems, (size_t)pressedOffer, trade);
                             else
                                 gameshop::purchase(nativeInventory->inventory, offer, trade);
                         }
@@ -5210,9 +5213,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     }
                     return;
                 }
-                if (vendorTrade.open && inventoryView.vendor.hoverItem >= 0 &&
-                    inventoryView.vendor.hoverItem < (int)vendorRaws.size()) { // Game's buying (and buying back)
-                    const gameshop::Item offer = vendorRaws[(size_t)inventoryView.vendor.hoverItem];
+                if (vendorTrade.open && pressedOffer >= 0 &&
+                    pressedOffer < (int)vendorRaws.size()) { // Game's buying (and buying back)
+                    const gameshop::Item offer = vendorRaws[(size_t)pressedOffer];
                     const bool back = inventoryView.vendor.tab == 1;
                     // (loot-shops.md §4.1, §4.3: buying pays the price, buying back the selling price)
                     const int cost = back ? gameshop::sellPrice(offer) : gameshop::price(offer);
@@ -5236,7 +5239,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     playerGold -= cost;
                     receive(offer);
                     if (back) { // (one unit a click; how the game shortens an entry is open, §8.2)
-                        const size_t k = soldItems.size() - 1 - (size_t)inventoryView.vendor.hoverItem;
+                        const size_t k = soldItems.size() - 1 - (size_t)pressedOffer;
                         if (--soldItems[k].second <= 0)
                             soldItems.erase(soldItems.begin() + (long long)k);
                     } else
@@ -5255,7 +5258,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     }
                     Gear::Item it;
                     if (nativeInventory) {
-                        const auto *stack = nativeInventory->inventory.slot(hoveredNative);
+                        const auto *stack = nativeInventory->inventory.slot(pressedItem);
                         if (!stack || stack->count == 0)
                             return;
                         it = Gear::fromRecord(stack->item);
@@ -5271,7 +5274,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         gear.remove(listed[(size_t)k]);
                         applyGear();
                     } else if (nativeInventory) {
-                        nativeInventory->inventory.consumeOne(hoveredNative);
+                        nativeInventory->inventory.consumeOne(pressedItem);
                         refreshInventory();
                     } else
                         consumeCarried((size_t)k - listed.size());
@@ -5285,7 +5288,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (nativeInventory) {
                     if (auto *actor = spawned.localPlayer()) {
                         auto outcome = upgrade.open ? inventoryslots::UseResult{}
-                                                    : inventoryslots::use(*nativeInventory, hoveredNative, actor->record, button,
+                                                    : inventoryslots::use(*nativeInventory, pressedItem, actor->record, button,
                                                                           glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
                                                                               glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS,
                                                                           spawned.playerAbilityDuration());
@@ -5307,8 +5310,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         } else if (outcome.action == Action::PetFood)
                             inventoryOpen = false;
                         else if (outcome.action == Action::Map) {
-                            mapSelection.useItem(nativeInventory->inventory.slot(hoveredNative));
-                        } else if (!upgrade.open && !vendorTrade.open && inventoryView.hoverSlot >= 0 && hoveredNative.tab < 0) {
+                            mapSelection.useItem(nativeInventory->inventory.slot(pressedItem));
+                        } else if (!upgrade.open && !vendorTrade.open && inventoryView.hoverSlot >= 0 && pressedItem.tab < 0) {
                             if (nativeInventory->unequip((int)equipSlotOf(inventoryView.hoverSlot))) {
                                 rebuildInventoryViews();
                                 applyGear(true);
@@ -5366,9 +5369,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             };
             for (int button : input.buttons) {
                 const float oldMaximum = spawned.playerMaxHealth();
-                handleInventoryDown(button);
+                // Classify the queued press once. UI and the later Game handlers
+                // share its cached physical or controller pointer position.
+                const glm::vec2 point = nativeInventory ? nativeDownPoint(button) : mouse;
+                handleInventoryDown(button, point);
                 if (nativeInventory) {
-                    finishNativeDown(button, oldMaximum, nativeDownPoint(button));
+                    finishNativeDown(button, oldMaximum, point);
                     if (button >= 0 && button < 3)
                         ++completedDowns[(size_t)button];
                 }

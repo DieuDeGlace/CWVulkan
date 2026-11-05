@@ -1001,7 +1001,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
         positionPreview(*information); // Selection observes the preceding draw's stored frame.
     modelRowItems(state.modelRow);
     ringItems(state.ring);
-    if (!state.interfaceVisible)
+    if (!state.interfaceVisible || !interfaceShown())
         return;
     if (state.feats)
         drawFeatText(*state.feats, out);

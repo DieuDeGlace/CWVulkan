@@ -87,6 +87,7 @@ void Hud::buildPanels() {
     frontNodes.clear();
     interfaceBranches.reset();
     scene = std::make_unique<plasma::Scene>(gui);
+    scene->root().visible = interfaceRootShown;
     interfaceBranches = std::make_unique<uiroot::Branches>(*scene);
     interfaceInput = std::make_unique<plasma::Input>(*scene, [this](glm::vec2 point) {
         return const_cast<plasma::SceneNode *>(scene->hitTest(scene->root(), point, frontTextHit()));

@@ -481,6 +481,8 @@ class Hud {
     };
     using Screen = std::vector<ScreenItem>;
     void setInterfaceState(const uiroot::State &);
+    void setInterfaceShown(bool);
+    bool interfaceShown() const { return interfaceRootShown; }
     void publishFrontendScreen(const Screen &) const;
     const plasma::SceneNode *interfaceBranchRoot(uiroot::Branch branch) const;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
@@ -584,6 +586,7 @@ class Hud {
     bool iconsLoaded = false;
     // Frontend templates and gameplay panels share their tree, scale and document geometry cache.
     std::unique_ptr<plasma::Scene> scene;
+    bool interfaceRootShown = true;
     std::unique_ptr<uiroot::Branches> interfaceBranches;
     std::unique_ptr<plasma::Input> interfaceInput; // Detaches before its scene is destroyed.
     Hud &operator=(Hud &&) = default; // Only the explicit reload uses assignment, after detaching input.

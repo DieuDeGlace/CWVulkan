@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- F4 now changes the retained principal scene root before the pointer poll,
+  including gameplay with no menu open. Hiding the root blocks fresh tab picks
+  without clearing child flags or the last drawn ordinal. The owner-GUI test
+  checks independent child changes while hidden and restoration of the old hit.
+  Each queued inventory press now shares its classified pointer position across
+  tab delivery and the later Game handlers. Bag and shop actions check their
+  retained cells at that same point. The native-only visibility contract also
+  bounds the observed focus/cancellation messages; full live pointer/capture
+  integration and hardware acceptance remain open.
+
+- Published `52a4798` passed a fresh isolated build of all five targets. Its 959
+  frozen payloads are byte-identical to the published source archive. The audit
+  verified ten cached pinned dependencies, 462 compiler commands, 273 frozen
+  project dependency paths, all five x64 images, and the four extractor exports.
+  Five focused suites passed, including owner GUI checks without skips. This
+  verifies that revision from frozen source; it does not replace live extractor
+  qualification in the original game.
+
 - Native-backed inventory tab presses now select one target from the shared
   scene root before delivering the registered listener. No tab is searched
   below a foreground target without that listener. The owner-GUI regression

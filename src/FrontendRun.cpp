@@ -207,7 +207,7 @@ class Session {
     }
     void toggleSystemMenu() { systemShown = !systemShown; }
     void toggleMultiplayerMenu();
-    bool interfaceVisible() const { return interfaceShown; }
+    bool interfaceVisible() const { return hud.interfaceShown(); }
     Services &services() { return s; }
 
   private:
@@ -238,7 +238,7 @@ class Session {
 
     // The front layers (frontend-title.md §2) and the screens over them.
     bool titleShown = true, charactersShown = false, creationShown = false;
-    bool optionsOpen = false, controlsOpen = false, helpOpen = false, interfaceShown = true;
+    bool optionsOpen = false, controlsOpen = false, helpOpen = false;
     bool riding() const { return titleShown || charactersShown; }
     bool front() const { return titleShown || charactersShown || creationShown; }
     void syncInterfaceState() {
@@ -915,6 +915,10 @@ void Session::readInput(bool poll, double frameMs) {
     const glm::vec2 cachedWheelPointer = mouse * guiScale;
     if (poll)
         glfwPollEvents();
+    // F4 changes the shared root even with no open menu or a binding wait.
+    for (int key : s.input->pressed)
+        if (key == GLFW_KEY_F4)
+            hud.setInterfaceShown(!hud.interfaceShown());
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
                       gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()))
@@ -1021,7 +1025,7 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
             break;
         }
         case GLFW_KEY_F4:
-            break; // Applied before focused/binding input below.
+            break; // Applied before the pointer poll.
         case GLFW_KEY_F5:
         case GLFW_KEY_F6:
             if (s.options) {
@@ -1041,10 +1045,6 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
 
 void Session::handleKeys(bool inGame) {
     MenuInput &in = *s.input;
-    // F4 changes the global GUI ancestor even while a controls row waits for input.
-    for (int key : in.pressed)
-        if (key == GLFW_KEY_F4)
-            interfaceShown = !interfaceShown;
     // A controls row waiting for a key takes the next key or mouse button (open question 6).
     if (controlsOpen && controls.waiting >= 0) {
         gameoptions::Binding first{0, 0};
@@ -1810,10 +1810,6 @@ Hud::Screen Session::buildScreen(bool inGame) {
     Hud::Screen out;
     navigationPoints.clear();
     syncInterfaceState();
-    if (!interfaceShown) {
-        hud.publishFrontendScreen(out);
-        return out;
-    }
     const auto append = [&](auto builder, uiroot::Branch branch) {
         const size_t first = out.size();
         (this->*builder)(out);
@@ -1838,6 +1834,10 @@ Hud::Screen Session::buildScreen(bool inGame) {
     if (helpOpen)
         append(&Session::helpItems, uiroot::Branch::Root);
     hud.publishFrontendScreen(out);
+    if (!hud.interfaceShown()) {
+        navigationPoints.clear();
+        return {};
+    }
     for (auto &item : out)
         if (item.kind == Hud::ScreenItem::Template) {
             item.buttonHover = hud.templateHit(item, mouse, true);

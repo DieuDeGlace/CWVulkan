@@ -37,6 +37,12 @@ void Hud::setInterfaceState(const uiroot::State &state) {
     if (interfaceBranches)
         interfaceBranches->apply(state);
 }
+void Hud::setInterfaceShown(bool shown) {
+    interfaceRootShown = shown;
+    if (scene)
+        scene->root().visible = shown;
+}
+
 const plasma::SceneNode *Hud::interfaceBranchRoot(uiroot::Branch branch) const {
     return interfaceBranches ? interfaceBranches->node(branch) : nullptr;
 }
