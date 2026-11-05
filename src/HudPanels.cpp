@@ -1193,23 +1193,30 @@ int Hud::panelSlotAt(glm::vec2 m, const Inventory &inv) const {
     return -1;
 }
 
-int Hud::nativeInventoryTabForPress(glm::vec2 point, const Inventory &inv, int which) const {
-    if (!hasPanels() || !panels.inGame->visible)
-        return -1;
-    const auto &panel = invPanel(which);
-    const auto list = listOf(inv, which);
-    if (!list.canonicalTabs || !panel.node || !panel.tabParent)
-        return -1;
+std::optional<Hud::InventoryTabPress> Hud::nativeInventoryTabForPress(glm::vec2 point, const Inventory &inv) const {
+    if (!hasPanels())
+        return {};
     placePanels(inv);
-    if (!panel.node->visible)
-        return -1;
-    // Panel admission still supplies the hit. The registered dispatch supplies
-    // owner/enable/passive checks and delivers the listener on that target.
-    panel.pressedTab = -1;
-    auto *hit = const_cast<plasma::SceneNode *>(scene->hitTest(*panel.tabParent, point, frontTextHit()));
+    const std::array<const InvPanel *, 3> receivers{&panels.bag, &panels.vendor, &panels.crafting};
+    for (const auto *panel : receivers)
+        panel->pressedTab = -1;
+
+    // Only the selected node can deliver the listener. An overlapping control
+    // with no registered tab callback does not allow a search below it.
+    auto *hit = interfaceInput->captureNode();
+    if (!hit)
+        hit = const_cast<plasma::SceneNode *>(scene->hitTest(scene->root(), point, frontTextHit()));
     interfaceInput->dispatchRegistered(hit, plasma::Input::Event::LeftDown);
-    const int tab = panel.pressedTab;
-    return tab >= 0 && tab != list.tab && (size_t)tab < list.canonicalTabs->size() ? tab : -1;
+
+    for (size_t index = 0; index < receivers.size(); ++index) {
+        const int tab = receivers[index]->pressedTab;
+        if (tab < 0)
+            continue;
+        const auto list = listOf(inv, (int)index);
+        if (list.canonicalTabs && tab != list.tab && (size_t)tab < list.canonicalTabs->size())
+            return InventoryTabPress{(int)index, tab};
+    }
+    return {};
 }
 
 int Hud::panelTabAt(glm::vec2 m, const Inventory &inv, int which) const {

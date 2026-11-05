@@ -188,22 +188,36 @@ void equipmentCallbacks() {
         const auto firstTab = tabPoint(0), secondTab = tabPoint(1);
         GUI_CHECK(firstTab && secondTab);
         if (firstTab && secondTab) {
-            GUI_CHECK(hud.nativeInventoryTabForPress(*firstTab, inventory, 0) == -1);
+            const auto tabForPress = [&](glm::vec2 point) {
+                const auto press = hud.nativeInventoryTabForPress(point, inventory);
+                return press && press->panel == 0 ? press->tab : -1;
+            };
+            GUI_CHECK(tabForPress(*firstTab) == -1);
             inventory.pointer = *firstTab;
             hud.draw(state, vertices);
-            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == 0);
-            GUI_CHECK(hud.nativeInventoryTabForPress(points[10], inventory, 0) == -1);
+            GUI_CHECK(tabForPress(*secondTab) == 0);
+            GUI_CHECK(tabForPress(points[10]) == -1);
             inventory.pointer = points[10];
             hud.draw(state, vertices); // Missing all tabs does not clear the retained ordinal.
-            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == 0);
+            GUI_CHECK(tabForPress(*secondTab) == 0);
             inventory.canonicalTabs = nullptr;
             hud.draw(state, vertices);
-            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == -1);
+            GUI_CHECK(tabForPress(*secondTab) == -1);
             inventory.canonicalTabs = &tabs;
-            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == 0);
+            GUI_CHECK(tabForPress(*secondTab) == 0);
             inventory.tab = 0;
-            GUI_CHECK(hud.nativeInventoryTabForPress(*secondTab, inventory, 0) == -1);
+            GUI_CHECK(tabForPress(*secondTab) == -1);
             inventory.tab = 2;
+
+            control.at = *secondTab - glm::vec2(100, 30);
+            hud.publishFrontendScreen({control});
+            uiroot::State overlays;
+            overlays.options = true;
+            hud.setInterfaceState(overlays);
+            GUI_CHECK(tabForPress(*secondTab) == -1); // The common root picks the foreground control.
+            hud.setInterfaceState({});
+            GUI_CHECK(tabForPress(*secondTab) == 0); // Hidden foreground controls do not take the hit.
+            hud.publishFrontendScreen({});
         }
         inventory.nativeCollections = false;
         inventory.pointer = points[11];

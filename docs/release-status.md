@@ -10,6 +10,15 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Native-backed inventory tab presses now select one target from the shared
+  scene root before delivering the registered listener. No tab is searched
+  below a foreground target without that listener. The owner-GUI regression
+  proves that an independent visible Options branch blocks the underlying tab
+  and that hiding Options restores the hit. All five build targets, the full
+  CPU/owner-data suite and 102 Vulkan GUI image checks pass. Physical pointer
+  polling and down/up ordering, scrollbar capture and the remaining widget
+  routes still need integration and live acceptance.
+
 - Inventory tab listeners now register on one scene-bound input owner. The
   live panel adapter delivers tag two through its registered-event path; it
   still supplies the panel hit separately. Replacing tab widgets removes their

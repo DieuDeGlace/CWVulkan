@@ -65,12 +65,14 @@ state from movement targets, tab hover and visual highlighting.
 
 A bound draw also stores the last successful tab ordinal. A miss or an unbound
 pass preserves it. Each cloned tab initializes its event target and registers
-a left-down listener on the shared scene input owner. The existing panel
-adapter supplies the hit; the registered dispatch checks ownership and enabled
-state before calling the listener. The listener reads the last drawn ordinal,
-and the adapter validates it against the current collection and selection.
-Removing or replacing a scene widget removes its listener. Common root picking,
-full down/up/move dispatch, capture and other widget hooks remain open.
+a left-down listener on the shared scene input owner. The gameplay down adapter
+now picks one scene at the common root, or uses an existing capture target.
+Registered dispatch checks ownership and enabled state before invoking the
+listener. The listener reads the last drawn ordinal, and the adapter validates
+it against the current collection and selection. A foreground hit with no tab
+listener does not fall through to a tab below it. Removing or replacing a scene
+widget removes its listener. The full down/up/move sequence, scrollbar capture
+and other widget hooks remain open.
 
 ## Font resolution
 

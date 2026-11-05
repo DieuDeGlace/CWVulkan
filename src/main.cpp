@@ -5149,13 +5149,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 audio.playInterface(gameshop::SOUND_REFUSED);
             };
             auto handleInventoryDown = [&](int button) {
-                const auto tabForPress = [&](int panel, int hovered) {
-                    if (button != GLFW_MOUSE_BUTTON_LEFT)
-                        return -1;
-                    if (nativeInventory)
-                        return hud.nativeInventoryTabForPress(nativeDownPoint(button), inventoryView, panel);
-                    return hovered;
-                };
+                if (nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT) {
+                    if (const auto press = hud.nativeInventoryTabForPress(nativeDownPoint(button), inventoryView)) {
+                        changePanelTab(press->panel, press->tab);
+                        return;
+                    }
+                }
                 if (nativeInventory && button == GLFW_MOUSE_BUTTON_MIDDLE && !mapOpen) {
                     if (auto *actor = spawned.localPlayer())
                         if (auto item = nativeInventory->inventory.dropOne(hoveredNative, actor->record)) {
@@ -5174,8 +5173,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     changeRegion(region);
                     return;
                 }
-                if (const int tab = craftingOpen ? tabForPress(2, inventoryView.crafting.hoverTab) : -1; tab >= 0) {
-                    changePanelTab(2, tab);
+                if (!nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen && inventoryView.crafting.hoverTab >= 0) {
+                    changePanelTab(2, inventoryView.crafting.hoverTab);
                     return;
                 }
                 if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen &&
@@ -5186,8 +5185,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen && inventoryView.crafting.hoverButton)
                     return;
-                if (const int tab = vendorTrade.open ? tabForPress(1, inventoryView.vendor.hoverTab) : -1; tab >= 0) {
-                    changePanelTab(1, tab);
+                if (!nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT && vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
+                    changePanelTab(1, inventoryView.vendor.hoverTab);
                     return;
                 }
                 if (nativeInventory && vendorTrade.open) {
@@ -5279,8 +5278,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     logLine("Vendor: sold " + itemName(it) + " for " + std::to_string(gameshop::sellPrice(raw)) + " gold");
                     return;
                 }
-                if (const int tab = tabForPress(0, inventoryView.hoverTab); tab >= 0) {
-                    changePanelTab(0, tab);
+                if (!nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverTab >= 0) {
+                    changePanelTab(0, inventoryView.hoverTab);
                     return;
                 }
                 if (nativeInventory) {

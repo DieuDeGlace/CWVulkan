@@ -815,9 +815,10 @@ individual feature documents.
   picking. Synthetic branch/input-model tests, owner-GUI checks and hidden menu
   captures pass. Exact sibling order, other stale HUD templates, full global
   picking and generated-card subtree rebuilding still need broader integration.
-  Inventory tabs now deliver registered down listeners through the scene-bound
-  input owner. Their panel adapter still supplies the hit, and full pointer
-  dispatch and capture are unfinished.
+  Inventory tab presses now pick once from the common scene root and deliver
+  the registered down listener on the selected target. An overlapping control
+  can block the tab without registering a tab action. Full pointer dispatch,
+  capture acquisition and other control routing are unfinished.
   Start Menu now retains the CPU HUD scene and its controls; the renderer,
   window and gameplay session still restart. Renderer bindings are cleared
   before teardown. Cursor units remain in a separate scene.

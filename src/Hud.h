@@ -295,7 +295,8 @@ class Hud {
     void clearInventoryCellHover(int which) const { invPanel(which).hoveredCell = {}; }
     int inventorySlotAt(glm::vec2 mouse, const Inventory &inv) const;
     int inventoryTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 0); }
-    int nativeInventoryTabForPress(glm::vec2, const Inventory &, int which) const;
+    struct InventoryTabPress { int panel, tab; };
+    std::optional<InventoryTabPress> nativeInventoryTabForPress(glm::vec2, const Inventory &) const;
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
     int vendorTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 1); }
