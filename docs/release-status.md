@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-11-04
+# Source review checkpoint — 2026-11-05
 
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
@@ -9,6 +9,15 @@ checkpoint describe the intended setup and remaining limits.
 
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
+
+- Physical Windows left-button edges and F4 now reach the retained interface
+  in message order, before the next admitted cursor sample. GLFW's synthetic
+  focus-loss releases still feed gameplay controls, while the retained scene
+  receives actual window button-up messages. An owner-GUI test exercises
+  visible/hidden/visible presses in one batch. Inventory presses retain their
+  identity through overlay filtering, so the later Game path sees the same
+  physical point and never delivers a second tab listener. Hardware focus and
+  controller comparisons remain open.
 
 - F4 now changes the retained principal scene root before the pointer poll,
   including gameplay with no menu open. Hiding the root blocks fresh tab picks

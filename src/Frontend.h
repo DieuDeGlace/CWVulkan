@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,11 @@ struct MenuInput {
     double scroll = 0;
     std::vector<inventoryui::WheelEvent> wheelEvents;
     std::vector<int> pressed, buttons, released;
+    enum class InterfaceMessage { LeftDown, LeftUp, ToggleVisibility };
+    std::vector<InterfaceMessage> interfaceMessages;
+    std::vector<Hud::InterfacePress> interfacePresses;
+    bool gameplayPointerAdmitted = false;
+    void routeInterfaceMessages(Hud &);
     std::string typed; // text typed this frame (character creation's name)
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
     GamepadButtons gamepad;
@@ -79,6 +85,9 @@ struct MenuInput {
         pressed.clear();
         buttons.clear();
         released.clear();
+        interfaceMessages.clear();
+        interfacePresses.clear();
+        gameplayPointerAdmitted = false;
         typed.clear();
         gamepadSampled = false;
         pointerSampled = false;

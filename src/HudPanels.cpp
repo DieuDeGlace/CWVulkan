@@ -60,6 +60,7 @@ void Hud::replaceInvTabs(InvPanel &p, const std::vector<std::string> &icons) {
     s.clearChildren(*p.tabParent);
     p.tabs.clear();
     // Replacing controls retains the separately owned selection/range state.
+    const int panel = &p == &panels.bag ? 0 : &p == &panels.vendor ? 1 : 2;
     float x = 4;
     for (const auto &icon : icons) {
         plasma::SceneNode *tab = s.instance("tab", p.tabParent);
@@ -70,8 +71,8 @@ void Hud::replaceInvTabs(InvPanel &p, const std::vector<std::string> &icons) {
         s.moveTo(*tab, glm::vec2(x, -s.viewSize(*tab).y - 3.0f));
         tab->initializeWidgets(); // Decorative hits route to this tab's own Widget.
         interfaceInput->registerEvent(*tab, plasma::Input::Event::LeftDown,
-                                      [receiver = &p](plasma::Input &, plasma::SceneNode &) {
-                                          receiver->pressedTab = receiver->hoveredTab;
+                                      [this, receiver = &p, panel](plasma::Input &, plasma::SceneNode &) {
+                                          pressedInventoryTab = InventoryTabPress{panel, receiver->hoveredTab};
                                       });
         x = s.viewSize(*tab).x + 2.0f + x;
         p.tabs.push_back(tab);
@@ -424,6 +425,22 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
             it->second->visible = list.regionArrows;
 }
 
+void Hud::setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const {
+    if (!hasPanels())
+        return;
+    panels.bag.node->visible = bag;
+    for (auto *slot : panels.slots)
+        slot->visible = bag;
+    if (panels.character)
+        panels.character->visible = bag;
+    if (panels.crafting.node)
+        panels.crafting.node->visible = crafting;
+    if (panels.details)
+        panels.details->visible = crafting;
+    if (panels.vendor.node)
+        panels.vendor.node->visible = vendor;
+}
+
 // Places the panels for this frame (the interface's layout for the window size).
 void Hud::placePanels(const Inventory &inv) const {
     plasma::Scene &s = *scene;
@@ -439,19 +456,12 @@ void Hud::placePanels(const Inventory &inv) const {
     if (panels.character)
         s.setPosition(*panels.character, glm::vec2(0, 0), glm::vec2(20, 170));
     placeInvPanel(panels.bag, bagList(inv));
-    if (panels.vendor.node) {
-        panels.vendor.node->visible = inv.vendor.open;
+    if (panels.vendor.node)
         placeInvPanel(panels.vendor, vendorList(inv));
-    }
-    bag.visible = inv.bagShown;
-    for (plasma::SceneNode *slot : panels.slots)
-        slot->visible = inv.bagShown;
-    if (panels.character)
-        panels.character->visible = inv.bagShown;
+    setInventoryPanelVisibility(inv.bagShown, inv.crafting.open, inv.vendor.open);
     // The crafting widget left of the bag, the formula details under it.
     const Inventory::Crafting &c = inv.crafting;
     if (plasma::SceneNode *crafting = panels.crafting.node) {
-        crafting->visible = c.open;
         const glm::vec2 view = s.viewSize(*crafting);
         s.setPosition(*crafting, glm::vec2(w / 2 - bagView.x * 0.5f - view.x, h / 2 - bagView.y), glm::vec2(-10, -50));
         const InvList list = craftingList(inv);
@@ -470,7 +480,6 @@ void Hud::placePanels(const Inventory &inv) const {
         }
     }
     if (plasma::SceneNode *details = panels.details) {
-        details->visible = c.open; // (Game: shown with the crafting widget)
         const glm::vec2 view = s.viewSize(*details);
         s.setPosition(*details, glm::vec2(w / 2 - bagView.x * 0.5f - view.x, h / 2), glm::vec2(-10, -40));
         // The craft button: cyan under the pointer when crafting is possible, green
@@ -1194,30 +1203,40 @@ int Hud::panelSlotAt(glm::vec2 m, const Inventory &inv) const {
     return -1;
 }
 
+bool Hud::inventoryTabPressEligible(InventoryTabPress press, const Inventory &inv) const {
+    const auto list = listOf(inv, press.panel);
+    return press.tab >= 0 && list.canonicalTabs && press.tab != list.tab && (size_t)press.tab < list.canonicalTabs->size();
+}
+
 std::optional<Hud::InventoryTabPress> Hud::nativeInventoryTabForPress(glm::vec2 point, const Inventory &inv) const {
     if (!hasPanels())
         return {};
     placePanels(inv);
-    const std::array<const InvPanel *, 3> receivers{&panels.bag, &panels.vendor, &panels.crafting};
-    for (const auto *panel : receivers)
-        panel->pressedTab = -1;
-
-    // Only the selected node can deliver the listener. An overlapping control
-    // with no registered tab callback does not allow a search below it.
+    pressedInventoryTab.reset();
     auto *hit = interfaceInput->captureNode();
     if (!hit)
         hit = const_cast<plasma::SceneNode *>(scene->hitTest(scene->root(), point, frontTextHit()));
     interfaceInput->dispatchRegistered(hit, plasma::Input::Event::LeftDown);
+    return pressedInventoryTab && inventoryTabPressEligible(*pressedInventoryTab, inv) ? pressedInventoryTab : std::nullopt;
+}
 
-    for (size_t index = 0; index < receivers.size(); ++index) {
-        const int tab = receivers[index]->pressedTab;
-        if (tab < 0)
-            continue;
-        const auto list = listOf(inv, (int)index);
-        if (list.canonicalTabs && tab != list.tab && (size_t)tab < list.canonicalTabs->size())
-            return InventoryTabPress{(int)index, tab};
-    }
-    return {};
+Hud::InterfacePress Hud::interfaceLeftDown() {
+    pressedInventoryTab.reset();
+    if (!interfaceInput)
+        return {};
+    const auto point = interfaceInput->pointer();
+    interfaceInput->leftDown();
+    return {point, pressedInventoryTab};
+}
+
+void Hud::interfaceLeftUp() {
+    if (interfaceInput)
+        interfaceInput->leftUp();
+}
+
+void Hud::moveInterfacePointer(glm::vec2 point) {
+    if (interfaceInput)
+        interfaceInput->move(point);
 }
 
 int Hud::panelTabAt(glm::vec2 m, const Inventory &inv, int which) const {

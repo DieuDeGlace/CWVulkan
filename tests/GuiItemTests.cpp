@@ -2,6 +2,7 @@
 #include "GuiItem.h"
 #include "Assets.h"
 #include "CubModel.h"
+#include "Frontend.h"
 #include "Hud.h"
 #include <bit>
 #include <cmath>
@@ -226,6 +227,26 @@ void equipmentCallbacks() {
             hud.setInterfaceShown(true);
             GUI_CHECK(tabForPress(*secondTab) == 0); // No child selection or tab hover was cleared.
             hud.publishFrontendScreen({});
+
+            MenuInput messages;
+            using Message = MenuInput::InterfaceMessage;
+            hud.moveInterfacePointer(*secondTab);
+            messages.interfaceMessages = {Message::LeftDown, Message::LeftUp, Message::ToggleVisibility, Message::LeftDown,
+                                          Message::LeftUp, Message::ToggleVisibility, Message::LeftDown, Message::LeftUp};
+            messages.routeInterfaceMessages(hud);
+            hud.moveInterfacePointer(points[10]);
+            GUI_CHECK(messages.interfaceMessages.empty() && messages.interfacePresses.size() == 3 && hud.interfaceShown());
+            if (messages.interfacePresses.size() == 3) {
+                const auto &first = messages.interfacePresses[0], &hidden = messages.interfacePresses[1],
+                           &last = messages.interfacePresses[2];
+                GUI_CHECK(first.point == *secondTab && first.tab && first.tab->panel == 0 && first.tab->tab == 0);
+                GUI_CHECK(hidden.point == *secondTab && !hidden.tab);
+                GUI_CHECK(last.point == *secondTab && last.tab && last.tab->tab == 0);
+            }
+            messages.interfaceMessages = {Message::LeftDown, Message::LeftUp};
+            messages.routeInterfaceMessages(hud);
+            GUI_CHECK(messages.interfacePresses.size() == 1 && messages.interfacePresses[0].point == points[10] &&
+                      !messages.interfacePresses[0].tab);
         }
         inventory.nativeCollections = false;
         inventory.pointer = points[11];

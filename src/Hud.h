@@ -297,6 +297,15 @@ class Hud {
     int inventoryTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 0); }
     struct InventoryTabPress { int panel, tab; };
     std::optional<InventoryTabPress> nativeInventoryTabForPress(glm::vec2, const Inventory &) const;
+    bool inventoryTabPressEligible(InventoryTabPress, const Inventory &) const;
+    struct InterfacePress {
+        glm::vec2 point{};
+        std::optional<InventoryTabPress> tab;
+    };
+    InterfacePress interfaceLeftDown();
+    void interfaceLeftUp();
+    void moveInterfacePointer(glm::vec2);
+    void setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const;
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
     int vendorTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 1); }
@@ -340,7 +349,6 @@ class Hud {
         int columns = 1, rows = 1;
         mutable inventoryslots::Index hoveredCell; // Physical group/row, published by the bound widget draw.
         mutable int hoveredTab = -1; // Last successful tab test, retained across misses and replacement.
-        mutable int pressedTab = -1; // Result of the current registered down delivery.
     };
     struct InvList {
         const std::vector<Inventory::Entry> *items = nullptr;
@@ -589,6 +597,7 @@ class Hud {
     bool interfaceRootShown = true;
     std::unique_ptr<uiroot::Branches> interfaceBranches;
     std::unique_ptr<plasma::Input> interfaceInput; // Detaches before its scene is destroyed.
+    mutable std::optional<InventoryTabPress> pressedInventoryTab;
     Hud &operator=(Hud &&) = default; // Only the explicit reload uses assignment, after detaching input.
     // One frontend instance per template owner/use, retained between frames.
     struct TemplateInstance {

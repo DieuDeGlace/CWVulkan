@@ -91,6 +91,9 @@
 #include <windows.h> // before GLFW, which defines APIENTRY only when Windows has not
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <commctrl.h>
 #include <dbghelp.h>
 #include <algorithm>
 #include <chrono>
@@ -122,6 +125,17 @@ fs::path exeDir() {
 }
 
 MenuInput input;
+
+// GLFW's focus handler also emits releases. Only a real window up belongs in
+// the retained interface's stream; gameplay keeps GLFW's existing callbacks.
+LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR) {
+    if (message == WM_LBUTTONUP)
+        input.interfaceMessages.push_back(MenuInput::InterfaceMessage::LeftUp);
+    else if (message == WM_NCDESTROY)
+        RemoveWindowSubclass(hwnd, interfaceWindowProc, id);
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
 cameramotion::FieldOfView cameraFieldOfView; // Native lens survives frontend/character/world transitions in this process.
 struct ChatInputEvent {
     enum Kind { Key, Character, MouseDown } kind;
@@ -600,6 +614,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         glfwWindowHint(GLFW_REFRESH_RATE, windowMode.refresh);
     GLFWwindow *window = glfwCreateWindow(windowMode.width, windowMode.height, "CubeVulkan",
                                           windowMode.fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
+    if (!window || !SetWindowSubclass(glfwGetWin32Window(window), interfaceWindowProc, 1, 0)) {
+        if (window)
+            glfwDestroyWindow(window);
+        glfwTerminate();
+        fatal("Could not initialize the game window's input");
+        return 1;
+    }
     // Native relative input is device counts, unaffected by desktop pointer acceleration.
     // GLFW applies raw motion only while its cursor is disabled; GUI coordinates stay absolute.
     if (glfwRawMouseMotionSupported())
@@ -627,14 +648,19 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.shiftDown = action != GLFW_RELEASE;
         if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
             input.controlDown = action != GLFW_RELEASE;
-        if (action == GLFW_PRESS || (action == GLFW_REPEAT && key == GLFW_KEY_F4))
+        if (action == GLFW_PRESS || (action == GLFW_REPEAT && key == GLFW_KEY_F4)) {
             input.pressed.push_back(key);
+            if (key == GLFW_KEY_F4)
+                input.interfaceMessages.push_back(MenuInput::InterfaceMessage::ToggleVisibility);
+        }
         if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
             chatInput.push_back({ChatInputEvent::Key, key, (modifiers & GLFW_MOD_SHIFT) != 0, action == GLFW_REPEAT});
     });
     glfwSetMouseButtonCallback(window, [](GLFWwindow *, int button, int action, int) {
         if (action == GLFW_PRESS) {
             input.buttons.push_back(button);
+            if (button == GLFW_MOUSE_BUTTON_LEFT)
+                input.interfaceMessages.push_back(MenuInput::InterfaceMessage::LeftDown);
             if (captureChatInput) chatInput.push_back({ChatInputEvent::MouseDown, button});
         }
         else if (action == GLFW_RELEASE)
@@ -3601,6 +3627,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.gamepadPanels = {hud.inventoryPanelEligible(point, inventoryView, 0), hud.inventoryPanelEligible(point, inventoryView, 2),
                                    hud.inventoryPanelEligible(point, inventoryView, 1)};
         }
+        input.gameplayPointerAdmitted = nativeOrdinaryUi();
+        hud.setInventoryPanelVisibility(inventoryOpen && bagShown, inventoryOpen && craftingOpen, inventoryOpen && vendorTrade.open);
         const auto physicalDowns = input.buttons;
         const auto physicalUps = input.released;
         const glm::vec2 previousGuiPointer{(float)input.pointerX, (float)input.pointerY};
@@ -3617,6 +3645,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             default:
                 break;
             }
+        if (!menusReady) {
+            input.routeInterfaceMessages(hud);
+            if (input.gameplayPointerAdmitted && glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+                double x, y;
+                int width, height;
+                glfwGetCursorPos(window, &x, &y);
+                glfwGetWindowSize(window, &width, &height);
+                const auto extent = renderer.screenSize();
+                hud.moveInterfacePointer({float(x * extent.width / std::max(1, width)), float(y * extent.height / std::max(1, height))});
+            }
+        }
         auto gameDowns = physicalDowns;
         if (nativeInventory) {
             auto gameUps = physicalUps;
@@ -4323,15 +4362,26 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             vendorTrade.open = upgrade.open = false, inventoryRegionActive = false, identify.close();
         lootWindowItems.clear();
         identificationView = {};
-        std::array<int, 3> completedDowns{}, downOrdinals{};
-        auto nativeDownPoint = [&](int button) {
-            const bool physical = button >= 0 && button < 3 &&
-                                  downOrdinals[(size_t)button]++ < (int)std::count(physicalDowns.begin(), physicalDowns.end(), button);
-            if (!physical)
-                return customizationPointer;
-            return glm::vec2(previousGuiPointer.x * renderExtent.width / std::max(1, pointerWindowWidth),
-                             previousGuiPointer.y * renderExtent.height / std::max(1, pointerWindowHeight));
+        struct NativeDown {
+            glm::vec2 point;
+            const Hud::InterfacePress *physicalLeft = nullptr;
+            bool completed = false;
         };
+        std::vector<NativeDown> nativeDowns;
+        if (nativeInventory) {
+            const glm::vec2 previousPoint(previousGuiPointer.x * renderExtent.width / std::max(1, pointerWindowWidth),
+                                          previousGuiPointer.y * renderExtent.height / std::max(1, pointerWindowHeight));
+            size_t left = 0;
+            nativeDowns.reserve(gameDowns.size());
+            for (size_t index = 0; index < gameDowns.size(); ++index) {
+                const bool physical = index < physicalDowns.size();
+                const bool physicalLeft = physical && gameDowns[index] == GLFW_MOUSE_BUTTON_LEFT;
+                const auto *press = physicalLeft && left < input.interfacePresses.size() ? &input.interfacePresses[left] : nullptr;
+                nativeDowns.push_back({press ? press->point : physical ? previousPoint : customizationPointer, press});
+                if (physicalLeft)
+                    ++left;
+            }
+        }
         auto finishNativeDown = [&](int button, float oldMaximum, glm::vec2 point) {
             if (!nativeInventory || button < 0 || button >= 3)
                 return;
@@ -4384,6 +4434,25 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         inventoryView.vendor.canonicalTabs = nativeInventory ? &shopCollection.rows : nullptr;
         // Inventory screen: the list holds every measured item not being worn.
         if (inventoryOpen) {
+            std::vector<size_t> inventoryDownIndices;
+            inventoryDownIndices.reserve(input.buttons.size());
+            for (size_t index = 0; index < input.buttons.size(); ++index)
+                inventoryDownIndices.push_back(index);
+            // Keep the original press identity when a floating window claims
+            // a press before the inventory receives the remaining ones.
+            auto filterInventoryDowns = [&](auto claim) {
+                size_t next = 0;
+                for (size_t index = 0; index < input.buttons.size(); ++index) {
+                    const int button = input.buttons[index];
+                    if (!claim(button)) {
+                        input.buttons[next] = button;
+                        inventoryDownIndices[next] = inventoryDownIndices[index];
+                        ++next;
+                    }
+                }
+                input.buttons.resize(next);
+                inventoryDownIndices.resize(next);
+            };
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
             auto tabOf = [](int category) {
                 switch (category) {
@@ -4759,7 +4828,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             return;
                         }
                 };
-                std::vector<int> unclaimed; // the clicks the windows leave to the inventory
 
                 auto selectedForIdentification = [&]() -> Carried * {
                     if (nativeInventory) {
@@ -4779,27 +4847,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     identify.takeOut();
                 const auto idLayout = hud.identificationLayout();
                 const glm::vec2 idMouse = pointerTestX >= 0 ? glm::vec2((float)pointerTestX, (float)pointerTestY) : mouse;
-                for (int button : input.buttons) {
-                    if (!identify.open || (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT)) {
-                        unclaimed.push_back(button);
-                        continue;
-                    }
+                filterInventoryDowns([&](int button) {
+                    if (!identify.open || (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT))
+                        return false;
                     if (nativeInventory) {
                         const auto *stack = nativeInventory->inventory.slot(hoveredNative);
                         if (stack && stack->count != 0) {
                             identify.bind(hoveredNative);
                             slotted = selectedForIdentification();
-                            continue;
+                            return true;
                         }
                     } else if (inventoryView.hoverItem >= (int)gearRows && (size_t)inventoryView.hoverItem - gearRows < bag.size()) {
                         identify.put(rawOf(bag[(size_t)inventoryView.hoverItem - gearRows].item));
                         slotted = selectedForIdentification();
-                        continue;
+                        return true;
                     }
-                    if (!idLayout.inWindow(idMouse))
-                        unclaimed.push_back(button);
-                }
-                input.buttons = std::move(unclaimed);
+                    return idLayout.inWindow(idMouse);
+                });
                 for (int button : input.released) {
                     if (!identify.acceptsRelease(button))
                         continue;
@@ -4912,30 +4976,25 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                         std::to_string(me[WORN + (size_t)hand * ITEM_SIZE + Gear::CUBE_COUNT_AT]) + " cubes");
                         }
                     };
-                    unclaimed.clear();
-                    for (int button : input.buttons) {
-                        if (button != GLFW_MOUSE_BUTTON_LEFT) {
-                            unclaimed.push_back(button);
-                            continue;
-                        }
+                    filterInventoryDowns([&](int button) {
+                        if (button != GLFW_MOUSE_BUTTON_LEFT)
+                            return false;
                         if (const int box = upLayout.paletteBoxAt(guiMouse); box >= 0) { // a palette entry chosen
                             if (box < (int)upgrade.palette.size())
                                 upgrade.selected = upgrade.selected == box ? -1 : box, upgrade.carrying = false;
-                            continue;
+                            return true;
                         }
                         if (const int turn = upLayout.turnAt(guiMouse)) { // the view turned
                             upgradeView.yawDegrees = std::fmod(upgradeView.yawDegrees + 45.0f * (float)turn + 360.0f, 360.0f);
-                            continue;
+                            return true;
                         }
                         // The widget's click (0x292650); the pointer over the window or the
                         // inventory is "over another widget".
                         const bool overOther = upLayout.inWindow(guiMouse) || inventoryView.hoverItem >= 0 || inventoryView.hoverSlot >= 0 ||
                                                inventoryView.hoverTab >= 0;
                         applyClick(upgradewidget::click(upgrade, record.data(), overOther));
-                        if (!upLayout.inWindow(guiMouse))
-                            unclaimed.push_back(button);
-                    }
-                    input.buttons = std::move(unclaimed);
+                        return upLayout.inWindow(guiMouse);
+                    });
                     if (nativeInventory && upgradeDemo) // the capture fixture starts without a preceding widget draw
                         upgrade.palette = upgradewidget::paletteOf(nativeInventory->inventory, record);
                     // --upgrade-demo: a cube of each of the first palette entries, set through the
@@ -5148,9 +5207,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                      {255, 51, 51, 255}});
                 audio.playInterface(gameshop::SOUND_REFUSED);
             };
-            auto handleInventoryDown = [&](int button, glm::vec2 point) {
+            auto handleInventoryDown = [&](int button, glm::vec2 point, const Hud::InterfacePress *physicalLeft) {
                 if (nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT) {
-                    if (const auto press = hud.nativeInventoryTabForPress(point, inventoryView)) {
+                    const auto press = physicalLeft ? physicalLeft->tab : hud.nativeInventoryTabForPress(point, inventoryView);
+                    if (press && hud.inventoryTabPressEligible(*press, inventoryView)) {
                         changePanelTab(press->panel, press->tab);
                         return;
                     }
@@ -5367,17 +5427,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     }
                 }
             };
-            for (int button : input.buttons) {
+            for (size_t index = 0; index < input.buttons.size(); ++index) {
+                const int button = input.buttons[index];
                 const float oldMaximum = spawned.playerMaxHealth();
-                // Classify the queued press once. UI and the later Game handlers
-                // share its cached physical or controller pointer position.
-                const glm::vec2 point = nativeInventory ? nativeDownPoint(button) : mouse;
-                handleInventoryDown(button, point);
-                if (nativeInventory) {
+                const size_t original = inventoryDownIndices[index];
+                auto *down = original < nativeDowns.size() ? &nativeDowns[original] : nullptr;
+                const auto point = down ? down->point : nativeInventory ? customizationPointer : mouse;
+                handleInventoryDown(button, point, down ? down->physicalLeft : nullptr);
+                if (nativeInventory)
                     finishNativeDown(button, oldMaximum, point);
-                    if (button >= 0 && button < 3)
-                        ++completedDowns[(size_t)button];
-                }
+                if (down)
+                    down->completed = true;
             }
             if (input.gamepadPointer.regionDirection)
                 changeRegion(input.gamepadPointer.regionDirection);
@@ -5459,18 +5519,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             craftButton.update((float)(dt * 1000.0), false, false);
             craftingFormula = {}; // Hiding clears the action snapshot, not the details recipe.
         }
-        if (nativeInventory) {
-            auto completed = completedDowns;
-            for (int button : gameDowns) {
-                if (button < 0 || button >= 3)
-                    continue;
-                if (completed[(size_t)button] > 0) {
-                    --completed[(size_t)button];
-                    continue;
-                }
-                finishNativeDown(button, spawned.playerMaxHealth(), nativeDownPoint(button));
-            }
-        }
+        for (size_t index = 0; index < nativeDowns.size(); ++index)
+            if (!nativeDowns[index].completed)
+                finishNativeDown(gameDowns[index], spawned.playerMaxHealth(), nativeDowns[index].point);
         // The game's default controls: attack (left mouse), special (right mouse; a
         // tap, since holding it turns the camera), dodge (middle mouse), class skill
         // (Shift), P and the ultimate (R).

@@ -817,7 +817,8 @@ individual feature documents.
   picking and generated-card subtree rebuilding still need broader integration.
   Inventory tab presses now pick once from the common scene root and deliver
   the registered down listener on the selected target. An overlapping control
-  can block the tab without registering a tab action. Full pointer dispatch,
+  can block the tab without registering a tab action. Ordinary pointer samples
+  and ordered physical left edges now reach the shared scene input. Wider widget dispatch,
   capture acquisition and other control routing are unfinished.
   Start Menu now retains the CPU HUD scene and its controls; the renderer,
   window and gameplay session still restart. Renderer bindings are cleared

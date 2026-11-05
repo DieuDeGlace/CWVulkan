@@ -36,6 +36,24 @@
 #include <map>
 #include <memory>
 
+void MenuInput::routeInterfaceMessages(Hud &hud) {
+    interfacePresses.clear();
+    for (const auto message : interfaceMessages) {
+        switch (message) {
+        case InterfaceMessage::LeftDown:
+            interfacePresses.push_back(hud.interfaceLeftDown());
+            break;
+        case InterfaceMessage::LeftUp:
+            hud.interfaceLeftUp();
+            break;
+        case InterfaceMessage::ToggleVisibility:
+            hud.setInterfaceShown(!hud.interfaceShown());
+            break;
+        }
+    }
+    interfaceMessages.clear();
+}
+
 namespace fs = std::filesystem;
 
 namespace frontend {
@@ -915,10 +933,9 @@ void Session::readInput(bool poll, double frameMs) {
     const glm::vec2 cachedWheelPointer = mouse * guiScale;
     if (poll)
         glfwPollEvents();
-    // F4 changes the shared root even with no open menu or a binding wait.
-    for (int key : s.input->pressed)
-        if (key == GLFW_KEY_F4)
-            hud.setInterfaceShown(!hud.interfaceShown());
+    // Button messages use the UI owner's last admitted coordinates. Polling
+    // a new pointer sample comes after those messages and before XInput.
+    s.input->routeInterfaceMessages(hud);
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
                       gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()))
@@ -942,7 +959,8 @@ void Session::readInput(bool poll, double frameMs) {
     if (req.pointer.x >= 0)
         mx = req.pointer.x, my = req.pointer.y;
     glfwGetWindowSize(s.window, &ww, &wh);
-    mouse = glm::vec2((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh))) / guiScale;
+    const glm::vec2 framebufferPointer((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh)));
+    mouse = framebufferPointer / guiScale;
     pointerDown = std::find(s.input->buttons.begin(), s.input->buttons.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->buttons.end();
     pointerUp = std::find(s.input->released.begin(), s.input->released.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->released.end();
     if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; }))
@@ -955,6 +973,8 @@ void Session::readInput(bool poll, double frameMs) {
     capturingAtPoll = capturingControl();
     const bool ui = front() || anyOpen() || s.input->gamepadModal;
     const bool focused = req.pointer.x >= 0 || glfwGetWindowAttrib(s.window, GLFW_FOCUSED);
+    if (focused && (front() || ordinaryUi() || s.input->gameplayPointerAdmitted))
+        hud.moveInterfacePointer(framebufferPointer);
     if (ui && focused && !capturingAtPoll) {
         if (!pointerClockStarted) {
             characterScroll.sampledAt = wallClockMs();

@@ -339,7 +339,7 @@ else()
 endif()
 
 add_executable(CubeVulkan src/main.cpp)
-target_link_libraries(CubeVulkan PRIVATE engine dbghelp)
+target_link_libraries(CubeVulkan PRIVATE engine dbghelp comctl32)
 # Mods link against nothing: the API is a table of function pointers.
 set_target_properties(CubeVulkan PROPERTIES ENABLE_EXPORTS OFF)
 
