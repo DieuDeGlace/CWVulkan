@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Experimental generation now publishes an exclusive context-tagged request
+  snapshot before consuming input. Observed World/seed/day changes or native
+  generation/refresh failures pause the batch and retain pending work. Actual
+  Windows file tests check exclusive input ownership, exact-file consumption,
+  complete publication and preservation of existing
+  final/temporary files. This is tool policy, not native lifetime pinning or
+  atomic capture. Live qualification and broader acceptance remain open.
+
 - Inventory row input now preserves separate callback visits and refreshes the
   local canonical inventory before each row decision, including a boundary attempt.
   Refresh clamping is distinct from requested movement, so it does not alone request

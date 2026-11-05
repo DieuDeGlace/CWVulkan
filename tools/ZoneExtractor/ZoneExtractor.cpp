@@ -7,6 +7,7 @@
 #include "CaptureTickContext.h"
 #include "CaptureWorldSections.h"
 #include "GenerationRequest.h"
+#include "GenerationSnapshotFile.h"
 #include "NativeConversation.h"
 #include "NativeCreatureAppearance.h"
 #include "NativeCreatureEffects.h"
@@ -6437,21 +6438,36 @@ static void writeZone(cube::World *w, unsigned char *zone, const std::string &st
 static capturepolicy::GenerationCoordinates genQueue; // a few a tick, so the game keeps running
 static capturepolicy::RetainedGenerationBudget genBudget;
 static bool genRequestNotice = false;
+static capturepolicy::GenerationContextGate genContextGate;
+static std::string genSnapshot;
+static uint64_t genSnapshotSerial = 0;
+static capturepolicy::GenerationContext generationContextOf(cube::World *world) {
+    // As with the native operation, the callback must supply a live initialized
+    // World. Comparing copied fields does not pin it or create a transaction.
+    const captureabi::WorldMetadata metadata(world);
+    return {reinterpret_cast<uintptr_t>(world), metadata.seedBits(), metadata.derivedGenerationValue(), metadata.day()};
+}
+static bool generationContextMatches(cube::World *world, size_t inFlight = 0) {
+    if (genContextGate.paused())
+        return false;
+    if (genContextGate.allow(generationContextOf(world)))
+        return true;
+    log("Oracle: generation paused after World/seed/day changed; remaining " + std::to_string(genQueue.size() + inFlight) +
+        " coordinates retained; original batch snapshot: " + genSnapshot);
+    return false;
+}
 static int genDone = 0;
 static std::string genDirectory;
 static void queueGeneration(cube::World *w) {
-    if (!genQueue.empty())
+    if (genContextGate.paused() || !genQueue.empty())
         return; // Do not redirect an active batch or consume another request.
-    FILE *f = nullptr;
-    if (fopen_s(&f, "Extract\\gen.request", "rb") != 0 || !f)
+    capturepolicy::GenerationRequestInput request("Extract\\gen.request");
+    if (!request)
         return;
-    char bytes[capturepolicy::MaximumGenerationRequestBytes + 1];
-    const size_t count = fread(bytes, 1, sizeof bytes, f);
-    const bool readComplete = !ferror(f);
-    fclose(f);
+    std::string bytes;
+    const bool readComplete = request.read(bytes);
     capturepolicy::GenerationCoordinates pending;
-    if (!readComplete ||
-        !capturepolicy::parseGenerationRequest(std::string_view(bytes, count), genBudget.remaining(), pending)) {
+    if (!readComplete || !capturepolicy::parseGenerationRequest(bytes, genBudget.remaining(), pending)) {
         if (!genRequestNotice) {
             log("Oracle: gen.request deferred (invalid/oversized or exceeds remaining " +
                 std::to_string(genBudget.remaining()) + " retained-Zone attempts); request preserved");
@@ -6459,18 +6475,33 @@ static void queueGeneration(cube::World *w) {
         }
         return;
     }
-    if (!DeleteFileA("Extract\\gen.request"))
-        return; // A batch is accepted only after its request can be consumed.
-    genRequestNotice = false;
-    genQueue.swap(pending);
+    const auto context = generationContextOf(w);
     const auto root = referenceFolder();
     const auto parent = root == "Extract" ? root + "\\oracle" : root;
+    const auto directory = parent + "\\gen";
     CreateDirectoryA(parent.c_str(), nullptr);
-    genDirectory = parent + "\\gen";
-    CreateDirectoryA(genDirectory.c_str(), nullptr);
-    CreateDirectoryA((genDirectory + "\\refreshed").c_str(), nullptr);
+    CreateDirectoryA(directory.c_str(), nullptr);
+    CreateDirectoryA((directory + "\\refreshed").c_str(), nullptr);
+    const auto snapshot = directory + "\\request_" + std::to_string(GetCurrentProcessId()) + "_" +
+                          std::to_string(GetTickCount64()) + "_" + std::to_string(++genSnapshotSerial) + ".txt";
+    if (!capturepolicy::publishGenerationSnapshot(snapshot, capturepolicy::generationRequestSnapshot(context, pending))) {
+        genContextGate.stop();
+        log("Oracle: generation paused; request snapshot failed; gen.request preserved");
+        return;
+    }
+    if (!request.consume()) {
+        genContextGate.stop();
+        log("Oracle: generation paused; gen.request could not be consumed; snapshot: " + snapshot);
+        return;
+    }
+    genRequestNotice = false;
+    genContextGate.bind(context);
+    genSnapshot = snapshot;
+    genQueue.swap(pending);
+    genDirectory = directory;
+    FILE *f = nullptr;
     if (fopen_s(&f, (genDirectory + "\\day.txt").c_str(), "w") == 0 && f) {
-        fprintf(f, "%d\n", captureabi::WorldMetadata(w).day());
+        fprintf(f, "%d\n", context.day);
         fclose(f);
     }
     genDone = 0;
@@ -6478,6 +6509,8 @@ static void queueGeneration(cube::World *w) {
 }
 static void generate(cube::World *w) {
     for (int n = 0; n < 2 && !genQueue.empty(); n++) {
+        if (!generationContextMatches(w))
+            return;
         if (!genBudget.beginAttempt())
             return; // Conservative admission includes attempts that fail after partial allocation.
         auto [zx, zy] = genQueue.front();
@@ -6491,8 +6524,14 @@ static void generate(cube::World *w) {
         if (tracing)
             hook(false);
         if (!made) {
-            log("Oracle: generating zone " + std::to_string(zx) + " " + std::to_string(zy) + " failed");
-            continue;
+            genContextGate.stop();
+            genQueue.emplace_front(zx, zy);
+            log("Oracle: generation failed; batch paused with pending work and snapshot: " + genSnapshot);
+            return;
+        }
+        if (!generationContextMatches(w, 1)) {
+            genQueue.emplace_front(zx, zy);
+            return;
         }
         const std::string name = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
         writeZone(w, zone, genDirectory + "\\" + name);
@@ -6504,10 +6543,17 @@ static void generate(cube::World *w) {
         traceThread = 0;
         if (tracing2)
             hook(false);
-        if (refreshed)
-            writeZone(w, zone, genDirectory + "\\refreshed\\" + name);
-        else
-            log("Oracle: refreshing zone " + std::to_string(zx) + " " + std::to_string(zy) + " failed");
+        if (!refreshed) {
+            genContextGate.stop();
+            genQueue.emplace_front(zx, zy);
+            log("Oracle: refresh failed; batch paused with pending work and snapshot: " + genSnapshot);
+            return;
+        }
+        if (!generationContextMatches(w, 1)) {
+            genQueue.emplace_front(zx, zy);
+            return;
+        }
+        writeZone(w, zone, genDirectory + "\\refreshed\\" + name);
         if (++genDone % 25 == 0 || genQueue.empty())
             log("Oracle: generated " + std::to_string(genDone) + " zones" + (genQueue.empty() ? " (done)" : ""));
     }

@@ -2013,3 +2013,18 @@ scrollbar using their refreshed range; the shared helper retains its local width
 before moving/resizing it. Full cached-range/thumb lifetimes and live callback/
 hardware acceptance remain separate unfinished work. No native source or game assets were
 read or added to the implementation or packages.
+
+## Generation request context and preservation, 2026-11-04
+
+The context gate, sticky pause and immutable request snapshot are original tool
+policies. The implementer used the already independently specified World metadata
+fields and owned extractor sources only. No native generation algorithm, source,
+SDK or additional native code was read. The copied World address is a comparison
+key, not ownership or a lifetime pin. Checks occur around the native operations;
+no atomic native snapshot, rollback, full escape proof or exception cleanup is
+inferred. Pending requests/coordinates remain available after admission, context
+or native-operation failures. Input stays exclusively held until exact-file
+consumption; a producer cannot replace it after reading and lose a newer request.
+Asset-free state-machine checks and actual isolated
+Windows publication/no-overwrite fixtures exercise this policy. No game assets
+or captured output enter either package; live supported-game acceptance is separate.

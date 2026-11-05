@@ -140,7 +140,10 @@ without reading implementation, SDK, probes or other project prose.
   [refresh lifetime audit](specs/steam-zone-refresh-reference-lifetimes.md) proves
   that World+0x1a0 can retain the actual Zone pointer until later native consumer
   dereferences and tree clearing; the Zone destructor does not detach it. Keep
-  that storage. Experimental gen.request batches now admit at most 32 native
+  that storage. Context-tagged request snapshots and sticky mismatch/failure
+  pausing now preserve admitted work; see [generation request policy](extractor-generation-requests.md).
+  These checks are not lifetime pins or atomic whole-World capture.
+  Experimental gen.request batches now admit at most 32 native
   allocation attempts over the extractor process, including failed attempts.
   Empty, malformed, oversized and over-budget requests remain on disk, and active
   batches cannot be redirected by a second request. This is project policy, not a

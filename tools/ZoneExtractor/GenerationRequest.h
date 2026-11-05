@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -25,6 +26,53 @@ class RetainedGenerationBudget {
 };
 using GenerationCoordinates = std::deque<std::pair<int32_t, int32_t>>;
 inline constexpr size_t MaximumGenerationRequestBytes = 4096;
+
+// Copied capture key, not a native record or an allocation-lifetime pin.
+struct GenerationContext {
+    uintptr_t worldAddress = 0;
+    uint32_t seedBits = 0;
+    int32_t derivedSeed = 0, day = 0;
+    bool operator==(const GenerationContext &other) const {
+        return worldAddress == other.worldAddress && seedBits == other.seedBits && derivedSeed == other.derivedSeed &&
+               day == other.day;
+    }
+};
+class GenerationContextGate {
+    GenerationContext expected;
+    bool bound = false, stopped = false;
+
+  public:
+    bool bind(const GenerationContext &context) {
+        if (stopped)
+            return false;
+        expected = context;
+        bound = true;
+        return true;
+    }
+    bool allow(const GenerationContext &context) {
+        if (!bound || stopped)
+            return false;
+        if (!(context == expected)) {
+            stopped = true;
+            return false;
+        }
+        return true;
+    }
+    void stop() { stopped = true; }
+    bool paused() const { return stopped; }
+};
+// Immutable local diagnostic receipt. It includes every admitted coordinate in
+// order, including duplicates; it is not an automatically replayable gen.request.
+inline std::string generationRequestSnapshot(const GenerationContext &context,
+                                             const GenerationCoordinates &coordinates) {
+    std::string text = "CW-GENERATION-SNAPSHOT 1\nworld-address " + std::to_string(context.worldAddress) +
+                       "\nseed-bits " + std::to_string(context.seedBits) + "\nderived-seed " +
+                       std::to_string(context.derivedSeed) + "\nday " + std::to_string(context.day) + "\ncoordinates " +
+                       std::to_string(coordinates.size()) + '\n';
+    for (const auto &[x, y] : coordinates)
+        text += std::to_string(x) + ' ' + std::to_string(y) + '\n';
+    return text + "END\n";
+}
 
 inline bool generationWhitespace(char c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
