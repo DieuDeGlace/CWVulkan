@@ -406,6 +406,9 @@ void equipmentCallbacks() {
     hud.draw(state, vertices);
     GUI_CHECK(hud.itemDraws().size() == 3);
     nextRenderer.shutdown();
+    GUI_CHECK(hud.load(assets.gameDir(), error)); // Explicit reload retires the old input owner before the scene.
+    const auto *reloadedOptions = hud.interfaceBranchRoot(uiroot::Branch::Options);
+    GUI_CHECK(reloadedOptions && reloadedOptions->children.empty());
 }
 } // namespace
 int guiItemTests() {

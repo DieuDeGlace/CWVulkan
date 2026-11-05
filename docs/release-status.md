@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Inventory tab listeners now register on one scene-bound input owner. The
+  live panel adapter delivers tag two through its registered-event path; it
+  still supplies the panel hit separately. Replacing tab widgets removes their
+  registrations through scene deletion, and explicit HUD reload detaches input
+  before replacing the scene. The owner survives Start Menu with the CPU HUD.
+  The owner-GUI regressions cover stale tab ordinals and explicit reload.
+  Common root admission, full pointer dispatch and scrollbar capture remain open.
+
 - Bound draws now retain a separate tab ordinal. The native-backed bag, shop
   and crafting left-down adapters require an enabled tab hit but read the last
   ordinal published by drawing. A missed or unbound draw preserves that value;

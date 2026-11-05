@@ -69,12 +69,17 @@ void Hud::replaceInvTabs(InvPanel &p, const std::vector<std::string> &icons) {
             s.setIcon(*tab, "background", iconsDoc, icon);
         s.moveTo(*tab, glm::vec2(x, -s.viewSize(*tab).y - 3.0f));
         tab->initializeWidgets(); // Decorative hits route to this tab's own Widget.
+        interfaceInput->registerEvent(*tab, plasma::Input::Event::LeftDown,
+                                      [receiver = &p](plasma::Input &, plasma::SceneNode &) {
+                                          receiver->pressedTab = receiver->hoveredTab;
+                                      });
         x = s.viewSize(*tab).x + 2.0f + x;
         p.tabs.push_back(tab);
     }
 }
 
 void Hud::buildPanels() {
+    interfaceInput.reset();
     panels = {};
     recipeEuler = {-120, 0, 0};
     if (!guiLoaded)
@@ -83,6 +88,9 @@ void Hud::buildPanels() {
     interfaceBranches.reset();
     scene = std::make_unique<plasma::Scene>(gui);
     interfaceBranches = std::make_unique<uiroot::Branches>(*scene);
+    interfaceInput = std::make_unique<plasma::Input>(*scene, [this](glm::vec2 point) {
+        return const_cast<plasma::SceneNode *>(scene->hitTest(scene->root(), point, frontTextHit()));
+    });
     plasma::Scene &s = *scene;
     s.setScale(1.0f); // (the game builds its interface before the scale option applies)
     panels.inGame = interfaceBranches->node(uiroot::Branch::Gameplay);
@@ -1190,22 +1198,18 @@ int Hud::nativeInventoryTabForPress(glm::vec2 point, const Inventory &inv, int w
         return -1;
     const auto &panel = invPanel(which);
     const auto list = listOf(inv, which);
-    const int tab = panel.hoveredTab;
-    if (!list.canonicalTabs || !panel.node || !panel.tabParent || tab < 0 || tab == list.tab ||
-        (size_t)tab >= list.canonicalTabs->size())
+    if (!list.canonicalTabs || !panel.node || !panel.tabParent)
         return -1;
     placePanels(inv);
     if (!panel.node->visible)
         return -1;
-    // This is the existing panel admission path. A matching tab target enables
-    // the action; its position in the tab list is not the callback argument.
-    const auto *hit = scene->hitTest(*panel.tabParent, point, frontTextHit());
-    if (!hit || (hit->flags & plx::NODE_PASSIVE))
-        return -1;
-    const auto *target = hit->widgetOwner;
-    if (!target || !target->widget || !target->widget->enabled)
-        return -1;
-    return std::find(panel.tabs.begin(), panel.tabs.end(), target) != panel.tabs.end() ? tab : -1;
+    // Panel admission still supplies the hit. The registered dispatch supplies
+    // owner/enable/passive checks and delivers the listener on that target.
+    panel.pressedTab = -1;
+    auto *hit = const_cast<plasma::SceneNode *>(scene->hitTest(*panel.tabParent, point, frontTextHit()));
+    interfaceInput->dispatchRegistered(hit, plasma::Input::Event::LeftDown);
+    const int tab = panel.pressedTab;
+    return tab >= 0 && tab != list.tab && (size_t)tab < list.canonicalTabs->size() ? tab : -1;
 }
 
 int Hud::panelTabAt(glm::vec2 m, const Inventory &inv, int which) const {

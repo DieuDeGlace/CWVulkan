@@ -46,14 +46,14 @@ borrowed branch references; `Scene` owns the nodes.
 `publishFrontendScreen` places retained template instances before pointer decisions
 and hides frontend-managed instances omitted from the current screen. Layout-only
 probes live under an inactive branch; drawing other HUD overlays still manages
-its own template visibility. Branch changes preserve the current scene and nodes. Inventory drawing respects
-the gameplay branch without overriding its active state.
-Returning to Start Menu retains the CPU HUD owner and its scene. The window,
+its own template visibility. Inventory drawing respects the gameplay branch
+without overriding its active state.
+
+Returning to Start Menu retains the CPU HUD, scene and input owner. The window,
 renderer and gameplay session are rebuilt, so renderer bindings are discarded
-before that teardown. Production pointer dispatch is not yet connected to
-`plasma::Input`. Synthetic
-input-model tests do not establish that live integration or full native lifetime
-parity. See the independent [root lifetime contract](specs/steam-interface-input-root-lifetime.md).
+before that teardown. An explicit interface reload detaches the input owner
+before replacing the scene. See the independent
+[root lifetime contract](specs/steam-interface-input-root-lifetime.md).
 
 The bound inventory, crafting and shop draws retain a physical cell index.
 Later item queries validate that index against the live collection and current
@@ -64,11 +64,13 @@ that raw pair before attempting to publish a recipe. The independent
 state from movement targets, tab hover and visual highlighting.
 
 A bound draw also stores the last successful tab ordinal. A miss or an unbound
-pass preserves it. The left-down adapter separately checks the hit tab's owner
-and enabled state, then uses the stored ordinal if valid and different from
-selection. Cloned tabs initialize their event target for decorative descendants.
-The adapter still runs within existing panel admission; global registered
-callbacks and capture are separate work.
+pass preserves it. Each cloned tab initializes its event target and registers
+a left-down listener on the shared scene input owner. The existing panel
+adapter supplies the hit; the registered dispatch checks ownership and enabled
+state before calling the listener. The listener reads the last drawn ordinal,
+and the adapter validates it against the current collection and selection.
+Removing or replacing a scene widget removes its listener. Common root picking,
+full down/up/move dispatch, capture and other widget hooks remain open.
 
 ## Font resolution
 

@@ -59,6 +59,7 @@ struct Packer {
 } // namespace
 
 bool Hud::loadMenu(const fs::path &gameDir, std::string &error) {
+    interfaceInput.reset();
     *this = Hud{}; // Explicit loading starts a fresh interface; ensureLoaded retains completed resources.
     error.clear();
     plasmaFonts.reset(gameDir);

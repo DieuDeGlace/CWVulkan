@@ -814,8 +814,10 @@ individual feature documents.
   templates before pointer decisions; inactive layout probes stay outside root
   picking. Synthetic branch/input-model tests, owner-GUI checks and hidden menu
   captures pass. Exact sibling order, other stale HUD templates, full global
-  picking and generated-card subtree rebuilding still need broader integration;
-  the game does not yet use the scene-bound input owner throughout its interface.
+  picking and generated-card subtree rebuilding still need broader integration.
+  Inventory tabs now deliver registered down listeners through the scene-bound
+  input owner. Their panel adapter still supplies the hit, and full pointer
+  dispatch and capture are unfinished.
   Start Menu now retains the CPU HUD scene and its controls; the renderer,
   window and gameplay session still restart. Renderer bindings are cleared
   before teardown. Cursor units remain in a separate scene.

@@ -18,6 +18,7 @@
 #include "PlasmaShape.h"
 #include "PlasmaText.h"
 #include "PlasmaScene.h"
+#include "PlasmaInput.h"
 #include "InterfaceRoot.h"
 #include <array>
 #include <memory>
@@ -51,6 +52,7 @@ struct CubModel;
 
 class Hud {
   public:
+    Hud() = default;
     struct ScreenItem; // (below: the items of the screens drawScreen draws)
     struct Plate {      // a monster's name and health over its head
         glm::vec2 at;   // screen position of the top of its head
@@ -337,6 +339,7 @@ class Hud {
         int columns = 1, rows = 1;
         mutable inventoryslots::Index hoveredCell; // Physical group/row, published by the bound widget draw.
         mutable int hoveredTab = -1; // Last successful tab test, retained across misses and replacement.
+        mutable int pressedTab = -1; // Result of the current registered down delivery.
     };
     struct InvList {
         const std::vector<Inventory::Entry> *items = nullptr;
@@ -581,6 +584,8 @@ class Hud {
     // Frontend templates and gameplay panels share their tree, scale and document geometry cache.
     std::unique_ptr<plasma::Scene> scene;
     std::unique_ptr<uiroot::Branches> interfaceBranches;
+    std::unique_ptr<plasma::Input> interfaceInput; // Detaches before its scene is destroyed.
+    Hud &operator=(Hud &&) = default; // Only the explicit reload uses assignment, after detaching input.
     // One frontend instance per template owner/use, retained between frames.
     struct TemplateInstance {
         plasma::SceneNode *node = nullptr;
