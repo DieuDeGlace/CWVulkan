@@ -50,6 +50,39 @@ inline void changeRegion(Region &active, const std::vector<Region> &choices, int
     active = choices[(size_t)((index + (direction < 0 ? count - 1 : 1)) % count)];
 }
 
+// Region arrows request sound before searching, then refresh even with no matching
+// choice. Next-region adds an explicit canonical sort before refresh's own sort.
+// steam-inventory-refresh-events.md section 4.2.
+template <class Sound, class Sort, class Refresh, class Thumb>
+void requestRegion(Region &active, const std::vector<Region> &choices, int direction, Sound &&sound, Sort &&sort,
+                   Refresh &&refresh, Thumb &&thumb) {
+    if (!direction)
+        return;
+    sound();
+    changeRegion(active, choices, direction);
+    if (direction > 0)
+        sort();
+    refresh();
+    thumb();
+}
+
+// Reached row handlers refresh even when already at a boundary. The callback
+// maintains the current row and returns the available first-row count, not a
+// maximum offset. A clamp performed by refresh is not a requested row movement.
+// steam-inventory-refresh-events.md section 4.2 / steam-inventory-grid-layout.md section 4.
+template <class Refresh> bool requestRow(int &row, int direction, Refresh &&refresh) {
+    if (!direction)
+        return false;
+    const int available = refresh();
+    const int before = row;
+    if (direction < 0) {
+        if (row > 0)
+            --row;
+    } else if (row < available - 1)
+        ++row;
+    return row != before;
+}
+
 template <size_t Count> struct Tabs {
     int tab = 0, scroll = 0;
     int selected = -1; // Entry index; scrolling leaves it unchanged.

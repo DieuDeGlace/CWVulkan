@@ -146,6 +146,10 @@ without reading implementation, SDK, probes or other project prose.
   batches cannot be redirected by a second request. This is project policy, not a
   native memory limit or proof of all generator reference lifetimes. Split larger
   capture requests into smaller sessions; ordinary loaded-zone export is unchanged.
+  The separate [generator escape audit](specs/steam-zone-generator-escape-audit.md)
+  distinguishes its complete bounded normal-flow callsite inventory from unproved
+  callee scopes and runtime/exception/lifetime boundaries; it does not authorize
+  cleanup of arbitrary generated temporaries.
   Explicit unsigned 32 seed arithmetic preserves the native modular equation at
   signed-coordinate extremes.
 - Complete creature/controller lifetime and transitive writer audits remain

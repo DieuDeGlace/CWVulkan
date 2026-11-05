@@ -104,8 +104,13 @@ code (`EngineTests wgterrain`, `wgstructures`, `wgcreatures`, and the commands n
 3. `EngineTests gen [field]` prints the differences.
 
 **Zones the game generates on request.** To check places that the extracted world lacks, the game itself can generate chosen zones:
-1. Write `Extract/gen.request` (lines `x y`, zone coordinates; `EngineTests encounters <r> <day>` lists every place within r regions with its role, encounter and the zone it is built in).
-2. In a game session (`build/game_session.sh start`), load the TEST character. ZoneExtractor makes each zone the way 0x2ae0c0 does (rand() seeded with `y*1024 + seed + x`, 0x2f9400, the generator 0x2ff6f0), two per frame, outside the world and without its saved changes. It writes `Extract/oracle/gen/z_x_y.cwz/.rec/.spawns`, a `.rtrace` of every rand() call (caller RVA and value), and `day.txt`.
+1. Write `Extract/gen.request` (at most 32 coordinate pairs over one extractor process; lines `x y`, zone coordinates; `EngineTests encounters <r> <day>` lists every place within r regions with its role, encounter and the zone it is built in).
+   The request is bounded to 4096 bytes. Failed native allocation/construction
+   attempts also consume the process budget. Invalid, oversized or over-budget
+   requests remain on disk; split larger captures across fresh authorized test
+   sessions. Temporary Zones are retained because their complete external
+   reference lifetimes are unproved; this is not a fixed byte-memory limit.
+2. Launch the supported Steam game with the extractor enabled and load the TEST character. ZoneExtractor makes each zone the way 0x2ae0c0 does (rand() seeded with `y*1024 + seed + x`, 0x2f9400, the generator 0x2ff6f0), two per frame, outside the world and without its saved changes. It writes `Extract/oracle/gen/z_x_y.cwz/.rec/.spawns`, a `.rtrace` of every rand() call (caller RVA and value), and `day.txt`.
    Each zone is then given the game's daily refresh for the world's day (0x31c540, as on loading) and written again to `Extract/oracle/gen/refreshed/` (with its own `.rtrace`); compare those with `CW_REFRESH_DAY=<day>` set.
 3. Copy them into a folder named like `gen_seed_123` (with the oracle's creature tables beside them) and run the usual comparisons on it: `CW_ZONES_DIR=<folder> CW_DAY=<day> EngineTests zones|zonediff|allobjects|allspawns|allitems`, plus `EngineTests rtrace x y` (our rand() values against the game's, to the first difference).
 Fresh zones have no light yet; `zonediff` ignores light-only differences.

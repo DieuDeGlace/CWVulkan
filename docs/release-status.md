@@ -10,6 +10,16 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Inventory row input now preserves separate callback visits and refreshes the
+  local canonical inventory before each row decision, including a boundary attempt.
+  Refresh clamping is distinct from requested movement, so it does not alone request
+  the row sound. Region arrows request sound before changing region; next-region
+  adds its explicit canonical sort before refresh, even with no matching choice.
+  Asset-free boundary, opposing-input and callback-order checks exercise the shared
+  production helpers. Event handlers also place the actual scrollbar with their
+  refreshed range. Full cached range/thumb state and live GUI callback binding
+  remain unfinished; this does not claim complete controller or UI parity.
+
 - The shipping extractor now builds without CWSDK. Independent owned views cover
   its loader, catalogs, World/Zone data, creatures, appearance, inventory, effects,
   simple event queues, camera and generated text. The actual compiler/header

@@ -298,6 +298,8 @@ class Hud {
     // The bag's rows to scroll through (the inventory rows: its row count), and the scroll
     // button under the mouse (1 up, 2 down, 0 none).
     int inventoryRowCount(const Inventory &inv, int which = 0) const;
+    // Uses current bound panel geometry and the caller's just-refreshed range A.
+    void updateInventoryThumb(const Inventory &inv, int which, int availableRows) const;
     int inventoryButtonAt(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
     // Tests this panel's own node tree, independent of overlapping panels (native 0x333e70).
     bool inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int which = 0) const;
@@ -593,6 +595,7 @@ class Hud {
     InvList listOf(const Inventory &inv, int which) const;
     void layoutInvPanel(InvPanel &p);
     void placeInvPanel(const InvPanel &p, const InvList &list) const;
+    void placeInvThumb(const InvPanel &p, const InvList &list, int availableRows) const;
     int invRowCount(const InvPanel &p, const InvList &list) const;
     void drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const InvList &list, const std::string &title,
                       const std::string &region, bool vendor, bool selling, glm::vec2 pointer) const;

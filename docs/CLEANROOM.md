@@ -1995,3 +1995,21 @@ explicit replacement-tool policies, not native allocation or quiescence claims.
 The wrapped unsigned 32 generation seed follows worldgen-terrain-zone.md section 2.
 Asset-free coordinate, malformed-input, admission and boundary fixtures qualify
 these policies; original-game live execution remains a separate acceptance gate.
+
+## Inventory row and region request ordering, 2026-11-04
+
+The implementer read the independent steam-inventory-refresh-events section 4.2,
+steam-inventory-grid-layout section 4 and owned engine code only. Inventory,
+crafting and shop row requests now refresh/sort the local canonical inventory
+before calculating the available row count and applying one directional request.
+Separate input visits are not summed into a cancelled or multirow request.
+A downward clamp performed by refresh is not itself a requested row movement.
+Region arrows request sound first, change the selected region when found, add
+next-region's explicit canonical sort, then run refresh and the thumb stage even
+when no choice matches. The extra sort avoids redundant presentation rebuilding.
+Synthetic post-refresh, boundary, opposing-input and ordered-callback fixtures
+exercise the shared production helpers. Event handlers now place the actual
+scrollbar using their refreshed range; the shared helper retains its local width
+before moving/resizing it. Full cached-range/thumb lifetimes and live callback/
+hardware acceptance remain separate unfinished work. No native source or game assets were
+read or added to the implementation or packages.

@@ -358,11 +358,27 @@ int Hud::invRowCount(const InvPanel &p, const InvList &list) const {
     return std::max(1, (count - 1) / p.columns - p.rows + 2);
 }
 
+void Hud::placeInvThumb(const InvPanel &p, const InvList &list, int rowCount) const {
+    if (!p.node)
+        return;
+    plasma::Scene &s = *scene;
+    if (auto it = p.buttons.find("scrollbutton"); it != p.buttons.end() && it->second && it->second->widget) {
+        plasma::SceneNode &button = *it->second;
+        const glm::vec2 content = s.contentSize(*p.node);
+        if (rowCount) {
+            const int track = (int)(content.y - 70.0f), buttonHeight = track / rowCount;
+            const float y = rowCount > 1 ? (float)(list.scroll * (track - buttonHeight) / (rowCount - 1) + 35) : 35.0f;
+            const float width = s.contentSize(button).x;
+            s.moveTo(button, glm::vec2(content.x - 28.0f, y));
+            s.resizeTo(button, glm::vec2(width, (float)buttonHeight));
+        }
+    }
+}
+
 // The cells' faint fill, the tabs lit when chosen or under the pointer, the scroll button
 // (the inventory scroll button: the track 35 from the top, the height less 70, divided
 // by the rows), the buttons lit under the pointer (the inventory panel's drawing).
 void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
-    plasma::Scene &s = *scene;
     for (plasma::SceneNode *c : p.cells)
         c->fill = glm::vec4(1, 1, 1, 0.25f);
     for (size_t t = 0; t < p.tabs.size(); t++) {
@@ -371,17 +387,7 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
         if (plasma::SceneNode *frame = p.tabs[t]->find("frame"))
             frame->fill = over ? glm::vec4(0, 1, 1, 1) : chosen ? glm::vec4(0, 1, 0, 1) : glm::vec4(1);
     }
-    if (auto it = p.buttons.find("scrollbutton"); it != p.buttons.end() && it->second && it->second->widget) {
-        plasma::SceneNode &button = *it->second;
-        const int rowCount = invRowCount(p, list);
-        const glm::vec2 content = s.contentSize(*p.node);
-        if (rowCount) {
-            const int track = (int)(content.y - 70.0f), buttonHeight = track / rowCount;
-            const float y = rowCount > 1 ? (float)(list.scroll * (track - buttonHeight) / (rowCount - 1) + 35) : 35.0f;
-            s.moveTo(button, glm::vec2(content.x - 28.0f, y));
-            s.resizeTo(button, glm::vec2(s.contentSize(button).x, (float)buttonHeight));
-        }
-    }
+    placeInvThumb(p, list, invRowCount(p, list));
     for (auto [name, value] : {std::pair{"upbutton", 1}, std::pair{"downbutton", 2}})
         if (auto it = p.buttons.find(name); it != p.buttons.end() && it->second)
             it->second->fill = list.hoverButton == value ? glm::vec4(0, 1, 1, 1) : glm::vec4(1);
@@ -947,6 +953,11 @@ int Hud::inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const {
             inside(mouse, scene->contentPosition(*found->second), scene->screenSize(*found->second)))
             return direction;
     return 0;
+}
+
+void Hud::updateInventoryThumb(const Inventory &inv, int which, int availableRows) const {
+    if (hasPanels())
+        placeInvThumb(invPanel(which), listOf(inv, which), availableRows);
 }
 
 int Hud::inventoryRowCount(const Inventory &inv, int which) const {

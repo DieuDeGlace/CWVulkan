@@ -388,6 +388,12 @@ individual feature documents.
   virtual/registered gates, nested release and global visitor order. Native Widget
   ownership/enabled state, Button copy/group/press semantics and resize propagation
   have synthetic regressions; scrollbar sizing retains its loaded dynamic class.
+  Inventory row requests now refresh/sort canonical inventory before their row
+  decision, including boundary attempts. Opposing mouse/controller requests remain
+  separate visits; a clamp done by refresh is not a row-movement sound. Region
+  arrows request sound first; next-region adds its explicit canonical sort before
+  refresh, including missing-choice paths. Event handlers update the actual
+  scrollbar using their refreshed count. Native full cached-range/thumb lifetime and callback/hardware acceptance remain open.
   Binding that dispatcher to the complete live GUI hierarchy, remaining dynamic
   hooks, full camera/focus integration and hardware comparisons remain. Creature selection now runs once before early control;
   separate minimum depth, post-movement aim, early assistance, later speaker

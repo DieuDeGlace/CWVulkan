@@ -359,6 +359,7 @@ target_sources(EngineTests PRIVATE
     tests/NativeEventQueueTests.cpp
     tests/NativeGameCameraTests.cpp
     tests/GenerationRequestTests.cpp
+    tests/InventoryUiTests.cpp
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)

@@ -2009,7 +2009,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 bag.push_back({std::move(item), stack.count});
             }
     };
-    auto refreshInventory = [&](bool pickup = false) {
+    auto sortInventory = [&](bool pickup = false) {
         if (!nativeInventory)
             return;
         const auto fallback = nativeRecord(-1, nullptr);
@@ -2023,6 +2023,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
         nativeInventory->inventory.refresh(context);
         if (pickup) // local pickup performs an explicit refresh, then the bound widget refresh
             nativeInventory->inventory.refresh(context);
+    };
+    auto refreshInventory = [&](bool pickup = false) {
+        sortInventory(pickup);
         rebuildInventoryViews();
     };
     auto consumeCarried = [&](size_t row) {
@@ -4898,20 +4901,41 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     change(inventoryView.crafting);
             };
             auto changeRegion = [&](int direction) {
-                inventoryui::changeRegion(inventoryView.activeRegion, inventoryView.regionChoices, direction);
-                refreshInventory();
-                refreshRegions();
-                inventoryView.scroll = std::clamp(inventoryView.scroll, 0, std::max(0, hud.inventoryRowCount(inventoryView) - 1));
-                audio.playInterface(soundrules::soundid::MENU_TAB);
+                inventoryui::requestRegion(
+                    inventoryView.activeRegion, inventoryView.regionChoices, direction,
+                    [&] { audio.playInterface(soundrules::soundid::MENU_TAB); }, [&] { sortInventory(); },
+                    [&] {
+                        refreshRegions();
+                        refreshInventory();
+                    },
+                    [&] {
+                        const int available = hud.inventoryRowCount(inventoryView);
+                        if (!available)
+                            inventoryView.scroll = 0;
+                        else if (inventoryView.scroll > available - 1)
+                            inventoryView.scroll = available - 1;
+                        hud.updateInventoryThumb(inventoryView, 0, available);
+                    });
             };
             auto scrollPanel = [&](int which, int &offset, int step) {
                 if (!step)
                     return;
-                const int last = std::max(0, hud.inventoryRowCount(inventoryView, which) - 1);
-                const int before = std::clamp(offset, 0, last);
-                offset = std::clamp(before + step, 0, last);
-                if (offset != before)
+                int available = 1;
+                const bool moved = inventoryui::requestRow(offset, step, [&] {
+                    // Every admitted InventoryWidget row callback refreshes/sorts
+                    // local canonical inventory, including attempts at a boundary.
+                    refreshInventory();
+                    available = hud.inventoryRowCount(inventoryView, which);
+                    if (!available)
+                        offset = 0; // Physically empty tab, unlike nonempty holes.
+                    else if (offset > available - 1)
+                        offset = available - 1;
+                    return available;
+                });
+                if (moved) {
                     audio.playInterface(soundrules::soundid::MENU_TAB);
+                    hud.updateInventoryThumb(inventoryView, which, available);
+                }
             };
             size_t wheelIndex = 0;
             for (const auto &event : input.wheelEvents) {
@@ -4925,30 +4949,26 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                     scrollPanel(2, inventoryView.crafting.scroll, event.rowStep);
             }
             if (bagShown) { // the inventory scroll buttons and controller
-                int step = 0;
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverButton)
-                        step += inventoryView.hoverButton == 1 ? -1 : 1;
+                        scrollPanel(0, inventoryView.scroll, inventoryView.hoverButton == 1 ? -1 : 1);
                 if (input.gamepadPointer.scrollPanel == 0)
-                    step += input.gamepadPointer.scrollRows;
-                scrollPanel(0, inventoryView.scroll, step);
+                    scrollPanel(0, inventoryView.scroll, input.gamepadPointer.scrollRows);
             }
             if (craftingOpen) { // the crafting scroll buttons and controller
                 Hud::Inventory::Crafting &cv = inventoryView.crafting;
-                int step = 0;
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && cv.hoverButton)
-                        step += cv.hoverButton == 1 ? -1 : 1;
+                        scrollPanel(2, cv.scroll, cv.hoverButton == 1 ? -1 : 1);
                 if (input.gamepadPointer.scrollPanel == 1)
-                    step += input.gamepadPointer.scrollRows;
-                scrollPanel(2, cv.scroll, step);
+                    scrollPanel(2, cv.scroll, input.gamepadPointer.scrollRows);
             }
             if (vendorTrade.open) {
-                int step = input.gamepadPointer.scrollPanel == 2 ? input.gamepadPointer.scrollRows : 0;
+                if (input.gamepadPointer.scrollPanel == 2)
+                    scrollPanel(1, inventoryView.vendor.scroll, input.gamepadPointer.scrollRows);
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.vendor.hoverButton)
-                        step += inventoryView.vendor.hoverButton == 1 ? -1 : 1;
-                scrollPanel(1, inventoryView.vendor.scroll, step);
+                        scrollPanel(1, inventoryView.vendor.scroll, inventoryView.vendor.hoverButton == 1 ? -1 : 1);
             }
             gameshop::TradeHooks trade;
             trade.inventory = [&] { refreshInventory(); };
