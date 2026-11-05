@@ -27,6 +27,7 @@
 #include "NativeTerrainBuffers.h"
 #include "NativeWorldMetadata.h"
 #include "ObjectRewardCapture.h"
+#include "StoredWorldDiagnostics.h"
 #include "ZoneTerrainCapture.h"
 #include <memory>
 // ZoneExtractor: CubeModLoader mod that saves the zones Steam Cube World
@@ -55,14 +56,14 @@
 //   char[4] "CWZ1"; int32 zoneX, zoneY, regionType, reserved;
 //   4096 columns in the game's order (index = localX * 64 + localY):
 //     int32 baseZ; uint32 runs; runs x { uint16 count; uint8 block[6] }
-//   block = red, green, blue, field_3, type, breakable (cube::Block bytes).
+//   block = red, green, blue, field_3, type, breakable (six stored block bytes).
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include "cwsdk.h"
+#include <d3d11.h>
 #include <dxgi1_2.h>
 #include <intrin.h>
 #include <mmsystem.h>
@@ -74,18 +75,29 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdio>
-#include <share.h>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
+#include <fstream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <set>
+#include <share.h>
+#include <sstream>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <fstream>
-#include <sstream>
+
+namespace cube {
+class Game;
+class World;
+class Creature;
+class Zone;
+} // namespace cube
 
 namespace extract {
 constexpr uintptr_t REGION_AT_RVA = 0x2ada20;    // void (World*, captureabi::CoordinatePair* out, x, y)
@@ -187,13 +199,6 @@ class CreatureSelection {
 };
 static CreatureSelection creatureById(const cube::World *world, int64_t id) {
     return CreatureSelection(world, id);
-}
-static cube::World *embeddedHostWorld(const cube::Game *game) {
-    // Independent in-place identity: steam-local-world-zone-ownership.md section1.
-    const auto address = reinterpret_cast<uintptr_t>(game);
-    if (!address || address > std::numeric_limits<uintptr_t>::max() - 0x6f0)
-        return nullptr;
-    return reinterpret_cast<cube::World *>(address + 0x6f0);
 }
 // Recording-only health ceiling, applied to each matching registration entry.
 // Client and host scopes are sequential; their different guards never overlap.
@@ -1178,7 +1183,7 @@ static void tourTick(cube::World *w, cube::Creature *player) {
 // readable snapshot of the player; F4 toggles recording every tick to a binary
 // file, so animations can be replayed exactly without the game's code.
 // The game's own combat numbers for a creature, from its stat functions
-// (RVAs as in CWSDK's Creature.cpp).
+// (independent call contract: steam-native-stat-query-abi.md).
 static std::string statsText(cube::Creature *c) {
     auto call = [&](uintptr_t rva) { return ((float (*)(cube::Creature *))(base() + rva))(c); };
     auto callBool = [&](uintptr_t rva) { return ((float (*)(cube::Creature *, bool))(base() + rva))(c, true); };
@@ -6348,15 +6353,19 @@ static bool writeSpawns(unsigned char *zone, const std::string &name) {
     return true;
 }
 static int spawns(cube::World *w, const std::string &dir) {
-    int zones = 0;
-    if (!TryEnterCriticalSection(&w->zones_critical_section))
+    const captureabi::WorldBufferLease held(reinterpret_cast<uintptr_t>(w));
+    if (!held)
         return -1;
-    for (auto &[key, zone] : w->zones)
-        if (zone && writeSpawns((unsigned char *)zone, dir + "\\z_" + std::to_string(zone->position.x) + "_" +
-                                                           std::to_string(zone->position.y) + ".spawns"))
-            zones++;
-    LeaveCriticalSection(&w->zones_critical_section);
-    return zones;
+    std::vector<captureabi::StoredZone> zones;
+    if (!captureabi::readStoredZones(base(), reinterpret_cast<uintptr_t>(w), zones, readNative))
+        return -1;
+    int written = 0;
+    for (const auto &zone : zones)
+        if (writeSpawns(reinterpret_cast<unsigned char *>(zone.address),
+                        dir + "\\z_" + std::to_string(zone.coordinates[0]) + "_" + std::to_string(zone.coordinates[1]) +
+                            ".spawns"))
+            ++written;
+    return written;
 }
 
 // Extract\oracle\gen: zones the game generates afresh for Extract\gen.request (lines "x y"),
@@ -7105,35 +7114,34 @@ static void tick(cube::Game *g) {
         static int pushDx = 0, pushDy = 0;
         bool down7key = extract::hotkeyDown('7');
         cube::World *cw = clientWorld(g);
-        auto blockSolid = [&](int64_t bx, int64_t by, int64_t bz) -> bool { // block-space z
-            int zx = (int)std::floor(bx / 64.0), zy = (int)std::floor(by / 64.0);
-            for (auto &[key, zone] : cw->zones)
-                if (zone && zone->position.x == zx && zone->position.y == zy) {
-                    const cube::Field &f = zone->fields[(bx - zx * 64) * 64 + (by - zy * 64)];
-                    if (bz < f.base_z)
-                        return true;
-                    size_t i = (size_t)(bz - f.base_z);
-                    if (i >= f.blocks.size())
-                        return false;
-                    uint8_t t = ((const uint8_t *)&f.blocks[i])[4];
-                    return t != 0 && t != 2 && t != 3 && t != 17 && t != 19;
-                }
-            return false;
-        };
-        if (down7key && !pushKey && TryEnterCriticalSection(&cw->zones_critical_section)) {
+        if (down7key && !pushKey) {
+            const captureabi::WorldBufferLease held(reinterpret_cast<uintptr_t>(cw));
+            captureabi::StoredWorldDiagnostics view(base(), held ? reinterpret_cast<uintptr_t>(cw) : 0, readNative);
+            bool complete = held && view.ready();
+            const auto blockSolid = [&](int64_t x, int64_t y, int64_t z) {
+                bool solid = false;
+                if (!view.solid(x, y, z, solid))
+                    complete = false;
+                return solid;
+            };
             const auto position = captureabi::CreatureScalars(localCreature(cw)).position();
-            double px = position.x / 65536.0, py = position.y / 65536.0, pz = position.z / 65536.0;
-            int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py), feet = (int64_t)std::floor(pz) - 1;
+            const double px = position.x / 65536.0, py = position.y / 65536.0, pz = position.z / 65536.0;
+            const int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py),
+                          feet = (int64_t)std::floor(pz) - 1;
             int best = 99;
             pushDx = pushDy = 0;
-            for (auto [dx, dy] : {std::pair{1, 0}, std::pair{-1, 0}, std::pair{0, 1}, std::pair{0, -1}})
-                for (int k = 1; k <= 16 && k < best; k++)
-                    if (blockSolid(bx + dx * k, by + dy * k, feet) && blockSolid(bx + dx * k, by + dy * k, feet + 1)) {
-                        best = k, pushDx = dx, pushDy = dy;
-                        break;
-                    }
-            LeaveCriticalSection(&cw->zones_critical_section);
-            if (best < 99) {
+            if (complete)
+                for (auto [dx, dy] : {std::pair{1, 0}, std::pair{-1, 0}, std::pair{0, 1}, std::pair{0, -1}})
+                    for (int k = 1; k <= 16 && k < best; ++k)
+                        if (blockSolid(bx + dx * k, by + dy * k, feet) &&
+                            blockSolid(bx + dx * k, by + dy * k, feet + 1)) {
+                            best = k, pushDx = dx, pushDy = dy;
+                            break;
+                        }
+            if (!complete) {
+                pushDx = pushDy = 0;
+                log("Push capture unavailable; try 7 again");
+            } else if (best < 99) {
                 pushUntil = GetTickCount64() + 5000;
                 if (collisionLog)
                     fprintf(collisionLog, "# push %+d %+d toward a wall %d blocks away\n", pushDx, pushDy, best);
@@ -7170,139 +7178,169 @@ static void tick(cube::Game *g) {
         static bool dropKey = false;
         bool downG = extract::hotkeyDown('G');
         if (downG && !dropKey) {
-            cube::World *w = clientWorld(g);
-            captureabi::CreatureScalars player(localCreature(w));
-            const auto position = player.position();
-            int64_t px = position.x >> 16, py = position.y >> 16;
-            int64_t best = -1, bx = 0, by = 0, bz = 0;
-            EnterCriticalSection(&w->zones_critical_section); // the game streams zones meanwhile
-            for (auto &[key, zone] : w->zones) {
-                if (!zone)
-                    continue;
-                for (int lx = 0; lx < 64; lx++)
-                    for (int ly = 0; ly < 64; ly++) {
-                        int64_t x = (int64_t)zone->position.x * 64 + lx, y = (int64_t)zone->position.y * 64 + ly;
-                        int64_t d = (x - px) * (x - px) + (y - py) * (y - py);
-                        if (best >= 0 && d >= best)
+            auto *world = clientWorld(g);
+            captureabi::FixedPosition position;
+            bool complete = false;
+            {
+                const captureabi::WorldActorLease held(reinterpret_cast<uintptr_t>(world));
+                auto *local = held && clientWorld(g) == world ? localCreature(world) : nullptr;
+                if (local) {
+                    position = captureabi::CreatureScalars(local).position();
+                    complete = true;
+                }
+            }
+            const int64_t px = position.x >> 16, py = position.y >> 16;
+            double best = -1;
+            int64_t bx = 0, by = 0, bz = 0;
+            size_t loaded = 0;
+            std::map<int, std::pair<int64_t, int64_t>> range;
+            if (complete) {
+                const captureabi::WorldBufferLease held(reinterpret_cast<uintptr_t>(world));
+                std::vector<captureabi::StoredZone> zones;
+                complete =
+                    held && captureabi::readStoredZones(base(), reinterpret_cast<uintptr_t>(world), zones, readNative);
+                loaded = zones.size();
+                for (const auto &zone : zones) {
+                    if (!complete)
+                        break;
+                    for (size_t column = 0; column < captureabi::ZONE_COLUMN_COUNT; ++column) {
+                        captureabi::StoredColumn stored;
+                        if (!captureabi::readStoredColumn(zone.address, column, stored, readNative)) {
+                            complete = false;
+                            break;
+                        }
+                        const int64_t x = int64_t(zone.coordinates[0]) * 64 + int64_t(column / 64),
+                                      y = int64_t(zone.coordinates[1]) * 64 + int64_t(column % 64);
+                        const double dx = captureabi::fixedDelta(x, px), dy = captureabi::fixedDelta(y, py),
+                                     distance = dx * dx + dy * dy;
+                        // Retain block-type ranges in the same pass; avoid rereading
+                        // every column when no deep-water candidate is present.
+                        for (size_t i = 0; i < stored.blocks.size(); ++i) {
+                            const int type = stored.blocks[i][4];
+                            const int64_t z = int64_t(stored.baseZ) + int64_t(i);
+                            auto entry = range.try_emplace(type, z, z).first;
+                            entry->second.first = std::min(entry->second.first, z);
+                            entry->second.second = std::max(entry->second.second, z);
+                        }
+                        if (best >= 0 && distance >= best)
                             continue;
-                        // Water blocks (type 2): the topmost run of eight or more (deep enough to swim), with
-                        // nothing solid above it.
-                        const cube::Field &f = zone->fields[lx * 64 + ly];
-                        size_t n = f.blocks.size(), run = 0;
+                        size_t run = 0;
                         int64_t top = 0;
-                        for (size_t i = n; i-- > 0;) {
-                            uint8_t t = ((const uint8_t *)&f.blocks[i])[4];
-                            if (t == 2) {
+                        for (size_t i = stored.blocks.size(); i-- > 0;) {
+                            const uint8_t type = stored.blocks[i][4];
+                            if (type == 2) {
                                 if (!run)
-                                    top = f.base_z + (int64_t)i + 1;
+                                    top = int64_t(stored.baseZ) + int64_t(i) + 1;
                                 if (++run >= 8)
                                     break;
-                            } else if (t != 0)
-                                break; // solid above any water
+                            } else if (type != 0)
+                                break;
                             else
                                 run = 0;
                         }
-                        if (run < 8)
-                            continue;
-                        best = d, bx = x, by = y, bz = top;
+                        if (run >= 8)
+                            best = distance, bx = x, by = y, bz = top;
                     }
+                }
             }
-            if (best < 0) {
-                // What the loaded zones hold instead: block types, with the z range of each.
-                std::map<int, std::pair<int64_t, int64_t>> range;
-                std::map<int, size_t> count;
-                for (auto &[key, zone] : w->zones)
-                    if (zone)
-                        for (int c = 0; c < 4096; c++) {
-                            const cube::Field &f = zone->fields[c];
-                            for (size_t i = 0; i < f.blocks.size(); i++) {
-                                int t = ((const uint8_t *)&f.blocks[i])[4];
-                                int64_t z = f.base_z + (int64_t)i;
-                                auto r = range.try_emplace(t, z, z).first;
-                                r->second.first = std::min(r->second.first, z), r->second.second = std::max(r->second.second, z);
-                                count[t]++;
-                            }
-                        }
-                std::string s;
-                for (auto &[t, r] : range)
-                    s += " type " + std::to_string(t) + ": " + std::to_string(count[t]) + " at z " + std::to_string(r.first) +
-                         ".." + std::to_string(r.second) + ";";
-                log("Drop test: no water in the " + std::to_string(w->zones.size()) + " loaded zones. Blocks:" + s +
+            if (!complete)
+                log("Drop capture unavailable; try G again");
+            else if (best < 0) {
+                std::string summary;
+                for (const auto &[type, bounds] : range)
+                    summary += " " + std::to_string(type) + ":" + std::to_string(bounds.first) + ".." +
+                               std::to_string(bounds.second);
+                log("Drop test: no water in the " + std::to_string(loaded) + " loaded zones. Blocks:" + summary +
                     " player z " + std::to_string(position.z >> 16));
             } else {
-                player.setPosition({captureabi::fixedFromBlocks(bx) + 32768, captureabi::fixedFromBlocks(by) + 32768,
-                                    captureabi::fixedFromBlocks(bz + 30)});
-                captureabi::CreatureScalars(localCreature(w)).setVelocity({});
-                if (collisionLog)
-                    fprintf(collisionLog, "# drop over water: column %lld %lld, water surface z=%lld\n", (long long)bx,
-                            (long long)by, (long long)bz);
-                log("Drop test: 30 blocks above water at " + std::to_string(bx) + ", " + std::to_string(by) + " (surface " +
-                    std::to_string(bz) + "), " + std::to_string((int)std::sqrt((double)best)) + " blocks away");
+                {
+                    const captureabi::WorldActorLease held(reinterpret_cast<uintptr_t>(world));
+                    auto *local = held && clientWorld(g) == world ? localCreature(world) : nullptr;
+                    complete = local != nullptr;
+                    if (local) {
+                        captureabi::CreatureScalars player(local);
+                        player.setPosition({captureabi::fixedFromBlocks(bx) + 32768,
+                                            captureabi::fixedFromBlocks(by) + 32768,
+                                            captureabi::fixedFromBlocks(bz + 30)});
+                        player.setVelocity({});
+                    }
+                }
+                if (!complete)
+                    log("Drop target update unavailable; try G again");
+                else {
+                    if (collisionLog)
+                        fprintf(collisionLog, "# drop over water: column %lld %lld, water surface z=%lld\n",
+                                (long long)bx, (long long)by, (long long)bz);
+                    log("Drop test: 30 blocks above water at " + std::to_string(bx) + ", " + std::to_string(by) +
+                        " (surface " + std::to_string(bz) + "), " + std::to_string(std::sqrt(best)) + " blocks away");
+                }
             }
-            LeaveCriticalSection(&w->zones_critical_section);
         }
         dropKey = downG;
         if (logging && collisionLog) {
             static captureabi::FixedPosition last{};
-            cube::World *w = clientWorld(g);
-            const captureabi::CreatureScalars player(localCreature(w));
+            auto *world = clientWorld(g);
+            const captureabi::CreatureScalars player(localCreature(world));
             const auto position = player.position();
             if (position.x != last.x || position.y != last.y || position.z != last.z) {
-                // The game's own blocks (zone columns): solid unless air or liquid.
-                auto solid = [&](int64_t bx, int64_t by, int64_t bz) -> bool {
-                    int zx = (int)std::floor(bx / 64.0), zy = (int)std::floor(by / 64.0);
-                    for (auto &[key, zone] : w->zones)
-                        if (zone && zone->position.x == zx && zone->position.y == zy) {
-                            const cube::Field &f = zone->fields[(bx - zx * 64) * 64 + (by - zy * 64)];
-                            if (bz < f.base_z)
-                                return true;
-                            size_t i = (size_t)(bz - f.base_z);
-                            if (i >= f.blocks.size())
-                                return false;
-                            uint8_t t = ((const uint8_t *)&f.blocks[i])[4];
-                            return t != 0 && t != 2 && t != 3 && t != 17 && t != 19;
-                        }
-                    return false;
-                };
-                double px = position.x / 65536.0, py = position.y / 65536.0, pz = position.z / 65536.0;
-                int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py), bz = (int64_t)std::floor(pz);
-                // Distance from the centre to the nearest solid face, within 3 blocks
-                // (9 = none): sideways at the levels z+0.5 and z+1.5, then above and below.
-                // Per block level relative to floor(z): -1, 0, +1, +2 (whether position z and
-                // block z share an origin is part of what this measures).
-                auto sideAt = [&](int dx, int dy, int level) {
-                    for (int k = 1; k <= 3; k++)
-                        if (solid(bx + dx * k, by + dy * k, bz + level)) {
-                            double face = dx > 0 ? bx + k : dx < 0 ? bx - k + 1 : dy > 0 ? by + k : by - k + 1;
-                            return std::abs(face - (dx ? px : py));
-                        }
-                    return 9.0;
-                };
+                const auto velocity = player.velocity();
+                const auto flags = player.movementFlags();
+                const double px = position.x / 65536.0, py = position.y / 65536.0, pz = position.z / 65536.0;
+                const int64_t bx = (int64_t)std::floor(px), by = (int64_t)std::floor(py), bz = (int64_t)std::floor(pz);
                 std::string levels;
-                auto side = [&](int dx, int dy) { return std::min(sideAt(dx, dy, 0), sideAt(dx, dy, 1)); };
                 double up = 9, down = 9, gx1 = 9, gx0 = 9, gy1 = 9, gy0 = 9;
-                if (TryEnterCriticalSection(&w->zones_critical_section)) {
-                    gx1 = side(1, 0), gx0 = side(-1, 0), gy1 = side(0, 1), gy0 = side(0, -1);
-                    for (auto [dx, dy, name] : {std::tuple{1, 0, "+x"}, std::tuple{-1, 0, "-x"}, std::tuple{0, 1, "+y"}, std::tuple{0, -1, "-y"}}) {
-                        char part[96];
-                        snprintf(part, sizeof part, " %s[%.3f,%.3f,%.3f,%.3f]", name, sideAt(dx, dy, -1), sideAt(dx, dy, 0),
-                                 sideAt(dx, dy, 1), sideAt(dx, dy, 2));
-                        levels += part;
+                bool complete = false;
+                {
+                    const captureabi::WorldBufferLease held(reinterpret_cast<uintptr_t>(world));
+                    captureabi::StoredWorldDiagnostics view(base(), held ? reinterpret_cast<uintptr_t>(world) : 0,
+                                                            readNative);
+                    complete = held && view.ready();
+                    const auto solid = [&](int64_t x, int64_t y, int64_t z) {
+                        bool value = false;
+                        if (!view.solid(x, y, z, value))
+                            complete = false;
+                        return value;
+                    };
+                    const auto sideAt = [&](int dx, int dy, int level) {
+                        for (int k = 1; k <= 3; ++k)
+                            if (solid(bx + dx * k, by + dy * k, bz + level)) {
+                                const double face = dx > 0   ? bx + k
+                                                    : dx < 0 ? bx - k + 1
+                                                    : dy > 0 ? by + k
+                                                             : by - k + 1;
+                                return std::abs(face - (dx ? px : py));
+                            }
+                        return 9.0;
+                    };
+                    const auto side = [&](int dx, int dy) { return std::min(sideAt(dx, dy, 0), sideAt(dx, dy, 1)); };
+                    if (complete) {
+                        gx1 = side(1, 0), gx0 = side(-1, 0), gy1 = side(0, 1), gy0 = side(0, -1);
+                        for (auto [dx, dy, name] : {std::tuple{1, 0, "+x"}, std::tuple{-1, 0, "-x"},
+                                                    std::tuple{0, 1, "+y"}, std::tuple{0, -1, "-y"}}) {
+                            char part[96];
+                            snprintf(part, sizeof part, " %s[%.3f,%.3f,%.3f,%.3f]", name, sideAt(dx, dy, -1),
+                                     sideAt(dx, dy, 0), sideAt(dx, dy, 1), sideAt(dx, dy, 2));
+                            levels += part;
+                        }
+                        for (int k = 0; k <= 4 && up == 9; ++k)
+                            if (solid(bx, by, bz + k + 1))
+                                up = bz + k + 1 - pz;
+                        for (int k = 0; k <= 4 && down == 9; ++k)
+                            if (solid(bx, by, bz - k))
+                                down = pz - (bz - k + 1);
                     }
-                    for (int k = 0; k <= 4 && up == 9; k++)
-                        if (solid(bx, by, bz + k + 1))
-                            up = bz + k + 1 - pz;
-                    for (int k = 0; k <= 4 && down == 9; k++)
-                        if (solid(bx, by, bz - k))
-                            down = pz - (bz - k + 1);
-                    LeaveCriticalSection(&w->zones_critical_section);
                 }
-                fprintf(collisionLog,
+                if (complete) {
+                    fprintf(
+                        collisionLog,
                         "t=%llu pos=%.5f %.5f %.5f vel=%.3f %.3f %.3f flags=%08x gaps +x=%.4f -x=%.4f +y=%.4f -y=%.4f "
                         "up=%.4f down=%.4f levels%s\n",
-                        (unsigned long long)GetTickCount64(), px, py, pz, player.velocity().x, player.velocity().y,
-                        player.velocity().z, player.movementFlags(), gx1, gx0, gy1, gy0, up, down, levels.c_str());
-                last = captureabi::CreatureScalars(localCreature(w)).position();
+                        (unsigned long long)GetTickCount64(), px, py, pz, velocity.x, velocity.y, velocity.z, flags,
+                        gx1, gx0, gy1, gy0, up, down, levels.c_str());
+                    last = position;
+                } else
+                    fprintf(collisionLog, "t=%llu stored-column capture unavailable\n",
+                            (unsigned long long)GetTickCount64());
             }
         }
         static bool slay = false; // Z: fight mode's target to 0 HP (the game then kills it and drops loot its own way)

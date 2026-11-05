@@ -1,5 +1,12 @@
 # CWSDK license provenance: bounded metadata audit
 
+Current build status (2026-11-04): the shipping ZoneExtractor target now uses
+project-owned adapters and no SDK headers/include path. Its compiler command and
+dependency audit is `tools/validate_extractor_no_sdk.ps1`. This removes the target's
+build dependency; it does not change the historical grant findings below. The
+optional legacy RegionProbe/RegionScout sources remain outside that target and
+runtime package. See [current qualification](extractor-independent-build.md).
+
 Audit date: 2026-11-03. This records license/provenance evidence, not legal
 clearance or a grant of additional rights. The audit inspected license files,
 Git repository/tree/commit metadata, public repository/submodule metadata and

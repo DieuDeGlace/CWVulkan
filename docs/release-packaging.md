@@ -4,7 +4,8 @@
 or claim that the readiness checklist is complete.
 
 Build `CubeVulkan`, `CubeVulkanSetup`, `CubeVulkanDataCheck` and `ZoneExtractor`.
-The extractor target needs the separate compatible CWSDK headers (see README).
+The Windows extractor target uses owned adapters without CWSDK; CubeModLoader
+remains a separate installation for loading it into the original game.
 Run EngineTests, then create the matching source archive:
 
 ```powershell
@@ -38,11 +39,10 @@ No game assets, saves, exports, Steam DLL, loader binary, PDB or build library i
 bundled. The package includes only the extractor DLL compiled from this project's
 source. Retain the matching source asset when distributing GPL executables.
 
-A final SDK-dependent extractor release also requires the
-[SDK permission/revision boundary](sdk-license-provenance.md) to be resolved.
-The retained MIT notice identifies the local notice; it does not independently
-establish permission for all original SDK material. No additional SDK code is
-cleared for reuse by a successful compilation or package audit.
+Run `tools/validate_extractor_no_sdk.ps1` after building to inspect the actual
+compiler commands and header dependencies. The [historical SDK audit](sdk-license-provenance.md)
+still grants no additional rights to legacy SDK material. This target no longer
+includes those headers; live supported-game qualification is a separate gate.
 
 A final public release waits for the [remaining readiness checks](roadmap.md).
 In particular, a local package/PE check does not validate the real first-run wizard,

@@ -1,13 +1,16 @@
 # Extractor independence workboard
 
-The current priority is to remove the extractor's remaining CWSDK dependency.
-The [provenance audit](sdk-license-provenance.md) has not established a grant for
-the exact SDK snapshot. Independent replacements use original project code and
-the separately authored contracts in `specs/`; SDK headers, implementations,
-compiler layout dumps and third-party reconstructions are not implementation
-references. Native-only authors use the standalone
-[author policy](CLEANROOM_AUTHOR.md), which contains no implementation history.
-This workboard does not grant rights or certify final redistribution.
+The shipping Windows extractor now builds without CWSDK. Its native data and
+loader boundaries use original project adapters and separately authored contracts.
+The compiler-command and header-dependency audit checks the actual target for SDK
+paths, headers and its former permissive option. Run
+`tools/validate_extractor_no_sdk.ps1` after building.
+
+The [historical SDK audit](sdk-license-provenance.md) still establishes no grant
+for the old snapshot; optional legacy RegionProbe/RegionScout sources are not part
+of this target. This build result is not legal clearance or live 1:1 acceptance.
+Native-only authors continue to use [the standalone policy](CLEANROOM_AUTHOR.md),
+without reading implementation, SDK, probes or other project prose.
 
 ## Completed adapters
 
@@ -95,6 +98,12 @@ This workboard does not grant rights or certify final redistribution.
   failure quarantines its partial storage and disables further role capture.
   See [camera/World values](extractor-camera-world-values.md). Safe disposal of
   generated unpublished Zones remains unproved and their oracle retention is open.
+- Remaining Zone enumeration, spawn-sidecar iteration and stored-column
+  diagnostics now use the owned sequence/identity/column readers. Per-pass caches
+  avoid repeated column copies; unavailable data defers probes instead of becoming
+  known air. Game/World/Creature/Zone names are opaque pointer declarations;
+  SDK headers, include paths and target gating are removed. Independent stat-query
+  ABI/label evidence also replaces the historical SDK-address reference.
 - Game-to-client-World and World-to-local-creature links, plus the separately
   embedded host-World identity, from the independent native ownership contracts.
 - Client registration capture for creature recordings, approach selection,
@@ -129,18 +138,15 @@ This workboard does not grant rights or certify final redistribution.
   helper must not be reused as a host capture or generic quiescence API.
 - Complete creature/controller lifetime and transitive writer audits remain
   separate from the replaced core, appearance, pose, inventory and effect views.
-- Remaining World fields, collections, region/material sidecars and record views.
-- Remaining World/Zone collection and column views; replace final SDK type
-  declarations and include/configuration after their last member consumers.
 - Keyed event-list and owning-string event behavior remain outside the simple
   capture adapter; broader native event-production comparisons remain open.
-- Remove the SDK include/configuration after the final consumer is replaced;
-  compile the extractor without the sibling SDK checkout.
+- Keep the SDK-free build/dependency audit in validation and qualify its DLL
+  exports, supported-game startup, extraction and recovery paths.
 - Run supported-game startup, title and loaded-world extraction comparisons;
   verify owner files are restored, then qualify packaging and wider acceptance.
 
-The current CMake extractor target still requires CWSDK. No completed slice above
-is described as full SDK independence. The registration/container checks detect
+The current CMake extractor target uses no SDK headers or include paths. The
+registration/container checks detect
 bounded malformed or changed metadata; they do not retain allocation lifetimes
 or provide atomic whole-creature snapshots. The observed guard excludes only
 cooperating writers, and its constructor/destructor require a live World.

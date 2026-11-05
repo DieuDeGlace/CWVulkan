@@ -357,7 +357,8 @@ target_sources(EngineTests PRIVATE
     tests/NativeConversationTests.cpp
     tests/NativeGeneratedTextTests.cpp
     tests/NativeEventQueueTests.cpp
-    tests/NativeGameCameraTests.cpp)
+    tests/NativeGameCameraTests.cpp
+    tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
 add_test(NAME EngineTests COMMAND EngineTests)
@@ -380,16 +381,13 @@ add_executable(CubeVulkanDataCheck tools/DataCheck.cpp)
 target_link_libraries(CubeVulkanDataCheck PRIVATE engine)
 
 # ZoneExtractor: CubeModLoader mod that saves the game's generated zones.
-# Needs the CWSDK headers vendored in the sibling SteamCubeWorldMods checkout.
-set(CWSDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../SteamCubeWorldMods/vendor/cwmods CACHE PATH "CWSDK headers")
-if(EXISTS ${CWSDK_DIR}/cwsdk.h)
+# Original project adapters implement the native/loader boundaries without CWSDK.
+unset(CWSDK_DIR CACHE) # Retire the obsolete external-header cache setting.
+if(WIN32)
     add_library(ZoneExtractor SHARED tools/ZoneExtractor/ZoneExtractor.cpp src/ProceduralItemData.cpp)
-    target_include_directories(ZoneExtractor PRIVATE ${CWSDK_DIR})
     target_compile_definitions(ZoneExtractor PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(ZoneExtractor PRIVATE user32 d3d11)
-    # CWSDK headers need C++17 without strict conformance (as their own builds use).
     set_target_properties(ZoneExtractor PROPERTIES CXX_STANDARD 17)
-    target_compile_options(ZoneExtractor PRIVATE /permissive)
     # Static runtime: the game ships an old MSVCP140 whose std::mutex is
     # incompatible with newer headers.
     set_target_properties(ZoneExtractor PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded"

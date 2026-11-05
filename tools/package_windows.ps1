@@ -83,8 +83,8 @@ Instance deaths reset when the spawn zone unloads for all players. Restart after
 This is a development package, not a finished 1:1 release. See the source repository's
 docs/roadmap.md for remaining gameplay, visual and multiplayer validation.
 Project source: https://github.com/DieuDeGlace/CWVulkan
-The SDK's original permission/revision scope remains unresolved; review the
-provenance audit in the matching source before redistributing the extractor.
+The extractor builds without CWSDK; supported-game and release acceptance remain
+open. Review docs/extractor-independence.md in the matching source.
 The matching source-review ZIP is provided alongside this package. Original code is
 GPL-3.0-only; third-party notices are in CubeVulkan/THIRD_PARTY_NOTICES.md.
 No game assets, saves, Steam runtime or loader binaries are included.

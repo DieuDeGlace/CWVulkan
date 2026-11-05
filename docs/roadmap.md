@@ -31,9 +31,9 @@ individual feature documents.
   output disposal/day restoration have mock ABI regressions. Other fields and
   collections remain. Byte preservation, signed extremes, sentinel exclusion,
   malformed/change/budget cases and actual Win32 contention/unwinding checks pass with all
-  five targets and full CPU/owner checks. The extractor still requires SDK headers;
-  see the [independence workboard](extractor-independence.md). New native execution,
-  remaining views and the complete independent build remain release gates.
+  five targets and full CPU/owner checks. The shipping extractor now builds
+  without SDK headers; see the [independence workboard](extractor-independence.md).
+  New supported-game execution and wider acceptance remain release gates.
 
 - [x] Verify effective fallback globals through original CRT startup and their
   native direct-writer census. Use the initialized missing-zone flags in the actual
@@ -970,6 +970,13 @@ resolves several questions in older specs. Remaining checkboxes are intentional.
   storage. Generated unpublished-Zone disposal remains explicitly unproved.
   See [camera/World values](extractor-camera-world-values.md).
 
+- [x] Remove the shipping extractor's final SDK World/Zone/column consumers,
+  include path and target gating. Build with opaque native object pointers and
+  owned adapters; audit actual compiler commands and header dependencies.
+  Per-pass stored-column caches retain diagnostic policy and defer unavailable
+  data. This closes the build dependency, with live acceptance still open.
+  See [independent extractor build](extractor-independent-build.md).
+
 ## Requested Alpha terrain default and compatible mod support
 
 - [x] Separate Alpha random, region, location and initial surface core, reusing the
@@ -1056,9 +1063,9 @@ See [Alpha generation](alpha-generation.md) and the
   day/night, buildings, effects and multiple GPUs.
 - [ ] Verify the Windows package and bundled extractor against the supported game
   build, its separate loader dependency, license notices and matching source.
-  Resolve the exact SDK revision and applicable permission before final
-  SDK-dependent extractor redistribution; the [local-notice audit](sdk-license-provenance.md)
-  does not establish SDK-wide license coverage.
+  Retain the SDK-free command/dependency audit and qualify the independent
+  extractor in the supported game; the [historical SDK audit](sdk-license-provenance.md)
+  grants no additional rights to legacy SDK material.
   See [Windows packaging](release-packaging.md).
 
 The installable development package is a candidate for those checks. It is not a

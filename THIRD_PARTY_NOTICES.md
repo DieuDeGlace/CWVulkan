@@ -30,19 +30,19 @@ The build fetches these pinned open-source dependencies. License copies below ar
 This software uses the FreeType Project (https://freetype.org). FreeType is copyright
 David Turner, Robert Wilhelm, Werner Lemberg and its contributors.
 
-Extractor builds use the separate `SteamCubeWorldMods/vendor/cwmods` headers.
-That local copy carries an MIT notice, copyright 2021 Gijs, preserved unchanged
-in `licenses/CWSDK-MIT.txt`. The notice matches
-[CubeMegaMod's project license](https://github.com/gijsgroenewegen/CubeMegaMod/blob/main/LICENSE).
-CubeMegaMod also names [a separate CWSDK dependency](https://github.com/gijsgroenewegen/CubeMegaMod/blob/main/.gitmodules),
-now at [coremaze/CWSDK](https://github.com/coremaze/CWSDK). The original SDK revision
-and permission covering the exact local SDK material have not been established;
-the copied parent-project notice is not treated as SDK-wide clearance. See the
-[bounded provenance audit](https://github.com/DieuDeGlace/CWVulkan/blob/main/docs/sdk-license-provenance.md).
-Confirm that scope before a final SDK-dependent extractor redistribution. These
-SDK headers and the external CubeModLoader binary are not bundled here. The
-project's GPL license applies to its original source, not an additional grant
-for separately owned dependencies.
+The shipping ZoneExtractor target now uses project-owned native adapters and
+standard Windows headers, without CWSDK. The optional legacy sources in
+`tools/RegionProbe` and `tools/RegionScout` still include separately supplied SDK
+headers; they are not CMake targets or runtime-package binaries.
+
+The historical local SDK notice is preserved in `licenses/CWSDK-MIT.txt`,
+copyright 2021 Gijs. The prior
+[bounded provenance audit](https://github.com/DieuDeGlace/CWVulkan/blob/main/docs/sdk-license-provenance.md)
+did not establish the exact original SDK revision or an SDK-wide permission grant.
+Removing the shipping build dependency does not change that historical finding
+or grant additional rights to SDK material. The external CubeModLoader binary
+is not bundled. The project's GPL license applies to its original source;
+separately owned dependencies retain their own licenses.
 
 The quest sprites in `assets/OverworldEvents/quest-icons.png` come from DieuDeGlace's [OverworldEvents](https://github.com/DieuDeGlace/OverworldEvents) (MIT); its license is `assets/OverworldEvents/LICENSE`.
 The same project supplies the rules in `src/events/`, as described in that directory's README.
