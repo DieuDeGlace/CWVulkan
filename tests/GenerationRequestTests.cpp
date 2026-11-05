@@ -94,6 +94,17 @@ int generationRequestTests() {
           "existing temporary owner file cannot be overwritten or deleted");
     check(!publishGenerationSnapshot((directory / "missing" / "request.txt").string(), snapshot),
           "unavailable output fails without publication");
+    const auto artifact = directory / "z_1_-2.cwz";
+    const auto writeTerrain = [](std::FILE *file) { return std::fwrite("CWZ1", 1, 4, file) == 4; };
+    check(writeGenerationArtifact(artifact.string(), writeTerrain) && read(artifact) == "CWZ1",
+          "capture writer reports a completed output");
+    check(!writeGenerationArtifact((directory / "missing" / "z_1_-2.cwz").string(), writeTerrain),
+          "a failed output open cannot be counted as a completed zone");
+    check(!writeGenerationArtifact(artifact.string(), [](std::FILE *file) {
+              std::fwrite("CW", 1, 2, file);
+              return false;
+          }),
+          "a partially written capture is not successful");
     const auto inputPath = directory / "gen.request";
     {
         std::ofstream output(inputPath, std::ios::binary);
@@ -120,6 +131,7 @@ int generationRequestTests() {
     check(!std::filesystem::exists(inputPath), "consumed request disappears after handle close");
     // Remove only the explicitly created fixture files, then its empty directory.
     std::filesystem::remove(inputPath);
+    std::filesystem::remove(artifact);
     std::filesystem::remove(final);
     std::filesystem::remove(final.string() + ".tmp");
     std::filesystem::remove(blocked);

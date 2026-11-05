@@ -6341,18 +6341,16 @@ static bool writeSpawns(unsigned char *zone, const std::string &name) {
         stack.push_back(n->left);
         stack.push_back(n->right);
     }
-    FILE *f = nullptr;
-    if (fopen_s(&f, name.c_str(), "wb") != 0 || !f)
-        return false;
-    fwrite("CWS1", 1, 4, f);
-    put<uint32_t>(f, (uint32_t)list.size());
-    for (unsigned char *sp : list) {
-        fwrite(sp, 1, SPAWN_SIZE, f);
-        putInts(f, *(IntVector *)(sp + 0x8c0));
-        putInts(f, *(IntVector *)(sp + 0x8e0));
-    }
-    fclose(f);
-    return true;
+    return capturepolicy::writeGenerationArtifact(name, [&](FILE *f) {
+        fwrite("CWS1", 1, 4, f);
+        put<uint32_t>(f, (uint32_t)list.size());
+        for (unsigned char *sp : list) {
+            fwrite(sp, 1, SPAWN_SIZE, f);
+            putInts(f, *(IntVector *)(sp + 0x8c0));
+            putInts(f, *(IntVector *)(sp + 0x8e0));
+        }
+        return true; // The writer checks the stream error after the complete sequence.
+    });
 }
 static int spawns(cube::World *w, const std::string &dir) {
     const captureabi::WorldBufferLease held(reinterpret_cast<uintptr_t>(w));
@@ -6396,12 +6394,13 @@ static bool generateOnce(cube::World *w, int x, int y, unsigned char *&zone) {
         return false;
     }
 }
-static void writeFile(const std::string &name, const std::vector<unsigned char> &data) {
-    FILE *f = nullptr;
-    if (fopen_s(&f, name.c_str(), "wb") == 0 && f) {
-        fwrite(data.data(), 1, data.size(), f);
-        fclose(f);
-    }
+static bool writeOracleFile(const std::string &path, const std::vector<unsigned char> &data) {
+    if (capturepolicy::writeGenerationArtifact(path, [&](FILE *file) {
+            return data.empty() || fwrite(data.data(), 1, data.size(), file) == data.size();
+        }))
+        return true;
+    log("Oracle: could not write " + path);
+    return false;
 }
 // The daily refresh (0x31c540) the game gives a zone when it loads it (a new zone's day is -1).
 // Refresh can put this exact Zone pointer into World+0x1a0; the later native
@@ -6418,22 +6417,26 @@ static bool refreshOnce(unsigned char *zone) {
     }
 }
 // A zone's blocks, records, spawn points and the rand() calls just traced, at stem.*.
-static void writeZone(cube::World *w, unsigned char *zone, const std::string &stem) {
+static bool writeZone(cube::World *w, unsigned char *zone, const std::string &stem) {
     const auto terrain = extract::serialise(w, (cube::Zone *)zone);
     if (terrain.empty()) {
         log("Oracle: terrain capture rejected; no new zone files written at " + stem);
-        return;
+        return false;
     }
-    writeFile(stem + ".cwz", terrain);
-    writeFile(stem + ".cwm", extract::serialiseMaterials(w, (cube::Zone *)zone));
-    writeFile(stem + ".rec", extract::serialiseRecords((cube::Zone *)zone));
-    writeSpawns(zone, stem + ".spawns");
+    if (!writeOracleFile(stem + ".cwz", terrain) ||
+        !writeOracleFile(stem + ".cwm", extract::serialiseMaterials(w, (cube::Zone *)zone)) ||
+        !writeOracleFile(stem + ".rec", extract::serialiseRecords((cube::Zone *)zone)))
+        return false;
+    if (!writeSpawns(zone, stem + ".spawns")) {
+        log("Oracle: could not capture or write " + stem + ".spawns");
+        return false;
+    }
     std::vector<unsigned char> trace(traced.size() * 6);
     for (size_t i = 0; i < traced.size(); i++) {
         memcpy(&trace[i * 6], &traced[i].first, 4);
         memcpy(&trace[i * 6 + 4], &traced[i].second, 2);
     }
-    writeFile(stem + ".rtrace", trace); // (uint32 caller RVA, uint16 value) per call
+    return writeOracleFile(stem + ".rtrace", trace); // (uint32 caller RVA, uint16 value) per call
 }
 static capturepolicy::GenerationCoordinates genQueue; // a few a tick, so the game keeps running
 static capturepolicy::RetainedGenerationBudget genBudget;
@@ -6499,12 +6502,14 @@ static void queueGeneration(cube::World *w) {
     genSnapshot = snapshot;
     genQueue.swap(pending);
     genDirectory = directory;
-    FILE *f = nullptr;
-    if (fopen_s(&f, (genDirectory + "\\day.txt").c_str(), "w") == 0 && f) {
-        fprintf(f, "%d\n", context.day);
-        fclose(f);
-    }
     genDone = 0;
+    if (!capturepolicy::writeGenerationArtifact(genDirectory + "\\day.txt", [&](FILE *file) {
+            return fprintf(file, "%d\r\n", context.day) >= 0;
+        })) {
+        genContextGate.stop();
+        log("Oracle: could not write day.txt; generation paused with pending work and snapshot: " + genSnapshot);
+        return;
+    }
     log("Oracle: generating " + std::to_string(genQueue.size()) + " zones into " + genDirectory);
 }
 static void generate(cube::World *w) {
@@ -6515,6 +6520,11 @@ static void generate(cube::World *w) {
             return; // Conservative admission includes attempts that fail after partial allocation.
         auto [zx, zy] = genQueue.front();
         genQueue.pop_front();
+        const auto pause = [&](const char *reason) {
+            genContextGate.stop();
+            genQueue.emplace_front(zx, zy);
+            log(std::string("Oracle: ") + reason + "; batch paused with pending work and snapshot: " + genSnapshot);
+        };
         unsigned char *zone = nullptr;
         traced.clear();
         const bool tracing = hook(true);
@@ -6524,9 +6534,7 @@ static void generate(cube::World *w) {
         if (tracing)
             hook(false);
         if (!made) {
-            genContextGate.stop();
-            genQueue.emplace_front(zx, zy);
-            log("Oracle: generation failed; batch paused with pending work and snapshot: " + genSnapshot);
+            pause("generation failed");
             return;
         }
         if (!generationContextMatches(w, 1)) {
@@ -6534,7 +6542,14 @@ static void generate(cube::World *w) {
             return;
         }
         const std::string name = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
-        writeZone(w, zone, genDirectory + "\\" + name);
+        if (!writeZone(w, zone, genDirectory + "\\" + name)) {
+            pause("fresh zone output incomplete");
+            return;
+        }
+        if (!generationContextMatches(w, 1)) {
+            genQueue.emplace_front(zx, zy);
+            return;
+        }
         // The same zone after the refresh the game gives it on loading, in gen\refreshed.
         traced.clear();
         const bool tracing2 = hook(true);
@@ -6544,16 +6559,21 @@ static void generate(cube::World *w) {
         if (tracing2)
             hook(false);
         if (!refreshed) {
-            genContextGate.stop();
-            genQueue.emplace_front(zx, zy);
-            log("Oracle: refresh failed; batch paused with pending work and snapshot: " + genSnapshot);
+            pause("refresh failed");
             return;
         }
         if (!generationContextMatches(w, 1)) {
             genQueue.emplace_front(zx, zy);
             return;
         }
-        writeZone(w, zone, genDirectory + "\\refreshed\\" + name);
+        if (!writeZone(w, zone, genDirectory + "\\refreshed\\" + name)) {
+            pause("refreshed zone output incomplete");
+            return;
+        }
+        if (!generationContextMatches(w, 1)) {
+            genQueue.emplace_front(zx, zy);
+            return;
+        }
         if (++genDone % 25 == 0 || genQueue.empty())
             log("Oracle: generated " + std::to_string(genDone) + " zones" + (genQueue.empty() ? " (done)" : ""));
     }

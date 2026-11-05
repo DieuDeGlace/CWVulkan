@@ -35,7 +35,10 @@ the rest of the process, even if the old values later return. The current
 coordinate and remaining queue are retained, with the complete original request
 also preserved in the immutable snapshot. Native generation/refresh failures
 likewise pause rather than repeatedly calling into a partially changed context.
-Ordinary loaded-zone export continues independently.
+A failed write of the day file or any fresh or refreshed zone artifact also
+pauses the batch. The coordinate stays pending, and the completion count advances
+only after both outputs close successfully. Treat files left by a failed attempt
+as incomplete. Ordinary loaded-zone export continues independently.
 
 For a retry, inspect the log and request snapshot, start a fresh authorized test
 session in the intended world/day, and copy the desired coordinate rows into a

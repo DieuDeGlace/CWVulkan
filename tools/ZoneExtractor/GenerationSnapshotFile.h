@@ -4,6 +4,7 @@
 #include "GenerationRequest.h"
 #include <Windows.h>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 
 namespace capturepolicy {
@@ -36,6 +37,17 @@ class GenerationRequestInput {
         return *this && SetFileInformationByHandle(file, FileDispositionInfo, &disposition, sizeof disposition);
     }
 };
+
+// Legacy capture files keep their paths. Report errors from both buffered
+// writes and close, which can fail while flushing data to the destination.
+template <class Writer> bool writeGenerationArtifact(const std::string &path, Writer write) {
+    std::FILE *file = nullptr;
+    if (fopen_s(&file, path.c_str(), "wb") != 0 || !file)
+        return false;
+    const bool complete = write(file) && !std::ferror(file);
+    const bool closed = std::fclose(file) == 0;
+    return complete && closed;
+}
 
 inline bool publishGenerationSnapshot(const std::string &path, const std::string &text) {
     if (text.size() > UINT32_MAX)

@@ -10,6 +10,12 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The experimental generation recorder now pauses on a failed terrain, material,
+  record, spawn, trace or day-file write. It retains the unfinished coordinate
+  and counts it only after both fresh and refreshed outputs close successfully.
+  The Windows writer checks cover successful, unavailable and partial writes.
+  The changed DLL still needs supported-game live validation.
+
 - `EngineTests castles` now reports which castle cells the engine predicts
   inside the owner's captured zone coordinates. `castles --targets` searches
   nearby big places for the two missing decorative cases. For seed 123 it
