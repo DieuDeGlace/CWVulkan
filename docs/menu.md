@@ -46,9 +46,12 @@ borrowed branch references; `Scene` owns the nodes.
 `publishFrontendScreen` places retained template instances before pointer decisions
 and hides frontend-managed instances omitted from the current screen. Layout-only
 probes live under an inactive branch; drawing other HUD overlays still manages
-its own template visibility. Branch changes preserve the current scene and nodes.
-Returning from a play session still rebuilds the wider frontend/HUD owner, and
-production pointer dispatch is not yet connected to `plasma::Input`. Synthetic
+its own template visibility. Branch changes preserve the current scene and nodes. Inventory drawing respects
+the gameplay branch without overriding its active state.
+Returning to Start Menu retains the CPU HUD owner and its scene. The window,
+renderer and gameplay session are rebuilt, so renderer bindings are discarded
+before that teardown. Production pointer dispatch is not yet connected to
+`plasma::Input`. Synthetic
 input-model tests do not establish that live integration or full native lifetime
 parity. See the independent [root lifetime contract](specs/steam-interface-input-root-lifetime.md).
 

@@ -162,7 +162,6 @@ void Hud::buildPanels() {
     chatFrame.kind = "Widget";
     chatFrame.bindSize = chatFrame.innerBindSize = chatFrame.frameSize = {400, 250};
     chatFrame.flags = plasma::WIDGET_OWN_SURFACE;
-    panels.inGame->visible = false;
 }
 
 // the formula details layout: the shadow under the item, the button at the bottom right,
@@ -551,10 +550,9 @@ void Hud::drawRetainedItem(const Inventory &inv, const InvList &list, std::vecto
 }
 
 void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) const {
-    if (!scene || !panels.bag.node)
+    if (!scene || !panels.bag.node || !panels.inGame->visible)
         return;
     placePanels(inv);
-    panels.inGame->visible = true;
     const auto bag = bagList(inv), vendor = vendorList(inv), crafting = craftingList(inv);
     const int tab = std::clamp(inv.tab, 0, 5);
     // InventoryWidget draws after its children; SpriteWidget draws before its children.
@@ -596,7 +594,6 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
     sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, drawWidget);
     if (panels.customization)
         panels.customization->visible = customizationShown;
-    panels.inGame->visible = false;
     drawCharacter(inv, out);
 
     // The equipment slots' items (SpriteWidget: in each box's content).

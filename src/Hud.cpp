@@ -1299,8 +1299,11 @@ int Hud::inventorySlotAt(glm::vec2 m) const {
 }
 
 void Hud::drawInventory(const Inventory &inv, std::vector<OverlayVertex> &out) const {
-    if (hasPanels())
+    if (hasPanels()) {
+        if (!panels.inGame->visible)
+            return;
         drawPanels(inv, out);
+    }
     if (!inventoryReady)
         return;
     auto X = [&](float x) { return std::round(offsetX + x * scale); };

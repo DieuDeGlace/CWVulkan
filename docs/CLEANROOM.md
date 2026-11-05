@@ -40,9 +40,14 @@ or capture access. The implementer used those prose contracts and engine sources
 only. InterfaceRoot and frontend publication implement shared branch ownership,
 visibility and retained template placement. Synthetic root/input-model tests and
 owner-data GUI/image checks exercise this bounded change; production callbacks,
-capture integration and cross-session root continuity remain separate work. The
-thumb's resource-defined dynamic class remains unresolved by the native contract.
-No original asset or game-derived capture is included in either package.
+capture integration and full native application lifetime remain separate work.
+The subsequent HUD-owner change retains the CPU scene across Start Menu and
+separates the outgoing renderer's handles from retained interface data. The same
+native-only author separately finalized the hover-publication contract without
+implementation or owner-data access. A private data-only check of the installed
+`gui.plx` found an ordinary Button on the scrollbutton template root. This does
+not change the native audit's resource-evidence boundary or establish the class
+for modified resources. No original asset or game-derived capture is packaged.
 
 ## Alpha terrain integration
 

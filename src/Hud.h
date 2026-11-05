@@ -271,6 +271,7 @@ class Hud {
     void addItemIcon(const std::string &key, const CubModel &, bool retainVolume = false,
                      steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock);
     void prepareItemResources(Renderer &renderer) { uploadItemModels(renderer); }
+    void discardRendererBindings(); // Before destroying the renderer; keep the interface scene and owner data.
     const std::vector<guiitem::Request> &itemDraws() const { return itemRequests; }
     const std::vector<plasma::LayerCommand> &clipDraws() const { return layerCommands; }
     void clearItemDraws() const {

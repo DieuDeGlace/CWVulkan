@@ -18,6 +18,17 @@ void Hud::addItemIcon(const std::string &key, const CubModel &cub, bool retainVo
     model.pending = guiitem::voxelMesh(cub, encoding);
 }
 
+void Hud::discardRendererBindings() {
+    clearItemDraws();
+    // The outgoing renderer owns the uploaded meshes. The next session registers
+    // its models again, so it must never see the previous renderer's handles.
+    for (const auto &entry : itemModels)
+        icons.erase(entry.first);
+    itemModels.clear();
+    ready = false;
+    atlasDirty = true;
+}
+
 void Hud::uploadItemModels(Renderer &renderer) {
     for (auto &[key, model] : itemModels)
         if (!model.mesh && !model.pending.empty()) {

@@ -816,8 +816,9 @@ individual feature documents.
   captures pass. Exact sibling order, other stale HUD templates, full global
   picking and generated-card subtree rebuilding still need broader integration;
   the game does not yet use the scene-bound input owner throughout its interface.
-  Return-to-title still rebuilds the wider HUD/window owner. Cursor units remain
-  in a separate scene.
+  Start Menu now retains the CPU HUD scene and its controls; the renderer,
+  window and gameplay session still restart. Renderer bindings are cleared
+  before teardown. Cursor units remain in a separate scene.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.

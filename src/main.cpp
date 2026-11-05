@@ -183,7 +183,7 @@ RegionLook regionLook(const ColumnInfo &c) {
 }
 } // namespace
 
-static int runSession(int argc, char **argv, bool returningToMenu, usecollection::Collection &creatureCollection) {
+static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, usecollection::Collection &creatureCollection) {
     const fs::path root = exeDir();
     logFile.close();
     fs::path logName = "CubeVulkan.log"; // --log FILE: another log (two instances side by side)
@@ -895,7 +895,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     const bool launchMenu =
         forceMenu || (!directPlay && capture.empty() && captureSpeech.empty() && captureFeat.empty() && benchmark <= 0 &&
                       std::isnan(startX) && runSeconds <= 0 && poseAbility <= 0 && !autoAttack && !openInventory && showcase.empty());
-    Hud hud; // One interface survives the ordinary frontend-to-play transition.
     frontend::Services front;
     front.hud = &hud;
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
@@ -8558,6 +8557,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     for (auto &name : world.missingModels)
         logLine("Missing sprite: " + name + ".cub");
     mods.shutdown();
+    if (returnToTitle)
+        hud.discardRendererBindings();
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -8607,8 +8608,9 @@ int main(int argc, char **argv) {
     // This controller owner outlives individual world/menu sessions. No save or
     // transition clear is inferred from the bounded native collection contract.
     usecollection::Collection creatureCollection;
-    int result = runSession(argc, argv, false, creatureCollection);
+    Hud hud; // Retain the CPU interface through both Play and Start Menu transitions.
+    int result = runSession(argc, argv, false, hud, creatureCollection);
     while (result == 2)
-        result = runSession(argc, argv, true, creatureCollection);
+        result = runSession(argc, argv, true, hud, creatureCollection);
     return result;
 }

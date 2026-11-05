@@ -91,6 +91,11 @@ void equipmentCallbacks() {
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 2 && hud.itemDraws()[0].at.size == requests[0].at.size);
     }
+    GUI_CHECK(gameplayRoot && gameplayRoot->visible);
+    hud.setInterfaceState({{true, false, false, false, false}});
+    hud.draw(state, vertices);
+    GUI_CHECK(gameplayRoot && !gameplayRoot->visible && hud.itemDraws().empty());
+    hud.setInterfaceState({});
     inventory.bagShown = false;
     hud.draw(state, vertices);
     GUI_CHECK(hud.itemDraws().empty());
@@ -325,7 +330,21 @@ void equipmentCallbacks() {
         const auto expected = guiitem::ringPlacement(2, 3, {1, 1, 1}, {1920, 1080}, 200, 0, 1, 1000);
         GUI_CHECK(ringRequests[1].at.screen == expected.screen); // absent resource leaves a hole rather than reducingN
     }
+    hud.discardRendererBindings();
     renderer.shutdown();
+    GUI_CHECK(hud.ensureLoaded(assets.gameDir(), error));
+    GUI_CHECK(hud.interfaceBranchRoot(uiroot::Branch::Gameplay) == gameplayRoot);
+    GUI_CHECK(hud.interfaceBranchRoot(uiroot::Branch::Options) == optionsRoot);
+    Renderer nextRenderer;
+    nextRenderer.initHeadless(RenderSettings{});
+    hud.prepareFrame(nextRenderer, {1920, 1080});
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().empty()); // No requests may reference the destroyed renderer.
+    hud.addItemIcon("synthetic-equipment", cub);
+    hud.prepareFrame(nextRenderer, {1920, 1080});
+    hud.draw(state, vertices);
+    GUI_CHECK(hud.itemDraws().size() == 3);
+    nextRenderer.shutdown();
 }
 } // namespace
 int guiItemTests() {

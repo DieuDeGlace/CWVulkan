@@ -10,6 +10,24 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Start Menu now retains the CPU HUD scene and its existing branch/control
+  identities across sessions. The outgoing renderer's item handles and queued
+  draws are discarded so they cannot be reused by the replacement renderer.
+  Owner-HUD checks keep the same roots, reject stale model draws and render again
+  after registering resources on a second renderer. All five build targets,
+  the full CPU/owner-data suite and 102 Vulkan GUI image checks pass. The window,
+  renderer and gameplay session still restart. Live input dispatch and end-to-end Start Menu
+  acceptance remain open. The independent inventory-hover audit now distinguishes
+  the cell/tab state published by drawing from pointer movement and callback
+  target selection. That callback integration is separate from this checkpoint.
+
+- Inventory drawing now respects the controller's gameplay-branch state instead
+  of temporarily forcing it active and hiding it after drawing. Two actual
+  owner-HUD regressions first reproduced both defects: drawing changed an active
+  branch to inactive, and an inactive branch still emitted equipment models.
+  Construction and drawing no longer override the shared branch state. This
+  closes that visibility edge, not the remaining live input/capture integration.
+
 - Frontend and gameplay controls now occupy separate branches under one scene
   root. Title, character selection and creation disable the gameplay branch;
   Options and Controls remain independent branches. Frontend templates are
