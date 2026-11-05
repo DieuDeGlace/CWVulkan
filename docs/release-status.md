@@ -10,6 +10,18 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The strict generation comparison now matches all 2,800 tested object
+  placements across 789 overlapping seed-123 snapshots. The only previous
+  differences were 11 captured street-lamp turn bytes. The comparison still
+  checks type, position and scale for those records and reports their raw
+  turns separately. Initialized turns still require exact equality. The
+  [independent audit](specs/steam-generated-cell-object-orientation.md)
+  distinguishes the unwritten generation input from native copy, equality
+  and render behavior. CubeVulkan retains original turns on import and
+  uses its existing zero turn for newly generated lamps. Complete structure
+  checks matched the sampled blocks and light lists. Wider labeled dungeon,
+  region and seed coverage remains open.
+
 - The retained inventory scrollbar now captures ordinary left presses on the
   supported Button template. Movement uses the receiver's local pointer delta
   and the cached row range. It retains a continuous thumb position and leaves

@@ -278,11 +278,14 @@ individual feature documents.
   full CPU/owner-data suite passes. Its 17 nonempty zones match 8 model and 11 static
   light records with complete neighborhoods. These samples do not close the broader
   placement/theme and runtime comparisons below.
-  The expanded 2026-10-29 audit covers 789 zone snapshots
-  across four overlapping seed-123 sets; it still finds object-record differences.
-  `WC_STRICT_RECORDS=1 EngineTests wgcreatures 10000` now fails on object keys,
-  model counts/positions or item keys/angles that differ, and on absent zone fixtures.
-  Defined model fields and list order now match all 50,116 records in those snapshots:
+  The expanded audit covers 789 snapshots across four overlapping seed-123
+  sets. On 2026-11-05 the strict run matched all 2,800 object placement keys.
+  Eleven raw turns differ on street-lamp records from the producer whose turn
+  input the original leaves unwritten. Captured turns survive import and still
+  affect rendering. The audit compares each other turn and reports these
+  producer-specific values separately. See the
+  [orientation contract](specs/steam-generated-cell-object-orientation.md).
+  Defined model fields and list order match all 50,116 records in those snapshots:
   type, position, size/angle, tint and flags. Only independently verified unused,
   unwritten marker-size fields are excluded and reported separately. The loader now
   draws only live model/object lists, retains full captured turn bytes, and derives

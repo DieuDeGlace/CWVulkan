@@ -11,6 +11,7 @@
 // WorldgenCreatureTests.cpp, compares the whole streams).
 #include "Assets.h"
 #include "Extracted.h"
+#include "WorldgenObjectOracle.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/BuildingBuilder.h"
 #include "worldgen/Structures.h"
@@ -201,15 +202,6 @@ template <class Key> struct Matched {
     }
 };
 
-struct ObjectKey {
-    int type;
-    int64_t x, y, z;
-    int turn;
-    uint32_t scale;
-    bool operator<(const ObjectKey &o) const {
-        return std::tie(type, x, y, z, turn, scale) < std::tie(o.type, o.x, o.y, o.z, o.turn, o.scale);
-    }
-};
 uint32_t bitsOf(float f) {
     uint32_t u;
     std::memcpy(&u, &f, 4);
@@ -219,7 +211,7 @@ uint32_t bitsOf(float f) {
 struct Totals {
     int zones = 0;
     BlockTally blocks;
-    int objectsGame = 0, objectsMine = 0, objectsSame = 0;
+    int objectsGame = 0, objectsMine = 0, objectsSame = 0, unspecifiedTurns = 0, rawTurnDifferences = 0;
     int modelsGame = 0, modelsMine = 0, modelsSame = 0, modelsFloats = 0;
     int itemsGame = 0, itemsMine = 0, itemsSame = 0, itemsAngle = 0;
     std::map<int, std::array<int, 3>> objectsByType; // game, ours, same
@@ -231,32 +223,35 @@ struct Totals {
 void compareRecords(const GameZone &g, const std::vector<wg::StaticObject> &objects, const std::vector<wg::Model> &models,
                     const std::vector<wg::GroundItem> &items, Totals &t, bool verbose, int &shown) {
     // Objects.
-    std::multiset<ObjectKey> game, mine;
+    std::vector<objectoracle::Placement> capturedObjects;
     if (auto it = g.lists.find(wg::zonelist::OBJECTS); it != g.lists.end())
-        for (const auto &r : it->second)
-            game.insert({field<int32_t>(r, 0), field<int64_t>(r, 8), field<int64_t>(r, 0x10), field<int64_t>(r, 0x18), r[0x20],
-                         bitsOf(field<float>(r, 0x24))});
-    for (const auto &o : objects)
-        mine.insert({o.type, o.x, o.y, o.z, o.turn, bitsOf(o.scale)});
-    std::multiset<ObjectKey> left = mine;
-    for (const ObjectKey &k : game) {
-        t.objectsByType[k.type][0]++;
-        auto f = left.find(k);
-        if (f != left.end()) {
-            left.erase(f), t.objectsSame++, t.objectsByType[k.type][2]++;
-        } else if (verbose && shown++ < 25) {
-            std::printf("  zone %d %d game only: object %d at %.3f %.3f %.3f turn %d\n", g.zx, g.zy, k.type, k.x / 65536.0, k.y / 65536.0,
-                        k.z / 65536.0, k.turn);
+        for (const auto &record : it->second) {
+            const auto placement = objectvisual::placement(record.data());
+            ++t.objectsByType[placement.type][0];
+            capturedObjects.push_back(placement);
         }
+    for (const auto &object : objects)
+        ++t.objectsByType[object.type][1];
+    t.objectsGame += (int)capturedObjects.size();
+    t.objectsMine += (int)objects.size();
+    const auto compared = objectoracle::compare(std::move(capturedObjects), objects);
+    t.objectsSame += (int)compared.matches.size();
+    for (const auto &match : compared.matches) {
+        ++t.objectsByType[match.captured.type][2];
+        t.unspecifiedTurns += !match.turnInitialized;
+        t.rawTurnDifferences += match.captured.turn != match.generated.turn;
     }
-    for (const ObjectKey &k : mine)
-        t.objectsByType[k.type][1]++;
-    if (verbose)
-        for (const ObjectKey &k : left)
+    if (verbose) {
+        const auto print = [&](const char *label, const objectoracle::Placement &key) {
             if (shown++ < 25)
-                std::printf("  zone %d %d ours only: object %d at %.3f %.3f %.3f turn %d\n", g.zx, g.zy, k.type, k.x / 65536.0,
-                            k.y / 65536.0, k.z / 65536.0, k.turn);
-    t.objectsGame += (int)game.size(), t.objectsMine += (int)mine.size();
+                std::printf("  zone %d %d %s: object %d at %.3f %.3f %.3f turn %u\n", g.zx, g.zy, label, key.type,
+                            key.position[0] / 65536.0, key.position[1] / 65536.0, key.position[2] / 65536.0, (unsigned)key.turn);
+        };
+        for (const auto &key : compared.unmatchedCaptured)
+            print("game only", key);
+        for (const auto &key : compared.unmatchedGenerated)
+            print("engine only", key);
+    }
 
     // Models: type and position, then the two floats.
     using MKey = std::tuple<int, int64_t, int64_t, int64_t>;
@@ -417,6 +412,8 @@ void printTotals(const char *who, const Totals &t) {
                 "the same %d, same angle %d\n",
                 who, t.objectsGame, who, t.objectsMine, t.objectsSame, t.modelsGame, who, t.modelsMine, t.modelsSame, t.modelsFloats,
                 t.itemsGame, who, t.itemsMine, t.itemsSame, t.itemsAngle);
+    std::printf("  %s: objects with unwritten native turns %d; raw turn differences %d\n", who, t.unspecifiedTurns,
+                t.rawTurnDifferences);
 }
 
 int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::CreatureTables *creatures = nullptr) {

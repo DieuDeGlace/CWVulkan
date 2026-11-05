@@ -53,6 +53,15 @@ ordinary pointer admission and named Windows focus/capture message paths.
 The implementer used only that prose and engine sources to retain the F4 root
 state. Unproved cancellation and indirect writer behavior was not inferred.
 
+## Street-lamp generation records, 2026-11-05
+
+A separate native-only author traced the street-lamp emitter, record copies and
+native consumers without implementation or fixture access. The implementer
+used the finalized orientation contracts and engine sources. The strict
+comparison distinguishes initialized turns from the traced producer's unwritten
+input and reports raw owner values locally. Captured game data remains outside
+the source and runtime packages.
+
 ## Alpha terrain integration
 
 The generator reuses the sister AlphaVulkan project's original GPL clean-room

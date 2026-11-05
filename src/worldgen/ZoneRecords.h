@@ -39,6 +39,7 @@ struct StaticObject {
     int64_t owner = 0;         // +0x30
     Item takes;                // +0x38: the item it takes (empty)
     uint8_t takesCount = 1;    // +0xd8
+    bool nativeTurnInitialized = true; // Generation provenance. Never serialized into native records.
 };
 
 // A model (0x40 bytes): plants, furniture, lights, signs.

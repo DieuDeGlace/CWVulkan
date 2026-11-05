@@ -7,6 +7,7 @@
 //     (.rec) and its spawn points (.spawns).
 // `EngineTests wgcreatures [zones]` runs everything with details; the default run takes a subset.
 #include "Assets.h"
+#include "WorldgenObjectOracle.h"
 #include "Extracted.h"
 #include "worldgen/CreatureBuilder.h"
 #include "worldgen/Residents.h"
@@ -312,13 +313,6 @@ std::vector<GamePoint> readSpawns(const std::vector<uint8_t> &b) {
     return out;
 }
 
-struct ObjectKey {
-    int type;
-    int64_t x, y, z;
-    int turn;
-    uint32_t scale;
-    bool operator<(const ObjectKey &o) const { return std::tie(type, x, y, z, turn, scale) < std::tie(o.type, o.x, o.y, o.z, o.turn, o.scale); }
-};
 uint32_t bitsOf(float f) {
     uint32_t u;
     std::memcpy(&u, &f, 4);
@@ -335,6 +329,31 @@ bool sameModelFields(const wg::Model &game, const wg::Model &mine) {
            bitsOf(game.yaw) == bitsOf(mine.yaw) && bitsOf(game.r) == bitsOf(mine.r) &&
            bitsOf(game.g) == bitsOf(mine.g) && bitsOf(game.b) == bitsOf(mine.b) && game.flags == mine.flags;
 }
+void objectRecordChecks() {
+    const objectoracle::Placement capture{0x3f, {8, 16, 24}, bitsOf(1), 191};
+    auto defined = capture;
+    defined.turn = 3;
+    wg::StaticObject lamp, placed;
+    lamp.type = placed.type = capture.type;
+    lamp.x = placed.x = 8;
+    lamp.y = placed.y = 16;
+    lamp.z = placed.z = 24;
+    lamp.nativeTurnInitialized = false;
+    placed.turn = defined.turn;
+    const std::array generated{lamp, placed};
+    const auto same = objectoracle::compare({defined, capture}, generated);
+    WC_CHECK(same.matches.size() == 2 && same.unmatchedCaptured.empty() && same.unmatchedGenerated.empty());
+    if (same.matches.size() == 2)
+        WC_CHECK(same.matches[0].turnInitialized && !same.matches[1].turnInitialized &&
+                 same.matches[1].captured.turn == 191 && same.matches[1].generated.turn == 0);
+    defined.turn = 2;
+    const auto changed = objectoracle::compare({defined}, std::span(&placed, 1));
+    WC_CHECK(changed.matches.empty() && changed.unmatchedCaptured.size() == 1 && changed.unmatchedGenerated.size() == 1);
+    defined.scaleBits = bitsOf(2);
+    const auto wrongScale = objectoracle::compare({defined}, std::span(&lamp, 1));
+    WC_CHECK(wrongScale.matches.empty());
+}
+
 void modelRecordChecks() {
     wg::Model game, mine;
     game.type = mine.type = 0x4d;
@@ -371,7 +390,7 @@ template <class K> int matched(std::multiset<K> game, const std::multiset<K> &mi
 struct Totals {
     int zones = 0, traces = 0, wholeTraces = 0;
     long long draws = 0, drawsSame = 0;
-    int objectsGame = 0, objectsMine = 0, objectsSame = 0;
+    int objectsGame = 0, objectsMine = 0, objectsSame = 0, unspecifiedTurns = 0, rawTurnDifferences = 0;
     int modelsGame = 0, modelsMine = 0, modelsSame = 0;
     int modelsInOrder = 0, unspecifiedSizes = 0, rawSizeDifferences = 0;
     int itemsGame = 0, itemsMine = 0, itemsSame = 0, itemsAngle = 0;
@@ -422,7 +441,7 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
     }
     // The records.
     const std::vector<uint8_t> rec = readFile(p.replace_extension(".rec"));
-    std::multiset<ObjectKey> go, mo;
+    std::vector<objectoracle::Placement> capturedObjects;
     std::multiset<std::tuple<int, int64_t, int64_t, int64_t>> gm, mm;
     std::vector<wg::Model> modelRecords;
     std::multiset<std::tuple<int, int, int64_t, int64_t, int64_t>> gi, mi;
@@ -435,8 +454,7 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
         for (uint32_t i = 0; i < count; i++) {
             const uint8_t *r = &rec[at + (size_t)i * stride];
             if (offset == wg::zonelist::OBJECTS)
-                go.insert({field<int32_t>(r, 0), field<int64_t>(r, 8), field<int64_t>(r, 0x10), field<int64_t>(r, 0x18), r[0x20],
-                           bitsOf(field<float>(r, 0x24))});
+                capturedObjects.push_back(objectvisual::placement(r));
             else if (offset == wg::zonelist::MODELS) {
                 gm.insert({field<int32_t>(r, 0), field<int64_t>(r, 8), field<int64_t>(r, 0x10), field<int64_t>(r, 0x18)});
                 wg::Model model;
@@ -455,15 +473,20 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
         }
         at += (size_t)stride * count;
     }
-    for (const auto &o : z.objects)
-        mo.insert({o.type, o.x, o.y, o.z, o.turn, bitsOf(o.scale)});
     for (const auto &m : z.models)
         mm.insert({m.type, m.x, m.y, m.z});
     for (const auto &i : z.items) {
         mi.insert({i.item.category, i.item.id, i.x, i.y, i.z});
         mia.insert({i.item.category, i.item.id, i.x, i.y, i.z, bitsOf(i.angle)});
     }
-    t.objectsGame += (int)go.size(), t.objectsMine += (int)mo.size(), t.objectsSame += matched(go, mo);
+    t.objectsGame += (int)capturedObjects.size();
+    t.objectsMine += (int)z.objects.size();
+    const auto objects = objectoracle::compare(std::move(capturedObjects), z.objects);
+    t.objectsSame += (int)objects.matches.size();
+    for (const auto &match : objects.matches) {
+        t.unspecifiedTurns += !match.turnInitialized;
+        t.rawTurnDifferences += match.captured.turn != match.generated.turn;
+    }
     t.modelsGame += (int)gm.size(), t.modelsMine += (int)mm.size(), t.modelsSame += matched(gm, mm);
     for (size_t i = 0; i < std::min(modelRecords.size(), z.models.size()); ++i) {
         const auto &game = modelRecords[i], &mine = z.models[i];
@@ -494,12 +517,17 @@ void compareZone(const fs::path &cwz, const wg::ZoneContents &z, const std::vect
     }
     t.itemsGame += (int)gi.size(), t.itemsMine += (int)mi.size(), t.itemsSame += matched(gi, mi), t.itemsAngle += matched(gia, mia);
     if (verbose && std::getenv("WC_RECORDS")) {
-        for (const ObjectKey &k : go)
-            if (!mo.count(k))
-                std::printf("  zone %d %d game only: object %d at %.2f %.2f %.2f turn %d\n", zx, zy, k.type, k.x / 65536.0, k.y / 65536.0, k.z / 65536.0, k.turn);
-        for (const ObjectKey &k : mo)
-            if (!go.count(k))
-                std::printf("  zone %d %d ours only: object %d at %.2f %.2f %.2f turn %d\n", zx, zy, k.type, k.x / 65536.0, k.y / 65536.0, k.z / 65536.0, k.turn);
+        const auto print = [&](const char *label, const objectoracle::Placement &key) {
+            std::printf("  zone %d %d %s: object %d at %.2f %.2f %.2f turn %u\n", zx, zy, label, key.type,
+                        key.position[0] / 65536.0, key.position[1] / 65536.0, key.position[2] / 65536.0, (unsigned)key.turn);
+        };
+        for (const auto &key : objects.unmatchedCaptured)
+            print("game only", key);
+        for (const auto &key : objects.unmatchedGenerated)
+            print("engine only", key);
+        for (const auto &match : objects.matches)
+            if (match.captured.turn != match.generated.turn)
+                print("captured unwritten turn", match.captured);
     }
     // The spawn points: each game point is paired with ours by position and race (§8.2).
     const std::vector<uint8_t> sb = readFile(p.replace_extension(".spawns"));
@@ -647,6 +675,7 @@ Totals zonesOracle(const fs::path &dir, const wg::CreatureTables &tables, int ma
         std::printf("  rand(): %d of %d traces whole (%lld of %lld draws)\n", t.wholeTraces, t.traces, t.drawsSame, t.draws);
     std::printf("  objects game %d, new %d, the same %d; models game %d, the same %d; items game %d, new %d, the same %d, same angle %d\n",
                 t.objectsGame, t.objectsMine, t.objectsSame, t.modelsGame, t.modelsSame, t.itemsGame, t.itemsMine, t.itemsSame, t.itemsAngle);
+    std::printf("  objects with unwritten native turns %d; raw turn differences %d\n", t.unspecifiedTurns, t.rawTurnDifferences);
     std::printf("  spawn points game %d, new %d, paired %d, every field the same %d, same id %d, excused %d\n", t.pointsGame, t.pointsMine,
                 t.pointsPlaced, t.pointsSame, t.idsSame, t.pointsExcused);
     std::printf("  model fields/order %d of %d; unspecified marker sizes %d, raw size differences %d\n",
@@ -768,6 +797,7 @@ void petChecks(const wg::CreatureTables &tables) {
 // The fast subset in the default test run.
 int worldgenCreatureTests() {
     failures = 0;
+    objectRecordChecks();
     modelRecordChecks();
     residentChecks();
     const fs::path game = gameDir();
@@ -791,6 +821,7 @@ int worldgenCreatureTests() {
 // `EngineTests wgcreatures [zones]`.
 int worldgenCreatureCommand(int maxZones) {
     failures = 0;
+    objectRecordChecks();
     modelRecordChecks();
     residentChecks();
     const fs::path game = gameDir();

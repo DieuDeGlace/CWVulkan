@@ -327,7 +327,7 @@ void cropField(ZoneBuild &zone, BuildingRules &rules, int32_t cx, int32_t cy, in
                     continue;
                 const int32_t h = trunc32(groundHeight(X, Y, 0) + 1.0f);
                 if (zone.draw() % 4 != 0) {
-                    zone.objects.push_back(makeObject(0x7f + zone.draw() % 3, dotsOf(X) + 32768, dotsOf(Y) + 32768, dotsOf(h), 0)); // turn not set
+                    zone.objects.push_back(makeObject(0x7f + zone.draw() % 3, dotsOf(X) + 32768, dotsOf(Y) + 32768, dotsOf(h), 0));
                 } else {
                     Model mo;
                     mo.type = 0x51;
@@ -419,7 +419,11 @@ void streetLamps(ZoneBuild &zone, BuildingRules &rules) {
                 type = 0x3f + (int)(random(cellKey(zone.place.cell.x, zone.place.cell.y)) & 1);
             const int64_t x = dotsOf(X) + dotsOf(0.5f), y = dotsOf(Y) + dotsOf(0.5f);
             const int64_t z = trunc64((groundHeight(blocksTowardZero(x), blocksTowardZero(y), 0) + 1.0f) * 65536.0f);
-            zone.settleAndKeep(makeObject(type, x, y, z, 0)); // the turn is not set (open question)
+            // The original leaves the turn unwritten for this producer. Use
+            // zero for new zones and keep captured turns on the import path.
+            auto lamp = makeObject(type, x, y, z, 0);
+            lamp.nativeTurnInitialized = false;
+            zone.settleAndKeep(lamp);
         }
 }
 
