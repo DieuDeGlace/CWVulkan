@@ -161,6 +161,10 @@ without reading implementation, SDK, probes or other project prose.
   capture adapter; broader native event-production comparisons remain open.
 - Keep the SDK-free build/dependency audit in validation and qualify its DLL
   exports, supported-game startup, extraction and recovery paths.
+- The independent [startup ordering audit](specs/steam-world-metadata-startup-readiness.md)
+  establishes ordinary client/host World setup before completed Game publication,
+  including title-menu frames. World construction/nonnull pointers alone are not
+  readiness predicates; later transitions and arbitrary observations stay unproved.
 - Run supported-game startup, title and loaded-world extraction comparisons;
   verify owner files are restored, then qualify packaging and wider acceptance.
 

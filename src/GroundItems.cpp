@@ -104,6 +104,17 @@ int moneyValue(const Item &item) {
     return (int)(((float)(h % 100000u) / 100000.0f + (float)item[RARITY] + 1.0f) * 10.0f);
 }
 
+PickupNotice decodePickupNotice(const std::array<uint8_t, 0xd0> &notice) {
+    PickupNotice result;
+    result.picker = get<int64_t>(notice.data(), 0);
+    std::memcpy(result.item.data(), notice.data() + 8, result.item.size());
+    result.quantity = get<uint16_t>(notice.data(), 0xa8);
+    for (size_t axis = 0; axis < result.position.size(); ++axis)
+        result.position[axis] = get<int64_t>(notice.data(), 0xb0 + 8 * axis);
+    result.flags = get<uint32_t>(notice.data(), 0xc8);
+    return result;
+}
+
 Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int count, uint8_t flags, const int64_t position[3],
                 const int32_t region[2], uint32_t playerFlags, bool abilityFree, std::optional<ReceiptRegion> descriptionRegion) {
     Receipt r;
@@ -118,7 +129,8 @@ Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int
     // 3.2: into the region counter, the gold or the inventory.
     const int t = adapted[TYPE];
     if (t == type::COIN && adapted[MATERIAL] == REGION_COIN_MATERIAL) {
-        keeper.regionCounters[{region[0], region[1]}] += count;
+        auto &counter = keeper.regionCounters[{region[0], region[1]}];
+        counter = gamemath::add32(counter, count);
         r.into = Into::RegionCounter, r.amount = count;
     } else if (const int money = moneyValue(adapted)) {
         r.into = Into::Gold, r.amount = money;

@@ -74,7 +74,9 @@ std::array<std::vector<Formula>, TABS> formulas(const std::vector<Thing> &known,
 bool rankUnlocked(int rank, int32_t regionX, int32_t regionY, const std::set<std::array<int32_t, 2>> &solved);
 
 // How many times a recipe can be made (0xb2ee0, §2.3): the fewest any ingredient allows, from
-// `held` (the total quantity of equal stacks carried); 0 for a recipe without ingredients.
+// `held` (the wrapped signed32 total of equal carried stacks). A negative candidate
+// acts as unset at the next ingredient; surviving negatives are retained. Empty
+// ingredients give0. Native division-fault inputs have a defined engine fallback0.
 int times(const Formula &formula, const std::function<int(const Thing &)> &held);
 
 // The extra yield of a crafted resource (0x8fbc0 step 5, §3.2): type 11 but not subtype 0x1a,

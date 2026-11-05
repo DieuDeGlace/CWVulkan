@@ -2711,13 +2711,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             return 0; // taken before by this character
         if (nativeInventory) {
             if (r.into == grounditems::Into::Gold)
-                playerGold += r.amount;
-            else if (r.into == grounditems::Into::Inventory) {
-                int quantity = r.amount;
-                if (adapted[0] == grounditems::type::COIN && adapted[nativesaves::item::MATERIAL] == grounditems::COIN_MATERIAL)
-                    quantity *= std::max(l.gold, 1);
-                nativeInventory->inventory.add(adapted, quantity);
-            }
+                playerGold = gamemath::add32(playerGold, r.amount);
+            else if (r.into == grounditems::Into::Inventory)
+                nativeInventory->inventory.add(adapted, r.amount);
             refreshInventory(true);
         }
         if (r.markCell && usedCells.insert(r.cell).second)
@@ -2739,7 +2735,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
             logLine("Picked up " + std::to_string(r.amount) + " for the region's counter");
             return 0;
         case grounditems::Into::Gold:
-            playerGold += r.amount;
+            playerGold = gamemath::add32(playerGold, r.amount);
             texts.push_back({player.position + glm::vec3(0, 0, 2.6f), "+" + std::to_string(r.amount) + " GOLD", gold});
             logLine("Picked up a gold bag: " + std::to_string(r.amount) + " gold");
             return 0;
@@ -4465,10 +4461,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 };
                 // Native ingredient equality includes modifier, region, formula and active cubes.
                 auto held = [&](const gamecraft::Thing &t) {
-                    int n = 0;
+                    if (nativeInventory)
+                        return nativeInventory->inventory.quantity(rawOfThing(t));
+                    int32_t total = 0;
                     for (const Carried &c : bag)
-                        if (matches(c.item, t)) n += c.count;
-                    return n;
+                        if (matches(c.item, t))
+                            total = gamemath::add32(total, c.count);
+                    return total;
                 };
                 // An item's icon: the sprite the game draws for it, rendered once.
                 auto iconOf = [&](const gameshop::Item &raw) {
@@ -6551,21 +6550,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
                 // What this player picked up: the host's pick-up notices (loot-pickup.md §4).
                 for (const cwnet::PickupRecord &n : spawned.events().pickups) {
                     using namespace grounditems::ground;
-                    constexpr size_t PICKER = 0x00, NOTICE_ITEM = 0x08, NOTICE_COUNT = 0xa8, NOTICE_POSITION = 0xb0, NOTICE_FLAGS = 0xc8;
-                    int64_t picker, at[3];
-                    int16_t count;
-                    std::memcpy(&picker, n.data() + PICKER, 8);
-                    if (picker != spawned.playerId())
+                    const auto notice = grounditems::decodePickupNotice(n);
+                    if (notice.picker != spawned.playerId())
                         continue;
-                    std::memcpy(&count, n.data() + NOTICE_COUNT, 2);
-                    std::memcpy(at, n.data() + NOTICE_POSITION, sizeof at);
                     nativesaves::Record g{}; // (the ground item it was)
-                    std::memcpy(g.data() + ITEM, n.data() + NOTICE_ITEM, 0xa0);
-                    std::memcpy(g.data() + POSITION, at, sizeof at);
-                    const int32_t many = count;
-                    std::memcpy(g.data() + COUNT, &many, 4);
-                    g[FLAGS] = n[NOTICE_FLAGS];
-                    groundRecord(g.data(), extractedWorld.toLocal(at), 1);
+                    std::memcpy(g.data() + ITEM, notice.item.data(), notice.item.size());
+                    std::memcpy(g.data() + POSITION, notice.position.data(), sizeof notice.position);
+                    const int32_t many = notice.quantity; // Native MOVZX, not a signed-word extension.
+                    std::memcpy(g.data() + COUNT, &many, sizeof many);
+                    g[FLAGS] = static_cast<uint8_t>(notice.flags); // The ground representation has one flags byte.
+                    groundRecord(g.data(), extractedWorld.toLocal(notice.position.data()), 1);
                     const Loot got = loot.back();
                     loot.pop_back();
                     const int k = receivePickup(got);

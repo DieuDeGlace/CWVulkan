@@ -2028,3 +2028,33 @@ consumption; a producer cannot replace it after reading and lose a newer request
 Asset-free state-machine checks and actual isolated
 Windows publication/no-overwrite fixtures exercise this policy. No game assets
 or captured output enter either package; live supported-game acceptance is separate.
+
+## Pickup notice quantities and counters, 2026-11-04
+
+The independent original-only author supplied
+steam-pickup-quantity-consumption.md. The implementer read that final prose and
+owned code only. A shared owned decoder now retains the notice's unsigned16
+quantity, complete flags32 and signed positions; the gameplay bridge zero-extends
+that word instead of passing negative signed16 values. The ordinary producer's
+word copy remains byte-equivalent. Regional and direct item-value gold additions
+use defined low32-bit sums; the native receipt path passes notice quantity without
+an extra unit-value multiplier. Item-derived gold still applies once independent
+of quantity. Packet-to-receipt/inventory tests cover high words, poisoned gaps,
+flag/position retention, zero quantity, wrapped counters and distinct gold paths.
+No native instructions, SDK or reconstruction code were read or copied by the
+implementer, and no original assets enter either package. Live multiplayer and
+broader presentation/RNG acceptance remain separate.
+
+## Crafting count arithmetic, 2026-11-04
+
+The independent original-only author supplied steam-crafting-collection-rebuild.md.
+The implementer read that final prose and owned engine code only. Formula counts
+retain signed division and the actual negative-candidate-as-unset test, with empty
+ingredients zero and no general final negative clamp. The live count query uses
+the actual canonical inventory's wrapped full-identity total; its legacy sum also
+uses defined low32-bit addition. Zero-divisor and signed-division-overflow inputs
+have a defined engine fallback, explicitly outside a qualified native successful
+return. Inventory-backed negative/overflow/order tests exercise the count path.
+This arithmetic change does not claim persistent derived-collection, selected-
+button lifetime, native RNG-role or full GUI callback completion. No native code,
+SDK or reconstruction was read by the implementer; no original assets are bundled.

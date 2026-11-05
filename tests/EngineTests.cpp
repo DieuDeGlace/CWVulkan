@@ -172,6 +172,8 @@ int nativeEventQueueTests(); // tests/NativeEventQueueTests.cpp
 int nativeGameCameraTests(); // tests/NativeGameCameraTests.cpp
 int generationRequestTests(); // tests/GenerationRequestTests.cpp
 int inventoryUiTests(); // tests/InventoryUiTests.cpp
+int pickupReceiptTests(); // tests/PickupReceiptTests.cpp
+int craftingCountTests(); // tests/CraftingCountTests.cpp
 int storedWorldDiagnosticsTests(); // tests/StoredWorldDiagnosticsTests.cpp
 int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int nativeInventoryTests(); // tests/NativeInventoryTests.cpp
@@ -9419,6 +9421,10 @@ int main(int argc, char **argv) {
         return lootWindowTests();
     if (argc == 2 && std::string(argv[1]) == "storedworldcapture")
         return storedWorldDiagnosticsTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "craftingcounts")
+        return craftingCountTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "pickupreceipts")
+        return pickupReceiptTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "inventoryrows")
         return inventoryUiTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "generationrequest")
@@ -10815,6 +10821,8 @@ int main(int argc, char **argv) {
     failures += nativeGameCameraTests();
     failures += generationRequestTests();
     failures += inventoryUiTests();
+    failures += pickupReceiptTests();
+    failures += craftingCountTests();
     failures += storedWorldDiagnosticsTests();
     failures += nativeCreaturePoseTests();
     failures += nativeInventoryTests();

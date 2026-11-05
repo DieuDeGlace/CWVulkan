@@ -542,7 +542,7 @@ void pickUp(World &w, const nativeai::Creature *picker, const nativeai::Interact
     PickUpNotice n{};
     set<int64_t>(n.data(), N_WHO, idOf(picker));
     std::memcpy(n.data() + N_ITEM, g.data(), ITEM_SIZE);
-    set<int16_t>(n.data(), N_COUNT, get<int16_t>(g.data(), G_COUNT));
+    set<uint16_t>(n.data(), N_COUNT, get<uint16_t>(g.data(), G_COUNT));
     putPosition(n.data(), N_POSITION, lying);
     set<int32_t>(n.data(), N_FLAGS, (int32_t)(int8_t)g[G_FLAGS]);
     w.pickUps.push_back(n);

@@ -360,6 +360,8 @@ target_sources(EngineTests PRIVATE
     tests/NativeGameCameraTests.cpp
     tests/GenerationRequestTests.cpp
     tests/InventoryUiTests.cpp
+    tests/PickupReceiptTests.cpp
+    tests/CraftingCountTests.cpp
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)

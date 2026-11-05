@@ -338,15 +338,19 @@ bool rankUnlocked(int rank, int32_t regionX, int32_t regionY, const std::set<std
     return false;
 }
 
-int times(const Formula &formula,const std::function<int(const Thing &)> &held) {
+int times(const Formula &formula, const std::function<int(const Thing &)> &held) {
     if (formula.ingredients.empty())
         return 0;
-    int fewest = -1;
+    int candidate = -1;
     for (const Ingredient &in : formula.ingredients) {
-        const int n = in.quantity > 0 ? held(in.item) / in.quantity : 0;
-        fewest = fewest < 0 ? n : std::min(fewest, n);
+        const int total = held(in.item);
+        // Native IDIV has no qualified successful result for these two cases.
+        // Keep a defined engine fallback instead of invoking C++ division UB.
+        const bool defined = in.quantity != 0 && !(total == INT32_MIN && in.quantity == -1);
+        const int quotient = defined ? total / in.quantity : 0;
+        candidate = candidate < 0 ? quotient : std::min(candidate, quotient);
     }
-    return std::max(fewest, 0);
+    return candidate; // A surviving negative is stored, not clamped to zero.
 }
 
 int extraPieces(const Thing &result, const std::function<int()> &rand) {

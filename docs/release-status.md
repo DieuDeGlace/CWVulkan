@@ -10,6 +10,20 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Crafting counts now retain the native negative-sentinel and signed-division
+  results, using wrapped carried totals without an extra final zero clamp. The
+  actual inventory total feeds the live formula count query. Native division-fault
+  inputs retain an explicit engine fallback; no native successful return is claimed
+  for those inputs. Cached collection/event lifetime and RNG coupling remain open.
+
+- Pickup notice quantities now reach gameplay as unsigned 16-bit values, preserving
+  32,768 and 65,535 through packet decoding and inventory insertion. Regional and
+  item-value gold counters use defined low 32-bit addition. The native notice path
+  passes coin quantities directly, with item-derived gold added once. Packet-to-
+  receipt tests cover zero, signed-word boundary, maximum word, full flags/position
+  preservation, counter overflow and quantity-independent gold value. Broader
+  receipt presentation and live multiplayer acceptance remain open.
+
 - Experimental generation now publishes an exclusive context-tagged request
   snapshot before consuming input. Observed World/seed/day changes or native
   generation/refresh failures pause the batch and retain pending work. Actual

@@ -14,6 +14,14 @@ inline double frameMilliseconds(double elapsedMs) {
     return std::min(elapsedMs, 1000.0);
 }
 
+// Four-byte native counter updates retain the low32 bits before signed use.
+inline int32_t add32(int32_t a, int32_t b) {
+    const uint32_t bits = uint32_t(a) + uint32_t(b);
+    int32_t result;
+    std::memcpy(&result, &bits, sizeof result);
+    return result;
+}
+
 // Fixed-coordinate arithmetic preserves native low64-bit operations before conversion.
 inline int64_t addFixed(int64_t a, int64_t b) {
     const uint64_t bits = uint64_t(a) + uint64_t(b);

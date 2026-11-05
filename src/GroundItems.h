@@ -25,6 +25,18 @@ namespace grounditems {
 
 using Item = std::array<uint8_t, 0xa0>;
 
+// Owned receipt values: steam-pickup-quantity-consumption.md. Notice quantities
+// are unsigned16; inventory stack counts and counters remain signed32.
+struct PickupNotice {
+    int64_t picker = 0;
+    Item item{};
+    uint16_t quantity = 0;
+    std::array<int64_t, 3> position{};
+    uint32_t flags = 0;
+};
+PickupNotice decodePickupNotice(const std::array<uint8_t, 0xd0> &);
+
+
 // The ground item record (drops-and-items.md §0.4).
 namespace ground {
 constexpr size_t ITEM = 0x00, POSITION = 0xa0, GROUND_Z = 0xb0, ANGLE = 0xc0, FLAGS = 0xc4, DELAY = 0xc8, TIMER = 0xcc,
