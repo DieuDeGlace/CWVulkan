@@ -29,6 +29,18 @@ CubeModLoader installation, supplied separately. Game assets remain owner data.
 See [extractor qualification](docs/extractor-independence.md) and
 [dependency notices](THIRD_PARTY_NOTICES.md).
 
+To build only the DLL, run from a Visual Studio x64 Developer Command Prompt:
+
+```bat
+cmake -S . -B build-extractor -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCUBEVULKAN_EXTRACTOR_ONLY=ON
+cmake --build build-extractor --target ZoneExtractor
+```
+
+This path needs CMake, the C++ compiler and Windows SDK; it skips renderer
+libraries, dependency downloads and shader compilation. The DLL is written to
+`build-extractor/tools/ZoneExtractor.dll`. It still requires the owner's supported
+game and separate compatible loader to run.
+
 ## Set up the owner's game data
 
 1. Install Steam Cube World and launch it normally once. Back up your saves.

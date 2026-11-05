@@ -10,6 +10,12 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- An extractor-only CMake configuration now builds the Windows DLL before
+  renderer/dependency setup. A fresh build passed with no FetchContent cache
+  entries or dependency directory; compiler/header audit and four required exports
+  also passed. The default five-target build remains unchanged. This source/build
+  qualification does not replace supported-game live acceptance.
+
 - Crafting counts now retain the native negative-sentinel and signed-division
   results, using wrapped carried totals without an extra final zero clamp. The
   actual inventory total feeds the live formula count query. Native division-fault

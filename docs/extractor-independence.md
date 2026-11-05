@@ -4,7 +4,17 @@ The shipping Windows extractor now builds without CWSDK. Its native data and
 loader boundaries use original project adapters and separately authored contracts.
 The compiler-command and header-dependency audit checks the actual target for SDK
 paths, headers and its former permissive option. Run
-`tools/validate_extractor_no_sdk.ps1` after building.
+`tools/validate_extractor_no_sdk.ps1` after building. The optional
+`CUBEVULKAN_EXTRACTOR_ONLY=ON` CMake configuration builds this DLL before any
+renderer/dependency fetching is configured. Audit it with
+`tools/validate_extractor_no_sdk.ps1 -BuildDirectory build-extractor`.
+
+The published source snapshot also passed a fresh-directory extractor build with
+cached pinned dependency sources; all 38 project headers were confined to that
+frozen tree, with no CWSDK cache entry. A separate fresh extractor-only build
+passed without FetchContent settings, dependency directories or renderer setup.
+Required DLL exports and the actual compiler/header audit passed in both builds.
+This is source/build qualification, not supported-game live acceptance.
 
 The [historical SDK audit](sdk-license-provenance.md) still establishes no grant
 for the old snapshot; optional legacy RegionProbe/RegionScout sources are not part

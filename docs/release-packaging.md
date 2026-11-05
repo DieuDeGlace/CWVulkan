@@ -6,6 +6,10 @@ or claim that the readiness checklist is complete.
 Build `CubeVulkan`, `CubeVulkanSetup`, `CubeVulkanDataCheck` and `ZoneExtractor`.
 The Windows extractor target uses owned adapters without CWSDK; CubeModLoader
 remains a separate installation for loading it into the original game.
+For an independent DLL build without renderer dependency downloads, configure
+`-DCUBEVULKAN_EXTRACTOR_ONLY=ON` in a separate build directory. Its output is not
+a complete engine package. The normal multi-target build below remains the
+packaging source.
 Run EngineTests, then create the matching source archive:
 
 ```powershell

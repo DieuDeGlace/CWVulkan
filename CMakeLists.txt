@@ -5,6 +5,28 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Original project adapters implement the native/loader boundaries without CWSDK.
+unset(CWSDK_DIR CACHE) # Retire the obsolete external-header cache setting.
+function(cubeworld_add_zone_extractor)
+    add_library(ZoneExtractor SHARED tools/ZoneExtractor/ZoneExtractor.cpp src/ProceduralItemData.cpp)
+    target_compile_definitions(ZoneExtractor PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(ZoneExtractor PRIVATE user32 d3d11)
+    set_target_properties(ZoneExtractor PROPERTIES CXX_STANDARD 17)
+    # Static runtime: the game ships an old MSVCP140 whose std::mutex is
+    # incompatible with newer headers.
+    set_target_properties(ZoneExtractor PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded"
+                          RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
+endfunction()
+
+option(CUBEVULKAN_EXTRACTOR_ONLY "Build only the Windows extraction mod without renderer dependencies" OFF)
+if(CUBEVULKAN_EXTRACTOR_ONLY)
+    if(NOT WIN32)
+        message(FATAL_ERROR "The native extraction mod requires Windows.")
+    endif()
+    cubeworld_add_zone_extractor()
+    return()
+endif()
+
 # Every dependency is fetched as source at a pinned version, so no Vulkan SDK
 # is required: volk loads the system vulkan-1.dll and glslang is built here to
 # compile the shaders.
@@ -385,17 +407,8 @@ add_executable(CubeVulkanDataCheck tools/DataCheck.cpp)
 target_link_libraries(CubeVulkanDataCheck PRIVATE engine)
 
 # ZoneExtractor: CubeModLoader mod that saves the game's generated zones.
-# Original project adapters implement the native/loader boundaries without CWSDK.
-unset(CWSDK_DIR CACHE) # Retire the obsolete external-header cache setting.
 if(WIN32)
-    add_library(ZoneExtractor SHARED tools/ZoneExtractor/ZoneExtractor.cpp src/ProceduralItemData.cpp)
-    target_compile_definitions(ZoneExtractor PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(ZoneExtractor PRIVATE user32 d3d11)
-    set_target_properties(ZoneExtractor PROPERTIES CXX_STANDARD 17)
-    # Static runtime: the game ships an old MSVCP140 whose std::mutex is
-    # incompatible with newer headers.
-    set_target_properties(ZoneExtractor PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded"
-                          RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
+    cubeworld_add_zone_extractor()
 endif()
 
 # HudExtract: cuts the game's HUD art out of frames captured in game (ZoneExtractor F10).
