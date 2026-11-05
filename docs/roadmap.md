@@ -295,7 +295,9 @@ individual feature documents.
   renders the generated 0x59 quad, bakes model sunlight from current neighboring
   terrain, maps native flag 1 glow, and orders model fades around water. Castle
   room choices/floor increments now use their documented unsigned remainders.
-  Full structure/light-list checks pass on all 789 snapshots; fresh-generation RNG
+  Full structure/light-list checks pass on all 789 snapshots. The strict
+  stored-span check also matches all 3,231,744 columns, including nonempty
+  bases, lengths and the ordered six-byte block records. Fresh-generation RNG
   checks are distinct from partial daily-refresh traces. Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.
   Native directional palette targets/RGBA easing have numeric checks, including

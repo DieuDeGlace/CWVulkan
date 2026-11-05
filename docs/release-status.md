@@ -10,6 +10,12 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The expanded structure audit can require exact stored spans using
+  `WS_COMPLETE=1` and `WS_STORED_EXACT=1` with `EngineTests wgstructures`.
+  It uses the bounded CWZ reader and compares nonempty bases, lengths and
+  six-byte block records directly. All 3,231,744 columns across 789 overlapping
+  seed-123 snapshots passed. This does not supply labels for missing cases.
+
 - The extractor has a separate opt-in dungeon request. It plans bounded 3×3
   cell neighborhoods, saves fresh zone blocks and independently queried dungeon
   decisions, and marks only complete batches. The offline comparator checks

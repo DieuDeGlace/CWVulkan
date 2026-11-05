@@ -100,26 +100,16 @@ struct GameZone {
 };
 
 bool readZone(const fs::path &cwz, GameZone &z) {
-    {
-        std::ifstream in(cwz, std::ios::binary);
-        std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), {});
-        if (data.size() < 20 || std::memcmp(data.data(), "CWZ1", 4) != 0)
+    if (!ExtractedWorld::zoneCoordinates(cwz, z.zx, z.zy))
+        return false;
+    std::string error;
+    z.columns = ExtractedWorld::readStoredZoneColumns(cwz, error);
+    if (z.columns.size() != wg::ZONE_COLUMNS)
+        return false;
+    for (const auto &column : z.columns) {
+        // The legacy effective comparison below uses an int32 top and loop.
+        if (column.base == INT32_MIN || int64_t(column.base) + int64_t(column.blocks.size()) >= INT32_MAX)
             return false;
-        std::memcpy(&z.zx, &data[4], 4), std::memcpy(&z.zy, &data[8], 4);
-        size_t at = 20;
-        z.columns.resize(wg::ZONE_COLUMNS);
-        for (auto &c : z.columns) {
-            uint32_t runs;
-            std::memcpy(&c.base, &data[at], 4), std::memcpy(&runs, &data[at + 4], 4);
-            at += 8;
-            for (uint32_t r = 0; r < runs; r++) {
-                uint16_t n;
-                wg::Block b;
-                std::memcpy(&n, &data[at], 2), std::memcpy(&b, &data[at + 2], 6);
-                at += 8;
-                c.blocks.insert(c.blocks.end(), n, b);
-            }
-        }
     }
     fs::path rec = cwz;
     rec.replace_extension(".rec");
@@ -168,6 +158,10 @@ bool terrainType(int t) {
 
 wg::Block blockOf(const wg::TerrainColumn &c, int32_t z) {
     return z >= c.base && z < c.top() ? c.blocks[(size_t)(z - c.base)] : wg::EMPTY_BLOCK;
+}
+
+bool sameStoredColumn(const wg::TerrainColumn &a, const wg::TerrainColumn &b) {
+    return (a.base == b.base || (a.empty() && b.empty())) && a.blocks == b.blocks;
 }
 
 // Block tallies of a zone against the game's.
@@ -418,9 +412,12 @@ void printTotals(const char *who, const Totals &t) {
 }
 
 int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::CreatureTables *creatures = nullptr) {
+    const bool strictStorage = creatures && std::getenv("WS_STORED_EXACT");
     const std::vector<fs::path> files = zoneFiles(dir, maxZones);
-    if (files.empty())
+    if (files.empty()) {
+        WS_CHECK(!strictStorage);
         return 0;
+    }
     const std::string name = dir.filename().string();
     const int seed = std::atoi(name.substr(name.find_last_of('_') + 1).c_str());
     int day = -1;
@@ -433,14 +430,20 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::Creat
     Totals mine;
     ModelListTally modelLists;
     int traces = 0, tracesToCreature = 0, shown = 0, markOnlyColumns = 0, otherColumns = 0;
+    size_t storedDifferences = 0;
     long long prefixTotal = 0, creatureTotal = 0;
     double newSeconds = 0;
     std::vector<std::string> notes;
     std::map<int, std::array<int, 2>> columnsByType; // by the cell object: columns, differing (not just marks)
     for (const fs::path &file : files) {
         GameZone g;
-        if (!readZone(file, g))
+        if (!readZone(file, g)) {
+            if (strictStorage) {
+                std::printf("Could not read stored columns from %s\n", file.filename().string().c_str());
+                WS_CHECK(false);
+            }
             continue;
+        }
         if (const char *find = std::getenv("WS_FINDTYPE")) { // debugging: the zones holding a cell object
             for (int32_t cx = 4 * g.zx; cx < 4 * g.zx + 4; cx++)
                 for (int32_t cy = 4 * g.zy; cy < 4 * g.zy + 4; cy++)
@@ -469,6 +472,10 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::Creat
         }
         for (int i = 0; i < wg::ZONE_COLUMNS; i++) {
             const wg::TerrainColumn &gc = g.columns[(size_t)i], &oc = z.terrain.columns[(size_t)i];
+            if (strictStorage && !sameStoredColumn(gc, oc) && storedDifferences++ < 8)
+                std::printf("  zone %d %d stored column %d %d: base %d/%d, count %zu/%zu\n",
+                            g.zx, g.zy, i / wg::ZONE_SIZE, i % wg::ZONE_SIZE, gc.base, oc.base,
+                            gc.blocks.size(), oc.blocks.size());
             const long long before = mine.blocks.exact;
             mine.blocks.add(gc, oc);
             static int shownColumns = 0;
@@ -594,6 +601,10 @@ int zonesOracle(const fs::path &dir, int maxZones, bool verbose, const wg::Creat
     std::printf("wgstructures zones %d (%s, day %d%s):\n", mine.zones, name.c_str(), day,
                 creatures ? ", full creature/object generation" : ", structure-only");
     printTotals("new", mine);
+    if (strictStorage) {
+        std::printf("  exact stored spans: %lld checked, %zu differ\n", mine.blocks.columns, storedDifferences);
+        WS_CHECK(mine.zones > 0 && storedDifferences == 0);
+    }
     if (name == "genr_seed_123")
         std::printf("  refresh RNG: partial capture; fresh-generation prefix check not applicable\n");
     std::printf("  new: of the differing columns, %d differ only in the flag 0x40 of blocks inside static objects, %d otherwise\n",
@@ -960,7 +971,7 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
         for (size_t i = 0; i < captured.size(); ++i) {
             const auto &native = captured[i];
             const auto &engine = generated.terrain.columns[i];
-            if (native.blocks == engine.blocks && (native.empty() || native.base == engine.base))
+            if (sameStoredColumn(native, engine))
                 continue;
             if (changed++ < 4)
                 std::printf("%s: stored column %zu %zu differs (base %d/%d, count %zu/%zu)\n",
@@ -1050,6 +1061,10 @@ int worldgenStructureCommand(int maxZones) {
     const auto directory = generatedZonesDir(game);
     wg::CreatureTables creatures;
     const wg::CreatureTables *complete = nullptr;
+    if (std::getenv("WS_STORED_EXACT") && !std::getenv("WS_COMPLETE")) {
+        std::puts("WS_STORED_EXACT requires WS_COMPLETE for full zone generation");
+        return 1;
+    }
     if (std::getenv("WS_COMPLETE")) {
         std::string why;
         if (!creatures.load(directory.parent_path() / "oracle", &why))
