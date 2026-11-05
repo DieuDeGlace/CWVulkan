@@ -83,6 +83,12 @@ int nativeGameCameraTests() {
     captureabi::CoordinatePair coordinates;
     std::memcpy(&coordinates, pair.data(), sizeof coordinates);
     check(coordinates.x == -7 && coordinates.y == INT32_MIN, "native coordinate pair retains signed32 order");
+    check(captureabi::zoneGenerationSeed(5, 7, 100) == 7273 &&
+              captureabi::zoneGenerationSeed(-1, -1, -1) == 0xfffffbfe &&
+              captureabi::zoneGenerationSeed(INT32_MIN, INT32_MAX, INT32_MAX) == 0xfffffbff &&
+              captureabi::zoneGenerationSeed(INT32_MAX, INT32_MIN, -1) == 0x7ffffffe &&
+              captureabi::zoneGenerationSeed(1, 4194304, 9) == 10,
+          "zone RNG seed preserves native32 wrap at negative and signed-overflow boundaries");
     int roleStorage = 7;
     roleDisposals = 0;
     {

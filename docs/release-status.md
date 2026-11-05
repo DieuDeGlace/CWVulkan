@@ -10,18 +10,20 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
-- Extractor independence is now the first work priority. Owned byte records
-  replace explicit SDK Item/Equipment types, native pointer overlays and equipment
-  field access in recording/naming/class-rule helpers. Independent primitive links
-  replace the SDK Game/client-World/local-player fields and embedded host identity.
-  Two recorder consumers now resolve IDs through the signed native tree; their
-  nonblocking native frame guard survives through pointer use, while busy/failed
-  reads defer tracking work. A registration-list reader is tested but its legacy
-  consumers are not yet migrated. Byte/layout, signed lookup, invalid/change/budget
-  and Win32 contention/unwinding cases pass with all five targets and full CPU/
-  owner checks. This does not remove every SDK-dependent field/container or the
-  CMake requirement, establish universal snapshot safety or qualify the new DLL
-  in the original game. The [workboard](extractor-independence.md) tracks the rest.
+- The shipping extractor now builds without CWSDK. Independent owned views cover
+  its loader, catalogs, World/Zone data, creatures, appearance, inventory, effects,
+  simple event queues, camera and generated text. The actual compiler/header
+  dependency audit, DLL exports, five build targets and full CPU/owner-data suite
+  pass. Native Zone refresh can retain a raw Zone pointer for a later World
+  consumer, and its destructor does not detach that reference. Temporary oracle
+  Zones remain retained until process exit while initial-generation escape
+  lifetimes remain unproved. Experimental gen.request admission now limits the
+  process to 32 allocation attempts, including failures, and preserves rejected
+  requests instead of dropping coordinates; this is an attempt limit, not a
+  byte-memory bound. Zone seed arithmetic explicitly wraps at 32 bits. These
+  changes still need supported-game startup/extraction/recovery qualification;
+  they do not establish universal snapshot safety, legal clearance or 1:1 parity.
+  The [workboard](extractor-independence.md) tracks remaining audits and acceptance.
 
 - The independent effective-block audit verifies original CRT initialization of
   the shared solid/air/water defaults, their ordinary lookup copies and direct

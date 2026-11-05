@@ -5,6 +5,10 @@
 #include <cstring>
 
 namespace captureabi {
+// Native modular arithmetic: worldgen-terrain-zone.md section 2.
+inline uint32_t zoneGenerationSeed(int32_t x, int32_t y, int32_t derived) {
+    return uint32_t(y) * 1024u + uint32_t(derived) + uint32_t(x);
+}
 struct CoordinatePair {
     int32_t x = 0, y = 0;
 };

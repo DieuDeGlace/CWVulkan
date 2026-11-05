@@ -6,6 +6,7 @@
 #include "CaptureTextUtf8.h"
 #include "CaptureTickContext.h"
 #include "CaptureWorldSections.h"
+#include "GenerationRequest.h"
 #include "NativeConversation.h"
 #include "NativeCreatureAppearance.h"
 #include "NativeCreatureEffects.h"
@@ -6372,8 +6373,8 @@ static int spawns(cube::World *w, const std::string &dir) {
 // made the way 0x2ae0c0 makes a zone (rand() seeded with y * 1024 + seed + x, 0x2f9400, then
 // the generator 0x2ff6f0) but kept out of the world, so without the world's saved changes.
 // Each gets z_<x>_<y>.cwz, .rec and .spawns as above; day.txt holds the world's day
-// (world+8), which some places' encounters depend on. The zones are leaked (their vectors
-// live on the game's heap); a test run generates a few hundred at most.
+// (world+8), which some places' encounters depend on. Storage is retained: initial
+// generator escape lifetimes remain unproved. Admission limits attempts per process.
 constexpr uintptr_t SRAND_IAT_RVA = 0x42cd38; // the exe's import slot for srand()
 constexpr uintptr_t NEW_RVA = 0x392bac;       // the game's operator new
 constexpr uintptr_t ZONE_CTOR_RVA = 0x2f9400; // Zone *(Zone *, World *, captureabi::CoordinatePair *)
@@ -6382,7 +6383,7 @@ constexpr size_t ZONE_SIZE = 0x58518;
 static bool generateOnce(cube::World *w, int x, int y, unsigned char *&zone) {
     __try {
         auto srandFn = *(void(__cdecl **)(unsigned))(base() + SRAND_IAT_RVA);
-        srandFn((unsigned)(y * 0x400 + *(int *)((unsigned char *)w + 0x244) + x));
+        srandFn(captureabi::zoneGenerationSeed(x, y, captureabi::WorldMetadata(w).derivedGenerationValue()));
         zone = (unsigned char *)((void *(*)(size_t))(base() + NEW_RVA))(ZONE_SIZE);
         if (!zone)
             return false;
@@ -6402,8 +6403,10 @@ static void writeFile(const std::string &name, const std::vector<unsigned char> 
     }
 }
 // The daily refresh (0x31c540) the game gives a zone when it loads it (a new zone's day is -1).
-// When it changes the zone's objects (a campfire) the game queues the zone for sending
-// (world+0x1a0); the zone stays valid (it is leaked), so that is harmless.
+// Refresh can put this exact Zone pointer into World+0x1a0; the later native
+// consumer dereferences it before clearing tree nodes. The Zone destructor does
+// not detach pending references. Keep its storage; this is not a quiescence proof.
+// See steam-zone-refresh-reference-lifetimes.md.
 constexpr uintptr_t ZONE_REFRESH_RVA = 0x31c540;
 static bool refreshOnce(unsigned char *zone) {
     __try {
@@ -6431,18 +6434,35 @@ static void writeZone(cube::World *w, unsigned char *zone, const std::string &st
     }
     writeFile(stem + ".rtrace", trace); // (uint32 caller RVA, uint16 value) per call
 }
-static std::deque<std::pair<int, int>> genQueue; // a few a tick, so the game keeps running
+static capturepolicy::GenerationCoordinates genQueue; // a few a tick, so the game keeps running
+static capturepolicy::RetainedGenerationBudget genBudget;
+static bool genRequestNotice = false;
 static int genDone = 0;
 static std::string genDirectory;
 static void queueGeneration(cube::World *w) {
+    if (!genQueue.empty())
+        return; // Do not redirect an active batch or consume another request.
     FILE *f = nullptr;
-    if (fopen_s(&f, "Extract\\gen.request", "r") != 0 || !f)
+    if (fopen_s(&f, "Extract\\gen.request", "rb") != 0 || !f)
         return;
-    int x, y;
-    while (fscanf_s(f, "%d %d", &x, &y) == 2)
-        genQueue.push_back({x, y});
+    char bytes[capturepolicy::MaximumGenerationRequestBytes + 1];
+    const size_t count = fread(bytes, 1, sizeof bytes, f);
+    const bool readComplete = !ferror(f);
     fclose(f);
-    DeleteFileA("Extract\\gen.request");
+    capturepolicy::GenerationCoordinates pending;
+    if (!readComplete ||
+        !capturepolicy::parseGenerationRequest(std::string_view(bytes, count), genBudget.remaining(), pending)) {
+        if (!genRequestNotice) {
+            log("Oracle: gen.request deferred (invalid/oversized or exceeds remaining " +
+                std::to_string(genBudget.remaining()) + " retained-Zone attempts); request preserved");
+            genRequestNotice = true;
+        }
+        return;
+    }
+    if (!DeleteFileA("Extract\\gen.request"))
+        return; // A batch is accepted only after its request can be consumed.
+    genRequestNotice = false;
+    genQueue.swap(pending);
     const auto root = referenceFolder();
     const auto parent = root == "Extract" ? root + "\\oracle" : root;
     CreateDirectoryA(parent.c_str(), nullptr);
@@ -6450,7 +6470,7 @@ static void queueGeneration(cube::World *w) {
     CreateDirectoryA(genDirectory.c_str(), nullptr);
     CreateDirectoryA((genDirectory + "\\refreshed").c_str(), nullptr);
     if (fopen_s(&f, (genDirectory + "\\day.txt").c_str(), "w") == 0 && f) {
-        fprintf(f, "%d\n", *(int *)((unsigned char *)w + 8));
+        fprintf(f, "%d\n", captureabi::WorldMetadata(w).day());
         fclose(f);
     }
     genDone = 0;
@@ -6458,6 +6478,8 @@ static void queueGeneration(cube::World *w) {
 }
 static void generate(cube::World *w) {
     for (int n = 0; n < 2 && !genQueue.empty(); n++) {
+        if (!genBudget.beginAttempt())
+            return; // Conservative admission includes attempts that fail after partial allocation.
         auto [zx, zy] = genQueue.front();
         genQueue.pop_front();
         unsigned char *zone = nullptr;

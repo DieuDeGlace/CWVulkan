@@ -136,6 +136,18 @@ without reading implementation, SDK, probes or other project prose.
   host-before-World locking for the named host phases and separate AI/worker
   scopes; neither guard alone covers all named host writers. The client capture
   helper must not be reused as a host capture or generic quiescence API.
+- Temporary generator lifetime remains unresolved. The independent
+  [refresh lifetime audit](specs/steam-zone-refresh-reference-lifetimes.md) proves
+  that World+0x1a0 can retain the actual Zone pointer until later native consumer
+  dereferences and tree clearing; the Zone destructor does not detach it. Keep
+  that storage. Experimental gen.request batches now admit at most 32 native
+  allocation attempts over the extractor process, including failed attempts.
+  Empty, malformed, oversized and over-budget requests remain on disk, and active
+  batches cannot be redirected by a second request. This is project policy, not a
+  native memory limit or proof of all generator reference lifetimes. Split larger
+  capture requests into smaller sessions; ordinary loaded-zone export is unchanged.
+  Explicit unsigned 32 seed arithmetic preserves the native modular equation at
+  signed-coordinate extremes.
 - Complete creature/controller lifetime and transitive writer audits remain
   separate from the replaced core, appearance, pose, inventory and effect views.
 - Keyed event-list and owning-string event behavior remain outside the simple

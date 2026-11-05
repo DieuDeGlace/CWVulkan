@@ -1980,3 +1980,18 @@ scope, with no invented lifetime pin or universal snapshot claim. Registration
 list/header/tree fixtures and actual Win32 guard tests are synthetic and asset-free.
 No SDK implementation, headers or compiler layout was inspected. Remaining
 SDK fields/containers, complete independence and new native acceptance stay open.
+
+## Temporary Zone refresh lifetime, 2026-11-04
+
+The independent original-only author supplied
+steam-zone-refresh-reference-lifetimes.md. The implementer read the finalized
+prose and owned exporter sources only. Refresh can register the Zone's address
+in a World-owned notification tree; later consumption dereferences the Zone and
+clears tree storage without destroying the referenced object. The Zone destructor
+does not detach pending notification references. Initial-generation full escape
+lifetimes remain unproved, so no temporary native Zone destructor is introduced.
+The 32-attempt process budget and bounded, all-or-nothing request admission are
+explicit replacement-tool policies, not native allocation or quiescence claims.
+The wrapped unsigned 32 generation seed follows worldgen-terrain-zone.md section 2.
+Asset-free coordinate, malformed-input, admission and boundary fixtures qualify
+these policies; original-game live execution remains a separate acceptance gate.
