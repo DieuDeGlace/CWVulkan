@@ -3342,6 +3342,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     frontend::Services inGameServices = front;
     inGameServices.externalMenuSounds = nativeInventory != nullptr;
     inGameServices.hud = hudReady ? &hud : nullptr;
+    inGameServices.inventory = nativeInventory ? &inventoryView : nullptr;
     inGameServices.spawned = nullptr; // (they leave the player alone)
     // The multiplayer menu (J): the Steam friends, or by address the players on this host.
     frontend::FriendsMenu friendsMenu;
@@ -3653,7 +3654,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 glfwGetCursorPos(window, &x, &y);
                 glfwGetWindowSize(window, &width, &height);
                 const auto extent = renderer.screenSize();
-                hud.moveInterfacePointer({float(x * extent.width / std::max(1, width)), float(y * extent.height / std::max(1, height))});
+                const glm::vec2 point(float(x * extent.width / std::max(1, width)), float(y * extent.height / std::max(1, height)));
+                hud.moveInterfacePointer(point, nativeInventory ? &inventoryView : nullptr);
             }
         }
         auto gameDowns = physicalDowns;
@@ -4444,7 +4446,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 size_t next = 0;
                 for (size_t index = 0; index < input.buttons.size(); ++index) {
                     const int button = input.buttons[index];
-                    if (!claim(button)) {
+                    if (!claim(button, inventoryDownIndices[index])) {
                         input.buttons[next] = button;
                         inventoryDownIndices[next] = inventoryDownIndices[index];
                         ++next;
@@ -4453,6 +4455,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 input.buttons.resize(next);
                 inventoryDownIndices.resize(next);
             };
+            filterInventoryDowns([&](int, size_t original) {
+                if (original >= nativeDowns.size())
+                    return false;
+                const auto *press = nativeDowns[original].physicalLeft;
+                return press && press->thumbCaptured;
+            });
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
             auto tabOf = [](int category) {
                 switch (category) {
@@ -4847,7 +4855,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     identify.takeOut();
                 const auto idLayout = hud.identificationLayout();
                 const glm::vec2 idMouse = pointerTestX >= 0 ? glm::vec2((float)pointerTestX, (float)pointerTestY) : mouse;
-                filterInventoryDowns([&](int button) {
+                filterInventoryDowns([&](int button, size_t) {
                     if (!identify.open || (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT))
                         return false;
                     if (nativeInventory) {
@@ -4976,7 +4984,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                         std::to_string(me[WORN + (size_t)hand * ITEM_SIZE + Gear::CUBE_COUNT_AT]) + " cubes");
                         }
                     };
-                    filterInventoryDowns([&](int button) {
+                    filterInventoryDowns([&](int button, size_t) {
                         if (button != GLFW_MOUSE_BUTTON_LEFT)
                             return false;
                         if (const int box = upLayout.paletteBoxAt(guiMouse); box >= 0) { // a palette entry chosen

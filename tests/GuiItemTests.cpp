@@ -267,6 +267,46 @@ void equipmentCallbacks() {
         GUI_CHECK(hud.inventoryRowCount(inventory) == 1); // Drawing did not refresh constructor A.
         hud.refreshInventoryRange(inventory);
         GUI_CHECK(hud.inventoryRowCount(inventory) == std::max(1, (matching - 1) / columns - rows + 2));
+        const auto bag = std::find_if(gameplayRoot->children.begin(), gameplayRoot->children.end(), [](const auto &child) {
+            return child->widget && child->widget->kind == "InventoryWidget";
+        });
+        const auto *thumb = bag != gameplayRoot->children.end() ? (*bag)->find("scrollbutton") : nullptr;
+        GUI_CHECK(thumb && thumb->widget && thumb->widget->kind == "Button");
+        if (thumb && thumb->widget) {
+            inventory.nativeCollections = true;
+            inventory.scroll = 0;
+            inventory.retainScroll();
+            const int available = inventory.availableRows;
+            hud.updateInventoryThumb(inventory, 0, available);
+            const plx::Document emptyDocument;
+            const plasma::Scene geometry(emptyDocument);
+            const auto start = geometry.contentPosition(*thumb);
+            const auto size = geometry.screenSize(*thumb);
+            const auto centre = start + size * 0.5f;
+            hud.moveInterfacePointer(centre, &inventory);
+            const auto press = hud.interfaceLeftDown();
+            GUI_CHECK(press.thumbCaptured && thumb->widget->buttonHeld && !press.tab);
+            hud.moveInterfacePointer(centre + glm::vec2(0, 11.5f), &inventory);
+            const auto moved = geometry.contentPosition(*thumb);
+            GUI_CHECK(near(moved.x, start.x) && near(moved.y, start.y + 11.5f));
+            GUI_CHECK(geometry.screenSize(*thumb) == size && inventory.availableRows == available);
+            hud.setInterfaceShown(false);
+            const auto outside = centre + glm::vec2(450, 800);
+            hud.moveInterfacePointer(outside, &inventory);
+            const auto bottom = geometry.contentPosition(*thumb);
+            GUI_CHECK(inventory.scroll == available - 1 && inventory.rowOffsets[0] == inventory.scroll && bottom.y > moved.y);
+            // GLFW's synthetic releases stay in its ordinary per-frame list.
+            MenuInput messages;
+            messages.released = {0};
+            messages.routeInterfaceMessages(hud);
+            GUI_CHECK(thumb->widget->buttonHeld);
+            messages.interfaceMessages = {MenuInput::InterfaceMessage::LeftUp};
+            messages.routeInterfaceMessages(hud);
+            hud.setInterfaceShown(true);
+            hud.moveInterfacePointer(centre, &inventory);
+            GUI_CHECK(!thumb->widget->buttonHeld && geometry.contentPosition(*thumb) == bottom);
+            inventory.nativeCollections = false;
+        }
         inventory.scroll = 2; // the earlier mismatch must not cut a later viewport
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == (size_t)std::min(capacity, (int)tabs[0].size() - 2 * columns));

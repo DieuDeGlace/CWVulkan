@@ -42,8 +42,18 @@ void Hud::buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons
     p.cellParent = s.create(node);
     if (selection && (panels.selector = s.instance(selection, node))) // the selection frame, hidden until placed
         panels.selector->visible = false;
-    for (const char *name : {"upbutton", "downbutton", "scrollbutton", "leftbutton", "rightbutton"})
-        p.buttons[name] = s.instance(name, node);
+    p.buttons["upbutton"] = s.instance("upbutton", node);
+    p.buttons["downbutton"] = s.instance("downbutton", node);
+    p.thumb = s.instance("scrollbutton", node);
+    p.buttons["leftbutton"] = s.instance("leftbutton", node);
+    p.buttons["rightbutton"] = s.instance("rightbutton", node);
+    if (p.thumb && p.thumb->widget && p.thumb->widget->name == L"scrollbutton") {
+        p.thumb->initializeWidgets();
+        interfaceInput->registerEvent(*p.thumb, plasma::Input::Event::Move,
+                                      [this, receiver = &p](plasma::Input &input, plasma::SceneNode &) {
+                                          moveInventoryThumb(*receiver, input);
+                                      });
+    }
     s.resizeTo(*node, size);
     layoutInvPanel(p);
     std::vector<std::string> icons((size_t)tabs);
@@ -93,6 +103,10 @@ void Hud::buildPanels() {
     interfaceInput = std::make_unique<plasma::Input>(*scene, [this](glm::vec2 point) {
         return const_cast<plasma::SceneNode *>(scene->hitTest(scene->root(), point, frontTextHit()));
     });
+    interfaceInput->virtualHook = [this](plasma::Input &input, plasma::SceneNode &node, plasma::Input::Hook hook) {
+        if (isInventoryThumb(&node))
+            plasma::buttonInput(input, node, hook);
+    };
     plasma::Scene &s = *scene;
     s.setScale(1.0f); // (the game builds its interface before the scale option applies)
     panels.inGame = interfaceBranches->node(uiroot::Branch::Gameplay);
@@ -381,6 +395,47 @@ int Hud::invRowCount(const InvPanel &p, const InvList &list) const {
     return std::max(1, (count - 1) / p.columns - p.rows + 2);
 }
 
+bool Hud::isInventoryThumb(const plasma::SceneNode *node) const {
+    return node && node->widget && node->widget->name == L"scrollbutton" &&
+           (node == panels.bag.thumb || node == panels.vendor.thumb || node == panels.crafting.thumb);
+}
+
+void Hud::moveInventoryThumb(const InvPanel &panel, const plasma::Input &input) {
+    if (!pointerMoveInventory || !(input.heldButtons() & 1))
+        return;
+    auto &inv = *pointerMoveInventory;
+    const int which = &panel == &panels.bag ? 0 : &panel == &panels.vendor ? 1 : 2;
+    if (!listOf(inv, which).canonicalTabs)
+        return;
+    auto &state = which == 0   ? static_cast<inventoryui::PanelState &>(inv)
+                  : which == 1 ? static_cast<inventoryui::PanelState &>(inv.vendor)
+                               : static_cast<inventoryui::PanelState &>(inv.crafting);
+    const int32_t track = worldgen::trunc32(scene->contentSize(*panel.node).y - 70.0f);
+    const glm::vec2 delta = input.pointer() - input.previousPointer();
+    const glm::vec4 localDelta = glm::inverse(scene->contentMatrix(*panel.node)) * glm::vec4(delta, 0, 0);
+    const auto position = scene->viewPosition(*panel.thumb);
+    if (const auto y = inventoryui::dragThumb(state, track, position.y, localDelta.y)) {
+        if (which == 2)
+            placeCraftingSelection(inv);
+        scene->moveTo(*panel.thumb, {scene->viewPosition(*panel.thumb).x, *y});
+    }
+}
+
+void Hud::placeCraftingSelection(const Inventory &inv) const {
+    const auto &crafting = inv.crafting;
+    auto *selector = panels.selector;
+    if (!selector || !selector->widget)
+        return;
+    const auto shown = shownOf(craftingList(inv));
+    const auto at = std::find(shown.begin(), shown.end(), crafting.selected);
+    const auto &panel = panels.crafting;
+    const int index = (int)(at - shown.begin()) - panel.columns * crafting.scroll;
+    selector->visible = panel.columns > 0 && at != shown.end() && index >= 0 && index < panel.columns * panel.rows;
+    if (selector->visible)
+        scene->moveTo(*selector, {float(index % panel.columns * (panels.cellWidth + 5) + 10),
+                                 float(index / panel.columns * (panels.cellHeight + 5) + 40)});
+}
+
 void Hud::placeInvThumb(const InvPanel &p, const InvList &list, int rowCount) const {
     if (!p.node)
         return;
@@ -392,8 +447,8 @@ void Hud::placeInvThumb(const InvPanel &p, const InvList &list, int rowCount) co
         rowCount = list.range->availableRows;
     }
     plasma::Scene &s = *scene;
-    if (auto it = p.buttons.find("scrollbutton"); it != p.buttons.end() && it->second && it->second->widget) {
-        plasma::SceneNode &button = *it->second;
+    if (p.thumb && p.thumb->widget) {
+        plasma::SceneNode &button = *p.thumb;
         const glm::vec2 content = s.contentSize(*p.node);
         if (const auto placement = inventoryui::thumbPlacement((int)(content.y - 70.0f), rowCount, list.scroll)) {
             const float width = s.contentSize(button).x;
@@ -460,24 +515,12 @@ void Hud::placePanels(const Inventory &inv) const {
         placeInvPanel(panels.vendor, vendorList(inv));
     setInventoryPanelVisibility(inv.bagShown, inv.crafting.open, inv.vendor.open);
     // The crafting widget left of the bag, the formula details under it.
-    const Inventory::Crafting &c = inv.crafting;
+    const auto &c = inv.crafting;
     if (plasma::SceneNode *crafting = panels.crafting.node) {
         const glm::vec2 view = s.viewSize(*crafting);
         s.setPosition(*crafting, glm::vec2(w / 2 - bagView.x * 0.5f - view.x, h / 2 - bagView.y), glm::vec2(-10, -50));
-        const InvList list = craftingList(inv);
-        placeInvPanel(panels.crafting, list);
-        // the inventory selection frame: the frame on the selected cell, hidden off the page.
-        if (panels.selector && panels.selector->widget) {
-            const std::vector<int> shown = shownOf(list);
-            const auto at = std::find(shown.begin(), shown.end(), c.selected);
-            const int first = panels.crafting.columns * c.scroll, index = (int)(at - shown.begin()) - first;
-            const bool on =
-                panels.crafting.columns > 0 && at != shown.end() && index >= 0 && index < panels.crafting.columns * panels.crafting.rows;
-            panels.selector->visible = on;
-            if (on)
-                s.moveTo(*panels.selector, glm::vec2((float)(index % panels.crafting.columns * (panels.cellWidth + 5) + 10),
-                                                     (float)(index / panels.crafting.columns * (panels.cellHeight + 5) + 40)));
-        }
+        placeInvPanel(panels.crafting, craftingList(inv));
+        placeCraftingSelection(inv);
     }
     if (plasma::SceneNode *details = panels.details) {
         const glm::vec2 view = s.viewSize(*details);
@@ -1226,7 +1269,7 @@ Hud::InterfacePress Hud::interfaceLeftDown() {
         return {};
     const auto point = interfaceInput->pointer();
     interfaceInput->leftDown();
-    return {point, pressedInventoryTab};
+    return {point, pressedInventoryTab, isInventoryThumb(interfaceInput->captureNode())};
 }
 
 void Hud::interfaceLeftUp() {
@@ -1234,9 +1277,15 @@ void Hud::interfaceLeftUp() {
         interfaceInput->leftUp();
 }
 
-void Hud::moveInterfacePointer(glm::vec2 point) {
-    if (interfaceInput)
-        interfaceInput->move(point);
+void Hud::moveInterfacePointer(glm::vec2 point, Inventory *inventory) {
+    if (!interfaceInput)
+        return;
+    struct InventoryScope {
+        Inventory *&slot;
+        Inventory *previous;
+        ~InventoryScope() { slot = previous; }
+    } scope{pointerMoveInventory, std::exchange(pointerMoveInventory, inventory)};
+    interfaceInput->move(point);
 }
 
 int Hud::panelTabAt(glm::vec2 m, const Inventory &inv, int which) const {

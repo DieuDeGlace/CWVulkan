@@ -1,9 +1,11 @@
 #pragma once
 // Inventory panel state and region choices (remaining-runtime-gaps.md §4.9, §4.15).
 #include "NativeKeyOrder.h"
+#include "worldgen/Noise.h"
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <optional>
@@ -148,6 +150,23 @@ struct PanelState {
             rowOffsets[(size_t)tab] = scroll;
     }
 };
+
+// Inventory thumb event 12. It changes the cached row and continuous position
+// without refreshing the collection or using the discrete placement formula.
+inline std::optional<float> dragThumb(PanelState &state, int32_t track, float y, float delta) {
+    const int32_t available = state.availableRows;
+    if (available <= 0 || state.tab < 0 || (size_t)state.tab >= state.rowOffsets.size() || !std::isfinite(y + delta))
+        return std::nullopt;
+    const auto travel = std::bit_cast<int32_t>(uint32_t(track) - uint32_t(track / available));
+    const auto end = std::bit_cast<int32_t>(uint32_t(travel) + 35u);
+    const float next = std::min(std::max(y + delta, 35.0f), float(end));
+    int32_t row = state.scroll;
+    if (travel > 0)
+        row = worldgen::trunc32((float(available - 1) * (next - 35.0f)) / float(travel));
+    state.scroll = std::clamp(row, 0, available - 1);
+    state.retainScroll();
+    return next;
+}
 
 // The caller has already performed the separate region/sort stages. Binding and
 // nonpositive-column skips preserve A, row-vector size and offsets. Invalid engine

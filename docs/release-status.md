@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The retained inventory scrollbar now captures ordinary left presses on the
+  supported Button template. Movement uses the receiver's local pointer delta
+  and the cached row range. It retains a continuous thumb position and leaves
+  collection refresh, sound and discrete thumb placement to their existing
+  paths. The owner-GUI regression covers capture beyond the control bounds,
+  a hidden root, and real versus synthetic release routing. Controller thumb
+  input and hardware focus behavior still need acceptance.
+
 - Physical Windows left-button edges and F4 now reach the retained interface
   in message order, before the next admitted cursor sample. GLFW's synthetic
   focus-loss releases still feed gameplay controls, while the retained scene

@@ -301,10 +301,11 @@ class Hud {
     struct InterfacePress {
         glm::vec2 point{};
         std::optional<InventoryTabPress> tab;
+        bool thumbCaptured = false;
     };
     InterfacePress interfaceLeftDown();
     void interfaceLeftUp();
-    void moveInterfacePointer(glm::vec2);
+    void moveInterfacePointer(glm::vec2, Inventory * = nullptr);
     void setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const;
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
@@ -345,6 +346,7 @@ class Hud {
     struct InvPanel {
         plasma::SceneNode *node = nullptr, *tabParent = nullptr, *cellParent = nullptr;
         std::map<std::string, plasma::SceneNode *> buttons;
+        plasma::SceneNode *thumb = nullptr;
         std::vector<plasma::SceneNode *> cells, tabs;
         int columns = 1, rows = 1;
         mutable inventoryslots::Index hoveredCell; // Physical group/row, published by the bound widget draw.
@@ -598,6 +600,7 @@ class Hud {
     std::unique_ptr<uiroot::Branches> interfaceBranches;
     std::unique_ptr<plasma::Input> interfaceInput; // Detaches before its scene is destroyed.
     mutable std::optional<InventoryTabPress> pressedInventoryTab;
+    Inventory *pointerMoveInventory = nullptr; // Borrowed for one synchronous pointer poll.
     Hud &operator=(Hud &&) = default; // Only the explicit reload uses assignment, after detaching input.
     // One frontend instance per template owner/use, retained between frames.
     struct TemplateInstance {
@@ -636,6 +639,9 @@ class Hud {
     void replaceInvTabs(InvPanel &, const std::vector<std::string> &icons);
     void placeInvPanel(const InvPanel &p, const InvList &list) const;
     void placeInvThumb(const InvPanel &p, const InvList &list, int availableRows) const;
+    void moveInventoryThumb(const InvPanel &, const plasma::Input &);
+    void placeCraftingSelection(const Inventory &) const;
+    bool isInventoryThumb(const plasma::SceneNode *) const;
     int invRowCount(const InvPanel &p, const InvList &list) const;
     void drawInvPanel(std::vector<OverlayVertex> &out, const InvPanel &p, const InvList &list, const std::string &title,
                       const std::string &region, bool vendor, bool selling, glm::vec2 pointer) const;

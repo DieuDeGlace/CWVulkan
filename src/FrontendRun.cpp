@@ -974,7 +974,7 @@ void Session::readInput(bool poll, double frameMs) {
     const bool ui = front() || anyOpen() || s.input->gamepadModal;
     const bool focused = req.pointer.x >= 0 || glfwGetWindowAttrib(s.window, GLFW_FOCUSED);
     if (focused && (front() || ordinaryUi() || s.input->gameplayPointerAdmitted))
-        hud.moveInterfacePointer(framebufferPointer);
+        hud.moveInterfacePointer(framebufferPointer, s.inventory);
     if (ui && focused && !capturingAtPoll) {
         if (!pointerClockStarted) {
             characterScroll.sampledAt = wallClockMs();

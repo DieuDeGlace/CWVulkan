@@ -11,6 +11,21 @@ int inventoryUiTests() {
             ++failures;
         }
     };
+    inventoryui::PanelState dragState;
+    dragState.availableRows = 4;
+    check(!inventoryui::dragThumb(dragState, 220, 35.0f, 74.25f), "a missing row header rejects thumb motion");
+    dragState.rowOffsets.resize(2);
+    dragState.tab = 1;
+    auto y = inventoryui::dragThumb(dragState, 220, 35.0f, 74.25f);
+    check(y == 109.25f && dragState.scroll == 1 && dragState.rowOffsets[1] == 1 && dragState.availableRows == 4,
+          "motion retains a fractional position and updates only the selected row");
+    y = inventoryui::dragThumb(dragState, 220, 109.25f, 400.0f);
+    check(y == 200.0f && dragState.scroll == 3, "motion clamps to the end of the cached travel");
+    y = inventoryui::dragThumb(dragState, -20, 35.0f, 5.0f);
+    check(y == 20.0f && dragState.scroll == 3, "inverted track clamps in order and retains the row");
+    dragState.availableRows = 0;
+    check(!inventoryui::dragThumb(dragState, 220, 35.0f, 1.0f), "nonpositive range rejects motion");
+
     int row = 99, refreshes = 0;
     const auto refresh = [&] {
         ++refreshes;

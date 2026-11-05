@@ -354,6 +354,7 @@ struct Services {
     const Assets *assets = nullptr;
     Renderer *renderer = nullptr;
     Hud *hud = nullptr; // the interface to draw with (the game's own in play); null: one of the screens' own
+    Hud::Inventory *inventory = nullptr; // borrowed gameplay bindings for synchronous pointer moves
     World *world = nullptr;
     ExtractedWorld *extracted = nullptr;                    // null without an extracted or generated world
     SpawnedCreatures *spawned = nullptr;                    // the game's creatures with the native player, if any
