@@ -808,10 +808,16 @@ individual feature documents.
   node/Widget deletion now provide ordered cleanup for a bound Input. Production
   probes, icons, speech and inventory cells use the scene mutation operations.
   Frontend templates, speech and gameplay panels now share one gui.plx scene and
-  document geometry cache. Semantic root order/active visibility, cached hit-only
-  templates, full global picking and generated-card subtree rebuilding still need
-  the broader runtime work; the game does not yet use the scene-bound input owner
-  throughout its interface. Cursor units remain in a separate scene.
+  document geometry cache. Frontend/gameplay now occupy shared-root branches;
+  the gameplay branch is inactive while any frontend branch is active, with
+  Options/Controls independent. Frontend publication hides omitted retained
+  templates before pointer decisions; inactive layout probes stay outside root
+  picking. Synthetic branch/input-model tests, owner-GUI checks and hidden menu
+  captures pass. Exact sibling order, other stale HUD templates, full global
+  picking and generated-card subtree rebuilding still need broader integration;
+  the game does not yet use the scene-bound input owner throughout its interface.
+  Return-to-title still rebuilds the wider HUD/window owner. Cursor units remain
+  in a separate scene.
   Frontend Play now transfers both displayed/target angles and both distances;
   Continue retains angles and resets distances to8, while Select resets90/0/180.
   Saved-angle compatibility cannot overwrite this entry state or snap it to targets.

@@ -35,6 +35,23 @@ Normal start-up opens the title. `--play` goes straight into gameplay.
   are read at start and written straight back, so a missing or partial file is completed with the defaults.
   `--settings-folder DIR` reads and writes them in another folder (testing).
 
+## Shared scene branches
+
+Title, Characters, Creation, Worlds and New World have separate branches under
+one scene root. The last two are reserved for the corresponding frontend paths.
+The gameplay branch is active only when all five frontend branches are inactive.
+Options and Controls are independent siblings. `InterfaceRoot.h` owns these
+borrowed branch references; `Scene` owns the nodes.
+
+`publishFrontendScreen` places retained template instances before pointer decisions
+and hides frontend-managed instances omitted from the current screen. Layout-only
+probes live under an inactive branch; drawing other HUD overlays still manages
+its own template visibility. Branch changes preserve the current scene and nodes.
+Returning from a play session still rebuilds the wider frontend/HUD owner, and
+production pointer dispatch is not yet connected to `plasma::Input`. Synthetic
+input-model tests do not establish that live integration or full native lifetime
+parity. See the independent [root lifetime contract](specs/steam-interface-input-root-lifetime.md).
+
 ## Font resolution
 
 Immediate widgets request resource1.dat without a face substitution. Template

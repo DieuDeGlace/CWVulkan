@@ -18,6 +18,7 @@
 #include "PlasmaShape.h"
 #include "PlasmaText.h"
 #include "PlasmaScene.h"
+#include "InterfaceRoot.h"
 #include <array>
 #include <memory>
 #include <optional>
@@ -466,8 +467,12 @@ class Hud {
         };
         std::optional<glm::vec2> modelPointer; // cached pointer in window pixels
         std::function<std::vector<guiitem::Request>(const ModelContext &)> drawModels;
+        uiroot::Branch branch = uiroot::Branch::Unspecified;
     };
     using Screen = std::vector<ScreenItem>;
+    void setInterfaceState(const uiroot::State &);
+    void publishFrontendScreen(const Screen &) const;
+    const plasma::SceneNode *interfaceBranchRoot(uiroot::Branch branch) const;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
                              std::vector<OverlayVertex> &, std::vector<glm::vec2> *navigation = nullptr) const;
     bool dialogueChoicesHit(glm::vec2 point) const;
@@ -569,14 +574,18 @@ class Hud {
     bool iconsLoaded = false;
     // Frontend templates and gameplay panels share their tree, scale and document geometry cache.
     std::unique_ptr<plasma::Scene> scene;
+    std::unique_ptr<uiroot::Branches> interfaceBranches;
     // One frontend instance per template owner/use, retained between frames.
     struct TemplateInstance {
         plasma::SceneNode *node = nullptr;
         glm::vec2 requested{-1};
         bool pointerInside = false;
+        bool frontendManaged = false;
     };
     mutable std::map<std::string, std::vector<TemplateInstance>> frontNodes;
-    TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0) const;
+    TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0,
+                                      uiroot::Branch fallback = uiroot::Branch::Unspecified) const;
+    void placeTemplate(TemplateInstance &, const ScreenItem &) const;
 
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     plasma::Scene::TextHit frontTextHit() const;

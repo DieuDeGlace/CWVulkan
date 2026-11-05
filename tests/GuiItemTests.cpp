@@ -39,6 +39,27 @@ void equipmentCallbacks() {
     hud.configureCraftingTabs(255);
     GUI_CHECK(hud.inventoryTabCount(2) == 4);
     hud.configureCraftingTabs(1);
+    const auto *optionsRoot = hud.interfaceBranchRoot(uiroot::Branch::Options);
+    const auto *gameplayRoot = hud.interfaceBranchRoot(uiroot::Branch::Gameplay);
+    GUI_CHECK(optionsRoot && gameplayRoot && optionsRoot->parent == gameplayRoot->parent);
+    Hud::ScreenItem control;
+    control.kind = Hud::ScreenItem::Template;
+    control.name = "button2";
+    control.instance = "interface-branch-test";
+    control.size = {200, 30};
+    control.branch = uiroot::Branch::Options;
+    hud.publishFrontendScreen({control});
+    GUI_CHECK(optionsRoot && optionsRoot->children.size() == 1);
+    if (optionsRoot && optionsRoot->children.size() == 1) {
+        const auto *retainedControl = optionsRoot->children.front().get();
+        GUI_CHECK(retainedControl->visible && retainedControl->parent == optionsRoot && !optionsRoot->visible);
+        hud.publishFrontendScreen({});
+        GUI_CHECK(!retainedControl->visible && optionsRoot->children.size() == 1);
+        hud.publishFrontendScreen({control});
+        GUI_CHECK(retainedControl == optionsRoot->children.front().get() && retainedControl->visible);
+    }
+    hud.publishFrontendScreen({});
+    hud.setInterfaceState({});
     Renderer renderer;
     renderer.initHeadless(RenderSettings{});
     CubModel cub;

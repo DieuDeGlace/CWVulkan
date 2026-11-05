@@ -33,19 +33,34 @@ void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) con
     plasmaText(out, style, m);
 }
 
-Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index) const {
+void Hud::setInterfaceState(const uiroot::State &state) {
+    if (interfaceBranches)
+        interfaceBranches->apply(state);
+}
+const plasma::SceneNode *Hud::interfaceBranchRoot(uiroot::Branch branch) const {
+    return interfaceBranches ? interfaceBranches->node(branch) : nullptr;
+}
+
+Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index, uiroot::Branch fallback) const {
     if (!guiLoaded || !scene)
         return nullptr;
+    const auto branch = item.branch == uiroot::Branch::Unspecified ? fallback : item.branch;
     const std::string &owner = item.instance.empty() ? item.name : item.instance;
     auto &instances = frontNodes[owner];
     while (instances.size() <= index) {
-        auto *node = scene->instance(item.name, &scene->root());
+        auto *parent = interfaceBranches ? interfaceBranches->node(branch) : &scene->root();
+        auto *node = scene->instance(item.name, parent);
         if (!node)
             return nullptr;
         instances.push_back({node});
     }
     auto &instance = instances[index];
     auto &node = *instance.node;
+    if (interfaceBranches && branch != uiroot::Branch::Unspecified) {
+        auto *parent = interfaceBranches->node(branch);
+        if (node.parent != parent)
+            scene->reparent(node, parent);
+    }
     const bool first = instance.requested.x < 0;
     if (first && item.replaceWidget && node.widget)
         scene->replaceWidget(node, plasma::reboundWidget(*node.widget));
@@ -151,6 +166,34 @@ plasma::Scene::TextHit Hud::frontTextHit() const {
     };
 }
 
+void Hud::placeTemplate(TemplateInstance &instance, const ScreenItem &item) const {
+    auto &node = *instance.node;
+    if (node.widget)
+        scene->moveTo(node, item.at * guiScale);
+    else
+        scene->setPosition(node, item.at * guiScale, glm::vec2(0));
+    if (!item.text.empty())
+        node.setAllText(item.text);
+}
+
+void Hud::publishFrontendScreen(const Screen &screen) const {
+    for (auto &[owner, instances] : frontNodes)
+        for (auto &instance : instances)
+            if (instance.frontendManaged)
+                instance.node->visible = false;
+    std::map<std::string, size_t> used;
+    for (const auto &item : screen) {
+        if (item.kind != ScreenItem::Template)
+            continue;
+        const auto &owner = item.instance.empty() ? item.name : item.instance;
+        if (auto *instance = prepareTemplate(item, used[owner]++, uiroot::Branch::Root)) {
+            instance->frontendManaged = true;
+            instance->node->visible = true;
+            placeTemplate(*instance, item);
+        }
+    }
+}
+
 void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std::vector<glm::vec2> *navigation) const {
     std::map<std::string, size_t> used; // instances of each template taken this frame
     for (const ScreenItem &item : screen) {
@@ -174,16 +217,17 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
         }
         case ScreenItem::Template: {
             const std::string &owner = item.instance.empty() ? item.name : item.instance;
-            auto *instance = prepareTemplate(item, used[owner]++);
+            auto *instance = prepareTemplate(item, used[owner]++, uiroot::Branch::Root);
             if (!instance)
                 break;
             auto &node = *instance->node;
-            if (node.widget)
-                scene->moveTo(node, item.at * guiScale);
-            else
-                scene->setPosition(node, item.at * guiScale, glm::vec2(0));
-            if (!item.text.empty())
-                node.setAllText(item.text);
+            node.visible = true;
+            placeTemplate(*instance, item);
+            bool active = true;
+            for (const auto *parent = node.parent; parent; parent = parent->parent)
+                active = active && parent->visible;
+            if (!active)
+                break;
             if (item.buttonHover && node.widget && node.widget->kind == "Button") {
                 if (*item.buttonHover != instance->pointerInside) {
                     node.playSequence(*item.buttonHover ? "button:enter" : "button:leave");

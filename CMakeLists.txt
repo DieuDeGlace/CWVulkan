@@ -386,6 +386,7 @@ target_sources(EngineTests PRIVATE
     tests/PickupReceiptTests.cpp
     tests/CraftingCountTests.cpp
     tests/ShopCollectionTests.cpp
+    tests/InterfaceRootTests.cpp
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)

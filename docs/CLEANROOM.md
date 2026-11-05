@@ -32,6 +32,18 @@ CubeVulkan's code, and those who write the code don't read the game's code.
 Similarities with the game are expected where behaviour must match (constants, the order of
 random draws, data layouts). What must not happen is lifting code or its expression.
 
+## Shared interface branches, 2026-11-04
+
+The independent native-only author finalized the interface-input-root lifetime
+and inventory-thumb capture contracts without implementation, tests, SDK, asset
+or capture access. The implementer used those prose contracts and engine sources
+only. InterfaceRoot and frontend publication implement shared branch ownership,
+visibility and retained template placement. Synthetic root/input-model tests and
+owner-data GUI/image checks exercise this bounded change; production callbacks,
+capture integration and cross-session root continuity remain separate work. The
+thumb's resource-defined dynamic class remains unresolved by the native contract.
+No original asset or game-derived capture is included in either package.
+
 ## Alpha terrain integration
 
 The generator reuses the sister AlphaVulkan project's original GPL clean-room

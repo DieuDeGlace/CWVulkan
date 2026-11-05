@@ -1467,6 +1467,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, usecollection
     Hud::Inventory inventoryView;
     inventoryView.nativeCollections = nativeInventory != nullptr;
     hud.configureCraftingTabs(gear.playerClass()); // The chosen character is loaded; replace startup controls now.
+    hud.setInterfaceState({});
     // The world map (M, the game's the map button): open, or the minimap in the corner. Its
     // position follows the player until the map is dragged (Game's the zoom change); the
     // overlay moves and grows between the corner and the middle (the overlay position, Scale).

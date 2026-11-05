@@ -78,10 +78,13 @@ void Hud::buildPanels() {
     recipeEuler = {-120, 0, 0};
     if (!guiLoaded)
         return;
+    frontNodes.clear();
+    interfaceBranches.reset();
     scene = std::make_unique<plasma::Scene>(gui);
+    interfaceBranches = std::make_unique<uiroot::Branches>(*scene);
     plasma::Scene &s = *scene;
     s.setScale(1.0f); // (the game builds its interface before the scale option applies)
-    panels.inGame = s.create(&s.root(), "ingame");
+    panels.inGame = interfaceBranches->node(uiroot::Branch::Gameplay);
     panels.templates = s.create(nullptr, "templates"); // Source prototypes are outside the live tree.
     panels.templates->visible = false;
 

@@ -10,6 +10,18 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Frontend and gameplay controls now occupy separate branches under one scene
+  root. Title, character selection and creation disable the gameplay branch;
+  Options and Controls remain independent branches. Frontend templates are
+  published before pointer decisions, retained between screens and hidden when
+  omitted. Detached layout probes cannot enter root picking. Screen publication
+  and drawing share placement without copying template callbacks. All five build
+  targets, the full CPU/owner-data suite, focused branch/owner-GUI checks and 102
+  Vulkan GUI image checks pass. Hidden title and character-selection captures
+  exit normally and leave the save fixture unchanged. These are visibility and
+  ownership foundations: production callback/capture routing, full stale-template
+  cleanup, persistent Return-to-title lifetime and live acceptance remain open.
+
 - Crafting controls now start with four blank roots and are explicitly replaced
   after character loading: recognized classes add their two native icons before
   the four common controls; other class values use the common four. Replacement

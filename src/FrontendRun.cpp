@@ -241,6 +241,9 @@ class Session {
     bool optionsOpen = false, controlsOpen = false, helpOpen = false, interfaceShown = true;
     bool riding() const { return titleShown || charactersShown; }
     bool front() const { return titleShown || charactersShown || creationShown; }
+    void syncInterfaceState() {
+        hud.setInterfaceState({{titleShown, charactersShown, creationShown, false, false}, optionsOpen, controlsOpen});
+    }
 
     // The characters of characters.db and the list's state.
     // Each listed character's creature as the entry draws it: its recording wearing its look,
@@ -412,6 +415,7 @@ bool Session::start(std::string &error) {
     }
     if (!hud.ensureLoaded(s.assets->gameDir(), error))
         return false;
+    syncInterfaceState();
     hud.setGuiScale(s.options ? std::clamp(s.options->guiScale, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX) : 1.0f);
     cardFrame = hud.templateSize("blackwidget", ENTRY_SIZE, true);
     selectFrame = hud.templateSize("button2", SELECT_SIZE);
@@ -449,6 +453,7 @@ bool Session::start(std::string &error) {
 }
 
 void Session::finish() {
+    hud.publishFrontendScreen({});
     if (logoMesh)
         s.renderer->release(logoMesh);
     logoMesh = 0;
@@ -463,6 +468,7 @@ bool Session::startInGame(std::string &error) {
     if (!s.hud && !hud.ensureLoaded(s.assets->gameDir(), error))
         return false;
     titleShown = charactersShown = creationShown = false;
+    syncInterfaceState();
     size = s.renderer->screenSize();
     return true;
 }
@@ -1803,25 +1809,35 @@ bool Session::friendsClick() {
 Hud::Screen Session::buildScreen(bool inGame) {
     Hud::Screen out;
     navigationPoints.clear();
-    if (!interfaceShown)
+    syncInterfaceState();
+    if (!interfaceShown) {
+        hud.publishFrontendScreen(out);
         return out;
+    }
+    const auto append = [&](auto builder, uiroot::Branch branch) {
+        const size_t first = out.size();
+        (this->*builder)(out);
+        for (size_t index = first; index < out.size(); ++index)
+            out[index].branch = branch;
+    };
     if (inGame) {
         if (systemShown && !optionsOpen && !controlsOpen)
-            systemItems(out);
+            append(&Session::systemItems, uiroot::Branch::Gameplay);
         if (friendsOpen && !optionsOpen && !controlsOpen)
-            friendsItems(out);
+            append(&Session::friendsItems, uiroot::Branch::Root);
     } else if (titleShown)
-        titleItems(out);
+        append(&Session::titleItems, uiroot::Branch::Title);
     else if (charactersShown)
-        characterItems(out);
+        append(&Session::characterItems, uiroot::Branch::Characters);
     else if (creationShown)
-        creationItems(out);
+        append(&Session::creationItems, uiroot::Branch::Creation);
     if (optionsOpen)
-        optionsItems(out);
+        append(&Session::optionsItems, uiroot::Branch::Options);
     if (controlsOpen)
-        controlsItems(out);
+        append(&Session::controlsItems, uiroot::Branch::Controls);
     if (helpOpen)
-        helpItems(out);
+        append(&Session::helpItems, uiroot::Branch::Root);
+    hud.publishFrontendScreen(out);
     for (auto &item : out)
         if (item.kind == Hud::ScreenItem::Template) {
             item.buttonHover = hud.templateHit(item, mouse, true);
@@ -1849,6 +1865,7 @@ bool Session::frame() {
         clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;
     }
+    (void)buildScreen(false); // Publish the controller's active objects before its pointer decisions.
     handleClick(false);
     s.input->finishPointerCallbacks();
     s.input->clear();
@@ -1969,6 +1986,7 @@ Result::Action Session::gameFrame(double frameMs) {
         return Result::Stay;
     }
     handleKeys(true);
+    (void)buildScreen(true);
     handleClick(true);
     s.input->finishPointerCallbacks();
     s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear(), s.input->typed.clear();
