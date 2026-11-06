@@ -1014,6 +1014,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     }
     spawned.restoreMapHistory(saveGame.regionHistory.value_or(std::vector<maphistory::Region>{}));
     Player player;
+    const bool nativeCameraStartup = useExtracted && nativePlayer;
+    if (nativeCameraStartup)
+        player.orbit = frontend::OrbitCamera{};
     if (!std::isnan(startX)) {
         player.position.x = startX;
         player.position.y = startY;
@@ -1097,7 +1100,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     if (resumed) {
         // Exactly where the save has the character, facing yaw 0; no ground search.
         player.position = enteredAt ? *enteredAt : saveGame.position;
-        player.setYawRadians(saveGame.yaw);
+        if (!nativeCameraStartup)
+            player.setYawRadians(saveGame.yaw);
         logLine("Save: resuming at " + std::to_string(player.position.x) + ", " + std::to_string(player.position.y));
     }
     if (enteredCamera) {
@@ -3427,16 +3431,20 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         toUnits(eye, useCamera.fixedEye->data());
         toUnits(target, useCamera.fixedRayOrigin->data());
     };
-    if (enteredCameraPosition && useExtracted) {
-        cameraPosition = *enteredCameraPosition;
+    if (useExtracted && (enteredCameraPosition || nativeCameraStartup)) {
+        // Steam starts at fixed zero and lets the first ordinary camera update
+        // place the anchors. A completed frontend camera supplies retained state.
+        if (enteredCameraPosition)
+            cameraPosition = *enteredCameraPosition;
         retainUseCamera(extractedWorld.toLocal(cameraPosition.eye.data()), extractedWorld.toLocal(cameraPosition.lookAt.data()));
         useCamera.fixedEye = cameraPosition.eye;
         useCamera.fixedRayOrigin = cameraPosition.lookAt;
         for (int axis = 0; axis < 2; ++axis)
             gameRenderOffset[axis] = gamemath::subtractFixed(0, cameraPosition.lookAt[axis]);
-        logLine("Camera: retained frontend fixed eye/look-at and render origin");
+        logLine(enteredCameraPosition ? "Camera: retained frontend fixed eye/look-at and render origin"
+                                      : "Camera: native startup from zero fixed anchors");
     } else {
-        // Direct diagnostic launches retain their legacy camera initialization.
+        // Legacy controllers use their source-local compatibility camera.
         const glm::vec3 initialFocus = player.position + glm::vec3(0, 0, 1.6f);
         retainUseCamera(initialFocus + viewZoom * glm::vec3(std::cos(displayedYawRadians()) * std::cos(displayedPitchRadians()),
                                                             std::sin(displayedYawRadians()) * std::cos(displayedPitchRadians()),
@@ -7995,10 +8003,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             answers.updateVisibility(talk.has_value() || npcSpeech.addressedTo(spawned.playerId()));
             sampleInterfaceSound();
             if (nativePlayer) {
-                const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
-                const bool leaning = (spawned.playerToggles() & 0x400) != 0;
-                hs.crosshair = !generalDialogue.visible() && !nativeCustomization.edit.open && !ordinaryUi && !leaning && ability != 156;
-                hs.zoomCrosshair = !generalDialogue.visible() && !nativeCustomization.edit.open && !ordinaryUi && leaning;
+                const bool visible = !generalDialogue.visible() && !nativeOrdinaryUi();
+                const bool aiming = (spawned.playerToggles() & 0x400) != 0;
+                const auto *record = spawned.playerRecord();
+                const int currentAbility = record ? record[worldgen::creature::ABILITY] : ability;
+                hs.crosshair = visible && !aiming && currentAbility != 0x9c;
+                hs.zoomCrosshair = visible && aiming;
             }
             if (!npcSpeech.emotes().empty())
                 speechEnvironment.eachActor([&](const npcspeech::Actor &actor) {

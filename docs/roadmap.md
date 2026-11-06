@@ -893,9 +893,15 @@ individual feature documents.
   transition matrices and complete late CPU rebuilds, including zero elapsed time.
   Projection publication now follows that CPU phase independently of presentation;
   early speech/feat consumers keep a value snapshot of the preceding camera/origin.
-  No numeric native pre-first-camera defaults are established; the engine keeps an
-  explicit absent projection until its first CPU build. Direct-launch startup,
-  exact event delivery, recovery and live comparisons still need parity work.
+  Native pre-first-camera matrix values remain unverified. The engine keeps an
+  explicit absent projection until its first CPU build. Direct launch now starts
+  from the native orbit defaults and zero fixed eye/look-at, with explicit CLI
+  camera overrides available for diagnostics. The first camera update uses its
+  ordinary position rules. Exact event delivery, recovery and live comparisons
+  still need parity work.
+  Both crosshairs now sample the shared ordinary-UI predicate after answer
+  visibility is updated. The normal reticle also reads the current ability
+  byte, so it uses the live eagle-flight gate.
   The newly documented
   [ordinary frame order](specs/steam-gameplay-frame-order.md) also establishes
   split early/late input phases. The live client now completes World stepping and
@@ -931,7 +937,7 @@ individual feature documents.
   Zero-limit rays retain the initial zone lookup and skip block reads. World/clip/
   speech views use a native inverse rotation, including zero distance and poles.
   Derived numeric/probe tests, both-style Vulkan camera cases and the full image
-  regression set pass. Exact mouse/capture producers, direct-launch startup,
+  regression set pass. Exact mouse/capture producers,
   full GPU render-origin fidelity and input/GUI integration remain open.
   The native process lens now starts at its exact50-degree float radians and
   eases toward30/50 using the imported creature toggle and distinct native rates.

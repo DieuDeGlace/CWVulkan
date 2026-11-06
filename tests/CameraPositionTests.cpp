@@ -127,6 +127,20 @@ int cameraPositionTests() {
     state = {};
     update(state, origin, {1, 0, 0}, 16, world);
     check(state.distance == 8 && state.eye == Point{-8 * BLOCK, 0, BLOCK}, "camera ignores water/flag40 aim-only obstruction");
+
+    world.block = [](int32_t, int32_t, int32_t) { return terrainray::Cell{0, 0}; };
+    Subject startup;
+    startup.physical = {10 * BLOCK, 20 * BLOCK, 30 * BLOCK};
+    State nearStart;
+    update(nearStart, startup, {1, 0, 0}, 0, world);
+    check(nearStart.lookAt == Point{} && nearStart.eye == Point{-8 * BLOCK, 0, 0},
+          "first camera update inside fifty blocks uses the zero startup anchor");
+    startup.physical[0] = 60 * BLOCK;
+    State distantStart;
+    update(distantStart, startup, {1, 0, 0}, 0, world);
+    check(distantStart.lookAt == startup.physical &&
+              distantStart.eye == Point{52 * BLOCK, 20 * BLOCK, 30 * BLOCK},
+          "first camera update beyond fifty blocks uses the ordinary raw-position snap");
     std::printf("Camera position: %s\n", failures ? "FAILED" : "passed");
     return failures;
 }
