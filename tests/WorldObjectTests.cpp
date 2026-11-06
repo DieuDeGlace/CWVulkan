@@ -154,11 +154,13 @@ void generatedGateIntegration(const auto &check) {
         std::array<int32_t, 2> zone;
         std::array<int32_t, 3> approach;
         int32_t threshold;
+        int32_t type;
         bool countRoute;
     };
     constexpr GateCase gates[] = {
-        {{-569, -718}, {-143, -180}, {-9096, -11464, 0}, 1, true},
-        {{247, 180}, {61, 45}, {3969, 2888, 50}, 5, false},
+        {{-569, -718}, {-143, -180}, {-9096, -11464, 0}, 1, 8, true},
+        {{-714, -1065}, {-179, -267}, {-11414, -17032, 0}, 4, 10, true},
+        {{247, 180}, {61, 45}, {3969, 2888, 50}, 5, 8, false},
     };
     for (const auto &gate : gates) {
         ExtractedWorld terrain;
@@ -168,7 +170,7 @@ void generatedGateIntegration(const auto &check) {
                               gamemath::floorFixedZone(gate.approach[1] * BLOCK));
         const auto source = worldgen::zone(gate.zone[0], gate.zone[1]);
         const auto door = std::find_if(source->objects.begin(), source->objects.end(), [&](const worldgen::StaticObject &o) {
-            return o.type == 8 && gamemath::floorFixedCell(o.x) == gate.cell[0] && gamemath::floorFixedCell(o.y) == gate.cell[1];
+            return o.type == gate.type && gamemath::floorFixedCell(o.x) == gate.cell[0] && gamemath::floorFixedCell(o.y) == gate.cell[1];
         });
         const auto threshold = source->gateThresholds.find(gate.cell);
         check(door != source->objects.end() && threshold != source->gateThresholds.end() && threshold->second == gate.threshold,
@@ -224,8 +226,9 @@ void generatedGateIntegration(const auto &check) {
                                       : "higher-step dungeon air opens the gate and publishes its state");
         check(!(terrain.gameBlock(dx, dy, dz)[5] & 0x40), "opening the gate clears the generated footprint");
         const auto sounds = actors.takeSounds();
-        check(std::count_if(sounds.begin(), sounds.end(), [](const auto &sound) {
-                  return soundrules::readRequest(sound).number == 0x36;
+        const int expectedSound = gate.type == 8 ? 0x36 : 0x39;
+        check(std::count_if(sounds.begin(), sounds.end(), [&](const auto &sound) {
+                  return soundrules::readRequest(sound).number == expectedSound;
               }) == 1, "gate transition delivers its sound once to local audio");
     }
 }
