@@ -24,6 +24,8 @@
 
 namespace ownersetup {
 namespace {
+constexpr const char *titleCaptureRequest = "ui-only.request";
+
 bool nonempty(const fs::path &file) {
     std::error_code ec;
     return fs::is_regular_file(file, ec) && fs::file_size(file, ec) > 0 && !ec;
@@ -594,8 +596,12 @@ bool prepare(const fs::path &game, const PrepareOptions &options, Host &host, st
     for (const auto &name : requests) {
         const auto staged = staging / name;
         std::ofstream out(staged, std::ios::binary);
-        out << (name == dungeonRequest ? options.dungeonTargets
-                                      : "Written by CubeVulkanSetup; the extractor answers it and removes it.\n");
+        if (name == dungeonRequest)
+            out << options.dungeonTargets;
+        else if (name == titleCaptureRequest)
+            out << "Title-only capture. CubeVulkanSetup removes this marker on restore.\n";
+        else
+            out << "Written by CubeVulkanSetup; the extractor answers it and removes it.\n";
         out.close();
         if (!out || !appendLine(journal, "request-staged " + name))
             return fail("Could not stage and journal Extract\\" + name + ".");
@@ -961,6 +967,7 @@ std::string hex8(uint32_t v) {
 
 int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, std::ostream &out) {
     bool check = false, extract = false, dryRun = false, restoreRun = false, capture = false;
+    bool titleOnly = false;
     fs::path game, dungeonTargetsFile;
     for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == L"--setup-check")
@@ -973,6 +980,8 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
             restoreRun = true;
         else if (args[i] == L"--dry-run")
             dryRun = true;
+        else if (args[i] == L"--title-only")
+            titleOnly = true;
         else if (args[i] == L"--dungeon-targets" && i + 1 < args.size())
             dungeonTargetsFile = args[++i];
         else if (args[i] == L"--game" && i + 1 < args.size())
@@ -981,6 +990,10 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
             out << "Unknown argument. Use --setup-check, --setup-extract, --setup-capture [--dry-run] or --setup-restore, with --game PATH optional.\n";
             return 2;
         }
+    }
+    if (titleOnly && (!capture || check || extract || restoreRun || !dungeonTargetsFile.empty())) {
+        out << "--title-only requires --setup-capture without --dungeon-targets.\n";
+        return 2;
     }
     std::string dungeonTargets;
     if (!dungeonTargetsFile.empty()) {
@@ -1063,6 +1076,11 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
     if (host->gameRunning(game))
         blockers.push_back("Cube World is running; quit it first.");
     if (capture) {
+        if (titleOnly) {
+            std::error_code ec;
+            if (fs::exists(game / "Extract" / titleCaptureRequest, ec) || ec)
+                blockers.push_back("An existing title-only capture request must be preserved.");
+        }
         if (!dungeonTargets.empty()) {
             std::error_code ec;
             for (const auto *name : {"gen.request", "gen-dungeon.request"})
@@ -1071,18 +1089,25 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
         }
         out << "\nIsolated reference capture" << (dryRun ? " (dry run)" : "") << ":\n"
             << "  Back up Save and temporarily set aside Mods and ReShade.\n"
-            << "  Install only ZoneExtractor; existing Extract data stays in place.\n"
-            << (dungeonTargets.empty() ? "  Launch Cube World; the extractor captures once a world is available.\n"
-                                        "  F5 and O remain available for manual refreshes. Quit afterward.\n"
-                                      : "  Launch Cube World and load a test character. Wait for the dungeon completion marker, then quit.\n")
-            << "  Run --setup-restore to restore Mods, ReShade and Save exactly.\n";
+            << "  Install only ZoneExtractor; existing Extract data stays in place.\n";
+        if (titleOnly)
+            out << "  Launch Cube World with mods and wait at the title screen for six UI frames.\n"
+                   "  The extractor skips world exports, recorders and hotkeys for this process.\n";
+        else if (dungeonTargets.empty())
+            out << "  Launch Cube World; the extractor captures once a world is available.\n"
+                   "  F5 and O remain available for manual refreshes. Quit afterward.\n";
+        else
+            out << "  Launch Cube World and load a test character. Wait for the dungeon completion marker, then quit.\n";
+        out << "  Run --setup-restore to restore Mods, ReShade and Save exactly.\n";
         for (const auto &blocker : blockers)
             out << "  Cannot run now: " << blocker << '\n';
         if (dryRun || !blockers.empty())
             return blockers.empty() ? 0 : 2;
         PrepareOptions options;
         options.extractorDll = dll;
-        if (dungeonTargets.empty())
+        if (titleOnly)
+            options.requests = {titleCaptureRequest};
+        else if (dungeonTargets.empty())
             options.requests = {"scene-reference.request"};
         else
             options.dungeonTargets = dungeonTargets;

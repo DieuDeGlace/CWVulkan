@@ -1395,6 +1395,15 @@ static void requestFrames() {
     extract::log("Interface capture: saving 6 frames");
 }
 
+// Setup owns this marker until restoration, including across game restarts.
+static bool titleOnly() {
+    static const bool enabled = [] {
+        const DWORD attributes = GetFileAttributesA("Extract\\ui-only.request");
+        return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }();
+    return enabled;
+}
+
 // A one-shot alternative to F10, including at the title menu. Keep the output
 // path and frame count fixed; a request never names another file or game action.
 static void pollRequest() {
@@ -7283,6 +7292,14 @@ static void tick(cube::Game *game) {
 } // namespace proceduralcapture
 
 static void tick(cube::Game *g) {
+    if (uicapture::titleOnly()) {
+        static bool requested = false;
+        if (!requested) {
+            requested = true;
+            uicapture::requestFrames();
+        }
+        return;
+    }
     netrecorder::poll(); // also outside a world, so a recording can start before joining
     uicapture::pollRequest(); // frame capture does not require a loaded character
     if (!g || !clientWorld(g) || !supported())
@@ -7964,6 +7981,10 @@ static void tick(cube::Game *g) {
 
 namespace {
 void initializeCapture(void *) {
+    if (extract::uicapture::titleOnly()) {
+        extract::log("ZoneExtractor loaded in title-only mode");
+        return;
+    }
     std::thread(extract::writer).detach();
     extract::log("ZoneExtractor loaded (F11 sweep around home, F6 calibration tour, F9 home, F5 character snapshot, F4 record animation)");
 }
@@ -7979,6 +8000,8 @@ extern "C" __declspec(dllexport) void *MakeMod() {
 }
 // Earliest entry point: the hook must be in place before the game loads sprites.
 extern "C" __declspec(dllexport) void ModPreInitialize() {
+    if (extract::uicapture::titleOnly())
+        return;
     extract::hookSpriteLoading();
     extract::hitprobe::install();
     extract::blockprobe::install();

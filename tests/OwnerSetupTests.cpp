@@ -311,6 +311,11 @@ void journalAndRollback() {
     SETUP_CHECK(!fs::exists(game / "Extract" / "scene-reference.request"));
     SETUP_CHECK(restore(game, host).ok && !fs::exists(dungeonRequest) && !runPending(game));
     options.dungeonTargets.clear();
+    options.requests = {"ui-only.request"};
+    const auto titleRequest = game / "Extract" / "ui-only.request";
+    SETUP_CHECK(prepare(game, options, host, why) && fs::exists(titleRequest) &&
+                !fs::exists(game / "Extract" / "scene-reference.request"));
+    SETUP_CHECK(restore(game, host).ok && !fs::exists(titleRequest) && !runPending(game));
     options.stamp = "standard";
 
     // Prepared: Save copied, Mods and ReShade aside, the extractor alone, the requests written.

@@ -175,8 +175,10 @@ without reading implementation, SDK, probes or other project prose.
   establishes ordinary client/host World setup before completed Game publication,
   including title-menu frames. World construction/nonnull pointers alone are not
   readiness predicates; later transitions and arbitrary observations stay unproved.
-- Run supported-game startup, title and loaded-world extraction comparisons;
-  verify owner files are restored, then qualify packaging and wider acceptance.
+- Supported-game title startup passed with the extractor as the only mod.
+  The isolated title mode saved six frames, preserved all existing export
+  entries in the before/after check, and restored the owner's setup.
+  Loaded-world extraction, first-run recovery and wider acceptance remain open.
 
 The current CMake extractor target uses no SDK headers or include paths. The
 registration/container checks detect

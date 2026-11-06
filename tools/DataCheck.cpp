@@ -31,6 +31,7 @@ int wmain(int argc, wchar_t **argv) {
         } else if (arg == L"--help") {
             std::cout << "CubeVulkanDataCheck [--game PATH] [--world SEED_FOLDER] [--deep] [--report FILE]\n"
                          "CubeVulkanDataCheck --setup-check | --setup-extract [--dry-run] | --setup-restore [--game PATH]\n"
+                         "CubeVulkanDataCheck --setup-capture [--title-only | --dungeon-targets FILE] [--dry-run] [--game PATH]\n"
                          "Reads the owner's game and exports; Steam must be online with a Cube World license.\n"
                          "Quick mode validates home terrain, player clips and menu; --deep also checks all zones, records, sprites and creatures.\n"
                          "Exit 0: no blocking data errors, 1: data errors, 2: arguments, Steam or report error.\n";

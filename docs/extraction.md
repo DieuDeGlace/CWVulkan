@@ -71,6 +71,13 @@ Quick mode checks the executable's x64 PE header and supported extractor timesta
   accepts no output path and changes no gameplay or save state. Keep these original-game
   images local; they do not belong in source or release packages.
 
+For a title-screen check that preserves existing world exports, prepare with
+`CubeVulkanDataCheck --setup-capture --title-only --game "<Cube World folder>"`.
+Launch the original game through Steam with mods enabled and wait at the title
+screen for six frames. Close the game, then run `--setup-restore` against the same
+folder. Setup owns the title-only marker until restoration, including across game
+restarts. In this mode the extractor runs only its frame capture.
+
 Close the original game before installing or updating the extractor. Setup checks that the supported game is closed, checks its x64 loader/DLL prerequisites, stages the new DLL, and only then replaces the old extractor. Existing exports can be checked repeatedly without reinstalling or running the game.
 
 All exports stay local to the owner. The source archive includes the readers and extraction tools, while excluding game content, recordings, screenshots, native executables and Steam DLLs. See [PUBLICATION.md](../PUBLICATION.md) for the separate source and rights review still required before publication.
