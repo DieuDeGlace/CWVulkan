@@ -17,7 +17,7 @@ void dungeonSpawnCellChecks(const auto &check) {
     constexpr uintptr_t guardHead = 0x1400, low = 0x1480, high = 0x1500;
     constexpr uintptr_t activationHead = 0x1580, activationNode = 0x1600;
     constexpr int64_t id = INT64_MIN + 7;
-    std::array<uint8_t, 0x1700> memory{};
+    std::array<uint8_t, 0x1900> memory{};
     const auto put = [&](uintptr_t address, const auto &value) {
         std::memcpy(memory.data() + address, &value, sizeof value);
     };
@@ -66,6 +66,24 @@ void dungeonSpawnCellChecks(const auto &check) {
           "spawn-cell sidecar preserves context, signed IDs and tree keys");
     check(!dungeoncapture::decodeSpawnCells(encoded + "1", decoded) && decoded.records.size() == 1,
           "trailing sidecar data is rejected without replacing a previous capture");
+
+    constexpr uintptr_t tab = 0x1680, stacks = 0x1700;
+    put(spawn + 0x7f0, std::array<uintptr_t, 3>{tab, tab + 24, tab + 24});
+    put(tab, std::array<uintptr_t, 3>{stacks, stacks + 2 * STACK_BYTES, stacks + 2 * STACK_BYTES});
+    ItemRecord key;
+    key.setCategory(dungeoncapture::DungeonKeyCategory);
+    key.setSubtype(18);
+    key.setRegion(-7, 3);
+    put(stacks + STACK_BYTES, int32_t{1});
+    put(stacks + STACK_BYTES + 4, key);
+    capture.keysRecorded = true;
+    const std::vector<dungeoncapture::SpawnKey> expectedKeys{{1, 18, {-7, 3}, 0, 0, 0, 0}};
+    check(dungeoncapture::readSpawnKeys(spawn, capture.keys[id], read) && capture.keys[id] == expectedKeys &&
+              dungeoncapture::decodeSpawnCells(dungeoncapture::encodeSpawnCells(capture), decoded) &&
+              decoded.keysRecorded && decoded.keys == capture.keys,
+          "the key capture reads the spawn inventory and round-trips its semantic fields");
+    check(dungeoncapture::decodeSpawnCells(encoded, decoded) && !decoded.keysRecorded && decoded.keys.empty(),
+          "older spawn captures distinguish unrecorded keys from an empty inventory");
 
     links(low, low, high, guardHead, 0);
     check(!readZoneSpawnCells(zone, capture.records, read) && capture.records.size() == 1,

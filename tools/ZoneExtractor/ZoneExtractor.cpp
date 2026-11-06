@@ -6487,10 +6487,18 @@ static dungeoncapture::Context genDungeonContext;
 static size_t genDungeonBudget = 0;
 static bool writeDungeonSpawnCells(unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
     const auto [x, y] = coordinate;
-    dungeoncapture::SpawnCapture capture{{x, y}, genDungeonContext.seed, genDungeonContext.day, {}};
+    dungeoncapture::SpawnCapture capture{{x, y}, genDungeonContext.seed, genDungeonContext.day, {}, true, {}};
     // The fresh Zone is retained locally and has not been refreshed or published to the world.
-    if (!captureabi::readZoneSpawnCells(reinterpret_cast<uintptr_t>(zone), capture.records, readNative)) {
-        log("Oracle: invalid or oversized native spawn-cell trees at " + stem);
+    const auto captureKeys = [&](uintptr_t spawn, int64_t id) {
+        std::vector<dungeoncapture::SpawnKey> keys;
+        if (!dungeoncapture::readSpawnKeys(spawn, keys, readNative))
+            return false;
+        if (!keys.empty())
+            capture.keys.emplace(id, std::move(keys));
+        return true;
+    };
+    if (!captureabi::readZoneSpawnCells(reinterpret_cast<uintptr_t>(zone), capture.records, readNative, captureKeys)) {
+        log("Oracle: invalid or oversized native spawn trees or inventories at " + stem);
         return false;
     }
     const auto encoded = dungeoncapture::encodeSpawnCells(capture);
@@ -6646,7 +6654,7 @@ static void generate(cube::World *w) {
             }
             if (genQueue.empty()) {
                 if (!capturepolicy::publishGenerationSnapshot(genDirectory + "\\complete.txt",
-                                                               std::string(dungeoncapture::CompletedWithSpawnCells))) {
+                                                               std::string(dungeoncapture::CompletedWithSpawnKeys))) {
                     pause("dungeon completion marker could not be published");
                     return;
                 }

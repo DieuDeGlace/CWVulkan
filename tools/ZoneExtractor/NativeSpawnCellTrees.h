@@ -100,8 +100,8 @@ bool readSpawnCellTrees(uintptr_t spawn, SpawnCellTrees &output, Read read) {
     return true;
 }
 
-template <class Read>
-bool readZoneSpawnCells(uintptr_t zone, std::vector<SpawnCellRecord> &output, Read read) {
+template <class Read, class Visit>
+bool readZoneSpawnCells(uintptr_t zone, std::vector<SpawnCellRecord> &output, Read read, Visit visitSpawn) {
     std::vector<SpawnCellRecord> records;
     size_t cellCount = 0;
     if (!spawn_tree::visit(zone, 0x460, MaxZoneSpawnRecords, read, [&](uintptr_t node) {
@@ -115,7 +115,7 @@ bool readZoneSpawnCells(uintptr_t zone, std::vector<SpawnCellRecord> &output, Re
                 !readSpawnCellTrees(spawn, record.cells, read))
                 return false;
             cellCount += record.cells.guards.size() + record.cells.activation.size();
-            if (cellCount > MaxZoneSpawnCells)
+            if (cellCount > MaxZoneSpawnCells || !visitSpawn(spawn, record.id))
                 return false;
             records.push_back(std::move(record));
             return true;
@@ -123,5 +123,10 @@ bool readZoneSpawnCells(uintptr_t zone, std::vector<SpawnCellRecord> &output, Re
         return false;
     output = std::move(records);
     return true;
+}
+
+template <class Read>
+bool readZoneSpawnCells(uintptr_t zone, std::vector<SpawnCellRecord> &output, Read read) {
+    return readZoneSpawnCells(zone, output, read, [](uintptr_t, int64_t) { return true; });
 }
 } // namespace captureabi

@@ -37,12 +37,14 @@ inline bool inventorySpan(const std::array<uintptr_t, 3> &span, size_t stride, s
 // tab order, duplicate items and padding. Caller retains creature and buffer
 // lifetimes and their applicable protection through capture. Header rechecks
 // reject changed ranges; they are not pins or an atomic in-place item snapshot.
-template <class Read> bool readInventory(uintptr_t creature, Inventory &output, Read read) {
+template <class Read>
+bool readInventoryAt(uintptr_t owner, size_t offset, Inventory &output, Read read,
+                     size_t maxTabs = MAX_CAPTURE_TABS, size_t maxStacks = MAX_CAPTURE_STACKS) {
     output.clear();
     std::array<uintptr_t, 3> outer;
     size_t tabs = 0;
-    if (!readField(creature, INVENTORY_OFFSET, outer.data(), sizeof outer, read) ||
-        !inventorySpan(outer, 24, 8, MAX_CAPTURE_TABS, tabs))
+    if (!readField(owner, offset, outer.data(), sizeof outer, read) ||
+        !inventorySpan(outer, 24, 8, maxTabs, tabs))
         return false;
     std::vector<std::array<uintptr_t, 3>> bounds(tabs);
     if (tabs && !readField(outer[0], 0, bounds.data(), tabs * 24, read))
@@ -51,7 +53,7 @@ template <class Read> bool readInventory(uintptr_t creature, Inventory &output, 
     size_t total = 0;
     for (size_t tab = 0; tab < tabs; ++tab) {
         size_t stacks = 0;
-        if (!inventorySpan(bounds[tab], STACK_BYTES, 4, MAX_CAPTURE_STACKS - total, stacks))
+        if (!inventorySpan(bounds[tab], STACK_BYTES, 4, maxStacks - total, stacks))
             return false;
         total += stacks;
         result[tab].resize(stacks);
@@ -59,7 +61,7 @@ template <class Read> bool readInventory(uintptr_t creature, Inventory &output, 
             return false;
     }
     std::array<uintptr_t, 3> current;
-    if (!readField(creature, INVENTORY_OFFSET, current.data(), sizeof current, read) || current != outer)
+    if (!readField(owner, offset, current.data(), sizeof current, read) || current != outer)
         return false;
     for (size_t tab = 0; tab < tabs; ++tab) {
         if (!readField(outer[0], tab * 24, current.data(), sizeof current, read) || current != bounds[tab])
@@ -67,6 +69,10 @@ template <class Read> bool readInventory(uintptr_t creature, Inventory &output, 
     }
     output = std::move(result);
     return true;
+}
+
+template <class Read> bool readInventory(uintptr_t creature, Inventory &output, Read read) {
+    return readInventoryAt(creature, INVENTORY_OFFSET, output, read);
 }
 
 inline const InventoryStack *inventorySlot(const Inventory &inventory, int tab, int slot) {

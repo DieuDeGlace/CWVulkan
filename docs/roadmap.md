@@ -315,9 +315,16 @@ individual feature documents.
   current zone build. The next capture has candidate targets for gate
   guards and all three qualifying floor codes. The independent guard-tree
   audit established which producers populate each tree and how live guard
-  counts reach the native gate-state pass. The version 2 extractor and
-  comparator support the two trees. A live kind-8 batch is still needed to
-  validate their contents, and gate-state behavior remains open.
+  counts reach the native gate-state pass. The first live kind-8 batch
+  matched 36 helper rows, all 36,864 stored columns, and both coordinate
+  trees for all 22 spawns across nine zones. The gate and floor-2 and
+  floor-4 guard pairs matched. The floor-3 target zone's guard trees were
+  empty in both engines. A subsequent version 3 capture matched the
+  floor-3 guard's dungeon key, including its ID, region, quantity, and
+  other compared item fields. All four spawns and 4,096 stored columns in
+  that zone matched. Runtime gate-state behavior remains open. The
+  [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
+  specifies its count, retention, and state-update rules.
   See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)
   and [guard-tree contract](specs/steam-dungeon-spawn-guard-trees.md).
   Mesh-prepass bounds,

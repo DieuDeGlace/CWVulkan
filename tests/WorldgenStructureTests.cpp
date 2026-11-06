@@ -999,9 +999,28 @@ size_t compareDungeonSpawnCells(const std::string &zone, const dungeoncapture::S
         const auto &spawn = generated++->second;
         const bool guardMatch = native.cells.guards == orderedCells(spawn.area);
         const bool activationMatch = native.cells.activation == orderedCells(spawn.clearedCells);
-        if (!guardMatch || !activationMatch) {
-            std::printf("%s: spawn %lld differs (guard %s, activation %s)\n", zone.c_str(),
-                        static_cast<long long>(native.id), guardMatch ? "match" : "differs", activationMatch ? "match" : "differs");
+        bool keysMatch = true;
+        if (capture.keysRecorded) {
+            std::vector<dungeoncapture::SpawnKey> engineKeys;
+            for (const auto &tab : spawn.gear.inventory.tabs)
+                for (const auto &stack : tab) {
+                    const auto &item = stack.item;
+                    if (item.category == dungeoncapture::DungeonKeyCategory)
+                        engineKeys.push_back({stack.quantity, item.id, {item.region.x, item.region.y}, item.modifier,
+                                              item.realm, item.rarity, item.material});
+                }
+            const auto keys = capture.keys.find(native.id);
+            keysMatch = keys == capture.keys.end() ? engineKeys.empty() : engineKeys == keys->second;
+            if (keys != capture.keys.end())
+                for (const auto &key : keys->second)
+                    std::printf("%s: native key %d, quantity %d, region %d %d, spawn %lld\n", zone.c_str(),
+                                key.id, key.quantity, key.region[0], key.region[1], static_cast<long long>(native.id));
+        }
+        if (!guardMatch || !activationMatch || !keysMatch) {
+            std::printf("%s: spawn %lld differs (guard %s, activation %s, key %s)\n", zone.c_str(),
+                        static_cast<long long>(native.id), guardMatch ? "match" : "differs",
+                        activationMatch ? "match" : "differs",
+                        capture.keysRecorded ? (keysMatch ? "match" : "differs") : "unrecorded");
             ++differences;
         }
     }
@@ -1028,8 +1047,9 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     Plan expected;
     capturepolicy::GenerationCoordinates targets;
     const auto request = read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes);
-    const auto marker = read(directory / "complete.txt", CompletedWithSpawnCells.size());
-    const bool withSpawnCells = marker == CompletedWithSpawnCells;
+    const auto marker = read(directory / "complete.txt", CompletedWithSpawnKeys.size());
+    const bool withSpawnKeys = marker == CompletedWithSpawnKeys;
+    const bool withSpawnCells = withSpawnKeys || marker == CompletedWithSpawnCells;
     if ((!withSpawnCells && marker != Completed) ||
         !plan(request, capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected) ||
         !capturepolicy::parseGenerationRequest(request, MaxTargets, targets)) {
@@ -1102,7 +1122,8 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
         if (withSpawnCells && labels.decisions.front().kind == 8) {
             SpawnCapture capture;
             if (!decodeSpawnCells(read(directory / (stem + ".cwg"), MaxSpawnCaptureBytes), capture) ||
-                capture.zone != captureabi::SpawnCell{zx, zy} || capture.seed != batch->seed || capture.day != batch->day) {
+                capture.zone != captureabi::SpawnCell{zx, zy} || capture.seed != batch->seed || capture.day != batch->day ||
+                capture.keysRecorded != withSpawnKeys) {
                 std::printf("%s: missing, invalid or mismatched spawn-cell capture\n", stem.c_str());
                 return 1;
             }
