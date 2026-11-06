@@ -87,6 +87,17 @@ the set at the synchronous generator boundary. Routine live and refreshed
 zone exports omit the chunk because their mutation exclusion is unproved.
 See the [restoration and occupancy contract](specs/steam-zone-restored-object-occupancy.md).
 
+After a completed ordinary request, run
+`EngineTests wgoccupancy <request-snapshot> <owner-Extract/oracle-directory>`.
+Use the fresh `.rec` files beside that snapshot from the same isolated
+session. The command uses the snapshot's seed, day and requested zones
+to compare each complete signed-coordinate set. It fails for a missing
+or malformed chunk, a file older than the request, or any missing or
+extra key. A valid empty chunk can match a zone with no marked blocks.
+Ordinary generation shares an
+output directory across requests, so use a clean capture directory and
+confirm completion in the extractor log before comparing.
+
 ## Labeled dungeon captures
 
 `CubeVulkanDataCheck.exe --setup-capture --dungeon-targets <targets-file> --game "<Cube World folder>"`

@@ -241,6 +241,7 @@ int worldgenDungeonTargets(int seed, int requestedStructure);
 int worldgenDungeonFloorTargets(const std::filesystem::path &, int seed);
 int worldgenDungeonGuardTargets(int seed, int32_t blockX, int32_t blockY);
 int worldgenDungeonOracle(const std::filesystem::path &capture, const std::filesystem::path &tables);
+int worldgenOccupancyOracle(const std::filesystem::path &snapshot, const std::filesystem::path &tables);
 int worldgenStructureTests(); // tests/WorldgenStructureTests.cpp: the new generator's structures, fast subset
 int worldgenStructureCommand(int maxZones);
 int worldgenCreatureTests(); // tests/WorldgenCreatureTests.cpp: the new generator's creatures, fast subset
@@ -9442,6 +9443,8 @@ int main(int argc, char **argv) {
         return inventoryUiTests() ? 1 : 0;
     if (argc >= 2 && std::string(argv[1]) == "wgdungeon")
         return argc == 4 ? worldgenDungeonOracle(argv[2], argv[3]) : 1;
+    if (argc >= 2 && std::string(argv[1]) == "wgoccupancy")
+        return argc == 4 ? worldgenOccupancyOracle(pathOfUtf8(argv[2]), pathOfUtf8(argv[3])) : 1;
     if (argc == 2 && std::string(argv[1]) == "generationrequest")
         return generationRequestTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "cameracapture")

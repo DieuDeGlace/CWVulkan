@@ -302,6 +302,9 @@ individual feature documents.
   confirmed structure 42/detail 11 and 44/detail 12, plus the 18 nearby helper
   rows. After correcting the detail-12 cone noise, all 12,288 stored columns
   in those three zones match. See the [cone contract](specs/steam-dungeon-hanging-cone.md).
+  An offline rerun of all seven labeled seed-123 dungeon batches matched
+  324 helper rows and 397,312 stored columns in 97 snapshots of 75 distinct
+  zones, with no differences in the additional fields those batches recorded.
   Two subsequent isolated Steam captures matched all 162 helper rows and
   229,376 stored columns across 56 zones. With the earlier detail captures,
   this covers named cases for all eight big-structure IDs 40–47. The newer
@@ -338,7 +341,8 @@ individual feature documents.
   sound, footprint clearing and client publication. The captured terrain
   loader can restore the marked-block coordinates from a fresh
   `.rec` export, so a later gate rebuild can clear the correct flags.
-  The new extractor chunk still needs a live capture.
+  The offline occupancy checker compares those coordinate sets directly.
+  Its Steam comparison still needs a fresh capture.
   See the [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
   and [threshold writers](specs/steam-dungeon-gate-threshold-writers.md).
   See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)

@@ -12,6 +12,7 @@
 #include "Assets.h"
 #include "Extracted.h"
 #include "GameMath.h"
+#include "ObjectOccupancyCapture.h"
 #include "WorldgenObjectOracle.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
 #include "../tools/ZoneExtractor/DungeonCeilingCapture.h"
@@ -1254,6 +1255,122 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
                 expected.size(), decisionDifferences, columnDifferences);
     return decisionDifferences || columnDifferences || spawnDifferences || gateDifferences || ceilingDifferences ||
            (withCeilings && !ceilingRows) || !batch->vanillaCandidate ? 1 : 0;
+}
+
+namespace {
+
+// Read one complete CWR1 stream. An absent or invalid map cannot validate an empty set.
+std::optional<objectoccupancy::Positions> readCapturedMarks(const fs::path &file) {
+    std::ifstream input(file, std::ios::binary | std::ios::ate);
+    const auto length = std::streamoff(input.tellg());
+    if (length < 4 || length > 128 * 1024 * 1024)
+        return {};
+    input.seekg(0);
+    char magic[4];
+    if (!input.read(magic, sizeof magic) || std::memcmp(magic, "CWR1", sizeof magic))
+        return {};
+    auto remaining = length - std::streamoff(sizeof magic);
+    std::optional<objectoccupancy::Positions> marks;
+    while (remaining) {
+        uint32_t chunk[3];
+        if (remaining < std::streamoff(sizeof chunk) || !input.read(reinterpret_cast<char *>(chunk), sizeof chunk))
+            return {};
+        const auto [tag, stride, count] = chunk;
+        remaining -= sizeof chunk;
+        if (!stride || count > uint64_t(remaining) / stride)
+            return {};
+        const auto bytes = std::streamoff(count) * stride;
+        if (tag == objectoccupancy::Chunk) {
+            if (marks || stride != objectoccupancy::RecordBytes || count > objectoccupancy::MaxPositions)
+                return {};
+            std::vector<uint8_t> payload(size_t(bytes), 0);
+            if (bytes && !input.read(reinterpret_cast<char *>(payload.data()), bytes))
+                return {};
+            marks = objectoccupancy::decode(payload.data(), payload.size());
+            if (!marks)
+                return {};
+        } else if (!input.seekg(bytes, std::ios::cur)) {
+            return {};
+        }
+        remaining -= bytes;
+    }
+    return marks;
+}
+
+} // namespace
+
+int worldgenOccupancyOracle(const fs::path &snapshot, const fs::path &tablesDirectory) {
+    std::ifstream input(snapshot, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() < 0 || input.tellg() > capturepolicy::MaximumGenerationRequestBytes)
+        return std::puts("Invalid generation request snapshot size"), 1;
+    input.seekg(0);
+    std::string header, label;
+    capturepolicy::GenerationContext context;
+    size_t count = 0;
+    if (!std::getline(input, header) || header != "CW-GENERATION-SNAPSHOT 1" ||
+        !(input >> label >> context.worldAddress) || label != "world-address" || !context.worldAddress ||
+        !(input >> label >> context.seedBits) || label != "seed-bits" ||
+        !(input >> label >> context.derivedSeed) || label != "derived-seed" ||
+        !(input >> label >> context.day) || label != "day" ||
+        !(input >> label >> count) || label != "coordinates" ||
+        !count || count > capturepolicy::RetainedGenerationBudget::MaximumAttempts)
+        return std::puts("Invalid generation request snapshot context"), 1;
+
+    std::set<dungeoncapture::Point> zones;
+    constexpr int32_t zoneLimit = dungeoncapture::MaxTargetCell / 4;
+    for (size_t i = 0; i < count; ++i) {
+        int32_t x, y;
+        if (!(input >> x >> y) || x < -zoneLimit || x > zoneLimit || y < -zoneLimit || y > zoneLimit)
+            return std::puts("Invalid or unsupported generation request zone"), 1;
+        zones.emplace(x, y);
+    }
+    if (!(input >> label) || label != "END" || (input >> label))
+        return std::puts("Invalid generation request snapshot footer"), 1;
+
+    std::error_code timeError;
+    const auto snapshotTime = fs::last_write_time(snapshot, timeError);
+    if (timeError)
+        return std::puts("Could not read generation snapshot timestamp"), 1;
+    const auto world = wg::worldValues(std::bit_cast<int32_t>(context.seedBits));
+    if (world.zoneSeed() != context.derivedSeed)
+        return std::puts("Generation snapshot derived seed differs from engine"), 1;
+    wg::CreatureTables tables;
+    std::string error;
+    if (!tables.load(tablesDirectory, &error))
+        return std::printf("Occupancy oracle requires owner creature tables: %s\n", error.c_str()), 1;
+
+    size_t checked = 0, nativeKeys = 0, missing = 0, extra = 0;
+    for (const auto &[x, y] : zones) {
+        const auto stem = "z_" + std::to_string(x) + "_" + std::to_string(y);
+        const auto record = snapshot.parent_path() / (stem + ".rec");
+        const auto recordTime = fs::last_write_time(record, timeError);
+        if (timeError || recordTime < snapshotTime) {
+            std::printf("%s: missing marked-block capture or capture predates the request\n", stem.c_str());
+            continue;
+        }
+        const auto capture = readCapturedMarks(record);
+        if (!capture) {
+            std::printf("%s: missing or invalid marked-block capture\n", stem.c_str());
+            continue;
+        }
+        ++checked;
+        nativeKeys += capture->size();
+        const auto generated = wg::generateZoneWithCreatures(world, tables, context.day, x, y);
+        const auto report = [&](const auto &points, const auto &other, size_t &differences, const char *description) {
+            for (const auto &point : points) {
+                if (other.contains(point))
+                    continue;
+                const auto &[px, py, pz] = point;
+                if (differences++ < 8)
+                    std::printf("%s: %s marked key %d %d %d\n", stem.c_str(), description, px, py, pz);
+            }
+        };
+        report(*capture, generated.lists.marked, missing, "missing engine");
+        report(generated.lists.marked, *capture, extra, "extra engine");
+    }
+    std::printf("Occupancy oracle: %zu of %zu zones checked, %zu native keys, %zu missing and %zu extra engine keys\n",
+                checked, zones.size(), nativeKeys, missing, extra);
+    return checked != zones.size() || missing || extra ? 1 : 0;
 }
 
 int worldgenDungeonFloorTargets(const fs::path &directory, int seed) {
