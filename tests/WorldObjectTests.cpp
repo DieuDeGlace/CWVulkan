@@ -82,12 +82,12 @@ struct Scene {
 };
 
 void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t columnBase = 0, bool empty = false,
-                  uint8_t flags = 0) {
+                  uint8_t flags = 0, int32_t zoneX = 0) {
     std::filesystem::create_directories(root);
     std::ofstream(root / "manifest.txt") << "seed=123\nhomeX=0\nhomeY=0\nhomeZ=1\n";
-    std::ofstream out(root / "z_0_0.cwz", std::ios::binary);
+    std::ofstream out(root / ("z_" + std::to_string(zoneX) + "_0.cwz"), std::ios::binary);
     out.write("CWZ1", 4);
-    const int32_t header[] = {0, 0, 0, 0};
+    const int32_t header[] = {zoneX, 0, 0, 0};
     out.write(reinterpret_cast<const char *>(header), sizeof header);
     for (int i = 0; i < 4096; ++i) {
         const int32_t base = columnBase;
@@ -105,6 +105,7 @@ void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t colum
 
 void capturedGateFootprint(const std::filesystem::path &root, const auto &check) {
     writeFixture(root, 1, 1, false, 0xc0);
+    writeFixture(root, 1, 1, false, 0xc0, -1);
     const auto clearFootprint = [&](uint8_t expected) {
         ExtractedWorld terrain;
         std::string why;
@@ -126,14 +127,19 @@ void capturedGateFootprint(const std::filesystem::path &root, const auto &check)
                   terrain.gameBlock(0, 0, 1)[5] == 0xc0,
               "a saved open gate restores its state while retaining the generated footprint");
         cwnet::ZoneObjects received{{0, 0}, {gate}};
+        float neighborTop = 0;
+        check(terrain.surface(-1, 0, neighborTop) && terrain.gameBlock(-1, 0, 1)[5] == 0xc0,
+              "neighbor footprint fixture is loaded and marked");
         actors.replaceStaticObjects(terrain, received);
         check(terrain.gameBlock(0, 0, 1)[5] == expected && terrain.gameBlock(0, 1, 1)[5] == 0xc0,
               "the rebuild clears only the tracked object footprint bit");
+        check(terrain.gameBlock(-1, 0, 1)[5] == 0xc0, "a tracked key outside its owning zone leaves the neighbor untouched");
     };
     clearFootprint(0xc0); // A legacy capture does not identify which stored flags came from objects.
     {
-        const auto payload = objectoccupancy::encode({{0, 0, 1}});
-        const uint32_t chunk[] = {objectoccupancy::Chunk, objectoccupancy::RecordBytes, 1};
+        const objectoccupancy::Positions marks{{-1, 0, 1}, {0, 0, 1}};
+        const auto payload = objectoccupancy::encode(marks);
+        const uint32_t chunk[] = {objectoccupancy::Chunk, objectoccupancy::RecordBytes, uint32_t(marks.size())};
         std::ofstream out(root / "z_0_0.rec", std::ios::binary);
         out.write("CWR1", 4);
         out.write(reinterpret_cast<const char *>(chunk), sizeof chunk);

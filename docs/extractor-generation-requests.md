@@ -91,11 +91,13 @@ After a completed ordinary request, run
 `EngineTests wgoccupancy <request-snapshot> <owner-Extract/oracle-directory>`.
 Use the fresh `.rec` files beside that snapshot from the same isolated
 session. The command uses the snapshot's seed, day and requested zones
-to compare each complete signed-coordinate set. It fails for a missing
+to compare each complete signed-coordinate set, including keys outside
+the owning zone. The footprint pass can retain a key even when the
+zone's block writer rejects it. The command fails for a missing
 or malformed chunk, a file older than the request, or any missing or
 extra key. A valid empty chunk can match a zone with no marked blocks.
-Ordinary generation shares an
-output directory across requests, so use a clean capture directory and
+Ordinary generation shares an output directory across requests, so
+use a clean capture directory and
 confirm completion in the extractor log before comparing.
 
 ## Labeled dungeon captures
