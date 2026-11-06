@@ -180,6 +180,7 @@ class ExtractedWorld {
     struct CapturedLists {
         std::vector<nativesaves::Record> groundItems, staticObjects;
         std::optional<objectrewards::Map> objectRewards;
+        std::optional<std::set<std::tuple<int32_t, int32_t, int32_t>>> markedObjectBlocks;
     };
     // No load: capture-backed zones use the owner's raw lists; generated zones have none.
     std::optional<CapturedLists> capturedLists(int32_t x, int32_t y) const;
@@ -253,7 +254,7 @@ class ExtractedWorld {
     std::shared_ptr<Zone> writableZone(int ax, int ay);
     std::vector<Scenery> propsForZone(const std::shared_ptr<const Zone> &, int ax, int ay, std::shared_ptr<const void> *modelSnapshot,
                                       bool includeModels);
-    CapturedLists readCapturedLists(int32_t x, int32_t y) const;
+    CapturedLists readCapturedLists(int32_t x, int32_t y, bool includeMarks = false) const;
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     void publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);

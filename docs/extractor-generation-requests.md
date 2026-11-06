@@ -78,6 +78,15 @@ Actual guard spawns also need a suitable spot, which this search does not
 verify. Seed 123 has candidates for a gate and floors 2, 3 and 4 in the
 bounded search. Floor 0 has no candidate in that search.
 
+Fresh ordinary generation exports can include an optional `0xe8` chunk in
+`.rec`. It contains the signed X/Y/Z block keys tracked by Steam's object
+footprint pass. CubeVulkan uses these keys when a later object rebuild
+clears footprint flags. Legacy captures without the chunk retain the
+stored flags because their ownership is unknown. The fresh exporter reads
+the set at the synchronous generator boundary. Routine live and refreshed
+zone exports omit the chunk because their mutation exclusion is unproved.
+See the [restoration and occupancy contract](specs/steam-zone-restored-object-occupancy.md).
+
 ## Labeled dungeon captures
 
 `CubeVulkanDataCheck.exe --setup-capture --dungeon-targets <targets-file> --game "<Cube World folder>"`

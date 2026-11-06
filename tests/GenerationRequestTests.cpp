@@ -4,6 +4,7 @@
 #include "../tools/ZoneExtractor/DungeonGateCapture.h"
 #include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "../tools/ZoneExtractor/GenerationSnapshotFile.h"
+#include "../tools/ZoneExtractor/NativeObjectOccupancy.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -111,6 +112,14 @@ void dungeonSpawnCellChecks(const auto &check) {
               dungeoncapture::decodeGateThresholds(dungeoncapture::encodeGateThresholds(thresholds), readThresholds) &&
               readThresholds.thresholds == thresholds.thresholds && readThresholds.zone == thresholds.zone,
           "gate threshold capture preserves an explicit zero, signed cell and owner zone");
+
+    put(zone + 0xe8, std::array<uintptr_t, 2>{thresholdHead, 1});
+    put(thresholdNode + 0x24, int32_t{-11});
+    const auto marked = readFreshObjectMarks(zone, read);
+    const auto encodedMarks = marked ? objectoccupancy::encode(*marked) : std::vector<uint8_t>{};
+    check(marked && *marked == objectoccupancy::Positions{{-5, 3, -11}} &&
+              objectoccupancy::decode(encodedMarks.data(), encodedMarks.size()) == marked,
+          "fresh occupancy capture retains the signed world block coordinates");
 }
 } // namespace
 

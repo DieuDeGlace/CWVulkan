@@ -3,6 +3,10 @@
 #include "NativePose.h"
 #include "Spawned.h"
 #include "Extracted.h"
+#include "GameMath.h"
+#include "ObjectOccupancyCapture.h"
+#include "worldgen/Generator.h"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -77,7 +81,8 @@ struct Scene {
     }
 };
 
-void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t columnBase = 0, bool empty = false) {
+void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t columnBase = 0, bool empty = false,
+                  uint8_t flags = 0) {
     std::filesystem::create_directories(root);
     std::ofstream(root / "manifest.txt") << "seed=123\nhomeX=0\nhomeY=0\nhomeZ=1\n";
     std::ofstream out(root / "z_0_0.cwz", std::ios::binary);
@@ -88,13 +93,140 @@ void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t colum
         const int32_t base = columnBase;
         const uint32_t runs = empty ? 0 : 1;
         const uint16_t count = 1;
-        const uint8_t block[] = {50, 60, 70, 0, type, 0};
+        const uint8_t block[] = {50, 60, 70, 0, type, flags};
         out.write(reinterpret_cast<const char *>(&base), sizeof base);
         out.write(reinterpret_cast<const char *>(&runs), sizeof runs);
         if (!empty) {
             out.write(reinterpret_cast<const char *>(&count), sizeof count);
             out.write(reinterpret_cast<const char *>(block), sizeof block);
         }
+    }
+}
+
+void capturedGateFootprint(const std::filesystem::path &root, const auto &check) {
+    writeFixture(root, 1, 1, false, 0xc0);
+    const auto clearFootprint = [&](uint8_t expected) {
+        ExtractedWorld terrain;
+        std::string why;
+        if (!terrain.open(root, why)) {
+            check(false, "captured gate fixture opens");
+            return;
+        }
+        auto gate = object(8, 0, 1000);
+        put(gate.data(), nativeinteract::OBJECT_POSITION + 16, BLOCK);
+        nativesaves::WorldState retained;
+        auto &saved = retained.zones[{0, 0}];
+        saved.flags = nativesaves::ZoneState::STATIC_OBJECTS_SAVED;
+        saved.staticObjects.push_back(gate);
+        SpawnedCreatures actors;
+        actors.setStoredZones(terrain, &retained, false);
+        cwnet::ZoneAnswer restored;
+        check(actors.zoneAnswer(terrain, {0, 0}, restored) && restored.staticObjects &&
+                  restored.staticObjects->size() == 1 && !restored.staticObjects->front()[nativeinteract::OBJECT_STATE] &&
+                  terrain.gameBlock(0, 0, 1)[5] == 0xc0,
+              "a saved open gate restores its state while retaining the generated footprint");
+        cwnet::ZoneObjects received{{0, 0}, {gate}};
+        actors.replaceStaticObjects(terrain, received);
+        check(terrain.gameBlock(0, 0, 1)[5] == expected && terrain.gameBlock(0, 1, 1)[5] == 0xc0,
+              "the rebuild clears only the tracked object footprint bit");
+    };
+    clearFootprint(0xc0); // A legacy capture does not identify which stored flags came from objects.
+    {
+        const auto payload = objectoccupancy::encode({{0, 0, 1}});
+        const uint32_t chunk[] = {objectoccupancy::Chunk, objectoccupancy::RecordBytes, 1};
+        std::ofstream out(root / "z_0_0.rec", std::ios::binary);
+        out.write("CWR1", 4);
+        out.write(reinterpret_cast<const char *>(chunk), sizeof chunk);
+        out.write(reinterpret_cast<const char *>(payload.data()), payload.size());
+    }
+    clearFootprint(0x80);
+}
+
+void generatedGateIntegration(const auto &check) {
+    struct SeedScope {
+        int32_t saved = worldgen::currentWorld().seed;
+        SeedScope() { worldgen::setWorldSeed(123); }
+        ~SeedScope() { worldgen::setWorldSeed(saved); }
+    } seedScope;
+    // The entrance and castle passage are both covered by the Steam threshold capture.
+    struct GateCase {
+        std::array<int32_t, 2> cell;
+        std::array<int32_t, 2> zone;
+        std::array<int32_t, 3> approach;
+        int32_t threshold;
+        bool countRoute;
+    };
+    constexpr GateCase gates[] = {
+        {{-569, -718}, {-143, -180}, {-9096, -11464, 0}, 1, true},
+        {{247, 180}, {61, 45}, {3969, 2888, 50}, 5, false},
+    };
+    for (const auto &gate : gates) {
+        ExtractedWorld terrain;
+        terrain.openGenerated(gate.approach[0], gate.approach[1], {});
+        terrain.propsAbsolute(gate.zone[0], gate.zone[1]);
+        terrain.propsAbsolute(gamemath::floorFixedZone(gate.approach[0] * BLOCK),
+                              gamemath::floorFixedZone(gate.approach[1] * BLOCK));
+        const auto source = worldgen::zone(gate.zone[0], gate.zone[1]);
+        const auto door = std::find_if(source->objects.begin(), source->objects.end(), [&](const worldgen::StaticObject &o) {
+            return o.type == 8 && gamemath::floorFixedCell(o.x) == gate.cell[0] && gamemath::floorFixedCell(o.y) == gate.cell[1];
+        });
+        const auto threshold = source->gateThresholds.find(gate.cell);
+        check(door != source->objects.end() && threshold != source->gateThresholds.end() && threshold->second == gate.threshold,
+              "generated gate and owner threshold match the recorded test case");
+        if (door == source->objects.end() || threshold == source->gateThresholds.end())
+            continue;
+        const int32_t dx = gamemath::floorFixedBlock(door->x), dy = gamemath::floorFixedBlock(door->y);
+        const int32_t dz = gamemath::floorFixedBlock(door->z);
+        check(terrain.gameBlock(dx, dy, dz)[5] & 0x40, "closed generated gate marks its footprint");
+
+        const auto [px, py, pz] = gate.approach;
+        const int64_t position[] = {px * BLOCK, py * BLOCK, gate.countRoute ? door->z : pz * BLOCK};
+        const auto approachBlock = terrain.gameBlock(px, py, pz);
+        if (!gate.countRoute) {
+            check(approachBlock[5] & 0x20, "the higher-step side has dungeon air");
+            auto outsideDungeon = approachBlock;
+            outsideDungeon[5] &= uint8_t(~0x20);
+            terrain.setGameBlock(px, py, pz, outsideDungeon);
+        }
+
+        nativesaves::WorldState retained;
+        SpawnedCreatures actors;
+        actors.setStoredZones(terrain, &retained, false);
+        actors.setNativePlayer(true);
+        actors.setPlayer(terrain, terrain.toLocal(position), 0, {}, 100, 1, true);
+        std::memcpy(actors.localPlayer()->record + worldgen::creature::POSITION, position, sizeof position);
+        actors.simulate(terrain, 0);
+        actors.zoneChangeLists();
+        check(actors.events().staticObjects.empty() && (terrain.gameBlock(dx, dy, dz)[5] & 0x40),
+              "the gate remains closed before its count or proximity condition is met");
+
+        if (gate.countRoute) {
+            // Four zones away is outside the live recount window but inside the gate's sum.
+            retained.zones[{gate.zone[0] + 4, gate.zone[1]}].placeCounters[gate.cell] = gate.threshold;
+        } else {
+            terrain.setGameBlock(px, py, pz, approachBlock);
+            std::memcpy(actors.localPlayer()->record + worldgen::creature::POSITION, position, sizeof position);
+        }
+        actors.simulate(terrain, 0);
+        actors.zoneChangeLists();
+        const auto &changes = actors.events().staticObjects;
+        const auto changed = std::find_if(changes.begin(), changes.end(), [&](const cwnet::ZoneObjects &zone) {
+            return zone.key.x == gate.zone[0] && zone.key.y == gate.zone[1];
+        });
+        const bool opened = changed != changes.end() &&
+                            std::any_of(changed->records.begin(), changed->records.end(), [&](const auto &o) {
+                                return get<int32_t>(o.data(), nativeinteract::OBJECT_TYPE) == door->type &&
+                                       get<int64_t>(o.data(), nativeinteract::OBJECT_POSITION) == door->x &&
+                                       get<int64_t>(o.data(), nativeinteract::OBJECT_POSITION + 8) == door->y &&
+                                       !o[nativeinteract::OBJECT_STATE];
+                            });
+        check(opened, gate.countRoute ? "retained guard count opens the gate and publishes its state"
+                                      : "higher-step dungeon air opens the gate and publishes its state");
+        check(!(terrain.gameBlock(dx, dy, dz)[5] & 0x40), "opening the gate clears the generated footprint");
+        const auto sounds = actors.takeSounds();
+        check(std::count_if(sounds.begin(), sounds.end(), [](const auto &sound) {
+                  return soundrules::readRequest(sound).number == 0x36;
+              }) == 1, "gate transition delivers its sound once to local audio");
     }
 }
 } // namespace
@@ -519,8 +651,10 @@ int worldObjectTests() {
             check(loaded && result == ExtractedWorld::GameBlock{color, color, color, 0, uint8_t(type), 0},
                   "empty effective columns preserve base-before-sea ordering and exact fallback bytes");
         }
+        capturedGateFootprint(root, check);
         std::filesystem::remove_all(root);
     }
-    std::printf("World object clocks, selection, trap state/hits/sounds and facade timing: %s\n", failures ? "FAIL" : "PASS");
+    generatedGateIntegration(check);
+    std::printf("World objects, gate transitions, trap state/hits/sounds and facade timing: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

@@ -332,7 +332,12 @@ individual feature documents.
   host authority, state and sound. An opt-in Steam recorder identifies
   the two call paths and copies the state and timer after the setter.
   The recorder started successfully in the dome session. A live
-  play-through that exercises both gate transitions remains open.
+  play-through that exercises both gate transitions remains open. The
+  engine's world-update tests now open both generated gates and verify
+  their sound, footprint clearing and client publication. The captured
+  terrain loader can restore the marked-block coordinates from a fresh
+  `.rec` export, so a later gate rebuild can clear the correct flags.
+  The new extractor chunk still needs a live capture.
   See the [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
   and [threshold writers](specs/steam-dungeon-gate-threshold-writers.md).
   See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)

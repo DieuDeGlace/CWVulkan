@@ -1,4 +1,5 @@
 #include "Extracted.h"
+#include "ObjectOccupancyCapture.h"
 #include "SteamSceneRange.h"
 #include "GameMath.h"
 #include "AlphaLight.h"
@@ -294,9 +295,11 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     if (!zone)
         return nullptr;
     if (!generate) {
-        auto records = readCapturedLists(ax, ay);
+        auto records = readCapturedLists(ax, ay, true);
         if (records.objectRewards)
             zone->objectRewards = std::make_shared<const objectrewards::Map>(std::move(*records.objectRewards));
+        if (records.markedObjectBlocks)
+            zone->markedObjectBlocks = std::move(*records.markedObjectBlocks);
     }
     applyBlockChanges(ax, ay, *zone);
     std::lock_guard lock(cacheMutex);
@@ -1198,7 +1201,7 @@ std::optional<nativesaves::Item> ExtractedWorld::capturedObjectReward(int32_t ax
     return {};
 }
 
-ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int32_t ay) const {
+ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int32_t ay, bool includeMarks) const {
     CapturedLists result;
     std::ifstream input(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec"), std::ios::binary | std::ios::ate);
     if (!input || input.tellg() < 4 || input.tellg() > 128 * 1024 * 1024)
@@ -1207,21 +1210,31 @@ ExtractedWorld::CapturedLists ExtractedWorld::readCapturedLists(int32_t ax, int3
     input.seekg(0);
     if (!input.read(reinterpret_cast<char *>(bytes.data()), bytes.size()) || std::memcmp(bytes.data(), "CWR1", 4))
         return result;
-    bool rewardsSeen = false;
+    bool rewardsSeen = false, occupancySeen = false;
     for (size_t at = 4; at + 12 <= bytes.size();) {
         uint32_t tag, stride, count;
         std::memcpy(&tag, bytes.data() + at, 4);
         std::memcpy(&stride, bytes.data() + at + 4, 4);
         std::memcpy(&count, bytes.data() + at + 8, 4);
         at += 12;
-        if (!stride || count > (bytes.size() - at) / stride)
+        if (!stride || count > (bytes.size() - at) / stride) {
+            if (tag == objectoccupancy::Chunk)
+                result.markedObjectBlocks.reset();
             break;
+        }
         if (tag == objectrewards::CHUNK) {
             if (!rewardsSeen && stride == objectrewards::RECORD_BYTES)
                 result.objectRewards = objectrewards::decode(bytes.data() + at, size_t(count) * stride);
             else
                 result.objectRewards.reset();
             rewardsSeen = true;
+        }
+        if (includeMarks && tag == objectoccupancy::Chunk) {
+            if (!occupancySeen && stride == objectoccupancy::RecordBytes)
+                result.markedObjectBlocks = objectoccupancy::decode(bytes.data() + at, size_t(count) * stride);
+            else
+                result.markedObjectBlocks.reset();
+            occupancySeen = true;
         }
         auto *destination = tag == 0x30 ? &result.groundItems : tag == 0x60 ? &result.staticObjects : nullptr;
         if (destination && stride == sizeof(nativesaves::Record)) {

@@ -27,6 +27,7 @@
 #include "NativeLoadedZones.h"
 #include "NativeNameFragments.h"
 #include "NativeObjectSpans.h"
+#include "NativeObjectOccupancy.h"
 #include "NativeRoleLifetime.h"
 #include "NativeSpriteBuffers.h"
 #include "NativeSpriteCatalog.h"
@@ -832,7 +833,8 @@ struct Placement {
 constexpr Placement PLACEMENTS[] = {{0x18, 0x40}, {0x30, 0xe0}, {0x48, 0xe0},
                                     {0x60, 0xe0}, {0x78, 0xe0}, {0x90, 0x40}, {0xa8, 0x40}, {0xc0, 0xe0}};
 
-static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCacheLocked = false) {
+static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCacheLocked = false,
+                                                    const objectoccupancy::Positions *marks = nullptr) {
     std::vector<unsigned char> out;
     out.insert(out.end(), {'C', 'W', 'R', '1'});
     for (auto p : PLACEMENTS) {
@@ -857,6 +859,13 @@ static std::vector<unsigned char> serialiseRecords(cube::Zone *zone, bool meshCa
     if (rewards) {
         const auto payload = objectrewards::encode(*rewards);
         const uint32_t header[] = {objectrewards::CHUNK, objectrewards::RECORD_BYTES, uint32_t(rewards->size())};
+        const auto *begin = reinterpret_cast<const unsigned char *>(header);
+        out.insert(out.end(), begin, begin + sizeof header);
+        out.insert(out.end(), payload.begin(), payload.end());
+    }
+    if (marks) {
+        const auto payload = objectoccupancy::encode(*marks);
+        const uint32_t header[] = {objectoccupancy::Chunk, objectoccupancy::RecordBytes, uint32_t(marks->size())};
         const auto *begin = reinterpret_cast<const unsigned char *>(header);
         out.insert(out.end(), begin, begin + sizeof header);
         out.insert(out.end(), payload.begin(), payload.end());
@@ -6497,7 +6506,8 @@ static bool refreshOnce(unsigned char *zone) {
     }
 }
 // A zone's blocks, records, spawn points and the rand() calls just traced, at stem.*.
-static bool writeZone(cube::World *w, unsigned char *zone, const std::string &stem) {
+static bool writeZone(cube::World *w, unsigned char *zone, const std::string &stem,
+                      const objectoccupancy::Positions *marks = nullptr) {
     const auto terrain = extract::serialise(w, (cube::Zone *)zone);
     if (terrain.empty()) {
         log("Oracle: terrain capture rejected; no new zone files written at " + stem);
@@ -6505,7 +6515,7 @@ static bool writeZone(cube::World *w, unsigned char *zone, const std::string &st
     }
     if (!writeOracleFile(stem + ".cwz", terrain) ||
         !writeOracleFile(stem + ".cwm", extract::serialiseMaterials(w, (cube::Zone *)zone)) ||
-        !writeOracleFile(stem + ".rec", extract::serialiseRecords((cube::Zone *)zone)))
+        !writeOracleFile(stem + ".rec", extract::serialiseRecords((cube::Zone *)zone, false, marks)))
         return false;
     if (!writeSpawns(zone, stem + ".spawns")) {
         log("Oracle: could not capture or write " + stem + ".spawns");
@@ -6783,7 +6793,10 @@ static void generate(cube::World *w) {
             }
             continue;
         }
-        if (!writeZone(w, zone, genDirectory + "\\" + name)) {
+        const auto marks = captureabi::readFreshObjectMarks(reinterpret_cast<uintptr_t>(zone), readNative);
+        if (!marks)
+            log("Oracle: fresh marked-object coordinates unavailable at " + name);
+        if (!writeZone(w, zone, genDirectory + "\\" + name, marks ? &*marks : nullptr)) {
             pause("fresh zone output incomplete");
             return;
         }
