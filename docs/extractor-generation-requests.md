@@ -71,6 +71,13 @@ per-process zone limit and labels additional picks for a later process. These
 commands only predict targets. Compare a fresh Steam batch before treating
 the floor or the structure as verified.
 
+`EngineTests castles --guard-targets` selects candidates for a kind-8 gate
+guard and the fortress floor cases 0, 2, 3 and 4. Floor 0 means no qualifying
+floor cell was found. The candidate search checks the cell's floor code.
+Actual guard spawns also need a suitable spot, which this search does not
+verify. The current dungeon batch records final blocks and helper outputs.
+It cannot verify a guard's area or activation cells.
+
 ## Labeled dungeon captures
 
 `CubeVulkanDataCheck.exe --setup-capture --dungeon-targets <targets-file> --game "<Cube World folder>"`

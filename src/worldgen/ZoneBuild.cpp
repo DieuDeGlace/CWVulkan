@@ -2,6 +2,7 @@
 // worldgen-structures-contents.md §C1, §C8.
 #include "worldgen/ZoneBuild.h"
 
+#include "worldgen/BuildingRules.h"
 #include "worldgen/Height.h"
 
 namespace worldgen {
@@ -34,6 +35,27 @@ int PlannerFacts::itemForCell(int32_t cx, int32_t cy) const {
 ZoneBuild::ZoneBuild(ZoneTerrain &terrain, const WorldValues &world, CellObjects &cells, bool recordDraws)
     : terrain(terrain), world(world), cells(cells), zx(terrain.zx), zy(terrain.zy), x0(terrain.zx * ZONE_SIZE),
       y0(terrain.zy * ZONE_SIZE), recordDraws_(recordDraws) {}
+
+const DungeonGuardFloor &ZoneBuild::dungeonGuardFloor() {
+    if (dungeonGuardFloor_)
+        return *dungeonGuardFloor_;
+    auto &floor = dungeonGuardFloor_.emplace();
+    BuildingRules rules(cells);
+    const FortressSquare square = fortressSquare(place.cell, place.place.point);
+    const auto [ax, ay] = square.middle;
+    const int32_t half = square.size / 2;
+    // The last qualifying cell in X-major order supplies the guard floor.
+    for (int32_t x = ax - half; x < ax + half; ++x)
+        for (int32_t y = ay - half; y < ay + half; ++y) {
+            const int type = rules.type(x, y);
+            if (type < 45 || type > 47)
+                continue;
+            const int code = rules.fortressFloorCode(x, y, 0);
+            if (code >= 2 && code <= 4)
+                floor = {code, {x, y}};
+        }
+    return floor;
+}
 
 int ZoneBuild::draw() {
     const int v = terrain.random.next();

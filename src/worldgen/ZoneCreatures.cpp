@@ -392,41 +392,11 @@ void castleCreature(CreatureBuilder &b, int32_t cx, int32_t cy, CastleCell k) {
 
 // --- §2.6 Dungeons ---------------------------------------------------------------------------
 
-// The dungeon's floor F and its cell D (§1), once per zone.
-struct DungeonFloor {
-    int floor = 0;
-    Int2 cell; // unset (0, 0) when no floor is found
-};
-
-DungeonFloor dungeonFloor(CreatureBuilder &b) {
-    thread_local Int2 zoneOf{0x7fffffff, 0};
-    thread_local DungeonFloor cached;
-    if (zoneOf == Int2{b.zone.zx, b.zone.zy})
-        return cached;
-    DungeonFloor f;
-    const Place &place = b.zone.place.place;
-    const int32_t ax = floorDiv(place.point.x, 4), ay = floorDiv(place.point.y, 4);
-    const int32_t h = fortressSquare(b.zone.place.cell, place.point).size / 2;
-    for (int32_t x = ax - h; x < ax + h; x++)
-        for (int32_t y = ay - h; y < ay + h; y++) {
-            const int t = b.rules.type(x, y);
-            if (t < 45 || t > 47)
-                continue;
-            const int code = b.rules.fortressFloorCode(x, y, 0);
-            if (code >= 2 && code <= 4)
-                f.floor = code, f.cell = {x, y};
-        }
-    zoneOf = {b.zone.zx, b.zone.zy};
-    cached = f;
-    return f;
-}
-
 void dungeonCreatures(CreatureBuilder &b, int32_t cx, int32_t cy) {
     ZoneBuild &zone = b.zone;
     const RegionPlan *plan = b.plan();
     if (!plan)
         return;
-    const DungeonFloor F = dungeonFloor(b);
     const Int2 P = zone.place.cell;
     const uint32_t ph = cellKey(P.x, P.y);
     const int lvl = plan->levelAt(P.x, P.y);
@@ -498,10 +468,11 @@ void dungeonCreatures(CreatureBuilder &b, int32_t cx, int32_t cy) {
         const int S = i == 0 ? 2 : 8;
         if (b.rules.fortressFloorCode(cx, cy, i) != 13 || b.count(cx, cy, S) == 0)
             continue;
+        const auto &floor = zone.dungeonGuardFloor();
         SpawnPoint p;
         p.addFlags(RESIDENT);
         b.seed(random(ph + 0x2ffdd));
-        if (F.floor == 3) {
+        if (floor.code == 3) {
             b.castleRace(p, DUNGEON, sigma);
             p.addFlags(STRONG);
             p.roam = 0x10;
@@ -511,17 +482,17 @@ void dungeonCreatures(CreatureBuilder &b, int32_t cx, int32_t cy) {
             key.region = regionAt(place.point.x, place.point.y);
             p.gear.inventory.add(key, 1);
             p.level = level;
-        } else if (F.floor == 4) {
+        } else if (floor.code == 4) {
             p.hostility = hostility::ANIMAL;
             p.race = 0xd6;
             p.level = level;
-            p.area.push_back(F.cell);
+            p.area.push_back(floor.cell);
         } else {
             b.castleRace(p, DUNGEON, sigma);
             p.addFlags(BIG);
             p.level = level;
             p.roam = 0x10;
-            p.area.push_back(F.cell);
+            p.area.push_back(floor.cell);
         }
         b.seed(random(ch + 0x1260b4) + (uint32_t)i);
         p.race = b.variant(p.race);

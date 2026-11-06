@@ -826,10 +826,30 @@ void plannerDoorChecks() {
     WS_CHECK(building.doorObjectType() == 8);
 }
 
+void dungeonGuardFloorChecks() {
+    const auto world = wg::worldValues(123);
+    wg::CellObjects cells(world);
+    wg::ZoneTerrain terrain;
+    wg::ZoneBuild first(terrain, world, cells, false);
+    first.place.cell = {-10, -12};
+    first.place.place = wg::cellPlace(first.place.cell.x, first.place.cell.y);
+    wg::ZoneBuild second(terrain, world, cells, false);
+    second.place.cell = {-12, -18};
+    second.place.place = wg::cellPlace(second.place.cell.x, second.place.cell.y);
+
+    // Identical zone coordinates must not make independent builds share the selected floor.
+    WS_CHECK(first.dungeonGuardFloor().code == 2);
+    WS_CHECK((first.dungeonGuardFloor().cell == wg::Int2{-569, -720}));
+    WS_CHECK(second.dungeonGuardFloor().code == 4);
+    WS_CHECK((second.dungeonGuardFloor().cell == wg::Int2{-714, -1065}));
+    WS_CHECK(first.dungeonGuardFloor().code == 2);
+}
+
 int worldgenStructureTests() {
     failures = 0;
     hangingConeChecks();
     plannerDoorChecks();
+    dungeonGuardFloorChecks();
     const fs::path game = gameDir();
     if (game.empty())
         return 0;
@@ -1223,11 +1243,76 @@ int worldgenDungeonTargets(int seed, int requestedStructure) {
     return found11 && found12 ? 0 : 1;
 }
 
+int worldgenDungeonGuardTargets(int seed) {
+    const auto world = wg::worldValues(seed);
+    wg::CellObjects cells(world);
+    wg::BuildingRules rules(cells);
+    wg::ZoneTerrain terrain;
+    constexpr int radius = 128;
+    constexpr int cellToPlaceShift = wg::PLACE_SHIFT - 4;
+    constexpr std::array<int, 4> floorCodes{0, 2, 3, 4};
+    std::set<int> remaining(floorCodes.begin(), floorCodes.end());
+    bool needGate = true;
+    std::printf("Engine-predicted kind-8 guard targets for seed %d\n", seed);
+    for (int distance = 1; distance <= radius && (needGate || !remaining.empty()); ++distance) {
+        for (int py = -distance; py <= distance; ++py) {
+            for (int px = -distance; px <= distance; ++px) {
+                if (std::max(std::abs(px), std::abs(py)) != distance)
+                    continue;
+                const auto place = wg::cellPlace(px, py);
+                if (place.kind != 8 || (place.big && (px % 2 != 0 || py % 2 != 0)))
+                    continue;
+                const wg::Int2 placeCell{px, py};
+                wg::ZoneBuild zone(terrain, world, cells, false);
+                zone.place.place = place;
+                zone.place.cell = placeCell;
+                const auto &floor = zone.dungeonGuardFloor();
+                const auto square = wg::fortressSquare(placeCell, place.point);
+                const auto [ax, ay] = square.middle;
+                const int reach = square.size / 2 + 2; // Include the cell just outside the gate.
+                const bool gateEnabled = needGate && (wg::random(wg::cellKey(px, py) + 0x10581) & 1);
+                const int placeMask = place.big ? ~1 : ~0;
+                for (int x = ax - reach; x <= ax + reach; ++x) {
+                    for (int y = ay - reach; y <= ay + reach; ++y) {
+                        if ((wg::floorDiv(x, cellToPlaceShift) & placeMask) != px ||
+                            (wg::floorDiv(y, cellToPlaceShift) & placeMask) != py)
+                            continue;
+                        const int type = rules.type(x, y);
+                        if (type >= 45 && type <= 47) {
+                            if ((x == ax && y == ay) || !remaining.contains(floor.code))
+                                continue;
+                            if (rules.fortressFloorCode(x, y, 0) == 13 || rules.fortressFloorCode(x, y, 1) == 13) {
+                                std::printf("  floor %d: cell %d %d, place %d %d", floor.code, x, y, px, py);
+                                if (floor.code)
+                                    std::printf(", selected cell %d %d", floor.cell.x, floor.cell.y);
+                                std::putchar('\n');
+                                remaining.erase(floor.code);
+                            }
+                        } else if (gateEnabled && needGate &&
+                                   (rules.type(x - 1, y) == 46 || rules.type(x + 1, y) == 46 ||
+                                    rules.type(x, y - 1) == 46 || rules.type(x, y + 1) == 46)) {
+                            std::printf("  gate: cell %d %d, place %d %d\n", x, y, px, py);
+                            needGate = false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (const int code : remaining)
+        std::printf("  no floor-%d candidate in the search window\n", code);
+    if (needGate)
+        std::puts("  no gate candidate in the search window");
+    remaining.erase(0); // The native no-selection case may be absent from this search.
+    return needGate || !remaining.empty() ? 1 : 0;
+}
+
 // `EngineTests wgstructures [zones]`; WS_COMPLETE=1 checks full generation in all four owner sets.
 int worldgenStructureCommand(int maxZones) {
     failures = 0;
     hangingConeChecks();
     plannerDoorChecks();
+    dungeonGuardFloorChecks();
     const fs::path game = gameDir();
     if (game.empty())
         return std::printf("no game folder\n"), 1;

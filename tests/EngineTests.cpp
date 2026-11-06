@@ -237,6 +237,7 @@ int worldgenTerrainCommand(int maxZones);
 int worldgenDungeonCoverage(const std::filesystem::path &, int seed);
 int worldgenDungeonTargets(int seed, int requestedStructure);
 int worldgenDungeonFloorTargets(const std::filesystem::path &, int seed);
+int worldgenDungeonGuardTargets(int seed);
 int worldgenDungeonOracle(const std::filesystem::path &capture, const std::filesystem::path &tables);
 int worldgenStructureTests(); // tests/WorldgenStructureTests.cpp: the new generator's structures, fast subset
 int worldgenStructureCommand(int maxZones);
@@ -10427,6 +10428,7 @@ int main(int argc, char **argv) {
     if (argc >= 2 && std::string(argv[1]) == "castles") {
         const bool targets = argc == 3 && std::string(argv[2]) == "--targets";
         const bool floors = argc == 3 && std::string(argv[2]) == "--floor-targets";
+        const bool guards = argc == 3 && std::string(argv[2]) == "--guard-targets";
         int structure = 0;
         if (argc == 4 && std::string_view(argv[2]) == "--structure") {
             const std::string_view id = argv[3];
@@ -10434,7 +10436,7 @@ int main(int argc, char **argv) {
                 return std::puts("Expected a dungeon structure ID from 40 to 47"), 1;
             structure = 40 + id[1] - '0';
         }
-        if (argc != 2 && !targets && !floors && !structure)
+        if (argc != 2 && !targets && !floors && !guards && !structure)
             return 1;
         Assets assets;
         if (!assets.locate(""))
@@ -10443,6 +10445,8 @@ int main(int argc, char **argv) {
         const int seed = seedOf(directory);
         if (floors)
             return worldgenDungeonFloorTargets(directory, seed);
+        if (guards)
+            return worldgenDungeonGuardTargets(seed);
         if (targets || structure)
             return worldgenDungeonTargets(seed, structure);
         return worldgenDungeonCoverage(directory, seed);

@@ -311,7 +311,12 @@ individual feature documents.
   floors from −134 to −130 and from −68 to −63. This evidence covers the
   sampled helper outputs and final blocks. Direct floor-index and dome
   observations, broader seed/theme coverage, and the kind-8 reward and guard
-  payloads remain open. See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures).
+  payloads remain open. The guard floor scan now caches only within its
+  current zone build. The next capture has candidate targets for gate
+  guards and all three qualifying floor codes. The independent guard-tree
+  audit established which producers populate each tree and how live guard
+  counts reach the native gate-state pass. See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)
+  and [guard-tree contract](specs/steam-dungeon-spawn-guard-trees.md).
   Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.
   Native directional palette targets/RGBA easing have numeric checks, including

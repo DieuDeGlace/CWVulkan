@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <vector>
 
@@ -55,6 +56,11 @@ struct Spot {
 };
 using SpotKey = std::tuple<int32_t, int32_t, int>; // cell x, cell y, kind
 using SpotMap = std::map<SpotKey, std::vector<Spot>>;
+
+struct DungeonGuardFloor {
+    int code = 0;
+    Int2 cell; // The portable fallback is (0, 0) when no cell qualifies.
+};
 
 class ZoneBuild {
 public:
@@ -116,9 +122,11 @@ public:
 
     // --- Part C's creatures (worldgen-creatures.md) ---
     ZoneSpawns spawns;
+    const DungeonGuardFloor &dungeonGuardFloor();
 
 private:
     bool recordDraws_;
+    std::optional<DungeonGuardFloor> dungeonGuardFloor_;
 };
 
 // Taking spots (contents file §C1, worldgen-creatures.md §5.3, §5.4) from a zone's spot map, its
