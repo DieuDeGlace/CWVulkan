@@ -642,7 +642,10 @@ individual feature documents.
   broader visual/peer acceptance remain open. Other object
   families and listening comparisons also remain. The independently traced
   [sound addenda](specs/steam-sound-event-addenda.md) resolves additional consumers;
-  their actual runtime wiring and broader listening checks still remain.
+  successful purchases and personal creature-list changes now play their specified
+  immediate sounds. Gameplay samples the combined ordinary-UI and ring-selector
+  state after visibility updates even if the HUD is unavailable. Switching between
+  qualifying panels produces no extra sound. Broader listening comparisons remain.
 - [x] Saved inventory loading preserves the stored tab count, including zero or
   fewer than six tabs, holes, negative quantities and complete item bytes. Empty
   quantity-zero slots contribute neither gameplay entries nor stale raw-item

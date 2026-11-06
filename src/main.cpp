@@ -7572,6 +7572,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 };
             }
         }
+        const auto sampleInterfaceSound = [&] {
+            if ((nativePlayer || nativeInventory) && !serverMode)
+                if (const int sound = interfaceSoundEdges.sample(nativeOrdinaryUi(), itemSelector.shown))
+                    audio.playInterface(sound);
+        };
         if (hudReady) {
             VkExtent2D screen = renderer.screenSize();
             if (screen.width != hudSize.width || screen.height != hudSize.height) {
@@ -7988,11 +7993,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
             }
             answers.updateVisibility(talk.has_value() || npcSpeech.addressedTo(spawned.playerId()));
-            if (nativeInventory) {
-                const bool ordinaryUi = nativeOrdinaryUi();
-                if (const int sound = interfaceSoundEdges.sample(ordinaryUi, itemSelector.shown))
-                    audio.playInterface(sound);
-            }
+            sampleInterfaceSound();
             if (nativePlayer) {
                 const bool ordinaryUi = inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible();
                 const bool leaning = (spawned.playerToggles() & 0x400) != 0;
@@ -8452,6 +8453,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 items.insert(items.end(), widgets.begin(), widgets.end());
                 renderer.overlay(std::move(hudVertices), std::move(items), std::move(layers));
             }
+        } else {
+            // UI state can change even when the HUD could not be loaded.
+            sampleInterfaceSound();
         }
         if (serverMode) {
             // A dedicated server draws nothing: it keeps the world running at about
