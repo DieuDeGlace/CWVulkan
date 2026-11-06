@@ -10,6 +10,14 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- A supported Steam session confirmed both named dungeon cases and the
+  18 helper rows. Structure 44/detail 12 exposed 145 block differences across
+  119 columns near two cones. The independent audit found the missing second
+  simplex offset. With the correction, all 12,288 stored columns across the
+  three captured zones match exactly. The session restored 60 checked owner
+  files byte-for-byte. Capture data remains local. This covers the two cases
+  and their captured neighborhoods.
+
 - The headless setup can now prepare the dungeon request by itself with
   `--setup-capture --dungeon-targets <file>`. It uses the existing Save, Mods
   and ReShade recovery journal. Setup stages requests before publishing them

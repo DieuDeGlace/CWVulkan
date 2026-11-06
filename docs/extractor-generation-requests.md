@@ -101,7 +101,8 @@ comes from the mod-file inventory and does not attest active modules.
 Run `EngineTests wgdungeon <batch-directory> <owner-Extract/oracle-directory>`.
 It requires a complete batch and consistent world context, then compares the
 helper labels and exact stored block sequences, including nonempty column bases
-and lengths. It reports modified or unclassified captures as diagnostic results
+and lengths. Set `CW_DUNGEON_DIFF=1` to print every differing stored block
+in columns with the same base. It reports modified or unclassified captures as diagnostic results
 with a failing exit code. No captured files belong in the source or release.
 
 `EngineTests generationrequest` checks parser bounds, sticky context changes,

@@ -15,6 +15,7 @@
 #include "../tools/ZoneExtractor/DungeonCapture.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/BuildingBuilder.h"
+#include "worldgen/Mason.h"
 #include "worldgen/Structures.h"
 #include "worldgen/WorldValues.h"
 #include "worldgen/ZoneCreatures.h"
@@ -770,6 +771,24 @@ fs::path generatedZonesDir(const fs::path &game) {
 } // namespace
 
 // The fast subset in the default test run.
+void hangingConeChecks() {
+    const auto world = wg::worldValues(123);
+    wg::CellObjects cells(world);
+    wg::ZoneTerrain terrain;
+    terrain.columns.resize(wg::ZONE_COLUMNS);
+    terrain.retainedColours.resize(wg::ZONE_COLUMNS);
+    wg::ZoneBuild zone(terrain, world, cells, true);
+    auto mason = wg::Mason::atCell(zone, 1, 1);
+    mason.hangingCone(8, 8, 16, 4, 9);
+
+    // From the independent cone formula. At local Z=12 the squared radius
+    // is about 4.94. The second phase puts these two points on opposite sides.
+    const auto inside = zone.read(24, 22, 12);
+    WS_CHECK(inside.type == wg::blocktype::ROCK && inside.flags == 0x22);
+    WS_CHECK(zone.read(24, 26, 12).flags != 0x22); // No cone write, including below the stored span.
+    WS_CHECK(terrain.draws.empty());
+}
+
 void plannerDoorChecks() {
     // Independent arithmetic examples from worldgen-parity-gaps.md §10.
     WS_CHECK(wg::cellRandomUnsigned(26966, 0, 0x4e6289) == 0xffffffffu);
@@ -809,6 +828,7 @@ void plannerDoorChecks() {
 
 int worldgenStructureTests() {
     failures = 0;
+    hangingConeChecks();
     plannerDoorChecks();
     const fs::path game = gameDir();
     if (game.empty())
@@ -917,6 +937,7 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
 
     std::optional<Context> batch;
     size_t decisionDifferences = 0, columnDifferences = 0;
+    const bool showAllDifferences = std::getenv("CW_DUNGEON_DIFF") != nullptr;
     for (const auto &[coordinate, cells] : expected) {
         const auto [zx, zy] = coordinate;
         const auto stem = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
@@ -973,10 +994,25 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
             const auto &engine = generated.terrain.columns[i];
             if (sameStoredColumn(native, engine))
                 continue;
-            if (changed++ < 4)
+            if (changed++ < 4 || showAllDifferences) {
                 std::printf("%s: stored column %zu %zu differs (base %d/%d, count %zu/%zu)\n",
                             stem.c_str(), i / wg::ZONE_SIZE, i % wg::ZONE_SIZE, native.base, engine.base,
                             native.blocks.size(), engine.blocks.size());
+                if (native.base != engine.base)
+                    continue;
+                const size_t common = std::min(native.blocks.size(), engine.blocks.size());
+                for (size_t j = 0; j < common; ++j) {
+                    const auto &a = native.blocks[j], &b = engine.blocks[j];
+                    if (a != b) {
+                        std::printf("  z %lld: %u %u %u %u %u %u | %u %u %u %u %u %u\n",
+                                    static_cast<long long>(native.base) + static_cast<long long>(j),
+                                    unsigned(a.r), unsigned(a.g), unsigned(a.b), unsigned(a.glow), unsigned(a.type), unsigned(a.flags),
+                                    unsigned(b.r), unsigned(b.g), unsigned(b.b), unsigned(b.glow), unsigned(b.type), unsigned(b.flags));
+                        if (!showAllDifferences)
+                            break;
+                    }
+                }
+            }
         }
         columnDifferences += changed;
         std::printf("%s: %zu helper rows, %zu of %zu stored columns match\n",
@@ -1038,6 +1074,7 @@ int worldgenDungeonTargets(int seed) {
 // `EngineTests wgstructures [zones]`; WS_COMPLETE=1 checks full generation in all four owner sets.
 int worldgenStructureCommand(int maxZones) {
     failures = 0;
+    hangingConeChecks();
     plannerDoorChecks();
     const fs::path game = gameDir();
     if (game.empty())

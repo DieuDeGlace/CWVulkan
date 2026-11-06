@@ -664,7 +664,7 @@ Call the mason's hanging cone at local **(8,8,top0−2)** with that radius/heigh
 **0xc0cd0** writes its noisy circular slices from **z−height through z+1
 inclusive**, radius at slice Z equal to **(Z−z+height)/height × radius** in
 float. Its x/y bounds, two world-coordinate noise displacements and circle test
-are already given in the mason spec. Accepted blocks have **type6, glow0,
+are detailed in the [native cone audit](steam-dungeon-hanging-cone.md). Accepted blocks have **type6, glow0,
 flags0x22**, with packed color from that scheme. The shape introduces no extra
 CRT random draws. It is a downward hanging solid feature, not a replacement
 height map for the whole room ceiling.

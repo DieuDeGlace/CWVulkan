@@ -410,13 +410,17 @@ void Mason::tube(bool alongX, int32_t x0, int32_t y0, int32_t z0, int32_t z1, in
 void Mason::hangingCone(int32_t x, int32_t y, int32_t z, int32_t r, int32_t h) {
     for (int32_t bz = z - h; bz <= z + 1; bz++) {
         const float rr = (float)(bz - z + h) / (float)h * (float)r;
-        for (int32_t bx = trunc32((float)x - rr - 1.5f); (float)bx <= (float)x + rr + 1.5f; bx++)
-            for (int32_t by = trunc32((float)y - rr - 1.5f); (float)by <= (float)y + rr + 1.5f; by++) {
-                if (!columnInZone(bx, by))
+        const float endX = ((float)x + rr) + 1.5f;
+        const float endY = (rr + 1.5f) + (float)y;
+        const double slice = (double)bz * 0.1;
+        for (int32_t bx = trunc32((float)x - rr - 1.5f); (float)bx <= endX; bx++)
+            for (int32_t by = trunc32((float)y - rr - 1.5f); (float)by <= endY; by++) {
+                const World w = world(bx, by, 0);
+                if (!zone.inZone(w.x, w.y))
                     continue;
-                const World w = world(bx, by, bz);
-                const float a = simplex((double)w.y * 0.1, (double)bz * 0.1) * 1.5f + (float)(bx - x);
-                const float b = simplex((double)w.x * 0.1, (double)bz * 0.1) * 1.5f + (float)(by - y);
+                // The Y displacement samples a separate slice of the noise field.
+                const float a = simplex((double)w.y * 0.1, slice) * 1.5f + (float)(bx - x);
+                const float b = simplex((double)w.x * 0.1, slice + 843.0) * 1.5f + (float)(by - y);
                 if (a * a + b * b <= rr * rr)
                     put(bx, by, bz, block(bx, by, bz, blocktype::ROCK, 0x22));
             }

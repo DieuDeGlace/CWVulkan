@@ -298,7 +298,10 @@ individual feature documents.
   Full structure/light-list checks pass on all 789 snapshots. The strict
   stored-span check also matches all 3,231,744 columns, including nonempty
   bases, lengths and the ordered six-byte block records. Fresh-generation RNG
-  checks are distinct from partial daily-refresh traces. Mesh-prepass bounds,
+  checks are distinct from partial daily-refresh traces. A later live capture
+  confirmed structure 42/detail 11 and 44/detail 12, plus the 18 nearby helper
+  rows. After correcting the detail-12 cone noise, all 12,288 stored columns
+  in those three zones match. See the [cone contract](specs/steam-dungeon-hanging-cone.md). Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.
   Native directional palette targets/RGBA easing have numeric checks, including
   regional/structure/effect13 blends and capped wall timing. Steam sky/fog/sun now
