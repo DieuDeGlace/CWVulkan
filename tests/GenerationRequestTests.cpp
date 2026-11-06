@@ -1,5 +1,6 @@
 #include "../tools/ZoneExtractor/GenerationRequest.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
+#include "../tools/ZoneExtractor/DungeonGateCapture.h"
 #include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "../tools/ZoneExtractor/GenerationSnapshotFile.h"
 #include <filesystem>
@@ -17,7 +18,7 @@ void dungeonSpawnCellChecks(const auto &check) {
     constexpr uintptr_t guardHead = 0x1400, low = 0x1480, high = 0x1500;
     constexpr uintptr_t activationHead = 0x1580, activationNode = 0x1600;
     constexpr int64_t id = INT64_MIN + 7;
-    std::array<uint8_t, 0x1900> memory{};
+    std::array<uint8_t, 0x1a00> memory{};
     const auto put = [&](uintptr_t address, const auto &value) {
         std::memcpy(memory.data() + address, &value, sizeof value);
     };
@@ -96,6 +97,19 @@ void dungeonSpawnCellChecks(const auto &check) {
           "a constructed empty activation tree is distinct from a missing tree");
     put(spawn + 0x928, std::array<uintptr_t, 2>{0, 0});
     check(!readZoneSpawnCells(zone, capture.records, read), "a missing activation head is rejected");
+
+    constexpr uintptr_t thresholdHead = 0x1900, thresholdNode = 0x1980;
+    put(zone + 0x4c8, std::array<uintptr_t, 2>{thresholdHead, 1});
+    links(thresholdHead, thresholdNode, thresholdNode, thresholdNode, 1);
+    links(thresholdNode, thresholdHead, thresholdHead, thresholdHead, 0);
+    put(thresholdNode + 0x1c, SpawnCell{-5, 3});
+    put(thresholdNode + 0x24, int32_t{0});
+    dungeoncapture::GateCapture thresholds{{-2, 0}, 123, -2, {}}, readThresholds;
+    check(dungeoncapture::readGateThresholds(zone, thresholds, read) &&
+              thresholds.thresholds == std::map<SpawnCell, int32_t>{{{-5, 3}, 0}} &&
+              dungeoncapture::decodeGateThresholds(dungeoncapture::encodeGateThresholds(thresholds), readThresholds) &&
+              readThresholds.thresholds == thresholds.thresholds && readThresholds.zone == thresholds.zone,
+          "gate threshold capture preserves an explicit zero, signed cell and owner zone");
 }
 } // namespace
 

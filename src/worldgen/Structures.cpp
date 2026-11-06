@@ -270,6 +270,7 @@ ZoneContents generateZone(const WorldValues &world, int32_t zx, int32_t zy, cons
     out.emitters = std::move(modelLists7.emitters);
     out.items = std::move(zone.items);
     out.rewards = std::move(zone.rewards);
+    out.gateThresholds = std::move(zone.gateThresholds);
     out.spots = std::move(zone.spots);
     out.working = std::move(zone.working);
     out.spawns = std::move(zone.spawns);

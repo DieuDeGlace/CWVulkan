@@ -1239,6 +1239,18 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         objectWorld.creatures = &a.creatures;
         objectWorld.usedCells = hasPlayer ? (usedCells ? usedCells : &noUsedCells) : nullptr;
         objectWorld.rand = w.rand;
+        objectWorld.block = a.block;
+        objectWorld.actor = [&](int64_t id) -> const uint8_t * {
+            const auto *actor = u.byId(id);
+            return actor ? actor->record : nullptr;
+        };
+        objectWorld.castleSteps = [](nativeobjects::Cell cell) {
+            worldgen::BuildingRules rules(worldgen::cellObjectsFor(worldgen::currentWorld()));
+            return rules.castleCell(cell[0], cell[1]).steps;
+        };
+        objectWorld.guardCount = [&](nativeobjects::Cell zone, nativeobjects::Cell gate) {
+            return zoneStates.guardCount(zone, gate);
+        };
         objectWorld.sound = [&](const soundrules::RequestRecord &sound) {
             sounds.push_back(sound);
             worldEvents.sounds.push_back(sound);
@@ -1262,6 +1274,34 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             nativesaves::ZoneLists *lists = zoneLists(ew, visit.key[0], visit.key[1]);
             if (!lists)
                 continue;
+            lists->placeCounters.clear();
+            const auto residents = zoneResidents.find({visit.key[0], visit.key[1]});
+            const auto source = residents != zoneResidents.end() ? residents->second : worldgen::zone(visit.key[0], visit.key[1]);
+            for (const auto &[id, spawn] : source->spawns.points) {
+                if (spawn.area.empty() || !u.byId(id))
+                    continue;
+                std::set<nativeobjects::Cell> area;
+                for (const auto &cell : spawn.area)
+                    area.insert({cell.x, cell.y});
+                for (const auto &cell : area) {
+                    auto &count = lists->placeCounters[cell];
+                    count = gamemath::add32(count, 1);
+                }
+            }
+        }
+        for (const auto &visit : selected) {
+            nativesaves::ZoneLists *lists = zoneStates.find(visit.key);
+            if (!lists)
+                continue;
+            objectWorld.gateThreshold = [owner = visit.key, generated = std::shared_ptr<const worldgen::ZoneContents>{}]
+                                        (nativeobjects::Cell key) mutable -> std::optional<int32_t> {
+                if (!generated)
+                    generated = worldgen::zone(owner[0], owner[1]);
+                const auto threshold = generated->gateThresholds.find(key);
+                if (threshold != generated->gateThresholds.end())
+                    return threshold->second;
+                return std::nullopt;
+            };
             objectWorld.objectsChanged = [&] {
                 zoneStates.objectsChanged(visit.key);
                 objectsChanged.insert({visit.key[0], visit.key[1]});

@@ -9,6 +9,7 @@
 #include "worldgen/ZoneRecords.h"
 #include "worldgen/ZoneTerrain.h"
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -102,6 +103,7 @@ public:
     std::vector<Model> models;
     std::vector<GroundItem> items;
     std::map<int, Item> rewards; // a reward chest's item by its index in `objects`
+    std::map<std::array<int32_t, 2>, int32_t> gateThresholds;
     // "Keep if inside" (0x1194b0, 0x2fb7d0): appended when x and y lie in the zone.
     bool keepIfInside(const StaticObject &o);
     bool keepIfInside(const Model &m);
@@ -123,10 +125,12 @@ public:
     // --- Part C's creatures (worldgen-creatures.md) ---
     ZoneSpawns spawns;
     const DungeonGuardFloor &dungeonGuardFloor();
+    int32_t fortressGateThreshold();
 
 private:
     bool recordDraws_;
     std::optional<DungeonGuardFloor> dungeonGuardFloor_;
+    std::optional<int32_t> fortressGateThreshold_;
 };
 
 // Taking spots (contents file §C1, worldgen-creatures.md §5.3, §5.4) from a zone's spot map, its

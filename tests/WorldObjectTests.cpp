@@ -125,7 +125,66 @@ int worldObjectTests() {
         scene.actors = {&npc.side};
         lookups.clear();
         nativeobjects::collectZones(scene.world, [&](auto key) { lookups.push_back(key); });
-        check(lookups.empty(), "nonplayers do not select zones");
+        check(lookups.empty() && scene.world.gatePlayers.empty(), "nonplayers do not select zones or join the gate actor snapshot");
+    }
+    {
+        Scene scene;
+        std::vector<nativeobjects::Cell> searched;
+        scene.world.gateThreshold = [](nativeobjects::Cell cell) -> std::optional<int32_t> {
+            return cell == nativeobjects::Cell{-1, 0} ? std::optional<int32_t>{3} : std::nullopt;
+        };
+        scene.world.guardCount = [&](nativeobjects::Cell zone, nativeobjects::Cell cell) {
+            check(cell == nativeobjects::Cell{-1, 0}, "all guard-count lookups use the gate's signed cell");
+            searched.push_back(zone);
+            return zone == nativeobjects::Cell{-17, -16} ? 2 : zone == nativeobjects::Cell{15, 16} ? 1 : 0;
+        };
+        auto gate = object(8, 1, 600);
+        put(gate.data(), nativeinteract::OBJECT_POSITION, -BLOCK);
+        nativeobjects::step(scene.world, gate, 20);
+        check(searched.size() == 1089 && searched.front() == nativeobjects::Cell{-17, -16} &&
+                  searched[1] == nativeobjects::Cell{-17, -15} && searched.back() == nativeobjects::Cell{15, 16},
+              "guard count includes the whole 33 by 33 rectangle in X/Y order");
+        check(gate[nativeinteract::OBJECT_STATE] == 0 && get<float>(gate.data(), nativeinteract::OBJECT_SWING) == 380 &&
+                  scene.order == std::vector<std::string>{"sound54", "changed"},
+              "threshold equality opens a type-8 gate after advancing the timer and publishes the change");
+        nativeobjects::step(scene.world, gate, 20);
+        check(searched.size() == 1089 && scene.changes == 1, "an open gate does not query counts or toggle back");
+    }
+    {
+        Scene scene;
+        Actor player(1, 0, 15 * BLOCK), npc(2, 1);
+        scene.actors = {&npc.side, &player.side};
+        nativeobjects::collectZones(scene.world, {});
+        scene.world.actor = [&](int64_t id) { return id == 1 ? player.record.data() : nullptr; };
+        scene.world.guardCount = [](auto, auto) { return 0; };
+        scene.world.castleSteps = [](nativeobjects::Cell cell) { return cell[0] < 0 ? 1 : 2; };
+        bool dungeonBlock = false;
+        scene.world.block = [&](int, int, int) {
+            nativeai::Block result{};
+            result[5] = dungeonBlock ? 0x20 : 0;
+            return result;
+        };
+        auto gate = object(10, 1, 900);
+        put(gate.data(), nativeinteract::OBJECT_POSITION, -BLOCK);
+        nativeobjects::step(scene.world, gate, 0);
+        check(scene.changes == 0, "missing threshold suppresses both gate paths");
+        scene.world.gateThreshold = [](auto) -> std::optional<int32_t> { return 1; };
+        dungeonBlock = true;
+        nativeobjects::step(scene.world, gate, 0);
+        check(scene.changes == 0, "proximity excludes exactly sixteen blocks");
+        put(player.record.data(), 0x10, 14 * BLOCK);
+        dungeonBlock = false;
+        nativeobjects::step(scene.world, gate, 0);
+        check(scene.changes == 0, "proximity requires the player's dungeon block flag");
+        dungeonBlock = true;
+        scene.world.client = true;
+        nativeobjects::step(scene.world, gate, 0);
+        check(scene.changes == 0, "client gate state is supplied by the host");
+        scene.world.client = false;
+        nativeobjects::step(scene.world, gate, 0);
+        check(scene.world.gatePlayers == std::vector<int64_t>{1} && gate[nativeinteract::OBJECT_STATE] == 0 &&
+                  scene.order == std::vector<std::string>{"sound57", "changed"},
+              "below-threshold type-10 gate opens for the admitted player with a higher descriptor");
     }
     {
         Scene scene;

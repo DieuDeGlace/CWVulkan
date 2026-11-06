@@ -1,11 +1,11 @@
 #pragma once
-// Per-object World prelude from docs/specs/steam-world-traps.md.
-// Other object-family callbacks and the separate area pass remain outside this module.
+// Per-object World prelude from steam-world-traps.md and steam-dungeon-live-gate-guard-counts.md.
 #include "NativeAI.h"
 #include "NativeUpkeep.h"
 #include "SoundRules.h"
 #include <array>
 #include <functional>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -24,6 +24,13 @@ struct World {
     std::function<void(nativeai::Creature &, const nativeupkeep::Hit &)> hit;
     std::function<void(const soundrules::RequestRecord &)> sound;
     std::function<void()> objectsChanged;
+    // Snapshot of the admitted players in registration order, resolved at use.
+    std::vector<int64_t> gatePlayers;
+    std::function<const uint8_t *(int64_t)> actor;
+    std::function<std::optional<int32_t>(Cell)> gateThreshold;
+    std::function<int32_t(Cell zone, Cell gate)> guardCount;
+    std::function<uint8_t(Cell)> castleSteps;
+    std::function<nativeai::Block(int, int, int)> block;
 };
 
 // Clear0x2002 on all current actors, collect kind0 players, then visit their7x7
@@ -33,7 +40,7 @@ void collectZones(World &world, const std::function<void(Cell)> &lookup);
 
 // Shared clock/personal-state portion, also used by clock-only storage callers.
 void advanceClock(nativeai::Object &object, float milliseconds, const std::set<Cell> *usedCells);
-// Complete one object's clock/personal-state and specified0x11/0x12/0x13 tail.
+// Complete one object's clock, personal state, gate or trap update.
 void step(World &world, nativeai::Object &object, float milliseconds);
 
 } // namespace nativeobjects

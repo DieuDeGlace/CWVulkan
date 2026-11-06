@@ -310,10 +310,8 @@ individual feature documents.
   both elevations. For example, native structure 46 raised two below-zero
   floors from −134 to −130 and from −68 to −63. This evidence covers the
   sampled helper outputs and final blocks. Direct floor-index and dome
-  observations, broader seed/theme coverage, and the kind-8 reward and guard
-  payloads remain open. The guard floor scan now caches only within its
-  current zone build. The next capture has candidate targets for gate
-  guards and all three qualifying floor codes. The independent guard-tree
+  observations and broader seed/theme coverage remain open. The guard
+  floor scan caches only within its current zone build. The independent guard-tree
   audit established which producers populate each tree and how live guard
   counts reach the native gate-state pass. The first live kind-8 batch
   matched 36 helper rows, all 36,864 stored columns, and both coordinate
@@ -322,9 +320,15 @@ individual feature documents.
   empty in both engines. A subsequent version 3 capture matched the
   floor-3 guard's dungeon key, including its ID, region, quantity, and
   other compared item fields. All four spawns and 4,096 stored columns in
-  that zone matched. Runtime gate-state behavior remains open. The
-  [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
-  specifies its count, retention, and state-update rules.
+  that zone matched. The live gate pass now rebuilds guard counts before
+  testing objects and uses the retained counts of unloaded zones. The
+  version 4 batch matched all 11 generated thresholds, 60 helper rows,
+  77,824 stored columns, and 25 spawn records across 19 zones. It covered
+  the kind-8 entrance and its halo, two fortress interiors, and three
+  castle passages. Runtime checks cover the count boundary, proximity,
+  host authority, state and sound. A live play-through of gate transitions
+  remains open. See the [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
+  and [threshold writers](specs/steam-dungeon-gate-threshold-writers.md).
   See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)
   and [guard-tree contract](specs/steam-dungeon-spawn-guard-trees.md).
   Mesh-prepass bounds,

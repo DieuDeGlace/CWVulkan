@@ -20,6 +20,7 @@ inline constexpr uint32_t SourceTimestamp = 0x5d93ab0d;
 inline constexpr std::string_view Completed = "CW-DUNGEON-COMPLETE 1\n";
 inline constexpr std::string_view CompletedWithSpawnCells = "CW-DUNGEON-COMPLETE 2\n";
 inline constexpr std::string_view CompletedWithSpawnKeys = "CW-DUNGEON-COMPLETE 3\n";
+inline constexpr std::string_view CompletedWithGateThresholds = "CW-DUNGEON-COMPLETE 4\n";
 
 inline bool plan(std::string_view text, size_t zoneBudget, Plan &output) {
     capturepolicy::GenerationCoordinates targets;

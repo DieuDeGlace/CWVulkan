@@ -21,6 +21,8 @@ struct CastleRoom {
     int type = 0, flags = 0, b2 = 0, side = 0, steps = 0;
 };
 
+int fortressEntranceGuardCount(Int2 place);
+
 class BuildingRules {
 public:
     explicit BuildingRules(CellObjects &cells) : cells(cells) {}

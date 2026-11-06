@@ -57,6 +57,25 @@ const DungeonGuardFloor &ZoneBuild::dungeonGuardFloor() {
     return floor;
 }
 
+int32_t ZoneBuild::fortressGateThreshold() {
+    if (fortressGateThreshold_)
+        return *fortressGateThreshold_;
+    BuildingRules rules(cells);
+    constexpr int cellsPerPlace = (1 << PLACE_SHIFT) / 16;
+    const int32_t x0 = place.cell.x * cellsPerPlace, y0 = place.cell.y * cellsPerPlace;
+    int32_t threshold = 0;
+    for (int32_t x = x0; x < x0 + 2 * cellsPerPlace; ++x)
+        for (int32_t y = y0; y < y0 + 2 * cellsPerPlace; ++y) {
+            const int type = rules.type(x, y);
+            if (type >= 45 && type <= 47)
+                for (int layer = 0; layer <= (type == 47 ? 1 : 0); ++layer)
+                    if (rules.fortressFloorCode(x, y, layer) == 13)
+                        ++threshold;
+        }
+    fortressGateThreshold_ = threshold;
+    return threshold;
+}
+
 int ZoneBuild::draw() {
     const int v = terrain.random.next();
     if (recordDraws_)

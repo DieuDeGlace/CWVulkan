@@ -415,7 +415,7 @@ void dungeonCreatures(CreatureBuilder &b, int32_t cx, int32_t cy) {
                     gate = n, found = true;
             if (!found)
                 return;
-            const int n = (random(ph + 0x11c135) & 1) ? 1 : (int)(random(ph + 0x3c77a) & 3) + 3;
+            const int n = fortressEntranceGuardCount(P);
             b.seed(random(ph) + 9003);
             for (int i = 0; i < n; i++) {
                 SpawnPoint p;

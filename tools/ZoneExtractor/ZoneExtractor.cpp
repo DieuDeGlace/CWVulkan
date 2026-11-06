@@ -8,6 +8,7 @@
 #include "CaptureWorldSections.h"
 #include "GenerationRequest.h"
 #include "DungeonCapture.h"
+#include "DungeonGateCapture.h"
 #include "DungeonSpawnCapture.h"
 #include "GenerationSnapshotFile.h"
 #include "NativeConversation.h"
@@ -6485,6 +6486,17 @@ static dungeoncapture::Context dungeonContext(cube::World *world, uint32_t vanil
 static dungeoncapture::Plan genDungeonPlan;
 static dungeoncapture::Context genDungeonContext;
 static size_t genDungeonBudget = 0;
+static bool writeDungeonGateThresholds(unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
+    const auto [x, y] = coordinate;
+    dungeoncapture::GateCapture capture{{x, y}, genDungeonContext.seed, genDungeonContext.day, {}};
+    if (!dungeoncapture::readGateThresholds(reinterpret_cast<uintptr_t>(zone), capture, readNative)) {
+        log("Oracle: invalid or oversized native gate thresholds at " + stem);
+        return false;
+    }
+    const auto encoded = dungeoncapture::encodeGateThresholds(capture);
+    return writeOracleFile(stem + ".cgt", {encoded.begin(), encoded.end()});
+}
+
 static bool writeDungeonSpawnCells(unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
     const auto [x, y] = coordinate;
     dungeoncapture::SpawnCapture capture{{x, y}, genDungeonContext.seed, genDungeonContext.day, {}, true, {}};
@@ -6521,6 +6533,7 @@ static bool writeDungeonZone(cube::World *world, unsigned char *zone, dungeoncap
         labels.decisions.push_back(decision);
     }
     return dungeonContext(world, genDungeonContext.vanillaCandidate) == genDungeonContext &&
+           writeDungeonGateThresholds(zone, coordinate, stem) &&
            (labels.decisions.front().kind != 8 || writeDungeonSpawnCells(zone, coordinate, stem)) &&
            writeOracleFile(stem + ".cwz", blocks) && writeOracleFile(stem + ".cwd", dungeoncapture::encode(labels));
 }
@@ -6654,7 +6667,7 @@ static void generate(cube::World *w) {
             }
             if (genQueue.empty()) {
                 if (!capturepolicy::publishGenerationSnapshot(genDirectory + "\\complete.txt",
-                                                               std::string(dungeoncapture::CompletedWithSpawnKeys))) {
+                                                               std::string(dungeoncapture::CompletedWithGateThresholds))) {
                     pause("dungeon completion marker could not be published");
                     return;
                 }

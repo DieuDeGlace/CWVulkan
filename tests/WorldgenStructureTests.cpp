@@ -13,6 +13,7 @@
 #include "Extracted.h"
 #include "WorldgenObjectOracle.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
+#include "../tools/ZoneExtractor/DungeonGateCapture.h"
 #include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/BuildingBuilder.h"
@@ -844,6 +845,11 @@ void dungeonGuardFloorChecks() {
     WS_CHECK(second.dungeonGuardFloor().code == 4);
     WS_CHECK((second.dungeonGuardFloor().cell == wg::Int2{-714, -1065}));
     WS_CHECK(first.dungeonGuardFloor().code == 2);
+
+    // The captured seed-123 entrance has one spawn guarding its cell.
+    const auto entrance = wg::generateZone(world, -143, -180);
+    const auto threshold = entrance.gateThresholds.find({-569, -718});
+    WS_CHECK(threshold != entrance.gateThresholds.end() && threshold->second == 1);
 }
 
 int worldgenStructureTests() {
@@ -1047,8 +1053,9 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     Plan expected;
     capturepolicy::GenerationCoordinates targets;
     const auto request = read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes);
-    const auto marker = read(directory / "complete.txt", CompletedWithSpawnKeys.size());
-    const bool withSpawnKeys = marker == CompletedWithSpawnKeys;
+    const auto marker = read(directory / "complete.txt", CompletedWithGateThresholds.size());
+    const bool withGateThresholds = marker == CompletedWithGateThresholds;
+    const bool withSpawnKeys = withGateThresholds || marker == CompletedWithSpawnKeys;
     const bool withSpawnCells = withSpawnKeys || marker == CompletedWithSpawnCells;
     if ((!withSpawnCells && marker != Completed) ||
         !plan(request, capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected) ||
@@ -1067,6 +1074,7 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     std::map<Point, Decision> nativeRows;
     size_t decisionDifferences = 0, columnDifferences = 0;
     size_t guardZones = 0, spawnRecords = 0, spawnDifferences = 0;
+    size_t gateThresholds = 0, gateDifferences = 0;
     const bool showAllDifferences = std::getenv("CW_DUNGEON_DIFF") != nullptr;
     for (const auto &[coordinate, cells] : expected) {
         const auto [zx, zy] = coordinate;
@@ -1119,6 +1127,31 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
             return 1;
         }
         const auto generated = wg::generateZoneWithCreatures(world, tables, batch->day, zx, zy);
+        if (withGateThresholds) {
+            GateCapture capture;
+            if (!decodeGateThresholds(read(directory / (stem + ".cgt"), MaxGateCaptureBytes), capture) ||
+                capture.zone != captureabi::SpawnCell{zx, zy} || capture.seed != batch->seed || capture.day != batch->day) {
+                std::printf("%s: missing, invalid or mismatched gate-threshold capture\n", stem.c_str());
+                return 1;
+            }
+            gateThresholds += capture.thresholds.size();
+            for (const auto &[cell, native] : capture.thresholds) {
+                const auto engine = generated.gateThresholds.find(cell);
+                if (engine == generated.gateThresholds.end()) {
+                    std::printf("%s: missing threshold at %d %d (Steam %d)\n", stem.c_str(), cell[0], cell[1], native);
+                    ++gateDifferences;
+                } else if (engine->second != native) {
+                    std::printf("%s: threshold at %d %d differs (Steam %d, engine %d)\n",
+                                stem.c_str(), cell[0], cell[1], native, engine->second);
+                    ++gateDifferences;
+                }
+            }
+            for (const auto &[cell, engine] : generated.gateThresholds)
+                if (!capture.thresholds.count(cell)) {
+                    std::printf("%s: extra threshold at %d %d (engine %d)\n", stem.c_str(), cell[0], cell[1], engine);
+                    ++gateDifferences;
+                }
+        }
         if (withSpawnCells && labels.decisions.front().kind == 8) {
             SpawnCapture capture;
             if (!decodeSpawnCells(read(directory / (stem + ".cwg"), MaxSpawnCaptureBytes), capture) ||
@@ -1165,9 +1198,11 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     if (withSpawnCells)
         std::printf("Dungeon spawn cells: %zu kind-8 zones, %zu native spawns, %zu differing spawn records\n",
                     guardZones, spawnRecords, spawnDifferences);
+    if (withGateThresholds)
+        std::printf("Dungeon gate thresholds: %zu native entries, %zu differences\n", gateThresholds, gateDifferences);
     std::printf("Dungeon oracle: %zu zones, %zu differing helper rows, %zu differing stored columns\n",
                 expected.size(), decisionDifferences, columnDifferences);
-    return decisionDifferences || columnDifferences || spawnDifferences || !batch->vanillaCandidate ? 1 : 0;
+    return decisionDifferences || columnDifferences || spawnDifferences || gateDifferences || !batch->vanillaCandidate ? 1 : 0;
 }
 
 int worldgenDungeonFloorTargets(const fs::path &directory, int seed) {

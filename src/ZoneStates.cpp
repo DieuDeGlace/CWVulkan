@@ -110,6 +110,23 @@ const nativesaves::ZoneLists *ZoneStates::find(Cell zone) const {
     return it == zones.end() ? nullptr : &it->second;
 }
 
+int32_t ZoneStates::guardCount(Cell zone, Cell gate) const {
+    const auto countAt = [&](const std::map<Cell, int32_t> &counts) {
+        const auto count = counts.find(gate);
+        return count == counts.end() ? 0 : count->second;
+    };
+    // An empty live map takes precedence. Terrain cached for rendering can
+    // outlive the zone lists and does not replace their retained counts.
+    if (const auto *live = find(zone))
+        return countAt(live->placeCounters);
+    if (world) {
+        const auto retained = world->zones.find(zone);
+        if (retained != world->zones.end())
+            return countAt(retained->second.placeCounters);
+    }
+    return 0;
+}
+
 std::vector<Cell> ZoneStates::zonesInMemory() const {
     std::vector<Cell> out;
     for (const auto &[zone, lists] : zones)

@@ -561,6 +561,11 @@ int BuildingRules::fortressCellCode(int32_t cx, int32_t cy) {
     return mark != 0 ? 2 : gapped(2);
 }
 
+int fortressEntranceGuardCount(Int2 place) {
+    const uint32_t key = cellKey(place.x, place.y);
+    return (random(key + 0x11c135) & 1) ? 1 : int(random(key + 0x3c77a) & 3) + 3;
+}
+
 int BuildingRules::fortressStyle(int32_t cx, int32_t cy) {
     switch (random(fortressOf(cx, cy).g + 0x55a05c) % 3) {
     case 1: return 4;

@@ -61,9 +61,45 @@ float maximumHealth(const World &world, const nativeai::Creature &creature) {
     const auto buffs = nativebuffs::forStats(creature);
     return nativerules::maxHealth(creature.record, buffs.data(), buffs.size());
 }
+
+bool gateShouldOpen(const World &world, const nativeai::Object &object) {
+    if (!object[nativeinteract::OBJECT_STATE] || !world.gateThreshold || !world.guardCount)
+        return false;
+    const Point gate = position(object.data(), OBJECT_POSITION);
+    const Cell cell{gamemath::floorFixedCell(gate[0]), gamemath::floorFixedCell(gate[1])};
+    const auto threshold = world.gateThreshold(cell);
+    if (!threshold)
+        return false;
+    constexpr int64_t reach = 1024 * 65536;
+    const auto low = [&](size_t axis) { return gamemath::floorFixedZone(gamemath::subtractFixed(gate[axis], reach)); };
+    const auto high = [&](size_t axis) { return gamemath::floorFixedZone(gamemath::addFixed(gate[axis], reach)); };
+    int32_t count = 0;
+    for (int32_t x = low(0), lastX = high(0); x <= lastX; ++x)
+        for (int32_t y = low(1), lastY = high(1); y <= lastY; ++y)
+            count = gamemath::add32(count, world.guardCount({x, y}, cell));
+    if (count >= *threshold)
+        return true;
+    if (!world.castleSteps || !world.actor || !world.block)
+        return false;
+    const uint8_t gateSteps = world.castleSteps(cell);
+    for (const int64_t id : world.gatePlayers) {
+        const uint8_t *actor = world.actor(id);
+        if (!actor)
+            continue;
+        const Point player = position(actor, POSITION);
+        if (!(gamemath::fixedDistanceSquared(gate.data(), player.data()) < 256.0f))
+            continue;
+        const int32_t x = gamemath::floorFixedBlock(player[0]), y = gamemath::floorFixedBlock(player[1]);
+        if ((world.block(x, y, gamemath::floorFixedBlock(player[2]))[5] & 0x20) &&
+            world.castleSteps({gamemath::floorFixedCell(player[0]), gamemath::floorFixedCell(player[1])}) > gateSteps)
+            return true;
+    }
+    return false;
+}
 } // namespace
 
 void collectZones(World &world, const std::function<void(Cell)> &lookup) {
+    world.gatePlayers.clear();
     std::vector<const uint8_t *> players;
     if (world.creatures)
         for (nativeai::Creature *creature : *world.creatures) {
@@ -71,8 +107,10 @@ void collectZones(World &world, const std::function<void(Cell)> &lookup) {
                 continue;
             auto *record = creature->record;
             write<uint16_t>(record, STATE_FLAGS, read<uint16_t>(record, STATE_FLAGS) & uint16_t(0xdffd));
-            if (record[KIND] == 0)
+            if (record[KIND] == 0) {
                 players.push_back(record);
+                world.gatePlayers.push_back(read<int64_t>(record, ID));
+            }
         }
     if (!lookup)
         return;
@@ -103,7 +141,21 @@ void advanceClock(nativeai::Object &object, float milliseconds, const std::set<C
 void step(World &world, nativeai::Object &object, float milliseconds) {
     advanceClock(object, milliseconds, world.usedCells);
     const int32_t type = read<int32_t>(object.data(), OBJECT_TYPE);
-    if (world.client || type < 0x11 || type > 0x13)
+    if (world.client)
+        return;
+    if (type == 8 || type == 10) {
+        if (gateShouldOpen(world, object)) {
+            std::vector<nativeinteract::Sound> sounds;
+            if (nativeinteract::openOrShut(object, 0, sounds)) {
+                for (const auto &sound : sounds)
+                    emit(world, sound);
+                if (world.objectsChanged)
+                    world.objectsChanged();
+            }
+        }
+        return;
+    }
+    if (type < 0x11 || type > 0x13)
         return;
     if (read<float>(object.data(), nativeinteract::OBJECT_SWING) > 2000.0f) {
         const uint8_t oldState = object[nativeinteract::OBJECT_STATE];

@@ -54,6 +54,7 @@ class ZoneStates {
     bool loaded(Cell zone) const { return zones.count(zone) != 0; }
     nativesaves::ZoneLists *find(Cell zone);
     const nativesaves::ZoneLists *find(Cell zone) const;
+    int32_t guardCount(Cell zone, Cell gate) const;
     // The zones in memory.
     std::vector<Cell> zonesInMemory() const;
     // Early world-step pass (worldgen-parity-gaps.md §4.4). Only existing zones

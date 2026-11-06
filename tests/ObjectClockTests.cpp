@@ -16,6 +16,20 @@ int objectClockTests() {
     };
     auto near = [](float a, float b) { return std::abs(a - b) < 0.00001f; };
     auto same = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 0.00001f; };
+    {
+        nativesaves::WorldState retained;
+        const zonestates::Cell owner{-3, 1}, gate{-10, 6};
+        retained.zones[owner].placeCounters[gate] = 4;
+        zonestates::ZoneStates counts(&retained);
+        check(counts.guardCount(owner, gate) == 4, "an unloaded zone supplies its retained guard count");
+        auto &live = counts.load(owner, {}, {});
+        check(counts.guardCount(owner, gate) == 4, "zone load restores its guard count");
+        live.placeCounters.clear();
+        check(counts.guardCount(owner, gate) == 0, "an empty live guard map supersedes the retained map");
+        counts.unload(owner);
+        check(counts.guardCount(owner, gate) == 0 && retained.zones.at(owner).placeCounters.empty(),
+              "unloading replaces a retained guard map with an empty live one");
+    }
     worldgen::ZoneObject source;
     source.type = 3;
     source.turn = 191;

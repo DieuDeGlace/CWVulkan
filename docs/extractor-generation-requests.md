@@ -102,14 +102,16 @@ directory beneath the session's reference root. It retains the original target
 list, the resolved zone request and the capture day. Each zone contains a
 freshly generated `.cwz` file and a `.cwd` label file. The exporter copies
 stored blocks before querying the helpers and skips the daily refresh in this
-mode. In kind-8 zones, batch versions 2 and 3 also write a `.cwg` file with
+mode. In kind-8 zones, batch versions 2 and later also write a `.cwg` file with
 the ordered guard and activation coordinates for each spawn ID, including
 empty trees. The extractor reads these records from the retained fresh
 zone while generation is quiescent and exports only scalar keys. A
-malformed or oversized tree fails the batch. Version 3 also reads the
+malformed or oversized tree fails the batch. Version 3 and later also read the
 bounded spawn inventory and records each dungeon key stack's quantity,
-ID, region, modifier, realm, rarity and material. `complete.txt` appears
-only after the whole batch succeeds.
+ID, region, modifier, realm, rarity and material. Version 4 adds a
+`.cgt` file in every zone for its gate threshold map. The file preserves
+explicit zero entries and halo keys owned by that generating zone.
+`complete.txt` appears only after the whole batch succeeds.
 
 The label file records the loaded PE timestamp and image size, public seed
 bits, derived seed, day, sand parameters, the mod-file classification at
@@ -129,10 +131,11 @@ At a corner it also reports the alternate edge's smoothed top. The summary
 does not record internal room flags, floor indices or dome decisions. Set
 `CW_DUNGEON_DIFF=1` to print every differing stored block
 in columns with the same base. It reports modified or unclassified captures as diagnostic results
-with a failing exit code. Versions 2 and 3 require matching kind-8 spawn
-IDs and both coordinate sets. Version 3 also compares dungeon key stacks.
-Version 1 captures still compare their original fields. No captured files
-belong in the source or release.
+with a failing exit code. Versions 2 and later require matching kind-8 spawn
+IDs and both coordinate sets. Version 3 adds dungeon key stacks. Version 4
+also compares every gate threshold and reports missing, extra, and changed
+entries. Earlier captures still compare their original fields. No captured
+files belong in the source or release.
 
 `EngineTests generationrequest` checks parser bounds, sticky context changes,
 full-width snapshot values, exclusive input ownership/consumption and actual

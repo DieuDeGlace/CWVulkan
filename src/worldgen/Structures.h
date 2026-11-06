@@ -49,6 +49,7 @@ struct ZoneContents {
     std::vector<Model> emitters;       // +0xa8: the models that sound (C2.1)
     std::vector<GroundItem> items;     // +0x30
     std::map<int, Item> rewards;       // +0x450: a reward chest's item by its index
+    std::map<std::array<int32_t, 2>, int32_t> gateThresholds; // +0x4c8
     SpotMap spots;                     // +0x100
     SpotMap working;                   // +0x110, as the generator leaves it
     ZoneLists lists;                   // +0x78, +0x48, +0xc0, +0x4b8, +0xe8

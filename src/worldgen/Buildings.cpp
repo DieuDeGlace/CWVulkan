@@ -156,6 +156,8 @@ void buildBuilding(ZoneBuild &zone, BuildingRules &rules, int i, int j, int32_t 
 }
 
 void BuildingBuilder::build() {
+    if (t == 46 && zone.place.place.kind == 8)
+        zone.gateThresholds[{cx, cy}] = fortressEntranceGuardCount(zone.place.cell);
     setUp();
     if (F > 0)
         foundations();
@@ -730,6 +732,20 @@ void BuildingBuilder::afterColumns(Floor &fl) {
     }
     if (kind <= 0)
         return;
+    if (kind == 8 || kind == 10) {
+        const std::array<int32_t, 2> cell{cx, cy};
+        if (fl.level) {
+            const int32_t x0 = floorDiv(cx, 3) * 8, y0 = floorDiv(cy, 3) * 8;
+            for (int32_t x = x0; x < x0 + 8; ++x)
+                for (int32_t y = y0; y < y0 + 8; ++y) {
+                    const int descriptor = rules.castleCell(x, y).kind;
+                    if (descriptor == 2 || descriptor == 4 || descriptor == 6)
+                        ++zone.gateThresholds[cell];
+                }
+        } else if (zone.place.place.kind == 8) {
+            zone.gateThresholds[cell] += zone.fortressGateThreshold();
+        }
+    }
     int32_t down = 0;
     while (down < 30 && isOpen(zone.read(16 * cx + 8, 16 * cy + 8, fl.z0 - 1 - down)))
         down++;
