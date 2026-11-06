@@ -235,7 +235,8 @@ int makeTestSave(const char *folder, const char *recording, const glm::vec2 *nea
 int worldgenTerrainTests(); // tests/WorldgenTerrainTests.cpp: the new generator's terrain, fast subset
 int worldgenTerrainCommand(int maxZones);
 int worldgenDungeonCoverage(const std::filesystem::path &, int seed);
-int worldgenDungeonTargets(int seed);
+int worldgenDungeonTargets(int seed, int requestedStructure);
+int worldgenDungeonFloorTargets(const std::filesystem::path &, int seed);
 int worldgenDungeonOracle(const std::filesystem::path &capture, const std::filesystem::path &tables);
 int worldgenStructureTests(); // tests/WorldgenStructureTests.cpp: the new generator's structures, fast subset
 int worldgenStructureCommand(int maxZones);
@@ -10425,14 +10426,26 @@ int main(int argc, char **argv) {
     }
     if (argc >= 2 && std::string(argv[1]) == "castles") {
         const bool targets = argc == 3 && std::string(argv[2]) == "--targets";
-        if (argc != 2 && !targets)
+        const bool floors = argc == 3 && std::string(argv[2]) == "--floor-targets";
+        int structure = 0;
+        if (argc == 4 && std::string_view(argv[2]) == "--structure") {
+            const std::string_view id = argv[3];
+            if (id.size() != 2 || id[0] != '4' || id[1] < '0' || id[1] > '7')
+                return std::puts("Expected a dungeon structure ID from 40 to 47"), 1;
+            structure = 40 + id[1] - '0';
+        }
+        if (argc != 2 && !targets && !floors && !structure)
             return 1;
         Assets assets;
         if (!assets.locate(""))
             return 1;
         const auto directory = zonesDir(assets.gameDir());
         const int seed = seedOf(directory);
-        return targets ? worldgenDungeonTargets(seed) : worldgenDungeonCoverage(directory, seed);
+        if (floors)
+            return worldgenDungeonFloorTargets(directory, seed);
+        if (targets || structure)
+            return worldgenDungeonTargets(seed, structure);
+        return worldgenDungeonCoverage(directory, seed);
     }
     if (argc == 4 && std::string(argv[1]) == "gamecol") { // an extracted column, block by block
         int32_t x = std::atoi(argv[2]), y = std::atoi(argv[3]);

@@ -301,7 +301,18 @@ individual feature documents.
   checks are distinct from partial daily-refresh traces. A later live capture
   confirmed structure 42/detail 11 and 44/detail 12, plus the 18 nearby helper
   rows. After correcting the detail-12 cone noise, all 12,288 stored columns
-  in those three zones match. See the [cone contract](specs/steam-dungeon-hanging-cone.md). Mesh-prepass bounds,
+  in those three zones match. See the [cone contract](specs/steam-dungeon-hanging-cone.md).
+  Two subsequent isolated Steam captures matched all 162 helper rows and
+  229,376 stored columns across 56 zones. With the earlier detail captures,
+  this covers named cases for all eight big-structure IDs 40–47. The newer
+  batches confirm floor outputs at all four sides and four corners, positive
+  and negative elevations with room increments, and style-1 interiors at
+  both elevations. For example, native structure 46 raised two below-zero
+  floors from −134 to −130 and from −68 to −63. This evidence covers the
+  sampled helper outputs and final blocks. Direct floor-index and dome
+  observations, broader seed/theme coverage, and the kind-8 reward and guard
+  payloads remain open. See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures).
+  Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.
   Native directional palette targets/RGBA easing have numeric checks, including
   regional/structure/effect13 blends and capped wall timing. Steam sky/fog/sun now

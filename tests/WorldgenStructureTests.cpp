@@ -909,6 +909,50 @@ int worldgenDungeonCoverage(const fs::path &directory, int seed) {
     return zoneFiles == 0;
 }
 
+namespace {
+using dungeoncapture::Point;
+struct FloorEdges {
+    std::array<Point, 2> neighbors{};
+    std::array<const char *, 2> names{};
+    size_t count = 0;
+};
+FloorEdges floorEdges(Point cell) {
+    const auto [x, y] = cell;
+    const auto lx = wg::posMod(x, 8), ly = wg::posMod(y, 8);
+    FloorEdges edges;
+    const auto add = [&](Point neighbor, const char *name) {
+        edges.neighbors[edges.count] = neighbor;
+        edges.names[edges.count++] = name;
+    };
+    if (lx == 0) add({x - 1, y}, "west");
+    if (ly == 0) add({x, y - 1}, "south");
+    if (lx == 7) add({x + 1, y}, "east");
+    if (ly == 7) add({x, y + 1}, "north");
+    return edges;
+}
+
+int32_t smoothFloor(int32_t top, int32_t other) {
+    return wg::wrapAdd(top, std::max(top, other)) / 2;
+}
+
+void reportDungeonFloors(const capturepolicy::GenerationCoordinates &targets,
+                         const std::map<Point, dungeoncapture::Decision> &rows) {
+    std::puts("Target floors (edge and smoothing derived from queried tops):");
+    for (const auto &target : targets) {
+        const auto &current = rows.at(target);
+        const auto edges = floorEdges(target);
+        const auto smoothed = edges.count ? smoothFloor(current.top, rows.at(edges.neighbors[0]).top) : current.top;
+        std::printf("  cell %d %d: structure %d, kind/detail/style %u/%u/%u, %s, top %d, smoothed %d, floor %d, delta %lld",
+                    target.first, target.second, current.structure, current.castle & 255u, (current.castle >> 8) & 255u,
+                    (current.castle >> 16) & 255u, edges.count ? edges.names[0] : "interior", current.top, smoothed,
+                    current.floor, int64_t(current.floor) - smoothed);
+        if (edges.count == 2)
+            std::printf(", alternate %s smoothed %d", edges.names[1], smoothFloor(current.top, rows.at(edges.neighbors[1]).top));
+        std::putchar('\n');
+    }
+}
+} // namespace
+
 int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirectory) {
     using namespace dungeoncapture;
     const auto read = [](const fs::path &file, size_t limit) {
@@ -922,9 +966,11 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
         return bytes;
     };
     Plan expected;
+    capturepolicy::GenerationCoordinates targets;
+    const auto request = read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes);
     if (read(directory / "complete.txt", Completed.size()) != Completed ||
-        !plan(read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes),
-              capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected)) {
+        !plan(request, capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected) ||
+        !capturepolicy::parseGenerationRequest(request, MaxTargets, targets)) {
         std::puts("Dungeon oracle requires a completed capture with a valid target list");
         return 1;
     }
@@ -936,6 +982,7 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     }
 
     std::optional<Context> batch;
+    std::map<Point, Decision> nativeRows;
     size_t decisionDifferences = 0, columnDifferences = 0;
     const bool showAllDifferences = std::getenv("CW_DUNGEON_DIFF") != nullptr;
     for (const auto &[coordinate, cells] : expected) {
@@ -964,6 +1011,7 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
                 std::printf("%s: unexpected queried cell %d %d\n", stem.c_str(), cx, cy);
                 return 1;
             }
+            nativeRows.emplace(native.cell, native);
             const Point place{wg::floorDiv(cx, 6), wg::floorDiv(cy, 6)};
             const auto [px, py] = place;
             const auto context = wg::cellPlace(px, py);
@@ -1018,24 +1066,123 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
         std::printf("%s: %zu helper rows, %zu of %zu stored columns match\n",
                     stem.c_str(), labels.decisions.size(), captured.size() - changed, captured.size());
     }
+    reportDungeonFloors(targets, nativeRows);
     std::printf("Dungeon oracle: %zu zones, %zu differing helper rows, %zu differing stored columns\n",
                 expected.size(), decisionDifferences, columnDifferences);
     return decisionDifferences || columnDifferences || !batch->vanillaCandidate ? 1 : 0;
 }
 
-// Search the engine's decisions for two future capture targets. Only the
-// original game can confirm the predicted labels and supply their stored blocks.
-int worldgenDungeonTargets(int seed) {
+int worldgenDungeonFloorTargets(const fs::path &directory, int seed) {
+    const auto world = wg::worldValues(seed);
+    wg::CellObjects cells(world);
+    wg::BuildingRules rules(cells);
+    struct Candidate {
+        Point cell;
+        int score = 0;
+    };
+    std::map<std::string, Candidate> picks;
+    const auto consider = [&](const std::string &label, Point cell, int score) {
+        auto it = picks.find(label);
+        if (it == picks.end() || score > it->second.score || (score == it->second.score && cell < it->second.cell))
+            picks[label] = {cell, score};
+    };
+    const auto classify = [&](int cx, int cy) {
+        const Point point{cx, cy};
+        const auto castle = rules.castleCell(cx, cy);
+        const auto edges = floorEdges(point);
+        const int32_t top = rules.castleBlockTop(cx, cy);
+        const auto neighborTop = [&](size_t i) {
+            const auto [x, y] = edges.neighbors[i];
+            return rules.castleBlockTop(x, y);
+        };
+        const auto smoothed = edges.count ? smoothFloor(top, neighborTop(0)) : top;
+        const auto floor = rules.castleFloor(cx, cy);
+        const int proximity = castle.kind ? 20 : 0;
+        if (edges.count == 1 && smoothed != top)
+            consider(std::string("edge-") + edges.names[0], point, proximity + std::min(20, std::abs(smoothed - top)));
+        if (edges.count == 2) {
+            const int separation = std::abs(smoothed - smoothFloor(top, neighborTop(1)));
+            if (separation > 5) // Alternate branch plus any room increment cannot explain this result.
+                consider(std::string("corner-") + edges.names[0] + "-" + edges.names[1], point, proximity + std::min(20, separation));
+        }
+        if (!edges.count && castle.kind) {
+            if (floor > top)
+                consider(floor < 0 ? "increment-negative-floor" : "increment-nonnegative-floor", point, floor - top);
+            if (floor == top)
+                consider("interior-zero-delta", point, 1);
+            if (castle.style == 1)
+                consider("style-one-interior", point, castle.kind >= 9 ? 2 : 1);
+        }
+    };
+
+    std::set<Point> zoneCoordinates;
+    std::error_code error;
+    if (!fs::is_directory(directory, error))
+        return std::printf("No zone directory for floor targets\n"), 1;
+    for (const auto &entry : fs::directory_iterator(directory)) {
+        int zx, zy;
+        if (entry.is_regular_file() && ExtractedWorld::zoneCoordinates(entry.path(), zx, zy) &&
+            zx >= -100000 && zx <= 100000 && zy >= -100000 && zy <= 100000)
+            zoneCoordinates.emplace(zx, zy);
+    }
+    for (const auto &[zx, zy] : zoneCoordinates) {
+        const int px = wg::floorDiv(zx, wg::PLACE_SHIFT - wg::ZONE_SHIFT);
+        const int py = wg::floorDiv(zy, wg::PLACE_SHIFT - wg::ZONE_SHIFT);
+        const auto place = wg::cellPlace(px, py);
+        if (!wg::bigStructure(px, py, place.kind, place.big))
+            continue;
+        bool active = false;
+        for (int y = 0; y < 4 && !active; ++y)
+            for (int x = 0; x < 4 && !active; ++x)
+                active = rules.castleCell(zx * 4 + x, zy * 4 + y).kind != 0;
+        if (!active)
+            continue;
+        for (int y = 0; y < 4; ++y)
+            for (int x = 0; x < 4; ++x)
+                classify(zx * 4 + x, zy * 4 + y);
+    }
+
+    std::printf("Engine-predicted floor targets for seed %d, limited to %zu captured zone coordinates\n", seed, zoneCoordinates.size());
+    std::set<Point> selected;
+    std::string request;
+    dungeoncapture::Plan plan;
+    for (const auto &[label, candidate] : picks) {
+        const auto [x, y] = candidate.cell;
+        if (selected.count(candidate.cell)) {
+            std::printf("  %s: cell %d %d\n", label.c_str(), x, y);
+            continue;
+        }
+        auto next = request + std::to_string(x) + ' ' + std::to_string(y) + '\n';
+        const bool fits = dungeoncapture::plan(next, capturepolicy::RetainedGenerationBudget::MaximumAttempts, plan);
+        std::printf("  %s: cell %d %d%s\n", label.c_str(), x, y, fits ? "" : " (deferred to another process)");
+        if (fits) {
+            selected.insert(candidate.cell);
+            request = std::move(next);
+        }
+    }
+    if (selected.empty()) {
+        std::puts("No floor targets found in this coordinate set");
+        return 1;
+    }
+    std::printf("Capture request (%zu cells, %zu zones):\n%s", selected.size(), plan.size(), request.c_str());
+    return 0;
+}
+
+// Search for the two ceiling detail targets or a room in one requested structure.
+// Only the original game can confirm the labels and supply their stored blocks.
+int worldgenDungeonTargets(int seed, int requestedStructure) {
     const auto world = wg::worldValues(seed);
     wg::CellObjects cells(world);
     wg::BuildingRules rules(cells);
     constexpr int radius = 64;
     constexpr int cellsPerPlace = (1 << wg::PLACE_SHIFT) / 16;
-    auto findDetail = [&](int px, int py, int detail) -> std::optional<wg::Int2> {
+    constexpr int cellToZoneShift = wg::ZONE_SHIFT - 4;
+    const auto findRoom = [&](int px, int py, int detail) -> std::optional<wg::Int2> {
         const int startX = px * cellsPerPlace, startY = py * cellsPerPlace;
         for (int cy = startY; cy < startY + 2 * cellsPerPlace; ++cy)
             for (int cx = startX; cx < startX + 2 * cellsPerPlace; ++cx)
-                if (const auto castle = rules.castleCell(cx, cy); castle.kind && castle.detail == detail)
+                if (const auto castle = rules.castleCell(cx, cy);
+                    castle.kind && (detail < 0 ? castle.kind >= 9 : castle.detail == detail))
                     return wg::Int2{cx, cy};
         return std::nullopt;
     };
@@ -1049,15 +1196,18 @@ int worldgenDungeonTargets(int seed) {
                     continue;
                 const auto place = wg::cellPlace(px, py);
                 const int structure = wg::bigStructure(px, py, place.kind, place.big);
-                if ((structure != 42 || found11) && (structure != 44 || found12))
+                if (requestedStructure ? structure != requestedStructure
+                                       : (structure != 42 || found11) && (structure != 44 || found12))
                     continue;
-                const int detail = structure == 42 ? 11 : 12;
-                if (const auto cell = findDetail(px, py, detail)) {
+                const int detail = requestedStructure ? -1 : (structure == 42 ? 11 : 12);
+                if (const auto cell = findRoom(px, py, detail)) {
                     const auto castle = rules.castleCell(cell->x, cell->y);
-                    std::printf("  structure %d detail %d style %d: cell %d %d, zone %d %d, top %d, floor %d\n",
-                                structure, detail, castle.style, cell->x, cell->y,
-                                wg::floorDiv(cell->x, 2), wg::floorDiv(cell->y, 2),
+                    std::printf("  structure %d kind %d detail %d style %d: cell %d %d, zone %d %d, top %d, floor %d\n",
+                                structure, castle.kind, castle.detail, castle.style, cell->x, cell->y,
+                                wg::floorDiv(cell->x, cellToZoneShift), wg::floorDiv(cell->y, cellToZoneShift),
                                 rules.castleBlockTop(cell->x, cell->y), rules.castleFloor(cell->x, cell->y));
+                    if (requestedStructure)
+                        return 0;
                     if (structure == 42)
                         found11 = true;
                     else
@@ -1066,6 +1216,8 @@ int worldgenDungeonTargets(int seed) {
             }
         }
     }
+    if (requestedStructure)
+        return std::printf("  no room predicted for structure %d in this search window\n", requestedStructure), 1;
     if (!found11 || !found12)
         std::printf("  missing predicted labels: 42/detail11 %s, 44/detail12 %s\n", found11 ? "no" : "yes", found12 ? "no" : "yes");
     return found11 && found12 ? 0 : 1;

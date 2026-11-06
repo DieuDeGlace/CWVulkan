@@ -63,6 +63,14 @@ original game or writing a request. See the [dungeon
 oracle](specs/steam-dungeon-oracle.md) for the native decision and block evidence
 needed to confirm the labels.
 
+Use `EngineTests castles --structure <40..47>` to find a candidate interior
+for one dungeon structure. `EngineTests castles --floor-targets` uses the
+zone coordinates in the selected capture directory to find candidate edge,
+corner and room-increment cases. It prints a request that fits the extractor's
+per-process zone limit and labels additional picks for a later process. These
+commands only predict targets. Compare a fresh Steam batch before treating
+the floor or the structure as verified.
+
 ## Labeled dungeon captures
 
 `CubeVulkanDataCheck.exe --setup-capture --dungeon-targets <targets-file> --game "<Cube World folder>"`
@@ -101,7 +109,11 @@ comes from the mod-file inventory and does not attest active modules.
 Run `EngineTests wgdungeon <batch-directory> <owner-Extract/oracle-directory>`.
 It requires a complete batch and consistent world context, then compares the
 helper labels and exact stored block sequences, including nonempty column bases
-and lengths. Set `CW_DUNGEON_DIFF=1` to print every differing stored block
+and lengths. The target-floor summary derives edge order and smoothing from
+the captured top values, then reports the difference from the queried floor.
+At a corner it also reports the alternate edge's smoothed top. The summary
+does not record internal room flags, floor indices or dome decisions. Set
+`CW_DUNGEON_DIFF=1` to print every differing stored block
 in columns with the same base. It reports modified or unclassified captures as diagnostic results
 with a failing exit code. No captured files belong in the source or release.
 
