@@ -59,3 +59,21 @@ None of these producer paths has an established insertion into Spawn `+0x928`. T
 In initial Zone generation `0x2ff6f0`, F is a 32-bit stack value at the native frame's RBP plus `0x200`. It starts at zero at `0x2ff905`. The kind test at `0x2ff90b` gates the selection scan to kind 8. The scan traverses its rectangular range with ascending X outside and ascending Y inside. It tests the result of `0x69c60` through `0x25eb30`, then reads the floor code through `0x2a1d10` with fourth argument zero. Only codes 2, 3 and 4 qualify. Each qualifying cell replaces both F at `0x2ff9f2` and D at `0x2ffa0b`. D contains signed 32-bit X at RBP plus `0x1b40` followed by signed 32-bit Y at RBP plus `0x1b44`. They are world cell indices in 16-block units. The last qualifying cell wins.
 
 RVA `0x2ffa25` is a passive observation point for those values on the producing invocation. It is the common continuation after the scan finishes or its range is empty, before the kind-8 guard call at `0x318326`. The same point is reached when the scan is skipped for other kinds. The 32-bit kind at RBP plus `0x1568` distinguishes the kind-8 path there. At this point F can always be read on the kind-8 path. D is valid for F equal to 2, 3 or 4. If F is zero, the scan performed no qualifying write to D. Bytes in that stack slot have no established coordinate meaning in that case. The stack offsets are specific to this native frame and have no lifetime beyond it.
+
+## Outer Zone spawn map
+
+The outer map header is at `Zone+0x460`. Its first eight bytes hold the head pointer and the next eight bytes at `Zone+0x468` hold the unsigned element count. The constructor at `0x2f9605–0x2f9620` initializes both words to zero, allocates the head through `0x2fa4b0`, and installs it in the header. Insertion through `0x7690` increments the count when linking a new key. The count is for outer map nodes.
+
+| Outer node offset | Width | Meaning |
+| --- | --- | --- |
+| `+0x00` | 8 bytes | Left child on an ordinary node. Minimum node on the head. |
+| `+0x08` | 8 bytes | Parent on an ordinary node. Root on the head. |
+| `+0x10` | 8 bytes | Right child on an ordinary node. Maximum node on the head. |
+| `+0x18` | 1 byte | Balancing color. |
+| `+0x19` | 1 byte | Nil marker. The head carries 1 and ordinary nodes carry 0. |
+| `+0x20` | 8 bytes | Signed 64-bit spawn ID key on an ordinary node. |
+| `+0x28` | 8 bytes | Pointer to the Spawn record on an ordinary node. |
+
+The head and each ordinary node are separate `0x30`-byte allocations through `0x2fa4b0` and `0x119220` respectively. On a constructed empty map, the count is zero and all three head links point to the head itself. The head bytes at `+0x18` and `+0x19` are both 1. The head has no constructed key or value. In a populated map, missing children and the root's parent point to that same head. Ordinary insertion through `0x112eb0` copies the ID from `Spawn+0x38` and initializes the value pointer to zero. `0x119530` stores the Spawn pointer at `0x119642` after looking up or creating the node. The null initialization is part of insertion and precedes that pointer store.
+
+The outer walk at `0x2e4478–0x2e45c1` begins at the head's minimum link and finishes on reaching the head. It uses the same successor rule as the inner tree walks above. It visits keys in ascending signed 64-bit order, as established by the signed comparisons at `0x1156b0–0x1156d5`. Each ordinary value gives the Spawn base for the two inner headers. The Zone destructor at `0x2f9969–0x2f998c` also starts from the minimum link, reads the value at `+0x28`, and checks it for zero before destruction. These fields describe the live Zone map with insertion and replacement quiescent. The insertion interval can contain an ordinary node before its final value pointer is stored.

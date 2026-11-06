@@ -8,6 +8,7 @@
 #include "CaptureWorldSections.h"
 #include "GenerationRequest.h"
 #include "DungeonCapture.h"
+#include "DungeonSpawnCapture.h"
 #include "GenerationSnapshotFile.h"
 #include "NativeConversation.h"
 #include "NativeCreatureAppearance.h"
@@ -6484,6 +6485,19 @@ static dungeoncapture::Context dungeonContext(cube::World *world, uint32_t vanil
 static dungeoncapture::Plan genDungeonPlan;
 static dungeoncapture::Context genDungeonContext;
 static size_t genDungeonBudget = 0;
+static bool writeDungeonSpawnCells(unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
+    const auto [x, y] = coordinate;
+    dungeoncapture::SpawnCapture capture{{x, y}, genDungeonContext.seed, genDungeonContext.day, {}};
+    // The fresh Zone is retained locally and has not been refreshed or published to the world.
+    if (!captureabi::readZoneSpawnCells(reinterpret_cast<uintptr_t>(zone), capture.records, readNative)) {
+        log("Oracle: invalid or oversized native spawn-cell trees at " + stem);
+        return false;
+    }
+    const auto encoded = dungeoncapture::encodeSpawnCells(capture);
+    return encoded.size() <= dungeoncapture::MaxSpawnCaptureBytes &&
+           writeOracleFile(stem + ".cwg", {encoded.begin(), encoded.end()});
+}
+
 static bool writeDungeonZone(cube::World *world, unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
     if (dungeonContext(world, genDungeonContext.vanillaCandidate) != genDungeonContext)
         return false;
@@ -6498,8 +6512,9 @@ static bool writeDungeonZone(cube::World *world, unsigned char *zone, dungeoncap
             return false;
         labels.decisions.push_back(decision);
     }
-    return dungeonContext(world, genDungeonContext.vanillaCandidate) == genDungeonContext && writeOracleFile(stem + ".cwz", blocks) &&
-           writeOracleFile(stem + ".cwd", dungeoncapture::encode(labels));
+    return dungeonContext(world, genDungeonContext.vanillaCandidate) == genDungeonContext &&
+           (labels.decisions.front().kind != 8 || writeDungeonSpawnCells(zone, coordinate, stem)) &&
+           writeOracleFile(stem + ".cwz", blocks) && writeOracleFile(stem + ".cwd", dungeoncapture::encode(labels));
 }
 
 static capturepolicy::GenerationCoordinates genQueue; // a few a tick, so the game keeps running
@@ -6630,7 +6645,8 @@ static void generate(cube::World *w) {
                 return;
             }
             if (genQueue.empty()) {
-                if (!capturepolicy::publishGenerationSnapshot(genDirectory + "\\complete.txt", std::string(dungeoncapture::Completed))) {
+                if (!capturepolicy::publishGenerationSnapshot(genDirectory + "\\complete.txt",
+                                                               std::string(dungeoncapture::CompletedWithSpawnCells))) {
                     pause("dungeon completion marker could not be published");
                     return;
                 }

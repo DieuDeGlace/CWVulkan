@@ -18,6 +18,7 @@ inline constexpr size_t MaxStoredBytes = 256 * 1024 * 1024;
 inline constexpr int32_t MaxTargetCell = 400000; // Diagnostic range, including safe native block-coordinate conversion.
 inline constexpr uint32_t SourceTimestamp = 0x5d93ab0d;
 inline constexpr std::string_view Completed = "CW-DUNGEON-COMPLETE 1\n";
+inline constexpr std::string_view CompletedWithSpawnCells = "CW-DUNGEON-COMPLETE 2\n";
 
 inline bool plan(std::string_view text, size_t zoneBudget, Plan &output) {
     capturepolicy::GenerationCoordinates targets;

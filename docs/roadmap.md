@@ -315,7 +315,10 @@ individual feature documents.
   current zone build. The next capture has candidate targets for gate
   guards and all three qualifying floor codes. The independent guard-tree
   audit established which producers populate each tree and how live guard
-  counts reach the native gate-state pass. See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)
+  counts reach the native gate-state pass. The version 2 extractor and
+  comparator support the two trees. A live kind-8 batch is still needed to
+  validate their contents, and gate-state behavior remains open.
+  See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)
   and [guard-tree contract](specs/steam-dungeon-spawn-guard-trees.md).
   Mesh-prepass bounds,
   containing-zone/model gates and coherent cache-oracle capture are implemented.

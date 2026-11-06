@@ -1,5 +1,6 @@
 #include "../tools/ZoneExtractor/GenerationRequest.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
+#include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "../tools/ZoneExtractor/GenerationSnapshotFile.h"
 #include <filesystem>
 #include <fstream>
@@ -7,6 +8,78 @@
 #include <iterator>
 #include <limits>
 #include <string>
+
+namespace {
+void dungeonSpawnCellChecks(const auto &check) {
+    using namespace captureabi;
+    constexpr uintptr_t zone = 0x100, spawn = 0x800;
+    constexpr uintptr_t mapHead = 0x1300, mapNode = 0x1380;
+    constexpr uintptr_t guardHead = 0x1400, low = 0x1480, high = 0x1500;
+    constexpr uintptr_t activationHead = 0x1580, activationNode = 0x1600;
+    constexpr int64_t id = INT64_MIN + 7;
+    std::array<uint8_t, 0x1700> memory{};
+    const auto put = [&](uintptr_t address, const auto &value) {
+        std::memcpy(memory.data() + address, &value, sizeof value);
+    };
+    const auto links = [&](uintptr_t address, uintptr_t left, uintptr_t parent, uintptr_t right, uint8_t nil) {
+        const spawn_tree::Links fields{left, parent, right, nil, nil};
+        std::memcpy(memory.data() + address, &fields, spawn_tree::LinkBytes);
+    };
+    const auto read = [&](uintptr_t address, void *output, size_t size) {
+        if (address > memory.size() || size > memory.size() - address)
+            return false;
+        std::memcpy(output, memory.data() + address, size);
+        return true;
+    };
+
+    put(zone + 0x460, std::array<uintptr_t, 2>{mapHead, 1});
+    links(mapHead, mapNode, mapNode, mapNode, 1);
+    links(mapNode, mapHead, mapHead, mapHead, 0);
+    put(mapNode + 0x20, id);
+    put(mapNode + 0x28, spawn);
+    put(spawn + 0x38, id);
+
+    put(spawn + 0x900, std::array<uintptr_t, 2>{guardHead, 2});
+    links(guardHead, low, high, high, 1);
+    links(low, guardHead, high, guardHead, 0);
+    links(high, low, guardHead, guardHead, 0);
+    put(low + 0x1c, SpawnCell{-7, 12});
+    put(high + 0x1c, SpawnCell{-7, 13});
+
+    put(spawn + 0x928, std::array<uintptr_t, 2>{activationHead, 1});
+    links(activationHead, activationNode, activationNode, activationNode, 1);
+    links(activationNode, activationHead, activationHead, activationHead, 0);
+    put(activationNode + 0x1c, SpawnCell{3, -5});
+
+    dungeoncapture::SpawnCapture capture{{-10, 12}, UINT32_MAX, -7, {}};
+    const std::vector<SpawnCell> guards{{-7, 12}, {-7, 13}}, activation{{3, -5}};
+    const bool captured = readZoneSpawnCells(zone, capture.records, read);
+    check(captured && capture.records.size() == 1 && capture.records[0].id == id &&
+              capture.records[0].cells.guards == guards && capture.records[0].cells.activation == activation,
+          "fresh zone spawn capture follows signed tree order and keeps the two cell collections separate");
+    const auto encoded = dungeoncapture::encodeSpawnCells(capture);
+    dungeoncapture::SpawnCapture decoded;
+    check(dungeoncapture::decodeSpawnCells(encoded, decoded) && decoded.zone == capture.zone &&
+              decoded.seed == capture.seed && decoded.day == capture.day && decoded.records.size() == 1 &&
+              decoded.records[0].id == id && decoded.records[0].cells.guards == guards &&
+              decoded.records[0].cells.activation == activation,
+          "spawn-cell sidecar preserves context, signed IDs and tree keys");
+    check(!dungeoncapture::decodeSpawnCells(encoded + "1", decoded) && decoded.records.size() == 1,
+          "trailing sidecar data is rejected without replacing a previous capture");
+
+    links(low, low, high, guardHead, 0);
+    check(!readZoneSpawnCells(zone, capture.records, read) && capture.records.size() == 1,
+          "invalid or cyclic native links reject the whole spawn-cell capture");
+    links(low, guardHead, high, guardHead, 0);
+    put(spawn + 0x928, std::array<uintptr_t, 2>{activationHead, 0});
+    links(activationHead, activationHead, activationHead, activationHead, 1);
+    check(readZoneSpawnCells(zone, capture.records, read) && capture.records.size() == 1 &&
+              capture.records[0].cells.activation.empty(),
+          "a constructed empty activation tree is distinct from a missing tree");
+    put(spawn + 0x928, std::array<uintptr_t, 2>{0, 0});
+    check(!readZoneSpawnCells(zone, capture.records, read), "a missing activation head is rejected");
+}
+} // namespace
 
 int generationRequestTests() {
     int failures = 0;
@@ -16,6 +89,7 @@ int generationRequestTests() {
             ++failures;
         }
     };
+    dungeonSpawnCellChecks(check);
     using namespace capturepolicy;
     RetainedGenerationBudget budget;
     GenerationCoordinates work{{99, 99}};

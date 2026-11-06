@@ -24,6 +24,8 @@ sounds/
 Mods/
 *.cub
 *.cwz
+*.cwd
+*.cwg
 *.rec
 *.cwa
 *.cws

@@ -13,6 +13,7 @@
 #include "Extracted.h"
 #include "WorldgenObjectOracle.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
+#include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/BuildingBuilder.h"
 #include "worldgen/Mason.h"
@@ -971,6 +972,45 @@ void reportDungeonFloors(const capturepolicy::GenerationCoordinates &targets,
         std::putchar('\n');
     }
 }
+
+size_t compareDungeonSpawnCells(const std::string &zone, const dungeoncapture::SpawnCapture &capture,
+                                const wg::ZoneSpawns &spawns) {
+    const auto orderedCells = [](const std::vector<wg::Int2> &cells) {
+        std::vector<captureabi::SpawnCell> ordered;
+        for (const auto &cell : cells)
+            ordered.push_back({cell.x, cell.y});
+        std::sort(ordered.begin(), ordered.end());
+        ordered.erase(std::unique(ordered.begin(), ordered.end()), ordered.end());
+        return ordered;
+    };
+    size_t differences = 0;
+    auto generated = spawns.points.begin();
+    for (const auto &native : capture.records) {
+        while (generated != spawns.points.end() && generated->first < native.id) {
+            std::printf("%s: extra engine spawn %lld\n", zone.c_str(), static_cast<long long>(generated->first));
+            ++generated;
+            ++differences;
+        }
+        if (generated == spawns.points.end() || generated->first != native.id) {
+            std::printf("%s: missing engine spawn %lld\n", zone.c_str(), static_cast<long long>(native.id));
+            ++differences;
+            continue;
+        }
+        const auto &spawn = generated++->second;
+        const bool guardMatch = native.cells.guards == orderedCells(spawn.area);
+        const bool activationMatch = native.cells.activation == orderedCells(spawn.clearedCells);
+        if (!guardMatch || !activationMatch) {
+            std::printf("%s: spawn %lld differs (guard %s, activation %s)\n", zone.c_str(),
+                        static_cast<long long>(native.id), guardMatch ? "match" : "differs", activationMatch ? "match" : "differs");
+            ++differences;
+        }
+    }
+    for (; generated != spawns.points.end(); ++generated) {
+        std::printf("%s: extra engine spawn %lld\n", zone.c_str(), static_cast<long long>(generated->first));
+        ++differences;
+    }
+    return differences;
+}
 } // namespace
 
 int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirectory) {
@@ -988,7 +1028,9 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     Plan expected;
     capturepolicy::GenerationCoordinates targets;
     const auto request = read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes);
-    if (read(directory / "complete.txt", Completed.size()) != Completed ||
+    const auto marker = read(directory / "complete.txt", CompletedWithSpawnCells.size());
+    const bool withSpawnCells = marker == CompletedWithSpawnCells;
+    if ((!withSpawnCells && marker != Completed) ||
         !plan(request, capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected) ||
         !capturepolicy::parseGenerationRequest(request, MaxTargets, targets)) {
         std::puts("Dungeon oracle requires a completed capture with a valid target list");
@@ -1004,6 +1046,7 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     std::optional<Context> batch;
     std::map<Point, Decision> nativeRows;
     size_t decisionDifferences = 0, columnDifferences = 0;
+    size_t guardZones = 0, spawnRecords = 0, spawnDifferences = 0;
     const bool showAllDifferences = std::getenv("CW_DUNGEON_DIFF") != nullptr;
     for (const auto &[coordinate, cells] : expected) {
         const auto [zx, zy] = coordinate;
@@ -1056,6 +1099,17 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
             return 1;
         }
         const auto generated = wg::generateZoneWithCreatures(world, tables, batch->day, zx, zy);
+        if (withSpawnCells && labels.decisions.front().kind == 8) {
+            SpawnCapture capture;
+            if (!decodeSpawnCells(read(directory / (stem + ".cwg"), MaxSpawnCaptureBytes), capture) ||
+                capture.zone != captureabi::SpawnCell{zx, zy} || capture.seed != batch->seed || capture.day != batch->day) {
+                std::printf("%s: missing, invalid or mismatched spawn-cell capture\n", stem.c_str());
+                return 1;
+            }
+            ++guardZones;
+            spawnRecords += capture.records.size();
+            spawnDifferences += compareDungeonSpawnCells(stem, capture, generated.spawns);
+        }
         size_t changed = 0;
         for (size_t i = 0; i < captured.size(); ++i) {
             const auto &native = captured[i];
@@ -1087,9 +1141,12 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
                     stem.c_str(), labels.decisions.size(), captured.size() - changed, captured.size());
     }
     reportDungeonFloors(targets, nativeRows);
+    if (withSpawnCells)
+        std::printf("Dungeon spawn cells: %zu kind-8 zones, %zu native spawns, %zu differing spawn records\n",
+                    guardZones, spawnRecords, spawnDifferences);
     std::printf("Dungeon oracle: %zu zones, %zu differing helper rows, %zu differing stored columns\n",
                 expected.size(), decisionDifferences, columnDifferences);
-    return decisionDifferences || columnDifferences || !batch->vanillaCandidate ? 1 : 0;
+    return decisionDifferences || columnDifferences || spawnDifferences || !batch->vanillaCandidate ? 1 : 0;
 }
 
 int worldgenDungeonFloorTargets(const fs::path &directory, int seed) {
