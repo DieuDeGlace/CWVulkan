@@ -203,6 +203,7 @@ int npcSpeechTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests(); // tests/ObjectClockTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
+int worldGateCaptureCommand(const std::filesystem::path &);
 int blockMutationTests();
 int terrainBandTests();
 int staticObjectSceneTests();
@@ -9534,6 +9535,8 @@ int main(int argc, char **argv) {
         return deadCreatureTests();
     if (argc == 2 && std::string(argv[1]) == "worldobjects")
         return worldObjectTests();
+    if (argc == 3 && std::string(argv[1]) == "wggatelive")
+        return worldGateCaptureCommand(argv[2]);
     if (argc == 2 && std::string(argv[1]) == "objectclocks")
         return objectClockTests();
     if (argc == 2 && std::string(argv[1]) == "charactercard")

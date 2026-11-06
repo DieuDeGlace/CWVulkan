@@ -27,6 +27,8 @@ Mods/
 *.cwd
 *.cwg
 *.cgt
+*.cdo
+gate-live_*.txt
 *.rec
 *.cwa
 *.cws

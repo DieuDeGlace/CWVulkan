@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <tuple>
@@ -97,6 +98,45 @@ void writeFixture(const std::filesystem::path &root, uint8_t type, int32_t colum
     }
 }
 } // namespace
+
+int worldGateCaptureCommand(const std::filesystem::path &path) {
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() < 0 || input.tellg() > 16 * 1024)
+        return std::puts("Invalid gate transition capture size"), 1;
+    input.seekg(0);
+    std::string line;
+    if (!std::getline(input, line) || line != "CW-DUNGEON-GATE-LIVE 1")
+        return std::puts("Invalid gate transition capture header"), 1;
+    size_t counts[2]{}, differences = 0;
+    while (std::getline(input, line)) {
+        std::istringstream row(line);
+        int route = 0, type = 0;
+        std::array<int64_t, 3> position{};
+        unsigned before = 0, after = 0;
+        uint32_t oldSwing = 0, newSwing = 0;
+        if (!(row >> route >> type >> position[0] >> position[1] >> position[2] >> before >> after >> oldSwing >> newSwing) ||
+            route < 1 || route > 2 || (type != 8 && type != 10) || !before || before > 255 || after > 255 ||
+            counts[0] + counts[1] >= 64)
+            return std::puts("Invalid gate transition row"), 1;
+        row >> std::ws;
+        if (!row.eof())
+            return std::puts("Unexpected trailing gate transition fields"), 1;
+        ++counts[route - 1];
+        float timer = 0;
+        std::memcpy(&timer, &oldSwing, sizeof timer);
+        auto gate = object(type, uint8_t(before), timer);
+        std::memcpy(gate.data() + nativeinteract::OBJECT_POSITION, position.data(), sizeof position);
+        std::vector<nativeinteract::Sound> sounds;
+        if (!nativeinteract::openOrShut(gate, 0, sounds) || gate[nativeinteract::OBJECT_STATE] != after ||
+            get<uint32_t>(gate.data(), nativeinteract::OBJECT_SWING) != newSwing) {
+            std::printf("Gate transition differs at row %zu\n", counts[0] + counts[1]);
+            ++differences;
+        }
+    }
+    std::printf("Gate transition setter replay: %zu count-route rows, %zu proximity-route rows, %zu differences\n",
+                counts[0], counts[1], differences);
+    return differences || counts[0] + counts[1] == 0 ? 1 : 0;
+}
 
 int worldObjectTests() {
     int failures = 0;

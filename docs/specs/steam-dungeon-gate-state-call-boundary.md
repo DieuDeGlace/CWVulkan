@@ -1,0 +1,14 @@
+# Steam dungeon gate state call boundary
+
+This note covers the unpacked original Steam AMD64 image `cubeworld.original.exe.unpacked.exe`, preferred base `0x140000000`, SHA-256 `7AF18CB28C8BF848F355287428C6390B2EA2A682CA466190F5EB9859C5D6F244`. Addresses are image RVAs.
+
+| Path in `0x2e3510` | Call to `0x2d3a10` | Return RVA | Argument setup in the caller |
+| --- | --- | --- | --- |
+| Guard count at least the threshold | `0x2e54b6` | `0x2e54bb` | RCX from RSI, RDX from R14, R8D cleared. RSI is reloaded from the saved World pointer immediately before the call. |
+| Below threshold, qualifying nearby Creature | `0x2e573d` | `0x2e5742` | RCX from R15, RDX from R14, R8D cleared. R15 was loaded with the saved World pointer at `0x2e55d3`. |
+
+At the native setter entry, RCX holds the World pointer, RDX the live cell-object record pointer, and R8B the requested byte, zero on both calls. The type is the dword at record `+0x00` and the old state is the byte at `+0x28`. The return address is the qword at entry RSP. The return RVAs above are distinct caller identities. The setter also has other callers, so the argument values alone do not identify these paths.
+
+The caller's RBP at this entry is the frame base established by `0x2e3510` at `0x2e351e`. The owner Zone pointer is the qword at that RBP plus `0xc0`. The caller writes the slot at `0x2e4715` from its current selected Zone and uses it at `0x2e4ada` to obtain the live object vector. The vector's begin and end pointers are at `Zone+0x60` and `+0x68`. R14 is the current record in that vector and advances by `0xe0` at `0x2e5d9a`. At both call boundaries, RDX and R14 identify the same object. The qword at caller RBP minus `0x68` also holds that iteration's record pointer. The owner comes from the caller's selected Zone. It does not need to be reconstructed from the object's position. The owner's signed 32-bit Zone indices are X at `+0x10` and Y at `+0x14`, initialized in that order at `0x2f942e–0x2f9438`. Each index is in 64-block Zone units.
+
+An entry observation can distinguish an impending nonzero-to-zero transition from a repeated zero request on these paths. It uses the return address, record type 8 or 10, requested byte zero and the old state byte. At `0x2d3a28` the setter compares the two state bytes and returns early if they match. When the old byte is nonzero, the ordinary path writes zero at `0x2d3a45`. The below-threshold loop can call the setter again for another qualifying Creature after the first transition. Such a call has the same return address and a zero old state, and the setter makes no second state write. Entry establishes which branch the call is eligible to take. The old byte sampled there does not by itself prove completion of the store or the later sound and Zone-update work. The caller tests the resulting byte after return at `0x2e54c0` or `0x2e5742`.

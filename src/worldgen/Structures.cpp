@@ -229,6 +229,7 @@ ZoneContents generateZone(const WorldValues &world, int32_t zx, int32_t zy, cons
     CellObjects &cells = cellObjectsFor(world);
     BuildingRules rules(cells);
     ZoneBuild zone(out.terrain, world, cells, options.recordDraws);
+    zone.ceilingObserver = options.ceilingObserver ? &options.ceilingObserver : nullptr;
     zone.place = zonePlace(out.terrain);
     if (options.hooks.planner)
         zone.planner = options.hooks.planner(zone.place);

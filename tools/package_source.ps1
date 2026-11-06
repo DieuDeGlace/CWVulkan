@@ -42,7 +42,8 @@ foreach ($file in ($files | Sort-Object FullName -Unique)) {
     }
     $relative = $file.FullName.Substring($sourceRoot.Length + 1).Replace('\', '/')
     if ($relative -match '(^|/)(build[^/]*|Extract|Save|Saves|reference|references|scratchpad|vendor|\.git)/' -or
-        $relative -match '\.(exe|dll|obj|lib|pdb|cub|cwz|cwd|cwg|cgt|rec|cwa|cws|cwm|cwp|db|bin|dat|plx|log)$') {
+        $relative -match '\.(exe|dll|obj|lib|pdb|cub|cwz|cwd|cwg|cgt|cdo|rec|cwa|cws|cwm|cwp|db|bin|dat|plx|log)$' -or
+        $file.Name -like 'gate-live_*.txt') {
         throw "Private or generated file entered the source allowlist: $relative"
     }
     $destination = Join-Path $stagingDirectory $relative

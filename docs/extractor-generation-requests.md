@@ -137,6 +137,31 @@ also compares every gate threshold and reports missing, extra, and changed
 entries. Earlier captures still compare their original fields. No captured
 files belong in the source or release.
 
+### Direct castle ceiling checks
+
+Put `CW-DUNGEON-DOME 1` on the first line of the dungeon target file before
+the coordinate pairs. The normal setup command accepts it. This opts into
+batch version 5 and one thread-local execution breakpoint at Steam's
+verified final-ceiling continuation. Each `.cdo` records the signed layer,
+local column, dome flag and final integer ceiling for explicitly targeted
+cells in their owning zones. Earlier or later block writes remain separate
+from this observation. The comparator reports dome and control columns and
+rejects an empty comparison. Plain coordinate files use version 4.
+
+### Live gate transitions
+
+Place `Extract/gate-live.request` containing one line
+`CW-DUNGEON-GATE-LIVE 1` before starting an isolated Steam session. Only
+this request enables the setter observer. Enter a dungeon and play through
+its gates. The recorder copies up to 64 actual nonzero-state calls from
+the two verified routes, including the resulting state and timer after
+Steam's setter returns. Close the game before reviewing the file.
+
+Run `EngineTests wggatelive <gate-live-file>` to replay the recorded state
+and timer through the engine setter. It reports the coverage of the count
+and proximity routes separately. This observes the route Steam selected.
+The engine's eligibility predicates have their own runtime tests.
+
 `EngineTests generationrequest` checks parser bounds, sticky context changes,
 full-width snapshot values, exclusive input ownership/consumption and actual
 Windows file publication/no-overwrite

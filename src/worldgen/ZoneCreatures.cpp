@@ -758,10 +758,11 @@ RefreshHook creatureRefresh(const CreatureTables &tables) {
 }
 
 ZoneContents generateZoneWithCreatures(const WorldValues &world, const CreatureTables &tables, int32_t day, int32_t zx, int32_t zy,
-                                       bool recordDraws) {
+                                       bool recordDraws, CastleCeilingObserver ceilingObserver) {
     StructureOptions options;
     options.hooks = creatureHooks(tables, day);
     options.recordDraws = recordDraws;
+    options.ceilingObserver = std::move(ceilingObserver);
     return generateZone(world, zx, zy, options);
 }
 

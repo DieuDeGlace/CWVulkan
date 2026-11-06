@@ -13,6 +13,7 @@
 #include "Extracted.h"
 #include "WorldgenObjectOracle.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
+#include "../tools/ZoneExtractor/DungeonCeilingCapture.h"
 #include "../tools/ZoneExtractor/DungeonGateCapture.h"
 #include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "worldgen/CellObjects.h"
@@ -1053,13 +1054,14 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     Plan expected;
     capturepolicy::GenerationCoordinates targets;
     const auto request = read(directory / "targets.txt", capturepolicy::MaximumGenerationRequestBytes);
-    const auto marker = read(directory / "complete.txt", CompletedWithGateThresholds.size());
-    const bool withGateThresholds = marker == CompletedWithGateThresholds;
+    const auto marker = read(directory / "complete.txt", CompletedWithCeilings.size());
+    const bool withCeilings = marker == CompletedWithCeilings;
+    const bool withGateThresholds = withCeilings || marker == CompletedWithGateThresholds;
     const bool withSpawnKeys = withGateThresholds || marker == CompletedWithSpawnKeys;
     const bool withSpawnCells = withSpawnKeys || marker == CompletedWithSpawnCells;
-    if ((!withSpawnCells && marker != Completed) ||
+    if ((!withSpawnCells && marker != Completed) || withCeilings != wantsCeilings(request) ||
         !plan(request, capturepolicy::RetainedGenerationBudget::MaximumAttempts, expected) ||
-        !capturepolicy::parseGenerationRequest(request, MaxTargets, targets)) {
+        !capturepolicy::parseGenerationRequest(targetText(request), MaxTargets, targets)) {
         std::puts("Dungeon oracle requires a completed capture with a valid target list");
         return 1;
     }
@@ -1075,6 +1077,8 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
     size_t decisionDifferences = 0, columnDifferences = 0;
     size_t guardZones = 0, spawnRecords = 0, spawnDifferences = 0;
     size_t gateThresholds = 0, gateDifferences = 0;
+    size_t ceilingRows = 0, domeRows = 0, ceilingDifferences = 0;
+    const std::set<Point> targetCells(targets.begin(), targets.end());
     const bool showAllDifferences = std::getenv("CW_DUNGEON_DIFF") != nullptr;
     for (const auto &[coordinate, cells] : expected) {
         const auto [zx, zy] = coordinate;
@@ -1126,7 +1130,47 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
             std::printf("%s: %s\n", stem.c_str(), error.c_str());
             return 1;
         }
-        const auto generated = wg::generateZoneWithCreatures(world, tables, batch->day, zx, zy);
+        CeilingRows engineCeilings;
+        wg::CastleCeilingObserver observer;
+        if (withCeilings) {
+            observer = [&](int32_t x, int32_t y, int32_t floor, int lx, int ly, bool dome, int32_t ceiling) {
+                if (targetCells.count({x, y}) &&
+                    !engineCeilings.emplace(CeilingKey{x, y, floor, lx, ly}, CeilingValue{dome, ceiling}).second)
+                    ++ceilingDifferences;
+            };
+        }
+        const auto generated = wg::generateZoneWithCreatures(world, tables, batch->day, zx, zy, false, std::move(observer));
+        if (withCeilings) {
+            CeilingCapture capture;
+            if (!decodeCeilings(read(directory / (stem + ".cdo"), MaxCeilingBytes), capture) ||
+                capture.zone != coordinate || capture.seed != batch->seed || capture.day != batch->day) {
+                std::printf("%s: missing, invalid or mismatched ceiling capture\n", stem.c_str());
+                return 1;
+            }
+            ceilingRows += capture.rows.size();
+            for (const auto &[key, value] : capture.rows) {
+                if (!targetCells.count({key[0], key[1]})) {
+                    std::printf("%s: ceiling row is outside the explicit targets\n", stem.c_str());
+                    return 1;
+                }
+                domeRows += value.first;
+                const auto engine = engineCeilings.find(key);
+                if (engine != engineCeilings.end() && engine->second == value)
+                    continue;
+                if (ceilingDifferences++ < 16 || showAllDifferences) {
+                    std::printf("%s: ceiling differs at cell %d %d floor %d column %d %d (Steam %d %d",
+                                stem.c_str(), key[0], key[1], key[2], key[3], key[4], int(value.first), value.second);
+                    if (engine != engineCeilings.end())
+                        std::printf(", engine %d %d)\n", int(engine->second.first), engine->second.second);
+                    else
+                        std::puts(", missing engine observation)");
+                }
+            }
+            for (const auto &[key, value] : engineCeilings)
+                if (!capture.rows.count(key) && (ceilingDifferences++ < 16 || showAllDifferences))
+                    std::printf("%s: extra engine ceiling at cell %d %d floor %d column %d %d (%d %d)\n",
+                                stem.c_str(), key[0], key[1], key[2], key[3], key[4], int(value.first), value.second);
+        }
         if (withGateThresholds) {
             GateCapture capture;
             if (!decodeGateThresholds(read(directory / (stem + ".cgt"), MaxGateCaptureBytes), capture) ||
@@ -1200,9 +1244,13 @@ int worldgenDungeonOracle(const fs::path &directory, const fs::path &tablesDirec
                     guardZones, spawnRecords, spawnDifferences);
     if (withGateThresholds)
         std::printf("Dungeon gate thresholds: %zu native entries, %zu differences\n", gateThresholds, gateDifferences);
+    if (withCeilings)
+        std::printf("Dungeon ceilings: %zu native observations, %zu dome columns, %zu differences\n",
+                    ceilingRows, domeRows, ceilingDifferences);
     std::printf("Dungeon oracle: %zu zones, %zu differing helper rows, %zu differing stored columns\n",
                 expected.size(), decisionDifferences, columnDifferences);
-    return decisionDifferences || columnDifferences || spawnDifferences || gateDifferences || !batch->vanillaCandidate ? 1 : 0;
+    return decisionDifferences || columnDifferences || spawnDifferences || gateDifferences || ceilingDifferences ||
+           (withCeilings && !ceilingRows) || !batch->vanillaCandidate ? 1 : 0;
 }
 
 int worldgenDungeonFloorTargets(const fs::path &directory, int seed) {

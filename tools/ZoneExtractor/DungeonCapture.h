@@ -21,10 +21,23 @@ inline constexpr std::string_view Completed = "CW-DUNGEON-COMPLETE 1\n";
 inline constexpr std::string_view CompletedWithSpawnCells = "CW-DUNGEON-COMPLETE 2\n";
 inline constexpr std::string_view CompletedWithSpawnKeys = "CW-DUNGEON-COMPLETE 3\n";
 inline constexpr std::string_view CompletedWithGateThresholds = "CW-DUNGEON-COMPLETE 4\n";
+inline constexpr std::string_view CompletedWithCeilings = "CW-DUNGEON-COMPLETE 5\n";
+inline constexpr std::string_view DomeRequest = "CW-DUNGEON-DOME 1";
+
+inline bool wantsCeilings(std::string_view request) {
+    return request.substr(0, DomeRequest.size()) == DomeRequest &&
+           (request.substr(DomeRequest.size(), 1) == "\n" || request.substr(DomeRequest.size(), 2) == "\r\n");
+}
+
+inline std::string_view targetText(std::string_view request) {
+    if (wantsCeilings(request))
+        request.remove_prefix(request.find('\n') + 1);
+    return request;
+}
 
 inline bool plan(std::string_view text, size_t zoneBudget, Plan &output) {
     capturepolicy::GenerationCoordinates targets;
-    if (!capturepolicy::parseGenerationRequest(text, MaxTargets, targets))
+    if (!capturepolicy::parseGenerationRequest(targetText(text), MaxTargets, targets))
         return false;
     Plan next;
     for (const auto &[x, y] : targets) {

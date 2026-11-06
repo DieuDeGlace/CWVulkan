@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -63,6 +64,9 @@ struct DungeonGuardFloor {
     Int2 cell; // The portable fallback is (0, 0) when no cell qualifies.
 };
 
+// Optional diagnostic for the actual castle ceiling immediately before the common air/ceiling writes.
+using CastleCeilingObserver = std::function<void(int32_t, int32_t, int32_t, int, int, bool, int32_t)>;
+
 class ZoneBuild {
 public:
     ZoneBuild(ZoneTerrain &terrain, const WorldValues &world, CellObjects &cells, bool recordDraws);
@@ -72,6 +76,7 @@ public:
     CellObjects &cells;
     ZonePlace place;
     PlannerFacts planner;
+    const CastleCeilingObserver *ceilingObserver = nullptr;
     int32_t zx, zy;
     int32_t x0, y0; // the zone's first block
 

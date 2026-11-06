@@ -1,5 +1,6 @@
 #include "../tools/ZoneExtractor/GenerationRequest.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
+#include "../tools/ZoneExtractor/DungeonCeilingCapture.h"
 #include "../tools/ZoneExtractor/DungeonGateCapture.h"
 #include "../tools/ZoneExtractor/DungeonSpawnCapture.h"
 #include "../tools/ZoneExtractor/GenerationSnapshotFile.h"
@@ -181,6 +182,14 @@ int generationRequestTests() {
     check(!dungeoncapture::plan("194 715\n-862 154", 2, dungeon) && dungeon == savedPlan &&
               !dungeoncapture::plan("2147483647 0", 32, dungeon) && dungeon == savedPlan,
           "dungeon planning rejects budget and coordinate overflow without truncating the request");
+    check(dungeoncapture::plan("CW-DUNGEON-DOME 1\r\n194 715\r\n-862 154\r\n", 3, dungeon) && dungeon == savedPlan,
+          "opt-in ceiling request preserves the normal neighborhood plan");
+    dungeoncapture::CeilingCapture ceilings{{-216, 38}, 123, -2, {{{-862, 154, -1, 0, 15}, {true, -21}}}};
+    dungeoncapture::CeilingCapture decodedCeilings;
+    const auto ceilingText = dungeoncapture::encodeCeilings(ceilings);
+    check(dungeoncapture::decodeCeilings(ceilingText, decodedCeilings) && decodedCeilings.rows == ceilings.rows &&
+              decodedCeilings.zone == ceilings.zone && !dungeoncapture::decodeCeilings(ceilingText + "1", decodedCeilings),
+          "ceiling sidecar retains a signed layer and height and rejects trailing data");
     dungeoncapture::Zone labels{{dungeoncapture::SourceTimestamp, 0x500000, UINT32_MAX, INT32_MIN, -7, 3, 4, 1},
                                {-216, 38},
                                {{{-862, 154}, {-14, 2}, {-14, 2}, 1, 44, 44, 9, 0x00020c09, -35, -34}}};

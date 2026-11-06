@@ -36,6 +36,7 @@ struct StructureHooks {
 struct StructureOptions {
     StructureHooks hooks;
     bool recordDraws = false; // keep every rand() value drawn, in order
+    CastleCeilingObserver ceilingObserver;
 };
 
 // Everything a zone holds after the generator.

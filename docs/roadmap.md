@@ -309,8 +309,11 @@ individual feature documents.
   and negative elevations with room increments, and style-1 interiors at
   both elevations. For example, native structure 46 raised two below-zero
   floors from −134 to −130 and from −68 to −63. This evidence covers the
-  sampled helper outputs and final blocks. Direct floor-index and dome
-  observations and broader seed/theme coverage remain open. The guard
+  sampled helper outputs and final blocks. A version 5 capture directly
+  matched the negative layer, dome flag and final ceiling in 1,124 columns
+  across nine zones, including 704 dome columns and 420 controls. All
+  36,864 final stored columns in that batch also matched. Broader
+  seed/theme coverage remains open. The guard
   floor scan caches only within its current zone build. The independent guard-tree
   audit established which producers populate each tree and how live guard
   counts reach the native gate-state pass. The first live kind-8 batch
@@ -326,8 +329,11 @@ individual feature documents.
   77,824 stored columns, and 25 spawn records across 19 zones. It covered
   the kind-8 entrance and its halo, two fortress interiors, and three
   castle passages. Runtime checks cover the count boundary, proximity,
-  host authority, state and sound. A live play-through of gate transitions
-  remains open. See the [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
+  host authority, state and sound. An opt-in Steam recorder identifies
+  the two call paths and copies the state and timer after the setter.
+  The recorder started successfully in the dome session. A live
+  play-through that exercises both gate transitions remains open.
+  See the [live gate contract](specs/steam-dungeon-live-gate-guard-counts.md)
   and [threshold writers](specs/steam-dungeon-gate-threshold-writers.md).
   See the [dungeon capture workflow](extractor-generation-requests.md#labeled-dungeon-captures)
   and [guard-tree contract](specs/steam-dungeon-spawn-guard-trees.md).

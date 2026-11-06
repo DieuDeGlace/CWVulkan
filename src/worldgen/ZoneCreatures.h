@@ -21,7 +21,7 @@ RefreshHook creatureRefresh(const CreatureTables &tables);
 
 // A whole zone with its creatures.
 ZoneContents generateZoneWithCreatures(const WorldValues &world, const CreatureTables &tables, int32_t day, int32_t zx, int32_t zy,
-                                       bool recordDraws = false);
+                                       bool recordDraws = false, CastleCeilingObserver ceilingObserver = {});
 // The daily refresh, once a day.
 void refreshZoneCreatures(ZoneContents &zone, const WorldValues &world, const CreatureTables &tables, int32_t day);
 

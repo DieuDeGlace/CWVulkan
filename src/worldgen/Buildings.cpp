@@ -647,6 +647,8 @@ void BuildingBuilder::floorColumns(Floor &fl) {
                 tw = tw * (tw * tw);
                 ceiling = (int32_t)std::floor((double)(1.0f - tw) * (tt - 1.0) + (double)tw * zz);
             }
+            if (zone.ceilingObserver && fl.level && insideZone())
+                (*zone.ceilingObserver)(cx, cy, f, lx, ly, fl.dome, ceiling);
             // k. The room's air.
             for (int32_t z = fz; z <= ceiling - 2; z++)
                 m.put(lx, ly, z, Block{0, 0, 0, light, 0, floorFlags});

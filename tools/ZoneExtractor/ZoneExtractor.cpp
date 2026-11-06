@@ -8,10 +8,12 @@
 #include "CaptureWorldSections.h"
 #include "GenerationRequest.h"
 #include "DungeonCapture.h"
+#include "DungeonCeilingCapture.h"
 #include "DungeonGateCapture.h"
 #include "DungeonSpawnCapture.h"
 #include "GenerationSnapshotFile.h"
 #include "NativeConversation.h"
+#include "NativeCeilingProbe.h"
 #include "NativeCreatureAppearance.h"
 #include "NativeCreatureEffects.h"
 #include "NativeCreaturePose.h"
@@ -3896,6 +3898,77 @@ static void install() {
 }
 } // namespace controloracle
 
+namespace gatelive {
+// Opt-in startup observer. The original setter always runs; only its two
+// verified dungeon callers are eligible for a scalar before/after record.
+using Setter = uintptr_t(__fastcall *)(void *, void *, uint8_t);
+static Setter original = nullptr;
+static std::atomic<bool> enabled{false};
+static std::mutex outputLock;
+static FILE *output = nullptr;
+static unsigned remaining = 64;
+
+static __declspec(noinline) uintptr_t __fastcall record(void *world, void *object, uint8_t requested) {
+    if (!enabled.load(std::memory_order_relaxed) || requested != 0)
+        return original(world, object, requested);
+    const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - base();
+    const int route = caller == 0x2e54bb ? 1 : caller == 0x2e5742 ? 2 : 0;
+    if (!route)
+        return original(world, object, requested);
+    const uintptr_t address = reinterpret_cast<uintptr_t>(object);
+    std::array<int64_t, 3> position{};
+    int32_t type = 0;
+    uint8_t before = 0, after = 0;
+    uint32_t oldSwing = 0, newSwing = 0;
+    const bool observing = readNative(address, &type, sizeof type) && (type == 8 || type == 10) &&
+                           readNative(address + 0x28, &before, sizeof before) && before != 0 &&
+                           readNative(address + 8, position.data(), sizeof position) &&
+                           readNative(address + 0x2c, &oldSwing, sizeof oldSwing);
+    const uintptr_t result = original(world, object, requested);
+    if (observing && readNative(address + 0x28, &after, sizeof after) &&
+        readNative(address + 0x2c, &newSwing, sizeof newSwing)) {
+        std::lock_guard hold(outputLock);
+        if (output && (std::fprintf(output, "%d %d %lld %lld %lld %u %u %u %u\n", route, type,
+                                    static_cast<long long>(position[0]), static_cast<long long>(position[1]),
+                                    static_cast<long long>(position[2]), unsigned(before), unsigned(after), oldSwing, newSwing) < 0 ||
+                       std::fflush(output) != 0 || --remaining == 0)) {
+            std::fclose(output);
+            output = nullptr;
+            enabled.store(false, std::memory_order_relaxed);
+        }
+    }
+    return result;
+}
+
+static void install() {
+    if (!supported())
+        return;
+    capturepolicy::GenerationRequestInput request("Extract\\gate-live.request");
+    std::string bytes;
+    if (!request || !request.read(bytes) || (bytes != "CW-DUNGEON-GATE-LIVE 1\n" && bytes != "CW-DUNGEON-GATE-LIVE 1\r\n"))
+        return;
+    constexpr uint8_t prologue[]{0x40, 0x53, 0x48, 0x83, 0xec, 0x60};
+    original = reinterpret_cast<Setter>(controloracle::detour(0x2d3a10, prologue, sizeof prologue, reinterpret_cast<void *>(&record)));
+    if (!original) {
+        log("Gate oracle: unexpected setter entry or no nearby trampoline; request preserved");
+        return;
+    }
+    CreateDirectoryA("Extract\\oracle", nullptr);
+    const auto path = "Extract\\oracle\\gate-live_" + std::to_string(GetCurrentProcessId()) + "_" +
+                      std::to_string(GetTickCount64()) + ".txt";
+    if (!capturepolicy::publishGenerationSnapshot(path, "CW-DUNGEON-GATE-LIVE 1\n") ||
+        fopen_s(&output, path.c_str(), "ab") != 0 || !output || !request.consume()) {
+        if (output)
+            std::fclose(output);
+        output = nullptr;
+        log("Gate oracle: could not start output; request preserved");
+        return;
+    }
+    enabled.store(true, std::memory_order_relaxed);
+    log("Gate oracle: observing guard-count and proximity transitions in " + path);
+}
+} // namespace gatelive
+
 // --- AI oracle (Extract\ai.request) ---------------------------------------------------
 // The game's creature AI runs on the server world's own thread: 0x83f20 calls 0x13830
 // about every 40 ms with the server's AI state (server+0x768: [0] the world, [1] a map of
@@ -6485,6 +6558,8 @@ static dungeoncapture::Context dungeonContext(cube::World *world, uint32_t vanil
 
 static dungeoncapture::Plan genDungeonPlan;
 static dungeoncapture::Context genDungeonContext;
+static bool genObserveCeilings = false;
+static std::map<dungeoncapture::Point, std::set<dungeoncapture::Point>> genCeilingTargets;
 static size_t genDungeonBudget = 0;
 static bool writeDungeonGateThresholds(unsigned char *zone, dungeoncapture::Point coordinate, const std::string &stem) {
     const auto [x, y] = coordinate;
@@ -6581,6 +6656,11 @@ static void queueGeneration(cube::World *w, bool dungeon) {
         }
         return;
     }
+    capturepolicy::GenerationCoordinates ceilingTargets;
+    const bool observeCeilings = dungeon && dungeoncapture::wantsCeilings(bytes);
+    if (observeCeilings && !capturepolicy::parseGenerationRequest(dungeoncapture::targetText(bytes),
+                                                                  dungeoncapture::MaxTargets, ceilingTargets))
+        return;
     for (const auto &[zone, cells] : dungeonPlan)
         pending.push_back(zone);
     const auto context = generationContextOf(w);
@@ -6614,6 +6694,10 @@ static void queueGeneration(cube::World *w, bool dungeon) {
     genSnapshot = snapshot;
     genQueue.swap(pending);
     genDungeonPlan = std::move(dungeonPlan);
+    genObserveCeilings = observeCeilings;
+    genCeilingTargets.clear();
+    for (const auto &[x, y] : ceilingTargets)
+        genCeilingTargets[{x >> 2, y >> 2}].emplace(x, y);
     if (dungeon) {
         genDungeonContext = dungeonContext(w, root == "Extract");
         genDungeonBudget = dungeoncapture::MaxStoredBytes;
@@ -6644,14 +6728,24 @@ static void generate(cube::World *w) {
         };
         unsigned char *zone = nullptr;
         const bool dungeon = !genDungeonPlan.empty();
+        const dungeoncapture::Point coordinate{zx, zy};
+        static const std::set<dungeoncapture::Point> noTargets;
+        const auto requested = genCeilingTargets.find(coordinate);
+        const auto &ceilingTargets = requested == genCeilingTargets.end() ? noTargets : requested->second;
+        captureabi::NativeCeilingProbe ceilings(base(), zone, ceilingTargets, readNative);
+        if (!ceilings.arm()) {
+            pause("could not reserve the thread-local dome observation");
+            return;
+        }
         traced.clear();
         const bool tracing = !dungeon && hook(true);
         traceThread = tracing ? GetCurrentThreadId() : 0;
         const bool made = generateOnce(w, zx, zy, zone);
+        const bool stopped = ceilings.stop();
         traceThread = 0;
         if (tracing)
             hook(false);
-        if (!made) {
+        if (!made || !stopped) {
             pause("generation failed");
             return;
         }
@@ -6661,13 +6755,27 @@ static void generate(cube::World *w) {
         }
         const std::string name = "z_" + std::to_string(zx) + "_" + std::to_string(zy);
         if (dungeon) {
-            if (!writeDungeonZone(w, zone, {zx, zy}, genDirectory + "\\" + name) || !generationContextMatches(w, 1)) {
+            const auto stem = genDirectory + "\\" + name;
+            if (genObserveCeilings) {
+                dungeoncapture::CeilingCapture capture{coordinate, genDungeonContext.seed, genDungeonContext.day, {}};
+                if (!ceilings.collect(capture.rows)) {
+                    pause("invalid or oversized ceiling observation");
+                    return;
+                }
+                const auto encoded = dungeoncapture::encodeCeilings(capture);
+                if (!writeOracleFile(stem + ".cdo", {encoded.begin(), encoded.end()})) {
+                    pause("ceiling observations could not be written");
+                    return;
+                }
+            }
+            if (!writeDungeonZone(w, zone, coordinate, stem) || !generationContextMatches(w, 1)) {
                 pause("fresh dungeon capture incomplete");
                 return;
             }
             if (genQueue.empty()) {
                 if (!capturepolicy::publishGenerationSnapshot(genDirectory + "\\complete.txt",
-                                                               std::string(dungeoncapture::CompletedWithGateThresholds))) {
+                                                               std::string(genObserveCeilings ? dungeoncapture::CompletedWithCeilings
+                                                                                              : dungeoncapture::CompletedWithGateThresholds))) {
                     pause("dungeon completion marker could not be published");
                     return;
                 }
@@ -7867,6 +7975,7 @@ extern "C" __declspec(dllexport) void ModPreInitialize() {
     extract::effectoracle::install();
     extract::droporacle::install();
     extract::controloracle::install();
+    extract::gatelive::install();
     extract::aiprobe::install();
     extract::netrecorder::install();
 }
