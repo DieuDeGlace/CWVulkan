@@ -11,6 +11,7 @@
 // WorldgenCreatureTests.cpp, compares the whole streams).
 #include "Assets.h"
 #include "Extracted.h"
+#include "GameMath.h"
 #include "WorldgenObjectOracle.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
 #include "../tools/ZoneExtractor/DungeonCeilingCapture.h"
@@ -19,6 +20,7 @@
 #include "worldgen/CellObjects.h"
 #include "worldgen/BuildingBuilder.h"
 #include "worldgen/Mason.h"
+#include "worldgen/Planner.h"
 #include "worldgen/Structures.h"
 #include "worldgen/WorldValues.h"
 #include "worldgen/ZoneCreatures.h"
@@ -26,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1404,21 +1407,24 @@ int worldgenDungeonTargets(int seed, int requestedStructure) {
     return found11 && found12 ? 0 : 1;
 }
 
-int worldgenDungeonGuardTargets(int seed) {
+int worldgenDungeonGuardTargets(int seed, int32_t blockX, int32_t blockY) {
     const auto world = wg::worldValues(seed);
     wg::CellObjects cells(world);
     wg::BuildingRules rules(cells);
     wg::ZoneTerrain terrain;
     constexpr int radius = 128;
     constexpr int cellToPlaceShift = wg::PLACE_SHIFT - 4;
+    const int32_t originX = wg::floorDiv(blockX, wg::PLACE_SHIFT), originY = wg::floorDiv(blockY, wg::PLACE_SHIFT);
     constexpr std::array<int, 4> floorCodes{0, 2, 3, 4};
     std::set<int> remaining(floorCodes.begin(), floorCodes.end());
     bool needGate = true;
-    std::printf("Engine-predicted kind-8 guard targets for seed %d\n", seed);
-    for (int distance = 1; distance <= radius && (needGate || !remaining.empty()); ++distance) {
-        for (int py = -distance; py <= distance; ++py) {
-            for (int px = -distance; px <= distance; ++px) {
-                if (std::max(std::abs(px), std::abs(py)) != distance)
+    wg::StructureOptions gateOptions;
+    gateOptions.hooks.planner = wg::plannerFacts;
+    std::printf("Engine-predicted kind-8 guard targets for seed %d near block %d %d\n", seed, blockX, blockY);
+    for (int distance = 0; distance <= radius && (needGate || !remaining.empty()); ++distance) {
+        for (int py = originY - distance; py <= originY + distance; ++py) {
+            for (int px = originX - distance; px <= originX + distance; ++px) {
+                if (std::max(std::abs(px - originX), std::abs(py - originY)) != distance)
                     continue;
                 const auto place = wg::cellPlace(px, py);
                 if (place.kind != 8 || (place.big && (px % 2 != 0 || py % 2 != 0)))
@@ -1431,7 +1437,11 @@ int worldgenDungeonGuardTargets(int seed) {
                 const auto square = wg::fortressSquare(placeCell, place.point);
                 const auto [ax, ay] = square.middle;
                 const int reach = square.size / 2 + 2; // Include the cell just outside the gate.
-                const bool gateEnabled = needGate && (wg::random(wg::cellKey(px, py) + 0x10581) & 1);
+                bool gateEnabled = needGate && (wg::random(wg::cellKey(px, py) + 0x10581) & 1);
+                if (needGate && !gateEnabled) {
+                    const auto region = wg::regionAt(place.point.x, place.point.y);
+                    gateEnabled = wg::regionPlan(region.x, region.y)->regionItem(px, py) == 8;
+                }
                 const int placeMask = place.big ? ~1 : ~0;
                 for (int x = ax - reach; x <= ax + reach; ++x) {
                     for (int y = ay - reach; y <= ay + reach; ++y) {
@@ -1449,11 +1459,26 @@ int worldgenDungeonGuardTargets(int seed) {
                                 std::putchar('\n');
                                 remaining.erase(floor.code);
                             }
-                        } else if (gateEnabled && needGate &&
-                                   (rules.type(x - 1, y) == 46 || rules.type(x + 1, y) == 46 ||
-                                    rules.type(x, y - 1) == 46 || rules.type(x, y + 1) == 46)) {
-                            std::printf("  gate: cell %d %d, place %d %d\n", x, y, px, py);
-                            needGate = false;
+                        } else if (gateEnabled && needGate) {
+                            for (const auto &[gx, gy] : {wg::Int2{x - 1, y}, wg::Int2{x + 1, y},
+                                                         wg::Int2{x, y - 1}, wg::Int2{x, y + 1}}) {
+                                if (rules.type(gx, gy) != 46)
+                                    continue;
+                                const auto gateZone = wg::generateZone(world, wg::floorDiv(gx, 2), wg::floorDiv(gy, 2), gateOptions);
+                                const auto threshold = gateZone.gateThresholds.find({gx, gy});
+                                const bool gatePresent = std::any_of(gateZone.objects.begin(), gateZone.objects.end(), [&](const auto &o) {
+                                    return o.type == 8 && gamemath::floorFixedCell(o.x) == gx && gamemath::floorFixedCell(o.y) == gy;
+                                });
+                                if (gatePresent && threshold != gateZone.gateThresholds.end() && threshold->second > 0) {
+                                    const int32_t approachX = 16 * x + 8, approachY = 16 * y + 8;
+                                    std::printf("  gate: cell %d %d, place %d %d, door cell %d %d, threshold %d\n"
+                                                "  approach: block %d %d, %.0f blocks from origin\n", x, y, px, py,
+                                                gx, gy, threshold->second, approachX, approachY,
+                                                std::hypot(double(approachX) - blockX, double(approachY) - blockY));
+                                    needGate = false;
+                                }
+                                break; // The native gate-side branch uses the first matching cardinal cell.
+                            }
                         }
                     }
                 }

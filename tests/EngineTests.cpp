@@ -1,6 +1,7 @@
 #include "WaterLilies.h"
 #include "AlphaLook.h"
 #include <array>
+#include <charconv>
 #include <deque>
 #include <set>
 #include <tuple>
@@ -238,7 +239,7 @@ int worldgenTerrainCommand(int maxZones);
 int worldgenDungeonCoverage(const std::filesystem::path &, int seed);
 int worldgenDungeonTargets(int seed, int requestedStructure);
 int worldgenDungeonFloorTargets(const std::filesystem::path &, int seed);
-int worldgenDungeonGuardTargets(int seed);
+int worldgenDungeonGuardTargets(int seed, int32_t blockX, int32_t blockY);
 int worldgenDungeonOracle(const std::filesystem::path &capture, const std::filesystem::path &tables);
 int worldgenStructureTests(); // tests/WorldgenStructureTests.cpp: the new generator's structures, fast subset
 int worldgenStructureCommand(int maxZones);
@@ -10431,7 +10432,17 @@ int main(int argc, char **argv) {
     if (argc >= 2 && std::string(argv[1]) == "castles") {
         const bool targets = argc == 3 && std::string(argv[2]) == "--targets";
         const bool floors = argc == 3 && std::string(argv[2]) == "--floor-targets";
-        const bool guards = argc == 3 && std::string(argv[2]) == "--guard-targets";
+        const bool guards = (argc == 3 || argc == 5) && std::string(argv[2]) == "--guard-targets";
+        int32_t guardX = 0, guardY = 0;
+        if (guards && argc == 5) {
+            const auto parse = [](std::string_view text, int32_t &value) {
+                const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+                return result.ec == std::errc{} && result.ptr == text.data() + text.size() &&
+                       value >= -2000000000 && value <= 2000000000;
+            };
+            if (!parse(argv[3], guardX) || !parse(argv[4], guardY))
+                return std::puts("Expected two signed world block coordinates"), 1;
+        }
         int structure = 0;
         if (argc == 4 && std::string_view(argv[2]) == "--structure") {
             const std::string_view id = argv[3];
@@ -10449,7 +10460,7 @@ int main(int argc, char **argv) {
         if (floors)
             return worldgenDungeonFloorTargets(directory, seed);
         if (guards)
-            return worldgenDungeonGuardTargets(seed);
+            return worldgenDungeonGuardTargets(seed, guardX, guardY);
         if (targets || structure)
             return worldgenDungeonTargets(seed, structure);
         return worldgenDungeonCoverage(directory, seed);

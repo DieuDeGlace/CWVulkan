@@ -162,6 +162,12 @@ and timer through the engine setter. It reports the coverage of the count
 and proximity routes separately. This observes the route Steam selected.
 The engine's eligibility predicates have their own runtime tests.
 
+Use `EngineTests castles --guard-targets <block-x> <block-y>` to look for
+a count-route entrance near a test character's current world position.
+The search checks that the engine generates a type-8 door and a positive
+threshold at the selected cell. It prints the approach coordinates and
+distance. Steam gameplay is needed to confirm the transition.
+
 `EngineTests generationrequest` checks parser bounds, sticky context changes,
 full-width snapshot values, exclusive input ownership/consumption and actual
 Windows file publication/no-overwrite
