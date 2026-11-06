@@ -7,6 +7,7 @@
 #include "alphagen/PlantModels.h"
 #include "Extracted.h"
 #include "SteamSession.h"
+#include "../tools/ZoneExtractor/DungeonCapture.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <tlhelp32.h>
@@ -402,7 +403,7 @@ bool appendLine(const fs::path &file, const std::string &line) {
 struct Journal {
     std::string run;
     std::set<std::string> begun, done, none;
-    std::vector<std::string> requests;
+    std::vector<std::string> requests, stagedRequests;
     bool valid = false;
 };
 Journal readJournal(const fs::path &file) {
@@ -428,6 +429,8 @@ Journal readJournal(const fs::path &file) {
             j.none.insert(rest);
         else if (word == "request")
             j.requests.push_back(rest);
+        else if (word == "request-staged")
+            j.stagedRequests.push_back(rest);
     }
     // The run folder is a plain name inside the setup folder.
     j.valid = !j.run.empty() && j.run.find_first_of("/\\:") == std::string::npos && j.run != "." && j.run != "..";
@@ -503,11 +506,31 @@ bool prepare(const fs::path &game, const PrepareOptions &options, Host &host, st
         why = "CubeModLoader is not installed in the game folder. It loads the extractor; install it first.";
         return false;
     }
-    for (const auto &r : options.requests)
-        if (!plainName(r)) {
-            why = "Invalid request name " + r;
+    auto requests = options.requests;
+    constexpr const char *dungeonRequest = "gen-dungeon.request";
+    if (!options.dungeonTargets.empty()) {
+        dungeoncapture::Plan plan;
+        if (!dungeoncapture::plan(options.dungeonTargets, capturepolicy::RetainedGenerationBudget::MaximumAttempts, plan)) {
+            why = "Invalid dungeon targets or too many zones for one run.";
             return false;
         }
+        if (fs::exists(game / "Extract" / "gen.request", ec) || ec) {
+            why = "An ordinary generation request is already pending or cannot be checked.";
+            return false;
+        }
+        requests.push_back(dungeonRequest);
+    }
+    std::set<std::string> unique;
+    for (const auto &name : requests) {
+        if (!plainName(name) || !unique.insert(name).second) {
+            why = "Invalid or duplicate request name " + name;
+            return false;
+        }
+        if (fs::exists(game / "Extract" / name, ec) || ec) {
+            why = "A request already exists or cannot be checked at Extract\\" + name + ".";
+            return false;
+        }
+    }
 
     // The run's folder and its journal.
     const fs::path setup = setupFolder(game);
@@ -565,13 +588,23 @@ bool prepare(const fs::path &game, const PrepareOptions &options, Host &host, st
     if (options.backupOracle && fs::is_directory(game / "Extract" / "oracle", ec) &&
         !copyTree(game / "Extract" / "oracle", run / "oracle-before", ec))
         return fail("Could not copy Extract\\oracle aside: " + plainError(ec));
-    for (const auto &r : options.requests) {
-        if (!appendLine(journal, "request " + r))
-            return fail("Cannot write the journal.");
-        std::ofstream out(game / "Extract" / r);
-        out << "Written by CubeVulkanSetup; the extractor answers it and removes it.\n";
-        if (!out)
-            return fail("Could not write Extract\\" + r + ".");
+    const auto staging = run / "requests-staged";
+    if (!requests.empty() && (!fs::create_directory(staging, ec) || ec))
+        return fail("Could not stage the capture requests: " + plainError(ec));
+    for (const auto &name : requests) {
+        const auto staged = staging / name;
+        std::ofstream out(staged, std::ios::binary);
+        out << (name == dungeonRequest ? options.dungeonTargets
+                                      : "Written by CubeVulkanSetup; the extractor answers it and removes it.\n");
+        out.close();
+        if (!out || !appendLine(journal, "request-staged " + name))
+            return fail("Could not stage and journal Extract\\" + name + ".");
+        // Same-volume rename without replacement. Recovery can tell whether
+        // publication happened by checking whether the staged file remains.
+        if (!MoveFileExW(staged.c_str(), (game / "Extract" / name).c_str(), MOVEFILE_WRITE_THROUGH)) {
+            ec = std::error_code(int(GetLastError()), std::system_category());
+            return fail("Could not publish Extract\\" + name + ": " + plainError(ec));
+        }
     }
     return true;
 }
@@ -600,12 +633,25 @@ RestoreResult restore(const fs::path &game, Host &host) {
         return r;
     };
 
-    // Requests the extractor never answered (it removes the ones it answers).
-    for (const auto &name : j.requests)
-        if (plainName(name) && fs::exists(game / "Extract" / name, ec)) {
-            fs::remove(game / "Extract" / name, ec); // the setup's own file
+    // Old journals recorded a direct write. New journals identify requests
+    // that made it out of the staging directory, including after interruption.
+    auto published = j.requests;
+    for (const auto &name : j.stagedRequests) {
+        if (!plainName(name))
+            continue;
+        if (!fs::exists(run / "requests-staged" / name, ec) && !ec)
+            published.push_back(name);
+        if (ec)
+            return failed("Could not check staged request " + name);
+    }
+    for (const auto &name : published) {
+        if (!plainName(name))
+            continue;
+        if (fs::remove(game / "Extract" / name, ec))
             r.steps.push_back("Removed the unanswered request Extract\\" + name + ".");
-        }
+        if (ec)
+            return failed("Could not remove request " + name);
+    }
 
     // The run's Mods folder: the one the setup made, never the owner's.
     const bool ownerModsAside = fs::exists(run / "Mods", ec);
@@ -915,7 +961,7 @@ std::string hex8(uint32_t v) {
 
 int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, std::ostream &out) {
     bool check = false, extract = false, dryRun = false, restoreRun = false, capture = false;
-    fs::path game;
+    fs::path game, dungeonTargetsFile;
     for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == L"--setup-check")
             check = true;
@@ -927,12 +973,31 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
             restoreRun = true;
         else if (args[i] == L"--dry-run")
             dryRun = true;
+        else if (args[i] == L"--dungeon-targets" && i + 1 < args.size())
+            dungeonTargetsFile = args[++i];
         else if (args[i] == L"--game" && i + 1 < args.size())
             game = args[++i];
         else {
             out << "Unknown argument. Use --setup-check, --setup-extract, --setup-capture [--dry-run] or --setup-restore, with --game PATH optional.\n";
             return 2;
         }
+    }
+    std::string dungeonTargets;
+    if (!dungeonTargetsFile.empty()) {
+        if (!capture || check || extract || restoreRun) {
+            out << "--dungeon-targets requires --setup-capture.\n";
+            return 2;
+        }
+        std::ifstream input(dungeonTargetsFile, std::ios::binary);
+        std::array<char, capturepolicy::MaximumGenerationRequestBytes + 1> bytes{};
+        input.read(bytes.data(), bytes.size());
+        dungeoncapture::Plan plan;
+        if (input.bad() || !input.eof() ||
+            !dungeoncapture::plan({bytes.data(), size_t(input.gcount())}, capturepolicy::RetainedGenerationBudget::MaximumAttempts, plan)) {
+            out << "Invalid dungeon targets or too many zones for one run.\n";
+            return 2;
+        }
+        dungeonTargets.assign(bytes.data(), size_t(input.gcount()));
     }
     Config config;
     config.load(setupRoot / "CubeVulkan.ini");
@@ -998,11 +1063,18 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
     if (host->gameRunning(game))
         blockers.push_back("Cube World is running; quit it first.");
     if (capture) {
+        if (!dungeonTargets.empty()) {
+            std::error_code ec;
+            for (const auto *name : {"gen.request", "gen-dungeon.request"})
+                if (fs::exists(game / "Extract" / name, ec) || ec)
+                    blockers.push_back(std::string("An existing request blocks this dungeon run: ") + name + ".");
+        }
         out << "\nIsolated reference capture" << (dryRun ? " (dry run)" : "") << ":\n"
             << "  Back up Save and temporarily set aside Mods and ReShade.\n"
             << "  Install only ZoneExtractor; existing Extract data stays in place.\n"
-            << "  Launch Cube World; the extractor captures once a world is available.\n"
-            << "  F5 and O remain available for manual refreshes. Quit afterward.\n"
+            << (dungeonTargets.empty() ? "  Launch Cube World; the extractor captures once a world is available.\n"
+                                        "  F5 and O remain available for manual refreshes. Quit afterward.\n"
+                                      : "  Launch Cube World and load a test character. Wait for the dungeon completion marker, then quit.\n")
             << "  Run --setup-restore to restore Mods, ReShade and Save exactly.\n";
         for (const auto &blocker : blockers)
             out << "  Cannot run now: " << blocker << '\n';
@@ -1010,7 +1082,10 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
             return blockers.empty() ? 0 : 2;
         PrepareOptions options;
         options.extractorDll = dll;
-        options.requests = {"scene-reference.request"};
+        if (dungeonTargets.empty())
+            options.requests = {"scene-reference.request"};
+        else
+            options.dungeonTargets = dungeonTargets;
         if (!prepare(game, options, *host, why)) {
             out << why << '\n';
             return 2;

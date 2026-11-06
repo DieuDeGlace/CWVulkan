@@ -65,6 +65,14 @@ needed to confirm the labels.
 
 ## Labeled dungeon captures
 
+`CubeVulkanDataCheck.exe --setup-capture --dungeon-targets <targets-file> --game "<Cube World folder>"`
+prepares an isolated dungeon session using the same Save, Mods and ReShade
+journal as the normal setup. Add `--dry-run` to inspect the preparation
+without changing the installation. The setup refuses to replace an existing
+generation request and queues only the dungeon request for this mode. Load a
+test character in Steam Cube World, wait for completion, close the game, and
+run `--setup-restore` against the same game folder.
+
 `Extract/gen-dungeon.request` opts into the dungeon diagnostic. Supply up to
 16 signed **16-block cell** coordinate pairs, one pair per line. The extractor
 includes each target's 3×3 neighborhood and deduplicates cells and 64-block zones.

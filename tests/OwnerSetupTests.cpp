@@ -301,12 +301,24 @@ void journalAndRollback() {
     SETUP_CHECK(!prepare(game, options, host, why) && !runPending(game));
     SETUP_CHECK(fs::exists(game / "Mods" / "SomeMod.dll") && fs::exists(game / "dxgi.dll"));
 
+    options.requests.clear();
+    options.dungeonTargets = "194 715\n-862 154\n";
+    const auto dungeonRequest = game / "Extract" / "gen-dungeon.request";
+    write(dungeonRequest, "existing owner request");
+    SETUP_CHECK(!prepare(game, options, host, why) && !runPending(game) && read(dungeonRequest) == "existing owner request");
+    fs::remove(dungeonRequest);
+    SETUP_CHECK(prepare(game, options, host, why) && read(dungeonRequest) == options.dungeonTargets);
+    SETUP_CHECK(!fs::exists(game / "Extract" / "scene-reference.request"));
+    SETUP_CHECK(restore(game, host).ok && !fs::exists(dungeonRequest) && !runPending(game));
+    options.dungeonTargets.clear();
+    options.stamp = "standard";
+
     // Prepared: Save copied, Mods and ReShade aside, the extractor alone, the requests written.
     write(game / "Extract" / "oracle" / "old.txt", "old tables");
     options.requests = {"sounds.request", "oracle.request"};
     options.backupOracle = true;
     SETUP_CHECK(prepare(game, options, host, why));
-    const fs::path run = setupFolder(game) / "run-test";
+    const fs::path run = setupFolder(game) / "run-standard";
     SETUP_CHECK(runPending(game));
     SETUP_CHECK(sameTree(run / "Save", fake.pristine / "Save"));
     SETUP_CHECK(sameTree(run / "Mods", fake.pristine / "Mods"));
@@ -350,6 +362,17 @@ void journalAndRollback() {
 // loss: the journal and the folder as they were left, then the rollback of the next start.
 void interruptedRuns() {
     const std::string header = "CubeVulkanSetup journal 1\nrun run-cut\n";
+    {
+        FakeGame fake("cut-request");
+        fake.ownerFiles();
+        FakeHost host;
+        const auto staged = setupFolder(fake.game) / "run-cut" / "requests-staged" / "gen-dungeon.request";
+        const auto request = fake.game / "Extract" / "gen-dungeon.request";
+        write(staged, "staged coordinates");
+        write(request, "independent owner request");
+        write(journalFile(fake.game), header + "request-staged gen-dungeon.request\n");
+        SETUP_CHECK(restore(fake.game, host).ok && read(request) == "independent owner request");
+    }
     {
         // Mods moved aside, its "done" never written.
         FakeGame fake("cut-mods");

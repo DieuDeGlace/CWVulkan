@@ -10,6 +10,12 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- The headless setup can now prepare the dungeon request by itself with
+  `--setup-capture --dungeon-targets <file>`. It uses the existing Save, Mods
+  and ReShade recovery journal. Setup stages requests before publishing them
+  and refuses to overwrite an existing request. Recovery tests cover a
+  competing owner request and an interrupted publication.
+
 - The expanded structure audit can require exact stored spans using
   `WS_COMPLETE=1` and `WS_STORED_EXACT=1` with `EngineTests wgstructures`.
   It uses the bounded CWZ reader and compares nonempty bases, lengths and

@@ -119,6 +119,7 @@ struct PrepareOptions {
     std::vector<std::string> requests;     // request files to write in Extract\ (names)
     bool backupOracle = false;             // copy Extract\oracle into the run folder first
     std::string stamp;                     // the run's name; empty: the local time
+    std::string dungeonTargets;            // optional 16-block cell coordinates for the dungeon diagnostic
 };
 
 // Takes the steps in order, journalled: Save copied, Mods and dxgi.dll moved aside, the
