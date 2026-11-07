@@ -1,4 +1,4 @@
-# Source review checkpoint — 2026-11-05
+# Source review checkpoint — 2026-11-07
 
 ## Fresh-PC validation — 2026-11-07
 
@@ -30,6 +30,18 @@ checkpoint describe the intended setup and remaining limits.
 
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
+
+- Controller input now distinguishes skipped sampling from a failed XInput poll.
+  Foreground loss and binding capture retain sampled controls and both stick
+  pairs; a failed admitted poll clears the pairs. Stateful checks reproduced six
+  pre-fix failures and pass after the correction. The independent controller
+  contract leaves broader active-input and hardware acceptance explicitly open.
+
+- Formula tooltips now borrow a panel-owned item published by resource-admitted
+  drawing, including both result and ingredient icons. Hidden/missing-result draws
+  retain that copy; missing ingredient icons still permit hover publication.
+  Actual owner-GUI tests with synthetic items reproduced nine pre-fix failures
+  and pass after the correction. Exact native frame latency remains open.
 
 - A supported Steam session confirmed both named dungeon cases and the
   18 helper rows. Structure 44/detail 12 exposed 145 block differences across

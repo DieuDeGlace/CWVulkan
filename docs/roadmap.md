@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Retain sampled controls and both stick pairs when foreground/binding-capture
+  admission skips polling; discard only the adapter's transient delivery flags.
+  Failed admitted polls still clear both pairs, while successful panel scrolling
+  clears movement and preserves turn. Removed the redundant saved-turn temporary.
+  Stateful regressions cover cold/repeated bypasses, camera consumption, panel
+  diversion, failed polls, reconnect, map mode and B suppression. Six checks failed
+  before the correction and pass afterward. The independent
+  [controller contract](specs/steam-controller-aim-20261107.md) bounds these rules;
+  broader active-input producers, native consumer scheduling and hardware
+  focus/capture/controller acceptance remain open.
+
 - [x] Formula-details hover now publishes an owned semantic item during an admitted
   draw, including the result icon and ordered ingredient hits. Missing result
   resources, hidden roots and invalid formula presentation preserve the cache;

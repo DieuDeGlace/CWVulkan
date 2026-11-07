@@ -35,7 +35,7 @@ GamepadCamera gamepadCamera(GamepadStick stick, double elapsedMs, float tracking
 class GamepadFrame {
   public:
     void update(const GamepadButtons &pad, bool ui, bool mapMode, bool panelEligible = false);
-    void clear(); // Lost foreground/capture: release inputs without clearing the B latch.
+    void skipPoll(); // Foreground/capture bypass retains sampled controls, both stick pairs and the B latch.
     std::array<bool, gameoptions::BINDINGS> held{};
     GamepadStick movement{}, look{};
     bool dismiss = false;

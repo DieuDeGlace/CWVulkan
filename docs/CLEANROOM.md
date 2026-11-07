@@ -2221,3 +2221,37 @@ oracles passes without skips. All Vulkan groups pass (92 shader, 2 camera, 102 G
 17 map, shared water and Alpha scenery), and the extractor SDK-independence audit
 passes. Local evidence: build/formula-tooltip-validation. These regression results
 do not establish complete live native tooltip or visual parity.
+
+## Controller sampling bypass and retained axes, 2026-11-07
+
+The same isolated source-only author independently finalized and held
+steam-controller-aim-20261107.md after complete readback. It uses Infinite-Cubes
+only as a discovery aid and grounds its stated behavior in original Steam
+executable evidence. No prohibited implementation exposure was reported. The
+clean implementer read the entire held contract and owned engine/test sources
+only; accepted prose under docs/specs preserves the held text.
+
+GameInput now bypasses its normal binding/pad refresh on lost foreground or
+binding capture, retaining combined sampled held state. The per-frame press-edge
+adapter discards its delivery flags rather than replaying an earlier edge.
+GamepadFrame's explicit skip path retains held contributions, movement/turn axes
+and the B latch while clearing its transient dismissal request. Successful polls
+rebuild controller contributions; failure neutralizes both stick pairs. Ordinary
+panel diversion zeroes movement but preserves turn without a temporary copy.
+These paths implement the independently described state distinctions rather
+than inferring axis ownership from the separate last-device indication.
+
+Stateful production-facade tests exercise cold and repeated bypasses, retained
+camera input, panel diversion, failure/reconnect, map publication and B-latch
+survival. Six checks reproduced the former reset error and pass after the fix.
+Full original global-active-input producers, consumer/callback scheduling and
+hardware/foreground/capture comparisons remain open. No native or reconstruction
+source was read by the implementer. Alpha terrain, lighting, Omega water and the
+other requested extensions are unchanged; final provenance and wider live Steam
+parity acceptance remain release gates.
+
+All five targets build. The full CPU/owner-data suite with required procedural
+oracles passes without skips, as do all Vulkan groups (92 shader, 2 camera,
+102 GUI, 17 map, shared water and Alpha scenery). The extractor SDK-independence
+audit also passes. Evidence: build/controller-input-validation. These checks do
+not substitute for the remaining native hardware and caller-schedule acceptance.

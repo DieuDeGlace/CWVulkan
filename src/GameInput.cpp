@@ -124,10 +124,12 @@ void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls
                        const std::vector<int> &pressedButtons, bool enabled, bool ui, bool mapMode, bool capturingBinding,
                        bool panelEligible, const GamepadButtons *sample) {
     const bool focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
-    if (focused && !capturingBinding)
-        padFrame.update(sample ? *sample : pollGamepad(window, false), ui, mapMode, panelEligible);
-    else
-        padFrame.clear();
+    if (!focused || capturingBinding) {
+        padFrame.skipPoll();
+        edge = {}; // Retained held state does not produce another press edge.
+        return;
+    }
+    padFrame.update(sample ? *sample : pollGamepad(window, false), ui, mapMode, panelEligible);
     for (int i = 0; i < gameoptions::BINDINGS; i++) {
         const gameoptions::Binding &b = controls[(size_t)i];
         const bool zoom = i == gameoptions::ZOOM_IN || i == gameoptions::ZOOM_OUT;
@@ -187,16 +189,17 @@ GamepadCamera gamepadCamera(GamepadStick stick, double elapsedMs, float tracking
             (double)(nativecrt::powf(stick.y, 3.0f) * rate) * ms};
 }
 
-void GamepadFrame::clear() {
-    held = {}, movement = {}, look = {};
+void GamepadFrame::skipPoll() {
     dismiss = false;
 }
 
 void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool mapMode, bool panelEligible) {
-    const GamepadStick previousLook = look;
-    clear();
-    if (!pad.connected)
+    held = {};
+    dismiss = false;
+    if (!pad.connected) {
+        movement = {}, look = {};
         return;
+    }
     if (!pad.b)
         suppressJump = false;
     else if (ui)
@@ -205,8 +208,10 @@ void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool mapMode, bool
     if (!ui || mapMode) {
         movement = gamepadStick(pad.leftX, pad.leftY);
         look = gamepadStick(pad.rightX, pad.rightY);
-    } else if (panelEligible)
-        look = previousLook; // The ordinary UI branch does not write a fresh right pair.
-    else
-        look = gamepadStick(pad.rightX, pad.rightY);
+    } else {
+        movement = {};
+        if (!panelEligible)
+            look = gamepadStick(pad.rightX, pad.rightY);
+        // Panel scrolling preserves the previous turn pair, including on a neutral sample.
+    }
 }

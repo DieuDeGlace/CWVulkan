@@ -11,6 +11,66 @@ int gamepadUiTests() {
     auto check = [&](bool pass, const char *what) {
         if (!pass) { std::printf("FAIL gamepad UI: %s\n", what); ++failures; }
     };
+    // Exercise sampled-input lifetime through gameplay, skipped polls and panel diversion.
+    {
+        GamepadFrame sampled;
+        GamepadButtons sticks;
+        sampled.skipPoll();
+        check(sampled.movement.x == 0 && sampled.look.y == 0, "a bypass before sampling retains initial neutral axes");
+        sticks.connected = true;
+        sticks.leftX = 16384, sticks.leftY = 24576;
+        sticks.rightX = -16384, sticks.rightY = 8192;
+        sticks.rightShoulder = true;
+        sampled.update(sticks, false, false);
+        check(sampled.movement.x == .5f && sampled.movement.y == .75f && sampled.look.x == -.5f && sampled.look.y == .25f,
+              "successful gameplay publishes both stick pairs");
+        const auto beforeSkip = gamepadCamera(sampled.look, 16);
+        sampled.skipPoll(); // Live foreground/binding-capture bypass path.
+        check(sampled.held[gameoptions::ATTACK] && !sampled.dismiss,
+              "skipped sampling retains held controller contributions without replaying a dismissal");
+        check(sampled.movement.x == .5f && sampled.movement.y == .75f && sampled.look.x == -.5f && sampled.look.y == .25f,
+              "skipped sampling preserves both stored stick pairs");
+        const auto afterSkip = gamepadCamera(sampled.look, 16);
+        check(beforeSkip.yaw != 0 && afterSkip.yaw == beforeSkip.yaw && afterSkip.pitch == beforeSkip.pitch,
+              "the camera consumes retained turn axes after a skipped poll");
+        sampled.skipPoll();
+        check(sampled.held[gameoptions::ATTACK] && sampled.movement.y == .75f && sampled.look.x == -.5f,
+              "repeated bypasses preserve the last sample");
+        sticks.leftX = sticks.leftY = sticks.rightX = sticks.rightY = 0;
+        sampled.update(sticks, true, false, true);
+        check(sampled.movement.x == 0 && sampled.movement.y == 0 && sampled.look.x == -.5f && sampled.look.y == .25f,
+              "an eligible UI panel clears movement but a neutral diverted stick retains prior turn axes");
+        sticks.rightX = 8192, sticks.rightY = -16384;
+        sampled.update(sticks, true, false, false);
+        check(sampled.movement.x == 0 && sampled.look.x == .25f && sampled.look.y == -.5f,
+              "ordinary UI outside eligible panels refreshes the turn pair");
+        sticks.connected = false;
+        sampled.update(sticks, true, false, true);
+        check(sampled.movement.x == 0 && sampled.movement.y == 0 && sampled.look.x == 0 && sampled.look.y == 0 &&
+                  !sampled.held[gameoptions::ATTACK],
+              "a failed admitted poll clears both pairs and adds no controller-held contribution");
+        sticks.connected = true;
+        sampled.update(sticks, true, false, true);
+        check(sampled.look.x == 0 && sampled.look.y == 0,
+              "panel diversion after a failed poll cannot resurrect an older turn sample");
+        sticks.leftX = 16384, sticks.leftY = 8192;
+        sampled.update(sticks, true, true, true);
+        check(sampled.movement.x == .5f && sampled.movement.y == .25f && sampled.look.x == .25f && sampled.look.y == -.5f,
+              "interactive map mode publishes both pairs even with an eligible panel");
+        sticks.b = true;
+        sampled.update(sticks, true, false, true);
+        check(sampled.dismiss, "an admitted UI B press requests dismissal");
+        sampled.skipPoll();
+        check(!sampled.dismiss && sampled.held[gameoptions::ATTACK], "a bypass consumes no new dismissal and retains held state");
+        sampled.update(sticks, false, false);
+        check(!sampled.held[gameoptions::JUMP], "the B suppression latch survives skipped sampling");
+        sticks.b = false;
+        sampled.update(sticks, false, false);
+        sticks.b = true;
+        sampled.update(sticks, false, false);
+        check(sampled.held[gameoptions::JUMP], "a successful release and new B press restore jumping");
+    }
+
     check(navigationTarget({}, 20000, 0, {{8, 1}, {50, 0}}) == 1, "alignment wins over raw proximity");
     check(navigationTarget({}, 20000, 0, {{50, 1}, {150, 0}}) == 0, "equal score preserves registration order");
     check(navigationTarget({}, 20000, 0, {{1, 10}, {2, 30}}) == 0, "fallback outside the preferred cone");
