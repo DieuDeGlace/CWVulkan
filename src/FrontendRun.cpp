@@ -62,10 +62,10 @@ void MenuInput::routeInterfaceMessages(Hud &hud) {
         case InterfaceMessage::LeftUp:
             hud.interfaceLeftUp();
             break;
-        case InterfaceMessage::RightDown: hud.interfaceButtonHeld(1, true); break;
-        case InterfaceMessage::RightUp: hud.interfaceButtonHeld(1, false); break;
-        case InterfaceMessage::MiddleDown: hud.interfaceButtonHeld(2, true); break;
-        case InterfaceMessage::MiddleUp: hud.interfaceButtonHeld(2, false); break;
+        case InterfaceMessage::RightDown: hud.interfaceSecondaryButton(1, true); break;
+        case InterfaceMessage::RightUp: hud.interfaceSecondaryButton(1, false); break;
+        case InterfaceMessage::MiddleDown: hud.interfaceSecondaryButton(2, true); break;
+        case InterfaceMessage::MiddleUp: hud.interfaceSecondaryButton(2, false); break;
         case InterfaceMessage::ToggleVisibility:
             hud.setInterfaceShown(!hud.interfaceShown());
             break;
@@ -80,13 +80,13 @@ void MenuInput::routeGamepadButtons(Hud &hud) {
             if (button == 0)
                 interfacePresses.push_back(hud.interfaceLeftDown());
             else
-                hud.interfaceButtonHeld(button, true);
+                hud.interfaceSecondaryButton(button, true);
         }
         if (gamepadPointer.released[(size_t)button]) {
             if (button == 0)
                 hud.interfaceLeftUp();
             else
-                hud.interfaceButtonHeld(button, false);
+                hud.interfaceSecondaryButton(button, false);
         }
     }
 }

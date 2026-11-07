@@ -9,8 +9,14 @@
 namespace plasma {
 class Input : private Scene::DeletionObserver {
   public:
-    enum class Event { LeftDown = 2, LeftUp = 3, Move = 12, Enter = 13, Leave = 14, FocusLost = 19 };
-    enum class Hook { LeftDown, LeftUp, Move, Enter, Leave, GlobalQualifyingDown, GlobalDown, GlobalUp, GlobalMove };
+    enum class Event {
+        LeftDown = 2, LeftUp = 3, RightDown = 5, RightUp = 6, MiddleDown = 8, MiddleUp = 9,
+        Move = 12, Enter = 13, Leave = 14, FocusLost = 19
+    };
+    enum class Hook {
+        LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, Move, Enter, Leave,
+        GlobalQualifyingDown, GlobalDown, GlobalUp, GlobalRightDown, GlobalRightUp, GlobalMiddleDown, GlobalMiddleUp, GlobalMove
+    };
     using Pick = std::function<SceneNode *(glm::vec2)>;
     using Callback = std::function<void(Input &, SceneNode &)>;
     using Virtual = std::function<void(Input &, SceneNode &, Hook)>;
@@ -27,6 +33,10 @@ class Input : private Scene::DeletionObserver {
     void setButtonHeld(int button, bool down); // Mask publication only; widget callbacks are separate.
     void leftDown();
     void leftUp();
+    void rightDown();
+    void rightUp();
+    void middleDown();
+    void middleUp();
     SceneNode *target() const; // Capture or fresh root pick, never the retained movement hit.
     void capture(SceneNode *node) { captured = node; }
     void clearCapture(); // Includes a full unchanged-pointer move, even when capture was null.
@@ -62,6 +72,8 @@ class Input : private Scene::DeletionObserver {
     void invoke(SceneNode *owner, Hook);
     void visit(SceneNode &, Hook);
     void closeShownAuxiliary();
+    void clearOtherFocus(SceneNode *selected);
+    void secondaryButton(int button, bool down, Hook targeted, Event event, Hook global);
 };
 // Only the ordinary Button dynamic class. Derived kinds retain their own hooks;
 // Move returns false so the controller can invoke the common Widget geometry hook.

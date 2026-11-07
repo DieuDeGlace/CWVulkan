@@ -305,7 +305,7 @@ class Hud {
     };
     InterfacePress interfaceLeftDown();
     void interfaceLeftUp();
-    void interfaceButtonHeld(int button, bool down);
+    void interfaceSecondaryButton(int button, bool down); // Right/middle; left presses retain their separate press record.
     uint32_t interfaceHeldButtons() const;
     glm::vec2 interfacePointerDelta() const;
     const plasma::SceneNode *interfacePointerTarget() const;

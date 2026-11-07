@@ -8,6 +8,18 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Right/middle UI button dispatch now follows held publication with
+  capture-or-fresh-pick selection, down-only focused-widget cleanup, associated
+  owner virtual hooks, native-key registered callbacks and own-widget global
+  traversal. Registered admission rereads the owner after the virtual hook.
+  Secondary dispatch omits the left-only auxiliary/qualifying-owner operations;
+  its release path adds no automatic capture clear or outside-owner leave.
+  Actual window and controller adapters share these dispatchers. Stateful checks
+  reproduced 26 failures in the mask-only path and pass after the correction.
+  See the independent [secondary-button contract](specs/steam-secondary-button-dispatch-20261107.md).
+  Dynamic widget-hook bodies, broader callback/tree lifetime rules and physical
+  device acceptance remain open.
+
 - [x] Shared held-mouse state now receives actual window edges and eligible
   controller mouse callbacks. Left controller clicks enter the same capture/tab
   path and retain their press identity for later inventory work. Native-backed UI
@@ -21,7 +33,7 @@ individual feature documents.
   [mouse admission](specs/steam-mouse-mode-admission-20261107.md),
   [held-mask](specs/steam-mouse-held-mask-20261107.md) and
   [map yaw](specs/steam-map-pan-yaw-20261107.md) contracts. Complete active-input,
-  cursor-preparation/warp, right/middle widget callback and physical-device
+  cursor-preparation/warp, dynamic widget-hook bodies and physical-device
   acceptance remain open.
 
 - [x] Retain sampled controls and both stick pairs when foreground/binding-capture

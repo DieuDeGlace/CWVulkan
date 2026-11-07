@@ -31,6 +31,12 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Right and middle UI events now dispatch targeted and global callbacks using
+  the native event keys, capture selection and focus-cleanup order. These paths
+  omit the left button's auxiliary and extra release operations. Stateful checks
+  reproduced 26 failures in the prior mask-only path and pass after the fix.
+  Dynamic widget bodies and live hardware acceptance remain separate gates.
+
 - Mouse motion now runs before controller callbacks and shares the GUI's stored
   button mask. Actual window messages and synthesized controller clicks use that
   mask; left controller clicks also reach the retained capture/tab path. Camera

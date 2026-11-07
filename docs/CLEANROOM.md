@@ -2309,3 +2309,41 @@ An isolated hidden/offline/no-save Alpha-world system-menu run with a synthetic
 pointer exits zero and renders the menu (build/mouse-input-smoke). This exercises
 the in-game service binding and retained pointer stage, not native hardware or
 pixel acceptance. Full regression logs are in build/mouse-input-validation.
+
+## Secondary-button dispatch, 2026-11-07
+
+The clean source_mouse_mask author read the updated standalone author policy and
+individually selected original Steam evidence only. It finalized/read back/held
+steam-secondary-button-dispatch-20261107.md, reported no prohibited exposure and
+left earlier held files unchanged. The implementer read the entire final prose
+before implementation; the accepted docs/specs text matches it. Original event
+keys, virtual identities, field distinctions and direct operation order are facts;
+no native source, reconstruction, SDK or callback body was read by the implementer.
+The earlier source_feat_contract context remains quarantined.
+
+The original mask-only adapter was first extracted into named secondary entry
+points without adding dispatch. Native-key trace/state tests then reproduced 26
+failures. The completed owned input path updates the held bit, selects capture or
+a fresh pick, performs down-only focused-object dirty/key19/null cleanup, invokes
+the associated owner's virtual hook, rereads registered-callback admission and
+attempts its button-specific global traversal. Focus cleanup is shared with the
+existing left-down path without adding the left-only auxiliary/qualifying-owner
+steps to secondary buttons. Secondary releases neither force capture clearing
+nor synthesize the left release's outside-owner leave. Window and controller
+adapters call the same right/middle dispatch methods.
+
+Tests cover native numeric registration keys, ordering, live owner/enabled/style
+changes after callbacks, own versus associated widgets, passive/disabled capture,
+ownerless capture, callback-induced nested movement, focus replacement before the
+outer null store, preserved auxiliary state and release without matching down.
+Those focused checks pass after the correction. The new global hook identities
+are kept separate from registered keys; unproved global registration numbers or
+callback body effects were not invented. Dynamic widget behavior, arbitrary tree
+mutation/lifetime guarantees, complete Game/UI scheduling and physical-device
+acceptance remain open. Alpha defaults and enhancements are unchanged.
+
+All five targets build. Full CPU/owner-data validation with required procedural
+oracles passes without skips. All Vulkan groups pass: 92 shader, 2 camera,
+102 GUI, 17 map, shared water and Alpha scenery. The extractor dependency audit
+passes without CWSDK. Evidence: build/secondary-button-validation. These regression
+results do not establish native physical-device or complete widget-body acceptance.

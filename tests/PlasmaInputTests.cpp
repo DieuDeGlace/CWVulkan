@@ -47,6 +47,180 @@ int plasmaInputTests() {
             ++failures;
         }
     };
+    // Native keys come from the independent secondary-button contract rather
+    // than the enum, so incorrect numeric bindings cannot silently agree here.
+    struct Secondary {
+        int button, key;
+        bool down;
+        Input::Hook target, global;
+        void (Input::*send)();
+    };
+    const Secondary secondary[] = {
+        {1, 5, true, Input::Hook::RightDown, Input::Hook::GlobalRightDown, &Input::rightDown},
+        {1, 6, false, Input::Hook::RightUp, Input::Hook::GlobalRightUp, &Input::rightUp},
+        {2, 8, true, Input::Hook::MiddleDown, Input::Hook::GlobalMiddleDown, &Input::middleDown},
+        {2, 9, false, Input::Hook::MiddleUp, Input::Hook::GlobalMiddleUp, &Input::middleUp}
+    };
+    for (const auto &test : secondary) {
+        Node root;
+        root.name = "root";
+        root.widget.emplace();
+        root.widget->enabled = false; // Global traversal has a separate admission rule.
+        auto *a = add(root, "A"), *child = add(*a, "child", false), *b = add(root, "B");
+        Node *picked = b;
+        int picks = 0;
+        Input input(root, [&](glm::vec2) { ++picks; return picked; });
+        input.move({7, 9});
+        b->widget->flags |= 0x20;
+        input.leftDown(); // Retain a qualifying owner that secondary buttons must not replace.
+        input.auxiliary(b);
+        input.focus(b);
+        input.setButtonHeld(1, true);
+        input.setButtonHeld(2, true);
+        input.setButtonHeld(test.button, !test.down);
+        picked = child; // The retained movement hit is B, but button selection must pick afresh.
+        const uint32_t expectedMask = test.down ? 7u : 7u & ~(1u << test.button);
+        std::vector<std::string> trace;
+        input.registerEvent(*b, static_cast<Input::Event>(19), [&](Input &state, Node &) {
+            trace.push_back("focus");
+            check(state.heldButtons() == expectedMask && state.focusWidget() == b && b->widget->dirty,
+                  "secondary down marks old focus and dispatches key19 after held publication, before focus clear");
+            state.focus(a); // The outer direct null store follows the callback even if it assigned new focus.
+        });
+        input.virtualHook = [&](Input &state, Node &node, Input::Hook hook) {
+            if (hook == test.target) {
+                trace.push_back("target");
+                check(&node == a && state.heldButtons() == expectedMask, "secondary virtual uses the associated owner after mask update");
+            } else if (hook == test.global)
+                trace.push_back("global:" + node.name);
+        };
+        input.registerEvent(*a, static_cast<Input::Event>(test.key), [&](Input &, Node &node) {
+            trace.push_back("registered");
+            check(&node == child, "secondary registered callback keeps the originally selected node");
+        });
+        const int before = picks;
+        (input.*test.send)();
+        std::vector<std::string> expected;
+        if (test.down) expected.push_back("focus");
+        expected.insert(expected.end(), {"target", "registered", "global:root", "global:A", "global:B"});
+        check(trace == expected, "secondary focus/virtual/registered/global order and root-first own-widget traversal");
+        check(picks == before + 1 && input.movementHit() == b, "secondary selection uses one fresh pick without overwriting retained hover");
+        check(input.heldButtons() == expectedMask && input.auxiliaryWidget() == b && b->visible && input.downOwner() == b,
+              "secondary buttons preserve other held bits, the auxiliary target and the left qualifying owner");
+        check(test.down ? (!input.focusWidget() && b->widget->dirty) : (input.focusWidget() == b && !b->widget->dirty),
+              "focused-widget cleanup belongs only to secondary down, with no direct hide");
+    }
+    for (const auto &test : secondary) {
+        Node root;
+        auto *a = add(root, "A"), *child = add(*a, "child", false), *b = add(root, "B");
+        int picks = 0;
+        Input input(root, [&](glm::vec2) { ++picks; return b; });
+        input.capture(child);
+        child->flags = plx::NODE_PASSIVE | plx::NODE_DISABLED;
+        root.visible = false;
+        std::vector<std::string> trace;
+        input.virtualHook = [&](Input &, Node &node, Input::Hook hook) {
+            if (hook == test.target) trace.push_back("target:" + node.name);
+            if (hook == test.global) trace.push_back("global:" + node.name);
+        };
+        input.registerEvent(*a, static_cast<Input::Event>(test.key), [&](Input &, Node &) { trace.push_back("registered"); }, false);
+        (input.*test.send)();
+        check(picks == 0 && trace == std::vector<std::string>{"target:A"},
+              "secondary capture bypasses pick/root visibility while passive registration and global gates stay separate");
+        trace.clear();
+        child->flags = 0;
+        root.visible = true;
+        a->widget->enabled = false;
+        (input.*test.send)();
+        check(trace == std::vector<std::string>{"registered", "global:A", "global:B"},
+              "optional-enabled secondary registration and global hooks survive a disabled targeted owner");
+    }
+    {
+        Node root;
+        auto *a = add(root, "A"), *child = add(*a, "child", false), *b = add(root, "B");
+        int picks = 0;
+        Input input(root, [&](glm::vec2) { ++picks; return b; });
+        input.capture(child);
+        std::vector<std::string> trace;
+        input.virtualHook = [&](Input &, Node &node, Input::Hook hook) {
+            if (hook == Input::Hook::RightDown) {
+                trace.push_back("target:" + node.name);
+                child->widgetOwner = b;
+                b->widget->enabled = false;
+            } else if (hook == Input::Hook::GlobalRightDown)
+                trace.push_back("global:" + node.name);
+        };
+        input.registerEvent(*b, static_cast<Input::Event>(5), [&](Input &, Node &node) {
+            trace.push_back("registered:B");
+            check(&node == child, "secondary registration rereads owner after the virtual without replacing its selected node");
+            root.visible = false;
+        }, false);
+        input.rightDown();
+        check(trace == std::vector<std::string>{"target:A", "registered:B"} && picks == 0,
+              "secondary admission and global visibility are read after earlier callbacks");
+        trace.clear();
+        child->widgetOwner = nullptr;
+        root.visible = true;
+        input.rightDown();
+        check(picks == 0 && trace == std::vector<std::string>{"global:A", "global:B"},
+              "an ownerless secondary capture does not fall back to picking and still attempts global traversal");
+    }
+    for (const auto &test : secondary) {
+        if (test.down) continue;
+        Node root;
+        auto *a = add(root, "A"), *b = add(root, "B");
+        int picks = 0;
+        Input input(root, [&](glm::vec2) { ++picks; return b; });
+        input.capture(a);
+        input.move({11, 13});
+        input.setButtonHeld(test.button, true);
+        std::vector<std::string> trace;
+        input.virtualHook = [&](Input &state, Node &node, Input::Hook hook) {
+            if (hook == test.target) {
+                trace.push_back("up");
+                check(state.heldButtons() == 0, "secondary release clears its held bit before callbacks");
+                state.clearCapture();
+            } else if (hook == Input::Hook::Leave && &node == a)
+                trace.push_back("nested-leave");
+            else if (hook == Input::Hook::Move && &node == b)
+                trace.push_back("nested-move");
+            else if (hook == test.global)
+                trace.push_back("global:" + node.name);
+        };
+        input.registerEvent(*a, static_cast<Input::Event>(test.key), [&](Input &state, Node &node) {
+            trace.push_back("registered-up");
+            check(&node == a && !state.captureNode() && state.movementHit() == b,
+                  "secondary up retains its entry target across a callback-induced capture release");
+        });
+        (input.*test.send)();
+        check(trace == std::vector<std::string>{"up", "nested-leave", "nested-move", "registered-up", "global:A", "global:B"} && picks == 1,
+              "secondary up has no extra left-button owner-comparison pick after nested movement");
+        input.capture(a);
+        int leaves = 0, releases = 0;
+        input.virtualHook = [&](Input &, Node &, Input::Hook hook) { leaves += hook == Input::Hook::Leave; };
+        input.registerEvent(*a, static_cast<Input::Event>(test.key), [&](Input &, Node &) { ++releases; });
+        const int before = picks;
+        (input.*test.send)();
+        check(input.captureNode() == a && releases == 1 && leaves == 0 && picks == before,
+              "secondary release has no matching-down, automatic capture clear or outside-owner leave rule");
+    }
+    for (const auto &test : secondary) {
+        if (!test.down) continue;
+        Node root;
+        auto *a = add(root, "A"), *child = add(*a, "child", false);
+        Node *picked = a;
+        Input input(root, [&](glm::vec2) { return picked; });
+        int lost = 0;
+        input.focus(a);
+        input.registerEvent(*a, static_cast<Input::Event>(19), [&](Input &, Node &) { ++lost; });
+        (input.*test.send)();
+        check(input.focusWidget() == a && !a->widget->dirty && lost == 0,
+              "secondary down preserves focus when the selected node owns that exact widget");
+        picked = child;
+        (input.*test.send)();
+        check(!input.focusWidget() && a->widget->dirty && lost == 1,
+              "secondary focus comparison uses the node's direct widget, not its associated owner");
+    }
     {
         Node root;
         auto *a = add(root, "A"), *one = add(*a, "one", false), *two = add(*a, "two", false);

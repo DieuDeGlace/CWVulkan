@@ -114,13 +114,7 @@ void Input::leftDown() {
     }
     if (shownAuxiliary && !contains(shownAuxiliary, selected))
         closeShownAuxiliary();
-    auto *ownWidget = selected && selected->widget ? selected : nullptr;
-    if (focused && (!selected || ownWidget != focused)) {
-        if (focused->widget)
-            focused->widget->dirty = true;
-        dispatchRegistered(focused, Event::FocusLost);
-        focused = nullptr;
-    }
+    clearOtherFocus(selected);
     if (selected) {
         invoke(owner(selected), Hook::LeftDown);
         dispatchRegistered(selected, Event::LeftDown);
@@ -144,6 +138,39 @@ void Input::leftUp() {
     }
     visit(root, Hook::GlobalUp);
 }
+void Input::clearOtherFocus(SceneNode *selected) {
+    auto *ownWidget = selected && selected->widget ? selected : nullptr;
+    if (focused && (!selected || ownWidget != focused)) {
+        if (focused->widget)
+            focused->widget->dirty = true;
+        dispatchRegistered(focused, Event::FocusLost);
+        focused = nullptr;
+    }
+}
+void Input::secondaryButton(int button, bool down, Hook targeted, Event event, Hook global) {
+    setButtonHeld(button, down);
+    auto *selected = target();
+    if (down)
+        clearOtherFocus(selected);
+    if (selected) {
+        invoke(owner(selected), targeted);
+        dispatchRegistered(selected, event); // Resolve the associated owner and admission again after the virtual hook.
+    }
+    visit(root, global);
+}
+void Input::rightDown() {
+    secondaryButton(1, true, Hook::RightDown, Event::RightDown, Hook::GlobalRightDown);
+}
+void Input::rightUp() {
+    secondaryButton(1, false, Hook::RightUp, Event::RightUp, Hook::GlobalRightUp);
+}
+void Input::middleDown() {
+    secondaryButton(2, true, Hook::MiddleDown, Event::MiddleDown, Hook::GlobalMiddleDown);
+}
+void Input::middleUp() {
+    secondaryButton(2, false, Hook::MiddleUp, Event::MiddleUp, Hook::GlobalMiddleUp);
+}
+
 bool buttonInput(Input &input, SceneNode &node, Input::Hook hook, const ButtonSequenceStart &start) {
     if (!node.widget || node.widget->kind != "Button")
         return false;
@@ -191,7 +218,7 @@ bool buttonInput(Input &input, SceneNode &node, Input::Hook hook, const ButtonSe
     case Input::Hook::Move:
         return false;
     default:
-        return true; // Ordinary Button global visitor slots are no-ops.
+        return true; // Other hooks have no Button-specific handler here.
     }
 }
 } // namespace plasma

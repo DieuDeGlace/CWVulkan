@@ -1272,9 +1272,16 @@ void Hud::interfaceLeftUp() {
         interfaceInput->leftUp();
 }
 
-void Hud::interfaceButtonHeld(int button, bool down) {
-    if (interfaceInput)
-        interfaceInput->setButtonHeld(button, down);
+void Hud::interfaceSecondaryButton(int button, bool down) {
+    if (!interfaceInput)
+        return;
+    if (button == 1) {
+        if (down) interfaceInput->rightDown();
+        else interfaceInput->rightUp();
+    } else if (button == 2) {
+        if (down) interfaceInput->middleDown();
+        else interfaceInput->middleUp();
+    }
 }
 uint32_t Hud::interfaceHeldButtons() const {
     return interfaceInput ? interfaceInput->heldButtons() : 0;
