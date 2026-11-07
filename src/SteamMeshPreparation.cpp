@@ -9,9 +9,8 @@ PreparationBudget::PreparationBudget(int32_t radius) {
     limit = int64_t(budget);
 }
 bool PreparationBudget::consider(int32_t cost) {
-    if (cost == 0 && used > limit)
-        return false;
-    used += cost;
-    return true;
+    const bool admitted = allows(cost);
+    account(cost);
+    return admitted;
 }
 } // namespace scenerange

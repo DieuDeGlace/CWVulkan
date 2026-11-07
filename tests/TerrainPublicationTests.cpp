@@ -29,7 +29,7 @@ bool finish(World &world) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     do {
         world.update({96, 32, 166});
-        if (world.zoneCount() == 1 && !world.pendingCount()) return true;
+        if (world.zoneCount() == 1 && !world.preparingTerrain()) return true;
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     } while (std::chrono::steady_clock::now() < deadline);
     return false;
@@ -140,6 +140,8 @@ int terrainPublicationTests() {
         {
             World empty(terrain, assets, renderer, 0, &blocks);
             check(finish(empty), "initially empty zone completes without prior active groups");
+            check(!empty.preparingTerrain() && (!steam || empty.pendingCount() > 0),
+                  "clean zero-cost native refresh stays eligible without delaying foreground readiness");
             const Draws draws(empty);
             check(draws.opaque.empty() && draws.water.empty(), "empty initial staging invents no active geometry");
         }
@@ -234,6 +236,11 @@ int terrainPublicationRenderTests(Renderer &renderer, const std::filesystem::pat
         std::printf("Native water nonempty replacement GPU resources %s\n", replacement ? "PASS" : "FAIL");
         failures += !replacement;
         world.update({2048, 2048, 166});
+        const auto retirementDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (world.pendingCount() && std::chrono::steady_clock::now() < retirementDeadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            world.update({2048, 2048, 166});
+        }
         const Draws retiredDraws(world);
         bool retired = retiredDraws.opaque.empty() && retiredDraws.water.empty();
         for (int frame = 0; frame < 4; ++frame)

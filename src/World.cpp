@@ -1,4 +1,5 @@
 #include "World.h"
+#include "TaskPool.h"
 #include "WaterLilies.h"
 #include "AlphaLight.h"
 #include "AlphaLook.h"
@@ -154,7 +155,8 @@ World::~World() {
             renderer.release(mesh);
     renderer.setUnloadedDistance(-1);
     for (auto &[key, job] : jobs)
-        job.wait();
+        job.result.wait();
+    nativePool.reset(); // join worker lanes before releasing their World inputs
     for (const auto &[key, zone] : zones)
         releaseTerrain(zone);
 }
@@ -680,20 +682,28 @@ void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, con
     keyorder::sort(candidates, [](const Candidate &candidate) { return candidate.distance; });
     const std::set<Key> needed(wanted.begin(), wanted.end());
     wanted.clear();
-    scenerange::PreparationBudget budget(viewZones);
+    scenerange::PreparationBatch batch(viewZones);
     for (const auto &candidate : candidates) {
         int32_t cost = 0;
+        bool knownCost = false;
         const auto installed = zones.find(candidate.key);
-        if (installed != zones.end() && installed->second.nativeBounds)
-            cost = installed->second.nativeBounds->triangleCost.value_or(0);
+        if (installed != zones.end() && installed->second.nativeBounds && installed->second.nativeBounds->triangleCost) {
+            cost = *installed->second.nativeBounds->triangleCost;
+            knownCost = true;
+        }
         const auto pending = pendingBounds.find(candidate.key);
         if (pending != pendingBounds.end())
-            if (const auto bounds = pending->second->read(); bounds && bounds->triangleCost)
+            if (const auto bounds = pending->second->read(); bounds && bounds->triangleCost) {
                 cost = *bounds->triangleCost;
-        // Clean and pending meshes contribute too. A nonzero cached cost remains
-        // eligible above budget; new zero-cost work waits, without losing its dirtiness.
-        if (budget.consider(cost) && needed.contains(candidate.key) &&
-            (!extracted->generated() || zonedemand::neighborhood(candidate.key.first, candidate.key.second, available)))
+                knownCost = true;
+            }
+        // Incomplete owner captures retain cached fallback meshes until dirty;
+        // missing native cost metadata is not a proved successful zero-cost result.
+        if (!knownCost && !needed.contains(candidate.key))
+            continue;
+        if (batch.consider(cost, needed.contains(candidate.key), [&] {
+                return !extracted->generated() || zonedemand::neighborhood(candidate.key.first, candidate.key.second, available);
+            }))
             wanted.push_back(candidate.key);
     }
 }
@@ -726,16 +736,24 @@ void World::update(glm::vec3 focus) {
     auto retained = [&](const Key &key) {
         return inWindow(key, cx, cy) || (anchor && inWindow(key, physicalCx, physicalCy));
     };
-    // Finish completed jobs, nearest first, a few per frame to keep frames smooth.
-    int integrated = 0;
-    for (auto it = jobs.begin(); it != jobs.end() && integrated < 6;) {
-        if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            ++it;
-            continue;
-        }
-        Generated g = it->second.get();
-        Key key = it->first;
-        it = jobs.erase(it);
+    const bool nativePreparation = extracted && renderStyle() == RenderStyle::Steam;
+    const bool batchBusy = nativePreparation && !nativeOrder.empty() && !nativePool->idle();
+    std::vector<Key> finished;
+    if (nativePreparation) {
+        if (!batchBusy)
+            finished.swap(nativeOrder); // selected order, after every task has returned
+    } else {
+        for (auto &[key, job] : jobs)
+            if (job.result.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+                finished.push_back(key);
+    }
+    unsigned integrated = 0;
+    for (const Key &key : finished) {
+        if (!nativePreparation && integrated == 6)
+            break;
+        auto job = jobs.find(key);
+        Generated g = job->second.result.get();
+        jobs.erase(job);
         pendingBounds.erase(key);
         if (!retained(key) || !g.meshSucceeded)
             continue; // A failed source read publishes neither geometry nor metadata.
@@ -805,7 +823,7 @@ void World::update(glm::vec3 focus) {
         }
         buildScenery(z, g.scenery);
         zones[key] = std::move(z);
-        integrated++;
+        ++integrated;
     }
     if (extracted)
         for (const auto &key : staleModels) {
@@ -821,6 +839,10 @@ void World::update(glm::vec3 focus) {
     syncObjectZones();
     staleObjects.clear();
     staleModels.clear();
+    // Ordinary native retirement/selection follows the completed batch and its
+    // publication. Object/model updates above keep their independent frame path.
+    if (batchBusy)
+        return;
     // Drop zones out of range.
     for (auto it = zones.begin(); it != zones.end();) {
         if (!retained(it->first)) {
@@ -849,9 +871,17 @@ void World::update(glm::vec3 focus) {
             it = stale.erase(it); // a missing zone already has a fresh request above
         }
     }
-    if (extracted && renderStyle() == RenderStyle::Steam) {
-        if (jobs.size() < workers)
-            orderNativePreparation(wanted, cx, cy, streaming);
+    if (nativePreparation) {
+        orderNativePreparation(wanted, cx, cy, streaming);
+        if (cpuPerformance != sampledCpuPerformance) {
+            sampledCpuPerformance = cpuPerformance;
+            nativeConcurrency = cpuPerformance == 0 ? 4u : 8u;
+        }
+        // The original initial scheduler allocation is unproved. Retain the
+        // engine's hardware-based fallback and cap changed preferences as specified.
+        workers = std::min(workers, nativeConcurrency.value_or(workers));
+        if (!wanted.empty() && (!nativePool || nativePool->size() != workers))
+            nativePool = std::make_unique<TaskPool>(workers);
     } else {
         std::stable_sort(wanted.begin(), wanted.end(), [&](const Key &a, const Key &b) {
             auto d = [&](const Key &k) { return (k.first - cx) * (k.first - cx) + (k.second - cy) * (k.second - cy); };
@@ -880,8 +910,9 @@ void World::update(glm::vec3 focus) {
     renderer.setUnloadedDistance(nearest2 < 0 ? 1e9f : std::sqrt(nearest2));
     const bool alphaLook = renderStyle() == RenderStyle::Alpha; // (models take the light where they stand)
     for (auto &k : wanted) {
-        if (jobs.size() >= workers)
+        if (!nativePreparation && jobs.size() >= workers)
             break;
+        const bool required = !zones.contains(k) || stale.contains(k);
         stale.erase(k);
         const Terrain *t = &land;
         if (extracted) {
@@ -892,7 +923,7 @@ void World::update(glm::vec3 focus) {
             ExtractedWorld *ex = extracted;
             auto publication = std::make_shared<scenerange::CachePublication>();
             pendingBounds[k] = publication;
-            jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook, publication] {
+            auto generate = [this, ex, k, alphaLook, publication] {
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
                 g.meshSucceeded = ex->mesh(k.first, k.second, g.opaque, g.water,
@@ -910,10 +941,16 @@ void World::update(glm::vec3 focus) {
                     g.nativeLights = ex->lightSources(k.first, k.second, nativeLight);
                 }
                 return g;
-            });
+            };
+            if (nativePreparation) {
+                nativeOrder.push_back(k);
+                jobs[k] = {nativePool->submit(std::move(generate)), required};
+            } else {
+                jobs[k] = {std::async(std::launch::async, std::move(generate)), true};
+            }
             continue;
         }
-        jobs[k] = std::async(std::launch::async, [this, t, k, alphaLook] {
+        jobs[k].result = std::async(std::launch::async, [this, t, k, alphaLook] {
             Generated g;
             ZoneData data = t->generate(k.first, k.second);
             t->mesh(data, g.opaque, g.water);

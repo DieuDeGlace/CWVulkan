@@ -839,6 +839,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     }
     World world(terrain, assets, renderer, viewZones, useExtracted ? &extractedWorld : nullptr);
     world.setSourceRenderDistance(gameOptions.renderDistance);
+    world.setCpuPerformance(gameOptions.cpuPerformance);
     // The zones' stored states in Save/world.db go on the zones as they are made, and what changed
     // goes back when they leave memory (ZoneStates.h).
     // (The title shows the client world with the stored states; once play starts they are the host
@@ -889,6 +890,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         if (!setOnCommandLine("graphics.vsync") && benchmark <= 0)
             renderer.settings.vsync = renderSettings.vsync = o.vsync != 0; // (taken up when the swapchain is next made)
+        world.setCpuPerformance(o.cpuPerformance);
         renderer.settings.nativeZoneRadius = renderSettings.nativeZoneRadius = o.zonesDrawn();
         if (!setOnCommandLine("graphics.viewdistance")) {
             renderer.settings.fogDistance = renderSettings.fogDistance = o.viewDistance();
@@ -8563,7 +8565,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (benchmark > 0) {
             static double startedAt = -1;
             static unsigned counted = 0;
-            if (startedAt < 0 && world.pendingCount() == 0 && time > 3)
+            if (startedAt < 0 && !world.preparingTerrain() && time > 3)
                 startedAt = time;
             if (startedAt >= 0) {
                 counted++;
@@ -8594,7 +8596,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             break;
         // --capture: wait for the world around the player, then save and quit.
         if (!capture.empty()) {
-            settledFrames = world.pendingCount() == 0 && time >= runSeconds ? settledFrames + 1 : 0;
+            settledFrames = !world.preparingTerrain() && time >= runSeconds ? settledFrames + 1 : 0;
             if (settledFrames == 30)
                 renderer.capture(capture);
             if (settledFrames == 32)

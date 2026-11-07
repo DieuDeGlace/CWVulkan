@@ -116,8 +116,8 @@ void runtimeBands(ExtractedWorld &blocks, const auto &check) {
         do {
             runtime.update({32, 32, 38});
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        } while ((!runtime.zoneCount() || runtime.pendingCount()) && std::chrono::steady_clock::now() < deadline);
-        check(runtime.zoneCount() == 1 && !runtime.pendingCount(), "actual water mesh job installs into the headless runtime");
+        } while ((!runtime.zoneCount() || runtime.preparingTerrain()) && std::chrono::steady_clock::now() < deadline);
+        check(runtime.zoneCount() == 1 && !runtime.preparingTerrain(), "actual water mesh job installs into the headless runtime");
         std::vector<DrawItem> opaque, water;
         runtime.collect(opaque, water);
         std::set<int32_t> bases;

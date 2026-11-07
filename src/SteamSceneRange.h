@@ -29,9 +29,30 @@ struct Frame {
 class PreparationBudget {
   public:
     explicit PreparationBudget(int32_t zoneRadius);
-    bool consider(int32_t cost); // the outer cost branch only; dirty/readiness gates follow
+    bool allows(int32_t cost) const { return cost != 0 || used <= limit; }
+    void account(int32_t cost) { used += cost; }
+    bool consider(int32_t cost); // compatibility helper: outer admission, then accounting
   private:
     int64_t limit = 0, used = 0;
+};
+
+// Native candidate gates precede prefix accounting, including after the cap.
+class PreparationBatch {
+  public:
+    static constexpr size_t LIMIT = 8;
+    explicit PreparationBatch(int32_t radius) : budget(radius) {}
+    template <class Neighborhood> bool consider(int32_t cost, bool dirty, const Neighborhood &neighborhood) {
+        bool admitted = false;
+        if (budget.allows(cost) && (cost == 0 || dirty) && neighborhood() && selected < LIMIT) {
+            ++selected;
+            admitted = true;
+        }
+        budget.account(cost);
+        return admitted;
+    }
+  private:
+    PreparationBudget budget;
+    size_t selected = 0;
 };
 
 struct Ranges { float scene = 0, models = 0, abilities = 0; };

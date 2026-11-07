@@ -1,5 +1,51 @@
 # Source review checkpoint — 2026-11-07
 
+## Native mesh selection and batch boundary - 2026-11-07
+
+Native preparation now selects at most eight coordinates with the independent
+prefix-cost, zero-cost, invalidation and neighborhood gates. Reused bounded worker
+lanes complete the whole batch before selected-order publication and subsequent
+terrain retirement/selection. Source snapshots and deferred Vulkan releases stay
+owned by the engine; model/object updates retain their separate frame route.
+
+Known zero-cost results remain eligible after successful empty meshing. Required
+work is tracked separately, so diagnostic capture/benchmark settling can finish
+while clean empty refreshes continue. Partial captures with missing native cost
+metadata keep their cached fallback behavior. Alpha retains its existing async
+path and cap of six successful integrations per frame.
+
+A controlled owned generator hook reproduced two failures before the change:
+partial batch publication and premature retirement. Both now pass. Additional
+checks exercise the actual eight-coordinate batch, literal prefix boundaries,
+neighbor-before-cap order, signed costs and zero-cost readiness; terrain bands,
+publication, static objects and fourteen native-water GPU checks also pass.
+Evidence: build/native-preparation-validation. The independent
+[selection contract](specs/steam-mesh-invalidation-selection-20261107.md) and
+[concurrency addendum](specs/steam-mesh-worker-concurrency-20261107.md) are held.
+
+CPU-setting changes cap our hardware-bounded lanes at four for zero or eight for
+nonzero, sampled after the current batch. The original default first scheduler
+limit is unproved; the existing hardware-based fallback stays an explicit engine
+policy. Native scheduler priorities/runtime internals are not reproduced. Incoming
+edit requests retain the engine's immutable-snapshot queue behavior; the native
+unconditional final dirty-byte clear is documented separately. Exact native race,
+publication latency, source-cache/eviction cadence and broad cold-load acceptance
+remain open. Alpha terrain/lighting, Omega water and enhancements stay configured.
+
+All five targets and the full required-oracle CPU/owner-data suite pass without
+skips. Vulkan groups pass: 92 shader, 2 camera, 102 GUI, 17 map, 14 native-water,
+shared water and Alpha scenery. Extractor SDK independence passes. Final logs
+include the restored Alpha successful-integration cap.
+
+A matching hidden/offline/no-save Alpha/Steam/Omega full-fill observation still
+reaches its deadline: 128.422seconds, 384 prepared zones and8 queued/running
+coordinates, no capture. The baseline was128.234seconds, 433 prepared and3 running
+coordinates. The pending counts describe different batch representations. This
+single comparison establishes no speedup and leaves cold-fill performance open.
+Evidence: build/native-preparation-validation/cold-profile-comparison.json and
+build/alpha-steam-fill-after-preparation. No original game was run; owner saves,
+mods and display settings were not changed. Shipped Alpha/Omega defaults remain.
+
 ## Native empty-staging publication - 2026-11-07
 
 A successful wholly empty Steam mesh now retains the previous active terrain

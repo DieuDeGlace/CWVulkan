@@ -15,6 +15,7 @@
 #include <vector>
 #include <memory>
 
+class TaskPool;
 class Assets;
 struct CubModel;
 namespace proceduralitem {
@@ -59,6 +60,7 @@ class World {
     // How many zones are drawn each way around the focus (the view distance changed).
     void setViewZones(int zones) { viewZones = zones; }
     void setSourceRenderDistance(int setting) { sourceRenderDistance = setting; }
+    void setCpuPerformance(int setting) { cpuPerformance = setting; }
     int viewZoneCount() const { return viewZones; }
     // Zone (zx, zy)'s blocks changed: it is meshed again, the old mesh drawn until then.
     void refreshZone(int zx, int zy);
@@ -96,6 +98,10 @@ class World {
     const Terrain &terrain() const { return land; }
     size_t zoneCount() const { return zones.size(); }
     size_t pendingCount() const { return jobs.size(); }
+    // Clean zero-cost native refreshes continue without blocking settled captures.
+    bool preparingTerrain() const {
+        return !stale.empty() || std::any_of(jobs.begin(), jobs.end(), [](const auto &job) { return job.second.required; });
+    }
     size_t modelCount() const { return models.size(); }
     std::vector<std::string> missingModels;
 
@@ -185,7 +191,15 @@ class World {
     };
     std::map<Key, ObjectZone> objectZones; // absolute coordinates, independent of terrain GPU publication
     bool independentObjects = false;
-    std::map<Key, std::future<Generated>> jobs;
+    struct Job {
+        std::future<Generated> result;
+        bool required = true;
+    };
+    std::map<Key, Job> jobs;
+    std::unique_ptr<TaskPool> nativePool;
+    std::vector<Key> nativeOrder;
+    int cpuPerformance = 1, sampledCpuPerformance = 1;
+    std::optional<unsigned> nativeConcurrency; // no explicit initial native maximum is proved
     std::map<Key, std::shared_ptr<scenerange::CachePublication>> pendingBounds;
     std::set<Key> staleModels;
     std::set<Key> staleObjects;

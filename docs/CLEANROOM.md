@@ -2539,3 +2539,72 @@ All five targets, full required-oracle CPU/owner-data suite without skips and
 all Vulkan groups (92 shader, 2 camera, 102 GUI, 17 map, 14 native-water plus
 shared-water/Alpha) pass. Extractor SDK independence passes. Evidence:
 build/terrain-publication-validation. No original-game or owner-state mutation.
+
+
+## Native mesh selection and bounded batch execution, 2026-11-07
+
+The isolated original-only source_mouse_mask context finalized/read back/held
+steam-mesh-invalidation-selection-20261107.md and the separate
+steam-mesh-worker-concurrency-20261107.md. The implementer read each ENTIRE held
+file before accepting matching text. They identify raw candidate order, signed
+prefix budget, zero-cost and invalidation gates, complete-neighborhood-before-cap
+order, the eight-item batch, normal completion and publication phases, and the
+CPU-setting change branch. Both report no prohibited exposure; all earlier held
+files remain immutable and the quarantined source_feat_contract remains excluded.
+The private hash receipt is build/native-preparation-validation/handoff.json.
+
+Owned PreparationBatch and World code now use those bounded admission and
+completion facts. A small owned TaskPool reuses bounded worker lanes, drains
+queued work and joins before World inputs are released. Native results publish
+in selected order after every task returns, before another terrain retirement/
+selection phase. Independent object/model frame updates remain separate. Vulkan
+uploads and deferred fence-aware destruction stay on the engine's existing path.
+
+Known zero-cost results remain eligible without an invented completed-empty latch.
+Required work/dirty requests are distinguished from clean refreshes for capture
+and benchmark readiness. Incomplete owner captures with unknown native cost stay
+on their cached fallback policy. Alpha retains its own async jobs and six-success
+integration cap; discarded/failed results do not consume that cap.
+
+The concurrency addendum specifically does NOT establish an initial native max8:
+the default raw preference1 matches the worker's remembered1 and skips explicit
+scheduler creation. On later changes, zero/nonzero configure max4/max8, min1.
+Our hardware-based initial lane count is explicit engine policy, bounded by those
+later caps; native runtime priorities/attachment-stack behavior are not copied.
+The original final invalidation clear can overwrite a mark made earlier during
+meshing. Our existing queue retains edits arriving while immutable snapshots run.
+That safety adaptation is not a claim of identical native dirty-byte races.
+Per-zone render interleavings, exact batch/cold-streaming and source-eviction
+cadence, alternate writers/cancellation/shutdown and final parity remain open.
+
+A public-API owned-hook fixture holds one source reader while siblings finish,
+reproducing two prior failures: partial publication and early retirement. Both
+pass after the change, including the actual8-coordinate batch and preference
+changes during it. Independent literal cases cover prefix-boundary accounting,
+nonzero dirty work over budget, unselected signed costs, incomplete neighbors,
+and all neighbor calls beyond the cap. Existing CPU terrain/publication/object
+fixtures and fourteen native-water GPU checks pass in focused runs. No original
+game was started or owner Save/Mods/display modified.
+
+Baseline private own-engine profiles are bounded and do not certify native FPS:
+minimum-distance Steam terrain/Native water exits0 in14.531seconds including10s
+play; default-distance Alpha terrain/Steam rendering/Omega exits0 in17.234seconds
+including10s play. The latter's separate full-fill capture reaches its observation
+deadline and exits1 at128.234seconds with433 prepared zones and3 pending jobs,
+without a capture. This distinguishes bounded startup from settled cold-fill
+acceptance. Logs are under build/native-cold-profile, build/alpha-steam-cold-profile
+and build/alpha-steam-fill-profile. Alpha/Omega shipped settings remain unchanged.
+
+All five targets and the full required-oracle CPU/owner-data suite pass without
+skips. Vulkan groups pass: 92 shader, 2 camera, 102 GUI, 17 map, 14 native-water,
+shared water and Alpha scenery. Extractor SDK independence passes. Final logs
+include the restored Alpha successful-integration cap.
+
+A matching hidden/offline/no-save Alpha/Steam/Omega full-fill observation still
+reaches its deadline: 128.422seconds, 384 prepared zones and8 queued/running
+coordinates, no capture. The baseline was128.234seconds, 433 prepared and3 running
+coordinates. The pending counts describe different batch representations. This
+single comparison establishes no speedup and leaves cold-fill performance open.
+Evidence: build/native-preparation-validation/cold-profile-comparison.json and
+build/alpha-steam-fill-after-preparation. No original game was run; owner saves,
+mods and display settings were not changed. Shipped Alpha/Omega defaults remain.

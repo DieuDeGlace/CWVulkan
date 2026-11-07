@@ -8,6 +8,23 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Native mesh preparation now uses at most eight selected coordinates,
+  source-ordered prefix/zero-cost/dirty/neighborhood gates and a whole-batch
+  completion boundary before selected-order publication and further retirement.
+  Bounded worker lanes are reused; clean zero-cost refreshes keep their native
+  eligibility while diagnostic readiness follows required work. Alpha keeps its
+  existing async route and successful-integration cap. Two controlled runtime
+  failures now pass, along with literal selection/cap checks and existing water/
+  terrain/object groups. All five targets, full required-oracle CPU with no skips,
+  all Vulkan groups and SDK audit pass. Matching full-fill observation still times
+  out (384 prepared zones versus433 before); no speedup or cold-fill acceptance is
+  claimed. The independent
+  [selection](specs/steam-mesh-invalidation-selection-20261107.md) and
+  [concurrency](specs/steam-mesh-worker-concurrency-20261107.md) contracts leave
+  initial native allocation, race/priority details and exact streaming latency
+  unresolved. Our immutable-snapshot dirty queue and hardware fallback remain
+  explicit engine policies, with broader cold-load/native acceptance still open.
+
 - [x] Native whole-empty staging preserves active solid/water groups while fresh
   bounds/cost/points remain independent. Nonempty solid-only replacement removes
   old water; failed source meshing changes neither active handles nor metadata.
