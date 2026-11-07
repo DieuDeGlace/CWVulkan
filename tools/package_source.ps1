@@ -10,7 +10,7 @@ foreach ($name in @('.gitignore', '.gitattributes', 'CMakeLists.txt', 'build.cmd
     if (Test-Path -LiteralPath $path -PathType Leaf) { $files.Add((Get-Item -LiteralPath $path)) }
 }
 # .inc contains source tables needed by the engine, not local game exports.
-$extensions = @('.cpp', '.c', '.h', '.hpp', '.inc', '.vert', '.frag', '.glsl', '.cmd', '.ps1', '.py', '.md')
+$extensions = @('.cpp', '.c', '.h', '.hpp', '.inc', '.vert', '.frag', '.comp', '.glsl', '.cmd', '.ps1', '.py', '.md')
 foreach ($directory in @('src', 'include', 'shaders', 'tests', 'setup', 'examples', 'tools')) {
     Get-ChildItem -LiteralPath (Join-Path $sourceRoot $directory) -File -Recurse |
         Where-Object { $_.Extension -in $extensions } | ForEach-Object { $files.Add($_) }

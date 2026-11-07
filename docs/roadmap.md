@@ -8,6 +8,18 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Native Steam water now consumes shared homogeneous clip and full view-space
+  normal/light/position varyings for gradients, reflection, fog and opacity,
+  preserving the vertex-lit blue and optional engine shadows. Two positive/
+  negative large-origin color failures now match near images, with independent
+  ordinary-WORLD geometry controls. Three original-derived raw pixel references
+  pass on the actual shared GLSL helper; real zone point-slot/light checks and
+  ordinary-versus-sea water bytes add coverage. The ten-case native-water group
+  is included in full validation. See the [shader contract](specs/steam-native-water-shader-20261107.md)
+  together with its mandatory [pass-state correction](specs/steam-native-water-pass-state-addendum-20261107.md).
+  Runtime local water groups, empty/incoming pass timing, publication/lifetimes
+  and wider native visual/hardware comparisons remain open.
+
 - [x] Physical wheel messages now retain window-message order with button/F4
   callbacks and run before the next pointer/device poll. The actual signed high
   word is normalized per message, including zero; each delivery reads the

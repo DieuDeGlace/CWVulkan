@@ -1,5 +1,5 @@
 // Build-time GLSL -> SPIR-V compiler (glslang library, no Python needed).
-// Usage: spirv_compile <input.vert|.frag> <output.h> <symbol> <include dir>
+// Usage: spirv_compile <input.vert|.frag|.comp> <output.h> <symbol> <include dir>
 // Writes `static const uint32_t <symbol>[] = {...};`. `#include "x"` lines are
 // expanded textually from the include directory.
 #include <glslang/Include/glslang_c_interface.h>
@@ -56,7 +56,8 @@ int main(int argc, char **argv) {
     }
     glslang_stage_t stage = input.size() > 5 && input.substr(input.size() - 5) == ".frag"
                                 ? GLSLANG_STAGE_FRAGMENT
-                                : GLSLANG_STAGE_VERTEX;
+                                : input.size() > 5 && input.substr(input.size() - 5) == ".comp"
+                                      ? GLSLANG_STAGE_COMPUTE : GLSLANG_STAGE_VERTEX;
     glslang_initialize_process();
     glslang_input_t in{};
     in.language = GLSLANG_SOURCE_GLSL;

@@ -2396,3 +2396,56 @@ oracles passes without skips. Vulkan groups pass: 92 shader, 2 camera, 102 GUI,
 Focused guiitems, guiinput and padui checks pass. Evidence is under
 build/wheel-input-validation; these are bounded regression checks, not native
 physical-device or complete Game/UI callback acceptance.
+
+
+## Native water view-space shader inputs, 2026-11-07
+
+The clean source_mouse_mask author independently resolved the original water
+vertex/pixel blobs, their bindings and arithmetic using original Steam evidence.
+It finalized/read back/held steam-native-water-shader-20261107.md. The implementer
+read the entire final prose. A conflict with earlier independent pass/control
+contracts was identified before any pass-state change. The same isolated author
+rechecked original assembly, concrete vtable cells, wrappers, buffer destinations
+and embedded resource records, then finalized/read back/held the separate
+steam-native-water-pass-state-addendum-20261107.md. The implementer read it fully.
+The addendum supersedes the main contract's mistaken White/DepthOffset mapping:
+water requests White0/Glow0 and retains DepthOffset. Existing controls agree with
+that correction; they were not changed on the mistaken claim. Both held files
+remain immutable and accepted text matches them. The private receipt/hashes are
+in build/native-water-validation/handoff.json. The author reports no prohibited
+exposure; Microsoft tool-usage documentation was used only to operate the original
+bytecode disassembler under the assignment's explicit permission. The earlier
+source-context quarantine remains in effect.
+
+Synthetic anchored geometry reproduces two water-only color failures at positive
+and negative 16,777,216-block origins, while matching ordinary-WORLD geometry
+controls pass. The owned shared vertex stage now retains a full native-basis view
+normal, transformed directional vector and view position, plus the existing
+homogeneous clip varying. Native water consumes those values for screen gradients,
+reflection, distance, fog and opacity, retaining the shared vertex-lit blue and
+optional engine shadows. It no longer reconstructs native reflection/fog distance
+from rounded source-home world floats. The legacy vertex fallback and Alpha/Omega
+paths remain distinct. The water pixel arithmetic is factored into one owned GLSL
+helper used by the production fragment shader and an asset-free compute probe.
+The native branch also avoids the unused legacy fragment-light calculation.
+
+The isolated source-side arithmetic references are copied as explicit inputs and
+expected raw RGBA values. The actual shared GPU helper passes all three within
+0.00001 per component, before blend/UNORM conversion; these values were not fitted
+to rendering output. Positive/negative fixed-origin images now match their near
+reference exactly. Real zone-table tests verify first-ten point-slot selection and
+registered vertex point lights. CPU checks distinguish sampled ordinary water
+V254 from whole-sea bypass V255 and retain fully occluded water. The compute probe
+uses coherent host memory, a compute-to-host dependency and a fence following
+[Khronos readback guidance](https://docs.vulkan.org/guide/latest/synchronization_examples.html).
+
+All five targets build. Full CPU/owner-data validation with required procedural
+oracles passes without skips. All Vulkan groups pass: 92 shader, 2 camera, 102 GUI,
+17 map, 10 native-water checks, shared water and Alpha scenery. Extractor SDK
+independence passes. Evidence: build/native-water-validation. These checks do not
+certify native GPU captures, nonfinite inputs or cross-GPU last-bit behavior.
+Remaining water work includes actual runtime local mesh-group submission, empty/
+incoming pass-state timing and publication/lifetime acceptance. Broader rendering,
+hardware and final provenance/Steam parity remain release gates. No original game,
+owner capture or save/mod/display mutation was needed. Alpha terrain/lighting,
+Omega water, shadows and the other enhancements remain configured.

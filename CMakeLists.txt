@@ -102,7 +102,7 @@ foreach(shader scene.vert scene.frag shadow.vert water.frag omega_water.frag sky
     add_custom_command(OUTPUT ${out}
         COMMAND spirv_compile ${SHADER_DIR}/${shader} ${out} spv_${symbol} ${SHADER_DIR}
         DEPENDS ${SHADER_DIR}/${shader} ${SHADER_DIR}/common.glsl ${SHADER_DIR}/lighting.glsl ${SHADER_DIR}/alpha.glsl ${SHADER_DIR}/steam_sky.glsl ${SHADER_DIR}/steam_vertex.glsl ${SHADER_DIR}/steam_fragment.glsl
-                ${SHADER_DIR}/frame.glsl ${SHADER_DIR}/steam_colour.glsl ${SHADER_DIR}/steam_pixel.glsl ${SHADER_DIR}/steam_transform.glsl
+                ${SHADER_DIR}/frame.glsl ${SHADER_DIR}/steam_colour.glsl ${SHADER_DIR}/steam_pixel.glsl ${SHADER_DIR}/steam_transform.glsl ${SHADER_DIR}/steam_water.glsl
                 ${SHADER_DIR}/smaa_common.glsl ${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa/SMAA.hlsl spirv_compile
         COMMENT "Compiling ${shader}")
     list(APPEND SHADER_HEADERS ${out})
@@ -438,6 +438,15 @@ target_sources(engine PRIVATE src/SteamVoxel.cpp)
 target_sources(EngineTests PRIVATE tests/SteamVoxelTests.cpp)
 
 target_sources(EngineTests PRIVATE tests/SteamTerrainTests.cpp)
+target_sources(EngineTests PRIVATE tests/NativeWaterTests.cpp)
+set(WATER_REFERENCE_HEADER ${SHADER_OUT}/water_reference_comp.h)
+add_custom_command(OUTPUT ${WATER_REFERENCE_HEADER}
+    COMMAND spirv_compile ${CMAKE_CURRENT_SOURCE_DIR}/tests/shaders/native_water_reference.comp
+            ${WATER_REFERENCE_HEADER} spv_water_reference_comp ${SHADER_DIR}
+    DEPENDS tests/shaders/native_water_reference.comp shaders/steam_water.glsl shaders/steam_colour.glsl spirv_compile)
+add_custom_target(water_reference_shader DEPENDS ${WATER_REFERENCE_HEADER})
+add_dependencies(EngineTests water_reference_shader)
+
 target_sources(EngineTests PRIVATE tests/SteamShaderTests.cpp tests/GuiItemTests.cpp tests/GuiRenderTests.cpp tests/PlasmaNodeAnimationTests.cpp tests/ItemSelectorTests.cpp)
 target_sources(EngineTests PRIVATE tests/VoxelEditTests.cpp tests/VoxelCustomizationTests.cpp tests/ItemPreviewTests.cpp tests/MapPreviewTests.cpp)
 target_sources(EngineTests PRIVATE tests/ProceduralItemTests.cpp)

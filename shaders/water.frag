@@ -1,32 +1,31 @@
 #version 450
-// From docs/specs/water-rendering.md B.3-B.4; no native shader source is used.
 #extension GL_GOOGLE_include_directive : require
 #include "common.glsl"
 #include "lighting.glsl"
+#include "steam_water.glsl"
 layout(location = 0) in vec3 vWorld;
 layout(location = 1) in vec3 vNormal;
 layout(location = 2) in vec4 vColor;
 layout(location = 3) flat in uint vFlags;
 layout(location = 4) in vec3 vIndirect;
+layout(location = 5) in vec4 vClip;
+layout(location = 6) in vec3 vView;
+layout(location = 7) in vec3 vViewNormal;
+layout(location = 8) in vec3 vViewLight;
 layout(location = 0) out vec4 outColor;
 void main() {
-    vec2 screen = steamScreen();
-    float Y = screen.y + f.steamSky[5].x;
-    vec3 toEye = f.eye.xyz - vWorld;
-    float distance2 = dot(toEye, toEye);
     vec3 normal = vec3(0, 0, 1);
-    Shade light = shade(vWorld, normal, true);
     bool nativeVertex = (vFlags & (STEAM_VERTEX | STEAM_WORLD)) == (STEAM_VERTEX | STEAM_WORLD);
-    float blue = nativeVertex ? mix(vIndirect.b, vColor.b, sunShare(vWorld, normal))
-                              : clamp(vColor.b * light.light.b, 0, 1);
-    vec3 body = mix(f.steamSky[0].rgb, f.steamSky[1].rgb, .8 * steamSmooth(Y + 1));
-    vec3 reflected = reflect(-(nativeVertex ? f.steamSun.xyz : f.lightDir.xyz), normal);
-    float sheen = max(dot(normalize(reflected), normalize(toEye)), 0);
-    vec3 colour = clamp(blue * body + sheen * .25 * f.steamSky[0].rgb, 0, 1);
-    float scale = f.steamSky[5].w;
-    float exponent = 1 - .75 * exp2(-403.95462 * scale);
-    float haze = steamSmooth(min(pow(distance2 * scale * scale, exponent), 1));
-    colour = mix(colour, f.steamSky[2].rgb, haze);
-    colour = clamp(mix(colour, steamSunGlow(steamSkyAt(screen), screen), haze * haze * haze), 0, 1);
-    outColor = vec4(vanillaGrade(colour), min(.75 + min(.000025 * distance2, 1), 1));
+    float blue;
+    if (nativeVertex)
+        blue = mix(vIndirect.b, vColor.b, sunShare(vWorld, normal)); // Optional engine shadows retain the vertex light result.
+    else {
+        Shade light = shade(vWorld, normal, true);
+        blue = clamp(vColor.b * light.light.b, 0, 1);
+    }
+    SteamWaterState state = SteamWaterState(f.steamSky[0], f.steamSky[1], f.steamSky[2], f.steamSky[3], f.steamSky[4],
+                                           vec4(f.steamSky[5].w, f.steamSky[5].x, pc.params.w, 0));
+    outColor = nativeVertex
+        ? steamWaterPixel(blue, vClip, vViewNormal, vViewLight, vView, state)
+        : steamWaterPixel(blue, vec4(steamScreen(), 0, 1), normal, f.lightDir.xyz, vWorld - f.eye.xyz, state);
 }

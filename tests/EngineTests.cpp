@@ -196,6 +196,7 @@ int steamLightingTests();
 int steamVoxelTests();
 int steamTerrainTests();
 int steamShaderTests();
+int nativeWaterTests();
 int steamPointLightsTests();
 int steamTransientLightsTests();
 int steamCreatureLightsTests();
@@ -9405,6 +9406,8 @@ int main(int argc, char **argv) {
         return steamPointLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamshader")
         return steamShaderTests();
+    if (argc == 2 && std::string(argv[1]) == "nativewater")
+        return nativeWaterTests();
     if (argc == 2 && std::string(argv[1]) == "steamterrain")
         return steamTerrainTests();
     if (argc == 2 && std::string(argv[1]) == "steamvoxel")

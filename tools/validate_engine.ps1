@@ -61,6 +61,12 @@ try {
         $mapPassed = @(Select-String -LiteralPath $mapLog -Pattern '^Map renderer .* PASS$')
         if (!$mapPassed.Count) { throw "No map image results were produced; read $mapLog" }
         Write-Output "Map image checks passed: $($mapPassed.Count); $mapLog"
+        $nativeWaterLog = Join-Path $LogDirectory 'native-water-images.log'
+        & $testProgram nativewater *> $nativeWaterLog
+        if ($LASTEXITCODE -ne 0) { throw "Native water checks failed; read $nativeWaterLog" }
+        $nativeWaterPassed = @(Select-String -LiteralPath $nativeWaterLog -Pattern '^Native water .* PASS$')
+        if ($nativeWaterPassed.Count -lt 10) { throw "Missing native water results; read $nativeWaterLog" }
+        Write-Output "Native water checks passed: $($nativeWaterPassed.Count); $nativeWaterLog"
         $waterLog = Join-Path $LogDirectory 'shared-water-images.log'
         & $testProgram sharedwater *> $waterLog
         if ($LASTEXITCODE -ne 0) { throw "Shared water image tests failed; read $waterLog" }

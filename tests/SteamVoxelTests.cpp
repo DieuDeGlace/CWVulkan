@@ -62,6 +62,10 @@ int steamVoxelTests() {
     sampled.clear();
     check(terrainCorner({.25f, .5f, .5f, 1}, {}, 4, record, true) == glm::u8vec4(63, 127, 127, 255) && sampled.empty(),
           "special type/water bypass retains base RGBA without sampling");
+    check(terrainCorner({.25f, .5f, .5f, 1}, {}, 4, open) == glm::u8vec4(63, 127, 127, 254),
+          "ordinary open water samples light and differs from the whole-sea bypass V255");
+    check(terrainCorner({.25f, .5f, .5f, 1}, {}, 4, shut) == glm::u8vec4(0),
+          "ordinary water has no CUB openness floor or forced illumination");
     check(cubCorner({255, 255, 255}, {}, 0, open, {}, CubEncoding::Stock, 0) == glm::u8vec4(0, 0, 0, 255),
           "zero total sample weight does not invent minimum openness");
     check(byte(2) == 254 && byte(-1) == 1 && byte(std::numeric_limits<float>::quiet_NaN()) == 0,

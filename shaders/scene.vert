@@ -13,7 +13,8 @@ layout(location = 3) flat out uint vFlags;
 layout(location = 4) out vec3 vIndirect;
 layout(location = 5) out vec4 vClip;
 layout(location = 6) out vec3 vView;
-layout(location = 7) out vec2 vViewNormal;
+layout(location = 7) out vec3 vViewNormal;
+layout(location = 8) out vec3 vViewLight;
 void main() {
     uint flags = inNormalFlags.y | uint(pc.params.x);
     vec4 palette = inColor;
@@ -28,7 +29,8 @@ void main() {
         vIndirect = palette.rgb;
         vClip = gl_Position;
         vView = vec3(0);
-        vViewNormal = vec2(0);
+        vViewNormal = vec3(0);
+        vViewLight = vec3(0);
         return;
     }
     vec3 world = (pc.model * vec4(inPosition, 1)).xyz;
@@ -77,7 +79,11 @@ void main() {
     }
     // Preserve homogeneous coordinates for division after raster interpolation.
     vClip = vec4(gl_Position.x, -gl_Position.y, gl_Position.zw);
-    vView = viewPoint.xyz;
+    // The native camera basis reverses the generic right-handed X/Z axes.
+    // Keep all shared water reflection/distance varyings in that same basis.
+    vView = originWorld ? viewPoint.xyz : vec3(-viewPoint.x, viewPoint.y, -viewPoint.z);
     vec3 viewNormal = normalize(mat3(worldView) * normal);
-    vViewNormal = originWorld ? viewNormal.xy : vec2(-viewNormal.x, viewNormal.y);
+    vec3 viewLight = mat3(worldView) * f.steamSun.xyz;
+    vViewNormal = originWorld ? viewNormal : vec3(-viewNormal.x, viewNormal.y, -viewNormal.z);
+    vViewLight = originWorld ? viewLight : vec3(-viewLight.x, viewLight.y, -viewLight.z);
 }

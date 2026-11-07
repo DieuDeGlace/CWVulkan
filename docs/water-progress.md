@@ -1,5 +1,22 @@
 # Shared surface and underwater style target
 
+## Native Steam water shader checkpoint - 2026-11-07
+
+Native packed water now retains clip/view-space inputs through its fragment
+stage, correcting two large-coordinate color failures without changing the
+shared vertex light solve. Three independent raw pixel references, fixed-origin
+geometry/color comparisons and real point-table/slot tests pass in a new ten-case
+GPU group. All five targets, full required-oracle CPU checks without skips, the
+existing Vulkan groups and extractor SDK independence pass. Alpha terrain/lighting,
+Omega water and enhancements remain intact. Evidence: build/native-water-validation.
+
+Use the [shader contract](specs/steam-native-water-shader-20261107.md) together with
+the [pass-state addendum](specs/steam-native-water-pass-state-addendum-20261107.md).
+The latter corrects the former's White/DepthOffset mapping before any such state
+change was implemented: White0/Glow0, retained DepthOffset. Local water mesh-group
+submission, empty/incoming pass timing, publication/lifetimes and native visual/
+hardware acceptance remain open; this is not complete water or Steam parity.
+
 Water appearance is to be selected independently of `[Render] Style`, so switching
 between Alpha and Steam lighting retains the same chosen water treatment. The
 requested Omega-inspired surface is clear blue water with visible shallow geometry,
