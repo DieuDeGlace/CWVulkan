@@ -14,6 +14,8 @@
 #include <iostream>
 #include <vector>
 
+int terrainPublicationRenderTests(Renderer &, const std::filesystem::path &);
+
 namespace {
 int waterArithmeticReferences() {
     using V = std::array<float, 4>;
@@ -163,6 +165,7 @@ int nativeWaterTests() {
     const bool point = lit.size() == near.size() && !lit.empty() && lit[centre + 2] > near[centre + 2] + 8;
     std::cout << "Native water registered vertex point light" << (point ? " PASS\n" : " FAIL\n");
     failures += !point;
+    failures += terrainPublicationRenderTests(renderer, root);
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

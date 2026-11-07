@@ -1,5 +1,42 @@
 # Source review checkpoint — 2026-11-07
 
+## Native empty-staging publication - 2026-11-07
+
+A successful wholly empty Steam mesh now retains the previous active terrain
+and water handles while publishing fresh zone bounds, cost and light inputs.
+A nonempty solid-only replacement still removes previous water. Source-mesh
+failure now publishes neither geometry nor metadata, and an explicit retry can
+replace the retained result after recovery. Alpha keeps its existing successful
+empty-replacement behavior. Optional lilies remain attached to retained water.
+
+Public runtime regressions reproduced seven failures before the fix. They now
+cover repeated empty results, water-only and solid-only replacements, independent
+zero-cost metadata, damaged/repaired disposable source files, and initially empty
+zones in both styles. Four additional Vulkan checks exercise actual World
+uploads, visible water retained across empty rebuilds/fence reuse, nonempty
+replacement and retirement. The fixture first settles then freezes the sky
+palette to avoid an inconclusive saturated-blue visibility comparison.
+Evidence: build/terrain-publication-validation.
+
+The independent [publication](specs/steam-water-mesh-publication-20261107.md) and
+[zone lifetime](specs/steam-zone-retirement-lifetime-20261107.md) contracts delimit
+the native behavior. The engine retains immutable source snapshots and deferred
+Vulkan resource releases; raw native pointers and unproved shutdown/error paths
+are not reproduced. Exact worker-batch cadence, zero-cost reselection and wider
+native visual/gameplay/lifetime acceptance remain open. Alpha terrain/lighting,
+Omega water, shadows and the other enhancements retain their settings.
+
+The independent [incoming matrix audit](specs/steam-water-incoming-matrix-timing-20261107.md)
+confirms the ordinary pre-water segment preserves the frame VIEW/projection for
+the depth sweep; color explicitly reinstalls the same pair, even with no groups.
+The current ordinary renderer path agrees. No matrix implementation change was
+needed; alternative callers/flags remain outside that proved boundary.
+
+All five targets build. Full required-oracle CPU/owner-data validation passes
+without skips. Vulkan groups pass: 92 shader, 2 camera, 102 GUI, 17 map, 14 native
+water, shared water and Alpha scenery. Extractor SDK independence passes. These
+checks remain bounded regressions rather than complete Steam acceptance.
+
 ## Local native water groups - 2026-11-07
 
 Steam water now follows the 250-block local terrain bands from CPU meshing to

@@ -207,6 +207,7 @@ int objectClockTests(); // tests/ObjectClockTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int worldGateCaptureCommand(const std::filesystem::path &);
 int blockMutationTests();
+int terrainPublicationTests();
 int terrainBandTests();
 int staticObjectSceneTests();
 int staticObjectStreamingTests();
@@ -9524,6 +9525,8 @@ int main(int argc, char **argv) {
         return particleTests();
     if (argc == 2 && std::string(argv[1]) == "blockedits")
         return blockMutationTests();
+    if (argc == 2 && std::string(argv[1]) == "terrainpublication")
+        return terrainPublicationTests();
     if (argc == 2 && std::string(argv[1]) == "terrainbands")
         return terrainBandTests();
     if (argc == 2 && std::string(argv[1]) == "staticobjectscene")
@@ -10882,6 +10885,7 @@ int main(int argc, char **argv) {
     failures += worldObjectTests();
     failures += deadCreatureTests();
     failures += blockMutationTests();
+    failures += terrainPublicationTests();
     failures += terrainBandTests();
     failures += staticObjectSceneTests();
     failures += staticObjectStreamingTests();

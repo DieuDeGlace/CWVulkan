@@ -65,7 +65,7 @@ try {
         & $testProgram nativewater *> $nativeWaterLog
         if ($LASTEXITCODE -ne 0) { throw "Native water checks failed; read $nativeWaterLog" }
         $nativeWaterPassed = @(Select-String -LiteralPath $nativeWaterLog -Pattern '^Native water .* PASS$')
-        if ($nativeWaterPassed.Count -lt 10) { throw "Missing native water results; read $nativeWaterLog" }
+        if ($nativeWaterPassed.Count -lt 14) { throw "Missing native water results; read $nativeWaterLog" }
         Write-Output "Native water checks passed: $($nativeWaterPassed.Count); $nativeWaterLog"
         $waterLog = Join-Path $LogDirectory 'shared-water-images.log'
         & $testProgram sharedwater *> $waterLog

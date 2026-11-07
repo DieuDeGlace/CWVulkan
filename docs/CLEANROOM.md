@@ -2489,3 +2489,53 @@ procedural oracles and no skips. Vulkan checks pass: 92 shader, 2 camera, 102 GU
 passes. Logs and private receipts are under build/water-band-validation. These
 checks establish the bounded regressions above; native rendering and full
 publication/lifetime acceptance remain open.
+
+
+## Native empty-staging publication and zone lifetime, 2026-11-07
+
+The same isolated original-only source_mouse_mask author traced the ordinary
+World instance, mesh/eviction worker phases, concrete thread launch and joins,
+guard intervals, raw snapshots, erasure/destruction and the distinct linked
+alternate World. It finalized/read back/held
+steam-zone-retirement-lifetime-20261107.md with no exposure. The implementer read
+the ENTIRE held prose before accepting matching text under docs/specs. Earlier
+held files remain immutable. The new and prior publication/shader/state contracts
+are hashed in build/terrain-publication-validation/handoff.json; the stopped
+source_feat_contract context remains quarantined.
+
+The held publication contract's nonempty-whole-staging admission now preserves
+old active GPU groups on a successful empty Steam result. Fresh bounds/cost,
+light inputs and ordinary scenery remain independent; optional decorations keep
+their active water. Nonempty groups lacking water replace old water normally.
+Mesh-source failure is a separate explicit result and publishes neither geometry
+nor cache metadata. Alpha's successful-empty replacement behavior stays separate.
+The engine uses immutable shared source snapshots and its own fence-aware GPU
+retirement. Native raw pointer copies, possible alternate erasers and unproved
+concurrent insertion/shutdown/error behavior are not adopted as safe guarantees.
+
+Seven public-runtime regressions fail before this correction and pass afterward.
+The owned fixture covers repeated wholly empty results, retained solid/water
+handles with fresh zero-cost metadata, nonempty replacement, initial emptiness,
+failed source read and explicit repaired-source retry in both styles. Four GPU
+checks use actual World jobs/uploads and fixed camera/palette: visible water,
+repeated empty rebuilds spanning fence reuse, solid/water replacement and retired
+buffers. The initial GPU visibility control was inconclusive under the frozen
+constructor-blue sky; settling the palette before freezing makes it informative.
+This was a fixture correction, not a shader/engine fix or native pixel match.
+No original game run, owner capture or save/mod/display change was required.
+Exact worker batch cadence, zero-cost reselection, alternate lifecycle paths and
+broader native visual/gameplay/final provenance acceptance remain release gates.
+
+The original-only author also independently finalized/read back/held
+steam-water-incoming-matrix-timing-20261107.md. The implementer read it ENTIRELY
+before accepting matching text. Concrete setter/binding histories prove the
+ordinary pre-water mode2 consumers preserve the frame VIEW/projection, which
+therefore reaches depth; water color explicitly reinstalls that same pair, even
+for empty lists. The current ordinary path agrees and no matrix code change was
+needed. Alternative callers/flags remain unresolved. The private receipt now
+hashes five held contracts. No prohibited exposure was reported.
+
+All five targets, full required-oracle CPU/owner-data suite without skips and
+all Vulkan groups (92 shader, 2 camera, 102 GUI, 17 map, 14 native-water plus
+shared-water/Alpha) pass. Extractor SDK independence passes. Evidence:
+build/terrain-publication-validation. No original-game or owner-state mutation.

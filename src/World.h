@@ -112,6 +112,7 @@ class World {
         mutable bool voxelsRead = false;
     };
     struct Generated {
+        bool meshSucceeded = false;
         Mesh opaque, water, lava;
         std::vector<TerrainMeshBand> terrainBands;
         std::optional<scenevisibility::Bounds> nativeBounds;

@@ -737,12 +737,19 @@ void World::update(glm::vec3 focus) {
         Key key = it->first;
         it = jobs.erase(it);
         pendingBounds.erase(key);
-        if (!retained(key))
-            continue;                                         // Walked away meanwhile.
-        if (auto old = zones.find(key); old != zones.end()) { // meshed again
-            releaseTerrain(old->second);
-        }
+        if (!retained(key) || !g.meshSucceeded)
+            continue; // A failed source read publishes neither geometry nor metadata.
+        // Native publication requires a nonempty whole-group staging list. An
+        // empty water stream inside other geometry still replaces active water.
+        const bool retainActive = g.nativeBounds && g.terrainBands.empty() &&
+                                  g.opaque.empty() && g.water.empty() && g.lava.empty();
         Zone z;
+        if (auto old = zones.find(key); old != zones.end()) {
+            if (retainActive)
+                z = std::move(old->second);
+            else
+                releaseTerrain(old->second);
+        }
         if (extracted) {
             const auto current = extracted->gameModels(key.first + extracted->originZoneX(), key.second + extracted->originZoneY());
             if (current && current != g.modelSnapshot) {
@@ -752,7 +759,10 @@ void World::update(glm::vec3 focus) {
                     lightScenery(g.scenery);
             }
         }
-        if (extracted && land.config().lilies) {
+        if (retainActive) {
+            // These optional decorations belong to the still-active water mesh.
+            g.scenery.insert(g.scenery.end(), z.decorations.begin(), z.decorations.end());
+        } else if (extracted && land.config().lilies) {
             const auto &settings = land.config();
             auto eligible = [&](glm::vec3 surface) {
                 if (!extracted->waterAt(surface.x, surface.y, surface.z - .01f) ||
@@ -772,13 +782,15 @@ void World::update(glm::vec3 focus) {
             g.scenery.insert(g.scenery.end(), pads.begin(), pads.end());
             z.decorations = std::move(pads);
         }
-        z.opaque = renderer.upload(g.opaque);
-        z.water = renderer.upload(g.water);
-        z.lava = renderer.upload(g.lava);
-        for (const auto &band : g.terrainBands) {
-            Zone::Band installed{band.base, renderer.upload(band.opaque), renderer.upload(band.lava), renderer.upload(band.water)};
-            if (installed.opaque || installed.lava || installed.water)
-                z.terrainBands.push_back(installed);
+        if (!retainActive) {
+            z.opaque = renderer.upload(g.opaque);
+            z.water = renderer.upload(g.water);
+            z.lava = renderer.upload(g.lava);
+            for (const auto &band : g.terrainBands) {
+                Zone::Band installed{band.base, renderer.upload(band.opaque), renderer.upload(band.lava), renderer.upload(band.water)};
+                if (installed.opaque || installed.lava || installed.water)
+                    z.terrainBands.push_back(installed);
+            }
         }
         z.nativeLights = std::move(g.nativeLights);
         if (extracted && g.nativeBounds) {
@@ -883,8 +895,11 @@ void World::update(glm::vec3 focus) {
             jobs[k] = std::async(std::launch::async, [this, ex, k, alphaLook, publication] {
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
-                ex->mesh(k.first, k.second, g.opaque, g.water, alphaLook ? nullptr : &g.nativeBounds, alphaLook ? nullptr : &nativeLight,
-                         &g.lava, alphaLook ? nullptr : &g.terrainBands);
+                g.meshSucceeded = ex->mesh(k.first, k.second, g.opaque, g.water,
+                                           alphaLook ? nullptr : &g.nativeBounds, alphaLook ? nullptr : &nativeLight,
+                                           &g.lava, alphaLook ? nullptr : &g.terrainBands);
+                if (!g.meshSucceeded)
+                    return g;
                 if (g.nativeBounds)
                     publication->publish(*g.nativeBounds);
                 g.scenery = ex->props(k.first, k.second, &g.modelSnapshot);
@@ -902,6 +917,7 @@ void World::update(glm::vec3 focus) {
             Generated g;
             ZoneData data = t->generate(k.first, k.second);
             t->mesh(data, g.opaque, g.water);
+            g.meshSucceeded = true;
             // Zone meshes are zone-local; move them into world space.
             glm::vec3 offset((float)k.first * ZONE, (float)k.second * ZONE, 0);
             for (Mesh *m : {&g.opaque, &g.water}) {

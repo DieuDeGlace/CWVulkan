@@ -8,6 +8,19 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Native whole-empty staging preserves active solid/water groups while fresh
+  bounds/cost/points remain independent. Nonempty solid-only replacement removes
+  old water; failed source meshing changes neither active handles nor metadata.
+  Alpha's successful-empty policy is unchanged. Seven reproduced runtime failures
+  now pass. Four actual Vulkan World-publication/lifetime checks extend the native
+  water group to fourteen cases, including repeated empty rebuilds across fences.
+  All five targets, full required-oracle CPU suite, all Vulkan groups and SDK
+  audit pass. The independent ordinary incoming-matrix audit confirms the current
+  frame pair reaches both water sweeps; alternative callers/flags stay open.
+  Exact batch cadence, zero-cost reselection, alternate lifetime/shutdown paths
+  and native acceptance remain open. See the
+  [zone-lifetime contract](specs/steam-zone-retirement-lifetime-20261107.md).
+
 - [x] Steam water now uses the existing 250-block local terrain groups through
   meshing, upload, draw collection and retirement. Ordinary water, wet-ground
   film, water-only groups and the whole-sea quad retain their bytes, topology
