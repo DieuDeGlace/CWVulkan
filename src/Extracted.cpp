@@ -1687,6 +1687,16 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         return c;
     };
     std::map<int32_t, TerrainMeshBand> bands;
+    const bool localWater = nativeEncoding && terrainBands && nativeBox;
+    auto waterGroup = [&](int32_t z) -> Mesh & {
+        if (!localWater)
+            return water;
+        const int32_t base = terrainBandBase(z, nativeBox->lowest);
+        auto &band = bands[base];
+        band.base = base;
+        band.water.localOrigin = glm::ivec3(0, 0, base);
+        return band.water;
+    };
     // The Alpha look bakes the block light (docs/specs/alpha-rendering.md 9.2-9.4): the light
     // is flooded through the zone and a 16-block border, then every corner samples it.
     std::unique_ptr<alphalight::LightVolume> light;
@@ -1758,23 +1768,29 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 break;
             }
     if (wholeWater) {
-        const uint32_t base = (uint32_t)water.vertices.size();
+        Mesh &target = waterGroup(0);
+        const uint32_t base = (uint32_t)target.vertices.size();
         const glm::ivec2 corners[]{{0,0}, {64,0}, {64,64}, {0,64}};
         for (auto corner : corners) {
-            const glm::vec3 at = offset + glm::vec3(corner, 1);
-            water.vertices.push_back({at.x, at.y, at.z, 63, 127, 127, 255, 4, WATER_SURFACE | STEAM_VERTEX, 0, 0});
-            water.min = glm::min(water.min, at);
-            water.max = glm::max(water.max, at);
+            const glm::vec3 at = localWater
+                ? glm::vec3(corner, float(int64_t(1) - target.localOrigin->z))
+                : offset + glm::vec3(corner, 1);
+            target.vertices.push_back({at.x, at.y, at.z, 63, 127, 127, 255, 4, WATER_SURFACE | STEAM_VERTEX, 0, 0});
+            target.min = glm::min(target.min, at);
+            target.max = glm::max(target.max, at);
         }
         for (uint32_t index : steamvoxel::CUB_TRIANGLES)
-            water.indices.push_back(base + index);
+            target.indices.push_back(base + index);
     }
     auto emitWater = [&](int x, int y, int z, int face) {
-        const uint32_t base = (uint32_t)water.vertices.size();
+        Mesh &target = waterGroup(z);
+        const uint32_t base = (uint32_t)target.vertices.size();
         CornerShade corners[4];
         for (int k = 0; k < 4; k++) {
             const int *corner = nativeEncoding ? steamvoxel::CORNERS[face][k] : FACE_CORNERS[face][k];
-            const glm::vec3 at = offset + glm::vec3(x + corner[0], y + corner[1], z + corner[2]);
+            const glm::vec3 at = localWater
+                ? glm::vec3(float(x + corner[0]), float(y + corner[1]), float(int64_t(z) - target.localOrigin->z + corner[2]))
+                : offset + glm::vec3(x + corner[0], y + corner[1], z + corner[2]);
             CornerShade shade{128, 255, 255, 255};
             if (alphaLook) {
                 glm::vec3 rgb = alphalight::waterColour(light->light({x, y, z}) / 255.f);
@@ -1787,16 +1803,16 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             }
             corners[k] = shade;
             const uint8_t flags = WATER_SURFACE | (nativeEncoding ? STEAM_VERTEX : 0);
-            water.vertices.push_back({at.x, at.y, at.z, shade.r, shade.g, shade.b, shade.a,
-                                      (uint8_t)(alphaLook ? face : 4), flags, 0, 0});
-            water.min = glm::min(water.min, at);
-            water.max = glm::max(water.max, at);
+            target.vertices.push_back({at.x, at.y, at.z, shade.r, shade.g, shade.b, shade.a,
+                                       (uint8_t)(alphaLook ? face : 4), flags, 0, 0});
+            target.min = glm::min(target.min, at);
+            target.max = glm::max(target.max, at);
         }
         if (nativeEncoding)
-            appendFaceIndices(water, base, corners, VoxelLayout::SteamTerrain);
+            appendFaceIndices(target, base, corners, VoxelLayout::SteamTerrain);
         else
             for (uint32_t index : steamvoxel::CUB_TRIANGLES)
-                water.indices.push_back(base + index);
+                target.indices.push_back(base + index);
     };
     for (int y = 0; y < 64; y++)
         for (int x = 0; x < 64; x++)
@@ -1816,16 +1832,18 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             }
     size_t solidIndices = opaque.indices.size() - opaqueStart;
     size_t lavaIndices = lava ? lava->indices.size() - lavaStart : 0;
+    size_t waterIndices = water.indices.size() - waterStart;
     if (terrainBands)
         for (auto &[base, band] : bands) {
-            if (band.opaque.empty() && band.lava.empty())
+            if (band.opaque.empty() && band.lava.empty() && band.water.empty())
                 continue;
             solidIndices += band.opaque.indices.size();
             lavaIndices += band.lava.indices.size();
+            waterIndices += band.water.indices.size();
             terrainBands->push_back(std::move(band));
         }
     if (nativeEncoding && nativeBounds && *nativeBounds)
-        (*nativeBounds)->triangleCost = scenerange::triangleCost(solidIndices, water.indices.size() - waterStart, lavaIndices);
+        (*nativeBounds)->triangleCost = scenerange::triangleCost(solidIndices, waterIndices, lavaIndices);
     return true;
 }
 

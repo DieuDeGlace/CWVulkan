@@ -8,6 +8,18 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam water now uses the existing 250-block local terrain groups through
+  meshing, upload, draw collection and retirement. Ordinary water, wet-ground
+  film, water-only groups and the whole-sea quad retain their bytes, topology
+  and source-block band ownership. Fixed anchors preserve exact local corners
+  beyond float integer precision; per-zone point selection and triangle cost
+  include water-only groups. Lily decoration retains aggregate visitation and
+  its per-zone cap. All five targets, full required-oracle CPU suite, existing
+  Vulkan groups and SDK-independence audit pass. See the
+  [publication contract](specs/steam-water-mesh-publication-20261107.md).
+  Native empty-staging publication, complete streaming/lifetimes and visual
+  acceptance remain open; safe Vulkan resource retirement remains engine-owned.
+
 - [x] Native Steam water now consumes shared homogeneous clip and full view-space
   normal/light/position varyings for gradients, reflection, fog and opacity,
   preserving the vertex-lit blue and optional engine shadows. Two positive/
@@ -17,7 +29,7 @@ individual feature documents.
   ordinary-versus-sea water bytes add coverage. The ten-case native-water group
   is included in full validation. See the [shader contract](specs/steam-native-water-shader-20261107.md)
   together with its mandatory [pass-state correction](specs/steam-native-water-pass-state-addendum-20261107.md).
-  Runtime local water groups, empty/incoming pass timing, publication/lifetimes
+  Empty/incoming pass timing, remaining publication/lifetimes
   and wider native visual/hardware comparisons remain open.
 
 - [x] Physical wheel messages now retain window-message order with button/F4

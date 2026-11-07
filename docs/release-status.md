@@ -1,5 +1,35 @@
 # Source review checkpoint — 2026-11-07
 
+## Local native water groups - 2026-11-07
+
+Steam water now follows the 250-block local terrain bands from CPU meshing to
+GPU upload, draw collection and retirement, including groups containing only
+water. Integer subtraction before float conversion preserves local unit corners
+at distant source-home coordinates. Ordinary water and wet-ground film retain
+their lighting, bytes and topology; the whole-sea quad retains its direct V255
+and native height1 in the group containing Z0. Zone point-table identity and the
+adaptive triangle cost include the new water streams. Optional lily decoration
+recovers the former sea-first/cell/layer order and the same zone cap.
+
+Focused tests cover boundary250, omitted intermediate groups, water-only groups,
+exact far-coordinate mesh bytes, negative sea anchors, lily callback/output order
+and actual asynchronous World upload/draw/retirement. Three regressions fail on
+the preceding aggregate-water route and pass with local bands. Evidence:
+build/water-band-validation. The independent
+[publication contract](specs/steam-water-mesh-publication-20261107.md) is accepted
+alongside the shader contract and its mandatory pass-state correction. Complete
+empty-staging publication, streaming/lifetime behavior and native visual
+acceptance remain open. Alpha terrain/lighting, Omega water, shadows and the
+other enhancements retain their settings.
+
+
+All five targets build. The full CPU/owner-data suite passes with required
+procedural oracles and no skips. Vulkan checks pass: 92 shader, 2 camera, 102 GUI,
+17 map, 10 native-water, shared water and Alpha scenery. Extractor SDK independence
+passes. Logs and private receipts are under build/water-band-validation. These
+checks establish the bounded regressions above; native rendering and full
+publication/lifetime acceptance remain open.
+
 ## Native Steam water shader checkpoint - 2026-11-07
 
 Native packed water now retains clip/view-space inputs through its fragment

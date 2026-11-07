@@ -2449,3 +2449,43 @@ incoming pass-state timing and publication/lifetime acceptance. Broader renderin
 hardware and final provenance/Steam parity remain release gates. No original game,
 owner capture or save/mod/display mutation was needed. Alpha terrain/lighting,
 Omega water, shadows and the other enhancements remain configured.
+
+
+## Native water local groups and publication evidence, 2026-11-07
+
+The clean source_mouse_mask context independently inspected scoped original Steam
+mesh construction, active/staging lists, concrete buffer wrappers, worker and
+ordinary draw guards. It finalized, fully read back and held
+steam-water-mesh-publication-20261107.md with no prohibited exposure. The clean
+implementer read the entire held prose before use and accepted matching text
+under docs/specs. Hashes of this contract and the earlier shader/state-correction
+contracts are recorded in build/water-band-validation/handoff.json. Earlier held
+files remain immutable and the quarantined source_feat_contract is not reused.
+
+Owned meshing now routes ordinary water and wet-ground films into the same
+lowest-relative 250-block bands as solid geometry. Whole-sea water uses the band
+containing Z0, native height1 and direct V255. Water-only bands survive upload,
+carry fixed native anchors and their owning zone light key, contribute to cost,
+and release through the existing fence-aware renderer path. Optional lilies
+retain sea-first/cell/layer visitation, duplicate admission and the zone cap;
+Alpha aggregate decoration stays on its existing route.
+
+Synthetic regressions reproduced three failures on the prior aggregate route.
+Focused checks now pass for unit corners/top250, packed colors/topology, a
+water-only band, omitted middle bands, source-home displacement16777216, a sea
+quad above a negative anchor, and actual asynchronous World publication, draw
+collection and retirement. Lily callback/output equivalence is checked across
+caps/densities and repeated cells. These are owned-fixture regressions, not
+native image or timing acceptance. Remaining work includes wholly empty staging
+preservation, full native task/retirement lifetimes and incoming matrix timing.
+The source contract explicitly leaves device-error/cancellation/GPU completion
+unproved; the engine retains its safer Vulkan resource ownership. No original
+game run, owner capture or save/mod/display mutation was needed. Alpha terrain,
+lighting, Omega water, shadows and other enhancements remain configured.
+
+All five targets build. The full CPU/owner-data suite passes with required
+procedural oracles and no skips. Vulkan checks pass: 92 shader, 2 camera, 102 GUI,
+17 map, 10 native-water, shared water and Alpha scenery. Extractor SDK independence
+passes. Logs and private receipts are under build/water-band-validation. These
+checks establish the bounded regressions above; native rendering and full
+publication/lifetime acceptance remain open.

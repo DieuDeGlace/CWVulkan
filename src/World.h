@@ -143,7 +143,7 @@ class World {
         uint32_t opaque = 0, water = 0, lava = 0;
         struct Band {
             int32_t base = 0;
-            uint32_t opaque = 0, lava = 0;
+            uint32_t opaque = 0, lava = 0, water = 0;
         };
         std::vector<Band> terrainBands;
         std::shared_ptr<const scenevisibility::Bounds> nativeBounds;

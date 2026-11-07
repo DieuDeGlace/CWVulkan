@@ -165,6 +165,7 @@ void World::releaseTerrain(const Zone &zone) {
     for (const auto &band : zone.terrainBands) {
         renderer.release(band.opaque);
         renderer.release(band.lava);
+        renderer.release(band.water);
     }
 }
 
@@ -762,8 +763,10 @@ void World::update(glm::vec3 focus) {
                         return true;
                 return false;
             };
-            auto pads = waterLilies::decorate(g.water, settings.seed, settings.lilyPatchDensity,
-                                              settings.lilyMaxPadsPerZone, eligible);
+            auto pads = g.terrainBands.empty()
+                ? waterLilies::decorate(g.water, settings.seed, settings.lilyPatchDensity, settings.lilyMaxPadsPerZone, eligible)
+                : waterLilies::decorate(g.terrainBands, glm::vec3(float(key.first) * ZONE, float(key.second) * ZONE, ExtractedWorld::Z_OFFSET),
+                                        settings.seed, settings.lilyPatchDensity, settings.lilyMaxPadsPerZone, eligible);
             if (renderStyle() == RenderStyle::Alpha)
                 lightScenery(pads);
             g.scenery.insert(g.scenery.end(), pads.begin(), pads.end());
@@ -773,8 +776,8 @@ void World::update(glm::vec3 focus) {
         z.water = renderer.upload(g.water);
         z.lava = renderer.upload(g.lava);
         for (const auto &band : g.terrainBands) {
-            Zone::Band installed{band.base, renderer.upload(band.opaque), renderer.upload(band.lava)};
-            if (installed.opaque || installed.lava)
+            Zone::Band installed{band.base, renderer.upload(band.opaque), renderer.upload(band.lava), renderer.upload(band.water)};
+            if (installed.opaque || installed.lava || installed.water)
                 z.terrainBands.push_back(installed);
         }
         z.nativeLights = std::move(g.nativeLights);
@@ -1039,7 +1042,7 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
         terrainDraw(z.lava, opaque, DrawKind::LavaTerrain, LAVA_LIGHTING);
         terrainDraw(z.water, water, DrawKind::Terrain, 0, false);
         for (const auto &band : z.terrainBands) {
-            const auto drawBand = [&](uint32_t mesh, DrawKind kind, uint32_t flags) {
+            const auto drawBand = [&](uint32_t mesh, std::vector<DrawItem> &draws, DrawKind kind, uint32_t flags, bool castShadow = true) {
                 if (!mesh)
                     return;
                 DrawItem draw{
@@ -1047,7 +1050,7 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
                     glm::translate(glm::mat4(1), glm::vec3(float(key.first) * 64, float(key.second) * 64, float(band.base) + ExtractedWorld::Z_OFFSET)),
                     flags,
                     0,
-                    true,
+                    castShadow,
                     kind};
                 draw.nativeZone = z.nativeBounds;
                 draw.nativeLights = z.nativeLights;
@@ -1056,11 +1059,13 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
                     const int32_t y = std::bit_cast<int32_t>(uint32_t(key.second + extracted->originZoneY()) << 6);
                     draw.nativePosition = steampoints::Point{int64_t(x) * 65536, int64_t(y) * 65536, int64_t(band.base) * 65536};
                     draw.nativeModel = glm::mat4(1);
+                    draw.nativeLightZone = steampoints::ZoneKey{key.first + extracted->originZoneX(), key.second + extracted->originZoneY()};
                 }
-                opaque.push_back(std::move(draw));
+                draws.push_back(std::move(draw));
             };
-            drawBand(band.opaque, DrawKind::Terrain, 0);
-            drawBand(band.lava, DrawKind::LavaTerrain, LAVA_LIGHTING);
+            drawBand(band.opaque, opaque, DrawKind::Terrain, 0);
+            drawBand(band.lava, opaque, DrawKind::LavaTerrain, LAVA_LIGHTING);
+            drawBand(band.water, water, DrawKind::Terrain, 0, false);
         }
         const size_t first = opaque.size();
         collectScenery(z, extracted ? key.first + extracted->originZoneX() : key.first,

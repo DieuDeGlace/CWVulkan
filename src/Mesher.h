@@ -38,7 +38,7 @@ struct Mesh {
 
 struct TerrainMeshBand {
     int32_t base = 0;
-    Mesh opaque, lava;
+    Mesh opaque, lava, water;
 };
 
 // The grid starts at the prepass's lowest exposed block, with signed truncation.
