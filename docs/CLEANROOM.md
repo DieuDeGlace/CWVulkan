@@ -1,7 +1,7 @@
 # Clean-room process
 
 **Role boundary:** this document includes implementation history below the process
-rules. Native-only specification authors must read the standalone
+rules. Source-side specification authors must read the standalone
 [author policy](CLEANROOM_AUTHOR.md) instead and must not read this combined file.
 
 CubeVulkan is to Cube World what OpenMW is to Morrowind: its own engine, written from a
@@ -15,14 +15,16 @@ CubeVulkan's code, and those who write the code don't read the game's code.
    RVA) and the binary for its constants. It writes a plain-language behavioural spec in
    `docs/specs/`: inputs, outputs, the order of decisions and random draws, and constants, ids
    and record offsets (facts). It contains no code, no transcribed pseudocode, no decompiler
-   variable names, and nothing from third-party reconstructions (Infinite-Cubes, its Steam
-   `release` and its Alpha `alpha` folders alike). Alpha specs come from the Alpha decompile
-   (`disassembled alpha cube world`). Routines are cited by RVA.
+   variable names or copied expression/structure. Alpha specs come from the Alpha decompile
+   (`disassembled alpha cube world`). Original routines are cited by RVA.
 
-   The spec writer reads only original native evidence and finalized independent prose.
-   It must not inspect reconstructions, SDK source, engine/exporter code, tests, owner
-   outputs, probes or implementation history. Unproved facts remain unresolved. Follow
-   the separate [author policy](CLEANROOM_AUTHOR.md), including its exposure-stop rule.
+   The user's 2026-11-07 clarification permits the source-side agent to research
+   Infinite-Cubes in isolation. Reconstruction observations are reference leads;
+   Steam behavior must be confirmed against original Steam evidence and unsupported
+   findings remain unresolved. The source-side agent does not see our engine/exporter,
+   SDK, tests, owner outputs, probes or implementation history. Use a fresh context
+   without inheriting the implementation chat. Follow the separate
+   [author policy](CLEANROOM_AUTHOR.md), including its exposure-stop rule.
 2. **Implementation.** A second agent reads only the spec and CubeVulkan's own sources. It
    never opens the decompile, the binary's code or Infinite-Cubes. It writes the code with
    CubeVulkan's structure and names, readable on its own, commented in plain words.
@@ -31,6 +33,17 @@ CubeVulkan's code, and those who write the code don't read the game's code.
 
 Similarities with the game are expected where behaviour must match (constants, the order of
 random draws, data layouts). What must not happen is lifting code or its expression.
+
+## Final provenance and parity audit
+
+The user requested a final review after the remaining implementation work. Keep
+source-side and implementation-side role provenance, specification references,
+evidence limits and test results traceable during development. Before a final
+release, audit those handoffs, identify uncertain or inherited contributions,
+verify owner-content/package boundaries and repeat broader Steam gameplay,
+visual, save and multiplayer comparisons. Unsubstantiated areas remain open for
+independent specification or reimplementation. A later audit does not erase an
+actual role exposure; the author policy's exposure-stop rule still applies.
 
 ## Shared interface branches, 2026-11-04
 
@@ -2178,3 +2191,33 @@ key2/Windows0x201 proof, without reading native instructions. Asset-free class/i
 contracts and actual owner-scene repeated replacement checks qualify these changes;
 full callback/capture/hover/frontend and hardware acceptance remain separate. No
 original code, SDK/reconstruction or game assets were added.
+
+## Retained formula tooltip publication, 2026-11-07
+
+The isolated source-only author finalized steam-preview-selection-20261107.md and
+its ingredient-admission addendum, then read them back and held further writes.
+The author used Infinite-Cubes only as a research lead for the main contract and
+confirmed stated Steam behavior against the original supported image; the
+addendum used original evidence only. It reports no prohibited implementation
+exposure. The clean implementer read both entire held prose contracts and owned
+engine/test sources only. Their accepted prose is retained under docs/specs.
+
+The formula panel now owns a stable semantic item copy published by its real draw
+callback after result-resource admission. Result and ordered ingredient hits share
+that copy; ingredient-resource absence does not suppress its publication. Hidden,
+invalid-presentation and missing-result draws preserve it, while an admitted miss
+clears category only. The ordinary selector borrows it while the formula panel is
+locally shown, independently of formula presentation validity, and the information
+callback reads the still-live item after earlier draw callbacks. Removed the old
+per-frame ingredient-only selector scan. The separate legacy bitmap presentation
+remains supported. Synthetic items in the actual owner GUI scene exercise this
+bounded behavior; the focused checks reproduced nine failures before the fix and
+pass afterward. Exact native update/draw latency and unproved skill/specialization
+publishers remain unresolved. Alpha defaults and extensions are unchanged. Final
+provenance and wider live Steam parity acceptance remain release gates.
+
+All five targets build. Full CPU/owner-data validation with required procedural
+oracles passes without skips. All Vulkan groups pass (92 shader, 2 camera, 102 GUI,
+17 map, shared water and Alpha scenery), and the extractor SDK-independence audit
+passes. Local evidence: build/formula-tooltip-validation. These regression results
+do not establish complete live native tooltip or visual parity.

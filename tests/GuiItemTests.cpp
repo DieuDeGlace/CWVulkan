@@ -394,6 +394,94 @@ void equipmentCallbacks() {
         state.guiStepMs = 25;
         hud.draw(state, vertices);
         GUI_CHECK(hud.itemDraws().size() == 3 && hud.itemDraws()[1].at.euler.z == 1.5f);
+        // Formula hover is a panel-owned draw publication, not a fresh selector hit.
+        // Exercise the real owner scene with synthetic items and resources only.
+        state.guiStepMs = 0;
+        const auto *formula = &hud.formulaPreviewItem();
+        GUI_CHECK((*formula)[0] == 0);
+        auto result = nativesaves::makeItem(3, 4, 17);
+        result[1] = 0xa5; // Assignment must leave destination padding alone.
+        auto expectedResult = result;
+        expectedResult[1] = 0;
+        auto ingredient = nativesaves::makeItem(11, 2, 29);
+        ingredient[2] = 0xb6;
+        auto expectedIngredient = ingredient;
+        expectedIngredient[2] = 0;
+        details.original = result;
+        details.ingredients[0].original = ingredient;
+        if (hud.itemDraws().size() == 3) {
+            const auto resultCentre = hud.itemDraws()[1].at.screen;
+            const auto ingredientCentre = hud.itemDraws()[2].at.screen;
+            inventory.pointer = resultCentre;
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedResult);
+            details.original->at(4) ^= 0x7f;
+            GUI_CHECK(hud.formulaPreviewItem() == expectedResult); // Source replacement cannot change the owned copy.
+            itempreview::Sources sources;
+            sources.formulaShown = true;
+            sources.formula = formula;
+            sources.voxel = &weapon;
+            const auto selected = itempreview::select(sources);
+            GUI_CHECK(selected.item == formula);
+            bool lateRead = false;
+            state.informationDraw = [&] {
+                lateRead = selected.item == &hud.formulaPreviewItem() && *selected.item == expectedIngredient;
+            };
+            inventory.pointer = ingredientCentre;
+            hud.draw(state, vertices);
+            GUI_CHECK(lateRead && hud.formulaPreviewItem() == expectedIngredient);
+            state.informationDraw = {};
+            details.ingredients[0].icon = "missing-owner-resource";
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.itemDraws().size() == 2 && hud.formulaPreviewItem() == expectedIngredient);
+            details.ingredients[0].icon = "synthetic-equipment";
+            state.interfaceVisible = false;
+            inventory.pointer = {-1000, -1000};
+            details.ingredients[0].original->at(4) ^= 0x31;
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedIngredient && itempreview::select(sources).item == formula);
+            state.interfaceVisible = true;
+            hud.setInterfaceShown(false);
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedIngredient && itempreview::select(sources).item == formula);
+            hud.setInterfaceShown(true);
+            details.valid = false;
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedIngredient);
+            details.valid = true;
+            details.icon = "missing-owner-resource";
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedIngredient);
+            details.icon = "synthetic-equipment";
+            inventory.crafting.open = false;
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedIngredient);
+            sources.formulaShown = false;
+            GUI_CHECK(itempreview::select(sources).item == &weapon);
+            inventory.crafting.open = true;
+            sources.formulaShown = true;
+            hud.draw(state, vertices);
+            auto cleared = expectedIngredient;
+            cleared[0] = 0; // An admitted miss clears category, retaining the other semantic bytes.
+            GUI_CHECK(hud.formulaPreviewItem() == cleared && itempreview::select(sources).item == nullptr);
+            GUI_CHECK(formula == &hud.formulaPreviewItem());
+            // Result edges exclude hits; ingredient left/top admit and right/bottom exclude.
+            for (const auto offset : {glm::vec2(-60, 0), glm::vec2(60, 0), glm::vec2(0, -60), glm::vec2(0, 60)}) {
+                inventory.pointer = resultCentre + offset;
+                hud.draw(state, vertices);
+                GUI_CHECK(hud.formulaPreviewItem()[0] == 0);
+            }
+            details.ingredients[0].original = ingredient;
+            inventory.pointer = ingredientCentre - glm::vec2(20);
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem() == expectedIngredient);
+            inventory.pointer = ingredientCentre + glm::vec2(20, 0);
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem()[0] == 0);
+            inventory.pointer = ingredientCentre + glm::vec2(0, 20);
+            hud.draw(state, vertices);
+            GUI_CHECK(hud.formulaPreviewItem()[0] == 0);
+        }
         inventory.crafting.open = false;
         inventory.info.push_back({"Synthetic preview"});
         inventory.infoItem = weapon;

@@ -1,5 +1,26 @@
 # Source review checkpoint — 2026-11-05
 
+## Fresh-PC validation — 2026-11-07
+
+A supported-game session reached the title and a loaded TEST-character world,
+confirmed by the owner. A journaled extractor-only run captured seed-123 terrain
+and region data; save-file hashes matched the backup after restoration. The
+owner's Mods and original display settings were restored and the recovery
+journal was cleared. Desktop screenshot capture remained unavailable, so this
+is not a new native visual-comparison result.
+
+The CPU suite now passes without skips, including 324 fresh completed native
+procedural-item volumes. All existing Vulkan image groups also pass: 92 shader,
+two camera, 102 GUI and 17 map cases, plus shared water and Alpha scenery checks.
+Fresh comparisons match 95,575 generator-field values, 193,880 block sample values,
+60,000 cell objects, 3,000 gear records, 7,704 appearances and two region plans. The bounded zone check also matches 127,085 stored block records
+across four zones. The corpus contains 968 zone snapshots; these results do not
+mean every captured zone, seed, dungeon transition or gameplay path was checked.
+Local logs are under `build/loaded-world-validation` and
+`build/loaded-world-oracle-checks`; isolated resource-capture evidence is in
+`build/procedural-capture`. All 3,882 prior hashed references stayed unchanged
+during that isolated run. Remaining acceptance gates below stay open.
+
 This is a replacement-engine source package for review. It is not a finished-game
 release or a claim of pixel/behavioural parity. Older dated development notes may
 describe prototypes that have since been replaced; the current README and this

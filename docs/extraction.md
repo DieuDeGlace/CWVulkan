@@ -52,6 +52,10 @@ Quick mode checks the executable's x64 PE header and supported extractor timesta
 
 “Ready to test” means basic data is available. It does not establish complete world coverage, complete classes/equipment, native gameplay behavior, or visual parity. Nonempty fonts and HUD images are presence checks, not full resource validation. Unsupported executable builds cannot be used to install this extractor even when an existing export remains readable.
 
+Steam ownership verification runs in a short-lived `CubeVulkanDataCheck.exe` worker before setup launches the original game. Keep that executable beside `CubeVulkanSetup.exe`. Exiting the worker releases Steam's process association; merely shutting down the API inside the long-lived setup process was insufficient in a fresh-PC test.
+
+For isolated procedural-item resource capture, use `--setup-capture --procedural-items FILE`; see [the capture protocol](procedural-items.md). This mode preserves general exports and uses the same save/Mods recovery journal.
+
 ## Addressing gaps
 
 - Missing or damaged original models/fonts: repair the owner's Steam installation.

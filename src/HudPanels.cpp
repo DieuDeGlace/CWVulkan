@@ -5,6 +5,7 @@
 // around the character, the character panel, the item details and the formula details. Positions follow
 // the interface's layout for the window size; the drawing the inventory panel's drawing and its neighbours.
 #include "Hud.h"
+#include "ItemValue.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -93,6 +94,7 @@ void Hud::buildPanels() {
     interfaceInput.reset();
     panels = {};
     recipeEuler = {-120, 0, 0};
+    formulaHoveredItem = {};
     if (!guiLoaded)
         return;
     frontNodes.clear();
@@ -707,9 +709,13 @@ void Hud::drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) con
     // A missing result resource skips this widget's hook, including its draw-local spin.
     if (d.original && !itemModels.contains(d.icon))
         return;
+    // Hidden/skipped draws retain the previous copy. An admitted miss clears only category.
+    formulaHoveredItem[0] = 0;
     const glm::vec2 pointer = s.widgetPointer(node, inv.pointer);
     const bool overResult = pointer.x > content.x * .5f - 60 && pointer.x < content.x * .5f + 60 && pointer.y > 50 && pointer.y < 170;
     if (d.original) {
+        if (overResult)
+            itemvalue::assign(formulaHoveredItem.data(), d.original->data());
         recipeEuler.z = (float)guiStepMs * .02f + recipeEuler.z;
         itemIcon(d.icon, *d.original, guiitem::recipePlacement(position, view.x, scaleNow, recipeEuler, overResult), out.size());
     } else
@@ -720,9 +726,12 @@ void Hud::drawDetails(const Inventory &inv, std::vector<OverlayVertex> &out) con
         if (!cell)
             continue;
         const auto &ingredient = d.ingredients[i];
-        if (ingredient.original)
+        if (ingredient.original) {
+            // Publication precedes icon rendering, even when the ingredient sprite is absent.
+            if (cell->hovered)
+                itemvalue::assign(formulaHoveredItem.data(), ingredient.original->data());
             itemIcon(ingredient.icon, *ingredient.original, cell->icon, out.size());
-        else
+        } else
             icon(ingredient.icon, cell->icon.screen, 32 * scaleNow * (cell->hovered ? 1.5f : 1));
     }
     widgetText(out, node, latin1(d.name), {content.x * 0.5f, 30.0f}, 12, 3, d.color, BLACK, plasma::TEXT_CENTER | plasma::TEXT_WRAP,
@@ -1218,20 +1227,6 @@ bool Hud::craftButtonAt(glm::vec2 m, const Inventory &inv) const {
         return false;
     placePanels(inv);
     return inside(m, scene->contentPosition(*panels.craftButton), scene->screenSize(*panels.craftButton));
-}
-
-int Hud::ingredientAt(glm::vec2 m, const Inventory &inv) const {
-    if (!hasPanels() || !panels.details || !inv.crafting.open)
-        return -1;
-    placePanels(inv);
-    const plasma::SceneNode &node = *panels.details;
-    const float scaleNow = scene->matrix(node)[0][0];
-    const glm::vec2 position = scene->contentPosition(node), content = scene->contentSize(node);
-    for (int i = 0; i < (int)inv.crafting.details.ingredients.size(); i++)
-        if (const auto cell = guiitem::ingredientCell(position, scene->viewSize(node).x, content.y, scaleNow, i, m, guiClockMs);
-            cell && cell->hovered)
-            return i;
-    return -1;
 }
 
 int Hud::panelSlotAt(glm::vec2 m, const Inventory &inv) const {

@@ -4748,7 +4748,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         d.missing = gamecraft::requirement(f.workstation);
                     d.ready = station && !missing;
                     d.buttonOver = d.ready && hud.craftButtonAt(mouse, inventoryView);
-                    d.hoverIngredient = hud.ingredientAt(mouse, inventoryView);
                 }
                 // The craft button (loot-crafting.md §3.1): held, it makes the selected recipe in
                 // 1000 ms, each further one 1.2 times faster down to 200 ms.
@@ -8326,13 +8325,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (vendor.open && vendor.hoverItem >= 0 && (size_t)vendor.hoverItem < vendor.items.size() &&
                         vendor.items[(size_t)vendor.hoverItem].original)
                         sources.shop = &*vendor.items[(size_t)vendor.hoverItem].original;
-                    sources.formulaShown = crafting.open && crafting.details.valid;
-                    if (sources.formulaShown && crafting.details.hoverIngredient >= 0 &&
-                        (size_t)crafting.details.hoverIngredient < crafting.details.ingredients.size()) {
-                        const auto &original = crafting.details.ingredients[(size_t)crafting.details.hoverIngredient].original;
-                        if (original)
-                            sources.formula = &*original;
-                    }
+                    sources.formulaShown = crafting.open;
+                    if (sources.formulaShown)
+                        sources.formula = &hud.formulaPreviewItem();
                 }
                 if (nativeCustomization.edit.open && nativeCustomization.paletteHover >= 0)
                     sources.voxel = &nativeCustomization.hoveredItem;

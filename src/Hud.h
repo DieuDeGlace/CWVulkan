@@ -113,7 +113,6 @@ class Hud {
                 bool ready = false;      // nothing is missing: the button is green
                 bool buttonOver = false; // the pointer is on the craft button (cyan)
                 float progress = -1;     // the bar while crafting (-1 hidden)
-                int hoverIngredient = -1;
             } details;
         } crafting;
         bool bagShown = true; // the bag, its slots and the character (B); crafting alone hides them
@@ -267,6 +266,7 @@ class Hud {
     bool loadMenu(const std::filesystem::path &gameDir, std::string &error);
     bool hasInventoryArt() const { return inventoryReady || (scene && panels.bag.node); }
     const mapmarks::PreviewOutputs &mapPreviewOutputs() const { return mapOutputs; }
+    const nativesaves::Item &formulaPreviewItem() const { return formulaHoveredItem; }
     // An icon (RGBA, size x size) to pack into the atlas at the next layout().
     void addIcon(const std::string &key, std::vector<uint8_t> rgba, int size);
     // Retains the owner CUB allocation and native voxel data for immediate 3D widget draws.
@@ -310,11 +310,10 @@ class Hud {
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
     int vendorTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 1); }
-    // The crafting widget's (which 2) and the formula details' craft button and ingredients.
+    // The crafting widget's (which 2) and the formula details' craft button.
     int craftingItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 2); }
     int craftingTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 2); }
     bool craftButtonAt(glm::vec2 mouse, const Inventory &inv) const;
-    int ingredientAt(glm::vec2 mouse, const Inventory &inv) const;
     // The bag's rows to scroll through (the inventory rows: its row count), and the scroll
     // button under the mouse (1 up, 2 down, 0 none).
     int inventoryRowCount(const Inventory &inv, int which = 0) const;
@@ -434,6 +433,7 @@ class Hud {
     plasma::GuiClock interfaceClock;
     mutable int32_t guiClockMs = 0;
     mutable int32_t guiStepMs = 0;
+    mutable nativesaves::Item formulaHoveredItem{}; // Owned draw-time copy; selection borrows its stable address.
     mutable glm::vec3 recipeEuler{-120, 0, 0}; // advances only when the detail widget actually draws
     void uploadItemModels(Renderer &);
     void itemIcon(const std::string &, const nativesaves::Item &, const guiitem::Placement &, size_t beforeVertex) const;

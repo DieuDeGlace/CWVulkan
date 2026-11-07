@@ -8,6 +8,19 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Formula-details hover now publishes an owned semantic item during an admitted
+  draw, including the result icon and ordered ingredient hits. Missing result
+  resources, hidden roots and invalid formula presentation preserve the cache;
+  missing ingredient resources do not suppress publication. Selection borrows the
+  retained copy using the panel's own visibility, and an admitted miss clears only
+  category. The redundant per-frame ingredient scan is removed. Actual owner-scene
+  tests with synthetic items cover ownership, late reads, padding, visibility,
+  resources and strict/half-open boundaries. See the independent
+  [selection contract](specs/steam-preview-selection-20261107.md) and
+  [ingredient admission addendum](specs/steam-preview-ingredient-admission-addendum-20261107.md).
+  Exact native frame latency, skill/specialization publishers and broader live
+  tooltip/input/visual acceptance remain open.
+
 - [x] Replace explicit extractor SDK item/equipment types with owned byte records,
   and Game/client-World/local-player links with independent guarded field reads.
   Signed-ID lookup now serves two recorder consumers under the observed frame

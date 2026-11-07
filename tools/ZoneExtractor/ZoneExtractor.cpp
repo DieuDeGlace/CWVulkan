@@ -7137,6 +7137,13 @@ static void run(cube::Game *g) {
 // Data/ABI facts: docs/specs/steam-procedural-item-resources.md sections1–5.
 namespace proceduralcapture {
 using proceduralitem::Key;
+static bool only() {
+    static const bool enabled = [] {
+        const DWORD attributes = GetFileAttributesA("Extract\\procedural-only.request");
+        return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }();
+    return enabled;
+}
 constexpr const char *REQUEST = "Extract\\procedural-items.request";
 constexpr const char *PROCESSING = "Extract\\procedural-items.processing";
 constexpr const char *STATUS = "Extract\\procedural-items.status";
@@ -7298,6 +7305,11 @@ static void tick(cube::Game *g) {
             requested = true;
             uicapture::requestFrames();
         }
+        return;
+    }
+    if (proceduralcapture::only()) {
+        if (g && clientWorld(g) && supported())
+            proceduralcapture::tick(g);
         return;
     }
     netrecorder::poll(); // also outside a world, so a recording can start before joining
@@ -7986,6 +7998,10 @@ void initializeCapture(void *) {
         return;
     }
     std::thread(extract::writer).detach();
+    if (extract::proceduralcapture::only()) {
+        extract::log("ZoneExtractor loaded in procedural-only mode");
+        return;
+    }
     extract::log("ZoneExtractor loaded (F11 sweep around home, F6 calibration tour, F9 home, F5 character snapshot, F4 record animation)");
 }
 void tickCapture(void *, std::uintptr_t reported) {
@@ -8000,7 +8016,7 @@ extern "C" __declspec(dllexport) void *MakeMod() {
 }
 // Earliest entry point: the hook must be in place before the game loads sprites.
 extern "C" __declspec(dllexport) void ModPreInitialize() {
-    if (extract::uicapture::titleOnly())
+    if (extract::uicapture::titleOnly() || extract::proceduralcapture::only())
         return;
     extract::hookSpriteLoading();
     extract::hitprobe::install();

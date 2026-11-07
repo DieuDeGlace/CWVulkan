@@ -37,6 +37,35 @@ closing sooner can leave the request for recovery. Each final data file is in
 eight lowercase hexadecimal digits. A temporary file is renamed only after its
 write closes successfully.
 
+## Isolated capture through Setup
+
+To preserve existing terrain, character recordings and table exports, stage only
+procedural-resource capture while the original game is closed:
+
+```powershell
+.\build\CubeVulkanDataCheck.exe --setup-capture --procedural-items keys.txt --game "<Steam Cube World folder>"
+```
+
+The request file uses the CWP1 format above. `--dry-run` validates it without
+changing the installation. Setup backs up Save, sets aside Mods/ReShade and
+installs the extractor with a persistent `procedural-only.request` marker. Launch
+the game through Steam after this command exits and allow mods. The initialized
+title world can supply the model store; no inventory or character interaction is
+required. Wait for `procedural-items.status` to report complete, with zero lookup
+and write failures, then close the game and run:
+
+```powershell
+.\build\CubeVulkanDataCheck.exe --setup-restore --game "<Steam Cube World folder>"
+```
+
+This mode skips general export hooks, recorders and hotkeys, while retaining the
+procedural capture's native-window-thread requirement and asynchronous writer.
+The mode marker remains until restoration. Setup rejects mixed capture modes,
+malformed/oversized input and existing competing requests before moving owner
+files. Recovery removes its marker and unanswered request, preserves completed
+resources, and retains an interrupted `.processing` file for the existing resume
+protocol. A new isolated batch is refused while that file is present.
+
 ## CWP1 resource record
 
 All multibyte fields are little-endian. This is CubeVulkan's data format, not a
@@ -101,3 +130,13 @@ IDs -1 and 7, and four high-bit modifier words across all nine tested IDs.
 This is bounded sample coverage, not an exhaustive claim over every possible key
 or a reconstruction of internal CRT trigonometry. The captured files and their
 private manifest are not distributed.
+
+### Fresh-PC isolated comparison — 2026-11-07
+
+An extractor-only isolated run completed 324 native lookups with no lookup or
+write failures: IDs -1 through 7, modifiers 0..31 and the four full words
+7fffffff, 80000000, ff112233 and ffffffff for every ID. Independent generation
+matched all RGB bytes and metadata in the 324 resources. The prior 3,882 hashed
+terrain/table/reference files remained byte-identical; saves and display settings
+matched their backups after restoration. Local evidence is under
+`build/procedural-capture`. This sample does not exhaust the full key space.

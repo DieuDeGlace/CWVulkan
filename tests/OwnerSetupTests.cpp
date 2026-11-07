@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <sstream>
 #include <windows.h>
 
 using namespace ownersetup;
@@ -278,6 +279,72 @@ void generationReadiness() {
 }
 
 // --- The journal and its rollback ------------------------------------------------------------
+// A resource-only run must preserve the reference corpus and any competing request.
+void proceduralCapture() {
+    FakeGame fake("procedural-only");
+    fake.ownerFiles();
+    FakeHost host;
+    const fs::path extract = fake.game / "Extract";
+    write(extract / "seed_123" / "z_0_0.cwz", "owner terrain");
+    write(extract / "oracle" / "gear.bin", "owner tables");
+    PrepareOptions options;
+    options.extractorDll = fake.dll;
+    options.stamp = "procedural";
+    options.proceduralItems = "CWP1\n-1 ffffffff\n3 80000000\n";
+    std::string why;
+    const fs::path requestFile = fake.root / "keys.txt";
+    write(requestFile, options.proceduralItems);
+    for (const auto &args : std::vector<std::vector<std::wstring>>{
+             {L"--setup-capture", L"--procedural-items", L""},
+             {L"--setup-extract", L"--procedural-items", requestFile.wstring()},
+             {L"--setup-capture", L"--title-only", L"--procedural-items", requestFile.wstring()},
+             {L"--setup-capture", L"--dungeon-targets", requestFile.wstring(), L"--procedural-items", requestFile.wstring()}}) {
+        std::ostringstream output;
+        SETUP_CHECK(headless(args, fake.root, output) == 2 && !runPending(fake.game));
+        SETUP_CHECK(output.str().find("requires") != std::string::npos);
+    }
+    for (const std::string invalid : {std::string("CWP1\n"), std::string("CWP1\n3 not-hex\n"),
+                                      std::string(65537, 'x')}) {
+        auto bad = options;
+        bad.proceduralItems = invalid;
+        SETUP_CHECK(!prepare(fake.game, bad, host, why) && !runPending(fake.game));
+    }
+    auto mixed = options;
+    mixed.requests = {"scene-reference.request"};
+    SETUP_CHECK(!prepare(fake.game, mixed, host, why) && !runPending(fake.game));
+    mixed = options;
+    mixed.dungeonTargets = "0 0\n";
+    SETUP_CHECK(!prepare(fake.game, mixed, host, why) && !runPending(fake.game));
+    for (const char *name : {"procedural-items.request", "procedural-items.processing", "procedural-only.request", "ui-only.request"}) {
+        write(extract / name, "existing owner request");
+        SETUP_CHECK(!prepare(fake.game, options, host, why) && !runPending(fake.game));
+        SETUP_CHECK(read(extract / name) == "existing owner request");
+        fs::remove(extract / name);
+    }
+    SETUP_CHECK(sameTree(fake.game / "Save", fake.pristine / "Save") &&
+                sameTree(fake.game / "Mods", fake.pristine / "Mods"));
+    SETUP_CHECK(prepare(fake.game, options, host, why));
+    SETUP_CHECK(fs::is_regular_file(extract / "procedural-only.request"));
+    SETUP_CHECK(read(extract / "procedural-items.request") == options.proceduralItems);
+    SETUP_CHECK(!fs::exists(extract / "scene-reference.request") && !fs::exists(extract / "oracle.request"));
+    SETUP_CHECK(read(extract / "seed_123" / "z_0_0.cwz") == "owner terrain" &&
+                read(extract / "oracle" / "gear.bin") == "owner tables");
+    write(fake.game / "Save" / "world.db", "temporary world progress");
+    write(extract / "procedural-items" / "completed.cwp", "completed owner resource");
+    SETUP_CHECK(restore(fake.game, host).ok && !runPending(fake.game));
+    SETUP_CHECK(!fs::exists(extract / "procedural-only.request") && !fs::exists(extract / "procedural-items.request"));
+    SETUP_CHECK(read(extract / "procedural-items" / "completed.cwp") == "completed owner resource");
+    SETUP_CHECK(sameTree(fake.game / "Save", fake.pristine / "Save") &&
+                sameTree(fake.game / "Mods", fake.pristine / "Mods"));
+
+    // An interrupted exporter retains its resumable processing request; setup removes its mode marker.
+    SETUP_CHECK(prepare(fake.game, options, host, why));
+    fs::rename(extract / "procedural-items.request", extract / "procedural-items.processing");
+    SETUP_CHECK(restore(fake.game, host).ok && !fs::exists(extract / "procedural-only.request"));
+    SETUP_CHECK(read(extract / "procedural-items.processing") == options.proceduralItems);
+    SETUP_CHECK(!prepare(fake.game, options, host, why) && !runPending(fake.game));
+}
+
 void journalAndRollback() {
     FakeGame fake("journal");
     fake.ownerFiles();
@@ -571,6 +638,7 @@ int ownerSetupTests() {
         libraryParsing();
         completenessRules();
         generationReadiness();
+        proceduralCapture();
         journalAndRollback();
         interruptedRuns();
         extractionRun();

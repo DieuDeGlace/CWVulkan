@@ -42,8 +42,8 @@ struct GameStatus {
     std::string problem;         // plain words, empty when found and valid
 };
 GameStatus inspectGame(const fs::path &dir);
-// Steam online with a Cube World licence, checked as the engine does. The Steam runtime is
-// released again before this returns, so Steam can start the game afterwards.
+// Steam online with a Cube World licence, checked as the engine does in a short-lived
+// CubeVulkanDataCheck worker. That process exits before this returns.
 bool steamVerified(const fs::path &game, std::string &why);
 
 // --- What has been extracted -----------------------------------------------------------------
@@ -120,6 +120,7 @@ struct PrepareOptions {
     bool backupOracle = false;             // copy Extract\oracle into the run folder first
     std::string stamp;                     // the run's name; empty: the local time
     std::string dungeonTargets;            // optional 16-block cell coordinates for the dungeon diagnostic
+    std::string proceduralItems;           // optional validated CWP1 request; isolated resource capture
 };
 
 // Takes the steps in order, journalled: Save copied, Mods and dxgi.dll moved aside, the

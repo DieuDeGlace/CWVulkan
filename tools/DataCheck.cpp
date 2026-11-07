@@ -11,6 +11,16 @@
 
 int wmain(int argc, wchar_t **argv) {
     namespace fs = std::filesystem;
+    // Internal setup worker: the process must exit before the original game launches.
+    if (argc == 4 && std::wstring(argv[1]) == L"--setup-steam-check" &&
+        std::wstring(argv[2]) == L"--game") {
+        SteamSession steam;
+        std::string why;
+        if (!steam.start(fs::path(argv[3]), why))
+            return 2;
+        steam.pump();
+        return steam.check(why) ? 0 : 2;
+    }
     // The setup wizard's headless commands (--setup-check, --setup-extract [--dry-run],
     // --setup-restore), here too because a console program's exit code is easy to script.
     const std::vector<std::wstring> args(argv + 1, argv + argc);
@@ -31,7 +41,7 @@ int wmain(int argc, wchar_t **argv) {
         } else if (arg == L"--help") {
             std::cout << "CubeVulkanDataCheck [--game PATH] [--world SEED_FOLDER] [--deep] [--report FILE]\n"
                          "CubeVulkanDataCheck --setup-check | --setup-extract [--dry-run] | --setup-restore [--game PATH]\n"
-                         "CubeVulkanDataCheck --setup-capture [--title-only | --dungeon-targets FILE] [--dry-run] [--game PATH]\n"
+                         "CubeVulkanDataCheck --setup-capture [--title-only | --dungeon-targets FILE | --procedural-items FILE] [--dry-run] [--game PATH]\n"
                          "Reads the owner's game and exports; Steam must be online with a Cube World license.\n"
                          "Quick mode validates home terrain, player clips and menu; --deep also checks all zones, records, sprites and creatures.\n"
                          "Exit 0: no blocking data errors, 1: data errors, 2: arguments, Steam or report error.\n";

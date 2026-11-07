@@ -3,10 +3,10 @@
 #include "OwnerSetup.h"
 #include "Assets.h"
 #include "Config.h"
+#include "ProceduralItemData.h"
 #include "CubModel.h"
 #include "alphagen/PlantModels.h"
 #include "Extracted.h"
-#include "SteamSession.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
 #include <windows.h>
 #include <shellapi.h>
@@ -25,6 +25,9 @@
 namespace ownersetup {
 namespace {
 constexpr const char *titleCaptureRequest = "ui-only.request";
+constexpr const char *proceduralCaptureMarker = "procedural-only.request";
+constexpr const char *proceduralCaptureRequest = "procedural-items.request";
+constexpr const char *proceduralCaptureProcessing = "procedural-items.processing";
 
 bool nonempty(const fs::path &file) {
     std::error_code ec;
@@ -509,6 +512,21 @@ bool prepare(const fs::path &game, const PrepareOptions &options, Host &host, st
         return false;
     }
     auto requests = options.requests;
+    if (!options.proceduralItems.empty()) {
+        std::vector<proceduralitem::Key> keys;
+        if (!requests.empty() || !options.dungeonTargets.empty() ||
+            !proceduralitem::decodeRequest(options.proceduralItems, keys)) {
+            why = "Procedural capture requires a valid CWP1 request without other capture modes.";
+            return false;
+        }
+        for (const auto *name : {proceduralCaptureProcessing, titleCaptureRequest}) {
+            if (fs::exists(game / "Extract" / name, ec) || ec) {
+                why = std::string("An existing request blocks procedural capture: ") + name + ".";
+                return false;
+            }
+        }
+        requests = {proceduralCaptureMarker, proceduralCaptureRequest};
+    }
     constexpr const char *dungeonRequest = "gen-dungeon.request";
     if (!options.dungeonTargets.empty()) {
         dungeoncapture::Plan plan;
@@ -598,6 +616,8 @@ bool prepare(const fs::path &game, const PrepareOptions &options, Host &host, st
         std::ofstream out(staged, std::ios::binary);
         if (name == dungeonRequest)
             out << options.dungeonTargets;
+        else if (name == proceduralCaptureRequest)
+            out << options.proceduralItems;
         else if (name == titleCaptureRequest)
             out << "Title-only capture. CubeVulkanSetup removes this marker on restore.\n";
         else
@@ -913,8 +933,8 @@ std::string ExtractionRun::instructions() const {
                    "Your mods, ReShade and Save are put back as soon as it has closed.";
             break;
         }
-        out << "You are in the world. The extractor is writing the game's tables: the game may stop responding "
-               "for a minute or two. That is normal; leave it running.\n";
+        out << "The extractor is writing the game's tables. The game may stop responding or show a black screen "
+               "for a minute or two while this finishes; leave it running.\n";
         if (const Target *sweep = sweepPending()) {
             out << (sweepStopped_ ? "\nThe sweep was stopped (F11 was pressed again). Press F11 once to start it again.\n"
                                   : "\nPress F11 once to sweep the land around your character. It is moved from place to "
@@ -950,11 +970,46 @@ bool isHeadlessCommand(const std::vector<std::wstring> &args) {
 }
 
 bool steamVerified(const fs::path &game, std::string &why) {
-    SteamSession steam; // closed again at the end of this call, before the game is started
-    if (!steam.start(game, why))
+    // Steam can retain the app association until the checking process exits,
+    // even after API shutdown. Keep the long-lived setup outside that session.
+    why.clear();
+    wchar_t self[32768];
+    const DWORD size = GetModuleFileNameW(nullptr, self, DWORD(std::size(self)));
+    if (!size || size == std::size(self)) {
+        why = "Cannot locate the setup's Steam verification helper.";
         return false;
-    steam.pump();
-    return steam.check(why);
+    }
+    const fs::path helper = fs::path(self).parent_path() / "CubeVulkanDataCheck.exe";
+    // The final dot prevents a trailing path separator from escaping the quote.
+    std::wstring command = L"\"" + helper.wstring() + L"\" --setup-steam-check --game \"" +
+                           (game / L".").wstring() + L"\"";
+    STARTUPINFOW startup{};
+    startup.cb = sizeof startup;
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(helper.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                        nullptr, nullptr, &startup, &process)) {
+        why = "Cannot start CubeVulkanDataCheck.exe for Steam verification (Windows error " +
+              std::to_string(GetLastError()) + "). Keep it beside CubeVulkanSetup.exe.";
+        return false;
+    }
+    CloseHandle(process.hThread);
+    const DWORD wait = WaitForSingleObject(process.hProcess, 30000);
+    DWORD result = 1;
+    const bool completed = wait == WAIT_OBJECT_0 && GetExitCodeProcess(process.hProcess, &result);
+    if (!completed) {
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, 5000);
+    }
+    CloseHandle(process.hProcess);
+    if (!completed) {
+        why = "The Steam verification helper did not finish. Check Steam and try again.";
+        return false;
+    }
+    if (result != 0) {
+        why = "Steam verification failed. Start Steam online with an account that owns Cube World, then check again.";
+        return false;
+    }
+    return true;
 }
 
 namespace {
@@ -968,7 +1023,7 @@ std::string hex8(uint32_t v) {
 int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, std::ostream &out) {
     bool check = false, extract = false, dryRun = false, restoreRun = false, capture = false;
     bool titleOnly = false;
-    fs::path game, dungeonTargetsFile;
+    fs::path game, dungeonTargetsFile, proceduralItemsFile;
     for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == L"--setup-check")
             check = true;
@@ -984,6 +1039,13 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
             titleOnly = true;
         else if (args[i] == L"--dungeon-targets" && i + 1 < args.size())
             dungeonTargetsFile = args[++i];
+        else if (args[i] == L"--procedural-items" && i + 1 < args.size()) {
+            proceduralItemsFile = args[++i];
+            if (proceduralItemsFile.empty()) {
+                out << "--procedural-items requires a request file path.\n";
+                return 2;
+            }
+        }
         else if (args[i] == L"--game" && i + 1 < args.size())
             game = args[++i];
         else {
@@ -994,6 +1056,23 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
     if (titleOnly && (!capture || check || extract || restoreRun || !dungeonTargetsFile.empty())) {
         out << "--title-only requires --setup-capture without --dungeon-targets.\n";
         return 2;
+    }
+    std::string proceduralItems;
+    if (!proceduralItemsFile.empty()) {
+        if (!capture || check || extract || restoreRun || titleOnly || !dungeonTargetsFile.empty()) {
+            out << "--procedural-items requires --setup-capture without other capture modes.\n";
+            return 2;
+        }
+        std::ifstream input(proceduralItemsFile, std::ios::binary);
+        std::array<char, proceduralitem::MAX_REQUEST_BYTES + 1> bytes{};
+        input.read(bytes.data(), bytes.size());
+        std::vector<proceduralitem::Key> keys;
+        if (input.bad() || !input.eof() ||
+            !proceduralitem::decodeRequest({bytes.data(), size_t(input.gcount())}, keys)) {
+            out << "Invalid or oversized procedural item request; expected 1..512 unique CWP1 keys.\n";
+            return 2;
+        }
+        proceduralItems.assign(bytes.data(), size_t(input.gcount()));
     }
     std::string dungeonTargets;
     if (!dungeonTargetsFile.empty()) {
@@ -1087,12 +1166,21 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
                 if (fs::exists(game / "Extract" / name, ec) || ec)
                     blockers.push_back(std::string("An existing request blocks this dungeon run: ") + name + ".");
         }
+        if (!proceduralItems.empty()) {
+            std::error_code ec;
+            for (const auto *name : {proceduralCaptureMarker, proceduralCaptureRequest, proceduralCaptureProcessing, titleCaptureRequest})
+                if (fs::exists(game / "Extract" / name, ec) || ec)
+                    blockers.push_back(std::string("An existing request blocks procedural capture: ") + name + ".");
+        }
         out << "\nIsolated reference capture" << (dryRun ? " (dry run)" : "") << ":\n"
             << "  Back up Save and temporarily set aside Mods and ReShade.\n"
             << "  Install only ZoneExtractor; existing Extract data stays in place.\n";
         if (titleOnly)
             out << "  Launch Cube World with mods and wait at the title screen for six UI frames.\n"
                    "  The extractor skips world exports, recorders and hotkeys for this process.\n";
+        else if (!proceduralItems.empty())
+            out << "  Launch Cube World with mods and wait for procedural-items.status to report complete.\n"
+                   "  Only procedural resources are captured; other exports, recorders and hotkeys are skipped.\n";
         else if (dungeonTargets.empty())
             out << "  Launch Cube World; the extractor captures once a world is available.\n"
                    "  F5 and O remain available for manual refreshes. Quit afterward.\n";
@@ -1107,6 +1195,8 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
         options.extractorDll = dll;
         if (titleOnly)
             options.requests = {titleCaptureRequest};
+        else if (!proceduralItems.empty())
+            options.proceduralItems = proceduralItems;
         else if (dungeonTargets.empty())
             options.requests = {"scene-reference.request"};
         else

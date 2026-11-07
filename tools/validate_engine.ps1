@@ -19,8 +19,18 @@ Push-Location $sourceRoot
 try {
     $cpuLog = Join-Path $LogDirectory 'engine-tests.log'
     & $testProgram *> $cpuLog
-    if ($LASTEXITCODE -ne 0) { throw "Engine tests failed; read $cpuLog" }
-    Write-Output "CPU/owner-data engine suite passed: $cpuLog"
+    $cpuExit = $LASTEXITCODE
+    $skipped = @(Select-String -LiteralPath $cpuLog -Pattern '^\s*skip\b')
+    if ($skipped.Count) {
+        foreach ($entry in $skipped) { Write-Output $entry.Line }
+        Write-Warning "$($skipped.Count) reported skips remain unverified; this run does not establish complete owner-data coverage."
+    }
+    if ($cpuExit -ne 0) { throw "Engine tests failed; read $cpuLog" }
+    if ($skipped.Count) {
+        Write-Output "CPU engine checks passed with $($skipped.Count) reported skips: $cpuLog"
+    } else {
+        Write-Output "CPU/owner-data engine suite passed: $cpuLog"
+    }
 
     if ($SkipGpu) {
         Write-Output 'SKIP Vulkan image checks: requested with -SkipGpu.'
