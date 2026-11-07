@@ -31,6 +31,13 @@ checkpoint describe the intended setup and remaining limits.
 The newest checkpoints appear first. The latest validation result below qualifies
 older successful runs; none of these bounded changes establishes complete parity.
 
+- Mouse motion now runs before controller callbacks and shares the GUI's stored
+  button mask. Actual window messages and synthesized controller clicks use that
+  mask; left controller clicks also reach the retained capture/tab path. Camera
+  dragging uses capture or a fresh root pick, and map/model dragging can continue
+  into camera handling. Map pan uses current native-degree yaw. Camera and owner-GUI
+  regression cases pass; global cursor preparation and hardware acceptance remain.
+
 - Controller input now distinguishes skipped sampling from a failed XInput poll.
   Foreground loss and binding capture retain sampled controls and both stick
   pairs; a failed admitted poll clears the pairs. Stateful checks reproduced six

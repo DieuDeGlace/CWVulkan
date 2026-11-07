@@ -1272,6 +1272,20 @@ void Hud::interfaceLeftUp() {
         interfaceInput->leftUp();
 }
 
+void Hud::interfaceButtonHeld(int button, bool down) {
+    if (interfaceInput)
+        interfaceInput->setButtonHeld(button, down);
+}
+uint32_t Hud::interfaceHeldButtons() const {
+    return interfaceInput ? interfaceInput->heldButtons() : 0;
+}
+glm::vec2 Hud::interfacePointerDelta() const {
+    return interfaceInput ? interfaceInput->pointer() - interfaceInput->previousPointer() : glm::vec2(0);
+}
+const plasma::SceneNode *Hud::interfacePointerTarget() const {
+    return interfaceInput ? interfaceInput->target() : nullptr;
+}
+
 void Hud::moveInterfacePointer(glm::vec2 point, Inventory *inventory) {
     if (!interfaceInput)
         return;

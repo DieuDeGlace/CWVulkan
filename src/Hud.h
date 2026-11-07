@@ -305,6 +305,10 @@ class Hud {
     };
     InterfacePress interfaceLeftDown();
     void interfaceLeftUp();
+    void interfaceButtonHeld(int button, bool down);
+    uint32_t interfaceHeldButtons() const;
+    glm::vec2 interfacePointerDelta() const;
+    const plasma::SceneNode *interfacePointerTarget() const;
     void moveInterfacePointer(glm::vec2, Inventory * = nullptr);
     void setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const;
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.

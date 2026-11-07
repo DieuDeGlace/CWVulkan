@@ -8,6 +8,22 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Shared held-mouse state now receives actual window edges and eligible
+  controller mouse callbacks. Left controller clicks enter the same capture/tab
+  path and retain their press identity for later inventory work. Native-backed UI
+  edge snapshots exclude GLFW focus-loss releases. Pointer delivery, the device
+  snapshot and mouse motion run before XInput; binding capture skips ordinary
+  pointer publication. Camera dragging uses capture or a fresh root pick, including
+  hidden-root behavior. Map/model right dragging can continue into camera handling;
+  UI pointer deltas and relative arguments remain distinct. Both map-pan producers
+  use current yaw narrowed to float degrees without the legacy 90-degree adapter.
+  Stateful camera and actual owner-GUI mask/capture checks pass. See the independent
+  [mouse admission](specs/steam-mouse-mode-admission-20261107.md),
+  [held-mask](specs/steam-mouse-held-mask-20261107.md) and
+  [map yaw](specs/steam-map-pan-yaw-20261107.md) contracts. Complete active-input,
+  cursor-preparation/warp, right/middle widget callback and physical-device
+  acceptance remain open.
+
 - [x] Retain sampled controls and both stick pairs when foreground/binding-capture
   admission skips polling; discard only the adapter's transient delivery flags.
   Failed admitted polls still clear both pairs, while successful panel scrolling
@@ -877,8 +893,8 @@ individual feature documents.
   Mouse map/preview/look handlers now retain the last-device selection after the
   mapped physical pass and before the current XInput work. Later controller
   callbacks update the live selection without rewriting that earlier snapshot.
-  Focus/capture admission, root picking and UI-transition scheduling still need
-  the wider runtime integration. The independent
+  Global active-input producers, original cursor preparation/warps and complete
+  widget/UI-transition scheduling still need wider runtime integration. The independent
   [GUI root/lifetime audit](specs/steam-gui-root-construction-lifetime.md) establishes
   a detached document source, one live native root and a retained Interface on Play.
   Frontend and gameplay now share the same engine Hud and reuse completed resources

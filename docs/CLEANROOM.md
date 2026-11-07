@@ -2255,3 +2255,57 @@ oracles passes without skips, as do all Vulkan groups (92 shader, 2 camera,
 102 GUI, 17 map, shared water and Alpha scenery). The extractor SDK-independence
 audit also passes. Evidence: build/controller-input-validation. These checks do
 not substitute for the remaining native hardware and caller-schedule acceptance.
+
+## Mouse-mode handoff and source-context replacement, 2026-11-07
+
+The isolated source_feat_contract author finalized/read back/held
+steam-mouse-mode-admission-20261107.md. The clean implementer read the complete
+held prose. During a subsequent held-mask task, that author reported that a broad
+reference search returned excluded third-party SDK/header matches. It stopped
+immediately, relayed no matched contents, and produced no held-mask addendum.
+That context is excluded from further source work. Its earlier held contracts
+were unchanged; this records a later source-side exposure, not an assertion that
+ignoring exposed material restores separation.
+
+A fresh source_mouse_mask context, without the implementation chat or the stopped
+author's context, read the standalone role policy and original Steam evidence
+only. It finalized/read back/held steam-mouse-held-mask-20261107.md and the separate
+steam-map-pan-yaw-20261107.md. It reports no prohibited exposure. The implementer
+read both entire held contracts before using their facts. Accepted prose under
+docs/specs matches the held text; local provenance hashes are recorded under
+build/cleanroom-research/mouse-handoff-provenance.json. The author policy now
+requires filename discovery and explicitly scoped content searches, avoiding
+mixed reconstruction/dependency roots. The final provenance audit retains this
+incident and the replacement boundary.
+
+The implementation uses owned code only. The input owner stores one held mask;
+actual window edges and admitted controller callbacks modify its individual
+bits. Native-backed UI consumes window edge snapshots, while configured action
+polling retains its existing GLFW adapter. Controller left presses enter shared
+capture/listener routing and keep their recorded identity through inventory
+continuation. Ordinary mouse publication and motion now precede XInput work;
+focus/binding-capture skips do not supply a substitute motion call. Pointer
+publication remains admitted while the root is hidden, with capture or a fresh
+root pick deciding camera admission. Shared routing separates relative arguments
+from cached GUI displacement, retains entry-versus-later ownership, and permits
+successive map/model/camera branches. Map panning now receives current yaw narrowed
+to float degrees directly, replacing a legacy 90-degree adapter at both callers.
+The existing diagnostic pointer also feeds the retained in-game input owner.
+
+Focused production-math and actual owner-GUI fixtures exercise simultaneous
+routes, stationary versus skipped calls, shared per-bit mask updates across
+window/controller sources, focus-loss release exclusion, cached displacement,
+hidden-root capture, and controller scrollbar capture. Broader active-input and
+mask writers, original cursor preparation/warp and coordinate-option behavior,
+right/middle widget callbacks, complete Game/UI callback scheduling and real
+physical-device acceptance remain open. Alpha terrain, lighting, Omega water and
+other enhancements remain configured. No excluded contents or owner game files
+are included in the implementation or source publication.
+
+All five targets build. The full CPU/owner-data suite with required procedural
+oracles passes without skips. Vulkan checks pass for 92 shader, 2 camera, 102 GUI,
+17 map, shared water and Alpha scenery cases; extractor SDK independence passes.
+An isolated hidden/offline/no-save Alpha-world system-menu run with a synthetic
+pointer exits zero and renders the menu (build/mouse-input-smoke). This exercises
+the in-game service binding and retained pointer stage, not native hardware or
+pixel acceptance. Full regression logs are in build/mouse-input-validation.

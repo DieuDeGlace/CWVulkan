@@ -11,6 +11,7 @@
 #include "CameraPosition.h"
 #include "GameOptions.h"
 #include "GamepadUi.h"
+#include "MouseMotion.h"
 #include "Hud.h"
 #include "NativeProgress.h"
 #include "NativeSaves.h"
@@ -44,11 +45,13 @@ struct MenuInput {
     double scroll = 0;
     std::vector<inventoryui::WheelEvent> wheelEvents;
     std::vector<int> pressed, buttons, released;
-    enum class InterfaceMessage { LeftDown, LeftUp, ToggleVisibility };
+    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility };
     std::vector<InterfaceMessage> interfaceMessages;
     std::vector<Hud::InterfacePress> interfacePresses;
-    bool gameplayPointerAdmitted = false;
+    struct MouseEdges { std::vector<int> pressed, released; };
+    MouseEdges windowMouseEdges() const; // Actual window messages, independent of GLFW focus-loss releases.
     void routeInterfaceMessages(Hud &);
+    void routeGamepadButtons(Hud &);
     std::string typed; // text typed this frame (character creation's name)
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
     GamepadButtons gamepad;
@@ -68,9 +71,8 @@ struct MenuInput {
         lastUsedPadAtMousePoll = lastUsedPad;
     }
     double pointerX = 0, pointerY = 0; // GUI hit tests retain the pre-navigation cursor this frame.
-    void sampleGamepad(GLFWwindow *window, bool capturing, const gameoptions::Controls *controls = nullptr) {
+    void sampleGamepad(GLFWwindow *window, bool capturing) {
         if (!gamepadSampled) {
-            retainMouseDevice(!capturing && controls && GameInput::physicalBindingDown(window, *controls));
             gamepad = GameInput::pollGamepad(window, capturing);
             gamepadSampled = true;
         }
@@ -87,7 +89,6 @@ struct MenuInput {
         released.clear();
         interfaceMessages.clear();
         interfacePresses.clear();
-        gameplayPointerAdmitted = false;
         typed.clear();
         gamepadSampled = false;
         pointerSampled = false;
@@ -379,6 +380,8 @@ struct Services {
     // Puts options the options screen applied into effect (the window, the view distance, the
     // frame limit...); the screens set the volumes themselves.
     std::function<void(const gameoptions::Options &)> applyOptions;
+    std::function<bool()> ordinaryUi; // Live gameplay roots, in addition to this session's own panels.
+    std::function<void(const mousemotion::Sample &)> mouseMotion; // Admitted pointer stage, before XInput callbacks.
     // The start spot: the world the search asks, and where it starts (the world's origin, 0 0).
     StartSpotWorld startSpot;
     nativesaves::Cell startOrigin{0, 0};

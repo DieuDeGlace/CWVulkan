@@ -1,6 +1,7 @@
 // Independent gameplay-camera §2, §4 and §7.2, including actual queued Audio consumers.
 #include "Audio.h"
 #include "CameraMotion.h"
+#include "MouseMotion.h"
 #include "Frontend.h"
 #include "SoundRules.h"
 #include <cmath>
@@ -144,6 +145,71 @@ int cameraMotionTests() {
     mouseYaw = 180;
     cameramotion::mouseTargets(mousePitch, mouseYaw, .00001f, 0, 50, false);
     check(mouseYaw < 180 && float(mouseYaw) == 180.f, "double targets retain displacement below a float-degree increment");
+    // Exercise the shared production routing with different entry/current ownership.
+    mousemotion::State mouse;
+    mouse.admitted = true;
+    mouse.padSelected = true;
+    mouse.pointerTarget = true;
+    mouse.mapOpen = mouse.customizationOpen = true;
+    mouse.arguments = {4, -8};
+    mouse.pointerDelta = {100, 200};
+    auto routing = mousemotion::route(mouse);
+    check(routing.turnCamera && routing.cameraDelta == mouse.arguments && !routing.panMap && !routing.turnModel,
+          "relative motion ignores the UI-only device, capture and button gates");
+    mousePitch = 90, mouseYaw = 180;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, routing.cameraDelta.x, routing.cameraDelta.y, 50, false);
+    check(mousePitch == 88 && mouseYaw == 179, "relative routing delivers device displacement to the existing camera math");
+    mouse.interfaceAtEntry = mouse.interfaceOwned = true;
+    mouse.padSelected = mouse.pointerTarget = false;
+    mouse.buttons = 1;
+    mouse.arguments = {1000, 2000};
+    mouse.pointerDelta = {4, 8};
+    routing = mousemotion::route(mouse);
+    check(routing.turnCamera && routing.cameraDelta == mouse.pointerDelta && !routing.panMap && !routing.turnModel,
+          "blank-space left dragging works in an ordinary UI and uses the cached pointer delta");
+    mousePitch = 90, mouseYaw = 180;
+    cameramotion::mouseTargets(mousePitch, mouseYaw, routing.cameraDelta.x, routing.cameraDelta.y, 50, false);
+    check(mousePitch == 92 && mouseYaw == 179, "absolute UI coordinates do not become camera displacement");
+    mouse.buttons = 3;
+    routing = mousemotion::route(mouse);
+    check(routing.pointerMoved && routing.panMap && routing.turnModel && routing.turnCamera,
+          "map/model right dragging can continue into an admitted left-drag camera update");
+    mouse.pointerTarget = true;
+    routing = mousemotion::route(mouse);
+    check(routing.panMap && routing.turnModel && !routing.turnCamera,
+          "capture or a fresh node hit blocks camera dragging without suppressing map/model work");
+    mouse.buttons = 2;
+    mouse.pointerTarget = false;
+    routing = mousemotion::route(mouse);
+    check(routing.panMap && routing.turnModel && !routing.turnCamera, "a right button alone never admits UI camera dragging");
+    mouse.padSelected = true;
+    routing = mousemotion::route(mouse);
+    check(!routing.pointerMoved && !routing.panMap && !routing.turnModel && !routing.turnCamera,
+          "a pad-selected UI poll performs no mouse-specific work after pointer publication");
+    mouse.padSelected = false;
+    mouse.pointerDelta = {};
+    routing = mousemotion::route(mouse);
+    check(!routing.pointerMoved && routing.panMap && routing.turnModel && !routing.turnCamera,
+          "a stationary right-drag call still reaches map/model branches");
+    mouse.interfaceOwned = false; // A pointer callback changed ownership after entry.
+    routing = mousemotion::route(mouse);
+    check(routing.turnCamera && routing.cameraDelta == mouse.arguments,
+          "late relative ownership uses the supplied values instead of a frozen entry-mode interpretation");
+    mouse.interfaceAtEntry = false;
+    mouse.arguments = {};
+    mousePitch = 181.25;
+    routing = mousemotion::route(mouse);
+    if (routing.turnCamera)
+        cameramotion::mouseTargets(mousePitch, mouseYaw, routing.cameraDelta.x, routing.cameraDelta.y, 50, false);
+    check(mousePitch == 180, "a reached stationary relative call still clamps pitch");
+    mouse.admitted = false;
+    mousePitch = 181.25;
+    routing = mousemotion::route(mouse);
+    if (routing.turnCamera)
+        cameramotion::mouseTargets(mousePitch, mouseYaw, routing.cameraDelta.x, routing.cameraDelta.y, 50, false);
+    check(mousePitch == 181.25 && !routing.panMap && !routing.turnModel,
+          "a skipped focus/capture poll does not deliver a substitute neutral camera call");
+
     frontend::OrbitCamera precise;
     precise.set(90, 0, 180, 8);
     precise.targetYaw = 180.0000001;

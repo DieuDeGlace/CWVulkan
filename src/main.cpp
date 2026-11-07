@@ -126,13 +126,19 @@ fs::path exeDir() {
 
 MenuInput input;
 
-// GLFW's focus handler also emits releases. Only a real window up belongs in
-// the retained interface's stream; gameplay keeps GLFW's existing callbacks.
+// Keep actual window edges separate from GLFW's synthetic focus-loss releases.
+// Configured action polling still uses the GLFW state; GUI callbacks share one mask.
 LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR) {
-    if (message == WM_LBUTTONUP)
-        input.interfaceMessages.push_back(MenuInput::InterfaceMessage::LeftUp);
-    else if (message == WM_NCDESTROY)
-        RemoveWindowSubclass(hwnd, interfaceWindowProc, id);
+    using Message = MenuInput::InterfaceMessage;
+    switch (message) {
+    case WM_LBUTTONDOWN: input.interfaceMessages.push_back(Message::LeftDown); break;
+    case WM_LBUTTONUP: input.interfaceMessages.push_back(Message::LeftUp); break;
+    case WM_RBUTTONDOWN: input.interfaceMessages.push_back(Message::RightDown); break;
+    case WM_RBUTTONUP: input.interfaceMessages.push_back(Message::RightUp); break;
+    case WM_MBUTTONDOWN: input.interfaceMessages.push_back(Message::MiddleDown); break;
+    case WM_MBUTTONUP: input.interfaceMessages.push_back(Message::MiddleUp); break;
+    case WM_NCDESTROY: RemoveWindowSubclass(hwnd, interfaceWindowProc, id); break;
+    }
     return DefSubclassProc(hwnd, message, wParam, lParam);
 }
 
@@ -659,8 +665,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     glfwSetMouseButtonCallback(window, [](GLFWwindow *, int button, int action, int) {
         if (action == GLFW_PRESS) {
             input.buttons.push_back(button);
-            if (button == GLFW_MOUSE_BUTTON_LEFT)
-                input.interfaceMessages.push_back(MenuInput::InterfaceMessage::LeftDown);
             if (captureChatInput) chatInput.push_back({ChatInputEvent::MouseDown, button});
         }
         else if (action == GLFW_RELEASE)
@@ -3364,6 +3368,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     inGameServices.friends = &friendsMenu;
     frontend::Request inGameRequest;
     inGameRequest.readOnly = !savesWritable;
+    inGameRequest.pointer = {pointerTestX, pointerTestY}; // The existing diagnostic pointer also drives the shared input owner.
     frontend::InGameMenus menus(inGameServices, inGameRequest);
     bool menusReady = false;
     std::optional<maphistory::Region> historyCaptionRegion;
@@ -3492,6 +3497,35 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     auto nativeOrdinaryUi = [&] {
         return inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
                nativeCustomization.edit.open || chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
+    };
+    inGameServices.ordinaryUi = nativeOrdinaryUi;
+    inGameServices.mouseMotion = [&, ownsInterface = nativeOrdinaryUi](const mousemotion::Sample &sample) {
+        mousemotion::State state;
+        state.admitted = true;
+        state.interfaceAtEntry = sample.interfaceOwned;
+        state.interfaceOwned = ownsInterface();
+        state.padSelected = input.lastUsedPadAtMousePoll;
+        state.buttons = hud.interfaceHeldButtons();
+        state.mapOpen = mapOpen;
+        state.customizationOpen = nativeCustomization.edit.open;
+        state.pointerDelta = hud.interfacePointerDelta();
+        state.arguments = sample.interfaceOwned ? sample.absolutePosition
+            : glm::vec2(float(sample.windowPosition.x - lastX), float(sample.windowPosition.y - lastY));
+        if (!(state.interfaceAtEntry && state.padSelected) && state.interfaceOwned && (state.buttons & 1))
+            state.pointerTarget = hud.interfacePointerTarget() != nullptr;
+        const auto routes = mousemotion::route(state);
+        if (routes.pointerMoved)
+            mapSelection.move(state.pointerDelta, true);
+        if (routes.panMap) {
+            targetMapPosition = mapcontrol::blocks(mapcontrol::mousePan(mapcontrol::fromBlocks(targetMapPosition), state.pointerDelta,
+                                                                        mapZoom, float(player.orbit.yaw)));
+            mapMoved = true;
+        }
+        if (routes.turnModel)
+            nativeCustomization.rotatePointer(state.pointerDelta, float(gameOptions.cameraSpeed));
+        if (routes.turnCamera && (sample.interfaceOwned || state.interfaceOwned || mouseLook || (state.buttons & 2)))
+            cameramotion::mouseTargets(player.orbit.targetPitch, player.orbit.targetYaw,
+                                       routes.cameraDelta.x, routes.cameraDelta.y, gameOptions.cameraSpeed, gameOptions.invertY != 0);
     };
     spawned.setControlHooks(
         [&](int id) {
@@ -3636,12 +3670,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.gamepadPanels = {hud.inventoryPanelEligible(point, inventoryView, 0), hud.inventoryPanelEligible(point, inventoryView, 2),
                                    hud.inventoryPanelEligible(point, inventoryView, 1)};
         }
-        input.gameplayPointerAdmitted = nativeOrdinaryUi();
         hud.setInventoryPanelVisibility(inventoryOpen && bagShown, inventoryOpen && craftingOpen, inventoryOpen && vendorTrade.open);
-        const auto physicalDowns = input.buttons;
-        const auto physicalUps = input.released;
+        const auto physicalEdges = input.windowMouseEdges();
+        const auto &physicalDowns = physicalEdges.pressed;
+        const auto &physicalUps = physicalEdges.released;
         const glm::vec2 previousGuiPointer{(float)input.pointerX, (float)input.pointerY};
-        input.sampleGamepad(window, capturingBeforeInput, &gameControls);
         if (menusReady)
             switch (menus.frame(std::min(frameMs, 1000.0))) {
             case frontend::Result::Title:
@@ -3655,16 +3688,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 break;
             }
         if (!menusReady) {
+            input.gamepadPointer = {}; // No frontend callback producer is active in this compatibility path.
             input.routeInterfaceMessages(hud);
-            if (input.gameplayPointerAdmitted && glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+            if (glfwGetWindowAttrib(window, GLFW_FOCUSED) && !capturingBeforeInput) {
                 double x, y;
                 int width, height;
                 glfwGetCursorPos(window, &x, &y);
                 glfwGetWindowSize(window, &width, &height);
                 const auto extent = renderer.screenSize();
                 const glm::vec2 point(float(x * extent.width / std::max(1, width)), float(y * extent.height / std::max(1, height)));
-                hud.moveInterfacePointer(point, nativeInventory ? &inventoryView : nullptr);
+                const bool ui = nativeOrdinaryUi();
+                input.retainMouseDevice(GameInput::physicalBindingDown(window, gameControls));
+                if (ui)
+                    hud.moveInterfacePointer({float(worldgen::trunc32(point.x)), float(worldgen::trunc32(point.y))},
+                                             nativeInventory ? &inventoryView : nullptr);
+                inGameServices.mouseMotion({{x, y}, point, ui});
             }
+            input.sampleGamepad(window, capturingBeforeInput);
         }
         auto gameDowns = physicalDowns;
         if (nativeInventory) {
@@ -3836,8 +3876,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         double mx, my;
         pointerPosition(&mx, &my);
-        mapSelection.move({mx - lastX, my - lastY},
-                          !input.lastUsedPadAtMousePoll && (inventoryOpen || mapOpen || menusOpen || chat.typing() || answers.visible()));
         hud.customizationLayout(nativeCustomization.edit.open);
         const auto renderExtent = renderer.screenSize();
         int pointerWindowWidth, pointerWindowHeight;
@@ -3846,32 +3884,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                                    ? glm::vec2((float)pointerTestX, (float)pointerTestY)
                                                    : glm::vec2((float)mx * renderExtent.width / std::max(1, pointerWindowWidth),
                                                                (float)my * renderExtent.height / std::max(1, pointerWindowHeight));
-        const bool customizationNode =
-            nativeCustomization.edit.open && (!menusReady || menus.interfaceShown()) && hud.customizationHit(customizationPointer);
-        if (nativeCustomization.edit.open && !input.lastUsedPadAtMousePoll &&
-            glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-            nativeCustomization.rotatePointer({(float)(mx - lastX) * renderExtent.width / std::max(1, pointerWindowWidth),
-                                               (float)(my - lastY) * renderExtent.height / std::max(1, pointerWindowHeight)},
-                                              (float)gameOptions.cameraSpeed);
-        const bool customizationDragLook = nativeCustomization.edit.open && !input.lastUsedPadAtMousePoll &&
-                                           glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !customizationNode;
-        const bool answerDragLook = answers.visible() && !input.lastUsedPadAtMousePoll &&
-                                    glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&
-                                    !hud.dialogueChoicesHit({(float)mx, (float)my}) &&
-                                    !(generalDialogue.visible() && hud.generalDialogueHit({(float)mx, (float)my}));
-        if (mapOpen && !input.lastUsedPadAtMousePoll && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-            const glm::vec2 delta = glm::vec2(float(input.pointerX), float(input.pointerY)) - previousGuiPointer;
-            targetMapPosition = mapcontrol::blocks(mapcontrol::mousePan(mapcontrol::fromBlocks(targetMapPosition), delta, mapZoom,
-                                                                        float(double(displayedYawRadians()) * 57.29577951308232)));
-            mapMoved = true;
-        } else if (!inventoryOpen && !mapOpen && !menusOpen && glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
-                   (answers.visible()               ? answerDragLook
-                    : nativeCustomization.edit.open ? customizationDragLook
-                                                    : (mouseLook || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS))) {
-            // Native admitted polls also clamp stationary targets before controller look.
-            cameramotion::mouseTargets(player.orbit.targetPitch, player.orbit.targetYaw, float(mx - lastX), float(my - lastY),
-                                       gameOptions.cameraSpeed, gameOptions.invertY);
-        }
         lastX = mx;
         lastY = my;
         std::vector<int> wheelInventoryTargets;
@@ -4374,7 +4386,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         identificationView = {};
         struct NativeDown {
             glm::vec2 point;
-            const Hud::InterfacePress *physicalLeft = nullptr;
+            const Hud::InterfacePress *interfaceLeft = nullptr;
             bool completed = false;
         };
         std::vector<NativeDown> nativeDowns;
@@ -4385,10 +4397,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             nativeDowns.reserve(gameDowns.size());
             for (size_t index = 0; index < gameDowns.size(); ++index) {
                 const bool physical = index < physicalDowns.size();
-                const bool physicalLeft = physical && gameDowns[index] == GLFW_MOUSE_BUTTON_LEFT;
-                const auto *press = physicalLeft && left < input.interfacePresses.size() ? &input.interfacePresses[left] : nullptr;
+                const bool interfaceLeft = gameDowns[index] == GLFW_MOUSE_BUTTON_LEFT;
+                const auto *press = interfaceLeft && left < input.interfacePresses.size() ? &input.interfacePresses[left] : nullptr;
                 nativeDowns.push_back({press ? press->point : physical ? previousPoint : customizationPointer, press});
-                if (physicalLeft)
+                if (interfaceLeft)
                     ++left;
             }
         }
@@ -4466,7 +4478,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             filterInventoryDowns([&](int, size_t original) {
                 if (original >= nativeDowns.size())
                     return false;
-                const auto *press = nativeDowns[original].physicalLeft;
+                const auto *press = nativeDowns[original].interfaceLeft;
                 return press && press->thumbCaptured;
             });
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
@@ -5222,9 +5234,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                      {255, 51, 51, 255}});
                 audio.playInterface(gameshop::SOUND_REFUSED);
             };
-            auto handleInventoryDown = [&](int button, glm::vec2 point, const Hud::InterfacePress *physicalLeft) {
+            auto handleInventoryDown = [&](int button, glm::vec2 point, const Hud::InterfacePress *interfaceLeft) {
                 if (nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT) {
-                    const auto press = physicalLeft ? physicalLeft->tab : hud.nativeInventoryTabForPress(point, inventoryView);
+                    const auto press = interfaceLeft ? interfaceLeft->tab : hud.nativeInventoryTabForPress(point, inventoryView);
                     if (press && hud.inventoryTabPressEligible(*press, inventoryView)) {
                         changePanelTab(press->panel, press->tab);
                         return;
@@ -5448,7 +5460,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 const size_t original = inventoryDownIndices[index];
                 auto *down = original < nativeDowns.size() ? &nativeDowns[original] : nullptr;
                 const auto point = down ? down->point : nativeInventory ? customizationPointer : mouse;
-                handleInventoryDown(button, point, down ? down->physicalLeft : nullptr);
+                handleInventoryDown(button, point, down ? down->interfaceLeft : nullptr);
                 if (nativeInventory)
                     finishNativeDown(button, oldMaximum, point);
                 if (down)
@@ -7289,7 +7301,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 input.pointerSampled = true;
                 targetMapPosition =
                     mapcontrol::blocks(mapcontrol::padPan(mapcontrol::fromBlocks(targetMapPosition), {movementStick.x, movementStick.y},
-                                                          mapZoom, float(double(displayedYawRadians()) * 57.29577951308232), frameMs));
+                                                          mapZoom, float(player.orbit.yaw), frameMs));
                 mapMoved = true;
             } else if (mapcontrol::movementCloses(mapOpen, input.lastUsedPad,
                                                   gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||

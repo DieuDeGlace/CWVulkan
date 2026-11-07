@@ -69,6 +69,37 @@ void equipmentCallbacks() {
     hud.addItemIcon("synthetic-equipment", cub);
     hud.setGuiScale(1);
     hud.layout(renderer, {1920, 1080});
+    // Window and controller callbacks share one stored mask, independent of physical polling.
+    {
+        MenuInput messages;
+        using Message = MenuInput::InterfaceMessage;
+        hud.moveInterfacePointer({-1000, -1000});
+        GUI_CHECK(hud.interfaceHeldButtons() == 0 && !hud.interfacePointerTarget());
+        messages.interfaceMessages = {Message::RightDown, Message::MiddleDown};
+        const auto physical = messages.windowMouseEdges();
+        GUI_CHECK(physical.pressed == std::vector<int>({1, 2}) && physical.released.empty());
+        messages.routeInterfaceMessages(hud);
+        GUI_CHECK(hud.interfaceHeldButtons() == 6);
+        messages.gamepadPointer.pressed[1] = true;
+        messages.routeGamepadButtons(hud); // A second source sets the same bit without a press count.
+        GUI_CHECK(hud.interfaceHeldButtons() == 6);
+        messages.gamepadPointer = {};
+        messages.gamepadPointer.released[1] = true;
+        messages.routeGamepadButtons(hud);
+        GUI_CHECK(hud.interfaceHeldButtons() == 4); // Controller release clears the window's right-button bit.
+        messages.gamepadPointer = {};
+        messages.gamepadPointer.pressed[0] = true;
+        messages.routeGamepadButtons(hud);
+        GUI_CHECK(hud.interfaceHeldButtons() == 5 && messages.interfacePresses.size() == 1);
+        messages.released = {0, 1, 2}; // GLFW focus-loss releases are not actual engine button-up messages.
+        GUI_CHECK(messages.windowMouseEdges().released.empty());
+        messages.routeInterfaceMessages(hud);
+        messages.clear();
+        GUI_CHECK(hud.interfaceHeldButtons() == 5);
+        messages.interfaceMessages = {Message::MiddleUp, Message::LeftUp};
+        messages.routeInterfaceMessages(hud);
+        GUI_CHECK(hud.interfaceHeldButtons() == 0);
+    }
     Hud::Inventory inventory;
     inventory.sheet.valid = true;
     inventory.slots[0] = inventory.slots[1] = "synthetic-equipment";
@@ -286,6 +317,7 @@ void equipmentCallbacks() {
             hud.moveInterfacePointer(centre, &inventory);
             const auto press = hud.interfaceLeftDown();
             GUI_CHECK(press.thumbCaptured && thumb->widget->buttonHeld && !press.tab);
+            GUI_CHECK(hud.interfacePointerTarget() == thumb && (hud.interfaceHeldButtons() & 1));
             hud.moveInterfacePointer(centre + glm::vec2(0, 11.5f), &inventory);
             const auto moved = geometry.contentPosition(*thumb);
             GUI_CHECK(near(moved.x, start.x) && near(moved.y, start.y + 11.5f));
@@ -295,6 +327,9 @@ void equipmentCallbacks() {
             hud.moveInterfacePointer(outside, &inventory);
             const auto bottom = geometry.contentPosition(*thumb);
             GUI_CHECK(inventory.scroll == available - 1 && inventory.rowOffsets[0] == inventory.scroll && bottom.y > moved.y);
+            GUI_CHECK(hud.interfacePointerTarget() == thumb); // Capture bypasses the hidden root's fresh-pick rejection.
+            GUI_CHECK(hud.interfacePointerDelta() == outside - (centre + glm::vec2(0, 11.5f)));
+
             // GLFW's synthetic releases stay in its ordinary per-frame list.
             MenuInput messages;
             messages.released = {0};
@@ -302,9 +337,22 @@ void equipmentCallbacks() {
             GUI_CHECK(thumb->widget->buttonHeld);
             messages.interfaceMessages = {MenuInput::InterfaceMessage::LeftUp};
             messages.routeInterfaceMessages(hud);
+            GUI_CHECK(!hud.interfacePointerTarget() && !(hud.interfaceHeldButtons() & 1)); // Hidden uncaptured root picks nothing.
             hud.setInterfaceShown(true);
             hud.moveInterfacePointer(centre, &inventory);
             GUI_CHECK(!thumb->widget->buttonHeld && geometry.contentPosition(*thumb) == bottom);
+            const auto padCentre = geometry.contentPosition(*thumb) + size * .5f;
+            hud.moveInterfacePointer(padCentre, &inventory);
+            MenuInput controller;
+            controller.gamepadPointer.pressed[0] = true;
+            controller.routeGamepadButtons(hud);
+            GUI_CHECK(controller.interfacePresses.size() == 1 && controller.interfacePresses[0].thumbCaptured &&
+                      hud.interfacePointerTarget() == thumb && thumb->widget->buttonHeld);
+            controller.gamepadPointer = {};
+            controller.gamepadPointer.released[0] = true;
+            controller.routeGamepadButtons(hud);
+            GUI_CHECK(!thumb->widget->buttonHeld && !(hud.interfaceHeldButtons() & 1));
+
             inventory.nativeCollections = false;
         }
         inventory.scroll = 2; // the earlier mismatch must not cut a later viewport

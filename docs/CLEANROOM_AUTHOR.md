@@ -26,6 +26,11 @@ verification material. Default to original evidence only unless a document or
 excerpt has been individually checked for author-only suitability; task-specific
 stricter source restrictions take precedence.
 
+Identify reference filenames before searching contents. Restrict content searches
+to individually verified original or reconstruction-owned files. Do not recursively
+search a reference/reconstruction root that also contains SDKs, headers from
+dependencies, or other excluded third-party material.
+
 The author describes observable contracts in plain language: inputs, outputs,
 decision and random-draw order, constants, identifiers, field offsets and widths,
 ownership, protection scopes and explicit limits. Cite original routines by RVA

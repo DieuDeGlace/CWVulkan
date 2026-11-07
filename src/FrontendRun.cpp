@@ -36,6 +36,22 @@
 #include <map>
 #include <memory>
 
+MenuInput::MouseEdges MenuInput::windowMouseEdges() const {
+    MouseEdges out;
+    for (const auto message : interfaceMessages) {
+        switch (message) {
+        case InterfaceMessage::LeftDown: out.pressed.push_back(0); break;
+        case InterfaceMessage::LeftUp: out.released.push_back(0); break;
+        case InterfaceMessage::RightDown: out.pressed.push_back(1); break;
+        case InterfaceMessage::RightUp: out.released.push_back(1); break;
+        case InterfaceMessage::MiddleDown: out.pressed.push_back(2); break;
+        case InterfaceMessage::MiddleUp: out.released.push_back(2); break;
+        case InterfaceMessage::ToggleVisibility: break;
+        }
+    }
+    return out;
+}
+
 void MenuInput::routeInterfaceMessages(Hud &hud) {
     interfacePresses.clear();
     for (const auto message : interfaceMessages) {
@@ -46,12 +62,33 @@ void MenuInput::routeInterfaceMessages(Hud &hud) {
         case InterfaceMessage::LeftUp:
             hud.interfaceLeftUp();
             break;
+        case InterfaceMessage::RightDown: hud.interfaceButtonHeld(1, true); break;
+        case InterfaceMessage::RightUp: hud.interfaceButtonHeld(1, false); break;
+        case InterfaceMessage::MiddleDown: hud.interfaceButtonHeld(2, true); break;
+        case InterfaceMessage::MiddleUp: hud.interfaceButtonHeld(2, false); break;
         case InterfaceMessage::ToggleVisibility:
             hud.setInterfaceShown(!hud.interfaceShown());
             break;
         }
     }
     interfaceMessages.clear();
+}
+
+void MenuInput::routeGamepadButtons(Hud &hud) {
+    for (int button = 0; button < 3; ++button) {
+        if (gamepadPointer.pressed[(size_t)button]) {
+            if (button == 0)
+                interfacePresses.push_back(hud.interfaceLeftDown());
+            else
+                hud.interfaceButtonHeld(button, true);
+        }
+        if (gamepadPointer.released[(size_t)button]) {
+            if (button == 0)
+                hud.interfaceLeftUp();
+            else
+                hud.interfaceButtonHeld(button, false);
+        }
+    }
 }
 
 namespace fs = std::filesystem;
@@ -935,6 +972,9 @@ void Session::readInput(bool poll, double frameMs) {
         glfwPollEvents();
     // Button messages use the UI owner's last admitted coordinates. Polling
     // a new pointer sample comes after those messages and before XInput.
+    const auto &messages = s.input->interfaceMessages;
+    pointerDown = std::find(messages.begin(), messages.end(), MenuInput::InterfaceMessage::LeftDown) != messages.end();
+    pointerUp = std::find(messages.begin(), messages.end(), MenuInput::InterfaceMessage::LeftUp) != messages.end();
     s.input->routeInterfaceMessages(hud);
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
@@ -961,21 +1001,20 @@ void Session::readInput(bool poll, double frameMs) {
     glfwGetWindowSize(s.window, &ww, &wh);
     const glm::vec2 framebufferPointer((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh)));
     mouse = framebufferPointer / guiScale;
-    pointerDown = std::find(s.input->buttons.begin(), s.input->buttons.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->buttons.end();
-    pointerUp = std::find(s.input->released.begin(), s.input->released.end(), GLFW_MOUSE_BUTTON_LEFT) != s.input->released.end();
+    leftHeld = (hud.interfaceHeldButtons() & 1) != 0;
     if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; }))
         characterScroll.press();
-    if (pointerDown)
-        leftHeld = true;
-    if (pointerUp)
-        leftHeld = false;
     layoutCharacterFrames();
     capturingAtPoll = capturingControl();
-    const bool ui = front() || anyOpen() || s.input->gamepadModal;
+    const bool ui = front() || ordinaryUi() || (s.ordinaryUi ? s.ordinaryUi() : s.input->gamepadModal);
     const bool focused = req.pointer.x >= 0 || glfwGetWindowAttrib(s.window, GLFW_FOCUSED);
-    if (focused && (front() || ordinaryUi() || s.input->gameplayPointerAdmitted))
-        hud.moveInterfacePointer(framebufferPointer, s.inventory);
-    if (ui && focused && !capturingAtPoll) {
+    const bool mouseAdmitted = focused && !capturingAtPoll;
+    if (mouseAdmitted)
+        s.input->retainMouseDevice(s.controls && GameInput::physicalBindingDown(s.window, *s.controls));
+    if (mouseAdmitted && ui)
+        hud.moveInterfacePointer({float(worldgen::trunc32(framebufferPointer.x)), float(worldgen::trunc32(framebufferPointer.y))},
+                                 s.inventory);
+    if (ui && mouseAdmitted) {
         if (!pointerClockStarted) {
             characterScroll.sampledAt = wallClockMs();
             pointerClockStarted = true;
@@ -983,7 +1022,17 @@ void Session::readInput(bool poll, double frameMs) {
         // Stationary ordinary-UI polls still advance the filter, before the controller route.
         characterScroll.poll((int32_t)(mouse.y * guiScale), wallClockMs(), charactersShown, leftHeld, (int)size.width, cards);
     }
-    s.input->sampleGamepad(s.window, capturingAtPoll, s.controls);
+    if (mouseAdmitted) {
+        if (s.mouseMotion)
+            s.mouseMotion({{mx, my}, framebufferPointer, ui});
+        else if (ui && !s.input->lastUsedPadAtMousePoll && (hud.interfaceHeldButtons() & 1) && !hud.interfacePointerTarget()) {
+            const auto delta = hud.interfacePointerDelta();
+            const auto &activeOptions = s.options ? *s.options : options.values;
+            cameramotion::mouseTargets(camera.targetPitch, camera.targetYaw, delta.x, delta.y,
+                                       activeOptions.cameraSpeed, activeOptions.invertY != 0);
+        }
+    }
+    s.input->sampleGamepad(s.window, capturingAtPoll);
     std::vector<gamepadui::Point> points;
     if (!front())
         points = s.input->gamepadNavigationPoints;
@@ -993,6 +1042,7 @@ void Session::readInput(bool poll, double frameMs) {
     const auto &pad = s.input->gamepadPointer;
     if (pad.padBeforeCallbacks)
         s.input->lastUsedPad = true;
+    s.input->routeGamepadButtons(hud);
     for (int button = 0; button < 3; ++button) {
         if (pad.pressed[(size_t)button])
             s.input->buttons.push_back(button);
@@ -1001,10 +1051,11 @@ void Session::readInput(bool poll, double frameMs) {
         if (pad.pressed[(size_t)button])
             characterScroll.press();
     }
+    leftHeld = (hud.interfaceHeldButtons() & 1) != 0;
     if (pad.pressed[0])
-        leftHeld = true, pointerDown = true;
+        pointerDown = true;
     if (pad.released[0])
-        leftHeld = false, pointerUp = true;
+        pointerUp = true;
     if (pad.moveCursor) {
         glfwSetCursorPos(s.window, pad.cursor.x, pad.cursor.y);
     }

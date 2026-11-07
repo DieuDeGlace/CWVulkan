@@ -96,8 +96,14 @@ void Input::clearCapture() {
     captured = nullptr;
     move(current);
 }
+void Input::setButtonHeld(int button, bool down) {
+    if (button < 0 || button > 2)
+        return;
+    const uint32_t bit = uint32_t(1) << button;
+    held = down ? held | bit : held & ~bit;
+}
 void Input::leftDown() {
-    held |= 1;
+    setButtonHeld(0, true);
     auto *selected = target();
     auto *widgetNode = owner(selected);
     if (widgetNode && widgetNode->widget && widgetNode->widget->enabled && (widgetNode->widget->flags & 0x20)) {
@@ -122,7 +128,7 @@ void Input::leftDown() {
     visit(root, Hook::GlobalDown);
 }
 void Input::leftUp() {
-    held &= ~uint32_t(1);
+    setButtonHeld(0, false);
     auto *selected = target();
     if (shownAuxiliary && qualifyingDown)
         closeShownAuxiliary();

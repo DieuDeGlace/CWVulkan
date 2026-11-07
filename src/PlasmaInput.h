@@ -24,6 +24,7 @@ class Input : private Scene::DeletionObserver {
     void registerEvent(SceneNode &owner, Event, Callback, bool enabledRequired = true);
     void dispatchRegistered(SceneNode *, Event);
     void move(glm::vec2);
+    void setButtonHeld(int button, bool down); // Mask publication only; widget callbacks are separate.
     void leftDown();
     void leftUp();
     SceneNode *target() const; // Capture or fresh root pick, never the retained movement hit.
