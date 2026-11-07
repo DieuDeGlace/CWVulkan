@@ -19,6 +19,7 @@
 #include "Saves.h"
 
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -42,15 +43,20 @@ class FieldOfView;
 struct MenuInput {
     bool shiftDown = false; // Physical message state survives per-frame clear.
     bool controlDown = false;
-    double scroll = 0;
-    std::vector<inventoryui::WheelEvent> wheelEvents;
     std::vector<int> pressed, buttons, released;
-    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility };
-    std::vector<InterfaceMessage> interfaceMessages;
+    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, Wheel };
+    struct WindowMessage {
+        InterfaceMessage kind;
+        int wheelDelta = 0;
+        WindowMessage(InterfaceMessage kind, int wheelDelta = 0) : kind(kind), wheelDelta(wheelDelta) {}
+    };
+    std::vector<WindowMessage> interfaceMessages;
     std::vector<Hud::InterfacePress> interfacePresses;
     struct MouseEdges { std::vector<int> pressed, released; };
     MouseEdges windowMouseEdges() const; // Actual window messages, independent of GLFW focus-loss releases.
-    void routeInterfaceMessages(Hud &);
+    using WheelCallback = std::function<void(int, glm::vec2)>;
+    void wheelMessage(int16_t delta); // Normalize each actual message, including zero.
+    void routeInterfaceMessages(Hud &, const WheelCallback & = {});
     void routeGamepadButtons(Hud &);
     std::string typed; // text typed this frame (character creation's name)
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
@@ -82,8 +88,6 @@ struct MenuInput {
             lastUsedPad = true;
     }
     void clear() {
-        wheelEvents.clear();
-        scroll = 0;
         pressed.clear();
         buttons.clear();
         released.clear();
@@ -382,6 +386,8 @@ struct Services {
     std::function<void(const gameoptions::Options &)> applyOptions;
     std::function<bool()> ordinaryUi; // Live gameplay roots, in addition to this session's own panels.
     std::function<void(const mousemotion::Sample &)> mouseMotion; // Admitted pointer stage, before XInput callbacks.
+    MenuInput::WheelCallback zoomWheel; // Fallback after all five panel candidates.
+    std::function<bool(int, glm::vec2)> inventoryWheel; // First three candidates, before Controls/Friends.
     // The start spot: the world the search asks, and where it starts (the world's origin, 0 0).
     StartSpotWorld startSpot;
     nativesaves::Cell startOrigin{0, 0};

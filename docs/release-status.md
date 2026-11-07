@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-07
 
+## Ordered physical wheel delivery - 2026-11-07
+
+Physical wheel messages now share the button/F4 message queue and execute before
+new pointer/controller polling, using the retained GUI cursor. Stored panel-tree
+queries preserve inventory/shop/crafting priority without capture or ancestor
+visibility gates; Controls/Friends remain ahead of camera/map fallback. Reusing
+the existing row callback removes its later replay and the separate wheel buffer.
+Six initial stateful batching/zero regressions pass after the correction. All five
+targets build; full required-oracle CPU validation passes without skips, all Vulkan
+groups pass (92 shader, 2 camera, 102 GUI, 17 map, water and Alpha scenery), and
+extractor SDK independence passes. Evidence: build/wheel-input-validation. This is
+bounded input-route work; physical-device acceptance, complete Game/UI callbacks
+and the final provenance/Steam-parity audit remain open. Alpha defaults and the
+requested enhancements are unchanged.
+
 ## Fresh-PC validation — 2026-11-07
 
 A supported-game session reached the title and a loaded TEST-character world,

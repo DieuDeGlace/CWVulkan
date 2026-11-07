@@ -39,23 +39,28 @@
 MenuInput::MouseEdges MenuInput::windowMouseEdges() const {
     MouseEdges out;
     for (const auto message : interfaceMessages) {
-        switch (message) {
+        switch (message.kind) {
         case InterfaceMessage::LeftDown: out.pressed.push_back(0); break;
         case InterfaceMessage::LeftUp: out.released.push_back(0); break;
         case InterfaceMessage::RightDown: out.pressed.push_back(1); break;
         case InterfaceMessage::RightUp: out.released.push_back(1); break;
         case InterfaceMessage::MiddleDown: out.pressed.push_back(2); break;
         case InterfaceMessage::MiddleUp: out.released.push_back(2); break;
-        case InterfaceMessage::ToggleVisibility: break;
+        case InterfaceMessage::ToggleVisibility:
+        case InterfaceMessage::Wheel: break;
         }
     }
     return out;
 }
 
-void MenuInput::routeInterfaceMessages(Hud &hud) {
+void MenuInput::wheelMessage(int16_t delta) {
+    interfaceMessages.emplace_back(InterfaceMessage::Wheel, delta < 0 ? -1 : delta > 0 ? 1 : 0);
+}
+
+void MenuInput::routeInterfaceMessages(Hud &hud, const WheelCallback &wheel) {
     interfacePresses.clear();
     for (const auto message : interfaceMessages) {
-        switch (message) {
+        switch (message.kind) {
         case InterfaceMessage::LeftDown:
             interfacePresses.push_back(hud.interfaceLeftDown());
             break;
@@ -68,6 +73,10 @@ void MenuInput::routeInterfaceMessages(Hud &hud) {
         case InterfaceMessage::MiddleUp: hud.interfaceSecondaryButton(2, false); break;
         case InterfaceMessage::ToggleVisibility:
             hud.setInterfaceShown(!hud.interfaceShown());
+            break;
+        case InterfaceMessage::Wheel:
+            if (wheel)
+                wheel(message.wheelDelta, hud.interfacePointerPosition());
             break;
         }
     }
@@ -967,15 +976,25 @@ void Session::back(bool inGame) {
 // The frame's time and pointer. The title polls the window itself; in play the game has polled
 // it and gives the frame's time.
 void Session::readInput(bool poll, double frameMs) {
-    const glm::vec2 cachedWheelPointer = mouse * guiScale;
     if (poll)
         glfwPollEvents();
-    // Button messages use the UI owner's last admitted coordinates. Polling
+    // Window messages use the UI owner's retained coordinates. Polling
     // a new pointer sample comes after those messages and before XInput.
     const auto &messages = s.input->interfaceMessages;
-    pointerDown = std::find(messages.begin(), messages.end(), MenuInput::InterfaceMessage::LeftDown) != messages.end();
-    pointerUp = std::find(messages.begin(), messages.end(), MenuInput::InterfaceMessage::LeftUp) != messages.end();
-    s.input->routeInterfaceMessages(hud);
+    pointerDown = std::any_of(messages.begin(), messages.end(), [](const auto &event) {
+        return event.kind == MenuInput::InterfaceMessage::LeftDown;
+    });
+    pointerUp = std::any_of(messages.begin(), messages.end(), [](const auto &event) {
+        return event.kind == MenuInput::InterfaceMessage::LeftUp;
+    });
+    s.input->routeInterfaceMessages(hud, [this](int delta, glm::vec2 point) {
+        if (s.inventoryWheel && s.inventoryWheel(delta, point))
+            return;
+        if (wheel(delta, point))
+            return;
+        if (s.zoomWheel)
+            s.zoomWheel(delta, point);
+    });
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
                       gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()))
@@ -1062,9 +1081,6 @@ void Session::readInput(bool poll, double frameMs) {
     if (pad.navigationSound)
         playSound(SOUND_MENU_SELECT);
     clicked = pointerDown || pointerUp;
-    if (front())
-        for (const auto &event : s.input->wheelEvents)
-            wheel(-event.rowStep, cachedWheelPointer);
 }
 
 // --- Keys --------------------------------------------------------------------------------------
@@ -2061,7 +2077,6 @@ Result::Action Session::gameFrame(double frameMs) {
     handleClick(true);
     s.input->finishPointerCallbacks();
     s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear(), s.input->typed.clear();
-    s.input->scroll = 0;
     if (!anyOpen())
         playSound(SOUND_MENU_CLOSE);
     if (done) {

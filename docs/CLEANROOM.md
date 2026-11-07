@@ -2347,3 +2347,52 @@ oracles passes without skips. All Vulkan groups pass: 92 shader, 2 camera,
 102 GUI, 17 map, shared water and Alpha scenery. The extractor dependency audit
 passes without CWSDK. Evidence: build/secondary-button-validation. These regression
 results do not establish native physical-device or complete widget-body acceptance.
+
+
+## Ordered physical wheel delivery, 2026-11-07
+
+The existing clean source_mouse_mask author reread the standalone role policy and
+selected original Steam files individually. It finalized, fully read back and
+held steam-gui-wheel-dispatch-20261107.md, reporting no prohibited exposure. The
+implementer read the complete finalized contract before implementation. Accepted
+text under docs/specs matches the held text; the private hash receipt is under
+build/wheel-input-validation/handoff.json. Earlier held files remain unchanged,
+and the quarantined source_feat_contract context remains excluded.
+
+Original evidence proves direct WM_MOUSEWHEEL-to-Game routing, signed-high-word
+normalization, retained-pointer subtree selection, five-panel priority and the
+message-before-pointer/device/XInput order. No generic GUI wheel virtual slot,
+registered key, global notification or callback packet was inferred. The broader
+Widget/Button wheel bodies and arbitrary reentrant/coalescing/lifetime behavior
+remain unproved; this continuation does not close those boundaries.
+
+The owned adapter now puts normalized wheel values in the same ordered queue as
+actual button and F4 messages. Each reached wheel dispatch rereads the retained
+GUI pointer before the next ordinary pointer/device stage, without using message
+coordinates or a newly sampled/window-scaled cursor. Zero values remain deliveries.
+Inventory/shop/crafting use the stored node's own visibility and a fresh subtree
+pick, without capture override, ancestor admission or layout/visibility repair.
+An eligible panel consumes even zero or a row-boundary attempt. Existing Controls
+and Friends checks follow those panels, before the existing mapped-Walk camera
+or map-zoom arithmetic. The same row refresh/sound/thumb callback is reused at
+physical delivery and by the existing later controls; the wheel-specific replay,
+duplicate vector and unused accumulator are removed.
+
+Stateful owner-GUI fixtures reproduce six ordering/zero failures at the extracted
+former batching boundary and pass after correction. They check interleaved held
+bits and visibility, live retained-pointer changes, signed16 extremes/magnitudes,
+zero/repeated deliveries, clearing, hidden ancestors versus own-hidden panels,
+and scrollbar capture versus independent fresh wheel picks. The general legacy
+panel-eligibility helper remains separate; no broader controller or layout rewrite
+is inferred from this bounded wheel contract. Full Game/UI business-callback
+scheduling, actual hardware/DPI/focus acceptance, unproved buffering/reentrancy
+and final provenance/wider Steam parity remain release gates. No original-game
+run, owner capture, save/mod/display mutation or content publication was needed.
+Shipped Alpha terrain/lighting, Omega water and enhancements are unchanged.
+
+All five targets build. Full CPU/owner-data validation with required procedural
+oracles passes without skips. Vulkan groups pass: 92 shader, 2 camera, 102 GUI,
+17 map, shared water and Alpha scenery. Extractor SDK independence also passes.
+Focused guiitems, guiinput and padui checks pass. Evidence is under
+build/wheel-input-validation; these are bounded regression checks, not native
+physical-device or complete Game/UI callback acceptance.

@@ -137,6 +137,7 @@ LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPA
     case WM_RBUTTONUP: input.interfaceMessages.push_back(Message::RightUp); break;
     case WM_MBUTTONDOWN: input.interfaceMessages.push_back(Message::MiddleDown); break;
     case WM_MBUTTONUP: input.interfaceMessages.push_back(Message::MiddleUp); break;
+    case WM_MOUSEWHEEL: input.wheelMessage(static_cast<int16_t>((wParam >> 16) & 0xffff)); break;
     case WM_NCDESTROY: RemoveWindowSubclass(hwnd, interfaceWindowProc, id); break;
     }
     return DefSubclassProc(hwnd, message, wParam, lParam);
@@ -633,14 +634,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     std::printf("Input: %s\n",
                 glfwGetInputMode(window, GLFW_RAW_MOUSE_MOTION) ? "raw relative mouse counts enabled" : "relative cursor compatibility");
-    glfwSetScrollCallback(window, [](GLFWwindow *window, double, double y) {
-        input.scroll += y;
-        if (const int step = inventoryui::wheelRowStep(y)) {
-            double x, pointerY;
-            glfwGetCursorPos(window, &x, &pointerY);
-            input.wheelEvents.push_back({x, pointerY, step});
-        }
-    });
     captureChatInput = false;
     glfwSetCharCallback(window, [](GLFWwindow *, unsigned int c) {
         if (captureChatInput)
@@ -2087,6 +2080,32 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         rebuildInventoryViews();
     };
+    auto scrollPanel = [&](int which, int &offset, int step) {
+        if (!step)
+            return;
+        int available = 1;
+        const bool moved = inventoryui::requestRow(offset, step, [&] {
+            // Every admitted InventoryWidget row callback refreshes/sorts
+            // local canonical inventory, including attempts at a boundary.
+            refreshInventory(false, static_cast<inventoryui::Panel>(which));
+            available = hud.inventoryRowCount(inventoryView, which);
+            if (!nativeInventory) {
+                if (!available)
+                    offset = 0; // Physically empty tab, unlike nonempty holes.
+                else if (offset > available - 1)
+                    offset = available - 1;
+            }
+            return available;
+        });
+        auto &state = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
+                      : which == 1 ? static_cast<inventoryui::PanelState &>(inventoryView.vendor)
+                                   : static_cast<inventoryui::PanelState &>(inventoryView.crafting);
+        state.retainScroll();
+        if (moved) {
+            audio.playInterface(soundrules::soundid::MENU_TAB);
+            hud.updateInventoryThumb(inventoryView, which, available);
+        }
+    };
     auto refreshBagAndThumb = [&](bool pickup = false) {
         refreshInventory(pickup);
         hud.updateInventoryThumb(inventoryView, 0, hud.inventoryRowCount(inventoryView));
@@ -3527,6 +3546,31 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             cameramotion::mouseTargets(player.orbit.targetPitch, player.orbit.targetYaw,
                                        routes.cameraDelta.x, routes.cameraDelta.y, gameOptions.cameraSpeed, gameOptions.invertY != 0);
     };
+    inGameServices.inventoryWheel = [&](int delta, glm::vec2 point) {
+        const int which = hud.inventoryWheelTarget(point);
+        if (which < 0)
+            return false;
+        auto &panel = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
+                      : which == 1 ? static_cast<inventoryui::PanelState &>(inventoryView.vendor)
+                                   : static_cast<inventoryui::PanelState &>(inventoryView.crafting);
+        scrollPanel(which, panel.scroll, delta < 0 ? 1 : delta > 0 ? -1 : 0);
+        return true; // An eligible panel consumes zero and boundary attempts too.
+    };
+    inGameServices.zoomWheel = [&](int delta, glm::vec2) {
+        if (gameInput.held(gameoptions::WALK)) {
+            player.orbit.targetDistance = std::clamp(player.orbit.targetDistance - float(2 * delta), 0.f, 50.f);
+            return;
+        }
+        const int previous = mapZoom;
+        mapZoom = mapcontrol::wheelLayer(previous, delta);
+        if (mapZoom != previous && mapcontrol::fromBlocks(mapCursor)[0] != mapcontrol::NO_CURSOR_X) {
+            auto target = mapcontrol::wheelCenter(mapcontrol::fromBlocks(targetMapPosition), mapcontrol::fromBlocks(mapCursor),
+                                                  mapZoom < previous);
+            target = mapcontrol::terrainHeight(target, [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y, 0); });
+            mapPosition = targetMapPosition = mapcontrol::blocks(target);
+            mapMoved = true;
+        }
+    };
     spawned.setControlHooks(
         [&](int id) {
             return nativevehicle::ownsSpecialItem(spawned.playerRecord(),
@@ -3628,7 +3672,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         previewSources.ground.reset();
         input.gamepadSampled = false;
         input.pointerSampled = false;
-        input.wheelEvents.clear(); // GLFW callbacks below produce only this gameplay frame's wheel messages.
         glfwPollEvents();
         if (std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
             saveProgress();
@@ -3689,7 +3732,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
         if (!menusReady) {
             input.gamepadPointer = {}; // No frontend callback producer is active in this compatibility path.
-            input.routeInterfaceMessages(hud);
+            input.routeInterfaceMessages(hud, [&](int delta, glm::vec2 point) {
+                if (!inGameServices.inventoryWheel(delta, point))
+                    inGameServices.zoomWheel(delta, point);
+            });
             if (glfwGetWindowAttrib(window, GLFW_FOCUSED) && !capturingBeforeInput) {
                 double x, y;
                 int width, height;
@@ -3886,32 +3932,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                                                (float)my * renderExtent.height / std::max(1, pointerWindowHeight));
         lastX = mx;
         lastY = my;
-        std::vector<int> wheelInventoryTargets;
-        wheelInventoryTargets.reserve(input.wheelEvents.size());
-        for (const auto &event : input.wheelEvents) {
-            const glm::vec2 point(previousGuiPointer.x * renderExtent.width / std::max(1, pointerWindowWidth),
-                                  previousGuiPointer.y * renderExtent.height / std::max(1, pointerWindowHeight));
-            const int target = inventoryui::wheelTarget([&](int which) { return hud.inventoryPanelEligible(point, inventoryView, which); });
-            wheelInventoryTargets.push_back(target);
-            if (target >= 0)
-                continue;
-            const int delta = -event.rowStep;
-            if (menusReady && menus.wheel(delta, point))
-                continue;
-            if (gameInput.held(gameoptions::WALK)) {
-                player.orbit.targetDistance = std::clamp(player.orbit.targetDistance - float(2 * delta), 0.f, 50.f);
-                continue;
-            }
-            const int previous = mapZoom;
-            mapZoom = mapcontrol::wheelLayer(previous, delta);
-            if (mapZoom != previous && mapcontrol::fromBlocks(mapCursor)[0] != mapcontrol::NO_CURSOR_X) {
-                auto target = mapcontrol::wheelCenter(mapcontrol::fromBlocks(targetMapPosition), mapcontrol::fromBlocks(mapCursor),
-                                                      mapZoom < previous);
-                target = mapcontrol::terrainHeight(target, [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y, 0); });
-                mapPosition = targetMapPosition = mapcontrol::blocks(target);
-                mapMoved = true;
-            }
-        }
         // the mouse handling on the open map: the middle button marks the cursor's spot
         // with a star (or takes the star there away); two presses within 200 ms zoom in on it.
         {
@@ -3967,7 +3987,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         mapZoom = mapcontrol::mappedZoom(mapZoom, gameInput.pressed(gameoptions::ZOOM_IN), gameInput.pressed(gameoptions::ZOOM_OUT));
         player.orbit.targetYaw += double(spin) * dt * Player::DEGREES_PER_RADIAN;
-        input.scroll = 0;
 
         // The native player: the game's controller reads the keys (its game-object fields)
         // and the world's update moves it, at the creatures' step below; here it is where
@@ -5149,43 +5168,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         hud.updateInventoryThumb(inventoryView, 0, available);
                     });
             };
-            auto scrollPanel = [&](int which, int &offset, int step) {
-                if (!step)
-                    return;
-                int available = 1;
-                const bool moved = inventoryui::requestRow(offset, step, [&] {
-                    // Every admitted InventoryWidget row callback refreshes/sorts
-                    // local canonical inventory, including attempts at a boundary.
-                    refreshInventory(false, static_cast<inventoryui::Panel>(which));
-                    available = hud.inventoryRowCount(inventoryView, which);
-                    if (!nativeInventory) {
-                        if (!available)
-                            offset = 0; // Physically empty tab, unlike nonempty holes.
-                        else if (offset > available - 1)
-                            offset = available - 1;
-                    }
-                    return available;
-                });
-                auto &state = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
-                              : which == 1 ? static_cast<inventoryui::PanelState &>(inventoryView.vendor)
-                                           : static_cast<inventoryui::PanelState &>(inventoryView.crafting);
-                state.retainScroll();
-                if (moved) {
-                    audio.playInterface(soundrules::soundid::MENU_TAB);
-                    hud.updateInventoryThumb(inventoryView, which, available);
-                }
-            };
-            size_t wheelIndex = 0;
-            for (const auto &event : input.wheelEvents) {
-                // Preserve the window-dispatch result; later bindings must not retarget a consumed wheel event.
-                const int target = wheelInventoryTargets[wheelIndex++];
-                if (target == 0)
-                    scrollPanel(0, inventoryView.scroll, event.rowStep);
-                else if (target == 1)
-                    scrollPanel(1, inventoryView.vendor.scroll, event.rowStep);
-                else if (target == 2)
-                    scrollPanel(2, inventoryView.crafting.scroll, event.rowStep);
-            }
             if (bagShown) { // the inventory scroll buttons and controller
                 for (int button : input.buttons)
                     if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverButton)

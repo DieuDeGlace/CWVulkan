@@ -212,9 +212,6 @@ int gamepadUiTests() {
     frame = map.update(pad, true, true, {}, {});
     check(frame.pressed[2], "interactive map has its own saved Y edge");
     inventoryui::Tabs<6> inventoryTabs;
-    check(inventoryui::wheelRowStep(3.5) == -1 && inventoryui::wheelRowStep(.125) == -1 && inventoryui::wheelRowStep(-9) == 1 &&
-              inventoryui::wheelRowStep(0) == 0,
-          "wheel messages use sign rather than magnitude or fractional accumulation");
     std::vector<int> wheelHits;
     check(inventoryui::wheelTarget([&](int which) {
               wheelHits.push_back(which);

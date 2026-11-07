@@ -307,10 +307,12 @@ class Hud {
     void interfaceLeftUp();
     void interfaceSecondaryButton(int button, bool down); // Right/middle; left presses retain their separate press record.
     uint32_t interfaceHeldButtons() const;
+    glm::vec2 interfacePointerPosition() const;
     glm::vec2 interfacePointerDelta() const;
     const plasma::SceneNode *interfacePointerTarget() const;
     void moveInterfacePointer(glm::vec2, Inventory * = nullptr);
     void setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const;
+    int inventoryWheelTarget(glm::vec2) const; // Fresh stored-panel subtree picks, independent of capture/ancestors.
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
     int vendorTabAt(glm::vec2 mouse, const Inventory &inv) const { return panelTabAt(mouse, inv, 1); }

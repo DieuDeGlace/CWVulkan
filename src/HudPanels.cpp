@@ -1150,6 +1150,15 @@ int Hud::inventoryButtonAt(glm::vec2 m, const Inventory &inv, int which) const {
     return found;
 }
 
+int Hud::inventoryWheelTarget(glm::vec2 point) const {
+    if (!hasPanels())
+        return -1;
+    return inventoryui::wheelTarget([&](int which) {
+        const auto *node = invPanel(which).node;
+        return node && scene->hitTest(*node, point, frontTextHit()) != nullptr;
+    });
+}
+
 bool Hud::inventoryPanelEligible(glm::vec2 mouse, const Inventory &inv, int which) const {
     const bool shown = which == 0 ? inv.bagShown : which == 1 ? inv.vendor.open : inv.crafting.open;
     const InvPanel &panel = invPanel(which);
@@ -1286,6 +1295,10 @@ void Hud::interfaceSecondaryButton(int button, bool down) {
 uint32_t Hud::interfaceHeldButtons() const {
     return interfaceInput ? interfaceInput->heldButtons() : 0;
 }
+glm::vec2 Hud::interfacePointerPosition() const {
+    return interfaceInput ? interfaceInput->pointer() : glm::vec2(0);
+}
+
 glm::vec2 Hud::interfacePointerDelta() const {
     return interfaceInput ? interfaceInput->pointer() - interfaceInput->previousPointer() : glm::vec2(0);
 }

@@ -8,6 +8,20 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Physical wheel messages now retain window-message order with button/F4
+  callbacks and run before the next pointer/device poll. The actual signed high
+  word is normalized per message, including zero; each delivery reads the
+  then-current retained GUI pointer. Inventory/shop/crafting make fresh stored
+  subtree picks independent of capture, foreground siblings and hidden ancestors;
+  the first eligible panel consumes boundary and zero attempts. Existing Controls/
+  Friends routes precede the unchanged Walk-camera/map fallback. Row callbacks now
+  run at delivery instead of a later inventory pass, reusing the existing refresh/
+  sound/thumb path. The duplicate wheel buffer and unused scalar are removed.
+  Stateful regressions reproduce six batching/zero failures before correction.
+  See the independent [wheel contract](specs/steam-gui-wheel-dispatch-20261107.md).
+  Broader keyboard/button business callbacks, cursor preparation, physical-device
+  acceptance and unproved reentrant/buffering guarantees remain open.
+
 - [x] Right/middle UI button dispatch now follows held publication with
   capture-or-fresh-pick selection, down-only focused-widget cleanup, associated
   owner virtual hooks, native-key registered callbacks and own-widget global

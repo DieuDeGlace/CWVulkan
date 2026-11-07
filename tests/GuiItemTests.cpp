@@ -100,6 +100,55 @@ void equipmentCallbacks() {
         messages.routeInterfaceMessages(hud);
         GUI_CHECK(hud.interfaceHeldButtons() == 0);
     }
+    // Independent ordinary-wheel contract: each message reaches game routing
+    // in order, using the then-current retained GUI coordinates and state.
+    {
+        MenuInput messages;
+        using Message = MenuInput::InterfaceMessage;
+        const glm::vec2 first(-1000, -1000), later(-900, -800);
+        hud.moveInterfacePointer(first);
+        messages.pointerX = 1234;
+        messages.pointerY = 5678; // A newer adapter sample is not the retained GUI cursor.
+        messages.interfaceMessages.push_back(Message::RightDown);
+        messages.wheelMessage(360);
+        messages.interfaceMessages.push_back(Message::MiddleDown);
+        messages.wheelMessage(-120);
+        messages.interfaceMessages.push_back(Message::RightUp);
+        messages.wheelMessage(0);
+        messages.interfaceMessages.push_back(Message::ToggleVisibility);
+        messages.wheelMessage(1);
+        messages.interfaceMessages.push_back(Message::ToggleVisibility);
+        messages.interfaceMessages.push_back(Message::MiddleUp);
+        const auto edges = messages.windowMouseEdges();
+        GUI_CHECK(edges.pressed == std::vector<int>({1, 2}) && edges.released == std::vector<int>({1, 2}));
+        struct Delivery { int delta; uint32_t held; bool visible; glm::vec2 point; };
+        std::vector<Delivery> deliveries;
+        messages.routeInterfaceMessages(hud, [&](int delta, glm::vec2 point) {
+            deliveries.push_back({delta, hud.interfaceHeldButtons(), hud.interfaceShown(), point});
+            if (deliveries.size() == 1)
+                hud.moveInterfacePointer(later);
+        });
+        GUI_CHECK(deliveries.size() == 4);
+        const Delivery expected[] = {{1, 2, true, first}, {-1, 6, true, later}, {0, 4, true, later}, {1, 4, false, later}};
+        for (size_t i = 0; i < deliveries.size() && i < 4; ++i) {
+            GUI_CHECK(deliveries[i].delta == expected[i].delta);
+            GUI_CHECK(deliveries[i].held == expected[i].held && deliveries[i].visible == expected[i].visible);
+            GUI_CHECK(deliveries[i].point == expected[i].point);
+        }
+        GUI_CHECK(hud.interfaceShown() && hud.interfaceHeldButtons() == 0 && messages.interfaceMessages.empty());
+        messages.routeInterfaceMessages(hud, [&](int, glm::vec2) { GUI_CHECK(false); });
+        std::vector<int> normalized;
+        for (int16_t raw : {int16_t(32767), int16_t(-32768), int16_t(120), int16_t(0), int16_t(1), int16_t(-1), int16_t(360)})
+            messages.wheelMessage(raw);
+        messages.routeInterfaceMessages(hud, [&](int delta, glm::vec2 point) {
+            normalized.push_back(delta);
+            GUI_CHECK(point == later && hud.interfaceHeldButtons() == 0);
+        });
+        GUI_CHECK(normalized == std::vector<int>({1, -1, 1, 0, 1, -1, 1}));
+        messages.wheelMessage(120);
+        messages.clear();
+        messages.routeInterfaceMessages(hud, [&](int, glm::vec2) { GUI_CHECK(false); });
+    }
     Hud::Inventory inventory;
     inventory.sheet.valid = true;
     inventory.slots[0] = inventory.slots[1] = "synthetic-equipment";
@@ -254,6 +303,16 @@ void equipmentCallbacks() {
             GUI_CHECK(tabForPress(*secondTab) == -1); // Fresh picking stops at the hidden principal root.
             hud.setInterfaceState(overlays);
             GUI_CHECK(!hud.interfaceShown() && optionsRoot && optionsRoot->visible);
+            // Wheel eligibility starts at the panel subtree; neither an unrelated
+            // foreground control nor hidden ancestors replace that fresh pick.
+            GUI_CHECK(hud.inventoryWheelTarget(*secondTab) == 0);
+            const bool gameplayVisible = gameplayRoot->visible;
+            const_cast<plasma::SceneNode *>(gameplayRoot)->visible = false;
+            GUI_CHECK(hud.inventoryWheelTarget(*secondTab) == 0);
+            hud.setInventoryPanelVisibility(false, false, false);
+            GUI_CHECK(hud.inventoryWheelTarget(*secondTab) == -1);
+            const_cast<plasma::SceneNode *>(gameplayRoot)->visible = gameplayVisible;
+            hud.setInventoryPanelVisibility(true, false, false);
             hud.setInterfaceState({});
             hud.setInterfaceShown(true);
             GUI_CHECK(tabForPress(*secondTab) == 0); // No child selection or tab hover was cleared.
@@ -328,6 +387,8 @@ void equipmentCallbacks() {
             const auto bottom = geometry.contentPosition(*thumb);
             GUI_CHECK(inventory.scroll == available - 1 && inventory.rowOffsets[0] == inventory.scroll && bottom.y > moved.y);
             GUI_CHECK(hud.interfacePointerTarget() == thumb); // Capture bypasses the hidden root's fresh-pick rejection.
+            GUI_CHECK(hud.inventoryWheelTarget(outside) == -1 && (hud.interfaceHeldButtons() & 1));
+            GUI_CHECK(hud.inventoryWheelTarget(centre) == 0 && hud.interfacePointerTarget() == thumb);
             GUI_CHECK(hud.interfacePointerDelta() == outside - (centre + glm::vec2(0, 11.5f)));
 
             // GLFW's synthetic releases stay in its ordinary per-frame list.
