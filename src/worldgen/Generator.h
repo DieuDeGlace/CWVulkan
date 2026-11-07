@@ -119,7 +119,7 @@ std::vector<ZoneObject> zoneObjects(int32_t zx, int32_t zy);
 // these again.)
 bool hooksChange(int32_t zx, int32_t zy);
 
-// Lets go of the cached zones (after the world or its options change, they are made again anyway).
+// Retires ready and live-result lookups; existing readers keep their immutable values.
 void forgetZones();
 
 } // namespace worldgen

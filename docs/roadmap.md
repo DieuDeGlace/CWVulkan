@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Generated terrain reuses immutable results still held by decoded terrain or
+  resident consumers after the 96-entry ready LRU evicts them. Weak indexing adds
+  no permanent terrain keep; full generation keys and flush retirement remain.
+  A reproduced concurrent-reuse failure now passes, with release/epoch/mode checks.
+  In one matched 30s run, generations fell 954 to 760 while completed meshes rose
+  168 to 184. The full-load capture still hits its deadline (440 prepared zones),
+  so broader performance/native streaming acceptance remains open. All five targets,
+  full required-oracle CPU, Vulkan groups and SDK audit pass. See
+  [terrain loading](terrain-loading.md) for the default-off profiler and limits.
+
 - [x] Native mesh preparation now uses at most eight selected coordinates,
   source-ordered prefix/zero-cost/dirty/neighborhood gates and a whole-batch
   completion boundary before selected-order publication and further retirement.

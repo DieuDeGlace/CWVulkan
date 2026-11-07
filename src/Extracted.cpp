@@ -1,4 +1,5 @@
 #include "Extracted.h"
+#include "MeshProfile.h"
 #include "ObjectOccupancyCapture.h"
 #include "SteamSceneRange.h"
 #include "GameMath.h"
@@ -1545,6 +1546,7 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
 
 bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds,
                           worldgen::MeshLightVolume *nativeLight, Mesh *lava, std::vector<TerrainMeshBand> *terrainBands) {
+    meshprofile::Sample profile(zx, zy, renderStyle() == RenderStyle::Alpha);
     const size_t opaqueStart = opaque.indices.size(), waterStart = water.indices.size(), lavaStart = lava ? lava->indices.size() : 0;
     if (terrainBands)
         terrainBands->clear();
@@ -1560,6 +1562,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     for (int j = -1; j <= 1; j++)
         for (int i = -1; i <= 1; i++)
             around[j + 1][i + 1] = load(ax + i, ay + j);
+    profile.mark(meshprofile::Load);
     auto self = around[1][1];
     if (!self)
         return false;
@@ -1567,13 +1570,16 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     const auto nativeBox = (!alphaLook || nativeBounds) ? boundsFor(ax, ay, around) : std::nullopt;
     if (nativeBounds)
         *nativeBounds = nativeBox;
+    profile.mark(meshprofile::Bounds);
     worldgen::MeshLightVolume localLight;
     auto &solvedLight = nativeLight ? *nativeLight : localLight;
     // Gameplay light is independent of the selected rendering palette. Publish
     // target stored-air/water red before model samples, geometry and GPU install.
     if (auto solved = lightsFor(ax, ay, around)) {
         solvedLight = std::move(*solved);
+        profile.mark(meshprofile::Light);
         publishBlockLight(ax, ay, self, solvedLight);
+        profile.mark(meshprofile::PublishLight);
     }
     const bool nativeEncoding = !alphaLook && !solvedLight.columns.empty();
     // Column lookup over the zone and a one-column border from its neighbours.
@@ -1634,8 +1640,10 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             lo = std::min(lo, c.base - 1);
             hi = std::max(hi, c.base + (int)c.blocks.size());
         }
-    if (lo > hi)
+    if (lo > hi) {
+        profile.complete(lo, hi, 0, 0, 0);
         return true;
+    }
     auto solid = [&](int lx, int ly, int z) {
         if (z <= lo)
             return true; // Below the meshed range: buried.
@@ -1699,6 +1707,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     };
     // The Alpha look bakes the block light (docs/specs/alpha-rendering.md 9.2-9.4): the light
     // is flooded through the zone and a 16-block border, then every corner samples it.
+    profile.mark(meshprofile::Setup);
     std::unique_ptr<alphalight::LightVolume> light;
     if (alphaLook) {
         constexpr int BORDER = 16;
@@ -1719,6 +1728,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 }
             }
         light->flood();
+        profile.mark(meshprofile::AlphaLight);
         alphalight::CornerCache corners(*light, {0, 0}, {65, 65});
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = FACE_CORNERS[face][k];
@@ -1749,6 +1759,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                   VoxelLayout::SteamTerrain, group);
     } else
         meshVoxels({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, opaque, 1.f, offset);
+    profile.mark(meshprofile::Solid);
     // Water geometry from water-rendering.md A.1/B.1: exposed full block
     // faces, including sides/bottoms, and a coplanar film over exposed wet ground.
     auto typeAt = [&](int x, int y, int z) {
@@ -1830,6 +1841,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
                 } else if (type == WET_TYPE && typeAt(x, y, z + 1) == AIR_TYPE)
                     emitWater(x, y, z, 4);
             }
+    profile.mark(meshprofile::Water);
     size_t solidIndices = opaque.indices.size() - opaqueStart;
     size_t lavaIndices = lava ? lava->indices.size() - lavaStart : 0;
     size_t waterIndices = water.indices.size() - waterStart;
@@ -1844,6 +1856,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         }
     if (nativeEncoding && nativeBounds && *nativeBounds)
         (*nativeBounds)->triangleCost = scenerange::triangleCost(solidIndices, waterIndices, lavaIndices);
+    profile.complete(lo, hi, solidIndices, lavaIndices, waterIndices);
     return true;
 }
 

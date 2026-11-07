@@ -1,5 +1,6 @@
 // The world generator as the engine uses it (Generator.h).
 #include "worldgen/Generator.h"
+#include "MeshProfile.h"
 
 #include "worldgen/BlockColours.h"
 #include "worldgen/AlphaTerrain.h"
@@ -42,7 +43,20 @@ std::list<CachedZone> cache; // the most recently used first
 using ZonePointer = std::shared_ptr<const ZoneContents>;
 using ZoneKey = std::tuple<int32_t, int32_t, uint32_t, uint32_t, bool>;
 std::map<ZoneKey, std::shared_future<ZonePointer>> pendingZones;
-constexpr size_t CACHED_ZONES = 96; // a lit zone reads its 8 neighbours; the near zones fit
+constexpr size_t CACHED_ZONES = 96; // Strong ready retention, independent of live terrain consumers.
+// Decoded terrain and resident lists can outlive the ready LRU. Reuse their
+// immutable inputs without retaining additional terrain after those owners leave.
+std::map<ZoneKey, std::weak_ptr<const ZoneContents>> liveZones;
+
+// cacheLock is held by both ready insertion and live-result promotion.
+void remember(const ZoneKey &key, const ZonePointer &zone) {
+    const auto &[zx, zy, version, options, original] = key;
+    cache.push_front({zx, zy, version, options, original, zone});
+    liveZones[key] = zone;
+    if (cache.size() > CACHED_ZONES)
+        cache.pop_back();
+    std::erase_if(liveZones, [](const auto &entry) { return entry.second.expired(); });
+}
 
 ZoneContents makeZone(int32_t zx, int32_t zy, bool recordDraws) {
     const WorldValues &world = settings.world;
@@ -223,6 +237,16 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
                 cache.splice(cache.begin(), cache, it);
                 return it->zone;
             }
+        if (const auto live = liveZones.find(key); live != liveZones.end()) {
+            if (auto result = live->second.lock()) {
+                meshprofile::Sample reused(zx, zy, bool(settings.alpha), "generation_reuse");
+                reused.context(version, options, original);
+                remember(key, result);
+                reused.complete(0, 0, 0, 0, 0);
+                return result;
+            }
+            liveZones.erase(live);
+        }
         const auto loading = pendingZones.find(key);
         if (loading != pendingZones.end())
             future = loading->second;
@@ -234,8 +258,16 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
     }
     // A mesh reads eight neighbors. Concurrent readers of those neighbors share
     // one immutable result, without holding the cache lock during generation.
-    if (!producer)
-        return future.get();
+    if (!producer) {
+        meshprofile::Sample waiting(zx, zy, bool(settings.alpha), "generation_wait");
+        waiting.context(version, options, original);
+        auto result = future.get();
+        waiting.mark(meshprofile::Load);
+        waiting.complete(0, 0, 0, 0, 0);
+        return result;
+    }
+    meshprofile::Sample profile(zx, zy, bool(settings.alpha), "generation");
+    profile.context(version, options, original);
     try {
         if (!terrainZoneAvailable(zx, zy)) {
             auto missing = std::make_shared<ZoneContents>();
@@ -250,32 +282,35 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
             return missing; // No generated residents outside Alpha's finite world.
         }
         ZoneContents z = makeZone(zx, zy, false);
+        profile.mark(meshprofile::SourceGenerate);
         const int32_t refreshDay = settings.refreshDay.load();
         if (refreshDay >= 0 && settings.tablesLoaded)
             refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
+        profile.mark(meshprofile::Refresh);
         if (settings.alpha) {
             std::string error;
             if (!settings.alpha->compose(z, settings.world, error))
                 throw std::runtime_error("Alpha terrain composition: " + error);
         }
+        profile.mark(meshprofile::AlphaCompose);
         // Live full-setter gap writes still need the original cached material inputs.
         z.terrain.retainedColours.reserve(z.terrain.field.size());
         for (const auto &column : z.terrain.field)
             z.terrain.retainedColours.push_back(column.colours);
         std::vector<ColumnField>().swap(z.terrain.field);
         auto made = std::make_shared<const ZoneContents>(std::move(z));
+        profile.mark(meshprofile::Store);
         {
             std::lock_guard<std::mutex> hold(cacheLock);
             // A cache flush retires this generation. Existing waiters still receive
             // their result, but it cannot replace the newer ready-cache contents.
             if (settingsVersion.load() == version && optionsVersion() == options) {
-                cache.push_front({zx, zy, version, options, original, made});
-                if (cache.size() > CACHED_ZONES)
-                    cache.pop_back();
+                remember(key, made);
             }
             pendingZones.erase(key);
         }
         producer->set_value(made);
+        profile.complete(0, 0, 0, 0, 0);
         return made;
     } catch (...) {
         {
@@ -354,6 +389,7 @@ void forgetZones() {
     std::lock_guard<std::mutex> hold(cacheLock);
     ++settingsVersion;
     cache.clear();
+    liveZones.clear();
 }
 
 std::vector<soundrules::Emitter> soundEmitters(int32_t zx, int32_t zy) {

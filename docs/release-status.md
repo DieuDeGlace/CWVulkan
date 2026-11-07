@@ -1,5 +1,45 @@
 # Source review checkpoint — 2026-11-07
 
+## Live generated-terrain reuse and loading measurements - 2026-11-07
+
+Decoded terrain and resident consumers can outlive the generator's 96 ready
+entries. A weak lookup now recovers their immutable results instead of generating
+another copy. It retains the coordinate/settings/options/original key, pending
+reader coalescing and flush retirement. Expired weak metadata is removed on cache
+admission. The strong ready limit stays 96. This is an engine cache policy,
+distinct from native source-map retention and scheduling.
+
+A public-API concurrent-reuse regression reproduced one failure before the fix
+and passes afterward. Release without a consumer, release after reuse/eviction,
+flush, settings/option changes and original-versus-hooked isolation also pass.
+The optional private CSV profiler is off by default and preserves math, inputs
+and evaluation order. See [terrain loading](terrain-loading.md).
+
+In one matched 30-second hidden/offline/no-save Alpha-terrain/Steam-look/Omega run,
+generations fell from 954 for 313 distinct keys to 760 for 329 keys; completed mesh
+jobs rose from 168 to 184. There were 391 live-result recoveries. Timing sums are
+elapsed wall time in overlapping jobs, not process CPU or FPS. Repeated generation
+remains: 431 excess productions versus 641 before. Private evidence is under
+build/mesh-cache-validation and build/mesh-live-cache-profile.
+
+With profiling disabled and the exact prior full-capture arguments/settings except
+private output paths, the scene still reaches its observation deadline: 440
+prepared zones and 8 pending jobs after 133.689 seconds total, versus 384/8 after
+128.422 seconds before this fix. Neither run produces a capture. This does not
+establish a whole-game speedup or close cold-fill acceptance. Next streaming work
+separates native loaded-source retention from generation demand. Alpha terrain,
+lighting, Omega water and enhancements retain their settings.
+
+All five targets, the full required-oracle CPU suite with no skips, Vulkan groups
+(92 shader, 2 camera, 102 GUI, 17 map, 14 native-water, shared water and Alpha
+scenery) and extractor SDK independence pass. No original game was started or
+owner saves/mods/display changed. The independent
+[colour-evaluation contract](specs/steam-terrain-colour-evaluation-order-20261107.md)
+was read in full. It distinguishes base-colour from admitted-corner work and
+leaves broad purity assumptions unproved; no speculative colour-skipping change
+was needed. Native runtime, travel, memory-pressure, final provenance and wider
+parity acceptance remain open.
+
 ## Native mesh selection and batch boundary - 2026-11-07
 
 Native preparation now selects at most eight coordinates with the independent
