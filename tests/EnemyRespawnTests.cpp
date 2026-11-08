@@ -267,6 +267,7 @@ void generatedEnemy() {
     bool fresh;
     uint8_t *sameId = existing.networkCreature(id, fresh);
     sameId[worldgen::creature::HOSTILITY] = 1;
+    std::memcpy(sameId + worldgen::creature::POSITION, existing.record(1) + worldgen::creature::POSITION, 3 * sizeof(int64_t));
     setHealth(sameId, 0);
     existing.update(blocks, home);
     size_t copies = 0;
@@ -292,6 +293,7 @@ void generatedEnemy() {
         bool madeShopper = false;
         uint8_t *shopper = recoveredSave.networkCreature(7003, madeShopper);
         shopper[worldgen::creature::HOSTILITY] = 3;
+        std::memcpy(shopper + worldgen::creature::POSITION, recoveredSave.record(1) + worldgen::creature::POSITION, 3 * sizeof(int64_t));
         setHealth(shopper, 100);
         const auto zoneToken = blocks.gameZoneToken(zx, zy);
         CHECK_RESPAWN(zoneToken.has_value());

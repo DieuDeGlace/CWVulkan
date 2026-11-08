@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Live residents use the inclusive 320-block horizontal retention disk,
+  independently of source demand and height. Selection precedes owned erasure
+  in registration order; nonempty buckets survive source-demand cleanup. Boundary,
+  fresh-centre and vector-relocation tests pass with final required-owner CPU,
+  Vulkan, SDK and Steam/native plus Alpha/Omega scene checks. World-step ordering,
+  full source-state binding, external aliases and broad travel/memory remain open.
+  See the [retention contract](specs/steam-live-resident-retention-20261107.md).
+
 - [x] Selected source summaries use recorded catalog-identity membership rather
   than admitted live actors. The separate tracked-list scalar resets and counts
   its own matching entries, including repeats. One reproduced generated-gate

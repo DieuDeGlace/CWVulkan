@@ -1,5 +1,6 @@
 // Asset-free contracts from steam-authoritative-residents.md and its cited numeric rules.
 #include "ResidentPass.h"
+#include "Spawned.h"
 #include "GameMath.h"
 #include "worldgen/Generator.h"
 #include "worldgen/Residents.h"
@@ -26,6 +27,64 @@ Record actor(int64_t id, uint8_t kind, uint16_t state = 0, residentpass::Region 
     put(result.data(), 0x150, region);
     return result;
 }
+void retentionValues(const auto &check) {
+    constexpr int64_t block = 65536;
+    Record centre = actor(100, 0), outside = actor(20, 7), east = actor(9, 1), diagonal = actor(8, 255),
+           fraction = actor(3, 1), diagonalFraction = actor(5, 3), west = actor(4, 1);
+    put(outside.data(), 0x10, 320 * block); put(outside.data(), 0x18, block);
+    put(east.data(), 0x10, 320 * block); put(east.data(), 0x20, INT64_MAX);
+    put(diagonal.data(), 0x10, 192 * block); put(diagonal.data(), 0x18, 256 * block);
+    put(diagonal.data(), 0x20, INT64_MIN);
+    put(fraction.data(), 0x10, 320 * block + 1);
+    put(diagonalFraction.data(), 0x10, 192 * block); put(diagonalFraction.data(), 0x18, 256 * block + 1);
+    put(west.data(), 0x10, -320 * block);
+    std::vector<const uint8_t *> records{outside.data(), centre.data(), east.data(), diagonal.data(), fraction.data(),
+                                        diagonalFraction.data(), west.data()};
+    check(residentpass::residentsOutsideRetention(records) == std::vector<int64_t>{20, 3, 5},
+          "inclusive horizontal disk retains exact boundaries, ignores Z/HP and preserves removal order");
+    Record otherCentre = actor(200, 0), otherEdge = actor(10, 1);
+    put(otherCentre.data(), 0x10, -1000 * block);
+    put(otherEdge.data(), 0x10, -680 * block);
+    records.push_back(otherCentre.data()); records.push_back(otherEdge.data());
+    check(residentpass::residentsOutsideRetention(records) == std::vector<int64_t>{20, 3, 5},
+          "any zero-kind centre can retain a resident at its inclusive boundary");
+    records = {outside.data(), east.data(), diagonal.data(), fraction.data()};
+    check(residentpass::residentsOutsideRetention(records) == std::vector<int64_t>{20, 9, 8, 3},
+          "without centres all nonzero categories are removed in World order");
+    check(residentpass::residentsOutsideRetention({}).empty(), "empty World has no removals");
+
+    SpawnedCreatures world;
+    const auto add = [&](int64_t id, uint8_t kind, int64_t x, int64_t y, int64_t z) {
+        bool fresh = false;
+        auto *record = world.networkCreature(id, fresh);
+        check(record && fresh, "owned retention fixture registers a fresh actor");
+        if (!record) return;
+        record[0x60] = kind;
+        put(record, 0x10, x); put(record, 0x18, y); put(record, 0x20, z);
+        put(record, 0x180, 0.0f);
+    };
+    world.setWorldDead({555});
+    add(100, 0, 0, 0, 0);
+    add(20, 1, 320 * block, block, 0);
+    add(9, 1, 320 * block, 0, INT64_MAX);
+    add(3, 1, 320 * block + 1, 0, 0);
+    add(8, 1, 192 * block, 256 * block, INT64_MIN);
+    world.retireDistantResidents();
+    check(world.hasCreature(100) && world.hasCreature(9) && world.hasCreature(8) &&
+              !world.hasCreature(20) && !world.hasCreature(3),
+          "owned removal survives vector relocation and keeps boundary residents without any terrain source");
+    add(200, 0, 1000 * block, 0, 0);
+    add(10, 1, 1320 * block, 0, INT64_MAX);
+    world.remove(100);
+    world.retireDistantResidents();
+    check(world.hasCreature(200) && world.hasCreature(10) && !world.hasCreature(9) && !world.hasCreature(8),
+          "each pass collects current centres and retires candidates against their fresh membership");
+    world.remove(200);
+    world.retireDistantResidents();
+    check(!world.hasCreature(10) && world.worldDeadSet() == std::set<int64_t>{555},
+          "last-centre departure removes residents without erasing recorded world progress");
+}
+
 } // namespace
 int residentPassTests() {
     int failures = 0;
@@ -166,6 +225,7 @@ int residentPassTests() {
                   get<float>(record, 0x84) == 2.0f * 1.1f,
               "demon postprocessing preserves the earlier HP and native flag/size behavior");
     }
+    retentionValues(check);
     std::printf("Resident pass: %s\n", failures ? "FAILED" : "passed");
     return failures;
 }

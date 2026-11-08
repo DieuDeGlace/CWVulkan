@@ -216,12 +216,10 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             unloadedZones.push_back({zone[0], zone[1]});
         }
     for (auto it = zones.begin(); it != zones.end();)
-        if (it->first != NETWORK_ZONE && !near(it->first.first, it->first.second, NEAR_ZONES + 1)) {
+        if (it->first != NETWORK_ZONE && it->second.empty() && !near(it->first.first, it->first.second, NEAR_ZONES + 1)) {
             releaseDeaths(enemyDeaths.unload(it->first));
-            for (const Creature &cr : it->second)
-                made.erase(get<int64_t>(cr.record, worldgen::creature::ID));
             if (const auto residents = zoneResidents.find(it->first); residents != zoneResidents.end())
-                for (const auto &[id, sp] : residents->second->spawns.points) // (a zone let go takes its creatures)
+                for (const auto &[id, sp] : residents->second->spawns.points) // Empty storage releases its source catalog bookkeeping.
                     made.erase(id);
             zoneMissions.erase(it->first), zoneResidents.erase(it->first), zoneRand.erase(it->first);
             zoneSpots.erase(it->first), zoneChests.erase(it->first);
@@ -334,6 +332,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     // dead and newly registered actors. Region permission was snapshotted before refresh.
     for (nativeai::Creature *actor : worldList())
         participants.releasePetrified(actor->record);
+    retireDistantResidents(); // After the complete resident-admission/reconciliation pass.
     // Arena progression is a separate World helper.
     for (auto &[k, list] : zones)
         for (Creature &cr : list) {
@@ -465,6 +464,20 @@ void SpawnedCreatures::remove(int64_t id) {
                 ai.erase(id);
                 return;
             }
+}
+
+void SpawnedCreatures::retireDistantResidents() {
+    std::vector<const uint8_t *> actors;
+    forEachWorldCreature([&](const uint8_t *record) { actors.push_back(record); });
+    // IDs remain usable when vector erasure moves later owned records. Ordinary
+    // engine IDs are unique; selection preserves World registration order.
+    for (int64_t id : residentpass::residentsOutsideRetention(actors)) {
+        remove(id);
+        made.erase(id);
+        seenAlive.erase(id);
+        lastAbility.erase(id);
+        trips.erase(id);
+    }
 }
 
 void SpawnedCreatures::registerCreature(Creature &creature) {

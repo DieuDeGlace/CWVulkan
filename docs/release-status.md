@@ -1,5 +1,39 @@
 # Source review checkpoint — 2026-11-07
 
+## Live-resident horizontal retention - 2026-11-07
+
+Resident removal now uses the inclusive horizontal 320-block disk around every
+registered byte-zero centre. It ignores Z and health, admits every nonzero
+category as a candidate, and removes all such candidates when no centre remains.
+All candidates are selected in World registration order before owned storage is
+changed. Stable unique engine IDs allow vector erasure to move later records.
+
+The zero-role admission path runs this pass after its complete resident admission
+and reconciliation. Source demand no longer bulk-deletes a nonempty resident
+bucket; only empty storage releases its catalog bookkeeping at that boundary.
+Individual removal releases owned records and AI/activity caches while preserving
+recorded world progress. This separates the resident predicate from physical
+source demand, mesh readiness and source-array retention.
+
+Asset-free boundary and owned-world tests cover exact axial/diagonal boundaries,
+fixed-point oversteps, ignored height/health, multiple centres, empty centre lists,
+registration order, fresh centre membership and vector relocation. Two older
+respawn fixtures needed explicit NPC positions beside their test player; their
+identity-suppression and daily-refresh assertions remain in place. Final all-five-
+target builds, both focused modes, the full required-owner CPU suite without
+skips, all Vulkan groups and the SDK-independence audit pass.
+
+Hidden offline/no-save Steam-look/native-water scene startup completes at the
+negative-half-block position in 41.266 seconds; Alpha terrain/Steam look/Omega
+water completes in 79.984 seconds. Both images were inspected for loaded terrain,
+vegetation and HUD, and match the tested executable hash. These are bounded smoke
+checks, not FPS or original-pixel acceptance. See the
+[retention contract](specs/steam-live-resident-retention-20261107.md).
+
+Complete World-step ordering/guards, external reference cleanup, physical source-
+state binding and native persistence remain open. The owned catalog leases and
+broader travel/memory acceptance retain their separate evidence limits.
+
 ## Source summary identity membership - 2026-11-07
 
 The selected-source prelude now rebuilds coordinate counters from catalog-entry

@@ -119,6 +119,21 @@ Full selected-state retention/restoration, logical resident gates, native period
 persistence and exact producer/worker timing remain separate work. See the
 [host contract](specs/steam-host-source-cycle-20261107.md).
 
+## Live residents and physical sources
+
+The resident distance pass is separate from physical source demand. Byte-zero
+registered actors supply centres; nonzero-category actors remain when any centre
+passes the inclusive 320-block horizontal disk. Z and health do not participate.
+No centres means all nonzero-category candidates leave. Selection finishes in
+World registration order before owned records are erased.
+
+Source-demand cleanup releases only empty resident buckets. A still-retained
+actor can therefore outlive the physical source that supplied its template.
+Owned ID-based removal tolerates vector relocation and preserves world progress;
+full external alias cleanup, catalog-lease memory and World-step ordering retain
+separate limits. See the
+[retention contract](specs/steam-live-resident-retention-20261107.md).
+
 ## Source summary producers
 
 The selected-source prelude clears and rebuilds coordinate counters using exact

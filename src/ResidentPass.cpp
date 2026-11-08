@@ -22,6 +22,31 @@ void orderZones(std::vector<Zone> &zones) {
                 zones.end());
 }
 
+std::vector<int64_t> residentsOutsideRetention(std::span<const uint8_t *const> actors) {
+    std::vector<const uint8_t *> centres;
+    for (const auto *actor : actors)
+        if (actor[0x60] == 0)
+            centres.push_back(actor);
+    std::vector<int64_t> out;
+    for (const auto *actor : actors) {
+        if (actor[0x60] == 0)
+            continue;
+        const int64_t x = read<int64_t>(actor, 0x10), y = read<int64_t>(actor, 0x18);
+        bool retained = false;
+        for (const auto *centre : centres) {
+            const double dx = double(gamemath::subtractFixed(x, read<int64_t>(centre, 0x10))) * (1.0 / 65536.0);
+            const double dy = double(gamemath::subtractFixed(y, read<int64_t>(centre, 0x18))) * (1.0 / 65536.0);
+            if (std::abs(dx) <= 320.0 && std::abs(dy) <= 320.0 && dx * dx + dy * dy <= 102400.0) {
+                retained = true;
+                break;
+            }
+        }
+        if (!retained)
+            out.push_back(read<int64_t>(actor, 8));
+    }
+    return out;
+}
+
 void Collection::collect(const uint8_t *record) {
     const int64_t id = read<int64_t>(record, 8);
     ids_.insert(id); // Every nonnull registered actor suppresses duplicates, even dead actors.

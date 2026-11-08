@@ -2693,3 +2693,16 @@ owner CPU, Vulkan and SDK checks. The older guard prose's “live” wording is 
 used as evidence of resident-map membership. Physical ownership/freshness,
 consumer routing and ordinary update/admission order remain open. The private
 receipt freezes the held bytes; no owner data is published.
+
+## Live-resident distance retention, 2026-11-07
+
+The isolated original-only author supplied the held resident-retention contract;
+the implementer read its complete prose and owned sources only. The engine uses
+the inclusive horizontal disk and World-order candidate selection, with unique
+owned IDs preserving selection across vector movement. Source demand no longer
+erases nonempty resident buckets. Boundary/owned-world checks and final required-
+owner CPU, Vulkan, SDK and two scene smoke checks pass. Two unpositioned respawn
+fixtures now explicitly place their actors near their test player; the engine
+rule was not relaxed. Complete phase ordering, source-state binding, external
+aliases and broader travel/memory acceptance remain open. The private receipt
+freezes the held hash and no owner data is published.

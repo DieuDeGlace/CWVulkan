@@ -46,11 +46,13 @@ class SpawnedCreatures {
   public:
     // Reads the game's model list (id -> sprite, size). False without it.
     bool init(const std::filesystem::path &extractDir, std::string *why = nullptr);
-    // Keeps the zones within 4 of every player in memory and lets go of farther ones. A world that
-    // decides (not a remote client) makes the creatures of those zones, near every player
-    // (worldgen-creatures.md §7.1); a mirror makes none. `playerLocal` stands in for the local
-    // player before it exists.
+    // Admit residents from loaded sources near actual players; mirrors make none.
+    // Source/array lifetime is separate from the 320-block horizontal resident boundary.
+    // `playerLocal` supplies only legacy terrain streaming before an actual player exists.
     void update(ExtractedWorld &ew, glm::vec3 playerLocal);
+    // Native zero-World+0x358 caller runs this after admission. The routine itself
+    // has no role gate; it selects all candidate IDs before moving owned storage.
+    void retireDistantResidents();
 
     // --- Multiplayer: the world's side (docs/specs/netcode-roles.md) -------------------------
     // Every game has a host world, which decides, and a client world that mirrors a host (its own

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <set>
+#include <span>
 #include <memory>
 #include <vector>
 #include <utility>
@@ -17,6 +18,10 @@ struct Zone {
     std::shared_ptr<const void> keepAlive;
 };
 void orderZones(std::vector<Zone> &zones); // Nonnull, unique, unsigned Zone-address order.
+// Valid borrowed World records in membership order. Select all removals before
+// storage changes; retain nonzero-kind records within any zero-kind centre's
+// inclusive 320-block horizontal disk. Z and physical sources are not inputs.
+std::vector<int64_t> residentsOutsideRetention(std::span<const uint8_t *const> actors);
 
 class Collection {
   public:
