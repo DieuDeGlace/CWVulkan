@@ -1006,18 +1006,27 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     auto progressOwner = std::make_shared<SaveGame>();
     SaveGame &saveGame = *progressOwner;
     bool workerCharacterSaving = false;
+    std::shared_ptr<const nativesaves::Character> loadedNativeCharacter;
     const bool saving = chosen && saves.isOpen() && savesWritable && std::isnan(startX) && !serverMode;
     // A capture with --save-folder loads that folder's character too (read only: it writes
     // nothing back), so a test save's progress shows in the screenshot.
     const bool loading = saving || (chosen && saves.isOpen() && !saveFolder.empty() && std::isnan(startX) && !serverMode);
     if (loading) {
         saves.play(*chosen);
+        auto raw = std::make_shared<nativesaves::Character>();
         const bool had = saves.load(saveGame, saveFrame, savedWorldName, [&](const nativesaves::Item &it) {
             return spawnedReady ? spawned.itemSprite(it.data()) : std::string();
-        });
+        }, raw.get());
+        if (had && chosen->native && nativePlayer) {
+            loadedNativeCharacter = std::move(raw);
+            saveGame.level = loadedNativeCharacter->level;
+        }
         logLine(std::string("Save: ") + (had ? "loaded character " + std::to_string(saves.slot()) : "new character") + " of " +
                 utf8(saves.folder() / "characters.db"));
     }
+    std::array<uint8_t, 0xb0> loadedAppearance{};
+    const bool hasLoadedAppearance = loadedNativeCharacter &&
+        nativeprogress::appearanceOf(loadedNativeCharacter->looks, loadedAppearance);
     spawned.restoreMapHistory(saveGame.regionHistory.value_or(std::vector<maphistory::Region>{}));
     Player player;
     const bool nativeCameraStartup = useExtracted && nativePlayer;
@@ -1102,10 +1111,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // Back where the character was last saved, if it was in this world.
     const std::string worldName = !useExtracted ? "generated" : alphaGeneration
         ? extractedWorld.sourceIdentity() : extractedWorld.directory().filename().string();
-    const bool resumed = (saveGame.hasPosition && saveGame.world == worldName) || enteredAt;
+    const bool resumed = loadedNativeCharacter || (saveGame.hasPosition && saveGame.world == worldName) || enteredAt;
     if (resumed) {
         // Exactly where the save has the character, facing yaw 0; no ground search.
-        player.position = enteredAt ? *enteredAt : saveGame.position;
+        player.position = loadedNativeCharacter ? nativeprogress::localFeet(loadedNativeCharacter->position, saveFrame)
+                                               : enteredAt ? *enteredAt : saveGame.position;
         if (!nativeCameraStartup)
             player.setYawRadians(saveGame.yaw);
         logLine("Save: resuming at " + std::to_string(player.position.x) + ", " + std::to_string(player.position.y));
@@ -1338,7 +1348,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     };
     progression::Mode mode = readMode();
     const int recordedLevel = std::max(1, character.level);
-    saveGame.level = saveGame.level > 0 ? saveGame.level : recordedLevel;
+    if (!loadedNativeCharacter)
+        saveGame.level = saveGame.level > 0 ? saveGame.level : recordedLevel;
     int &playerLevel = saveGame.level;
     auto setSpecializationMetadata = [&](int specialization) {
         character.specialization = specialization;
@@ -1352,6 +1363,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     auto *nativeInventory = saveGame.nativeInventory ? &*saveGame.nativeInventory : nullptr;
     spawned.setHudContextSource(!worldName.empty(), nativeInventory ? &nativeInventory->inventory.tabs : nullptr);
     saveGame.inventoryAuthoritative = nativeInventory != nullptr;
+    if (nativeInventory && nativePlayer)
+        spawned.setPlayerInventorySource([owner = progressOwner](const nativeai::InventoryVisitor &visit) {
+            if (!owner->nativeInventory) return;
+            for (auto &tab : owner->nativeInventory->inventory.tabs)
+                for (auto &stack : tab)
+                    if (!visit({&stack.count, stack.item.data()})) return;
+        });
     if (chosen && chosen->native && nativeInventory && nativePlayer) {
         gear.setPlayerClass(chosen->classType);
         haveGear = true; // canonical native equipment and rules need no survey recording
@@ -1422,7 +1440,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         nativeplayer::Who who;
         who.race = chosen && chosen->native ? chosen->race : character.race, who.cls = gear.playerClass();
         who.spec = chosen && chosen->native ? chosen->specialization : character.specialization;
-        who.level = std::max(1, character.level), who.flags2 = character.flags2;
+        who.level = loadedNativeCharacter ? playerLevel : std::max(1, character.level);
+        who.flags2 = character.flags2;
         playerRegion = regionHere();
         who.region[0] = playerRegion.x, who.region[1] = playerRegion.y;
         std::array<nativeplayer::Item, 11> worn{};
@@ -1434,7 +1453,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 worn[(size_t)k] = Gear::toRecord(it);
         }
         worldgen::CreatureRecord r = nativeplayer::record(who, worn);
-        if (chosen && chosen->hasAppearance) // a character of characters.db: its own looks
+        if (hasLoadedAppearance)
+            std::memcpy(&r[worldgen::creature::APPEARANCE], loadedAppearance.data(), loadedAppearance.size());
+        else if (chosen && chosen->hasAppearance) // a character of characters.db: its own looks
             std::memcpy(&r[worldgen::creature::APPEARANCE], chosen->appearance.data(), chosen->appearance.size());
         else if (chosen)
             nativeplayer::appearance(r, chosen->dir / "snapshot.txt");
@@ -1703,7 +1724,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         saveGame.applyGear(gear);
         applyGear();
     }
-    if (resumed)
+    if (loadedNativeCharacter)
+        playerHp = loadedNativeCharacter->health;
+    else if (resumed)
         playerHp = saveGame.hpFraction * playerMaxHp;
 
     // Enemy levels (pyro): each creature's level follows the player's by the game's
@@ -3468,37 +3491,36 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             (*characterSaveGates)[i].store(values[i], std::memory_order_release);
     };
     publishCharacterSaveGates();
-    if (saving && nativePlayer && nativeInventory && spawned.physicalSourceState() && chosen && chosen->native) {
-        auto base = std::make_shared<nativesaves::Character>();
-        if (saves.store().load(saves.slot(), *base)) {
-            spawned.seedPlayerSave(base);
-            auto states = extractedWorld.sourceStateStore();
-            auto actor = spawned.playerSaveSource();
-            auto selected = saves.selection();
-            auto store = saves.sharedStore();
-            characterpersistence::Session::Access access;
-            access.named = [name = gameWorldName] { return !name.empty(); };
-            access.visibility = [gates = characterSaveGates](size_t i) {
-                return (*gates)[i].load(std::memory_order_acquire);
-            };
-            access.capture = [states, actor, selected, base, progressOwner]() -> std::optional<characterpersistence::Snapshot> {
-                auto guard = states->lock();
-                const int32_t slot = *selected;
-                if (slot < 0) return {};
-                characterpersistence::Snapshot snapshot;
-                snapshot.slot = slot;
-                snapshot.character = *base;
-                if (!nativeprogress::capturePlayerData(*progressOwner, snapshot.character, snapshot.notes) ||
-                    !actor(snapshot.character)) return {};
-                return snapshot; // the World guard leaves before serialization and database entry
-            };
-            access.write = [store](characterpersistence::Snapshot &&snapshot) {
-                const auto packed = nativesaves::compress(nativesaves::writeCharacter(snapshot.character));
-                return store->savePacked(snapshot.slot, packed, &snapshot.notes);
-            };
-            world.characterSaveSession()->bind(std::move(access));
-            workerCharacterSaving = true;
-        }
+    if (loadedNativeCharacter)
+        spawned.seedPlayerSave(loadedNativeCharacter); // read-only and writable native loads share the same state path
+    if (saving && loadedNativeCharacter && nativeInventory && spawned.physicalSourceState()) {
+        auto base = loadedNativeCharacter;
+        auto states = extractedWorld.sourceStateStore();
+        auto actor = spawned.playerSaveSource();
+        auto selected = saves.selection();
+        auto store = saves.sharedStore();
+        characterpersistence::Session::Access access;
+        access.named = [name = gameWorldName] { return !name.empty(); };
+        access.visibility = [gates = characterSaveGates](size_t i) {
+            return (*gates)[i].load(std::memory_order_acquire);
+        };
+        access.capture = [states, actor, selected, base, progressOwner]() -> std::optional<characterpersistence::Snapshot> {
+            auto guard = states->lock();
+            const int32_t slot = *selected;
+            if (slot < 0) return {};
+            characterpersistence::Snapshot snapshot;
+            snapshot.slot = slot;
+            snapshot.character = *base;
+            if (!nativeprogress::capturePlayerData(*progressOwner, snapshot.character, snapshot.notes) ||
+                !actor(snapshot.character)) return {};
+            return snapshot; // the World guard leaves before serialization and database entry
+        };
+        access.write = [store](characterpersistence::Snapshot &&snapshot) {
+            const auto packed = nativesaves::compress(nativesaves::writeCharacter(snapshot.character));
+            return store->savePacked(snapshot.slot, packed, &snapshot.notes);
+        };
+        world.characterSaveSession()->bind(std::move(access));
+        workerCharacterSaving = true;
     }
     // The game's controls (controls.cfg), read each frame.
     GameInput gameInput;

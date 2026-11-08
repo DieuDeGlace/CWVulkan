@@ -7,6 +7,7 @@
 #include "NativeCrt.h"
 #include "NativeRules.h"
 
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -1393,25 +1394,39 @@ bool Brain::fight(Creature *c) {
 
     // Drink a potion when badly hurt.
     if (healthOf(c) < maxHealth(c) * 0.25f && duration(c) < timeOf(c)) {
-        for (auto &tab : c->inventory)
-            for (auto &stack : tab) {
-                const int32_t count = get<int32_t>(stack.data(), 0);
-                if (count == 0 || stack[4] != ITEM_CONSUMABLE || get<int32_t>(stack.data(), 8) != 1)
-                    continue;
-                setAbility(c, DRINK);
-                setTime(c, 0.0f);
-                copyItem(c->record + ITEM, stack.data() + 4);
-                if (count - 1 < 1) {
-                    put<int32_t>(stack.data(), 0, 0);
-                    stack[4] = 0;
-                    put<int32_t>(stack.data(), 8, 0);
-                } else {
-                    put<int32_t>(stack.data(), 0, count - 1);
-                }
-                const float a = (float)rand(), b = (float)rand();
-                putVec(c->record, INTENT, {(b * 4.0f) / RAND_SCALE - 2.0f, (a * 4.0f) / RAND_SCALE - 2.0f, 0.0f});
+        bool drank = false;
+        const auto consume = [&](InventorySlot slot) {
+            const int32_t count = slot.count();
+            if (count == 0 || slot.item[0] != ITEM_CONSUMABLE || get<int32_t>(slot.item, 4) != 1)
                 return true;
+            setAbility(c, DRINK);
+            setTime(c, 0.0f);
+            copyItem(c->record + ITEM, slot.item);
+            // The native memory decrement wraps in 32 bits before a fresh signed
+            // comparison. In particular INT32_MIN becomes positive INT32_MAX.
+            slot.setCount(std::bit_cast<int32_t>(uint32_t(count) - uint32_t(1)));
+            if (slot.count() < 1) {
+                slot.setCount(0);
+                slot.item[0] = 0;
+                put<int32_t>(slot.item, 4, 0);
             }
+            drank = true;
+            return false;
+        };
+        if (c->inventorySource) {
+            c->inventorySource(consume);
+        } else {
+            for (auto &tab : c->inventory) {
+                for (auto &stack : tab)
+                    if (!consume({stack.data(), stack.data() + 4})) break;
+                if (drank) break;
+            }
+        }
+        if (drank) {
+            const float a = (float)rand(), b = (float)rand();
+            putVec(c->record, INTENT, {(b * 4.0f) / RAND_SCALE - 2.0f, (a * 4.0f) / RAND_SCALE - 2.0f, 0.0f});
+            return true;
+        }
     }
 
     Entry &e = entryOf(c);

@@ -218,6 +218,7 @@ int viewedNetworkPhaseTests(); // tests/ViewedNetworkPhaseTests.cpp
 int worldClockTests(); // tests/WorldClockTests.cpp
 int connectionRoleTests(); // tests/ConnectionRoleTests.cpp
 int characterPersistenceTests(); // tests/CharacterPersistenceTests.cpp
+int characterLoadTests(); // tests/CharacterLoadTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int worldGateCaptureCommand(const std::filesystem::path &);
 int blockMutationTests();
@@ -9545,6 +9546,8 @@ int main(int argc, char **argv) {
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "sourcecreation")
         return nativeSourceCreationTests();
+    if (argc == 2 && std::string(argv[1]) == "characterload")
+        return characterLoadTests();
     if (argc == 2 && std::string(argv[1]) == "characterpersistence")
         return characterPersistenceTests();
     if (argc == 2 && std::string(argv[1]) == "connectionrole")
@@ -10869,6 +10872,7 @@ int main(int argc, char **argv) {
     failures += worldClockTests();
     failures += connectionRoleTests();
     failures += characterPersistenceTests();
+    failures += characterLoadTests();
     failures += nativeSourceCreationTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();

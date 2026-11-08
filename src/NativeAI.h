@@ -9,6 +9,7 @@
 // beside them; an AI record is the game's map node (0x178 bytes) with its containers.
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <list>
 #include <map>
@@ -24,6 +25,17 @@ using Block = std::array<uint8_t, 6>;
 // An interaction (0xc8 bytes: an item, then who and where).
 using Interaction = std::array<uint8_t, 0xc8>;
 
+// Synchronous mutable slot view. Quantity bytes can belong to a typed canonical
+// stack or the NPC byte-record adapter; no alignment/type punning is required.
+struct InventorySlot {
+    void *quantity;
+    uint8_t *item;
+    int32_t count() const { int32_t value; std::memcpy(&value, quantity, 4); return value; }
+    void setCount(int32_t value) const { std::memcpy(quantity, &value, 4); }
+};
+using InventoryVisitor = std::function<bool(InventorySlot)>; // false stops traversal
+using InventorySource = std::function<void(const InventoryVisitor &)>;
+
 // A creature and what the game keeps beside its record.
 struct Creature {
     uint8_t *record = nullptr;                    // nativepose::CREATURE_SIZE bytes
@@ -37,6 +49,7 @@ struct Creature {
     std::set<int64_t> counted;                    // +0x9b8: of those, the ones already counted
     std::map<int32_t, float> cooldowns;           // +0xb78: skill to the ms before it may be used again
     std::vector<std::vector<std::array<uint8_t, 0xa4>>> inventory; // +0x9f0: tabs of stacks
+    InventorySource inventorySource; // optional owned canonical player source; caller holds World guard
     std::vector<int32_t> summonRaces;             // +0xbf0: the races a summoner may call up
 };
 

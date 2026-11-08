@@ -168,6 +168,7 @@ void finalSaveWaitsForGeneration(const auto &check) {
         gate.wait(); generated = true;
     });
     check(!batch->seal(), "the admitted generation job owns shutdown completion");
+    session->requestStop(); // establish the native stop-before-join order before releasing generation
     auto final = std::async(std::launch::async, [session] { session->finish(); });
     check(final.wait_for(10ms) == std::future_status::timeout && state->writes == 0,
           "stopping waits for admitted work before the once-only exit writer");

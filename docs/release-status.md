@@ -1,5 +1,55 @@
 # Source review checkpoint — 2026-11-08
 
+## Selected-character loading and live inventory - 2026-11-08
+
+Native selected characters now load their saved fixed position, health, level,
+experience, class, specialization, equipment, appearance, bookkeeping, buffs and
+ordered history through one shared state path for writable and read-only sessions.
+Zero coordinates are valid. Zero, negative, signed-zero and above-maximum health
+remain raw at the load boundary; orientation is consumed and zeroed. Normal later
+World/physics updates remain separate. A missing numeric record preserves the
+destination rather than applying a reset.
+
+The reset applies the independently specified default-core fields and clears only
+the traced transient maps, queued interactions, active/cursor item fields and
+other reset operands. Separate identifier sets, skill/summon ranges, group/pose
+state and omitted padding survive. Safe bounds for overlong names and malformed
+records remain explicit engine policies.
+
+Controlled-player potion use now visits the current owned canonical inventory,
+so it consumes the live slot after gameplay changes rather than a load-time copy.
+NPC records retain their direct byte-record adapter. Both paths preserve first
+match, item-copy/action order, the signed comparison after a wrapping 32-bit
+decrement, and the two random draws. Shared ownership avoids a dangling inventory
+provider; native sessions avoid a second authoritative inventory or per-frame
+full copy. The decoded character is reused instead of reading the database twice.
+
+The regression suite reproduced eighteen raw-load failures, two selective-reset
+failures and one canonical-inventory failure before their fixes. Literal count
+boundaries already passed on MSVC before the explicit wrap arithmetic; that change
+removes C++ signed-overflow ambiguity without claiming a reproduced numeric failure.
+All five targets, focused/default required-owner CPU tests without skips, all
+Vulkan groups and extractor SDK independence pass. Shutdown test synchronization
+now establishes stop-before-join before releasing generation; engine gates and
+expected final writes were unchanged.
+
+Four disposable load/save and read-only runs passed on an earlier build. The
+current executable also passed its zero-health/zero-position writable run.
+Steam then requested sign-in before the next load; that failed attempt is retained
+and excluded. Final negative/signed-zero/read-only repetitions and fresh native/
+Alpha/Omega scene checks remain pending Steam reconnection. No ownership check,
+deadline or scene setting was weakened. Owner saves, Mods and display were untouched.
+
+The isolated original-only author held the complete
+[load contract](specs/steam-selected-character-load-state-and-health-20261108.md),
+[reset boundaries](specs/steam-selected-character-reset-boundaries-20261108.md),
+[default-core copy](specs/steam-selected-character-default-core-copy-20261108.md)
+and [potion count widths](specs/steam-ai-potion-slot-count-widths-20261108.md).
+The implementer read all four entirely and froze their hashes privately. Complete
+caller/UI initialization, worker-start/process-mode/interleavings, alternate writers,
+backend durability and broader native gameplay/multiplayer acceptance remain open.
+Alpha terrain/lighting and Omega water remain implemented.
+
 ## Character worker saving and native roster - 2026-11-08
 
 Native character saving now completes from the generation worker path. It uses

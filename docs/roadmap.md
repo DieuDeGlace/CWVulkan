@@ -8,6 +8,18 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Selected native characters retain raw fixed position and health, including
+  zero coordinates/nonpositive health, with zeroed orientation and a selective
+  default-core/transient reset. Missing records preserve the destination; separate
+  sets/ranges and omitted padding survive. Writable/read-only loads share the path,
+  and controlled-player AI consumes current owned canonical slots without a second
+  inventory. Reproduced load/reset/ownership regressions, count-width literals,
+  full required-owner CPU without skips, every Vulkan group and SDK checks pass.
+  Current-binary extended runtime/scene repetitions await Steam sign-in; caller/UI,
+  worker timing and broader native acceptance remain open. See
+  [the checkpoint](release-status.md#selected-character-loading-and-live-inventory---2026-11-08)
+  and [save behavior](saves.md).
+
 - [x] Native character saves complete after generation with strict unsigned
   carried samples above60,000ms, ordered three-root visibility gates, owned captured
   slot/data and serialization outside the World guard. Exit waits admitted work;

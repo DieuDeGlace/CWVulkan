@@ -227,7 +227,7 @@ bool entryFor(const Character &c, int slot, const std::vector<CharacterEntry> &r
     out.name = c.name;
     out.classType = c.classType;
     out.specialization = c.specialization;
-    out.level = std::max(1, c.level);
+    out.level = c.level;
     out.race = nativesaves::raceOf(c.looks.people(), c.looks.sex());
     out.raceName = peopleWord(c.looks.people());
     out.native = true;
@@ -814,7 +814,7 @@ void ProgressFile::play(const CharacterEntry &entry) {
 }
 
 bool ProgressFile::load(SaveGame &out, const Frame &frame, const std::string &worldName,
-                        const std::function<std::string(const Item &)> &itemSprite) {
+                        const std::function<std::string(const Item &)> &itemSprite, Character *raw) {
     out = SaveGame{};
     out.day = world_.day;
     out.hour = std::fmod(world_.timeMs / 3600000.0f, 24.0f);
@@ -822,7 +822,8 @@ bool ProgressFile::load(SaveGame &out, const Frame &frame, const std::string &wo
     out.killed.assign(world_.dead.begin(), world_.dead.end());
     if (slot_ < 0)
         return false;
-    Character c;
+    Character fallback;
+    Character &c = raw ? *raw : fallback;
     if (!store_->load(slot_, c))
         return false;
     std::string notes;

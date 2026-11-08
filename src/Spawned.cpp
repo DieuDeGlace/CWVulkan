@@ -14,6 +14,7 @@
 #include "NativeInteract.h"
 #include "GroundItems.h"
 #include "NativePlayer.h"
+#include "CharacterLoad.h"
 #include "NativePlayerHit.h"
 #include "NativePet.h"
 #include "World.h"
@@ -1762,16 +1763,11 @@ void SpawnedCreatures::advanceTrips(ExtractedWorld &ew, double dtMs) {
 
 void SpawnedCreatures::applyPlayerSaveSeed() {
     if (!hasPlayer || !playerSaveSeed) return;
-    const auto &seed = *playerSaveSeed;
-    auto &r = player.record;
-    std::memset(r.data() + 0x958, 0, 16);
-    std::memcpy(r.data() + 0x958, seed.name.data(), std::min(seed.name.size(), size_t(15)));
-    put<float>(r, 0x9a4, seed.field9a4);
-    put<float>(r, 0x9a8, seed.field9a8);
-    put<int32_t>(r, 0x148, seed.experience);
-    std::memcpy(r.data() + 0x1d0, seed.homeCell.data(), 8);
-    player.side.buffs.clear();
-    for (const auto &buff : seed.buffs) player.side.buffs.push_back(buff.bytes);
+    characterload::apply(player.record, player.side, *playerSaveSeed);
+    // Rendering starts at the loaded physical location; no origin interpolation.
+    std::memcpy(player.record.data() + 0xb10, playerSaveSeed->position.data(), 24);
+    regionHistory = maphistory::History(playerSaveSeed->regionHistory);
+    savedPlacementPending = true;
 }
 void SpawnedCreatures::seedPlayerSave(std::shared_ptr<const nativesaves::Character> seed) {
     auto guard = sourceGuard();
@@ -1825,9 +1821,14 @@ void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, floa
         put<uint32_t>(r, 0xbcc, 0);
         registerCreature(player);
         hasPlayer = true;
-        applyPlayerSaveSeed();
         if (!gearRecord.empty())
             setPlayerGear(gearRecord);
+        applyPlayerSaveSeed(); // saved health/core follows constructor and derived gear
+    }
+    if (nativePlayer && savedPlacementPending) {
+        savedPlacementPending = false;
+        placed = true;
+        return; // the first legacy bridge must not replace the just-loaded raw state
     }
     put<int64_t>(r, worldgen::creature::ID, localId);
     put<int32_t>(r, worldgen::creature::LEVEL, level);

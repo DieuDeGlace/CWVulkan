@@ -80,7 +80,7 @@ To record another class:
   Native characters use the existing pose/control system and canonical equipment;
   class recordings are optional playback data. An installation without character
   recordings can still select and save its native characters.
-- `--play` skips the title and plays a recording:
+- `--play` skips the title and selects a saved native character or a recording:
   - `--character NAME`, or `[Game] Character=NAME` in `CubeVulkan.ini`.
   - NAME can be the character's name, its folder (`warrior-guardian`), a class (`warrior`) or a specialization
     (`guardian`). A class or specialization picks the newest matching recording.
@@ -116,6 +116,22 @@ A character keeps:
   in signed group order with each group retaining list order and duplicates.
 
 Fields CubeVulkan does not model are kept as they were read.
+
+**Loading a native character.** Writable and read-only sessions use the same raw
+decoded character. Saved fixed coordinates, including the origin, remain valid;
+health is not clamped or reconstructed from a fraction. Zero, negative, signed-zero
+and above-maximum health survive the load boundary. Saved orientation is read and
+then zeroed. Normal later physics, healing and death behavior are separate updates.
+Equipment, buffs, ordered history and raw core scalars retain their saved values.
+
+The selective reset clears the traced transient state and active/cursor item fields,
+preserving separate sets/ranges and omitted padding. A missing numeric key leaves
+the destination unchanged. Canonical inventory tabs remain the live authority for
+UI, saving and controlled-player potion use; slot mutations do not go to a stale
+load-time inventory copy. Six tabs remain a starter default rather than a limit.
+Overlong names and malformed records use the engine's bounded safety policy.
+See the [load contract](specs/steam-selected-character-load-state-and-health-20261108.md)
+and [reset/default-copy contracts](specs/steam-selected-character-default-core-copy-20261108.md).
 
 **CubeVulkan's own notes.** CubeVulkan's own quests, the places townspeople told the character about, and the
 zone items and objects it took or used have no place in the game's format. They are kept as text in the same

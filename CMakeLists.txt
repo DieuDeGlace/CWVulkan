@@ -316,6 +316,7 @@ add_library(engine STATIC
     src/NativeWorldObjects.cpp
     src/NativeWorldClock.cpp
     src/CharacterPersistence.cpp
+    src/CharacterLoad.cpp
     src/ResidentEffects.cpp
     src/ResidentPass.cpp
     src/DrawnState.cpp
@@ -502,7 +503,7 @@ target_sources(EngineTests PRIVATE tests/CharacterCardTests.cpp)
 target_sources(EngineTests PRIVATE tests/TerrainBandTests.cpp tests/TerrainPublicationTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamPreparationTests.cpp)
 target_sources(EngineTests PRIVATE tests/GeneratorCacheTests.cpp)
-target_sources(EngineTests PRIVATE tests/NativeSourceStreamingTests.cpp tests/HostSourceTests.cpp tests/SourceReadinessTests.cpp tests/SourceStateTests.cpp tests/PhysicalSourceStateTests.cpp tests/NativePersistenceTests.cpp tests/WorldIdentifierStateTests.cpp tests/ViewedNetworkPhaseTests.cpp tests/WorldClockTests.cpp tests/ConnectionRoleTests.cpp tests/CharacterPersistenceTests.cpp)
+target_sources(EngineTests PRIVATE tests/NativeSourceStreamingTests.cpp tests/HostSourceTests.cpp tests/SourceReadinessTests.cpp tests/SourceStateTests.cpp tests/PhysicalSourceStateTests.cpp tests/NativePersistenceTests.cpp tests/WorldIdentifierStateTests.cpp tests/ViewedNetworkPhaseTests.cpp tests/WorldClockTests.cpp tests/ConnectionRoleTests.cpp tests/CharacterPersistenceTests.cpp tests/CharacterLoadTests.cpp)
 target_sources(engine PRIVATE src/StaticObjectScene.cpp)
 target_sources(EngineTests PRIVATE tests/StaticObjectSceneTests.cpp)
 target_sources(EngineTests PRIVATE tests/StaticObjectStreamingTests.cpp)

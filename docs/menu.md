@@ -160,6 +160,11 @@ The title is the ordinary world (the extracted or generated world, seed 123), wi
     confirmation, as in the game.
 - Select loads that character and plays. `slot` is written.
 
+Selecting a valid native save uses its raw fixed position and health, with saved
+orientation consumed and zeroed. The load applies the independently specified
+selective reset; read-only capture sessions use the same state path. Later World
+updates are separate from that boundary. See [character loading](saves.md).
+
 These are size requests, subject to the owner's widget minimum and bind constraints. Select/Create
 sits 20 physical pixels inside the selected card's right and bottom frame edges, using the current effective
 button dimensions. The delete toggle also uses its effective width; Delete Character sits 20 pixels

@@ -2845,3 +2845,26 @@ No native code, reconstruction source, owner content, private evidence or memory
 is published. Complete selected-character loading, process-mode/worker-start and
 thread/bank interleavings, equal-coordinate star edit identity, alternate writers,
 durability and final native gameplay/provenance acceptance remain open.
+
+## Selected-character reset and canonical inventory, 2026-11-08
+
+The isolated original-only author finalized/read back/held four independent
+load, selective-reset, default-core-copy and potion-count-width contracts without
+implementation, SDK, tests or owner-output access. The implementer read every
+complete artifact, froze its original-byte hash, and used owned engine source only.
+A finite field mask reuses owned default values without reconstructing the whole
+actor or its surviving containers. Raw saved fields stay separate from legacy
+presentation and later World updates. Bounded malformed/name handling and drawn
+position initialization are explicit safe engine adapters.
+
+Eighteen raw-load failures, two reset failures and one live-inventory ownership
+failure were reproduced before fixes. Count-width literals already passed on MSVC;
+defined unsigned wrap arithmetic removes language-level overflow ambiguity rather
+than claiming a new numeric mismatch. Shared canonical inventory ownership avoids
+per-frame snapshots and stale aliases; NPC byte records retain their separate path.
+All-five-target, required-owner CPU without skips, Vulkan and SDK checks pass.
+Earlier disposable load/read-only runtimes and the current zero-health runtime
+pass; remaining current-binary runtime/scene checks await Steam sign-in, with the
+blocked attempt retained. Complete caller/UI initialization, worker baseline/global
+mode/interleavings, alternate writers, durability and broad native acceptance
+remain open. No owner data, private evidence, memory or original code is published.

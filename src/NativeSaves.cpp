@@ -802,12 +802,13 @@ bool CharacterStore::setSlot(int index) { std::lock_guard lock(mutex); return db
 
 bool CharacterStore::load(int index, Character &out) const {
     std::lock_guard lock(mutex);
-    out = Character{};
     std::vector<uint8_t> packed;
     if (!db.read(characterKey(index), packed))
-        return false;
-    readCharacter(inflate(packed), out);
-    ensureLoadRecipe(out);
+        return false; // missing lookup does not reset the selected destination
+    Character decoded;
+    readCharacter(inflate(packed), decoded);
+    ensureLoadRecipe(decoded);
+    out = std::move(decoded);
     return true;
 }
 

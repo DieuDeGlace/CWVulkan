@@ -148,6 +148,11 @@ class SpawnedCreatures {
     // Caller holds the shared source World guard while invoking this owned source.
     std::function<bool(nativesaves::Character &)> playerSaveSource() const;
     void seedPlayerSave(std::shared_ptr<const nativesaves::Character>);
+    void setPlayerInventorySource(nativeai::InventorySource source) {
+        auto guard = sourceGuard();
+        player.side.inventorySource = std::move(source);
+        if (player.side.inventorySource) player.side.inventory.clear();
+    }
     void setPlayerProgress(int32_t level, int32_t experience);
     void setHudContextSource(bool namedWorld, const hudcontext::Tabs *inventory) {
         contextNamedWorld = namedWorld;
@@ -606,6 +611,7 @@ class SpawnedCreatures {
     Creature &player = playerStorage->creature; // shared owned local state, not a borrowed Actor
     bool &hasPlayer = playerStorage->ready;
     std::shared_ptr<const nativesaves::Character> playerSaveSeed;
+    bool savedPlacementPending = false;
     void applyPlayerSaveSeed();
     maphistory::History &regionHistory = playerStorage->history;
     bool nativePlayer = false;
