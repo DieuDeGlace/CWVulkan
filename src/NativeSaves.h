@@ -1,4 +1,5 @@
 #pragma once
+#include <mutex>
 // The game's own save files, characters.db and world.db (docs/specs/native-saves.md), read and
 // written 1:1 so CubeVulkan keeps its saves in the same format as Steam Cube World.
 //
@@ -234,9 +235,9 @@ class CharacterStore {
   public:
     bool open(const std::filesystem::path &file, std::string *why = nullptr);
     // Read-only (a run that must not write): saving, creating and deleting then fail.
-    bool openReadOnly(const std::filesystem::path &file, std::string *why = nullptr) { return db.openReadOnly(file, why); }
-    bool isOpen() const { return db.isOpen(); }
-    void close() { db.close(); }
+    bool openReadOnly(const std::filesystem::path &file, std::string *why = nullptr) { std::lock_guard lock(mutex); return db.openReadOnly(file, why); }
+    bool isOpen() const { std::lock_guard lock(mutex); return db.isOpen(); }
+    void close() { std::lock_guard lock(mutex); db.close(); }
     int count() const;               // "num"; 0 without it
     std::optional<int> slot() const; // "slot"
     bool setSlot(int index);
@@ -245,6 +246,8 @@ class CharacterStore {
     bool load(int index, Character &out) const;
     // Saves character `index` (§4.5): written, compressed and stored under its key.
     bool save(int index, const Character &c);
+    // Already serialized/compressed ownership boundary; no World data is borrowed.
+    bool savePacked(int index, const std::vector<uint8_t> &, const std::string *notes = nullptr);
     // Adds a character (§4.3 steps 2 to 4): "num" grows, the character is saved under the old
     // count and "slot" names it. Returns its index, -1 on failure.
     int create(const Character &c);
@@ -257,9 +260,10 @@ class CharacterStore {
     // with their character when one before it is deleted.
     bool readNotes(int index, std::string &text) const;
     bool writeNotes(int index, const std::string &text);
-    const BlobDatabase &database() const { return db; }
+    const BlobDatabase &database() const { return db; } // diagnostics require quiescent writers
 
   private:
+    mutable std::recursive_mutex mutex;
     BlobDatabase db;
 };
 

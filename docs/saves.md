@@ -76,8 +76,10 @@ To record another class:
 
 ## Picking a character in CubeVulkan
 
-- The title's character select lists the characters of `Save/characters.db` (see below). Each one moves with
-  the newest recording of its class and specialization, or else of its class, and wears its own look and gear.
+- The title's character select lists the characters of `Save/characters.db` (see below).
+  Native characters use the existing pose/control system and canonical equipment;
+  class recordings are optional playback data. An installation without character
+  recordings can still select and save its native characters.
 - `--play` skips the title and plays a recording:
   - `--character NAME`, or `[Game] Character=NAME` in `CubeVulkan.ini`.
   - NAME can be the character's name, its folder (`warrior-guardian`), a class (`warrior`) or a specialization
@@ -110,7 +112,8 @@ A character keeps:
 - its name and looks;
 - the recipes;
 - the cells it used, the places and lands it discovered, the finished and solved missions and their timers;
-- its flight points and map stars.
+- its flight points as unique signed (x,y) pairs in lexical order, and map stars
+  in signed group order with each group retaining list order and duplicates.
 
 Fields CubeVulkan does not model are kept as they were read.
 
@@ -122,8 +125,26 @@ with their character when one before it is deleted.
 **What the game does not save.** As the game does on load, the facing is not restored, and the death
 position and tombstone are not saved.
 
-**When it saves.** It saves every 60 s, when the engine closes, on Start Menu, and when a character is
-created.
+**When it saves.** Generated native sessions save from generation-worker completion
+after a strict unsigned interval greater than 60,000 ms. The early cycle sample
+becomes the next baseline after a returned write attempt. A nonempty viewed World
+name, the three selection/Start Menu/creation root values, and the running state
+admit periodic attempts. Other panels and F4 visibility do not add gates. Name or
+menu rejection leaves the interval overdue; returned backend failure still advances
+the sample baseline and is reported to the engine.
+
+The snapshot captures the numeric character index, canonical data and raw current
+actor fields under the shared World guard. Serialization, compression and the
+guarded database write happen after that entry is released. Generation and final
+writes retain owned data rather than borrowing the session's facade. Shutdown
+drains admitted generation outside World guards and attempts one worker-exit save
+with only those three root gates; the explicit close/Start Menu call stays separate.
+Creation retains its explicit write. Recording/captured compatibility paths retain
+their separate save adapter.
+
+The worker-start instant, native global process-mode branch and exact native
+thread/attribute-bank interleavings remain unverified. This is not a backend
+durability or complete character-loading parity claim.
 
 **The world.** `world.db`'s day and time drive the world's clock and the generator's world day. Its dead
 creatures stay dead.
@@ -136,8 +157,9 @@ replace the generated ones, the block changes are put back in order and the coun
 leaves memory (more than five zones from the player) its state is recorded (0x2d3e20), and `world.db` keeps it
 at the next save. So a chest opened (its active byte cleared, `Open` no longer offered, whichever character
 comes), an item given to an object, a door left open, a ground item taken and a block the abilities broke stay
-that way. When the engine closes, the zones still in memory are recorded too (the spec's open question 3 leaves
-open whether the game does). Not kept: items that creatures dropped (CubeVulkan's own loot, not the zone's
+that way. Generated sessions save the retained archive; shutdown does not first
+synthesize retirement for every still-loaded source. Captured playback keeps its
+separate archive adapter. Not kept: items that creatures dropped (CubeVulkan's own loot, not the zone's
 list) and the place counters, which nothing in CubeVulkan changes yet (they are kept as read).
 
 **Moving the old saves.** On the first normal run, CubeVulkan's old text saves move into `characters.db`, once:

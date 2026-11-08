@@ -1,5 +1,57 @@
 # Source review checkpoint — 2026-11-08
 
+## Character worker saving and native roster - 2026-11-08
+
+Native character saving now completes from the generation worker path. It uses
+the strict unsigned interval greater than 60,000 ms and retains the early cycle
+sample as the next baseline after a returned writer attempt. Periodic admission
+checks the viewed name, the three selection/Start Menu/creation root values in
+order, and running state. Rejected name/menu gates leave the interval overdue;
+returned backend failure or a negative captured slot still consumes the sample.
+Normal worker exit applies only the three root gates. Explicit writes stay separate.
+
+Snapshots own the captured numeric slot, canonical inventory/data, raw current
+actor fields, full equipment/buff records, current history and extension notes.
+The World guard ends before serialization/compression and guarded database entry.
+Database, selection and local-player storage survive their facades. No per-frame
+full character/World snapshot or dedicated save timer thread was introduced.
+Shutdown drains admitted source/mesh work outside World guards before final capture.
+
+Flight points now read/write as a unique signed lexical pair set. Map-star groups
+keep their signed order and each inner list retains order, duplicates and separate
+unknown values. Four reproduced regressions cover both flight codec directions,
+duplicate-star capture and native roster admission without a class recording.
+Native saved characters now remain selectable without recordings; native metadata,
+canonical equipment and existing rules supply their class and equipment. Available
+recordings retain the compatibility playback route.
+
+All five targets build. Focused/default required-owner CPU tests pass without
+skips, as do all Vulkan groups and extractor SDK independence. Real TaskPool and
+private-database tests cover carried time, ordered/exit gates, stop completion,
+World-lock release, raw field words, owned lifetimes and captured-slot stability.
+The disposable native runtime changed its numeric row at 63.031 seconds,
+well before its normal exit at 90.797 seconds. Two complete saved payloads
+verify canonical inventory, separate duplicate-star values, flight order and raw
+bookkeeping words. Its zero-health final actor is saved unchanged. The initial
+no-recording run made no numeric writes; that retained failure motivated the
+roster regression and is excluded from the successful save evidence.
+
+Fresh native and Alpha/Steam/Omega hidden offline/no-save scenes exit zero in
+43.438 and 81.954 seconds. Both images were inspected against the tested
+binary, with unchanged baseline settings, readiness rules and deadlines. These
+are bounded smoke checks; no native-pixel, performance or reliable cold-start
+claim follows. Owner saves, Mods and display were untouched.
+
+The isolated original-only author held the complete
+[worker/snapshot contract](specs/steam-character-save-worker-and-snapshots-20261108.md)
+and [root/order addendum](specs/steam-character-save-ui-gates-and-flight-point-order-20261108.md).
+The implementer read both entirely and froze their original-byte hashes privately.
+The generation-owner baseline instant, native global process-mode branch and
+attribute-bank/thread interleavings remain unverified. Equal-coordinate star
+deletion identity, complete selected-character loading/initialization, other
+writers/guards, backend durability and broad gameplay/multiplayer acceptance
+remain separate work. Alpha terrain/lighting and Omega water remain implemented.
+
 ## Connection role and fresh-source restoration - 2026-11-08
 
 The shared connection path now sets the viewed World's nonzero role after the

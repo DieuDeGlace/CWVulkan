@@ -54,6 +54,7 @@ class Gear {
     // `dir`: the character's recording folder (Saves.h).
     bool load(const std::filesystem::path &dir, std::string &error);
     int playerClass() const { return classType; }
+    void setPlayerClass(int value) { classType = value; }
     // Stats with the currently equipped items (the game's totals at survey time
     // when nothing has been changed).
     Stats stats() const;

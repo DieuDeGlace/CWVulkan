@@ -8,6 +8,19 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Native character saves complete after generation with strict unsigned
+  carried samples above60,000ms, ordered three-root visibility gates, owned captured
+  slot/data and serialization outside the World guard. Exit waits admitted work;
+  explicit writes stay separate. Flight points use signed lexical unique order,
+  duplicate stars keep individual values, and native roster/equipment no longer
+  depend on a recording. Four reproduced regressions, real-worker/private-file
+  tests, a periodic writable native run well before exit, full required-owner CPU
+  without skips, every Vulkan group, SDK and inspected native/Alpha scenes pass.
+  Complete loading/initialization, native process-mode/baseline/interleavings,
+  alternate writers, durability and broader acceptance remain open. See
+  [the checkpoint](release-status.md#character-worker-saving-and-native-roster---2026-11-08)
+  and [save behavior](saves.md).
+
 - [x] Shared connect assigns viewed role1 after Join/timer/selected-peer publication
   for local, remote and Leave-fallback routes. Live guarded role changes control
   fresh-source restoration without clearing retained/live values; retirement

@@ -145,6 +145,10 @@ class SpawnedCreatures {
     int32_t day() const { return dayCount; }
     float timeOfDay() const { return dayMs; }
     float elapsedWorldTime() const { return elapsedWorldMs; }
+    // Caller holds the shared source World guard while invoking this owned source.
+    std::function<bool(nativesaves::Character &)> playerSaveSource() const;
+    void seedPlayerSave(std::shared_ptr<const nativesaves::Character>);
+    void setPlayerProgress(int32_t level, int32_t experience);
     void setHudContextSource(bool namedWorld, const hudcontext::Tabs *inventory) {
         contextNamedWorld = namedWorld;
         contextInventory = inventory;
@@ -593,9 +597,17 @@ class SpawnedCreatures {
     std::map<int64_t, RoadTrip> trips; // by the first id of the pack's group
     void startTrips(std::vector<Creature> &list);
     void advanceTrips(ExtractedWorld &ew, double dtMs);
-    Creature player; // the player's record for the AI
-    bool hasPlayer = false;
-    maphistory::History regionHistory;
+    struct PlayerStorage {
+        Creature creature;
+        bool ready = false;
+        maphistory::History history;
+    };
+    std::shared_ptr<PlayerStorage> playerStorage = std::make_shared<PlayerStorage>();
+    Creature &player = playerStorage->creature; // shared owned local state, not a borrowed Actor
+    bool &hasPlayer = playerStorage->ready;
+    std::shared_ptr<const nativesaves::Character> playerSaveSeed;
+    void applyPlayerSaveSeed();
+    maphistory::History &regionHistory = playerStorage->history;
     bool nativePlayer = false;
     size_t movesStarted = 0, strikesLanded = 0, playerPartsDrawn = 0, shouts = 0, summoned = 0;
     // Moves the creatures the interactions made during a frame (shadow clones, water

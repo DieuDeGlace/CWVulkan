@@ -37,6 +37,7 @@
 #include "GameInput.h"
 #include "GameOptions.h"
 #include "NativeProgress.h"
+#include "CharacterPersistence.h"
 #include "ZoneStates.h"
 #include "Gear.h"
 #include "Saves.h"
@@ -1002,7 +1003,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     }
 
     // The character's progress (Save/characters.db, the world's in Save/world.db).
-    SaveGame saveGame;
+    auto progressOwner = std::make_shared<SaveGame>();
+    SaveGame &saveGame = *progressOwner;
+    bool workerCharacterSaving = false;
     const bool saving = chosen && saves.isOpen() && savesWritable && std::isnan(startX) && !serverMode;
     // A capture with --save-folder loads that folder's character too (read only: it writes
     // nothing back), so a test save's progress shows in the screenshot.
@@ -1172,6 +1175,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         } else
             logLine("Character: none (" + why + ")");
     }
+    if (chosen && chosen->native) {
+        character.name = chosen->name;
+        character.race = chosen->race;
+        character.level = chosen->level;
+        character.specialization = chosen->specialization;
+    }
     // Creatures and NPCs recorded from the game (positions and poses replayed).
     CreatureRecordings creatures;
     std::vector<std::vector<int>> creatureModels;
@@ -1329,7 +1338,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     };
     progression::Mode mode = readMode();
     const int recordedLevel = std::max(1, character.level);
-    int playerLevel = saveGame.level > 0 ? saveGame.level : recordedLevel;
+    saveGame.level = saveGame.level > 0 ? saveGame.level : recordedLevel;
+    int &playerLevel = saveGame.level;
     auto setSpecializationMetadata = [&](int specialization) {
         character.specialization = specialization;
         saveGame.specialization = specialization;
@@ -1337,10 +1347,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (&entry == chosen) { entry.specialization = specialization; break; }
     };
     if (saveGame.specialization >= 0) setSpecializationMetadata(saveGame.specialization);
-    int playerXp = saveGame.xp, legacyGold = saveGame.gold;
+    int &playerXp = saveGame.xp;
+    int legacyGold = saveGame.gold;
     auto *nativeInventory = saveGame.nativeInventory ? &*saveGame.nativeInventory : nullptr;
     spawned.setHudContextSource(!worldName.empty(), nativeInventory ? &nativeInventory->inventory.tabs : nullptr);
     saveGame.inventoryAuthoritative = nativeInventory != nullptr;
+    if (chosen && chosen->native && nativeInventory && nativePlayer) {
+        gear.setPlayerClass(chosen->classType);
+        haveGear = true; // canonical native equipment and rules need no survey recording
+    }
     int &playerGold = nativeInventory ? nativeInventory->inventory.gold : legacyGold;
     if (nativeInventory)
         logLine("Inventory: canonical " + std::to_string(nativeInventory->inventory.tabs.size()) + " tabs loaded; saves retain live slots");
@@ -2293,7 +2308,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // gives them (its objective_/solved_ lines are unused; docs/dialogue.md). Off
     // unless [Quests] CubeVulkanQuests=1.
     const bool inventedQuests = config.flag("Quests", "CubeVulkanQuests", false);
-    std::vector<SaveGame::Quest> quests = saveGame.quests;
+    std::vector<SaveGame::Quest> &quests = saveGame.quests;
     // Proper names. The game makes its own in code (Lalan, Telgor, Ikolon, Ardara);
     // these are CubeVulkan's, in that style, fixed for each person or place.
     auto properName = [](uint64_t seed, int syllables) {
@@ -3166,6 +3181,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     auto saveProgress = [&]() -> std::string {
         if (!saving)
             return "";
+        if (workerCharacterSaving) {
+            spawned.setPlayerProgress(playerLevel, playerXp);
+            return world.characterSaveSession()->force()
+                ? "character " + std::to_string(saves.slot()) + " of " + utf8(saves.folder() / "characters.db") : "";
+        }
         saveGame.world = worldName;
         saveGame.hasPosition = true;
         saveGame.position = player.position;
@@ -3441,6 +3461,45 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         else if (openSystemMenu)
             menus.toggleSystemMenu();
     }
+    auto characterSaveGates = std::make_shared<std::array<std::atomic<int32_t>, 3>>();
+    auto publishCharacterSaveGates = [&] {
+        const auto values = menus.characterSaveVisibility();
+        for (size_t i = 0; i < values.size(); ++i)
+            (*characterSaveGates)[i].store(values[i], std::memory_order_release);
+    };
+    publishCharacterSaveGates();
+    if (saving && nativePlayer && nativeInventory && spawned.physicalSourceState() && chosen && chosen->native) {
+        auto base = std::make_shared<nativesaves::Character>();
+        if (saves.store().load(saves.slot(), *base)) {
+            spawned.seedPlayerSave(base);
+            auto states = extractedWorld.sourceStateStore();
+            auto actor = spawned.playerSaveSource();
+            auto selected = saves.selection();
+            auto store = saves.sharedStore();
+            characterpersistence::Session::Access access;
+            access.named = [name = gameWorldName] { return !name.empty(); };
+            access.visibility = [gates = characterSaveGates](size_t i) {
+                return (*gates)[i].load(std::memory_order_acquire);
+            };
+            access.capture = [states, actor, selected, base, progressOwner]() -> std::optional<characterpersistence::Snapshot> {
+                auto guard = states->lock();
+                const int32_t slot = *selected;
+                if (slot < 0) return {};
+                characterpersistence::Snapshot snapshot;
+                snapshot.slot = slot;
+                snapshot.character = *base;
+                if (!nativeprogress::capturePlayerData(*progressOwner, snapshot.character, snapshot.notes) ||
+                    !actor(snapshot.character)) return {};
+                return snapshot; // the World guard leaves before serialization and database entry
+            };
+            access.write = [store](characterpersistence::Snapshot &&snapshot) {
+                const auto packed = nativesaves::compress(nativesaves::writeCharacter(snapshot.character));
+                return store->savePacked(snapshot.slot, packed, &snapshot.notes);
+            };
+            world.characterSaveSession()->bind(std::move(access));
+            workerCharacterSaving = true;
+        }
+    }
     // The game's controls (controls.cfg), read each frame.
     GameInput gameInput;
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
@@ -3694,7 +3753,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         input.gamepadSampled = false;
         input.pointerSampled = false;
         glfwPollEvents();
-        if (std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
+        if (!workerCharacterSaving && std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
             saveProgress();
             lastSave = std::chrono::steady_clock::now();
         }
@@ -3990,7 +4049,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     } else {
                         playerGold -= price;
                         boughtFlights.insert(selectedFlightPoint);
-                        saveGame.flightPoints.push_back(selectedFlightPoint);
+                        saveGame.flightPoints.assign(boughtFlights.begin(), boughtFlights.end());
                         audio.playInterface(soundrules::soundid::DROP_COIN);
                         logLine("Flight: bought the flight point at " + std::to_string(selectedFlightPoint[0]) + " " +
                                 std::to_string(selectedFlightPoint[1]) + " for " + std::to_string(price) + " gold");
@@ -6426,6 +6485,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // Zones whose blocks changed are meshed again.
         for (const auto &[ax, ay] : extractedWorld.takeChangedZones())
             world.refreshZone(ax - extractedWorld.originZoneX(), ay - extractedWorld.originZoneY());
+        publishCharacterSaveGates();
         if (!serverMode) // a dedicated server draws nothing, so it streams no meshes
             world.update(player.position);
 
@@ -6976,6 +7036,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     logLine("Events: " + reply);
                 }
             }
+            spawned.setPlayerProgress(playerLevel, playerXp);
             // Native late dispatch: current3/4/6/8 effects precede the camera;
             // newly received7 lists wait for a later frame's earlier consume pass.
             session.dispatch(nowMs);
@@ -8510,6 +8571,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (spawned.playerBuff(0x13, strength, remainingMs))
                     lighting.effect13RemainingMs = remainingMs;
             }
+            publishCharacterSaveGates();
             sourceStateScope.unlock(); // draw uses immutable meshes and copied source inputs
             renderer.frame(camera, lighting, player.position, time, opaque, water);
         }
@@ -8673,6 +8735,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     for (auto &name : world.missingModels)
         logLine("Missing sprite: " + name + ".cub");
     mods.shutdown();
+    spawned.setPlayerProgress(playerLevel, playerXp);
+    publishCharacterSaveGates();
+    world.finishCharacterSaves();
+    for (const auto &error : world.characterSaveSession()->takeErrors()) logLine("Save: " + error);
     if (auto *host = session.hostSide()) host->stopSources(); // final loader capture, before reader teardown
     for (const auto &error : hostWorld.takeSourceSaveErrors()) logLine("Save: " + error);
     if (returnToTitle)

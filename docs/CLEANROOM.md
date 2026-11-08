@@ -2822,3 +2822,26 @@ changed no engine predicate or expected block value. Complete initial database
 configuration, socket lifecycle, alternate writers/guards, rekey collision policy
 and broad runtime acceptance remain separate. No original code, owner content,
 private evidence or memory is published.
+
+## Character generation-worker saves, 2026-11-08
+
+The unexposed original-only author finalized/read back/held separate character
+writer/worker and root/collection-order prose. The implementer read both complete
+artifacts, froze their original-byte hashes privately, and used owned engine code
+only. Captured slot/data and player/database ownership are explicit safe engine
+policies; no unused World-map copies or native temporary allocation shapes were
+reproduced. The three root booleans/atomic publication bridge and generation-owner
+baseline are adapters, not claims of native attribute-bank or worker timing identity.
+
+Four reproduced behavior/admission failures, real TaskPool and temporary database
+tests, the full required-owner CPU suite without skips, all Vulkan groups and SDK
+independence pass. A disposable writable native run proves a numeric row change
+well before exit; complete blob checks retain native collections and raw values.
+The first no-recording attempt is retained and excluded from that proof. Native
+and Alpha/Omega smoke images pass with unchanged settings/deadlines. Optional
+recordings no longer gate native roster admission or canonical equipment.
+
+No native code, reconstruction source, owner content, private evidence or memory
+is published. Complete selected-character loading, process-mode/worker-start and
+thread/bank interleavings, equal-coordinate star edit identity, alternate writers,
+durability and final native gameplay/provenance acceptance remain open.

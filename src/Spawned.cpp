@@ -34,13 +34,15 @@
 #include <set>
 #include <sstream>
 #include <unordered_map>
+#include <type_traits>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace {
 constexpr int NEAR_ZONES = 4; // the game makes creatures within 256 blocks of a player (0x2e17d0)
 
-template <class Actor, class Zones> std::vector<Actor *> registeredCreatures(Actor *local, Zones &zones) {
-    std::vector<Actor *> ordered;
+template <class Actor, class Zones> auto registeredCreatures(Actor *local, Zones &zones) {
+    using Current = std::conditional_t<std::is_const_v<Zones>, const Actor, Actor>;
+    std::vector<Current *> ordered;
     size_t count = local ? 1 : 0;
     for (const auto &[key, list] : zones)
         count += list.size();
@@ -1758,6 +1760,54 @@ void SpawnedCreatures::advanceTrips(ExtractedWorld &ew, double dtMs) {
     }
 }
 
+void SpawnedCreatures::applyPlayerSaveSeed() {
+    if (!hasPlayer || !playerSaveSeed) return;
+    const auto &seed = *playerSaveSeed;
+    auto &r = player.record;
+    std::memset(r.data() + 0x958, 0, 16);
+    std::memcpy(r.data() + 0x958, seed.name.data(), std::min(seed.name.size(), size_t(15)));
+    put<float>(r, 0x9a4, seed.field9a4);
+    put<float>(r, 0x9a8, seed.field9a8);
+    put<int32_t>(r, 0x148, seed.experience);
+    std::memcpy(r.data() + 0x1d0, seed.homeCell.data(), 8);
+    player.side.buffs.clear();
+    for (const auto &buff : seed.buffs) player.side.buffs.push_back(buff.bytes);
+}
+void SpawnedCreatures::seedPlayerSave(std::shared_ptr<const nativesaves::Character> seed) {
+    auto guard = sourceGuard();
+    playerSaveSeed = std::move(seed);
+    applyPlayerSaveSeed();
+}
+void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
+    auto guard = sourceGuard();
+    if (nativePlayer && hasPlayer) {
+        put<int32_t>(player.record, 0x144, level);
+        put<int32_t>(player.record, 0x148, experience);
+    }
+}
+std::function<bool(nativesaves::Character &)> SpawnedCreatures::playerSaveSource() const {
+    return [owner = playerStorage](nativesaves::Character &out) {
+        if (!owner->ready) return false;
+        const auto &r = owner->creature.record;
+        std::memcpy(out.position.data(), r.data() + 0x10, 24);
+        std::memcpy(out.orientation.data(), r.data() + 0x28, 12);
+        out.health = get<float>(r, 0x180);
+        out.level = get<int32_t>(r, 0x144);
+        out.experience = get<int32_t>(r, 0x148);
+        out.classType = r[0x14c]; out.specialization = r[0x14d];
+        out.field9a4 = get<float>(r, 0x9a4); out.field9a8 = get<float>(r, 0x9a8);
+        std::memcpy(out.equipment.data(), r.data() + 0x278, 11 * nativesaves::ITEM_SIZE);
+        const auto first = r.begin() + 0x958, last = first + 16;
+        out.name.assign(first, std::find(first, last, uint8_t(0)));
+        std::memcpy(out.homeCell.data(), r.data() + 0x1d0, 8);
+        out.buffs.clear();
+        out.buffs.reserve(owner->creature.side.buffs.size());
+        for (const auto &buff : owner->creature.side.buffs) out.buffs.push_back({buff});
+        out.regionHistory = owner->history.snapshot();
+        return true;
+    };
+}
+
 void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, float headingRad, glm::vec3 velocity,
                                  float health, int level, bool onGround) {
     auto sourceStateScope = ew.lockSourceState();
@@ -1775,6 +1825,7 @@ void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, floa
         put<uint32_t>(r, 0xbcc, 0);
         registerCreature(player);
         hasPlayer = true;
+        applyPlayerSaveSeed();
         if (!gearRecord.empty())
             setPlayerGear(gearRecord);
     }

@@ -272,6 +272,9 @@ class Session {
     void toggleSystemMenu() { systemShown = !systemShown; }
     void toggleMultiplayerMenu();
     bool interfaceVisible() const { return hud.interfaceShown(); }
+    std::array<int32_t, 3> characterSaveVisibility() const {
+        return {charactersShown ? 1 : 0, (titleShown || systemShown) ? 1 : 0, creationShown ? 1 : 0};
+    }
     Services &services() { return s; }
 
   private:
@@ -2154,6 +2157,9 @@ void InGameMenus::draw(std::vector<OverlayVertex> &out) {
 }
 bool InGameMenus::interfaceShown() const {
     return session->interfaceVisible();
+}
+std::array<int32_t, 3> InGameMenus::characterSaveVisibility() const {
+    return session->characterSaveVisibility();
 }
 
 } // namespace frontend

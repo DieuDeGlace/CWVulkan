@@ -195,7 +195,7 @@ void characterRoundTrip() {
     SAVE_CHECK(back.looks.people() == 1 && back.looks.sex() == 1 && back.looks.face() == 3 && back.looks.haircut() == 5);
     SAVE_CHECK(back.looks.hairColour()[1] == 200);
     SAVE_CHECK(back.inventory.size() == 6 && back.inventory[0].size() == 2 && back.inventory[2][0].count == 5);
-    SAVE_CHECK(back.usedCells == c.usedCells && back.missionTimers == c.missionTimers && back.flightPoints == c.flightPoints);
+    SAVE_CHECK(back.usedCells == c.usedCells && back.missionTimers == c.missionTimers && (back.flightPoints == std::vector<Cell>{{-30, 40}, {1000, 2000}}));
     SAVE_CHECK(back.homeCell == c.homeCell && back.buffs.size() == 1 && back.purchases == c.purchases);
     SAVE_CHECK(back.stars.size() == 2 && back.regionValues == c.regionValues);
     // The layout of §9: the equipment starts at 0x3e (slot 2, the chest, at 0x3e + 2 * 0xa0)
@@ -298,7 +298,7 @@ void readingQuirks() {
     Character nine;
     readCharacter(v9, nine);
     SAVE_CHECK(nine.version == 9);
-    SAVE_CHECK(nine.flightPoints == c.flightPoints);
+    SAVE_CHECK((nine.flightPoints == std::vector<Cell>{{-30, 40}, {1000, 2000}}));
     SAVE_CHECK(nine.homeCell == c.homeCell);
     SAVE_CHECK(nine.purchases == c.purchases);
 

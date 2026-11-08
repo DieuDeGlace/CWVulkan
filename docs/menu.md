@@ -147,7 +147,7 @@ The title is the ordinary world (the extracted or generated world, seed 123), wi
   Pointer polling and frame decay retain their separate clocks. Mouse-wheel scrolling is not
   added to this list.
 - An entry shows:
-  - the character's creature (its class's recording wearing its look), drawn at (100, 110) in the entry, turned
+  - the character's creature using native pose and its own look (with optional class playback recordings), drawn at (100, 110) in the entry, turned
     (−95°, 0°, 45°). While the mouse is over the entry it turns 50° a second and walks on the spot; otherwise it
     eases back to rest;
   - the name in (0.25, 1, 1);

@@ -1,5 +1,6 @@
 #include "World.h"
 #include "TaskPool.h"
+#include "CharacterPersistence.h"
 #include "WaterLilies.h"
 #include "AlphaLight.h"
 #include "AlphaLook.h"
@@ -58,6 +59,7 @@ SkyColumn skyColumnAt(int32_t x, int32_t y) {
 
 World::World(const Terrain &t, const Assets &a, Renderer &r, int view, ExtractedWorld *ex, bool clientView)
     : land(t), assets(a), renderer(r), viewZones(view), extracted(ex) {
+    characterPersistence = std::make_shared<characterpersistence::Session>();
     renderer.resetSceneRange();
     clientSources = clientView && extracted && extracted->generated() && renderStyle() == RenderStyle::Steam;
     sourcePending = clientSources;
@@ -148,7 +150,24 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
     loadSkyModels();
 }
 
+void World::finishCharacterSaves() {
+    if (characterSavesStopped) return;
+    characterSavesStopped = true;
+    characterPersistence->requestStop();
+    if (!characterPersistence->configured()) return;
+    // Drain admitted generation even when no periodic interval was reserved.
+    // Final capture must not overtake a still-running lane in a multi-worker pool.
+    for (auto &job : sourceJobs) job.wait();
+    for (auto &[key, job] : jobs) job.result.wait();
+    // Reuse generation lanes; no dedicated save timer/thread. Pending captures
+    // can finish because this caller does not hold the source World guard.
+    if (!nativePool) nativePool = std::make_unique<TaskPool>(1);
+    auto finished = nativePool->submit([saves = characterPersistence] { saves->finish(); });
+    finished.get();
+}
+
 World::~World() {
+    finishCharacterSaves();
     if (beamMesh)
         renderer.release(beamMesh);
     renderer.setWorldProbe({});
@@ -797,7 +816,7 @@ void World::update(glm::vec3 focus) {
         return inWindow(key, cx, cy) || (anchor && inWindow(key, physicalCx, physicalCy));
     };
     const bool nativePreparation = extracted && renderStyle() == RenderStyle::Steam;
-    const bool batchBusy = nativePreparation && !nativeOrder.empty() && !nativePool->idle();
+    const bool batchBusy = nativePreparation && nativePool && !nativePool->idle();
     std::vector<Key> finished;
     if (nativePreparation) {
         if (!batchBusy)
@@ -903,6 +922,8 @@ void World::update(glm::vec3 focus) {
     // publication. Object/model updates above keep their independent frame path.
     if (batchBusy)
         return;
+    auto saveCycle = characterPersistence->beginCycle(); // timer sample before admitted generation
+    auto saveBatch = saveCycle ? std::make_shared<characterpersistence::Batch>(std::move(saveCycle)) : nullptr;
     if (clientSources) {
         for (int i = 0; i < 8; ++i) {
             auto physical = streaming.physical;
@@ -992,7 +1013,9 @@ void World::update(glm::vec3 focus) {
             ExtractedWorld *ex = extracted;
             auto publication = std::make_shared<scenerange::CachePublication>();
             pendingBounds[k] = publication;
-            auto generate = [this, ex, k, alphaLook, publication] {
+            if (saveBatch) saveBatch->add();
+            auto generate = [this, ex, k, alphaLook, publication, saveBatch] {
+                characterpersistence::JobDone completed{saveBatch};
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
                 g.meshSucceeded = ex->mesh(k.first, k.second, g.opaque, g.water,
@@ -1019,7 +1042,9 @@ void World::update(glm::vec3 focus) {
             }
             continue;
         }
-        jobs[k].result = std::async(std::launch::async, [this, t, k, alphaLook] {
+        if (saveBatch) saveBatch->add();
+        jobs[k].result = std::async(std::launch::async, [this, t, k, alphaLook, saveBatch] {
+            characterpersistence::JobDone completed{saveBatch};
             Generated g;
             ZoneData data = t->generate(k.first, k.second);
             t->mesh(data, g.opaque, g.water);
@@ -1039,6 +1064,10 @@ void World::update(glm::vec3 focus) {
                 lightScenery(g.scenery);
             return g;
         });
+    }
+    if (saveBatch && saveBatch->seal()) {
+        if (!nativePool) nativePool = std::make_unique<TaskPool>(1);
+        nativePool->submit([saveBatch] { saveBatch->complete(); });
     }
 }
 

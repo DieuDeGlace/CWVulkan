@@ -15,6 +15,7 @@
 #include <cwctype>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <fstream>
 #include <sstream>
 
@@ -219,10 +220,10 @@ bool entryFor(const Character &c, int slot, const std::vector<CharacterEntry> &r
         if (!r.created && !r.native && r.classType == c.classType &&
             (!base || (r.specialization == c.specialization && base->specialization != c.specialization)))
             base = &r;
-    if (!base)
-        return false;
+    // Native pose/control uses the saved character directly. A recording is
+    // optional compatibility playback data, not roster admission.
     out = CharacterEntry{};
-    out.dir = base->dir;
+    if (base) out.dir = base->dir;
     out.name = c.name;
     out.classType = c.classType;
     out.specialization = c.specialization;
@@ -485,6 +486,51 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
     return s;
 }
 
+namespace {
+void captureProgressCollections(const SaveGame &s, Character &c, std::string &notes, bool includeHistory) {
+    c.usedCells = std::set<nativesaves::Cell>(s.usedCells.begin(), s.usedCells.end());
+    c.discoveredZones = std::set<nativesaves::Cell>(s.discoveredPlaces.begin(), s.discoveredPlaces.end());
+    c.discoveredLands = std::set<nativesaves::Cell>(s.discoveredAreas.begin(), s.discoveredAreas.end());
+    c.flightPoints = s.flightPoints;
+    if (includeHistory && s.regionHistory)
+        c.regionHistory = *s.regionHistory;
+    c.finishedMissions = s.finishedMissions;
+    c.setC8 = s.solvedMissions;
+    c.missionTimers = s.missionTimers;
+    c.purchases = s.purchases;
+    c.map88.clear();
+    for (const auto &block : s.perPlayerTaken)
+        c.map88[{block[0], block[1]}] = block[2];
+    c.regionValues = s.regionCounters;
+    // Match old records by coordinate and occurrence. Equal coordinates can
+    // carry different unknown values, so each original list entry is consumed once.
+    std::map<std::array<int32_t, 3>, std::deque<int32_t>> oldValues;
+    for (const auto &[group, list] : c.stars)
+        for (const auto &star : list)
+            oldValues[{star.x, star.y, star.z}].push_back(star.unknown);
+    std::map<nativesaves::Cell, std::vector<nativesaves::Star>> stars;
+    for (const auto &t : s.treasures) {
+        nativesaves::Star star{0, t[0], t[1], t[2]};
+        const auto old = oldValues.find(t);
+        if (old != oldValues.end() && !old->second.empty()) {
+            star.unknown = old->second.front();
+            old->second.pop_front();
+        }
+        stars[nativesaves::starGroup(t[0], t[1])].push_back(star);
+    }
+    c.stars = std::move(stars);
+    notes = notesOf(s);
+}
+}
+
+bool capturePlayerData(const SaveGame &s, Character &c, std::string &notes) {
+    if (!s.inventoryAuthoritative || !s.nativeInventory) return false;
+    s.nativeInventory->writeCharacter(c);
+    if (s.recipes) c.recipes = *s.recipes;
+    captureProgressCollections(s, c, notes, false);
+    return true;
+}
+
 void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame &frame, Character &c, std::string &notes) {
     if (s.hasPosition)
         c.position = gamePosition(s.position, frame);
@@ -538,31 +584,7 @@ void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame
         c.equipment = equipment;
         c.inventory = std::move(inventory);
     }
-    c.usedCells = std::set<nativesaves::Cell>(s.usedCells.begin(), s.usedCells.end());
-    c.discoveredZones = std::set<nativesaves::Cell>(s.discoveredPlaces.begin(), s.discoveredPlaces.end());
-    c.discoveredLands = std::set<nativesaves::Cell>(s.discoveredAreas.begin(), s.discoveredAreas.end());
-    c.flightPoints = s.flightPoints;
-    if (s.regionHistory)
-        c.regionHistory = *s.regionHistory;
-    c.finishedMissions = s.finishedMissions;
-    c.setC8 = s.solvedMissions;
-    c.missionTimers = s.missionTimers;
-    c.purchases = s.purchases;
-    c.map88.clear();
-    for (const auto &block : s.perPlayerTaken)
-        c.map88[{block[0], block[1]}] = block[2];
-    c.regionValues = s.regionCounters;
-    std::map<nativesaves::Cell, std::vector<nativesaves::Star>> stars;
-    for (const auto &t : s.treasures) {
-        nativesaves::Star star{0, t[0], t[1], t[2]};
-        for (const auto &[group, list] : c.stars) // (the value not established is kept)
-            for (const nativesaves::Star &old : list)
-                if (old.x == t[0] && old.y == t[1] && old.z == t[2])
-                    star.unknown = old.unknown;
-        stars[nativesaves::starGroup(t[0], t[1])].push_back(star);
-    }
-    c.stars = std::move(stars);
-    notes = notesOf(s);
+    captureProgressCollections(s, c, notes, true);
 }
 
 // --- The old text saves ----------------------------------------------------------------------
@@ -743,7 +765,7 @@ bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const 
             if (db.openReadOnly(target / "world.db") && db.read("state", state))
                 nativesaves::readWorld(state, world_);
         }
-        return store_.openReadOnly(target / "characters.db", &why);
+        return store_->openReadOnly(target / "characters.db", &why);
     }
     fs::create_directories(target, ec);
     if (!profile.empty()) {
@@ -758,7 +780,7 @@ bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const 
         for (std::string line; std::getline(lines, line);)
             log("Saves: import " + line);
     }
-    if (!store_.open(target / "characters.db", &why)) {
+    if (!store_->open(target / "characters.db", &why)) {
         log("Saves: " + why);
         return false;
     }
@@ -770,10 +792,10 @@ bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const 
 
 std::vector<CharacterEntry> ProgressFile::characters(const std::vector<CharacterEntry> &recorded, const SpriteTable &sprites) {
     std::vector<CharacterEntry> out = recorded;
-    for (int i = 0; i < store_.count(); i++) {
+    for (int i = 0; i < store_->count(); i++) {
         Character c;
         CharacterEntry e;
-        if (store_.load(i, c) && entryFor(c, i, recorded, sprites, e))
+        if (store_->load(i, c) && entryFor(c, i, recorded, sprites, e))
             out.push_back(e);
     }
     return out;
@@ -784,9 +806,9 @@ void ProgressFile::play(const CharacterEntry &entry) {
     slot_ = entry.native ? entry.slot : -1;
     if (entry.native)
         return;
-    for (int i = 0; i < store_.count() && slot_ < 0; i++) { // a recorded character's own progress
+    for (int i = 0; i < store_->count() && slot_ < 0; i++) { // a recorded character's own progress
         Character c;
-        if (store_.load(i, c) && c.classType == entry.classType && c.name == entry.name)
+        if (store_->load(i, c) && c.classType == entry.classType && c.name == entry.name)
             slot_ = i;
     }
 }
@@ -801,10 +823,10 @@ bool ProgressFile::load(SaveGame &out, const Frame &frame, const std::string &wo
     if (slot_ < 0)
         return false;
     Character c;
-    if (!store_.load(slot_, c))
+    if (!store_->load(slot_, c))
         return false;
     std::string notes;
-    store_.readNotes(slot_, notes);
+    store_->readNotes(slot_, notes);
     SaveGame s = toProgress(c, notes, frame, itemSprite);
     s.day = out.day, s.hour = out.hour, s.world = worldName, s.killed = out.killed;
     out = std::move(s);
@@ -812,7 +834,7 @@ bool ProgressFile::load(SaveGame &out, const Frame &frame, const std::string &wo
 }
 
 bool ProgressFile::saveWorld(int32_t day, float timeMs, const std::set<int64_t> &dead) {
-    if (!store_.isOpen())
+    if (!store_->isOpen())
         return false;
     world_.day = std::max(world_.day, day);
     world_.timeMs = timeMs;
@@ -821,10 +843,10 @@ bool ProgressFile::saveWorld(int32_t day, float timeMs, const std::set<int64_t> 
 }
 
 bool ProgressFile::save(const SaveGame &s, const Gear *gear, float health, const Frame &frame, bool world) {
-    if (!store_.isOpen())
+    if (!store_->isOpen())
         return false;
     Character c;
-    if (slot_ < 0 || !store_.load(slot_, c)) { // a recorded character's first save
+    if (slot_ < 0 || !store_->load(slot_, c)) { // a recorded character's first save
         c = Character{};
         c.name = playing_.name;
         c.classType = (uint8_t)playing_.classType;
@@ -835,12 +857,12 @@ bool ProgressFile::save(const SaveGame &s, const Gear *gear, float health, const
     fromProgress(s, gear, health, frame, c, notes);
     bool ok;
     if (slot_ < 0) {
-        slot_ = store_.create(c);
+        slot_ = store_->create(c);
         ok = slot_ >= 0;
     } else
-        ok = store_.save(slot_, c);
+        ok = store_->save(slot_, c);
     if (ok)
-        store_.writeNotes(slot_, notes);
+        store_->writeNotes(slot_, notes);
     if (!world)
         return ok;
     world_.day = std::max(world_.day, s.day);

@@ -16,6 +16,7 @@
 #include <memory>
 
 class TaskPool;
+namespace characterpersistence { class Session; }
 class Assets;
 struct CubModel;
 namespace proceduralitem {
@@ -37,6 +38,8 @@ class World {
     ~World();
     // Starts and finishes zone jobs around `focus`; drops zones out of range.
     void update(glm::vec3 focus);
+    std::shared_ptr<characterpersistence::Session> characterSaveSession() const { return characterPersistence; }
+    void finishCharacterSaves(); // outside World guards, before releasing live session inputs
     void collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const;
     using ObjectProvider = std::function<std::optional<objectvisual::State>(int zx, int zy, const objectvisual::Key &)>;
     void setObjectProvider(ObjectProvider provider) { objectProvider = std::move(provider); }
@@ -215,6 +218,8 @@ class World {
     std::unique_ptr<TaskPool> sourcePool;
     std::vector<std::future<bool>> sourceJobs;
     void updateSources(const scenerange::Player &player);
+    std::shared_ptr<characterpersistence::Session> characterPersistence;
+    bool characterSavesStopped = false;
     std::unique_ptr<TaskPool> nativePool;
     std::vector<Key> nativeOrder;
     int cpuPerformance = 1, sampledCpuPerformance = 1;

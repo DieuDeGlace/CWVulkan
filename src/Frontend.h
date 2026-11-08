@@ -454,6 +454,8 @@ class InGameMenus {
     void draw(std::vector<OverlayVertex> &out);
     // F4 hides the whole interface.
     bool interfaceShown() const;
+    // Own root values, independent of F4/effective inherited visibility.
+    std::array<int32_t, 3> characterSaveVisibility() const;
 
   private:
     std::unique_ptr<Session> session;

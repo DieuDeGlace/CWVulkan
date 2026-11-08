@@ -202,6 +202,11 @@ void readCells(Reader &r, std::vector<Cell> &out) {
         out.push_back(c);
     }
 }
+// D28 is a signed lexicographic set; history uses the separate ordered-list path.
+void normalizeFlightPoints(std::vector<Cell> &cells) {
+    std::sort(cells.begin(), cells.end());
+    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+}
 void writeCells(Writer &w, const std::vector<Cell> &cells) {
     w.count(cells.size());
     for (const Cell &c : cells)
@@ -336,6 +341,7 @@ void readCharacter(const std::vector<uint8_t> &blob, Character &c) {
     r.value(c.worldSeed);
     r.text(c.worldName);
     readCells(r, c.flightPoints);
+    normalizeFlightPoints(c.flightPoints);
     r.cell(c.homeCell);
     { // buffs, copied whole
         int32_t n;
@@ -417,7 +423,9 @@ std::vector<uint8_t> writeCharacter(const Character &c) {
     writeMap(w, c.missionTimers);
     w.value(c.worldSeed);
     w.text(c.worldName);
-    writeCells(w, c.flightPoints);
+    auto flightPoints = c.flightPoints;
+    normalizeFlightPoints(flightPoints);
+    writeCells(w, flightPoints);
     w.cell(c.homeCell);
     w.count(c.buffs.size());
     for (const Buff &b : c.buffs)
@@ -774,23 +782,26 @@ std::string characterKey(int index) { return std::to_string(index); }
 std::string notesKey(int index) { return "cubevulkan:" + std::to_string(index); }
 } // namespace
 
-bool CharacterStore::open(const fs::path &file, std::string *why) { return db.open(file, why); }
+bool CharacterStore::open(const fs::path &file, std::string *why) { std::lock_guard lock(mutex); return db.open(file, why); }
 
 int CharacterStore::count() const {
+    std::lock_guard lock(mutex);
     int32_t n = 0;
     return db.readInt(COUNT_KEY, n) ? std::max(0, n) : 0;
 }
 
 std::optional<int> CharacterStore::slot() const {
+    std::lock_guard lock(mutex);
     int32_t s;
     if (!db.readInt(SLOT_KEY, s))
         return std::nullopt;
     return s;
 }
 
-bool CharacterStore::setSlot(int index) { return db.writeInt(SLOT_KEY, index); }
+bool CharacterStore::setSlot(int index) { std::lock_guard lock(mutex); return db.writeInt(SLOT_KEY, index); }
 
 bool CharacterStore::load(int index, Character &out) const {
+    std::lock_guard lock(mutex);
     out = Character{};
     std::vector<uint8_t> packed;
     if (!db.read(characterKey(index), packed))
@@ -804,10 +815,18 @@ bool CharacterStore::save(int index, const Character &c) {
     if (index < 0)
         return false; // (a negative selection saves nothing, §4.5)
     const std::vector<uint8_t> packed = compress(writeCharacter(c));
-    return !packed.empty() && db.write(characterKey(index), packed);
+    return savePacked(index, packed);
+}
+
+bool CharacterStore::savePacked(int index, const std::vector<uint8_t> &packed, const std::string *notes) {
+    if (index < 0 || packed.empty()) return false;
+    std::lock_guard lock(mutex);
+    const bool saved = db.write(characterKey(index), packed);
+    return saved && (!notes || writeNotes(index, *notes));
 }
 
 int CharacterStore::create(const Character &c) {
+    std::lock_guard lock(mutex);
     const int index = count();
     if (!db.writeInt(COUNT_KEY, index + 1) || !save(index, c) || !setSlot(index))
         return -1;
@@ -815,6 +834,7 @@ int CharacterStore::create(const Character &c) {
 }
 
 bool CharacterStore::remove(int index) {
+    std::lock_guard lock(mutex);
     const int before = count();
     if (index < 0 || index >= before)
         return false;
@@ -830,6 +850,7 @@ bool CharacterStore::remove(int index) {
 }
 
 bool CharacterStore::readNotes(int index, std::string &text) const {
+    std::lock_guard lock(mutex);
     std::vector<uint8_t> bytes;
     if (!db.read(notesKey(index), bytes))
         return false;
@@ -838,6 +859,7 @@ bool CharacterStore::readNotes(int index, std::string &text) const {
 }
 
 bool CharacterStore::writeNotes(int index, const std::string &text) {
+    std::lock_guard lock(mutex);
     if (index < 0)
         return false;
     return db.write(notesKey(index), std::vector<uint8_t>(text.begin(), text.end()));

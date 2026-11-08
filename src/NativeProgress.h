@@ -7,6 +7,7 @@
 #include "Saves.h"
 
 #include <functional>
+#include <memory>
 #include <map>
 #include <string>
 #include <vector>
@@ -55,7 +56,7 @@ bool appearanceOf(const nativesaves::Looks &looks, std::array<uint8_t, 0xb0> &ou
 
 // The list entry of character `slot` of characters.db: its name, class, level and look, moving
 // with the newest recording of its class and specialization (or class) among `recorded`.
-// False when no recording of its class exists.
+// A missing recording leaves its playback directory empty; native play remains available.
 bool entryFor(const nativesaves::Character &c, int slot, const std::vector<CharacterEntry> &recorded, const SpriteTable &sprites,
               CharacterEntry &out);
 
@@ -72,6 +73,9 @@ SaveGame toProgress(const nativesaves::Character &c, const std::string &notes, c
 // Puts the progress back into the character (keeping everything CubeVulkan does not model) and
 // gives the notes to keep beside it. `gear`: what is worn and carried now (none: as saved).
 void fromProgress(const SaveGame &s, const Gear *gear, float health, const Frame &frame, nativesaves::Character &c, std::string &notes);
+// Canonical live player data only: no position/health/stat/UI conversions.
+// The caller overlays the owned actor fields before serializing the snapshot.
+bool capturePlayerData(const SaveGame &, nativesaves::Character &, std::string &notes);
 // A game item from CubeVulkan's item fields, and back.
 nativesaves::Item gameItem(int category, int id, int material, int rarity, uint32_t modifier, const int region[2], int formula = 0);
 
@@ -86,14 +90,19 @@ int migrateOldSaves(nativesaves::CharacterStore &store, const std::filesystem::p
 // CubeVulkan's Save folder for a session: characters.db and world.db in the game's format.
 class ProgressFile {
   public:
+    ProgressFile() = default;
+    ProgressFile(const ProgressFile &) = delete;
+    ProgressFile &operator=(const ProgressFile &) = delete;
     // Opens `folder` (created when missing). With `importFrom` set, the game's two files are first
     // copied in, read-only, if CubeVulkan has none of its own yet. Refuses a folder that is the
     // game's own Save folder (`gameSave`): the owner's real saves are never written. Not
     // `writable` (a capture, --no-save): nothing is created, imported or written.
     bool open(const std::filesystem::path &folder, const std::filesystem::path &gameSave, const std::filesystem::path &importFrom,
               bool writable, const std::function<void(const std::string &)> &log, const std::string &profile = {});
-    bool isOpen() const { return store_.isOpen(); }
-    nativesaves::CharacterStore &store() { return store_; }
+    bool isOpen() const { return store_->isOpen(); }
+    nativesaves::CharacterStore &store() { return *store_; }
+    std::shared_ptr<nativesaves::CharacterStore> sharedStore() const { return store_; }
+    std::shared_ptr<const int> selection() const { return slotStorage; }
     nativesaves::WorldState &world() { return world_; }
     const std::filesystem::path &folder() const { return folder_; }
     // Every recorded character and every character of characters.db that can be played.
@@ -117,10 +126,11 @@ class ProgressFile {
 
   private:
     std::filesystem::path folder_;
-    nativesaves::CharacterStore store_;
+    std::shared_ptr<nativesaves::CharacterStore> store_ = std::make_shared<nativesaves::CharacterStore>();
     nativesaves::WorldState world_;
     CharacterEntry playing_;
-    int slot_ = -1;
+    std::shared_ptr<int> slotStorage = std::make_shared<int>(-1);
+    int &slot_ = *slotStorage; // selected with the live World; an owned captured key outlives this facade
 };
 
 } // namespace nativeprogress
