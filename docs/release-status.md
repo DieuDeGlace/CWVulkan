@@ -1,5 +1,45 @@
 # Source review checkpoint — 2026-11-07
 
+## World-step admission and selected movement membership - 2026-11-07
+
+Each ordinary admitted substep now completes its source summaries and object
+prelude before resident admission/retention and the existing death, pet and body
+phases. Pending births settle before admission; actor views refresh afterwards,
+including when new registrations or removal move owned storage. Host and viewed
+callers use the same boundary, including a zero remainder. The existing 40-ms AI
+policy remains separate; this does not establish native AI-thread scheduling.
+
+Movement now receives the separate prelude-selected resident list. Selection uses
+the independently specified flag, positive-health and special-variant predicate
+in registration order. Surviving members expose their current fields without an
+eligibility recheck; later registrations wait for a subsequent rebuild. Stable
+owned registration identities prevent numeric ID reuse from substituting another
+actor after storage moves. Missing instances are skipped safely, an engine policy
+where the original's deleting-virtual side effects remain unproved. Late reset
+clears all selected membership, including surviving records.
+
+Focused checks cover per-substep object clocks/admission, zero elapsed, the viewed
+role gate, registration growth/removal, fresh body views, selection boundaries,
+order, relocation, ID reuse and reset. An actual movement/contact integration
+fixture verifies that admission-time position/eligibility changes remain visible
+to earlier selected members while a newly registered ladder enters selection only
+on the next prelude. The full required-owner CPU suite without skips, every Vulkan
+group and the SDK-independence audit pass. All five targets build.
+
+Native and Alpha/Steam/Omega hidden offline/no-save startup captures complete and
+show loaded terrain, vegetation and HUD. Startup performance remains open:
+unprofiled matched old/new runs take 56.265/82.344 seconds and, in reverse order,
+47.485/65.282 seconds. A profiled pair takes 46.047/44.609 seconds. CPU totals are
+similar; these variable observations neither resolve the slower unprofiled startup
+nor establish FPS or a speedup. The Alpha capture takes 114.703 seconds. Broad
+original-pixel, travel/memory and performance acceptance remain separate gates.
+
+See the independent [phase-order contract](specs/steam-world-step-phase-order-20261107.md)
+and [selected-pointer contract](specs/steam-world-selected-pointer-lifetime-20261107.md).
+Complete time/day and optional-owner phases, view admission fields, native guards,
+physical retained-state binding and persistence remain open. Alpha/Omega defaults
+and other enhancements are preserved; this is a bounded source checkpoint.
+
 ## Live-resident horizontal retention - 2026-11-07
 
 Resident removal now uses the inclusive horizontal 320-block disk around every

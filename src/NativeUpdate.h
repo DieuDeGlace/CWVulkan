@@ -35,7 +35,8 @@ struct World {
     std::function<Block(int x, int y, int z)> block; // 0xe9a0, by block coordinates
     std::function<bool(int x, int y)> loaded;        // 0x935e0: the block column's zone is loaded
     std::vector<uint8_t *> creatures;                // world+0x40, in the world's order
-    // world+0x50: elevators, doors, ladders and the like, laid out like creature records.
+    // world+0x50: selected resident pointers for movement; membership is rebuilt
+    // in the World prelude and remains separate from the full resident list.
     std::vector<const uint8_t *> objects;
     std::function<uint8_t *(int64_t id)> byId; // 0xe720
     std::function<int()> rand;                 // the C runtime's rand(), 0..32767

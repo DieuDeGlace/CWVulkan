@@ -55,9 +55,9 @@ void HostSide::advance(uint32_t dtMs) {
         const uint32_t step = std::min(left, uint32_t(16));
         left -= step;
         world.advanceClock((double)step);
-        world.update(blocks, standIn);
+        // The existing AI timer remains separate from the World-step phases.
         world.think(blocks, (double)step, world.timeOfDay() / 3600000.0f);
-        world.simulate(blocks, (double)step, reset);
+        world.simulate(blocks, (double)step, reset, [&] { world.update(blocks, standIn); });
         std::vector<SpawnedCreatures::Death> died = world.takeDeaths(blocks);
         if (deaths && !died.empty())
             deaths(died);

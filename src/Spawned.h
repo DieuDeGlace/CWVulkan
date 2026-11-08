@@ -171,7 +171,10 @@ class SpawnedCreatures {
     // NativeUpdate) in the world's steps of at most 16 ms, as the game's world update does.
     // Authority reset notices run after body visits and before effects; optional hook
     // observes each such reset. Mirrors retain their packet-controlled population.
-    void simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset = {});
+    // A supplied zero-mode admission pass runs after source objects, before the
+    // death/pet/body phases. Pending births settle first; actor views refresh afterwards.
+    void simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset = {},
+                  const std::function<void()> &admitResidents = {});
     // Runs the game's creature AI (0x13830, NativeAI): every 40 ms, as the game's AI thread
     // does, each creature picks what it does and the way it wants to go (+0x40), which the
     // update then follows. `hour` is the time of day (townsfolk sleep 20:00 to 7:00).

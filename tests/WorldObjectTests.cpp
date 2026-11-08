@@ -149,6 +149,113 @@ void capturedGateFootprint(const std::filesystem::path &root, const auto &check)
     clearFootprint(0x80);
 }
 
+void worldStepAdmissionOrder(const std::filesystem::path &root, const auto &check) {
+    writeFixture(root, 1);
+    ExtractedWorld terrain;
+    std::string why;
+    check(terrain.open(root, why), "World-step fixture opens");
+    nativesaves::WorldState archive;
+    auto &saved = archive.zones[{0, 0}];
+    saved.flags = nativesaves::ZoneState::STATIC_OBJECTS_SAVED;
+    saved.staticObjects.push_back(object(31, 0, 100));
+    SpawnedCreatures actors;
+    actors.setStoredZones(terrain, &archive, false);
+    bool fresh = false;
+    auto *centre = actors.networkCreature(2, fresh);
+    check(centre && fresh, "World-step fixture registers a centre");
+    if (!centre) return;
+    centre[0x60] = 0;
+    put(centre, 0x180, 0.0f);
+    const std::array<int64_t, 3> position{};
+    std::memcpy(centre + 0x10, position.data(), sizeof position);
+    std::vector<float> clocks;
+    std::vector<float> times;
+    const auto admit = [&] {
+        const auto *objects = actors.zoneObjects(0, 0);
+        check(objects && objects->size() == 1, "source objects exist before admission callback");
+        clocks.push_back(objects && !objects->empty() ? get<float>(objects->front().data(), nativeinteract::OBJECT_SWING) : -1);
+        times.push_back(actors.elapsedWorldTime());
+        if (clocks.size() == 1) {
+            bool added = false;
+            auto *born = actors.networkCreature(3, added); // Forces the first network vector to grow.
+            check(born && added, "admission callback appends a resident");
+            if (born) {
+                born[0x60] = 0;
+                put(born, 0x180, 0.0f);
+                put(born, 0x128, uint16_t(0x10));
+                std::memcpy(born + 0x10, position.data(), sizeof position);
+            }
+        } else if (clocks.size() == 2) {
+            actors.remove(2); // Moves the later record while old simulation views still exist.
+            if (auto *born = actors.record(3))
+                put(born, 0x128, uint16_t(0x10));
+        }
+    };
+    actors.simulate(terrain, 32, {}, admit);
+    check(clocks == std::vector<float>{116, 132} && times == std::vector<float>{16, 32},
+          "each 16-ms source prelude completes before its zero-mode admission callback");
+    check(!actors.record(2) && actors.record(3) && !(get<uint16_t>(actors.record(3), 0x128) & 0x10),
+          "body visits refresh after admission growth and removal, including the complete flag-clear pass");
+    actors.simulate(terrain, 0, {}, admit);
+    check(clocks == std::vector<float>{116, 132, 132} && times.back() == 32,
+          "an admitted zero remainder still runs source work and admission without advancing its clock");
+    actors.setRemoteClient(true);
+    actors.simulate(terrain, 0, {}, admit);
+    check(clocks.size() == 3, "nonzero viewed mode skips the resident-admission callback");
+}
+
+void selectedMovementIntegration(const std::filesystem::path &root, const auto &check) {
+    writeFixture(root, 1);
+    for (bool alreadySelected : {false, true}) {
+        ExtractedWorld terrain;
+        std::string why;
+        check(terrain.open(root, why) && terrain.loadSourceZone(0, 0), "selected-movement terrain opens");
+        SpawnedCreatures actors;
+        const auto make = [&](int64_t id, uint8_t kind) {
+            bool fresh = false;
+            auto *record = actors.networkCreature(id, fresh);
+            check(record && fresh, "selected-movement actor registers");
+            if (record) {
+                record[0x60] = kind;
+                put(record, 0x180, 100.0f);
+                for (int axis = 0; axis < 3; ++axis)
+                    put(record, 0x84 + 4 * axis, 1.0f);
+            }
+            return record;
+        };
+        auto *mover = make(10, 0);
+        if (!mover) continue;
+        const std::array<int64_t, 3> at{BLOCK, BLOCK, 4 * BLOCK};
+        std::memcpy(mover + 0x10, at.data(), sizeof at);
+        const auto placeLadder = [&](uint8_t *record) {
+            put(record, 0x64, int32_t(0x12e));
+            put(record, 0x17c, 8.0f);
+            const std::array<int64_t, 3> position{BLOCK + BLOCK / 4, BLOCK, 0};
+            std::memcpy(record + 0x10, position.data(), sizeof position);
+        };
+        if (alreadySelected) {
+            auto *record = make(11, 8);
+            if (!record) continue;
+            put(record, 0x80, uint32_t(0x800000));
+            put(record, 0x10, int64_t(30 * BLOCK)); // Outside the later ladder contact.
+        }
+        actors.simulate(terrain, 0, {}, [&] {
+            auto *record = alreadySelected ? actors.record(11) : make(11, 8);
+            if (record) {
+                placeLadder(record);
+                put(record, 0x80, uint32_t(alreadySelected ? 0 : 0x800000));
+            }
+        });
+        const auto contact = [&] { return get<uint32_t>(actors.record(10), 0x5c) & 0x1104; };
+        check(bool(contact()) == alreadySelected,
+              "movement uses pre-admission selection with live pointed fields, excluding new registrations");
+        if (!alreadySelected) {
+            actors.simulate(terrain, 0, {}, [&] { put(actors.record(11), 0x80, uint32_t(0)); });
+            check(contact() == 0x1104, "the next prelude selects a late registration before its eligibility changes");
+        }
+    }
+}
+
 void sourceSummaryValues(const auto &check) {
     worldgen::ZoneSpawns catalog;
     catalog.points[11].id = 999; // Membership uses the catalog key, not the template's own ID.
@@ -730,6 +837,8 @@ int worldObjectTests() {
             check(loaded && result == ExtractedWorld::GameBlock{color, color, color, 0, uint8_t(type), 0},
                   "empty effective columns preserve base-before-sea ordering and exact fallback bytes");
         }
+        worldStepAdmissionOrder(root, check);
+        selectedMovementIntegration(root, check);
         capturedGateFootprint(root, check);
         std::filesystem::remove_all(root);
     }

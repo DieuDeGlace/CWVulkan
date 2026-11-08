@@ -23,6 +23,21 @@ void orderZones(std::vector<Zone> &zones); // Nonnull, unique, unsigned Zone-add
 // inclusive 320-block horizontal disk. Z and physical sources are not inputs.
 std::vector<int64_t> residentsOutsideRetention(std::span<const uint8_t *const> actors);
 
+// World+0x50: distinct from all-resident ability/body traversal. Collect at the
+// prelude boundary; later resolution preserves membership and reads live storage.
+bool selectedForMovement(const uint8_t *record);
+class SelectedPointers {
+  public:
+    struct Current { const uint8_t *record = nullptr; uint64_t registration = 0; };
+    using Resolve = std::function<Current(int64_t)>;
+    void clear() { members.clear(); }
+    void collect(const uint8_t *record, uint64_t registration);
+    // Missing or replaced owned instances are skipped; native freed-pointer behavior is unproved.
+    void resolve(std::vector<const uint8_t *> &out, const Resolve &lookup) const;
+  private:
+    std::vector<std::pair<int64_t, uint64_t>> members;
+};
+
 class Collection {
   public:
     // Engine storage may move a record while constructing residents. Resolve the

@@ -924,7 +924,8 @@ std::vector<std::pair<int, glm::vec3>> SpawnedCreatures::list(const ExtractedWor
     return out;
 }
 
-void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset) {
+void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset,
+                                const std::function<void()> &admitResidents) {
     lastWorld = &ew;
     auto blockEdits = ew.editBlocks();
     // Gameplay-camera §7.2.3: ordinary frames retain double milliseconds. The host
@@ -1206,6 +1207,14 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         iw.added(made);
     };
     pets.setup = a.adopt;
+    residentpass::SelectedPointers selectedMovement;
+    const auto resolveSelected = [&] {
+        selectedMovement.resolve(w.objects, [&](int64_t id) -> residentpass::SelectedPointers::Current {
+            const auto *actor = find(id);
+            return actor ? residentpass::SelectedPointers::Current{actor->record.data(), actor->registration}
+                         : residentpass::SelectedPointers::Current{};
+        });
+    };
     auto rebuildViews = [&] {
         // Reset deletion and vector compaction end the old actor lifetimes. Never
         // reuse an old pointer cache merely because the new list has the same size.
@@ -1231,6 +1240,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         a.local = hw.local = fw.local = u.local;
         w.local = hasPlayer && nativePlayer ? player.record.data() : nullptr;
         pets.local = hasPlayer ? &player.side : nullptr;
+        resolveSelected();
     };
     auto keepHitEvents = [&] {
         keep(hw);
@@ -1245,10 +1255,20 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         hw.kills.clear();
     };
     auto step = [&](float dt) {
+        // Tail births were visible to the prior body traversal; publish their
+        // stable registrations before this step rebuilds selected membership.
+        selectedMovement.clear();
+        if (!born.empty()) {
+            settle(born);
+            rebuildViews();
+        }
         elapsedWorldMs += dt; // native world time advances before the near-player pass
         u.time = elapsedWorldMs;
         w.time = elapsedWorldMs;
         a.changeCount = fw.changeCount = uint32_t(dayCount);
+        for (const auto *actor : registeredCreatures(hasPlayer ? &player : nullptr, zones))
+            selectedMovement.collect(actor->record.data(), actor->registration);
+        resolveSelected();
         const std::set<nativesaves::Cell> noUsedCells;
         nativeobjects::World objectWorld;
         objectWorld.client = client;
@@ -1315,6 +1335,13 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             };
             for (auto &object : lists->staticObjects)
                 nativeobjects::step(objectWorld, object, dt);
+        }
+        if (!client && admitResidents) {
+            // Source callbacks may have created residents synchronously. Admission
+            // observes them, then its own registrations/removals can move storage.
+            settle(born);
+            admitResidents();
+            rebuildViews();
         }
         nativedeath::World corpses;
         corpses.client = client;
@@ -1433,6 +1460,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             // Settle synchronous births so the same reset owns their deletion too.
             settle(born);
             worldReset();
+            selectedMovement.clear(); // Native reset empties even surviving selected membership.
             if (onReset)
                 onReset();
             rebuildViews();

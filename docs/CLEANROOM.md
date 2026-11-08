@@ -2706,3 +2706,18 @@ fixtures now explicitly place their actors near their test player; the engine
 rule was not relaxed. Complete phase ordering, source-state binding, external
 aliases and broader travel/memory acceptance remain open. The private receipt
 freezes the held hash and no owner data is published.
+
+## World-step admission and movement selection, 2026-11-07
+
+The isolated original-only author held the phase-order and selected-pointer
+contracts without implementation, SDK, fixture or owner-output exposure. The
+implementer read both complete prose files and owned sources only. Each admitted
+substep now places its source prelude before resident admission and refreshes
+body views afterwards. Separate selected movement membership retains live owned
+fields without admitting new registrations early. Stable registration identities
+and skipping removed instances are explicit engine lifetime policies, not a claim
+of original destructor behavior. Bounded unit and actual movement/contact checks,
+full required-owner CPU/Vulkan and SDK checks pass. Startup captures complete,
+but repeated unprofiled native startup is slower; performance and broad native
+acceptance remain open. The private receipt freezes both held hashes; no owner
+content is published.

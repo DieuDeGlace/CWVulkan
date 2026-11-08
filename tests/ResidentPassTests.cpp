@@ -27,6 +27,57 @@ Record actor(int64_t id, uint8_t kind, uint16_t state = 0, residentpass::Region 
     put(result.data(), 0x150, region);
     return result;
 }
+void selectedMovementValues(const auto &check) {
+    Record first = actor(40, 1), second = actor(-3, 0), late = actor(9, 1);
+    for (auto *record : {first.data(), second.data(), late.data()}) {
+        put(record, 0x80, uint32_t(0x800000));
+        put(record, 0x180, 100.0f);
+    }
+    check(residentpass::selectedForMovement(first.data()), "selected movement requires the flag and positive HP");
+    put(first.data(), 0x80, uint32_t(0));
+    check(!residentpass::selectedForMovement(first.data()), "missing selection bit excludes a live resident");
+    put(first.data(), 0x80, uint32_t(0x800000)); put(first.data(), 0x180, 0.0f);
+    check(!residentpass::selectedForMovement(first.data()), "nonpositive HP excludes selection at rebuild time");
+    put(first.data(), 0x180, 100.0f);
+    for (int32_t code : {243, 244, 247, 248, -1}) {
+        first[0x60] = 8; first[0x19c] = 1; put(first.data(), 0x64, code);
+        check(residentpass::selectedForMovement(first.data()) == (code < 244 || code > 247),
+              "kind8 special variant exclusion uses the inclusive unsigned code range");
+    }
+    put(first.data(), 0x64, int32_t(244)); first[0x19c] = 0;
+    check(residentpass::selectedForMovement(first.data()), "zero variant keeps the special code eligible");
+    first[0x19c] = 1; first[0x60] = 7;
+    check(residentpass::selectedForMovement(first.data()), "the exclusion does not apply to another category");
+    residentpass::SelectedPointers selected;
+    selected.collect(first.data(), 11);
+    selected.collect(second.data(), 22);
+    using Current = residentpass::SelectedPointers::Current;
+    std::map<int64_t, Current> current{{40, {first.data(), 11}}, {-3, {second.data(), 22}}, {9, {late.data(), 33}}};
+    const auto lookup = [&](int64_t id) { const auto it = current.find(id); return it == current.end() ? Current{} : it->second; };
+    std::vector<const uint8_t *> resolved;
+    selected.resolve(resolved, lookup);
+    check(resolved == std::vector<const uint8_t *>{first.data(), second.data()},
+          "selection preserves encounter order and does not include later eligible registrations");
+    put(first.data(), 0x80, uint32_t(0)); put(first.data(), 0x180, 0.0f);
+    put(first.data(), 0x10, int64_t(123456));
+    selected.resolve(resolved, lookup);
+    check(resolved.size() == 2 && resolved[0] == first.data() && get<int64_t>(resolved[0], 0x10) == 123456,
+          "surviving selected members expose current state without rerunning eligibility");
+    Record moved = first;
+    current[40] = {moved.data(), 11};
+    selected.resolve(resolved, lookup);
+    check(resolved.size() == 2 && resolved[0] == moved.data(), "same owned lifetime resolves after record relocation");
+    current[40] = {late.data(), 44};
+    selected.resolve(resolved, lookup);
+    check(resolved == std::vector<const uint8_t *>{second.data()}, "numeric ID reuse cannot substitute a different owned instance");
+    current.erase(-3);
+    selected.resolve(resolved, lookup);
+    check(resolved.empty(), "removed selected instances are skipped without dangling reads");
+    selected.clear();
+    selected.resolve(resolved, lookup);
+    check(resolved.empty(), "reset clears selected membership independently of surviving records");
+}
+
 void retentionValues(const auto &check) {
     constexpr int64_t block = 65536;
     Record centre = actor(100, 0), outside = actor(20, 7), east = actor(9, 1), diagonal = actor(8, 255),
@@ -225,6 +276,7 @@ int residentPassTests() {
                   get<float>(record, 0x84) == 2.0f * 1.1f,
               "demon postprocessing preserves the earlier HP and native flag/size behavior");
     }
+    selectedMovementValues(check);
     retentionValues(check);
     std::printf("Resident pass: %s\n", failures ? "FAILED" : "passed");
     return failures;

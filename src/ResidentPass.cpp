@@ -47,6 +47,29 @@ std::vector<int64_t> residentsOutsideRetention(std::span<const uint8_t *const> a
     return out;
 }
 
+bool selectedForMovement(const uint8_t *record) {
+    if (!(read<uint32_t>(record, 0x80) & 0x800000) || !(read<float>(record, 0x180) > 0))
+        return false;
+    const uint32_t code = read<uint32_t>(record, 0x64);
+    return !(record[0x60] == 8 && code >= 244 && code <= 247 && record[0x19c] != 0);
+}
+
+void SelectedPointers::collect(const uint8_t *record, uint64_t registration) {
+    if (selectedForMovement(record))
+        members.emplace_back(read<int64_t>(record, 8), registration);
+}
+
+void SelectedPointers::resolve(std::vector<const uint8_t *> &out, const Resolve &lookup) const {
+    out.clear();
+    if (!lookup)
+        return;
+    for (const auto &[id, registration] : members) {
+        const auto current = lookup(id);
+        if (current.record && current.registration == registration)
+            out.push_back(current.record);
+    }
+}
+
 void Collection::collect(const uint8_t *record) {
     const int64_t id = read<int64_t>(record, 8);
     ids_.insert(id); // Every nonnull registered actor suppresses duplicates, even dead actors.

@@ -4009,7 +4009,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hour = clock.timeOfDay() / 3600000.0f;
                 day = clock.day();
             }
-            spawned.update(extractedWorld, player.position);
+            if (spawned.remoteClient())
+                spawned.update(extractedWorld, player.position); // Logical mirror-array adapter, not native resident admission.
             {
                 // The player as the AI sees it (monsters near it notice it, as in the game).
                 static glm::vec3 lastAt = player.position;
@@ -4024,7 +4025,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     applyGear();
             }
             spawned.think(extractedWorld, ms, hour);
-            spawned.simulate(extractedWorld, ms);
+            spawned.simulate(extractedWorld, ms, {}, [&] { spawned.update(extractedWorld, player.position); });
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
             if (session.started())
                 session.consume();

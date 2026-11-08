@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Each ordinary zero-mode substep runs its source prelude before resident
+  admission/retention and refreshes body views after registrations/removals.
+  Movement uses prelude-selected membership with live fields, separate from the
+  full resident list; stable owned lifetimes survive relocation and reject ID
+  replacement. Boundary, phase and real movement/contact integration checks pass
+  with full required-owner CPU/Vulkan/SDK checks. The slower unprofiled startup
+  observations remain an explicit performance issue; complete time/day, owner,
+  admission-field and guard behavior remain open. See the
+  [phase-order](specs/steam-world-step-phase-order-20261107.md) and
+  [selected-pointer](specs/steam-world-selected-pointer-lifetime-20261107.md) contracts.
+
 - [x] Live residents use the inclusive 320-block horizontal retention disk,
   independently of source demand and height. Selection precedes owned erasure
   in registration order; nonempty buckets survive source-demand cleanup. Boundary,
