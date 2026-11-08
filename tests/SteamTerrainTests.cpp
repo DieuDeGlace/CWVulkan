@@ -137,6 +137,7 @@ int steamTerrainTests() {
         store(model, 24, int64_t(moved ? 5 * 65536 : 0));
         store(model, 40, std::numeric_limits<float>::quiet_NaN());
         store(model, 44, .2f); store(model, 48, .4f); store(model, 52, .6f);
+        store(model, 56, int32_t(2));
         store(model, 0x40, int32_t(20));
         store(model, 0x40 + 24, int64_t(5 * 65536));
         store(model, 0x40 + 56, int32_t(1));
@@ -156,7 +157,7 @@ int steamTerrainTests() {
     worldgen::MeshLightVolume solved;
     check(lightWorld.open(root, lightError) && lightWorld.mesh(0, 0, lightOpaque, lightWater, nullptr, &solved),
           "source-record fixture has a complete retained light solve");
-    const auto sources = lightWorld.lightSources(0, 0, solved);
+    const auto sources = lightWorld.lightSources(0, 0);
     check(sources && sources->key == steampoints::ZoneKey(0,0) && sources->models.size() == 2 && sources->objects.size() == 1,
           "only auxiliary lists provide light sources; origin-position/null-marker records survive");
     if (sources && sources->models.size() == 2 && sources->objects.size() == 1) {
@@ -165,10 +166,32 @@ int steamTerrainTests() {
         check(!(sources->models[1].record.flags & 8) && sources->objects[0].scale == 1.5f,
               "dry auxiliary models and native object scales retain distinct inputs");
     }
+    check(lightWorld.lightSources(0, 0) == sources,
+          "scene light reads reuse the resident immutable auxiliary copy");
     writeLights(true, false, false);
-    const auto moved = lightWorld.lightSources(0, 0, solved);
-    check(moved && !moved->models.empty() && (moved->models[0].record.flags & 8),
-          "auxiliary water flag is sticky independently of the live model list");
+    const auto moved = lightWorld.lightSources(0, 0);
+    check(moved && moved == sources && !moved->models.empty() && moved->models[0].record.z == 0 && (moved->models[0].record.flags & 8),
+          "file changes cannot move or replace a resident auxiliary value copy");
+    lightWorld.setGameBlock(0, 0, -1, {0, 0, 0, 0, 0, 2});
+    check(lightWorld.removeUnsupportedModels(0, 0, 0, 0) == 1 && lightWorld.gameModels(0, 0)->empty() &&
+              lightWorld.lightSources(0, 0) == sources,
+          "ordinary model erasure leaves the separate auxiliary value copies intact");
+    lightWorld.setGameBlock(0, 0, 0, {100, 90, 80, 0, 1, 0});
+    lightWorld.setGameBlock(0, 0, 1, {100, 90, 80, 0, 1, 0});
+    check(lightWorld.lightSources(0, 0) == sources && sources && sources->models[0].bakedLight == 255,
+          "physical terrain edits leave prepared auxiliary light unchanged before remeshing");
+    lightOpaque = {};
+    lightWater = {};
+    check(lightWorld.mesh(0, 0, lightOpaque, lightWater, nullptr, &solved), "later auxiliary mesh completes");
+    const auto refreshed = lightWorld.lightSources(0, 0);
+    check(refreshed && refreshed != sources && !refreshed->models.empty() && refreshed->models[0].bakedLight == 0 &&
+              (refreshed->models[0].record.flags & 8),
+          "mesh replaces auxiliary scalar with zero and retains its independently ORed water flag");
+    check(sources && sources->models[0].bakedLight == 255, "held old auxiliary copies remain immutable after a mesh update");
+    lightOpaque = {};
+    lightWater = {};
+    check(lightWorld.mesh(0, 0, lightOpaque, lightWater, nullptr, &solved) && lightWorld.lightSources(0, 0) == refreshed,
+          "unchanged prepared auxiliary samples reuse their immutable source vector");
     const auto loaded = lightWorld.loadedLightZones();
     check(loaded.size() >= 9, "light binding includes loaded neighboring zones before they have their own meshes");
     const auto lightReport = dataCheck::inspect(root, root, true);
@@ -210,9 +233,28 @@ int steamTerrainTests() {
     const auto taken = liveItems.groundLights(lightWorld, 0, 0);
     check(taken.items.size() == 1 && taken.items[0].category == 0, "pickup clears the item used by light registration");
     writeLights(false, true, false);
-    check(!lightWorld.lightSources(0, 0, solved), "duplicate auxiliary list is rejected");
+    check(lightWorld.lightSources(0, 0) == refreshed, "changed file bytes do not invalidate a loaded auxiliary copy");
+    check(lightWorld.open(root, lightError) && !lightWorld.lightSources(0, 0), "duplicate auxiliary list is rejected on load");
     writeLights(false, false, true);
-    check(!lightWorld.lightSources(0, 0, solved), "wrong auxiliary stride is rejected");
+    check(lightWorld.open(root, lightError) && !lightWorld.lightSources(0, 0), "wrong auxiliary stride is rejected on load");
+    writeLights(false, false, false);
+    check(lightWorld.open(root, lightError), "valid auxiliary fixture reloads");
+    for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+            lightWorld.loadSourceZone(x, y);
+    lightWorld.setClientStreaming(true);
+    for (int count = 0; count < 9 && lightWorld.gameZoneLoaded(0, 0); ++count)
+        lightWorld.retireClientSource({100, 100}, 1);
+    const auto loadedAfterRetirement = lightWorld.loadedSourceCount();
+    check(!lightWorld.gameZoneLoaded(0, 0) && !lightWorld.lightSources(0, 0) &&
+              lightWorld.loadedSourceCount() == loadedAfterRetirement,
+          "auxiliary lookup cannot recreate a retired source or retain old flags by index");
+    check(lightWorld.loadSourceZone(0, 0), "retired source can be explicitly loaded again");
+    const auto reloaded = lightWorld.lightSources(0, 0);
+    check(reloaded && !reloaded->models.empty() && !(reloaded->models[0].record.flags & 8) &&
+              reloaded->models[0].bakedLight != reloaded->models[0].bakedLight,
+          "new residency receives captured initial auxiliary bytes without inheriting retired mesh samples");
+    lightWorld.setClientStreaming(false);
     setRenderStyle(previousStyle);
     fs::remove_all(root);
     std::printf("Steam terrain: %s\n", failures ? "FAIL" : "PASS");

@@ -85,6 +85,21 @@ Alpha scenery retains its own drawing-light path. See the independent
 [stage contract](specs/steam-source-model-light-stage-20261107.md); the auxiliary
 model-vector lifecycle and broader native-runtime acceptance remain open.
 
+## Source-resident auxiliary light copies
+
+Auxiliary model lights and static-light records are captured or projected from
+the canonical generator once per loaded source lifetime. Ordinary records and
+auxiliary models remain distinct value copies. The mesh prepass prepares both
+model vectors before faces; point registration only reads the cached auxiliary
+snapshot. Changing ordinary records or source files does not alias that snapshot.
+A later solve can replace derived samples; unchanged samples reuse storage.
+Retirement removes membership, and explicit reload starts a new auxiliary copy.
+Held leases remain immutable. Lookup adds no source demand. Captured duplicate
+auxiliary lists and invalid strides are rejected on load, and incomplete replay
+keeps its established fallback. Broader source-state restoration and host loading
+remain open. See the independent
+[auxiliary lifetime](specs/steam-auxiliary-model-lifetime-20261107.md) contract.
+
 ## Optional diagnostics
 
 Set `CW_PROFILE_MESH` to a private CSV path before starting CubeVulkan. The parent

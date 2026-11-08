@@ -88,7 +88,8 @@ class ExtractedWorld {
     // Opaque and water meshes in local world coordinates (thread-safe).
     bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,
               worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr, std::vector<TerrainMeshBand> *terrainBands = nullptr);
-    std::shared_ptr<const steampoints::ZoneSources> lightSources(int zx, int zy, const worldgen::MeshLightVolume &);
+    // Loaded source lookup only; mesh preparation owns derived light updates.
+    std::shared_ptr<const steampoints::ZoneSources> lightSources(int zx, int zy);
     std::vector<steampoints::ZoneKey> loadedLightZones() const;
     // Independent mesh-prepass bounds in absolute native fixed coordinates.
     // Missing neighbor data yields no assertion of native bounds.
@@ -243,11 +244,8 @@ class ExtractedWorld {
         bool generated = false;                                  // made by the generator rather than read
         std::shared_ptr<const objectrewards::Map> objectRewards; // immutable captured map, shared by block/light snapshots
         bool objectsMade = false;                                // objects made (for a read zone, once gameObjects asks)
-        struct AuxiliaryLightState {
-            std::mutex mutex;
-            std::set<size_t> waterModels; // +0x90 has a separate mesh-time copy/list
-        };
-        std::shared_ptr<AuxiliaryLightState> auxiliaryLights = std::make_shared<AuxiliaryLightState>();
+        std::shared_ptr<const steampoints::ZoneSources> lightSources; // independent auxiliary value copies
+
     };
     static bool writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t x, int32_t y, int32_t z, const GameBlock &block);
     static GameBlock readGameBlock(const Zone &zone, int32_t ax, int32_t ay, int64_t x, int64_t y, int32_t z);
@@ -306,7 +304,7 @@ class ExtractedWorld {
     void clearCache(); // joins this reader's prefetch before resetting the source
     void applyBlockChanges(int ax, int ay, Zone &zone) const;
     std::shared_ptr<Zone> cached(int ax, int ay); // as load, but only from the cache
-    static std::shared_ptr<const std::vector<ModelRecord>> readModels(const std::filesystem::path &file);
+    static void readModelLists(const std::filesystem::path &file, int ax, int ay, Zone &zone);
     static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error, bool storedOnly = false);
     static std::shared_ptr<Zone> generateZone(int ax, int ay, bool eagerLight);
 };

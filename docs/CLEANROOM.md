@@ -2621,3 +2621,15 @@ a native atomicity claim. The bounded regression reproduced 34 initial failures;
 focused and full required-owner CPU, Vulkan and SDK-independence checks pass.
 Auxiliary lifecycle integration and broader original-runtime acceptance remain
 separate work. No original code or owner data is included in source packages.
+
+## Auxiliary source-model lifetime, 2026-11-07
+
+The same unexposed original-only author finalized a separate auxiliary-model
+lifetime contract. The implementer read it entirely, held its original hash and
+used code-free prose with owned implementation only. Auxiliary models retain
+independent value-copy storage; meshing prepares their cached light and water
+flags, and point registration reads them until a later mesh or new residency.
+The archive reader shares one bounded load pass. Immutable leases and incomplete
+replay handling remain explicit engine policies. Seven prior lifecycle failures
+and additional independence/reuse checks exercise this change; broader native
+visual, alternate-writer and concurrent-lifetime acceptance remains separate.

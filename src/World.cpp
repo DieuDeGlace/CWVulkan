@@ -990,8 +990,9 @@ void World::update(glm::vec3 focus) {
                 g.scenery = ex->props(k.first, k.second, &g.modelSnapshot);
                 if (alphaLook)
                     lightScenery(g.scenery);
-                else {
-                    g.nativeLights = ex->lightSources(k.first, k.second, nativeLight);
+                else if (!nativeLight.columns.empty()) {
+                    // Incomplete capture replays retain their prior unbound-light fallback.
+                    g.nativeLights = ex->lightSources(k.first, k.second);
                 }
                 return g;
             };

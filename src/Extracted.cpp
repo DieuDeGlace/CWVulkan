@@ -164,6 +164,13 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
         models->push_back(record);
     }
     zone->models = std::move(models);
+    auto lights = std::make_shared<steampoints::ZoneSources>();
+    lights->key = {ax, ay};
+    lights->models.reserve(zone->things->modelLights.size());
+    for (const auto &model : zone->things->modelLights)
+        lights->models.push_back({model, -1.0f}); // engine placeholder, not a native default
+    lights->objects = zone->things->lists.lights;
+    zone->lightSources = std::move(lights);
     zone->objects = worldgen::zoneObjects(ax, ay);
     zone->objectsMade = true;
     // Native source admission preserves the generator's per-path bytes. The
@@ -898,35 +905,6 @@ bool ExtractedWorld::gameObjects(int ax, int ay, std::vector<worldgen::ZoneObjec
     return true;
 }
 
-std::shared_ptr<const std::vector<ExtractedWorld::ModelRecord>> ExtractedWorld::readModels(const fs::path &zoneFile) {
-    fs::path file = zoneFile;
-    file.replace_extension(".rec");
-    std::ifstream input(file, std::ios::binary | std::ios::ate);
-    auto result = std::make_shared<std::vector<ModelRecord>>();
-    if (!input || input.tellg() < 4 || input.tellg() > 128 * 1024 * 1024)
-        return result;
-    std::vector<uint8_t> bytes(size_t(input.tellg()));
-    input.seekg(0);
-    if (!input.read(reinterpret_cast<char *>(bytes.data()), bytes.size()) || std::memcmp(bytes.data(), "CWR1", 4))
-        return result;
-    for (size_t at = 4; at + 12 <= bytes.size();) {
-        uint32_t tag, stride, count;
-        std::memcpy(&tag, bytes.data() + at, 4);
-        std::memcpy(&stride, bytes.data() + at + 4, 4);
-        std::memcpy(&count, bytes.data() + at + 8, 4);
-        at += 12;
-        if (!stride || count > (bytes.size() - at) / stride)
-            break;
-        if (tag == 0x18 && stride == sizeof(ModelRecord)) {
-            const size_t first = result->size();
-            result->resize(first + count);
-            std::memcpy(result->data() + first, bytes.data() + at, size_t(count) * stride);
-        }
-        at += size_t(count) * stride;
-    }
-    return result;
-}
-
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &file, bool decode, std::string &error, bool storedOnly) {
     error.clear();
     auto fail = [&](const char *why) -> std::shared_ptr<Zone> { error = why; return nullptr; };
@@ -987,7 +965,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::readZone(const fs::path &f
     if (storedOnly)
         return zone;
     if (decode)
-        zone->models = readModels(file);
+        readModelLists(file, ax, ay, *zone);
     fs::path materialFile = file;
     materialFile.replace_extension(".cwm");
     std::error_code materialError;
@@ -1135,6 +1113,17 @@ void ExtractedWorld::publishMeshLight(int ax, int ay, const std::shared_ptr<Zone
                 draft->columns[column].blocks[z].r = red;
             }
         }
+    const auto sampleModel = [&](const steampoints::Point &position, int32_t flags) {
+        const int32_t x = gamemath::floorFixedBlock(position[0]), y = gamemath::floorFixedBlock(position[1]),
+                      z = gamemath::floorFixedBlock(position[2]);
+        const int64_t dx = floorDiv(x, 64) - ax, dy = floorDiv(y, 64) - ay;
+        if (dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1) {
+            const auto &neighbor = around[dy + 1][dx + 1];
+            if (neighbor && readGameBlock(*neighbor, ax + int(dx), ay + int(dy), x, y, z)[4] == WATER_TYPE)
+                flags |= 8;
+        }
+        return std::pair{float(light.at(x, y, z)), flags};
+    };
     // The native mesh stage samples every ordinary record, before scene/resource
     // filtering. Store the unnormalized float and OR-only water flag in the record;
     // ordinary frame preparation reuses them until a later admitted mesh.
@@ -1144,16 +1133,7 @@ void ExtractedWorld::publishMeshLight(int ax, int ay, const std::shared_ptr<Zone
             const auto &record = (*current->models)[index];
             std::array<int64_t, 3> position;
             std::memcpy(position.data(), record.data() + 8, sizeof position);
-            const int32_t x = gamemath::floorFixedBlock(position[0]), y = gamemath::floorFixedBlock(position[1]),
-                          z = gamemath::floorFixedBlock(position[2]);
-            const float sample = float(light.at(x, y, z));
-            int32_t flags = modelField<int32_t>(record, 0x38);
-            const int64_t dx = floorDiv(x, 64) - ax, dy = floorDiv(y, 64) - ay;
-            if (dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1) {
-                const auto &neighbor = around[dy + 1][dx + 1];
-                if (neighbor && readGameBlock(*neighbor, ax + int(dx), ay + int(dy), x, y, z)[4] == WATER_TYPE)
-                    flags |= 8;
-            }
+            const auto [sample, flags] = sampleModel(position, modelField<int32_t>(record, 0x38));
             if (std::memcmp(record.data() + 0x28, &sample, sizeof sample) == 0 && flags == modelField<int32_t>(record, 0x38))
                 continue;
             if (!models)
@@ -1165,6 +1145,28 @@ void ExtractedWorld::publishMeshLight(int ax, int ay, const std::shared_ptr<Zone
             if (!draft)
                 draft = writableZone(ax, ay);
             draft->models = std::move(models);
+        }
+    }
+    // Auxiliary light models are separate value copies, not ordinary-vector
+    // aliases. Sample them in the same pre-face stage and retain them for readers.
+    if (current->lightSources) {
+        std::shared_ptr<steampoints::ZoneSources> sources;
+        for (size_t index = 0; index < current->lightSources->models.size(); ++index) {
+            const auto &source = current->lightSources->models[index];
+            const auto &model = source.record;
+            const auto [sample, flags] = sampleModel({model.x, model.y, model.z}, model.flags);
+            if (std::memcmp(&source.bakedLight, &sample, sizeof sample) == 0 && flags == model.flags)
+                continue;
+            if (!sources)
+                sources = std::make_shared<steampoints::ZoneSources>(*current->lightSources);
+            auto &replacement = sources->models[index];
+            replacement.bakedLight = sample;
+            replacement.record.flags = flags;
+        }
+        if (sources) {
+            if (!draft)
+                draft = writableZone(ax, ay);
+            draft->lightSources = std::move(sources);
         }
     }
     // One COW transaction preserves held snapshots and loaded identity without a

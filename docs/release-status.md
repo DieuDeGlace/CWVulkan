@@ -1,5 +1,43 @@
 # Source review checkpoint — 2026-11-07
 
+## Resident auxiliary model-light copies - 2026-11-07
+
+Auxiliary light models now belong to the loaded source zone as independent value
+copies. Mesh preparation updates every cached scalar and OR-only water flag after
+the block-light solve and before terrain faces. Point-light preparation reads the
+resident immutable data without parsing files, resampling light or creating source
+zones. Changed samples publish a replacement; unchanged samples reuse the vector.
+Ordinary-model erasure leaves these independent copies intact. Held old copies
+survive retirement safely, while a new residency receives fresh source inputs.
+
+The capture adapter reads ordinary and auxiliary models and static-light records
+in one bounded pass per source load. File changes take effect on reload; duplicate
+auxiliary tags and wrong strides remain rejected. Generated inputs retain their
+existing classifier order and an explicit engine pre-mesh placeholder; no universal
+native initialization is claimed. Static-object live lighting remains separate,
+and incomplete capture replays retain their existing unbound-light fallback.
+The [auxiliary contract](specs/steam-auxiliary-model-lifetime-20261107.md) records
+value-copy construction, classification replacement, cached point consumption,
+residency teardown and limits. It does not establish every alternate writer,
+automatic classification after edits, native races or full visual acceptance.
+
+Seven reproduced lifecycle failures now pass, covering repeated reads, file and
+terrain changes, remesh replacement, retirement and fresh residency. Further
+regressions check ordinary erasure independence and reuse after an unchanged mesh.
+
+All five targets, six focused groups, the full required-oracle CPU/owner-data
+suite with no reported skips, every Vulkan group and SDK-independence audit pass.
+A separate owner-capture oracle matches all 2 model lights and 3 static lights
+across five complete neighborhoods, with zero mismatches. Two other nonempty
+snapshots lack neighboring captures and were excluded; they remain unqualified.
+This does not establish broad native pixel or source-lifetime race acceptance.
+
+The final hidden offline no-save Alpha-terrain/Steam-look/Omega smoke run exits
+zero in 83.762 seconds, with a viewed terrain/vegetation/HUD image and matching
+compiled executable hash. This is a loaded-scene check, not an FPS measurement
+or original pixel comparison. No installed-game saves, mods or display settings
+were changed, and no original game was started.
+
 ## Ordinary model light preparation - 2026-11-07
 
 Ordinary 64-byte model records now receive their float light sample and OR-only

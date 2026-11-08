@@ -86,7 +86,7 @@ int steamLightOracleTests(const std::filesystem::path &directory, const std::fil
             ++incomplete;
             continue;
         }
-        const auto actual = world.lightSources(localX, localY, volume);
+        const auto actual = world.lightSources(localX, localY);
         if (!actual || actual->models.size() != modelRecords.size() || actual->objects.size() != objectRecords.size()) {
             ++mismatches;
             continue;

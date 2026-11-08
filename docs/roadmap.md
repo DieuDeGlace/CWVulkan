@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Auxiliary light-model copies now live with their source zone. Mesh
+  preparation updates cached scalars and sticky flags before terrain faces; point
+  registration reads them without file I/O, resampling or missing-source creation.
+  One capture parse supplies ordinary/auxiliary models and static-light records.
+  Seven reproduced lifecycle failures pass, with ordinary-erasure independence,
+  unchanged-sample reuse, immutable leases and fresh-residency checks. Generated
+  classifier order, incomplete replay and Alpha behavior retain their boundaries.
+  Alternate writers, native races and broad visual acceptance remain separate.
+  See the [lifetime contract](specs/steam-auxiliary-model-lifetime-20261107.md).
+
 - [x] Ordinary model records receive cached scalar light and OR-only water flags
   in the mesh stage before draw filtering, rather than only for retained scenery.
   Stored records supply scene light until a later mesh; captured-neighbor lookup
