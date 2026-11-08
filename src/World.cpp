@@ -991,7 +991,6 @@ void World::update(glm::vec3 focus) {
                 if (alphaLook)
                     lightScenery(g.scenery);
                 else {
-                    ex->lightModels(k.first, k.second, g.scenery, &nativeLight);
                     g.nativeLights = ex->lightSources(k.first, k.second, nativeLight);
                 }
                 return g;

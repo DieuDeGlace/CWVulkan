@@ -125,8 +125,6 @@ class ExtractedWorld {
     // objects (doors, windows, furniture, statues), from its .rec file and the
     // game's own sprite tables (Extract/sprite-groups.txt).
     std::vector<Scenery> props(int zx, int zy, std::shared_ptr<const void> *modelSnapshot = nullptr);
-    // Bake native model light from current neighboring terrain, when all nine zones exist.
-    void lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved = nullptr);
     // The block the game's lookup (0xe9a0, 0xeb90) gives at absolute game block (x, y, z):
     // r, g, b, -, type, flags. Only zones already in memory are read; elsewhere the game's
     // default for a missing zone (grey stone, type 1) and `loaded` false.
@@ -245,14 +243,11 @@ class ExtractedWorld {
         bool generated = false;                                  // made by the generator rather than read
         std::shared_ptr<const objectrewards::Map> objectRewards; // immutable captured map, shared by block/light snapshots
         bool objectsMade = false;                                // objects made (for a read zone, once gameObjects asks)
-        struct ModelLightState {
+        struct AuxiliaryLightState {
             std::mutex mutex;
-            std::map<int, float> lightSamples; // native cached +0x28, indexed with the current ordinary vector
-            std::set<int> waterModels;         // flag8 is ORed, retained for this zone's lifetime
-            std::set<size_t> waterAuxiliary;   // +0x90 is a separate model copy/list
+            std::set<size_t> waterModels; // +0x90 has a separate mesh-time copy/list
         };
-        // Block edits copy the terrain snapshot; runtime model state stays shared.
-        std::shared_ptr<ModelLightState> modelLights = std::make_shared<ModelLightState>();
+        std::shared_ptr<AuxiliaryLightState> auxiliaryLights = std::make_shared<AuxiliaryLightState>();
     };
     static bool writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t x, int32_t y, int32_t z, const GameBlock &block);
     static GameBlock readGameBlock(const Zone &zone, int32_t ax, int32_t ay, int64_t x, int64_t y, int32_t z);
@@ -264,7 +259,7 @@ class ExtractedWorld {
                                       bool includeModels);
     CapturedLists readCapturedLists(int32_t x, int32_t y, bool includeMarks = false) const;
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
-    void publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light);
+    void publishMeshLight(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3], const worldgen::MeshLightVolume &light);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     using Key = std::pair<int, int>;
     std::filesystem::path folder;

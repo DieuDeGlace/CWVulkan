@@ -677,18 +677,6 @@ size_t ExtractedWorld::removeUnsupportedModels(int32_t x0, int32_t y0, int32_t x
             continue;
         auto draft = writableZone(key.first, key.second);
         auto replacement = std::make_shared<std::vector<ModelRecord>>(*records);
-        auto state = std::make_shared<Zone::ModelLightState>();
-        {
-            std::lock_guard lock(draft->modelLights->mutex);
-            state->waterAuxiliary = draft->modelLights->waterAuxiliary;
-            for (size_t i = 0; i < replacement->size(); ++i) {
-                if (draft->modelLights->waterModels.count(int(i) + 1))
-                    (*replacement)[i][0x38] |= 8;
-                const auto light = draft->modelLights->lightSamples.find(int(i) + 1);
-                if (light != draft->modelLights->lightSamples.end())
-                    std::memcpy((*replacement)[i].data() + 0x28, &light->second, 4);
-            }
-        }
         for (size_t index : erase) {
             for (size_t next = index + 1; next < replacement->size(); ++next) {
                 // Native semantic fields move; destination padding is not assigned.
@@ -698,7 +686,6 @@ size_t ExtractedWorld::removeUnsupportedModels(int32_t x0, int32_t y0, int32_t x
             replacement->pop_back();
         }
         draft->models = std::move(replacement);
-        draft->modelLights = std::move(state);
         removed += erase.size();
         std::lock_guard lock(changesMutex);
         changedModels.insert(key);
@@ -1123,12 +1110,13 @@ std::optional<worldgen::MeshLightVolume> ExtractedWorld::lightsFor(int ax, int a
     return worldgen::meshZoneLight(ax, ay, [&](int32_t x, int32_t y) -> const auto & { return columns[y - ay + 1][x - ax + 1]; });
 }
 
-void ExtractedWorld::publishBlockLight(int ax, int ay, const std::shared_ptr<Zone> &source, const worldgen::MeshLightVolume &light) {
+void ExtractedWorld::publishMeshLight(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3],
+                                      const worldgen::MeshLightVolume &light) {
     auto edits = editBlocks();
     auto current = editedZone(ax, ay);
     if (!current)
         current = cached(ax, ay);
-    if (!current || current->identity != source->identity)
+    if (!current || current->identity != around[1][1]->identity)
         return;
     std::shared_ptr<Zone> draft;
     for (int x = 0; x < 64; ++x)
@@ -1147,49 +1135,40 @@ void ExtractedWorld::publishBlockLight(int ax, int ay, const std::shared_ptr<Zon
                 draft->columns[column].blocks[z].r = red;
             }
         }
-    // No notice/history/dirty request: this is the completed solver's stored data.
-    // A single safe engine snapshot replaces native per-record concurrent stores.
-}
-
-void ExtractedWorld::lightModels(int zx, int zy, std::vector<Scenery> &scenery, const worldgen::MeshLightVolume *solved) {
-    if (std::none_of(scenery.begin(), scenery.end(), [](const Scenery &s) { return s.modelType >= 0; }))
-        return;
-    const int ax = zx + originX, ay = zy + originY;
-    std::shared_ptr<Zone> neighbors[3][3];
-    for (int y = -1; y <= 1; ++y)
-        for (int x = -1; x <= 1; ++x) {
-            neighbors[y + 1][x + 1] = load(ax + x, ay + y);
-            if (!neighbors[y + 1][x + 1])
-                return;
-        }
-    std::optional<worldgen::MeshLightVolume> computed;
-    if (!solved || solved->columns.empty()) {
-        computed = lightsFor(ax, ay, neighbors);
-        if (!computed)
-            return;
-        solved = &*computed;
-    }
-    Zone &center = *neighbors[1][1];
-    std::lock_guard modelLock(center.modelLights->mutex);
-    for (Scenery &s : scenery)
-        if (s.modelType >= 0) {
-            const float sample = float(solved->fixed(s.modelPosition));
-            s.light = sample / 255.0f;
-            // A model may have moved to another index since an older mesh job read
-            // its scenery. Such a job must not annotate the current vector's entry.
-            const size_t index = size_t(s.listPosition - 1);
-            if (!center.models || index >= center.models->size() || modelField<int32_t>((*center.models)[index], 0) != s.modelType ||
-                std::memcmp((*center.models)[index].data() + 8, s.modelPosition.data(), sizeof(int64_t) * 3) != 0)
-                continue;
-            center.modelLights->lightSamples[s.listPosition] = sample;
-            const auto &p = s.modelPosition;
-            if (gameBlock(p[0] >> 16, p[1] >> 16, (int32_t)(p[2] >> 16))[4] == WATER_TYPE)
-                center.modelLights->waterModels.insert(s.listPosition);
-            if ((s.modelFlags & 8) || center.modelLights->waterModels.count(s.listPosition)) {
-                s.modelFlags |= 8;
-                center.modelLights->waterModels.insert(s.listPosition);
+    // The native mesh stage samples every ordinary record, before scene/resource
+    // filtering. Store the unnormalized float and OR-only water flag in the record;
+    // ordinary frame preparation reuses them until a later admitted mesh.
+    if (current->models) {
+        std::shared_ptr<std::vector<ModelRecord>> models;
+        for (size_t index = 0; index < current->models->size(); ++index) {
+            const auto &record = (*current->models)[index];
+            std::array<int64_t, 3> position;
+            std::memcpy(position.data(), record.data() + 8, sizeof position);
+            const int32_t x = gamemath::floorFixedBlock(position[0]), y = gamemath::floorFixedBlock(position[1]),
+                          z = gamemath::floorFixedBlock(position[2]);
+            const float sample = float(light.at(x, y, z));
+            int32_t flags = modelField<int32_t>(record, 0x38);
+            const int64_t dx = floorDiv(x, 64) - ax, dy = floorDiv(y, 64) - ay;
+            if (dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1) {
+                const auto &neighbor = around[dy + 1][dx + 1];
+                if (neighbor && readGameBlock(*neighbor, ax + int(dx), ay + int(dy), x, y, z)[4] == WATER_TYPE)
+                    flags |= 8;
             }
+            if (std::memcmp(record.data() + 0x28, &sample, sizeof sample) == 0 && flags == modelField<int32_t>(record, 0x38))
+                continue;
+            if (!models)
+                models = std::make_shared<std::vector<ModelRecord>>(*current->models);
+            std::memcpy((*models)[index].data() + 0x28, &sample, sizeof sample);
+            std::memcpy((*models)[index].data() + 0x38, &flags, sizeof flags);
         }
+        if (models) {
+            if (!draft)
+                draft = writableZone(ax, ay);
+            draft->models = std::move(models);
+        }
+    }
+    // One COW transaction preserves held snapshots and loaded identity without a
+    // notice/history/dirty request. It does not reproduce native concurrent stores.
 }
 
 std::optional<scenecapture::MeshCache> ExtractedWorld::meshCapture(int zx, int zy) const {
@@ -1356,7 +1335,6 @@ std::vector<Scenery> ExtractedWorld::propsForZone(const std::shared_ptr<const Zo
     if (modelSnapshot)
         *modelSnapshot = zone->models;
     if (includeModels && zone->models) {
-        std::lock_guard lock(zone->modelLights->mutex);
         for (size_t index = 0; index < zone->models->size(); ++index) {
             const auto &record = (*zone->models)[index];
             const int32_t type = modelField<int32_t>(record, 0);
@@ -1387,10 +1365,7 @@ std::vector<Scenery> ExtractedWorld::propsForZone(const std::shared_ptr<const Zo
                 int(index) + 1};
             model.modelType = type;
             model.modelPosition = position;
-            if (zone->modelLights->waterModels.count(model.listPosition))
-                model.modelFlags |= 8;
-            const auto cached = zone->modelLights->lightSamples.find(model.listPosition);
-            const float sample = cached == zone->modelLights->lightSamples.end() ? modelField<float>(record, 0x28) : cached->second;
+            const float sample = modelField<float>(record, 0x28);
             if (std::isfinite(sample) && sample >= 0 && sample <= 255)
                 model.light = sample / 255.0f;
             out.push_back(std::move(model));
@@ -1670,7 +1645,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     if (auto solved = lightsFor(ax, ay, around)) {
         solvedLight = std::move(*solved);
         profile.mark(meshprofile::Light);
-        publishBlockLight(ax, ay, self, solvedLight);
+        publishMeshLight(ax, ay, around, solvedLight);
         profile.mark(meshprofile::PublishLight);
     }
     const bool nativeEncoding = !alphaLook && !solvedLight.columns.empty();

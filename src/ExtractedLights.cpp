@@ -75,17 +75,17 @@ std::shared_ptr<const steampoints::ZoneSources> ExtractedWorld::lightSources(
     }
     // Both native model lists receive independent mesh-time light writes.
     // Preserve auxiliary water flags separately from the ordinary model list.
-    std::lock_guard lock(zone->modelLights->mutex);
+    std::lock_guard lock(zone->auxiliaryLights->mutex);
     for (size_t index = 0; index < sources->models.size(); ++index) {
         auto &source = sources->models[index];
         auto &model = source.record;
         const steampoints::Point position{model.x, model.y, model.z};
         source.bakedLight = (float)solved.fixed(position);
         if (gameBlock(model.x >> 16, model.y >> 16, (int32_t)(model.z >> 16))[4] == 2)
-            zone->modelLights->waterAuxiliary.insert(index);
-        if ((model.flags & 8) || zone->modelLights->waterAuxiliary.count(index)) {
+            zone->auxiliaryLights->waterModels.insert(index);
+        if ((model.flags & 8) || zone->auxiliaryLights->waterModels.count(index)) {
             model.flags |= 8;
-            zone->modelLights->waterAuxiliary.insert(index);
+            zone->auxiliaryLights->waterModels.insert(index);
         }
     }
     return sources;

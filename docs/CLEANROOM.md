@@ -2608,3 +2608,16 @@ single comparison establishes no speedup and leaves cold-fill performance open.
 Evidence: build/native-preparation-validation/cold-profile-comparison.json and
 build/alpha-steam-fill-after-preparation. No original game was run; owner saves,
 mods and display settings were not changed. Shipped Alpha/Omega defaults remain.
+
+## Ordinary mesh-time model samples, 2026-11-07
+
+The unexposed original-only author source_mouse_mask finalized and held the
+source-model light-stage contract. The implementer read the complete prose,
+retained its original-byte hash privately, and changed owned engine code only.
+All ordinary records receive their cached scalar and captured-neighborhood water
+flag in mesh preparation; draw filtering and static-object live queries remain
+separate. Immutable replacement is an explicit engine ownership policy, without
+a native atomicity claim. The bounded regression reproduced 34 initial failures;
+focused and full required-owner CPU, Vulkan and SDK-independence checks pass.
+Auxiliary lifecycle integration and broader original-runtime acceptance remain
+separate work. No original code or owner data is included in source packages.

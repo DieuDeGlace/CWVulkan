@@ -659,13 +659,16 @@ static void extractedPlacements() {
     memcpy(wet.bytes.data(), editedBlock, sizeof editedBlock);
     wet.bytes[0x12 + 4] = 2;
     ex.setBlockChanges(-2, -1, {wet});
+    Mesh modelOpaque, modelWater;
+    CHECK(ex.mesh(0, 0, modelOpaque, modelWater));
     auto wetModels = ex.props(0, 0);
-    ex.lightModels(0, 0, wetModels);
     CHECK(wetModels[0].light == 1 && (wetModels[0].modelFlags & 8));
     wet.bytes[0x12 + 4] = 0;
     ex.setBlockChanges(-2, -1, {wet});
+    modelOpaque = {};
+    modelWater = {};
+    CHECK(ex.mesh(0, 0, modelOpaque, modelWater));
     auto dryModels = ex.props(0, 0);
-    ex.lightModels(0, 0, dryModels);
     CHECK(dryModels[0].light == 1 && (dryModels[0].modelFlags & 8));
     for (int zx = -3; zx <= -1; ++zx)
         for (int zy = -2; zy <= 0; ++zy)

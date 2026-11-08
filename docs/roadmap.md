@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Ordinary model records receive cached scalar light and OR-only water flags
+  in the mesh stage before draw filtering, rather than only for retained scenery.
+  Stored records supply scene light until a later mesh; captured-neighbor lookup
+  adds no source demand. Immutable replacements preserve old model leases and
+  loaded identity without dirty/history notices. The 34-failure regression covers
+  filtered/beam/nonfinite records, negative coordinates, cache boundaries, water
+  lifetime, scene reuse and remesh replacement in both render configurations.
+  Alpha rendering retains its own scenery light. Auxiliary lifecycle, native
+  concurrent-store details and wider visual acceptance remain separate work. See
+  the [independent contract](specs/steam-source-model-light-stage-20261107.md).
+
 - [x] Native client source creation preserves canonical per-path bytes until the
   actual mesh light prepass. A three-zone boundary test reproduces 20,303 premature
   changes and now matches all 44,485 records; isolated raw production falls from

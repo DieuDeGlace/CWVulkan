@@ -72,6 +72,19 @@ adapters and the current host reader retain their existing eager-lighting policy
 The [initial-byte contract](specs/steam-source-initial-block-light-20261107.md)
 records stage distinctions and limits; no blanket air/water initialization is used.
 
+## Model samples after the light prepass
+
+The same mesh preparation that writes stored air/water light now samples every
+ordinary model record before terrain-face generation or scenery filtering.
+Unnormalized float light and the sticky water bit live in an immutable model
+vector. Scene preparation reads this cache until a later mesh; block edits alone
+leave it intact. The scratch light cache permits zero and uses the record's
+fixed position, while static objects retain their separate live gameplay query.
+The captured nine-zone block lookup sets water flags without source creation.
+Alpha scenery retains its own drawing-light path. See the independent
+[stage contract](specs/steam-source-model-light-stage-20261107.md); the auxiliary
+model-vector lifecycle and broader native-runtime acceptance remain open.
+
 ## Optional diagnostics
 
 Set `CW_PROFILE_MESH` to a private CSV path before starting CubeVulkan. The parent

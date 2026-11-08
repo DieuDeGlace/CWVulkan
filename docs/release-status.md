@@ -1,5 +1,43 @@
 # Source review checkpoint — 2026-11-07
 
+## Ordinary model light preparation - 2026-11-07
+
+Ordinary 64-byte model records now receive their float light sample and OR-only
+water flag during the actual mesh stage, after stored block-light writeback and
+before terrain faces and scenery filtering. Every record participates, including
+beam records, missing resources, invalid draw parameters and previously positive
+or nonfinite light values. Scene preparation reads the stored scalar divided by
+255; terrain setters alone do not reset or resample it. The sampled point is the
+record position itself with downward fixed-coordinate conversion, without a
+height offset or the separate live-query minimum of five.
+
+The engine publishes changed model bytes and stored block light through one
+immutable replacement transaction. Held model snapshots and loaded-zone identity
+remain valid; unchanged samples avoid a vector copy. This safe ownership policy
+does not claim native atomicity or concurrent raw-pointer behavior. Water tests
+read the mesh job's captured neighborhood without loading more source zones.
+Static-object live light and auxiliary model copies remain separate paths.
+The auxiliary stage/lifetime integration and broader native visual acceptance remain
+open. No universal native pre-mesh light default is inferred; generated engine
+records keep their explicit safe placeholder until preparation.
+
+The new public-API regression reproduced 34 failures before the correction. It
+covers all-record preparation in Steam and Alpha render configurations, negative
+fractional positions, outside-cache sky, below-column zero, poisoned old samples,
+water normalization and sticky flags, retained snapshots, scene reuse, later
+remesh replacement and the distinct gameplay minimum. Alpha scenery still uses
+its separate rendering light calculation. See the independent
+[model-light contract](specs/steam-source-model-light-stage-20261107.md).
+
+All five targets, the full required-oracle CPU/owner-data suite with no skips,
+and all Vulkan groups pass: 92 shader, 2 camera, 102 GUI, 17 map, 14 native-water,
+shared water and Alpha scenery. The extractor SDK-independence audit also passes.
+Focused checks cover model light, block edits, terrain/light sources, source
+streaming, creation bytes and whole-batch preparation. A hidden no-save Alpha-terrain/Steam-look/Omega full-load smoke run completes in
+76.895 seconds with a nonblank terrain/vegetation/HUD image. Its executable hash
+matches the build. No broad native pixel, travel, memory or frame-performance
+acceptance is inferred from these checks.
+
 ## Native source bytes before mesh lighting - 2026-11-07
 
 Native client source creation now retains the canonical generator's per-path
