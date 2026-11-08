@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Retained ground arrays restore their override flag, including explicit
+  empty values, and reach real host source replies. The nonzero World+0x358 gate
+  suppresses restoration independently of later unload recording. Seven helper
+  failures pass, with ordered replay and all-five-field empty/zero retention
+  checks; full required-owner CPU, Vulkan and SDK checks pass. Physical source
+  binding, connection ordering, logical residency and periodic persistence remain
+  open. See the [field-lifetime contract](specs/steam-retained-source-field-lifetimes-20261107.md).
+
 - [x] Capture/benchmark readiness now allows native background fringe work to
   continue after required retained inputs and geometry are ready. A real V10
   negative-boundary regression reproduces the wait with 14 prepared zones and 4

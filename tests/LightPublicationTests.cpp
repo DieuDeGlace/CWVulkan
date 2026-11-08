@@ -232,7 +232,20 @@ int lightPublicationTests() {
                       "source fork retains source metadata and coordinate rebasing");
                 check(!host->gameZoneLoaded(0, 0), "source fork does not inherit another World's loaded lifetime");
                 host->propsAbsolute(0, 0);
+                auto &saved = stored.zones[{0, 0}];
+                saved.flags = nativesaves::ZoneState::GROUND_ITEMS_SAVED;
+                saved.groundItems.resize(1);
+                saved.groundItems[0][0] = 0x0b;
                 authority.setStoredZones(*host, &stored, false);
+                cwnet::ZoneAnswer restored;
+                check(authority.zoneAnswer(*host, {0, 0}, restored) && restored.groundItems &&
+                          *restored.groundItems == saved.groundItems,
+                      "restored ground override is included in the host source reply");
+                saved.groundItems.clear();
+                authority.setStoredZones(*host, &stored, false);
+                cwnet::ZoneAnswer cleared;
+                check(authority.zoneAnswer(*host, {0, 0}, cleared) && cleared.groundItems && cleared.groundItems->empty(),
+                      "restored empty ground override is included rather than omitted from the host source reply");
                 mirror.setStoredZones(world, nullptr, false);
                 const auto hostIdentity = host->gameZoneToken(0, 0);
                 check(hostIdentity && hostIdentity->order != world.gameZoneToken(0, 0)->order &&

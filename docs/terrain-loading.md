@@ -119,6 +119,21 @@ Full selected-state retention/restoration, logical resident gates, native period
 persistence and exact producer/worker timing remain separate work. See the
 [host contract](specs/steam-host-source-cycle-20261107.md).
 
+## Retained source flags and the restore gate
+
+Saved ground-item and static-object overrides restore their corresponding sticky
+source flags even when the saved array is empty. Host replies therefore include
+restored ground overrides. Once a retained entry exists, later empty collections
+and zero counters remain authoritative values rather than requests to keep old
+state. Recording order remains arrays, edits, count map and scalar.
+
+`skipRestore` represents nonzero World+0x358, independently of dedicated-host
+status. It suppresses restoration after generation; later unload recording has no
+such internal gate. These helper semantics are covered by the
+[field-lifetime contract](specs/steam-retained-source-field-lifetimes-20261107.md).
+Full physical source binding, connection ordering and periodic persistence remain
+separate work.
+
 ## Captures and procedural seeds
 
 A scene capture is a screenshot of the nearby prepared view. Game and Alpha

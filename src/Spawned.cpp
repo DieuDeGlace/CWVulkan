@@ -1925,13 +1925,13 @@ std::optional<objectvisual::State> SpawnedCreatures::objectVisual(int zx, int zy
     return std::nullopt;
 }
 
-void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool serverMode) {
+void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool skipRestore) {
     storedZones = world;
     lastWorld = &ew;
     if (world && respawnSettings.mode != enemyrespawn::Mode::Permanent)
         for (auto &[zone, state] : world->zones)
             state.deadTracked = 0; // temporary deaths from an earlier instance have ended
-    zoneStates = zonestates::ZoneStates(world, serverMode, [&ew](nativesaves::Cell zone, const std::vector<nativesaves::BlockChange> &changes) {
+    zoneStates = zonestates::ZoneStates(world, skipRestore, [&ew](nativesaves::Cell zone, const std::vector<nativesaves::BlockChange> &changes) {
         ew.setBlockChanges(zone[0], zone[1], changes);
     });
 }

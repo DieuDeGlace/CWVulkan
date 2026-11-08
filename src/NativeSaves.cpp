@@ -537,16 +537,18 @@ void recordZone(WorldState &world, Cell zone, const ZoneLists &lists) {
         record().deadTracked = lists.deadTracked;
 }
 
-void applyStoredZone(const WorldState &world, Cell zone, ZoneLists &lists, bool serverMode,
+void applyStoredZone(const WorldState &world, Cell zone, ZoneLists &lists, bool skipRestore,
                      const std::function<void(const BlockChange &)> &setBlock) {
-    if (serverMode)
+    if (skipRestore)
         return;
     auto found = world.zones.find(zone);
     if (found == world.zones.end())
         return;
     const ZoneState &z = found->second;
-    if (z.flags & ZoneState::GROUND_ITEMS_SAVED)
+    if (z.flags & ZoneState::GROUND_ITEMS_SAVED) {
         lists.groundItems = z.groundItems;
+        lists.groundItemsChanged = true;
+    }
     if (z.flags & ZoneState::STATIC_OBJECTS_SAVED) {
         lists.staticObjects = z.staticObjects;
         lists.staticObjectsChanged = true;

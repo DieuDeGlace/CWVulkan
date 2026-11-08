@@ -258,7 +258,7 @@ class SpawnedCreatures {
     // --- What changed in the zones (ZoneStates.h, native-saves.md §5.3) ---
     // The world's stored zone states (Save/world.db): put on each zone as it is made, recorded
     // into as it leaves memory. Null: zones are kept for the session only.
-    void setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool serverMode);
+    void setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool skipRestore);
     // A zone's ground items (zone +0x30, 0xe0 bytes each; an empty slot's item type is 0), made
     // with the zone when it comes into memory; null when its blocks are not in memory yet.
     const std::vector<nativesaves::Record> *groundItems(ExtractedWorld &ew, int zx, int zy);

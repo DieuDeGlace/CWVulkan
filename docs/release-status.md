@@ -1,5 +1,32 @@
 # Source review checkpoint — 2026-11-07
 
+## Retained source helper flags and gates - 2026-11-07
+
+Restoring a saved ground-item array now preserves its source override flag, as
+already done for static objects. This includes an explicitly empty override.
+Later replacement and retirement therefore retain that value, and host source
+replies include the saved array instead of omitting it. The five-field recording
+routine already matched the ordered contract and was left unchanged: once a
+retained entry exists, empty edit/count containers and a zero scalar replace its
+previous values, while array flags remain sticky.
+
+The restoration predicate is now named `skipRestore`. It represents the nonzero
+World+0x358 gate, independently of dedicated-host status. It suppresses restoration
+of generated values but does not suppress recording on later unload. Both actual
+standalone and host callers still pass their existing false value; this is not a
+claim of a previously broken dedicated-server session.
+
+Seven reproduced helper failures now pass. Focused checks cover ordered edit
+replay, both restored flags, explicit empty overrides, all five retained fields,
+and recording with restoration suppressed. The local host-reply path additionally
+checks nonempty and explicitly empty restored ground arrays. Full required-owner
+CPU, Vulkan image groups and SDK-independence checks pass. See the independent
+[field-lifetime contract](specs/steam-retained-source-field-lifetimes-20261107.md).
+
+This closes bounded helper semantics. Binding all five fields to physical source
+residency, full connection/publication ordering, logical residency and native
+periodic persistence remain open.
+
 ## Prepared-scene capture readiness - 2026-11-07
 
 The engine's capture/benchmark readiness test now distinguishes required source

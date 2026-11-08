@@ -2657,3 +2657,15 @@ A controlled real-world failure now passes, together with cold/changed-context
 checks and full required-owner CPU/Vulkan/SDK validation. Default-distance origin
 and negative-half-block captures produce viewed ground images; original pixels,
 generation speed and broader runtime parity are not inferred from those images.
+
+## Retained source helper flags and gates, 2026-11-07
+
+The isolated original-only author supplied the complete held five-field lifetime
+contract without replacement-code, SDK or fixture exposure. The implementer read
+that prose and owned engine sources only. Saved ground overrides now restore
+their sticky flag; the restoration gate no longer suppresses later unload
+recording. Existing five-field recording order was retained. Seven reproduced
+helper failures and nonempty/empty local host replies exercise this bounded fix.
+Physical source binding, wider synchronization and native persistence remain open;
+these checks do not establish full source-lifecycle or network parity. The private
+receipt freezes the original held bytes; owner content is not published.

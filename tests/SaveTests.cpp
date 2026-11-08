@@ -463,9 +463,9 @@ void zoneStates() {
     applyStoredZone(w, {1, 1}, again, false, [&](const BlockChange &b) { setBlocks += b.now()[0] == 7; });
     SAVE_CHECK(again.staticObjects[1][0x28] == 1 && again.staticObjectsChanged && again.groundItems.size() == 3);
     SAVE_CHECK(setBlocks == 2 && again.deadTracked == 2 && again.blockChanges.size() == 2);
-    ZoneLists server = generated;
-    applyStoredZone(w, {1, 1}, server, true, nullptr);
-    SAVE_CHECK(server.staticObjects[1][0x28] == 0 && server.deadTracked == 0);
+    ZoneLists skipped = generated;
+    applyStoredZone(w, {1, 1}, skipped, true, nullptr);
+    SAVE_CHECK(skipped.staticObjects[1][0x28] == 0 && skipped.deadTracked == 0);
     // The world reset empties the dead and the zones, keeps the rewards.
     w.dead = {1}, w.rewards = {2};
     resetWorld(w);
@@ -579,6 +579,89 @@ void generatedObjectMetadata() {
     SAVE_CHECK(zonestates::staticObjectRecord(worldgen::ZoneObject{})[0xd8] == 1);
 }
 
+
+void retainedSourceLifetimes() {
+    const Cell key{7,-9}, countKey{3,-4};
+    WorldState world;
+    auto &saved = world.zones[key];
+    saved.flags = ZoneState::GROUND_ITEMS_SAVED | ZoneState::STATIC_OBJECTS_SAVED;
+    saved.groundItems.resize(1);
+    saved.groundItems[0][0] = 0x11;
+    saved.staticObjects.resize(1);
+    saved.staticObjects[0][0] = 0x22;
+    BlockChange first{}, second{};
+    first.bytes[0x12] = 4;
+    second.bytes[0x12] = 9;
+    saved.blockChanges = {first, second};
+    saved.placeCounters[countKey] = 3;
+    saved.deadTracked = 7;
+    ZoneLists live;
+    live.groundItems.resize(3);
+    live.staticObjects.resize(2);
+    live.deadTracked = 99;
+    live.placeCounters[countKey] = 99;
+    std::vector<int> replay;
+    bool replayStage = true;
+    applyStoredZone(world, key, live, false, [&](const BlockChange &change) {
+        replayStage &= live.groundItems == saved.groundItems && live.staticObjects == saved.staticObjects &&
+                       live.groundItemsChanged && live.staticObjectsChanged &&
+                       live.deadTracked == 99 && live.placeCounters[countKey] == 99 && live.blockChanges.size() == 2;
+        replay.push_back(change.now()[0]);
+    });
+    SAVE_CHECK(live.groundItemsChanged && live.staticObjectsChanged);
+    SAVE_CHECK(replayStage && replay == std::vector<int>({4,9}));
+    SAVE_CHECK(live.deadTracked == 7 && live.placeCounters[countKey] == 3);
+    // A later first-array replacement need not set the already-restored flag.
+    // Its authoritative empty value must still survive another retirement.
+    live.groundItems.clear();
+    live.staticObjects.clear();
+    live.blockChanges.clear();
+    live.placeCounters.clear();
+    live.deadTracked = 0;
+    recordZone(world, key, live);
+    SAVE_CHECK(saved.flags == (ZoneState::GROUND_ITEMS_SAVED | ZoneState::STATIC_OBJECTS_SAVED));
+    SAVE_CHECK(saved.groundItems.empty() && saved.staticObjects.empty());
+    SAVE_CHECK(saved.blockChanges.empty() && saved.placeCounters.empty() && saved.deadTracked == 0);
+    ZoneLists regenerated;
+    regenerated.groundItems.resize(3);
+    regenerated.staticObjects.resize(2);
+    applyStoredZone(world, key, regenerated, false, nullptr);
+    SAVE_CHECK(regenerated.groundItems.empty() && regenerated.staticObjects.empty() &&
+               regenerated.groundItemsChanged && regenerated.staticObjectsChanged);
+    // The nonzero World+358 predicate skips restoration, not later retention.
+    const Cell suppressedKey{12,5};
+    world.zones[suppressedKey].flags = ZoneState::GROUND_ITEMS_SAVED | ZoneState::STATIC_OBJECTS_SAVED;
+    world.zones[suppressedKey].groundItems.resize(1);
+    world.zones[suppressedKey].groundItems[0][0] = 0x77;
+    world.zones[suppressedKey].staticObjects.resize(1);
+    world.zones[suppressedKey].staticObjects[0][0] = 0x88;
+    zonestates::ZoneStates suppressed(&world, true);
+    std::vector<Record> items(1), objects(1);
+    items[0][0] = 0x33;
+    objects[0][0] = 0x44;
+    auto &unrestored = suppressed.load(suppressedKey, items, objects);
+    SAVE_CHECK(unrestored.groundItems == items && unrestored.staticObjects == objects &&
+               !unrestored.groundItemsChanged && !unrestored.staticObjectsChanged);
+    unrestored.groundItems.clear();
+    unrestored.staticObjects[0][0] = 0x55;
+    unrestored.groundItemsChanged = unrestored.staticObjectsChanged = true;
+    unrestored.blockChanges = {second};
+    unrestored.placeCounters[countKey] = 2;
+    unrestored.deadTracked = 3;
+    suppressed.unload(suppressedKey);
+    const auto &recorded = world.zones[suppressedKey];
+    SAVE_CHECK(recorded.groundItems.empty() && recorded.staticObjects.size() == 1 && recorded.staticObjects[0][0] == 0x55);
+    SAVE_CHECK(recorded.blockChanges.size() == 1 && recorded.blockChanges[0].bytes == second.bytes &&
+               recorded.placeCounters.at(countKey) == 2 && recorded.deadTracked == 3);
+    const Cell emptyKey{50,-7};
+    auto &explicitEmpty = suppressed.load(emptyKey, items, objects);
+    explicitEmpty.groundItems.clear();
+    suppressed.groundItemsChanged(emptyKey);
+    suppressed.unload(emptyKey);
+    SAVE_CHECK(world.zones.count(emptyKey) == 1 && world.zones[emptyKey].flags == ZoneState::GROUND_ITEMS_SAVED &&
+               world.zones[emptyKey].groundItems.empty());
+}
+
 } // namespace
 
 int saveFormatTests() {
@@ -591,7 +674,15 @@ int saveFormatTests() {
     characterFile();
     importing();
     zoneStates();
+    retainedSourceLifetimes();
     generatedObjectMetadata();
     terrainProfiles();
+    return failures;
+}
+
+int retainedSourceTests() {
+    failures = 0;
+    retainedSourceLifetimes();
+    std::printf("Retained source lifetimes: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

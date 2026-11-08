@@ -98,7 +98,7 @@ BlockChange blockChange(int32_t x, int32_t y, int32_t z, const std::array<uint8_
     return c;
 }
 
-ZoneStates::ZoneStates(nativesaves::WorldState *w, bool server, BlocksChanged b) : world(w), serverMode(server), blocks(std::move(b)) {}
+ZoneStates::ZoneStates(nativesaves::WorldState *w, bool skip, BlocksChanged b) : world(w), skipRestore(skip), blocks(std::move(b)) {}
 
 nativesaves::ZoneLists *ZoneStates::find(Cell zone) {
     auto it = zones.find(zone);
@@ -158,7 +158,7 @@ nativesaves::ZoneLists &ZoneStates::load(Cell zone, std::vector<Record> groundIt
     lists.groundItems = std::move(groundItems);
     lists.staticObjects = std::move(staticObjects);
     if (world)
-        nativesaves::applyStoredZone(*world, zone, lists, serverMode, nullptr);
+        nativesaves::applyStoredZone(*world, zone, lists, skipRestore, nullptr);
     // The block changes go back in order; whoever keeps the blocks puts each "now" block back.
     if (blocks && !lists.blockChanges.empty())
         blocks(zone, lists.blockChanges);
@@ -171,7 +171,7 @@ void ZoneStates::unload(Cell zone, std::optional<int32_t> deadTracked) {
         return;
     if (deadTracked)
         it->second.deadTracked = *deadTracked;
-    if (world && !serverMode)
+    if (world)
         nativesaves::recordZone(*world, zone, it->second);
     zones.erase(it);
 }

@@ -46,10 +46,11 @@ BlockChange blockChange(int32_t x, int32_t y, int32_t z, const std::array<uint8_
 class ZoneStates {
   public:
     using BlocksChanged = std::function<void(Cell zone, const std::vector<BlockChange> &changes)>;
-    // `world` holds the stored states (null: nothing is applied or recorded). In server mode
-    // nothing is applied (0x2ae0c0). `blocks` replays stored history when a zone is loaded;
-    // appending live history never invokes that callback.
-    ZoneStates(nativesaves::WorldState *world = nullptr, bool serverMode = false, BlocksChanged blocks = {});
+    // `world` holds retained states (null: nothing is applied or recorded).
+    // skipRestore models the nonzero World+0x358 restoration gate (0x2ae0c0);
+    // recording on unload has no such gate (0x2d3e20). `blocks` replays stored
+    // history on load; appending live history never invokes that callback.
+    ZoneStates(nativesaves::WorldState *world = nullptr, bool skipRestore = false, BlocksChanged blocks = {});
 
     bool loaded(Cell zone) const { return zones.count(zone) != 0; }
     nativesaves::ZoneLists *find(Cell zone);
@@ -82,7 +83,7 @@ class ZoneStates {
 
   private:
     nativesaves::WorldState *world;
-    bool serverMode;
+    bool skipRestore;
     BlocksChanged blocks;
     std::map<Cell, nativesaves::ZoneLists> zones;
 };

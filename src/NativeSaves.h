@@ -183,9 +183,10 @@ struct ZoneLists {
 };
 // Records a zone's state into the world's map as the zone is unloaded (0x2d3e20).
 void recordZone(WorldState &world, Cell zone, const ZoneLists &lists);
-// Applies a stored state on top of a freshly generated zone (0x2ae0c0); nothing in server mode.
+// Applies retained state after generation (0x2ae0c0). skipRestore models nonzero
+// World+0x358, independently of dedicated-host status and later recordZone calls.
 // `setBlock` re-applies each block change's "now" block, in order.
-void applyStoredZone(const WorldState &world, Cell zone, ZoneLists &lists, bool serverMode,
+void applyStoredZone(const WorldState &world, Cell zone, ZoneLists &lists, bool skipRestore,
                      const std::function<void(const BlockChange &)> &setBlock);
 // The world reset (0x2c34c0) on the world's side: the dead set and the zone states emptied, the
 // rewards kept. (The player's side is resetCharacterForWorld.)
