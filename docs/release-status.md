@@ -1,5 +1,62 @@
 # Source review checkpoint — 2026-11-08
 
+## Viewed packet dispatch and frame boundaries - 2026-11-08
+
+Viewed gameplay packets now dispatch after World stepping, drawn-position work,
+previously pending event application and local input, before the current camera
+and renderer work. The earlier phase advances transport and the independent host
+only. Current clock/identity/entity changes therefore reach later presentation
+without rerunning the completed World batch. Newly received packet7 category
+lists wait for a later frame's earlier consume pass.
+
+The client takes one owned packet batch before applying gameplay callbacks.
+Immediate3/4/6/8 operations are forwarded to the World adapter in queue order,
+with current-peer admission checked for every entry. A peer transition can reject
+later old-peer entries and admit the new peer in that same batch. Source-request
+coordinates are sampled before dispatch. Sending occurs in the late phase;
+current local events are collected after renderer submission and the World event
+group is then cleared. They become eligible for a later send.
+
+Loopback and UDP extract their queued entries under one guard. The existing Steam
+backend finishes its available-byte drain before gameplay callbacks; its precise
+worker/ingestion timing and cross-producer ordering remain separate work. Owned
+batches, synchronous interface borrowing and per-entry payload lifetimes avoid
+async callbacks into caller state. The low-level value Inbox remains a protocol
+adapter. Broader native connection-role, complete rekey/collision and transport
+lifetime behavior are not claimed by this scheduling change.
+
+A real session/World/packet regression reproduced four earlier ordering failures.
+It now passes next-frame category application, late day reset after prior death-ID
+merge, mixed immediate packet and identity order, peer transitions, callback
+packets deferred outside the batch, pre-dispatch requests and later own-event
+sending. The existing protocol fixture now asserts no host effect at collection
+or the subsequent send, then exactly one hit/sound at host application. A first
+fixture compile used an absent convenience constant and was corrected without
+changing an engine predicate.
+
+All five targets build; the full required-owner CPU suite passes without skips,
+including region-sharing and earlier source/persistence cases. Vulkan checks pass:
+92 shader, 2 camera, 102 GUI, 17 map, 14 native-water, shared-water and Alpha-scenery
+groups, plus SDK independence. The hidden offline/no-save native process exits
+zero in 48.125 seconds. The first Alpha process exits one after 131.297 seconds at
+its readiness limit without an image; the unchanged binary/settings/deadline retry
+exits zero in 82.907 seconds.
+Both successful images were inspected for terrain, vegetation and HUD. The first
+failure remains evidence of variable cold-fill readiness; no speedup or original-
+pixel/runtime acceptance is inferred. No diagnostic deadline or readiness rule
+was relaxed. Alpha/Omega defaults and other enhancements remain supported.
+
+The independent [phase contract](specs/steam-viewed-network-dispatch-phases-20261108-v2.md),
+[identity transitions](specs/steam-client-connection-identity-transitions-20261108.md),
+[collision limits](specs/steam-local-identity-collision-lifetime-20261108.md) and
+[late read-only visit](specs/steam-late-world-event-consumer-20261108.md) were each
+finalized and held by an original-only author, then entirely read by the clean
+implementer. Four original-byte hashes are frozen privately. The late visitor
+has no proved award mutation; no invented operation was added for it. Complete
+role-byte/restoration gates, safe rekey lifetime policy, clock arithmetic,
+character-worker scheduling, untraced writers/guards and broad native acceptance
+remain open.
+
 ## Viewed World metadata reset - 2026-11-08
 
 An incoming clock message whose day differs now clears both the viewed World's

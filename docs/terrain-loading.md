@@ -245,6 +245,19 @@ keeps its explicit archive adapter. See the [persistence contract](specs/steam-h
 and [checkpoint](release-status.md) for ownership/failure tests, evidence limits
 and remaining character scheduling, durability and native runtime acceptance.
 
+## Source requests within the viewed frame
+
+The client samples requested coordinates after World/local-input work but before
+its late receive batch. A peer transition can mark current loaded sources for
+future requests without rebuilding that already sampled list. Immediate source-
+independent entity/clock changes occur in packet order; packet7 array/history
+application belongs to a later frame's earlier category pass. The World source
+factory, preparation and retirement rules retain their separate boundaries.
+Loopback/UDP batches have guarded extraction; exact Steam ingestion timing and
+complete connection/restoration gates remain open. See the
+[phase](specs/steam-viewed-network-dispatch-phases-20261108-v2.md) and
+[connection](specs/steam-client-connection-identity-transitions-20261108.md) contracts.
+
 ## Incoming day changes and retained state
 
 The viewed metadata reset clears its death-ID set and retained source map before

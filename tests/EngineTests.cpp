@@ -214,6 +214,7 @@ int objectClockTests(); // tests/ObjectClockTests.cpp
 int physicalSourceStateTests(); // tests/PhysicalSourceStateTests.cpp
 int nativePersistenceTests(); // tests/NativePersistenceTests.cpp
 int worldIdentifierStateTests(); // tests/WorldIdentifierStateTests.cpp
+int viewedNetworkPhaseTests(); // tests/ViewedNetworkPhaseTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int worldGateCaptureCommand(const std::filesystem::path &);
 int blockMutationTests();
@@ -9541,6 +9542,8 @@ int main(int argc, char **argv) {
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "sourcecreation")
         return nativeSourceCreationTests();
+    if (argc == 2 && std::string(argv[1]) == "networkphases")
+        return viewedNetworkPhaseTests();
     if (argc == 2 && std::string(argv[1]) == "worldidentifiers")
         return worldIdentifierStateTests();
     if (argc == 2 && std::string(argv[1]) == "nativepersistence")
@@ -10853,6 +10856,7 @@ int main(int argc, char **argv) {
     failures += physicalSourceStateTests();
     failures += nativePersistenceTests();
     failures += worldIdentifierStateTests();
+    failures += viewedNetworkPhaseTests();
     failures += nativeSourceCreationTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();

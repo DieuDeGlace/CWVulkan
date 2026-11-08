@@ -4006,8 +4006,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         const uint32_t nowMs = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(worldFrameNow.time_since_epoch()).count();
         if (spawnedReady) {
             const double ms = gamemath::frameMilliseconds(frameMs);
-            // Receive creature/clock packets before the client world; packet7 event lists
-            // stay queued until after its drawn-position pass (block-change lifecycle §3).
+            // The host/transport advance separately. Viewed packets remain queued
+            // until the late dispatch, after this World and local-input work.
             if (session.started()) {
                 if (HostSide *host = session.hostSide())
                     host->standIn = player.position;
@@ -6961,10 +6961,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     logLine("Events: " + reply);
                 }
             }
-            // The end of the frame: what this player caused goes to its host (with its record,
-            // at most every 32 ms), and the client world's lists start empty again.
-            session.endFrame(nowMs);
-            spawned.events() = cwnet::WorldEvents{};
+            // Native late dispatch: current3/4/6/8 effects precede the camera;
+            // newly received7 lists wait for a later frame's earlier consume pass.
+            session.dispatch(nowMs);
+            SpawnedCreatures &clock = serverMode ? hostWorld : spawned;
+            hour = clock.timeOfDay() / 3600000.0f;
+            day = clock.day();
             static double netLogged = 0; // for the log: who this player is and whom it sees
             if (session.started() && !serverMode && time - netLogged > 5) {
                 netLogged = time;
@@ -8495,6 +8497,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             sourceStateScope.unlock(); // draw uses immutable meshes and copied source inputs
             renderer.frame(camera, lighting, player.position, time, opaque, water);
+        }
+        if (spawnedReady) {
+            auto eventScope = extractedWorld.lockSourceState();
+            session.endFrame(); // native0x3cc40 follows renderer submission
+            spawned.events() = cwnet::WorldEvents{};
         }
         auto column = columnAt(player.position.x, player.position.y);
         {

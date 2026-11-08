@@ -34,6 +34,8 @@
 
 namespace cwnet {
 
+class MirrorWorld;
+
 struct ChatLine {
     int64_t speaker = 0;
     std::u16string text;
@@ -208,7 +210,9 @@ class GuestLink {
     void requestFullUpdate() { lastSent.reset(); }
 
     // Start of the client tick: everything waiting on channel 0.
-    void receive(uint32_t nowMs, Inbox &inbox);
+    // Optional receiver is borrowed only for this synchronous batch. Without
+    // one, protocol fixtures may inspect the value-owned Inbox instead.
+    void receive(uint32_t nowMs, Inbox &inbox, MirrorWorld *receiver = nullptr);
     // Then the timers: host silence and invitation expiry. Returns true if it went home.
     bool checkTimers(uint32_t nowMs);
     // Then, at most every 32 ms with a valid host: [3] -> [14] -> [9] -> [10]s -> [11]s -> [12]s ->

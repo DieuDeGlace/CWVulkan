@@ -10,12 +10,13 @@
 // The session owns the transport and the two protocol ends, and drives them in the game's order
 // each frame:
 //
-//   session.beginFrame(now);    // the host's tick (about every 32 ms, unless the player is a guest
-//                               // elsewhere), then what the client's host sent
-//   ... the client world steps and smooths its drawn positions ...
-//   session.consume();          // queued world updates, after that world/drawn-position pass
-//   ... the player plays ...
-//   session.endFrame(now);      // what the player caused, and the client's packets
+//   session.beginFrame(now);    // transport ingestion and the separate host tick
+//   ... the client World steps and smooths its drawn positions ...
+//   session.consume();          // category lists pending from earlier dispatches
+//   ... local player input/control ...
+//   session.dispatch(now);      // source-request snapshot, incoming batch and send
+//   ... camera/interface/renderer ...
+//   session.endFrame();         // collect current local events for a later send
 //
 // How players reach each other:
 //   * Steam (the game's way): immediate Steam friends only; the host invites, the guest joins from
@@ -74,7 +75,8 @@ class Multiplayer {
 
     void beginFrame(uint32_t nowMs);
     void consume();
-    void endFrame(uint32_t nowMs);
+    void dispatch(uint32_t nowMs);
+    void endFrame();
     // Pyro's world-shared baseline lasts only while a region has occupants.
     // The host decides; negotiated CubeVulkan extras mirror it to guests.
     void setRegionScaling(bool enabled);

@@ -5,18 +5,14 @@
 // The client world is always a mirror of a host: of a friend's when this player joined one,
 // otherwise of this machine's own host through the loopback (that is single player). Each frame:
 //
-//   receive()             the host's packets: creatures made, changed and removed (3, 6), the
-//                         player's id (4), the clock (8, a new day running the day change), chat;
-//                         the world updates (7) are kept for...
-//   ... the client world steps and advances drawn positions ...
-//   consumeWorldUpdates() ...the frame routine's later pass, in the game's order:
-//                         blocks, zone states, buffs, aggro, kill credits,
-//                         the lists the world's consumers play, damage numbers (a monster's hit
-//                         on the local player is applied here, by its own client), effects;
-//   send()                at the end of the frame: what the local player caused this frame is
-//                         queued (its hits, sounds, buffs and effects), and at most every 32 ms
-//                         its record, one chat line, one interaction, those events and, once a
-//                         second, the zones still needing their state go to the host.
+//   ... the client World steps, smooths and consumes previously pending lists ...
+//   ... local player input/control ...
+//   prepareSourceRequests()  snapshots the already built request coordinates;
+//   receive()               dispatches one batch in queue order:3/4/6/8 are
+//                           immediate,7 appends lists for a later consume pass;
+//   send()                  connection maintenance and the outgoing send tick;
+//   ... camera/interface/renderer ...
+//   collectOwnEvents()      queues this frame's local events for a later send.
 #include "net/Session.h"
 #include "net/Worlds.h"
 
@@ -34,7 +30,9 @@ class ClientGame {
 
     void receive(uint32_t nowMs);
     void consumeWorldUpdates();
+    void prepareSourceRequests();
     void send(uint32_t nowMs);
+    void collectOwnEvents();
 
     // What happened for the player to see, taken by the game.
     std::vector<ChatLine> chat;         // lines received, with the speaker's creature id

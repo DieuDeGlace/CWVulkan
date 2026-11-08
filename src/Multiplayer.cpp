@@ -258,8 +258,14 @@ void Multiplayer::beginFrame(uint32_t nowMs) {
         hostGame->frame(nowMs);
         sendRegionLevels();
     }
+}
+
+void Multiplayer::dispatch(uint32_t nowMs) {
+    if (!transport) return;
     if (client) {
+        client->prepareSourceRequests();
         client->receive(nowMs);
+        client->send(nowMs);
         remoteRegionView = guestElsewhere();
         if (client->link().hostIsCubeVulkan() && requestedRegionHost != client->link().host()) {
             if (client->link().sendExtra({"cwv.region-levels.request.v1", {}}))
@@ -288,9 +294,9 @@ void Multiplayer::consume() {
         client->consumeWorldUpdates();
 }
 
-void Multiplayer::endFrame(uint32_t nowMs) {
+void Multiplayer::endFrame() {
     if (client)
-        client->send(nowMs);
+        client->collectOwnEvents();
 }
 
 bool Multiplayer::joinAddress(const std::string &address, uint16_t port, std::string &error) {

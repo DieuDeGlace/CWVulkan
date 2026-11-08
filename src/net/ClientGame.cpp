@@ -15,20 +15,7 @@ ClientGame::ClientGame(Transport &transport, MirrorWorld &world, std::function<v
 
 void ClientGame::receive(uint32_t nowMs) {
     GuestLink::Inbox inbox;
-    guestLink.receive(nowMs, inbox);
-    if (inbox.givenId)
-        world.setLocalId(*inbox.givenId);
-    // Creature records and packet 6s in the order they came.
-    for (const auto &[isUpdate, index] : inbox.creatureOrder)
-        if (isUpdate)
-            world.receiveCreature(inbox.creatureUpdates[index]);
-        else
-            world.keepOnly(inbox.creatureLists[index]);
-    for (const Time &t : inbox.times) {
-        if (t.day != world.day())
-            world.dayChange(t.day);
-        world.setClock(t.day, t.timeOfDay);
-    }
+    guestLink.receive(nowMs, inbox, &world);
     for (WorldEvents &events : inbox.worldUpdates)
         received.push_back(std::move(events));
     for (ChatLine &line : inbox.chat)
@@ -97,12 +84,17 @@ void ClientGame::consumeWorldUpdates() {
             world.showDamageNumber(d);
 }
 
+void ClientGame::prepareSourceRequests() {
+    guestLink.outbox.neededZones = world.neededZones(); // before the late receive snapshot
+}
+
+void ClientGame::collectOwnEvents() {
+    guestLink.queueOwnEvents(world.ownEvents()); // end-of-frame0x3cc40, after renderer submission
+}
+
 void ClientGame::send(uint32_t nowMs) {
-    // What the local player caused this frame (0x3cc40).
-    guestLink.queueOwnEvents(world.ownEvents());
     if (guestLink.checkTimers(nowMs))
         wentHome = true;
-    guestLink.outbox.neededZones = world.neededZones();
     if (guestLink.outbox.interactions.empty()) {
         InteractionRecord record;
         if (world.takeInteraction(record))

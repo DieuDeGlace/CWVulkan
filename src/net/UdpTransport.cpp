@@ -208,6 +208,19 @@ bool UdpTransport::receive(Channel channel, Received &out) {
     return true;
 }
 
+std::vector<Received> UdpTransport::receiveBatch(Channel channel) {
+    std::vector<Received> batch;
+    std::lock_guard<std::mutex> hold(lock);
+    readSocket();
+    auto &queue = inbox[(int)channel];
+    batch.reserve(queue.size());
+    while (!queue.empty()) {
+        batch.push_back(std::move(queue.front()));
+        queue.pop_front();
+    }
+    return batch;
+}
+
 void UdpTransport::pump(uint32_t nowMs) {
     std::lock_guard<std::mutex> hold(lock);
     clock = nowMs;

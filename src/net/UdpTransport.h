@@ -39,6 +39,7 @@ class UdpTransport : public Transport {
     bool valid(PeerId peer) const override { return peer != 0; }
     bool send(PeerId to, Channel channel, const Bytes &packet) override;
     bool receive(Channel channel, Received &out) override;
+    std::vector<Received> receiveBatch(Channel channel) override;
     // Reads the socket and resends what is not yet acknowledged. Call every frame or tick.
     void pump(uint32_t nowMs) override;
     bool cubeVulkanOnly() const override { return true; }

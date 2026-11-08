@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Viewed network dispatch follows World/drawn/pending-event/local-input work
+  and precedes camera/rendering. Immediate3/4/6/8 effects preserve batch order;
+  packet7 remains pending for a later consume pass. Requests are sampled before
+  dispatch, sends occur late, and own events gather/clear after renderer submission.
+  Four reproduced failures, session/packet/lifetime checks, full required-owner
+  CPU without skips, Vulkan and SDK checks pass. Native and Alpha smoke images
+  pass, with one retained Alpha deadline failure before the unchanged retry.
+  Transport timing, connection roles/rekey, clocks and broader runtime acceptance
+  remain open. See [the checkpoint](release-status.md) and
+  [phase contract](specs/steam-viewed-network-dispatch-phases-20261108-v2.md).
+
 - [x] Incoming different-day clock messages reset both death IDs and retained
   source state before scalar stores, preserving reward IDs, loaded physical
   payloads and residents. A real client/packet/source fixture reproduces two

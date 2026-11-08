@@ -986,9 +986,11 @@ void hostAndClientGames() {
     ClientGame client(*a, mirror, [&] { host.link().dropAll(); });
     uint32_t now = 1000;
     auto frame = [&](ClientGame &c) {
-        c.receive(now);
         c.consumeWorldUpdates();
+        c.prepareSourceRequests();
+        c.receive(now);
         c.send(now);
+        c.collectOwnEvents();
     };
     auto tick = [&](int frames = 1) {
         for (int i = 0; i < frames; i++) {
@@ -1035,9 +1037,12 @@ void hostAndClientGames() {
     // The local player's own hits and sounds go to the host, which applies them.
     mirror.own.damageNumbers = {damageNumber(1, 5002, 25.0f), damageNumber(5002, 1, 1.0f)};
     mirror.own.sounds = {mine, near};
-    tick();
+    tick(); // collect after this frame's send
     mirror.own = {};
-    tick();
+    NET_CHECK(hostWorld.caused.damageNumbers.empty() && hostWorld.caused.sounds.empty());
+    tick(); // transmit the previously collected records after this host's early phase
+    NET_CHECK(hostWorld.caused.damageNumbers.empty() && hostWorld.caused.sounds.empty());
+    tick(); // the host now applies exactly those records
     NET_CHECK(hostWorld.caused.damageNumbers.size() == 1 && hostWorld.caused.sounds.size() == 1);
     // One interaction a send tick.
     InteractionRecord pickUp = defaultInteraction();

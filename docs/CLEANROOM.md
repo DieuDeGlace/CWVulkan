@@ -2767,3 +2767,19 @@ IDs and loaded lifetimes. Signed victim-ID and packet peer/clock checks retain
 their bounded scope. A fresh isolated author is separately tracing complete
 viewed dispatch phases; no unfinished phase output is accepted. Other writers,
 individual erasure, universal guards and broad native runtime parity remain open.
+
+## Viewed packet dispatch, 2026-11-08
+
+A fresh isolated original-only author held four separate phase, connection,
+collision-lifetime and late-record contracts. The implementer read each complete
+artifact, froze its original-byte hash and used owned code only. No unfinished
+pre-reload phase handoff was accepted. Owned client dispatch now follows the
+proved frame boundary and immediate queue order, with pre-dispatch requests and
+post-renderer event collection. Four reproduced failures and stronger real-session
+cases pass, with full required-owner CPU/Vulkan/SDK checks. The protocol fixture
+now explicitly checks the three outgoing stages rather than relaxing counts.
+Native and Alpha scene images pass; the first Alpha deadline failure is retained
+before an unchanged retry and cold-fill reliability stays open. Precise Steam
+transport ingestion, connection-role/rekey policy, native clocks and broader
+acceptance remain separate. No original code, owner data or private probe is
+published, and no unsupported effect was assigned to the read-only late visitor.

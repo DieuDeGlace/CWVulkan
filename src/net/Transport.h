@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <vector>
 
 namespace cwnet {
 
@@ -48,6 +49,14 @@ class Transport {
     virtual bool send(PeerId to, Channel channel, const Bytes &packet) = 0;
     // Takes the next packet waiting on `channel`; false when none is.
     virtual bool receive(Channel channel, Received &out) = 0;
+    // Finish ingestion before dispatch callbacks. Queued backends override this
+    // with one guarded extraction; external transport arrival timing is separate.
+    virtual std::vector<Received> receiveBatch(Channel channel) {
+        std::vector<Received> batch;
+        Received packet;
+        while (receive(channel, packet)) batch.push_back(std::move(packet));
+        return batch;
+    }
     // Lets the transport do its own work (Steam callbacks, UDP resends). Call once a frame.
     virtual void pump(uint32_t nowMs) { (void)nowMs; }
     // Whether every peer on this transport is CubeVulkan (UDP): extras need no hello there.

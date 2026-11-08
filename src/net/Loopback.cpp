@@ -27,6 +27,20 @@ class LoopbackNetwork::Endpoint : public Transport {
         return true;
     }
 
+    std::vector<Received> receiveBatch(Channel channel) override {
+        std::vector<Received> batch;
+        std::lock_guard<std::mutex> hold(network.lock);
+        auto it = network.queues.find({id, (int)channel});
+        if (it != network.queues.end()) {
+            batch.reserve(it->second.size());
+            while (!it->second.empty()) {
+                batch.push_back(std::move(it->second.front()));
+                it->second.pop_front();
+            }
+        }
+        return batch;
+    }
+
   private:
     LoopbackNetwork &network;
     PeerId id;

@@ -1,4 +1,5 @@
 #include "net/Session.h"
+#include "net/Worlds.h"
 
 #include <type_traits>
 
@@ -228,9 +229,10 @@ void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
     currentHost = host;
 }
 
-void GuestLink::receive(uint32_t nowMs, Inbox &inbox) {
-    Received in;
-    while (transport.receive(Channel::ToClient, in)) {
+void GuestLink::receive(uint32_t nowMs, Inbox &inbox, MirrorWorld *receiver) {
+    auto batch = transport.receiveBatch(Channel::ToClient);
+    for (auto &entry : batch) {
+        Received in = std::move(entry); // release this packet after dispatch, before the next entry
         const bool fromHost = transport.valid(currentHost) && in.from == currentHost;
         if (fromHost)
             lastHeard = nowMs;
@@ -262,9 +264,14 @@ void GuestLink::receive(uint32_t nowMs, Inbox &inbox) {
                     if (p.delta.id == myId)
                         return; // the player's own record never comes from the network
                     heard.insert(p.delta.id);
-                    inbox.creatureOrder.push_back({true, inbox.creatureUpdates.size()});
-                    inbox.creatureUpdates.push_back(std::move(p.delta));
+                    if (receiver)
+                        receiver->receiveCreature(p.delta);
+                    else {
+                        inbox.creatureOrder.push_back({true, inbox.creatureUpdates.size()});
+                        inbox.creatureUpdates.push_back(std::move(p.delta));
+                    }
                 } else if constexpr (std::is_same_v<T, YourId>) {
+                    if (receiver) receiver->setLocalId(p.id);
                     myId = p.id;
                     inbox.givenId = p.id;
                     requestFullUpdate();
@@ -273,8 +280,12 @@ void GuestLink::receive(uint32_t nowMs, Inbox &inbox) {
                         send(in.from, CubeVulkanHello{});
                     }
                 } else if constexpr (std::is_same_v<T, EndOfCreatureUpdates>) {
-                    inbox.creatureOrder.push_back({false, inbox.creatureLists.size()});
-                    inbox.creatureLists.push_back(std::move(heard));
+                    if (receiver)
+                        receiver->keepOnly(heard);
+                    else {
+                        inbox.creatureOrder.push_back({false, inbox.creatureLists.size()});
+                        inbox.creatureLists.push_back(std::move(heard));
+                    }
                     heard.clear();
                 } else if constexpr (std::is_same_v<T, WorldUpdate>) {
                     // A world reset (a sleep notice of 0) makes the next update a full one.
@@ -282,9 +293,13 @@ void GuestLink::receive(uint32_t nowMs, Inbox &inbox) {
                         if (sleep == 0)
                             requestFullUpdate();
                     inbox.worldUpdates.push_back(std::move(p.events));
-                } else if constexpr (std::is_same_v<T, Time>)
-                    inbox.times.push_back(p);
-                else if constexpr (std::is_same_v<T, Chat>) {
+                } else if constexpr (std::is_same_v<T, Time>) {
+                    if (receiver) {
+                        if (p.day != receiver->day()) receiver->dayChange(p.day);
+                        receiver->setClock(p.day, p.timeOfDay);
+                    } else
+                        inbox.times.push_back(p);
+                } else if constexpr (std::is_same_v<T, Chat>) {
                     if (!p.text.empty())
                         inbox.chat.push_back({p.speaker, std::move(p.text)});
                 } else if constexpr (std::is_same_v<T, CubeVulkanHello>)

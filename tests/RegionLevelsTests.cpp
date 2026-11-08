@@ -153,8 +153,8 @@ int regionLevelsTests() {
             auto frames = [&] {
                 for (int i = 0; i < 18; ++i) {
                     now += 32;
-                    home.beginFrame(now); home.consume(); home.endFrame(now);
-                    guest.beginFrame(now); guest.consume(); guest.endFrame(now);
+                    home.beginFrame(now); home.consume(); home.dispatch(now); home.endFrame();
+                    guest.beginFrame(now); guest.consume(); guest.dispatch(now); guest.endFrame();
                 }
             };
             frames();
