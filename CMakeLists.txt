@@ -156,6 +156,7 @@ add_library(engine STATIC
     src/Terrain.cpp
     ${ALPHA_TERRAIN_SOURCES}
     src/Extracted.cpp
+    src/HostSourceLoader.cpp
     src/VegetationWind.cpp
     src/Character.cpp
     src/Creatures.cpp
@@ -498,7 +499,7 @@ target_sources(EngineTests PRIVATE tests/CharacterCardTests.cpp)
 target_sources(EngineTests PRIVATE tests/TerrainBandTests.cpp tests/TerrainPublicationTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamPreparationTests.cpp)
 target_sources(EngineTests PRIVATE tests/GeneratorCacheTests.cpp)
-target_sources(EngineTests PRIVATE tests/NativeSourceStreamingTests.cpp)
+target_sources(EngineTests PRIVATE tests/NativeSourceStreamingTests.cpp tests/HostSourceTests.cpp)
 target_sources(engine PRIVATE src/StaticObjectScene.cpp)
 target_sources(EngineTests PRIVATE tests/StaticObjectSceneTests.cpp)
 target_sources(EngineTests PRIVATE tests/StaticObjectStreamingTests.cpp)

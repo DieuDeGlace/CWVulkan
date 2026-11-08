@@ -1,5 +1,48 @@
 # Source review checkpoint — 2026-11-07
 
+## Serial host source-loading cycle - 2026-11-07
+
+Generated host sessions now own a separate source worker. Host steps publish
+physical/eagle centres; each worker cycle copies the latest publication, builds
+the required union, retires every loaded source outside it, then collects missing
+keys. The native signed-priority sorter and minimum admitted rectangle-distance
+key select at most four serial factory requests. Hits during collection consume no slot; hits after selection keep their slot.
+The admitted prefix finishes before fresh demand or shutdown. Empty demand
+retires all sources; an idle cycle waits five milliseconds and yields. Worker
+exit joins without performing an extra required-set retirement.
+
+New host sources preserve canonical raw bytes until an actual mesh prepass.
+Host/client mutable readers and loaded maps remain distinct. Immutable leases
+survive membership removal, derived memos are invalidated, and Alpha's finite
+source admission remains. Capture replay and standalone compatibility readers
+retain their adapters. Thread ownership, producer publication timing, startup
+adapter prehistory and exception delivery are explicit engine policies, with no
+new native raw-pointer or frame-wide atomicity claim.
+
+Controlled real-generator tests cover a held first request, changed demand,
+joined stop, completion of all four old-prefix requests, existing-hit exclusion,
+nearest-key admission, empty retirement, retained leases, memo fallback and
+owner-visible worker errors. All 17,000 stored records in the checked host zone
+match the canonical raw generator after effective-query normalization. This is
+a stage/lifetime regression, not a new original-game runtime oracle.
+
+All five targets, seven focused groups, the full required-oracle CPU/owner-data
+suite with no skips, all Vulkan groups and SDK-independence audit pass against
+the final finite-domain build. A hidden offline no-save Alpha-terrain/Steam-look/
+Omega capture completes in 79.768 seconds with a viewed terrain/vegetation/HUD
+image and matching executable hash. The repeated default-distance Steam-terrain/
+Native-water case still reaches its internal observation deadline in 126.205
+seconds: 665 prepared zones, 0 mesh jobs, 754 loaded sources and 4 source jobs; no
+image. Native default-distance capture acceptance stays open. A source-boundary
+churn/readiness explanation is under investigation, not established acceptance.
+
+The [host-cycle contract](specs/steam-host-source-cycle-20261107.md) separately
+identifies logical admission, 320-block live-resident retention, the World+0x358
+instance histories and selected-state persistence. Complete five-field retained
+state, connection-dependent restoration, logical admission/retention alignment,
+periodic native persistence and broader visual/travel/memory/FPS checks remain
+open. The source loader checkpoint does not close those separate gates.
+
 ## Resident auxiliary model-light copies - 2026-11-07
 
 Auxiliary light models now belong to the loaded source zone as independent value

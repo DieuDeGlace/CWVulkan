@@ -32,6 +32,8 @@
 
 template <class Value> class NativeSourceMap;
 
+class HostSourceLoader;
+
 class ExtractedWorld {
     struct Zone;
 
@@ -197,6 +199,13 @@ class ExtractedWorld {
     // do not consume that budget. In-flight snapshots can outlive eviction.
     // Native client residency is retired explicitly; it is not an LRU/prefetch keep.
     // Select only while this reader's owners are quiescent (World construction/destruction).
+    // Host mode uses the independent serial source worker. Role/lifetime changes
+    // require quiescent owners, as for client streaming. Capture adapters stay legacy.
+    void setHostStreaming(bool enabled);
+    bool hostSourceStreaming() const { return hostStreaming.load(); }
+    void setHostSourceCentres(std::vector<std::array<int32_t, 2>> centres);
+    size_t pendingHostSourceCount() const;
+    size_t retireHostSources(const std::set<std::pair<int, int>> &required);
     void setClientStreaming(bool enabled);
     bool loadSourceZone(int ax, int ay); // explicit loader/inspector admission
     size_t loadedSourceCount() const;
@@ -278,12 +287,15 @@ class ExtractedWorld {
     int originX = 0, originY = 0, seedValue = 0;
     bool generatedMode = false;
     std::atomic<bool> clientStreaming{false};
+    std::atomic<bool> hostStreaming{false};
+    std::unique_ptr<HostSourceLoader> hostSources;
+    std::vector<std::array<int32_t, 2>> initialHostCentres;
     glm::vec3 homeLocal{0};
     // Small cache of decoded zones shared by the worker threads.
     std::mutex terrainWriterMutex; // serialize COW commits; readers retain immutable snapshots
     mutable std::mutex cacheMutex;
     std::list<std::pair<Key, std::shared_ptr<Zone>>> cache;
-    std::unique_ptr<NativeSourceMap<std::shared_ptr<Zone>>> clientMap;
+    std::unique_ptr<NativeSourceMap<std::shared_ptr<Zone>>> sourceMap;
     struct Kept {
         std::vector<Key> centres;
         int radius = -1;

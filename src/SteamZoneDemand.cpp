@@ -1,6 +1,7 @@
 #include "SteamZoneDemand.h"
 #include "GameMath.h"
 #include <bit>
+#include <cstdlib>
 
 namespace zonedemand {
 namespace {
@@ -30,6 +31,21 @@ int32_t generationPriority(BlockPoint zone, BlockPoint sampledBlocks) {
         squared += distance * distance;
     }
     return signedBits(squared);
+}
+int32_t hostGenerationPriority(BlockPoint zone, std::span<const BlockPoint> centres) {
+    const BlockPoint lower{signedBits(uint32_t(zone[0]) * 64u), signedBits(uint32_t(zone[1]) * 64u)};
+    const BlockPoint upper{signedBits(uint32_t(lower[0]) + 64u), signedBits(uint32_t(lower[1]) + 64u)};
+    int32_t best = -1;
+    for (const auto &point : centres) {
+        if (point[0] >= lower[0] && point[0] <= upper[0] && point[1] >= lower[1] && point[1] <= upper[1])
+            return 0;
+        if (std::abs(int64_t(point[0]) - lower[0]) > 384 || std::abs(int64_t(point[1]) - lower[1]) > 384)
+            continue;
+        const int32_t priority = generationPriority(zone, point);
+        if (best < 0 || priority < best)
+            best = priority;
+    }
+    return best;
 }
 Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
                     const std::optional<BlockPoint> &anchor) {

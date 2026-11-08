@@ -1,4 +1,6 @@
 #include "Extracted.h"
+#include "HostSourceLoader.h"
+#include <stdexcept>
 #include "MeshProfile.h"
 #include "NativeSourceMap.h"
 #include "ObjectOccupancyCapture.h"
@@ -291,8 +293,8 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     Key key{ax, ay};
     {
         std::lock_guard lock(cacheMutex);
-        if (clientMap) {
-            const auto found = clientMap->find(key);
+        if (sourceMap) {
+            const auto found = sourceMap->find(key);
             if (found != cache.end()) return found->second;
         } else {
             for (auto it = cache.begin(); it != cache.end(); ++it)
@@ -309,7 +311,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
         return nullptr;
     std::string error;
     auto zone =
-        generate ? generateZone(ax, ay, !clientStreaming) : readZone(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".cwz"), true, error);
+        generate ? generateZone(ax, ay, !clientStreaming && !hostStreaming) : readZone(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".cwz"), true, error);
     if (!zone)
         return nullptr;
     if (!generate) {
@@ -323,10 +325,10 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     std::lock_guard lock(cacheMutex);
     // A foreground query and prefetch can finish the same read concurrently. Preserve
     // the resident zone's identity instead of inserting another copy of the same key.
-    if (clientMap) {
-        const auto found = clientMap->find(key);
+    if (sourceMap) {
+        const auto found = sourceMap->find(key);
         if (found != cache.end()) return found->second;
-        clientMap->insert(key, zone);
+        sourceMap->insert(key, zone);
     } else {
         for (auto it = cache.begin(); it != cache.end(); ++it)
             if (it->first == key) {
@@ -338,7 +340,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     // Explicit keeps can exceed the normal cache budget (the native player
     // radius alone pins121 zones). Keep a separate bounded LRU for unpinned
     // readers, or every farther mesh request would evict its own source at once.
-    if (!clientStreaming) {
+    if (!clientStreaming && !hostStreaming) {
         constexpr size_t UNPINNED_LIMIT = 96;
         size_t unpinned = size_t(std::count_if(cache.begin(), cache.end(), [&](const auto &entry) { return !kept(entry.first); }));
         for (auto it = cache.end(); unpinned > UNPINNED_LIMIT && it != cache.begin();) {
@@ -365,10 +367,12 @@ ExtractedWorld::ExtractedWorld() : cacheRevision(nextZoneCacheRevision()) {
 }
 
 void ExtractedWorld::clearCache() {
+    setHostStreaming(false);
+    initialHostCentres.clear();
     if (keeper.joinable())
         keeper.join();
     std::lock_guard lock(cacheMutex);
-    clientMap.reset();
+    sourceMap.reset();
     clientStreaming = false;
     cache.clear();
     keptBy.clear();
@@ -383,15 +387,79 @@ void ExtractedWorld::clearCache() {
 }
 
 ExtractedWorld::~ExtractedWorld() {
+    setHostStreaming(false);
     if (keeper.joinable())
         keeper.join();
 }
 
+void ExtractedWorld::setHostStreaming(bool enabled) {
+    if (enabled == hostStreaming.load())
+        return;
+    if (enabled) {
+        if (!generatedMode)
+            return;
+        if (clientStreaming)
+            throw std::logic_error("Host and client source streaming require separate readers");
+        if (keeper.joinable())
+            keeper.join();
+        {
+            std::lock_guard lock(cacheMutex);
+            if (!sourceMap)
+                sourceMap = std::make_unique<NativeSourceMap<std::shared_ptr<Zone>>>(cache);
+            keptBy.clear();
+        }
+        hostStreaming = true;
+        try {
+            hostSources = std::make_unique<HostSourceLoader>(*this, std::move(initialHostCentres));
+        } catch (...) {
+            hostStreaming = false;
+            std::lock_guard lock(cacheMutex);
+            sourceMap.reset();
+            throw;
+        }
+    } else {
+        hostSources.reset(); // join after the admitted serial batch, before changing the reader role
+        hostStreaming = false;
+        initialHostCentres.clear();
+        std::lock_guard lock(cacheMutex);
+        sourceMap.reset();
+        // Worker exit is not required-set retirement. Existing sources remain
+        // until their owner clears/reuses this reader or its World is destroyed.
+    }
+}
+void ExtractedWorld::setHostSourceCentres(std::vector<std::array<int32_t, 2>> centres) {
+    if (hostSources)
+        hostSources->setCentres(std::move(centres));
+    else
+        initialHostCentres = std::move(centres);
+}
+size_t ExtractedWorld::pendingHostSourceCount() const { return hostSources ? hostSources->pending() : 0; }
+size_t ExtractedWorld::retireHostSources(const std::set<std::pair<int, int>> &required) {
+    std::vector<std::shared_ptr<Zone>> retired;
+    std::lock_guard lock(cacheMutex);
+    if (!hostStreaming || !sourceMap)
+        return 0;
+    for (auto it = cache.begin(); it != cache.end();) {
+        if (required.contains(it->first)) {
+            ++it;
+            continue;
+        }
+        const auto selected = it++;
+        retired.push_back(std::move(selected->second));
+        sourceMap->erase(selected);
+    }
+    if (!retired.empty())
+        cacheRevision = nextZoneCacheRevision();
+    return retired.size(); // snapshots are released after the cache guard
+}
+
 void ExtractedWorld::setClientStreaming(bool enabled) {
+    if (enabled && hostStreaming)
+        throw std::logic_error("Host and client source streaming require separate readers");
     if (keeper.joinable()) keeper.join();
     if (enabled) {
         std::lock_guard lock(cacheMutex);
-        if (!clientMap) clientMap = std::make_unique<NativeSourceMap<std::shared_ptr<Zone>>>(cache);
+        if (!sourceMap) sourceMap = std::make_unique<NativeSourceMap<std::shared_ptr<Zone>>>(cache);
         clientStreaming = true;
     } else if (clientStreaming.exchange(false)) {
         // Final deletion follows guard release; snapshots and edit journals
@@ -399,7 +467,7 @@ void ExtractedWorld::setClientStreaming(bool enabled) {
         decltype(cache) retired;
         {
             std::lock_guard lock(cacheMutex);
-            clientMap.reset();
+            sourceMap.reset();
             retired.splice(retired.begin(), cache);
             keptBy.clear();
             absent.clear();
@@ -430,7 +498,7 @@ std::optional<std::pair<int, int>> ExtractedWorld::retireClientSource(Key center
     if (selected == cache.end()) return {};
     const Key removed = selected->first;
     retired = std::move(selected->second);
-    clientMap->erase(selected);
+    sourceMap->erase(selected);
     cacheRevision = nextZoneCacheRevision();
     return removed;
 }
@@ -438,7 +506,7 @@ std::optional<std::pair<int, int>> ExtractedWorld::retireClientSource(Key center
 void ExtractedWorld::keepAround(int ax, int ay, int radius) { keepAround(nullptr, {{ax, ay}}, radius); }
 
 void ExtractedWorld::keepAround(const void *owner, const std::vector<std::pair<int, int>> &centres, int radius) {
-    if (clientStreaming) return; // Admission belongs to the separate client loader.
+    if (clientStreaming || hostStreaming) return; // The selected native loader owns admission.
     {
         std::lock_guard lock(cacheMutex);
         keptBy[owner] = {centres, radius};
@@ -472,8 +540,8 @@ void ExtractedWorld::keepAround(const void *owner, const std::vector<std::pair<i
 
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
     std::lock_guard lock(cacheMutex);
-    if (clientMap) {
-        const auto found = clientMap->find({ax, ay});
+    if (sourceMap) {
+        const auto found = sourceMap->find({ax, ay});
         return found == cache.end() ? nullptr : found->second;
     }
     for (auto &[key, zone] : cache)
@@ -708,8 +776,8 @@ std::vector<std::pair<int, int>> ExtractedWorld::takeChangedModels() {
 
 std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
-    if (clientMap) {
-        const auto found = clientMap->find({x, y});
+    if (sourceMap) {
+        const auto found = sourceMap->find({x, y});
         if (found == cache.end() || !found->second) return std::nullopt;
         const auto &zone = found->second;
         return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
@@ -722,8 +790,8 @@ std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x
 
 bool ExtractedWorld::gameZoneLoaded(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
-    if (clientMap) {
-        const auto found = clientMap->find({x, y});
+    if (sourceMap) {
+        const auto found = sourceMap->find({x, y});
         return found != cache.end() && bool(found->second);
     }
     return std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == Key{x, y} && entry.second; });
@@ -1599,7 +1667,7 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
     std::shared_ptr<Zone> around[3][3];
     if (clientStreaming) {
         std::lock_guard lock(cacheMutex);
-        if (clientMap) clientMap->neighborhood({(int)ax, (int)ay}, around);
+        if (sourceMap) sourceMap->neighborhood({(int)ax, (int)ay}, around);
     } else {
         for (int j = -1; j <= 1; ++j)
             for (int i = -1; i <= 1; ++i)
@@ -1625,7 +1693,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     std::shared_ptr<Zone> around[3][3];
     if (clientStreaming) {
         std::lock_guard lock(cacheMutex);
-        if (clientMap) clientMap->neighborhood({ax, ay}, around);
+        if (sourceMap) sourceMap->neighborhood({ax, ay}, around);
     } else {
         for (int j = -1; j <= 1; ++j)
             for (int i = -1; i <= 1; ++i)

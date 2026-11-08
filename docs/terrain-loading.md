@@ -100,6 +100,25 @@ keeps its established fallback. Broader source-state restoration and host loadin
 remain open. See the independent
 [auxiliary lifetime](specs/steam-auxiliary-model-lifetime-20261107.md) contract.
 
+## Generated host source worker
+
+A generated host owns its source worker independently of the viewed client.
+Each cycle copies the latest host-published physical/eagle block centres, forms
+the native wanted union and retires all outside members before ranking missing
+keys. The minimum admitted rectangle-distance key uses its 384-block per-centre
+gate and the shared priority-only sorter. At most four selected factories run
+serially; an existing hit retains its selected slot. The batch drains before a
+fresh snapshot or stop. Empty demand can remove every source; idle work waits
+five milliseconds and yields. Worker exit preserves remaining sources until
+reader/World teardown or later policy. Alpha's finite domain remains enforced.
+
+Host source creation now retains canonical raw bytes. Immutable source leases,
+cache memo invalidation and separate host/client mutable data remain engine-owned.
+The capture/standalone adapters and startup prehistory keep their stated limits.
+Full selected-state retention/restoration, logical resident gates, native periodic
+persistence and exact producer/worker timing remain separate work. See the
+[host contract](specs/steam-host-source-cycle-20261107.md).
+
 ## Optional diagnostics
 
 Set `CW_PROFILE_MESH` to a private CSV path before starting CubeVulkan. The parent

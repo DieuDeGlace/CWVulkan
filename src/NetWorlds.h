@@ -23,7 +23,8 @@
 
 class HostSide : public cwnet::HostWorld {
   public:
-    HostSide(SpawnedCreatures &world, ExtractedWorld &blocks) : world(world), blocks(blocks) {}
+    HostSide(SpawnedCreatures &world, ExtractedWorld &blocks);
+    ~HostSide() override;
 
     // Where the zones are kept before any player has joined (local blocks).
     glm::vec3 standIn{0};
@@ -55,6 +56,7 @@ class HostSide : public cwnet::HostWorld {
     SpawnedCreatures &world;
     ExtractedWorld &blocks;
     std::map<int64_t, uint64_t> playerFields;
+    bool ownsSourceWorker = false;
 };
 
 class MirrorSide : public cwnet::MirrorWorld {

@@ -8,6 +8,18 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Generated host sessions now use required-set retirement followed by
+  priority-ordered serial batches of at most four missing source requests. Fresh
+  published-centre snapshots, loaded-hit exclusion, batch completion during stop,
+  empty-demand retirement, raw source bytes and independent reader lifetimes have
+  controlled regressions. 17,000 checked records match the raw canonical generator.
+  All five targets, seven focused groups, full required-owner CPU, Vulkan and SDK
+  checks pass. Alpha/Omega loaded-scene capture passes; the default-distance
+  Steam/Native capture still reaches its observation deadline. Full retained-state
+  fields/gates, logical residency, periodic persistence, publication timing and
+  broader native acceptance remain open. See the
+  [host-cycle contract](specs/steam-host-source-cycle-20261107.md).
+
 - [x] Auxiliary light-model copies now live with their source zone. Mesh
   preparation updates cached scalars and sticky flags before terrain faces; point
   registration reads them without file I/O, resampling or missing-source creation.

@@ -157,6 +157,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     forEachWorldCreature([&](const uint8_t *record) { participants.collect(record); });
     std::vector<worldgen::ResidentWorld::Player> at;
     std::vector<zonedemand::Window> sourceWindows;
+    std::vector<zonedemand::BlockPoint> sourcePoints;
     for (const uint8_t *record : participants.players()) {
         int64_t position[3];
         std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
@@ -164,6 +165,8 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         if (!client) {
             zonedemand::BlockPoint destination;
             std::memcpy(destination.data(), record + worldgen::creature::HOME_PLACE, sizeof destination);
+            sourcePoints.push_back(zonedemand::sourcePoint({position[0], position[1], position[2]},
+                zonedemand::eagleAnchor(record[worldgen::creature::ABILITY], destination)));
             sourceWindows.push_back(zonedemand::hostWindow({position[0], position[1], position[2]},
                 zonedemand::eagleAnchor(record[worldgen::creature::ABILITY], destination)));
         }
@@ -201,6 +204,8 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     };
     if (client)
         ew.keepAround(this, centres, NEAR_ZONES + 1);
+    else if (ew.hostSourceStreaming())
+        ew.setHostSourceCentres(std::move(sourcePoints)); // no stand-in player is added to native demand
     else
         ew.keepAround(this, std::vector<std::pair<int, int>>(wantedSources.begin(), wantedSources.end()), 0);
     // A zone that leaves memory has its state recorded (0x2d3e20) and its lists let go.

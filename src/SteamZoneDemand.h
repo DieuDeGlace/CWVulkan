@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 
 namespace zonedemand {
 struct Window {
@@ -16,6 +17,8 @@ std::optional<BlockPoint> eagleAnchor(uint8_t ability, const BlockPoint &destina
 BlockPoint sourcePoint(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor = {});
 // Signed32 squared distance to the zone's closed block rectangle; ordinary inputs.
 int32_t generationPriority(BlockPoint zone, BlockPoint sampledBlocks);
+// Minimum admitted centre key; -1 when no centre passes the host scoring gate.
+int32_t hostGenerationPriority(BlockPoint zone, std::span<const BlockPoint> centres);
 Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
                     const std::optional<BlockPoint> &anchor = {});
 Window hostWindow(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor = {});

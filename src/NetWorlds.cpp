@@ -5,6 +5,15 @@
 
 // --- The host world ----------------------------------------------------------------------------
 
+HostSide::HostSide(SpawnedCreatures &world, ExtractedWorld &blocks) : world(world), blocks(blocks) {
+    blocks.setHostStreaming(true);
+    ownsSourceWorker = blocks.hostSourceStreaming();
+}
+HostSide::~HostSide() {
+    if (ownsSourceWorker)
+        blocks.setHostStreaming(false);
+}
+
 void HostSide::creatures(std::vector<cwnet::CreatureView> &out) {
     out.clear();
     world.forEach([&](const uint8_t *record) {

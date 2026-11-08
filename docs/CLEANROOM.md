@@ -2633,3 +2633,16 @@ The archive reader shares one bounded load pass. Immutable leases and incomplete
 replay handling remain explicit engine policies. Seven prior lifecycle failures
 and additional independence/reuse checks exercise this change; broader native
 visual, alternate-writer and concurrent-lifetime acceptance remains separate.
+
+## Host source-loader cycle, 2026-11-07
+
+The unexposed original-only author held a separate host cycle contract. The
+implementer read it entirely with the earlier held priority/initial-byte contracts,
+recorded their original-byte hashes privately and used owned code only. A dedicated
+host source worker now performs required-set retirement and serial cap-four
+requests with independent lifetime and raw generation. Controlled source-worker
+and raw-byte checks, full required-owner CPU/Vulkan validation and SDK audit pass.
+The Alpha/Omega scene capture passes; the native default-distance observation
+still times out and remains open. Immutable leases, latest published centres and
+exception handling are engine policies. Full retained fields, logical residency,
+periodic persistence and broader original-runtime acceptance remain separate.
