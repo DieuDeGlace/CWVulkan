@@ -11,7 +11,8 @@ constexpr size_t FEAT_CREATURE = 0x00;   // i64 in a feat notice
 } // namespace
 
 ClientGame::ClientGame(Transport &transport, MirrorWorld &world, std::function<void()> ownHostDropAll)
-    : world(world), guestLink(transport, GuestLink::World{[&world] { world.startOver(); }, std::move(ownHostDropAll)}) {}
+    : world(world), guestLink(transport, GuestLink::World{[&world] { world.startOver(); }, std::move(ownHostDropAll),
+                                                        [&world] { world.connected(); }}) {}
 
 void ClientGame::receive(uint32_t nowMs) {
     GuestLink::Inbox inbox;

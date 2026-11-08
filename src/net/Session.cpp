@@ -227,6 +227,8 @@ void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
     send(host, Join{});
     lastHeard = nowMs;
     currentHost = host;
+    if (world.mirrorConnected)
+        world.mirrorConnected();
 }
 
 void GuestLink::receive(uint32_t nowMs, Inbox &inbox, MirrorWorld *receiver) {

@@ -2027,22 +2027,30 @@ sourcestates::Store::Guard SpawnedCreatures::sourceGuard() const {
     return zoneStates.lockSources();
 }
 
+void SpawnedCreatures::setRemoteClient(bool on) {
+    auto guard = sourceGuard();
+    client = on;
+    zoneStates.setSkipRestore(client || sourceRestoreOverride);
+}
+
 void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool skipRestore) {
     auto guard = ew.lockSourceState();
     archiveDestination = world;
     storedZones = world;
+    sourceRestoreOverride = skipRestore;
+    const bool blockRestore = client || sourceRestoreOverride;
     lastWorld = &ew;
     if (world && respawnSettings.mode != enemyrespawn::Mode::Permanent)
         for (auto &[zone, state] : world->zones)
             state.deadTracked = 0; // temporary deaths from an earlier instance have ended
     if (ew.generated()) {
-        ew.configureSourceStates(world, skipRestore);
+        ew.configureSourceStates(world, blockRestore);
         ew.sourceStateStore()->setMetadata(saveMetadata);
         zoneStates = zonestates::ZoneStates(ew.sourceStateStore());
         storedZones = &ew.sourceStateStore()->retained();
         return;
     }
-    zoneStates = zonestates::ZoneStates(world, skipRestore, [&ew](nativesaves::Cell zone, const std::vector<nativesaves::BlockChange> &changes) {
+    zoneStates = zonestates::ZoneStates(world, blockRestore, [&ew](nativesaves::Cell zone, const std::vector<nativesaves::BlockChange> &changes) {
         ew.setBlockChanges(zone[0], zone[1], changes);
     });
 }

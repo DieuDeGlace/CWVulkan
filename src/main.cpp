@@ -3054,8 +3054,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             hostWorld.setNativeClock(!gameWorldName.empty());
             spawned.setNativeClock(!gameWorldName.empty());
         }
-        spawned.setStoredZones(extractedWorld, nullptr, false);
-        spawned.setRemoteClient(true);
+        // Physical viewed state survives connecting. Captured playback retains its
+        // separate archive adapter; shared connect assigns the live role afterward.
+        if (!spawned.physicalSourceState())
+            spawned.setStoredZones(extractedWorld, nullptr, false);
         spawned.setClock(day, hour * 3600000.0f);
         const int port = (int)config.number("Multiplayer", "Port", Multiplayer::DEFAULT_PORT, 1, 65535);
         std::string join = joinAddress.empty() ? config.text("Multiplayer", "Join") : joinAddress;

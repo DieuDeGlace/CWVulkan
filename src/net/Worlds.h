@@ -111,6 +111,8 @@ class MirrorWorld {
     // Connecting to any host: every creature but the local player goes, every loaded zone's
     // block changes are undone and every loaded zone needs its state again (§7).
     virtual void startOver() = 0;
+    // After Join/timer/selected-peer publication, for every destination including home.
+    virtual void connected() {}
 
     // --- Time (packet 8) ---
     virtual int32_t day() = 0;

@@ -12,6 +12,7 @@ void Store::configure(const nativesaves::WorldState *initial, bool skipRestore) 
     ready = true;
 }
 bool Store::configured() const { auto guard = lock(); return ready; }
+void Store::setSkipRestore(bool value) { auto guard = lock(); skip = value; }
 void Store::reset() {
     auto guard = lock();
     archive = nativesaves::WorldState{};

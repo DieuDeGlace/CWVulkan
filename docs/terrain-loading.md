@@ -303,3 +303,19 @@ Measured cold-fill results are recorded in the release status when validation
 completes. Broader travel, memory pressure, native scheduling, frame performance
 and original-game acceptance remain independent gates. Alpha terrain/lighting,
 Omega water and the engine's enhancements retain their separate settings.
+
+## Live role changes and fresh-source restoration
+
+The source factory reads the current guarded restoration gate after generation.
+The viewed World selects its nonzero role only after shared connect publishes
+the selected peer, including local/fallback destinations. Updating that gate
+preserves retained values, loaded payloads/COW identity and pending publication.
+A loaded hit never reapplies restoration. A future nonzero-role source skips all
+five saved fields and edit replay; a future zero-role source can restore them.
+Physical retirement records state in either role.
+
+The explicit compatibility-adapter suppression remains separate from the normal
+live role. Main preserves the physical viewed archive across connection, while
+captured playback retains its old adapter. Initial configuration/DB admission,
+socket/thread teardown, other writers and wider guard coverage remain open.
+See the [held role/name contract](specs/steam-world-role-name-and-restore-gates-20261108.md).

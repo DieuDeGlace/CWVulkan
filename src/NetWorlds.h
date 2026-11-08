@@ -76,6 +76,7 @@ class MirrorSide : public cwnet::MirrorWorld {
     void receiveCreature(const cwnet::CreatureDelta &delta) override;
     void keepOnly(const std::set<int64_t> &heard) override { world.keepOnly(&heard); }
     void startOver() override;
+    void connected() override { world.setRemoteClient(true); }
     int32_t day() override { return world.day(); }
     void dayChange(int32_t newDay) override;
     void setClock(int32_t day, int32_t timeOfDayMs) override { world.setClock(day, (float)timeOfDayMs); }

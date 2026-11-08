@@ -125,6 +125,13 @@ ZoneStates::ZoneStates(nativesaves::WorldState *w, bool skip, BlocksChanged b) :
 ZoneStates::ZoneStates(std::shared_ptr<sourcestates::Store> store)
     : physical(std::move(store)), world(&physical->retained()), skipRestore(false) {}
 
+void ZoneStates::setSkipRestore(bool skip) {
+    auto guard = lockSources();
+    skipRestore = skip;
+    if (physical)
+        physical->setSkipRestore(skip);
+}
+
 nativesaves::ZoneLists *ZoneStates::find(Cell zone) {
     if (physical) {
         auto source = physical->find(zone);

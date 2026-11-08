@@ -2803,3 +2803,22 @@ the wrong role, without relaxing numeric or engine predicates. Compiler-warning
 cleanup preserves literal float words. Full scheduling, role/name/restoration
 setup, other writers, complete reference-provider provenance and native runtime
 acceptance remain separate. No owner content or private evidence is published.
+
+## Connection role and source restoration, 2026-11-08
+
+The isolated original-only author finalized/read back/held the separate role,
+name and configuration-admission contract. The implementer read it entirely,
+froze its original-byte hash and used owned source with the earlier independent
+field-lifetime/connection prose only. A final synchronous connection callback
+now selects the viewed role after peer publication, including local fallback.
+A guarded source gate tracks that role without rebinding retained/live data;
+retirement remains ungated. Compatibility suppression, serialized engine guards
+and captured playback are explicit adapter policies.
+
+Five pre-change failures and actual reload/COW/retention/order checks pass with
+all-five-target, full required-owner CPU without skips, all Vulkan groups, SDK
+independence and inspected native/Alpha scenes. Fixture output/index corrections
+changed no engine predicate or expected block value. Complete initial database
+configuration, socket lifecycle, alternate writers/guards, rekey collision policy
+and broad runtime acceptance remain separate. No original code, owner content,
+private evidence or memory is published.

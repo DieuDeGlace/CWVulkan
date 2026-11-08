@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Shared connect assigns viewed role1 after Join/timer/selected-peer publication
+  for local, remote and Leave-fallback routes. Live guarded role changes control
+  fresh-source restoration without clearing retained/live values; retirement
+  recording stays ungated. Five reproduced regressions, real reload/COW/all-five-
+  field and ordering checks, full required-owner CPU without skips, Vulkan, SDK
+  and inspected native/Alpha scenes pass. Initial configuration/DB restore,
+  socket lifecycle, other writers and broader acceptance remain open. See
+  [the contract](specs/steam-world-role-name-and-restore-gates-20261108.md)
+  and [checkpoint](release-status.md#connection-role-and-fresh-source-restoration---2026-11-08).
+
 - [x] Both gameplay Worlds step the native binary32 elapsed/calendar clock before
   ordinary substep work, retaining the 10x/100x predicate, local fresh-reference
   healing, empty-name 9am assignment and strict repeated day/role/reset ordering.

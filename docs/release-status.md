@@ -1,5 +1,50 @@
 # Source review checkpoint — 2026-11-08
 
+## Connection role and fresh-source restoration - 2026-11-08
+
+The shared connection path now sets the viewed World's nonzero role after the
+Join attempt, timer and selected-host publication. The same final operation runs
+for local play, remote connections and current-peer Leave fallback. An ordinary
+Steam fallback therefore remains a viewed mirror of the local host; it is not
+treated as the separate native socket/thread disconnect routine.
+
+Fresh physical-source restoration now follows that live role. A guarded scalar
+update changes future factory admission without replacing retained values, live
+payloads, metadata or pending dirty membership. Nonzero role skips all five saved
+fields and edit replay after raw generation. Returning to zero permits restoration
+on a new source; an already loaded hit keeps its identity and current fields.
+Retirement recording remains ungated. Explicit suppression in compatibility
+adapters stays separate, and binding an archive respects an already selected role.
+
+Main no longer writes the viewed role before connecting or clears its physical
+retained map at that boundary. Captured playback keeps its separate archive
+adapter. Connection resets and source-request timing keep their existing phases;
+pending packet7 categories survive fallback. The callback borrows its World only
+synchronously, and the source worker retains no raw Actor pointer for this gate.
+
+Five pre-change regressions reproduced missing live factory admission and absent
+local/remote/fallback role writes. Focused and full required-owner CPU tests pass
+without skips. The tests include real physical reloads, COW/loaded-hit identity,
+all-five-field retention/restoration, dirty membership, metadata and archive
+survival, and reset/own-host-reset/Join/peer/role order. An initial fixture printing
+escape and a transposed raw-column index were corrected without changing engine
+rules or expected block values.
+
+All five targets, every Vulkan group and SDK independence pass. Fresh hidden,
+offline/no-save native and Alpha/Steam/Omega scenes exit zero in 41.250 and 82.062
+seconds; both images were fully inspected against the tested binary. No settings,
+readiness rule or deadline changed. These are bounded scene checks, not native
+pixels, startup reliability, performance or general multiplayer acceptance.
+The original game and owner saves/Mods/display were untouched.
+
+The independent [role/name/restore contract](specs/steam-world-role-name-and-restore-gates-20261108.md)
+was finalized and held by the isolated original-only author, then entirely read
+by the implementer. Its original-byte hash is frozen privately. The earlier
+retained-field and connection contracts remain immutable. Complete initial
+configuration/database behavior, actual socket/thread teardown, other role
+writers, collision/rekey lifetimes, broader guards and character-worker
+scheduling remain separate work. Alpha terrain/lighting and Omega water remain.
+
 ## Native per-World clock - 2026-11-08
 
 Both gameplay Worlds now advance their own clock at the start of each admitted

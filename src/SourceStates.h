@@ -39,6 +39,7 @@ class Store {
     // Replace retained values and the fresh-source gate; loaded instances remain intact.
     void configure(const nativesaves::WorldState *initial, bool skipRestore);
     bool configured() const;
+    void setSkipRestore(bool); // future factory admission only; preserve retained/live values
     void reset();
     std::shared_ptr<Source> make(Cell, uint64_t order, std::vector<Record> ground,
                                  std::vector<Record> objects, std::shared_ptr<const worldgen::ZoneContents> catalog);

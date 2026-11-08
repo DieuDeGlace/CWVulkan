@@ -147,6 +147,8 @@ class GuestLink {
         std::function<void()> resetMirror;
         // Connecting anywhere: this machine's own host drops its guests (§4.3 step 4).
         std::function<void()> ownHostDropAll;
+        // Final shared-connect operation, after the selected destination is stored.
+        std::function<void()> mirrorConnected;
     };
 
     // What the host sent, for the client world to apply (netcode-packets.md §2).

@@ -60,6 +60,7 @@ class ZoneStates {
 
     explicit ZoneStates(std::shared_ptr<sourcestates::Store> physical);
     bool physicalSources() const { return bool(physical); }
+    void setSkipRestore(bool); // live role gate; loaded arrays and unload recording survive
     const std::shared_ptr<sourcestates::Store> &sourceStore() const { return physical; }
     sourcestates::Store::Guard lockSources() const { return physical ? physical->lock() : sourcestates::Store::Guard{}; }
     bool loaded(Cell zone) const { return find(zone) != nullptr; }

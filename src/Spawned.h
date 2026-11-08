@@ -62,7 +62,9 @@ class SpawnedCreatures {
     // too, through the loopback). A remote client (world+0x358) makes no creatures, its AI,
     // abilities, hits and upkeep run as a client's (only the local player decides for itself), it
     // performs no interactions (its player's go to the host), and its creatures are the host's.
-    void setRemoteClient(bool on) { client = on; }
+    // Shared connect selects nonzero even when joining this machine's own host.
+    // This also updates the fresh-source restoration gate, without clearing state.
+    void setRemoteClient(bool on);
     bool remoteClient() const { return client; }
     // The local player's creature id: 1 until a host gives it another (packet 4).
     int64_t playerId() const { return localId; }
@@ -279,6 +281,7 @@ class SpawnedCreatures {
     // --- What changed in the zones (ZoneStates.h, native-saves.md §5.3) ---
     // The world's stored zone states (Save/world.db): put on each zone as it is made, recorded
     // into as it leaves memory. Null: zones are kept for the session only.
+    // skipRestore is an explicit adapter override, combined with the live role gate.
     void setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool skipRestore);
     // A zone's ground items (zone +0x30, 0xe0 bytes each; an empty slot's item type is 0), made
     // with the zone when it comes into memory; null when its blocks are not in memory yet.
@@ -533,7 +536,8 @@ class SpawnedCreatures {
     // them (first, as the map orders it) while the zones' comings and goings leave them alone.
     std::map<std::pair<int, int>, std::vector<Creature>> zones;
     static constexpr std::pair<int, int> NETWORK_ZONE{INT32_MIN, INT32_MIN};
-    bool client = false;          // world+0x358: a remote client (a mirror of a host)
+    bool client = false;          // world+0x358: viewed mirror after any completed connect
+    bool sourceRestoreOverride = false; // explicit compatibility-adapter suppression
     int64_t localId = 1;          // the local player's creature id
     cwnet::WorldEvents worldEvents; // world+0x90 .. +0x170
     struct SaveMetadata final : sourcestates::Metadata {
