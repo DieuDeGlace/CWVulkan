@@ -119,6 +119,24 @@ Full selected-state retention/restoration, logical resident gates, native period
 persistence and exact producer/worker timing remain separate work. See the
 [host contract](specs/steam-host-source-cycle-20261107.md).
 
+## Captures and procedural seeds
+
+A scene capture is a screenshot of the nearby prepared view. Game and Alpha
+sources generate further regions from the seed as the player travels; sampled
+reference exports do not define the procedural world's boundary. A whole-world
+export or all-at-once terrain bake is not required.
+
+Capture/benchmark readiness follows required work. Because native generation
+truncates fixed positions while retirement floors them, missing fringe sources
+can be generated and retired repeatedly at negative fractional boundaries.
+Those ordinary missing inputs outside physical retention no longer block a
+prepared capture. They still enter the same native source batches. Required
+sources, dirty meshes and required mesh jobs remain blocking; changed source/
+view settings, physical positions and destination work receive conservative
+readiness handling without extra player-provider reads. This is an owned
+diagnostic policy. Original frame comparison and broader runtime acceptance
+remain separate from obtaining a nonblank screenshot.
+
 ## Optional diagnostics
 
 Set `CW_PROFILE_MESH` to a private CSV path before starting CubeVulkan. The parent

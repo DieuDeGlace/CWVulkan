@@ -127,6 +127,7 @@ int alphaTerrainTests();
 int generatorCacheTests();
 int nativeSourceStreamingTests();
 int hostSourceTests();
+int sourceReadinessTests();
 int nativeSourceCreationTests();
 int plasmaLayoutTests();
 int fontCatalogTests();
@@ -9535,6 +9536,8 @@ int main(int argc, char **argv) {
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "sourcecreation")
         return nativeSourceCreationTests();
+    if (argc == 2 && std::string(argv[1]) == "sourcereadiness")
+        return sourceReadinessTests();
     if (argc == 2 && std::string(argv[1]) == "hostsource")
         return hostSourceTests();
     if (argc == 2 && std::string(argv[1]) == "sourcestreaming")
@@ -10830,6 +10833,7 @@ int main(int argc, char **argv) {
     failures += generatorCacheTests();
     failures += nativeSourceStreamingTests();
     failures += hostSourceTests();
+    failures += sourceReadinessTests();
     failures += nativeSourceCreationTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();

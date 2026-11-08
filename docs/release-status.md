@@ -1,5 +1,48 @@
 # Source review checkpoint — 2026-11-07
 
+## Prepared-scene capture readiness - 2026-11-07
+
+The engine's capture/benchmark readiness test now distinguishes required source
+work from repeatable background fringe loading. Native source demand truncates
+fixed positions to whole blocks, while retirement floors them to zones. At a
+negative fractional boundary their circles can differ. All native candidate
+selection, ordering, submission and retirement continue unchanged; missing normal
+inputs beyond the physical retention circle no longer keep a prepared screenshot
+waiting forever. No extra player-provider samples were added.
+
+Cold source work, required mesh jobs and dirty meshes still block readiness.
+Changed physical positions, destinations, view radii and source-distance settings
+invalidate an earlier background-only decision. Destination demand remains
+conservative. This is an engine-owned diagnostic policy, rather than a new claim
+about original Steam's worker quiescence or synchronization.
+
+A real small generated-world regression reproduced the failure with 14 prepared
+zones, 0 mesh jobs, 40 loaded sources and 4 source jobs: all 36 retained inputs were
+present among 45 demanded inputs. The corrected case becomes ready while its
+background batch continues. Cold work and changed-input checks also pass. All
+five targets, six focused groups, the full required-owner CPU suite without skips,
+all Vulkan groups and extractor SDK-independence audit pass.
+
+The default-distance Source=Game/Steam-rendering/Native-water scene now exits
+zero in 41.140 seconds with a viewed ground/trees/NPC/HUD image. An explicit
+negative-half-block start also exits zero in 40.336 seconds, with a viewed ground/
+vegetation/HUD image and final physical position (-0.5,-0.5). Private settings
+match the earlier native case byte-for-byte; the second case changes only its
+position arguments and output paths. The preceding 126.205-second run reached
+its observation deadline without an image. These are bounded scene observations;
+changed readiness criteria are not evidence of a generation speedup or FPS gain.
+Original pixel, wider cold/travel/memory and other native release gates remain.
+
+The final hidden offline no-save Alpha-terrain/Steam-look/Omega smoke case also
+exits zero in 79.760 seconds with a viewed terrain/vegetation/HUD image. All three
+measured executables match the compiled hash. Shipped Alpha terrain/lighting and
+Omega configuration remain; original game saves, mods and display settings were
+unchanged and the original game was not started.
+
+Capture here means a screenshot of the nearby prepared scene. Procedural Game
+and Alpha modes generate other regions from the seed as the player travels;
+reference captures are comparison samples, not a whole-world seed bake.
+
 ## Serial host source-loading cycle - 2026-11-07
 
 Generated host sessions now own a separate source worker. Host steps publish

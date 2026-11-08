@@ -58,8 +58,20 @@ class World {
     using GroundLightProvider = std::function<steampoints::GroundSources(steampoints::ZoneKey)>;
     void setGroundLightProvider(GroundLightProvider provider) { groundLightProvider = std::move(provider); }
     // How many zones are drawn each way around the focus (the view distance changed).
-    void setViewZones(int zones) { viewZones = zones; }
-    void setSourceRenderDistance(int setting) { sourceRenderDistance = setting; }
+    void setViewZones(int zones) {
+        if (viewZones != zones) {
+            viewZones = zones;
+            sourcePending = clientSources;
+            sourceReadinessContext.reset();
+        }
+    }
+    void setSourceRenderDistance(int setting) {
+        if (sourceRenderDistance != setting) {
+            sourceRenderDistance = setting;
+            sourcePending = clientSources;
+            sourceReadinessContext.reset();
+        }
+    }
     void setCpuPerformance(int setting) { cpuPerformance = setting; }
     int viewZoneCount() const { return viewZones; }
     // Zone (zx, zy)'s blocks changed: it is meshed again, the old mesh drawn until then.
@@ -100,7 +112,7 @@ class World {
     size_t pendingCount() const { return jobs.size(); }
     size_t pendingSourceCount() const { return sourceJobs.size(); }
     size_t loadedSourceCount() const;
-    // Clean zero-cost native refreshes continue without blocking settled captures.
+    // Required source/mesh work blocks captures; native background refreshes continue.
     bool preparingTerrain() const {
         return sourcePending || !stale.empty() || std::any_of(jobs.begin(), jobs.end(), [](const auto &job) { return job.second.required; });
     }
@@ -199,6 +211,7 @@ class World {
     };
     std::map<Key, Job> jobs;
     bool clientSources = false, sourcePending = false;
+    std::optional<std::pair<Key, Key>> sourceReadinessContext; // sampled block point and physical retention centre
     std::unique_ptr<TaskPool> sourcePool;
     std::vector<std::future<bool>> sourceJobs;
     void updateSources(const scenerange::Player &player);

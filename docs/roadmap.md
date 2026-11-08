@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Capture/benchmark readiness now allows native background fringe work to
+  continue after required retained inputs and geometry are ready. A real V10
+  negative-boundary regression reproduces the wait with 14 prepared zones and 4
+  source jobs, then passes with the native scheduler unchanged. Cold work and
+  changed position/range/destination checks remain blocking. Full required-owner
+  CPU, Vulkan groups and SDK audit pass. Default-distance Source=Game/Steam/Native
+  captures pass at both the recorded origin and explicit negative-half-block
+  start, with viewed ground images. This closes the bounded readiness regression;
+  broader original visual, travel, performance and state gates remain open.
+
 - [x] Generated host sessions now use required-set retirement followed by
   priority-ordered serial batches of at most four missing source requests. Fresh
   published-centre snapshots, loaded-hit exclusion, batch completion during stop,

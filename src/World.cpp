@@ -649,13 +649,21 @@ size_t World::loadedSourceCount() const { return extracted ? extracted->loadedSo
 
 void World::updateSources(const scenerange::Player &player) {
     if (!clientSources) return;
+    const auto anchor = zonedemand::eagleAnchor(player.ability, player.eagleDestination);
+    const auto point = zonedemand::sourcePoint(player.physical, anchor);
+    const auto physicalCentre = zonedemand::preparationCenter(player.physical);
+    const auto context = std::pair{Key{point[0], point[1]}, Key{physicalCentre[0], physicalCentre[1]}};
     if (!sourceJobs.empty()) {
-        if (!sourcePool->idle()) return;
+        if (!sourcePool->idle()) {
+            // Diagnostic readiness cannot reuse an old view's background-only
+            // classification after movement, a destination or a range change.
+            sourcePending = sourcePending || anchor.has_value() || !sourceReadinessContext || *sourceReadinessContext != context;
+            return;
+        }
         for (auto &job : sourceJobs) job.get();
         sourceJobs.clear();
     }
-    const auto anchor = zonedemand::eagleAnchor(player.ability, player.eagleDestination);
-    const auto point = zonedemand::sourcePoint(player.physical, anchor);
+    sourceReadinessContext = context;
     const auto window = zonedemand::clientWindow(player.physical, sourceRenderDistance, anchor);
     struct Candidate { Key key; int32_t priority; };
     std::vector<Candidate> missing;
@@ -665,8 +673,15 @@ void World::updateSources(const scenerange::Player &player) {
                 worldgen::terrainZoneAvailable(int32_t(x), int32_t(y))) {
                 missing.push_back({{int(x), int(y)}, zonedemand::generationPriority({int32_t(x), int32_t(y)}, point)});
             }
-    sourcePending = !missing.empty();
-    if (!sourcePending) return;
+    // Owned capture/readiness policy: loading and retirement can disagree at a
+    // negative fractional boundary. Keep every native request, but missing inputs
+    // beyond the physical retention circle must not prevent a prepared view from
+    // being captured forever. Destination work remains conservatively required.
+    sourcePending = std::any_of(missing.begin(), missing.end(), [&](const Candidate &candidate) {
+        return anchor.has_value() || zonedemand::withinRetention(int64_t(candidate.key.first) - physicalCentre[0],
+                                                                 int64_t(candidate.key.second) - physicalCentre[1], viewZones);
+    });
+    if (missing.empty()) return;
     // The shared native sorter compares signed priorities only. Parallel delivery
     // does not promise source construction/publication in this selected order.
     keyorder::sort(missing, [](const Candidate &candidate) { return candidate.priority; });

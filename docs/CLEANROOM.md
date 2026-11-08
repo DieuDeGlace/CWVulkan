@@ -2646,3 +2646,14 @@ The Alpha/Omega scene capture passes; the native default-distance observation
 still times out and remains open. Immutable leases, latest published centres and
 exception handling are engine policies. Full retained fields, logical residency,
 periodic persistence and broader original-runtime acceptance remain separate.
+
+## Native background fringe and capture diagnostics, 2026-11-07
+
+The implementer used the entire held source-retention and generation-order prose
+with owned code to separate required source work from background capture waits.
+The diagnostic classification is an engine policy; native candidate sets, sorter,
+batch submission, retirement and player-provider call counts remain unchanged.
+A controlled real-world failure now passes, together with cold/changed-context
+checks and full required-owner CPU/Vulkan/SDK validation. Default-distance origin
+and negative-half-block captures produce viewed ground images; original pixels,
+generation speed and broader runtime parity are not inferred from those images.
