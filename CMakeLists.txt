@@ -314,6 +314,7 @@ add_library(engine STATIC
     src/NativeParticles.cpp
     src/ParticleScene.cpp
     src/NativeWorldObjects.cpp
+    src/NativeWorldClock.cpp
     src/ResidentEffects.cpp
     src/ResidentPass.cpp
     src/DrawnState.cpp
@@ -330,13 +331,13 @@ if(MSVC)
     target_compile_options(engine PRIVATE /W3 /utf-8)
     # Native voxel, fixed-coordinate and preparation-budget paths depend on numeric staging.
     set_source_files_properties(
-        src/NativeVehicle.cpp src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
+        src/NativeVehicle.cpp src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp src/NativeWorldClock.cpp ${ALPHA_TERRAIN_SOURCES}
         PROPERTIES COMPILE_OPTIONS /fp:strict)
     # sscanf/getenv are the portable C calls; MSVC's _s variants are not.
     target_compile_definitions(engine PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     set_source_files_properties(
-        src/NativeVehicle.cpp src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp ${ALPHA_TERRAIN_SOURCES}
+        src/NativeVehicle.cpp src/ProceduralItems.cpp src/NativeParticles.cpp src/OwnedGroundCubes.cpp src/Clouds.cpp src/SteamMeshPreparation.cpp src/SteamZoneDemand.cpp src/NativeWorldClock.cpp ${ALPHA_TERRAIN_SOURCES}
         PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
@@ -500,7 +501,7 @@ target_sources(EngineTests PRIVATE tests/CharacterCardTests.cpp)
 target_sources(EngineTests PRIVATE tests/TerrainBandTests.cpp tests/TerrainPublicationTests.cpp)
 target_sources(EngineTests PRIVATE tests/SteamPreparationTests.cpp)
 target_sources(EngineTests PRIVATE tests/GeneratorCacheTests.cpp)
-target_sources(EngineTests PRIVATE tests/NativeSourceStreamingTests.cpp tests/HostSourceTests.cpp tests/SourceReadinessTests.cpp tests/SourceStateTests.cpp tests/PhysicalSourceStateTests.cpp tests/NativePersistenceTests.cpp tests/WorldIdentifierStateTests.cpp tests/ViewedNetworkPhaseTests.cpp)
+target_sources(EngineTests PRIVATE tests/NativeSourceStreamingTests.cpp tests/HostSourceTests.cpp tests/SourceReadinessTests.cpp tests/SourceStateTests.cpp tests/PhysicalSourceStateTests.cpp tests/NativePersistenceTests.cpp tests/WorldIdentifierStateTests.cpp tests/ViewedNetworkPhaseTests.cpp tests/WorldClockTests.cpp)
 target_sources(engine PRIVATE src/StaticObjectScene.cpp)
 target_sources(EngineTests PRIVATE tests/StaticObjectSceneTests.cpp)
 target_sources(EngineTests PRIVATE tests/StaticObjectStreamingTests.cpp)

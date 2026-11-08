@@ -853,6 +853,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     dayNight.moonBrightness = (float)config.number("Moon", "BrightnessPercent", 4, 0, 100) / 100;
     float hour = startHour >= 0 ? startHour : (float)config.number("Time", "StartHour", 10, 0, 24);
     float minutesPerSecond = (float)config.number("Time", "MinutesPerSecond", 1, 0, 600);
+    std::string clockMode = config.text("Time", "Mode", "Native");
+    for (char &c : clockMode)
+        c = (char)std::tolower((unsigned char)c);
+    const bool customClock = clockMode == "custom";
 
     // The game's options soundVolume, musicVolume (percent) and musicLoop (place music never
     // fades after its five minutes).
@@ -3043,7 +3047,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // The host world takes the stored zone states and the world's clock; the client world is
         // a mirror from now on.
         hostWorld.setClock(day, hour * 3600000.0f);
-        hostWorld.setClockRate(minutesPerSecond * 60.0); // ([Time] MinutesPerSecond: game ms a real ms)
+        if (customClock) {
+            hostWorld.setClockRate(minutesPerSecond * 60.0);
+            spawned.setClockRate(minutesPerSecond * 60.0);
+        } else {
+            hostWorld.setNativeClock(!gameWorldName.empty());
+            spawned.setNativeClock(!gameWorldName.empty());
+        }
         spawned.setStoredZones(extractedWorld, nullptr, false);
         spawned.setRemoteClient(true);
         spawned.setClock(day, hour * 3600000.0f);
@@ -4033,6 +4043,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             spawned.think(extractedWorld, ms, hour);
             spawned.simulate(extractedWorld, ms, {}, [&] { spawned.update(extractedWorld, player.position); });
+            const SpawnedCreatures &steppedClock = serverMode ? hostWorld : spawned;
+            hour = steppedClock.timeOfDay() / 3600000.0f;
+            day = steppedClock.day();
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
             if (session.started())
                 session.consume();

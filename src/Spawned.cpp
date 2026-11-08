@@ -2,6 +2,7 @@
 #include "NativeVehicle.h"
 #include "SteamZoneDemand.h"
 #include "NativeWorldObjects.h"
+#include "NativeWorldClock.h"
 #include "NativeDeadCreatures.h"
 #include "SteamCreatureLights.h"
 #include "worldgen/BlockColours.h"
@@ -1298,9 +1299,34 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             settle(born);
             rebuildViews();
         }
-        elapsedWorldMs += dt; // native world time advances before the near-player pass
+        if (nativeClock) {
+            const int32_t previousDay = dayCount;
+            bool reset = false;
+            nativeclock::World clock{dayCount, dayMs, elapsedWorldMs, client, clockNamedWorld, worldEvents.sleeps,
+                                     a.creatures, hasPlayer ? player.record.data() : nullptr};
+            clock.maxHealth = [&] { return playerMaxHealth(); };
+            clock.reset = [&] { worldReset(); reset = true; };
+            nativeclock::advance(clock, dt);
+            // Generator settings are an authority-side engine cache. A viewed World
+            // must not replace them when its independently stepped calendar crosses.
+            if (!client && dayCount != previousDay) {
+                worldgen::setWorldDay(dayCount);
+                worldgen::setRefreshDay(dayCount);
+            }
+            if (reset)
+                rebuildViews(); // clock cleanup ended old actor lifetimes before this step
+        } else {
+            const int32_t previousDay = dayCount;
+            advanceClock(dt); // optional custom calendar; elapsed time remains unscaled
+            elapsedWorldMs += dt;
+            if (!client && dayCount != previousDay)
+                rebuildViews();
+        }
         u.time = elapsedWorldMs;
+        u.day = dayMs;
         w.time = elapsedWorldMs;
+        iw.day = dayCount;
+        iw.timeOfDay = dayMs;
         a.changeCount = fw.changeCount = uint32_t(dayCount);
         for (const auto *actor : registeredCreatures(hasPlayer ? &player : nullptr, zones))
             selectedMovement.collect(actor->record.data(), actor->registration);
@@ -2366,7 +2392,7 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
     w.time = elapsedWorldMs;
     // A world that keeps its own clock (a host's, or a mirror's set by its host) goes by it;
     // otherwise by the caller's hour.
-    if (clockRate <= 0 && !client)
+    if (!nativeClock && clockRate <= 0 && !client)
         dayMs = std::fmod(hour, 24.0f) * 3600000.0f;
     w.day = dayMs;
     w.local = hasPlayer ? &player.side : nullptr;
@@ -2986,17 +3012,22 @@ std::set<std::pair<int, int>> SpawnedCreatures::takeReplacedGround() { return st
 
 void SpawnedCreatures::advanceClock(double dtMs) {
     auto metadataScope = sourceGuard();
-    if (clockRate <= 0)
+    if (nativeClock || clockRate <= 0)
         return;
+    // This configurable extension retains its previous double-rate arithmetic.
+    // The ordinary Steam path uses NativeWorldClock at the start of simulate's step.
     constexpr double DAY_MS = 86400000.0;
     double t = (double)dayMs + dtMs * clockRate;
     while (t > DAY_MS) {
+        dayCount = gamemath::add32(dayCount, 1);
         t -= DAY_MS;
-        dayCount++;
-        worldgen::setWorldDay(dayCount);
-        worldgen::setRefreshDay(dayCount);
-        worldReset();
-        worldEvents.sleeps.push_back(0);
+        dayMs = (float)t;
+        if (!client) {
+            worldgen::setWorldDay(dayCount);
+            worldgen::setRefreshDay(dayCount);
+            worldReset();
+            worldEvents.sleeps.push_back(0);
+        }
     }
     dayMs = (float)t;
 }

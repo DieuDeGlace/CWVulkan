@@ -1,5 +1,53 @@
 # Source review checkpoint — 2026-11-08
 
+## Native per-World clock - 2026-11-08
+
+Both gameplay Worlds now advance their own clock at the start of each admitted
+World substep. The normal path uses separate binary32 operations for unscaled
+elapsed time and the native 10x/100x calendar, the proved actor predicate and local
+healing/reference-call order. Packet8 still overwrites the viewed calendar later;
+it no longer has to supply every between-packet advance.
+
+Strict day crossings store the incremented day and float remainder before each
+role-gated actor/metadata reset and zero notice. Equality remains at one full day;
+multiple crossings retain their separate resets. The existing later notice reset
+still runs separately. Borrowed actor views rebuild after cleanup, and per-step
+upkeep/interaction snapshots receive the new day/time. An empty configured World
+name assigns 9am even on a zero-input call. Authority generator-cache updates
+remain an engine adapter; an independent viewed crossing does not change them.
+
+`[Time] Mode=Native` is now the default, including when the key is absent. This
+replaces the former host-only 60x default. `Mode=Custom` retains the optional
+constant double-rate calendar selected by `MinutesPerSecond`; zero freezes that
+calendar. Custom mode keeps its separate clock behavior in place of the native
+actor-rate/healing path. `StartHour` remains available. Alpha terrain/lighting,
+Omega water and all other settings are unchanged.
+
+Three initial actual-World regressions reproduced missing viewed stepping and
+incorrect role-nonzero resets/notices. Literal float-word tests now cover separate
+rounding and non-reassociated healing, fresh second/third references, rejected
+actor predicates, empty-name/zero-input behavior and strict repeated crossings.
+Actual Host/viewed tests cover substeps, capped time, clock packets, cleanup/view
+lifetimes and the later notice pass. One phase-observation fixture originally
+used a role that cannot run its authority-only callback; correcting that fixture
+changed no numeric expectation or engine predicate. Explicit float fixture
+literals subsequently removed a compiler warning without changing their words.
+
+All five targets build; focused clock and full required-owner CPU tests pass
+without skips. All Vulkan groups and extractor SDK independence pass. Fresh hidden
+offline/no-save native and Alpha/Steam/Omega captures exit zero in 43.546 and 82.906
+seconds, respectively; both images were fully inspected against the tested binary.
+These bounded checks do not establish native pixels, fixed scheduling, performance
+or general startup reliability. The prior Alpha deadline failure remains recorded.
+No original game, owner Save/Mods/display change or binary publication was needed.
+
+The isolated original-only author finalized and held the independent
+[clock contract](specs/steam-world-clock-units-and-update-20261108.md).
+The implementer read the entire prose and owned source only; its original-byte
+hash is frozen privately. Role/name/restore setup, exact worker scheduling,
+other clock writers, complete stat-provider re-audit, abnormal/reentrant paths,
+connection/rekey lifetimes and broad native runtime acceptance remain open.
+
 ## Viewed packet dispatch and frame boundaries - 2026-11-08
 
 Viewed gameplay packets now dispatch after World stepping, drawn-position work,

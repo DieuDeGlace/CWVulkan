@@ -2783,3 +2783,23 @@ before an unchanged retry and cold-fill reliability stays open. Precise Steam
 transport ingestion, connection-role/rekey policy, native clocks and broader
 acceptance remain separate. No original code, owner data or private probe is
 published, and no unsupported effect was assigned to the read-only late visitor.
+
+## Native per-World clock, 2026-11-08
+
+The isolated original-only author held the independent World-clock contract;
+the implementer read the entire prose, froze its original-byte hash and used
+owned engine source only. A separate small kernel preserves the proved binary32
+operation order, actor predicate, fresh local reference calls and strict crossing
+sequence. Existing actor views are borrowed synchronously and rebuilt after
+cleanup. The ordinary Host/viewed substeps now own their calendar advancement;
+packet assignments remain later explicit writers. Native mode is the default;
+the constant custom clock and authority generator cache are explicit engine
+adapters. No native code, instructions or reconstruction source was inspected.
+
+Three pre-change failures and literal/actual-World checks pass, together with
+all-five-target, full required-owner CPU without skips, Vulkan, SDK and native/
+Alpha scene checks. One authority-only observation fixture was corrected from
+the wrong role, without relaxing numeric or engine predicates. Compiler-warning
+cleanup preserves literal float words. Full scheduling, role/name/restoration
+setup, other writers, complete reference-provider provenance and native runtime
+acceptance remain separate. No owner content or private evidence is published.

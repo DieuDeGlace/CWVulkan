@@ -137,9 +137,9 @@ class SpawnedCreatures {
     // The zones whose ground items or static objects changed since the last call (0x2e30b0):
     // marked as ever changed, their whole lists added to the event lists.
     void zoneChangeLists();
-    // The world's clock: day (world+0x08) and time of day (world+0x0c, ms). A deciding world runs
-    // it at `gameMsPerMs` game milliseconds a real one (CubeVulkan's [Time] MinutesPerSecond);
-    // a mirror takes its host's (packet 8).
+    // Both native Worlds advance their own binary32 calendar at each World substep;
+    // packet8 can subsequently overwrite a mirror's day/time. Synthetic adapters keep
+    // an external calendar until configured. Custom speed is a separate extension.
     int32_t day() const { return dayCount; }
     float timeOfDay() const { return dayMs; }
     float elapsedWorldTime() const { return elapsedWorldMs; }
@@ -150,8 +150,18 @@ class SpawnedCreatures {
     const hudcontext::State &hudContext() const { return contextState; }
     const nativesaves::Item &vehicleItem() const { return vehicleSelection; }
     void setClock(int32_t day, float timeOfDayMs) { auto guard = sourceGuard(); dayCount = day; dayMs = timeOfDayMs; }
-    void setClockRate(double gameMsPerMs) { clockRate = gameMsPerMs; }
-    void advanceClock(double dtMs);
+    void setNativeClock(bool namedWorld) {
+        auto guard = sourceGuard();
+        nativeClock = true;
+        clockNamedWorld = namedWorld;
+        clockRate = 0;
+    }
+    void setClockRate(double gameMsPerMs) {
+        auto guard = sourceGuard();
+        nativeClock = false;
+        clockRate = gameMsPerMs;
+    }
+    void advanceClock(double dtMs); // custom calendar only; simulate calls it per substep
     // Metadata reset (0x2c34c0): clear World+0x20/+0x10, preserving reward IDs,
     // day/time, live residents and physical source payloads. Clock packets use this boundary.
     void resetWorldState();
@@ -537,7 +547,9 @@ class SpawnedCreatures {
     // Simulation aliases one shared owned value; the loader never captures this actor.
     std::shared_ptr<SaveMetadata> saveMetadata = std::make_shared<SaveMetadata>();
     int32_t &dayCount = saveMetadata->day; // world+0x08
-    double clockRate = 0;         // game ms a real ms (0: the clock is set from outside)
+    bool nativeClock = false;    // normal gameplay selects the verified Steam clock
+    bool clockNamedWorld = false; // actual configured World name, not HUD/inventory context
+    double clockRate = 0;         // custom game ms a real ms (0: externally set/frozen)
     // The event lists' records, from the native modules' arrays.
     void keepRecords(const std::vector<std::array<uint8_t, 0x30>> &sounds, const std::vector<std::array<uint8_t, 0x48>> &particles,
                      const std::vector<std::array<uint8_t, 0x48>> &numbers, const std::vector<std::array<uint8_t, 0x30>> &buffNotes);

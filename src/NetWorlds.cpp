@@ -59,7 +59,6 @@ void HostSide::advance(uint32_t dtMs) {
     do {
         const uint32_t step = std::min(left, uint32_t(16));
         left -= step;
-        world.advanceClock((double)step);
         // The existing AI timer remains separate from the World-step phases.
         world.think(blocks, (double)step, world.timeOfDay() / 3600000.0f);
         world.simulate(blocks, (double)step, reset, [&] { world.update(blocks, standIn); });
