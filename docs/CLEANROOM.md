@@ -2669,3 +2669,15 @@ helper failures and nonempty/empty local host replies exercise this bounded fix.
 Physical source binding, wider synchronization and native persistence remain open;
 these checks do not establish full source-lifecycle or network parity. The private
 receipt freezes the original held bytes; owner content is not published.
+
+## Physical source request control, 2026-11-07
+
+The isolated original-only author supplied the held F8 control and state-reply
+mapping contracts without replacement, SDK, fixture or owner-output exposure.
+The implementer read both complete prose files and owned engine sources only.
+Physical source identities now own request control across COW, clears, reset and
+reload; logical lists no longer own a duplicate request-key set. Host replies
+require a physical source lease. Nine reproduced failures and selected integration
+checks exercise these paths. Broader connection timing/writers, full retained
+payload binding and synchronization remain open. The private receipt freezes both
+held hashes; no owner data is published.

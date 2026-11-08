@@ -119,6 +119,24 @@ Full selected-state retention/restoration, logical resident gates, native period
 persistence and exact producer/worker timing remain separate work. See the
 [host contract](specs/steam-host-source-cycle-20261107.md).
 
+## Physical source request control
+
+Source F8 is loaded-lifetime control, separate from the saved ground/object flags.
+Fresh identities start flagged; terrain COW shares that flag, but reload does not.
+Replies clear only a currently loaded source. Connection reset visits all loaded
+sources rather than just lazily created logical arrays, flags even empty-history
+sources, and reverses their edit journals.
+
+The viewed nonzero role predicate admits an X-major nine-by-nine loaded-only
+scan around truncated/narrowed player block coordinates, or the eagle destination.
+The scan does not load sources, change their recency or clear their flags. Host
+reply admission separately requires a physical source and holds its lease while
+copying values, independently of the host source's F8 value. See the
+[F8 contract](specs/steam-source-f8-control-lifetime-20261107.md) and
+[reply mapping](specs/steam-source-state-reply-mapping-20261107.md).
+Connection writer/timing integration, full five-field physical ownership and
+periodic persistence remain separate work.
+
 ## Retained source flags and the restore gate
 
 Saved ground-item and static-object overrides restore their corresponding sticky

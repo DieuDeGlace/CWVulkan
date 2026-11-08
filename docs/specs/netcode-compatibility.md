@@ -235,9 +235,11 @@ A ZoneExtractor hook that logs every packet, as received, on the machine it runs
 6. **Talking and quests for a guest**: the host performs the guest's "talk" interaction (kind
    3); what, if anything, reaches the guest (a mission given, a reward), and through which list.
    Oracle: two-player session, the guest talks to a quest giver and finishes the mission.
-7. **"State needed" on new zones**: which routine sets zone+0xf8 for a zone newly made in a
-   mirror world (0x2da090 sets it only on connecting). Oracle: packet 15s while walking into
-   new land (single player is enough).
+7. **"State needed" on new zones — bounded resolution, 2026-11-07**: the constructor's
+   word-one write initializes F8 to one and F9 to zero. The existing-source factory
+   return does not reset F8; connection reset and loaded coordinate input have their
+   own writes. See [the held F8 audit](steam-source-f8-control-lifetime-20261107.md)
+   for request ordering, role gating, source lifetimes and explicit writer/timing limits.
 8. **A monster's hit on the local player** (0xa5a50, the damage-number pass): the exact
    arithmetic (block power, mana, mana shield, stealth constant 0x4ac95c, stun, maximum health)
    deserves its own spec section. Oracle: recorded damage numbers and the player's record before

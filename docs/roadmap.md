@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] State-request control now follows physical source identity through COW,
+  replies, reset and reload. Loaded-only X-major request bounds use truncated
+  player blocks or the eagle anchor. Host replies require a physical source even
+  when old logical lists remain. Nine reproduced regressions pass; full required-
+  owner CPU, Vulkan and SDK checks pass. Full five-field binding, connection
+  writers/timing, logical residency and persistence remain open. See the
+  [F8 contract](specs/steam-source-f8-control-lifetime-20261107.md) and
+  [reply mapping](specs/steam-source-state-reply-mapping-20261107.md).
+
 - [x] Retained ground arrays restore their override flag, including explicit
   empty values, and reach real host source replies. The nonzero World+0x358 gate
   suppresses restoration independently of later unload recording. Seven helper

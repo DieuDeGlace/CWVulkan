@@ -213,7 +213,6 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         if (!near(zone[0], zone[1], NEAR_ZONES + 1)) {
             releaseDeaths(enemyDeaths.unload({zone[0], zone[1]}));
             zoneStates.unload(zone, deadTrackedIn({zone[0], zone[1]}));
-            stateNeeded.erase({zone[0], zone[1]});
             unloadedZones.push_back({zone[0], zone[1]});
         }
     for (auto it = zones.begin(); it != zones.end();)
@@ -1952,11 +1951,6 @@ nativesaves::ZoneLists *SpawnedCreatures::zoneLists(ExtractedWorld &ew, int zx, 
         for (const worldgen::GroundItem &g : worldgen::zone(zx, zy)->items)
             itemRecords.push_back(zonestates::groundItemRecord(g, worldgen::worldDay()));
     }
-    // A mirror's new zone shows its own generation until the host has sent the zone's state.
-    // (Which routine flags a mirror's new zones is netcode-compatibility.md's open question 7;
-    // every new zone is flagged here, which the recorded zone requests bear out.)
-    if (client)
-        stateNeeded.insert({zx, zy});
     return &zoneStates.load({zx, zy}, std::move(itemRecords), std::move(objectRecords));
 }
 
@@ -2751,6 +2745,9 @@ bool SpawnedCreatures::isDead(int64_t id) const {
 }
 
 bool SpawnedCreatures::zoneAnswer(ExtractedWorld &ew, const cwnet::ZoneKey &zone, cwnet::ZoneAnswer &out) {
+    const auto source = ew.gameZoneToken(zone.x, zone.y);
+    if (!source)
+        return false; // Logical lists cannot admit a reply for a retired physical source.
     const nativesaves::ZoneLists *lists = zoneLists(ew, zone.x, zone.y);
     if (!lists)
         return false;
@@ -2810,23 +2807,24 @@ void SpawnedCreatures::applyBlockChange(const cwnet::BlockChangeRecord &change) 
     appendBlockHistory(*lastWorld, change);
 }
 
+void SpawnedCreatures::zoneAnswered(const cwnet::ZoneKey &zone) {
+    if (lastWorld)
+        lastWorld->sourceStateReceived(zone.x, zone.y);
+}
+
 std::vector<cwnet::ZoneKey> SpawnedCreatures::zonesNeedingState(int64_t blockX, int64_t blockY) const {
-    constexpr int64_t REACH = 256; // blocks either way of the player
-    auto zoneOf = [](int64_t block) { return (int32_t)std::floor((double)block / 64.0); };
     std::vector<cwnet::ZoneKey> out;
-    for (const auto &[zx, zy] : stateNeeded)
-        if (zx >= zoneOf(blockX - REACH) && zx <= zoneOf(blockX + REACH) && zy >= zoneOf(blockY - REACH) &&
-            zy <= zoneOf(blockY + REACH))
-            out.push_back({zx, zy});
+    if (client && lastWorld)
+        for (const auto &[x, y] : lastWorld->sourceStateRequests(int32_t(blockX), int32_t(blockY)))
+            out.push_back({x, y});
     return out;
 }
 
 void SpawnedCreatures::undoBlockChanges(ExtractedWorld &ew) {
-    for (const nativesaves::Cell &zone : zoneStates.zonesInMemory()) {
-        if (nativesaves::ZoneLists *lists = zoneStates.find(zone))
+    for (const auto &[x, y] : ew.resetSourceStateRequests()) {
+        if (nativesaves::ZoneLists *lists = zoneStates.find({x, y}))
             lists->blockChanges.clear();
-        ew.undoBlockChanges(zone[0], zone[1]);
-        stateNeeded.insert({zone[0], zone[1]});
+        ew.undoBlockChanges(x, y);
     }
 }
 

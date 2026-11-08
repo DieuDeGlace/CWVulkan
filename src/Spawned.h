@@ -125,7 +125,7 @@ class SpawnedCreatures {
     void notifyHitVisual(const cwnet::DamageRecord &number) { if (hitVisualObserver) hitVisualObserver(number); }
     // The zones whose state a client still needs (zone+0xf8): set for every zone in memory on
     // connecting and for each zone that comes into memory; cleared when the host answers.
-    void zoneAnswered(const cwnet::ZoneKey &zone) { stateNeeded.erase({zone.x, zone.y}); }
+    void zoneAnswered(const cwnet::ZoneKey &zone);
     std::vector<cwnet::ZoneKey> zonesNeedingState(int64_t blockX, int64_t blockY) const;
     // Connecting: every loaded zone's block changes undone and its state needed again (0x2da090).
     void undoBlockChanges(ExtractedWorld &ew);
@@ -510,7 +510,6 @@ class SpawnedCreatures {
     bool client = false;          // world+0x358: a remote client (a mirror of a host)
     int64_t localId = 1;          // the local player's creature id
     cwnet::WorldEvents worldEvents; // world+0x90 .. +0x170
-    std::set<std::pair<int, int>> stateNeeded; // zone+0xf8 of the zones in memory (a mirror's)
     int32_t dayCount = 0;         // world+0x08
     double clockRate = 0;         // game ms a real ms (0: the clock is set from outside)
     // The event lists' records, from the native modules' arrays.

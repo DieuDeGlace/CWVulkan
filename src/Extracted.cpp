@@ -540,6 +540,9 @@ void ExtractedWorld::keepAround(const void *owner, const std::vector<std::pair<i
 
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
     std::lock_guard lock(cacheMutex);
+    return cachedUnlocked(ax, ay);
+}
+std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cachedUnlocked(int ax, int ay) const {
     if (sourceMap) {
         const auto found = sourceMap->find({ax, ay});
         return found == cache.end() ? nullptr : found->second;
@@ -776,25 +779,44 @@ std::vector<std::pair<int, int>> ExtractedWorld::takeChangedModels() {
 
 std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
-    if (sourceMap) {
-        const auto found = sourceMap->find({x, y});
-        if (found == cache.end() || !found->second) return std::nullopt;
-        const auto &zone = found->second;
+    if (const auto zone = cachedUnlocked(x, y))
         return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
-    }
-    for (const auto &[key, zone] : cache)
-        if (key == Key{x, y} && zone)
-            return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
     return std::nullopt;
 }
 
 bool ExtractedWorld::gameZoneLoaded(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
-    if (sourceMap) {
-        const auto found = sourceMap->find({x, y});
-        return found != cache.end() && bool(found->second);
-    }
-    return std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == Key{x, y} && entry.second; });
+    return bool(cachedUnlocked(x, y));
+}
+
+std::vector<std::pair<int, int>> ExtractedWorld::sourceStateRequests(int32_t blockX, int32_t blockY) const {
+    std::lock_guard lock(cacheMutex);
+    std::vector<Key> out;
+    // Widen the bounds to keep ordinary signed32 block inputs defined at the edge.
+    // Extreme overflow behavior is outside the native contract.
+    for (int64_t x = floorDiv(int64_t(blockX) - 256, 64); x <= floorDiv(int64_t(blockX) + 256, 64); ++x)
+        for (int64_t y = floorDiv(int64_t(blockY) - 256, 64); y <= floorDiv(int64_t(blockY) + 256, 64); ++y)
+            if (const auto zone = cachedUnlocked(int(x), int(y)); zone && zone->identity->needsState)
+                out.emplace_back(int(x), int(y));
+    return out;
+}
+
+void ExtractedWorld::sourceStateReceived(int32_t x, int32_t y) {
+    std::lock_guard lock(cacheMutex);
+    if (const auto zone = cachedUnlocked(x, y))
+        zone->identity->needsState = false;
+}
+
+std::vector<std::pair<int, int>> ExtractedWorld::resetSourceStateRequests() {
+    std::lock_guard lock(cacheMutex);
+    std::vector<Key> out;
+    out.reserve(cache.size());
+    for (const auto &[key, zone] : cache)
+        if (zone) {
+            zone->identity->needsState = true;
+            out.push_back(key);
+        }
+    return out;
 }
 
 ExtractedWorld::GameBlock ExtractedWorld::gameBlock(int64_t x, int64_t y, int z, bool *loaded) {

@@ -191,6 +191,10 @@ class ExtractedWorld {
     std::optional<nativesaves::Item> capturedObjectReward(int32_t x, int32_t y, int32_t index) const;
     std::vector<Scenery> objectProps(std::span<const nativesaves::Record> records);
     bool gameZoneLoaded(int32_t x, int32_t y) const; // lookup only; no block read, load or LRU mutation
+    // Source+0xf8 control: loaded-only X-major request scan, reply clear and connection reset.
+    std::vector<std::pair<int, int>> sourceStateRequests(int32_t blockX, int32_t blockY) const;
+    void sourceStateReceived(int32_t x, int32_t y);
+    std::vector<std::pair<int, int>> resetSourceStateRequests();
     // The zones within `radius` of absolute zone (ax, ay) are kept in memory, as the game
     // keeps the zones around its player: those missing are read (or made) on a thread of
     // their own, and none of them is let go to make room for others (the creatures there
@@ -238,7 +242,10 @@ class ExtractedWorld {
     using Column = worldgen::TerrainColumn;
     // One stored column as the light sees it (lightColumn).
     static bool columnLight(const Column &c, int z0, int count, uint8_t *out);
-    struct ZoneIdentity {};
+    struct ZoneIdentity {
+        // Loaded-source control is shared by COW storage, not by later reloads.
+        mutable bool needsState = true; // guarded by cacheMutex, like the source map
+    };
     struct Zone {
         // Column replacements copy storage, not the loaded zone's lifetime/visit order.
         std::shared_ptr<const ZoneIdentity> identity = std::make_shared<ZoneIdentity>();
@@ -315,7 +322,8 @@ class ExtractedWorld {
     std::atomic<uint64_t> cacheRevision{0};
     void clearCache(); // joins this reader's prefetch before resetting the source
     void applyBlockChanges(int ax, int ay, Zone &zone) const;
-    std::shared_ptr<Zone> cached(int ax, int ay); // as load, but only from the cache
+    std::shared_ptr<Zone> cached(int ax, int ay);
+    std::shared_ptr<Zone> cachedUnlocked(int ax, int ay) const; // caller holds cacheMutex // as load, but only from the cache
     static void readModelLists(const std::filesystem::path &file, int ax, int ay, Zone &zone);
     static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error, bool storedOnly = false);
     static std::shared_ptr<Zone> generateZone(int ax, int ay, bool eagerLight);

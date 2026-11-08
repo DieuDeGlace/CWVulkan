@@ -128,6 +128,7 @@ int generatorCacheTests();
 int nativeSourceStreamingTests();
 int hostSourceTests();
 int sourceReadinessTests();
+int sourceControlTests();
 int retainedSourceTests();
 int nativeSourceCreationTests();
 int plasmaLayoutTests();
@@ -9537,6 +9538,8 @@ int main(int argc, char **argv) {
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "sourcecreation")
         return nativeSourceCreationTests();
+    if (argc == 2 && std::string(argv[1]) == "sourcecontrol")
+        return sourceControlTests();
     if (argc == 2 && std::string(argv[1]) == "retainedsource")
         return retainedSourceTests();
     if (argc == 2 && std::string(argv[1]) == "sourcereadiness")
@@ -10837,6 +10840,7 @@ int main(int argc, char **argv) {
     failures += nativeSourceStreamingTests();
     failures += hostSourceTests();
     failures += sourceReadinessTests();
+    failures += sourceControlTests();
     failures += nativeSourceCreationTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();

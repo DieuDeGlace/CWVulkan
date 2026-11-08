@@ -1,0 +1,105 @@
+# Steam source-state reply mapping — final held contract
+
+This is a bounded original-Steam-only account of the source-state reply contributions assembled by RVA 0xF33B0, their outgoing serialization in RVA 0xF5520, the reached local and network receive queues, message-7 decoding in RVA 0x3E450, and the corresponding ordinary viewed Game application in RVA 0xA5A50. It establishes these routes and their directly inspected helpers; it is not a protocol census, a universal producer census, or a guarantee of successful transport or source lifetime across other callers.
+
+The supported image is binary/cubeworld.original.exe.unpacked.exe under C:/Users/DieuDeGlace/Documents/decompiled cube world steam. Its image base is 0x140000000, timestamp 0x5D93AB0D, and SHA-256 is 7AF18CB28C8BF848F355287428C6390B2EA2A682CA466190F5EB9859C5D6F244. Addresses below are RVAs in this image. Evidence consists of the individually selected original decompiler files in decompiled/functions, the successful original Game-update file decompiled/retry-180-phase1/functions/1400a5a50.c, the individually selected original assembly.txt listing, and the original image. No replacement implementation or earlier held contract was used as behavior evidence.
+
+The principal selected function files are 1400f33b0.c, 1400f5520.c, 1400f4f50.c, 1400f1b50.c, 1400f1ac0.c, 140009950.c, 14003e450.c, 14003cb50.c, 14003bae0.c, 14003f4f0.c, and the successful 1400a5a50.c. The selected original list-copy, serialization, parsing, byte-buffer, lookup and application helpers are identified by RVA alongside the facts they support. The callback thunk at RVA 0x8A360 was resolved in the original listing and through the original image vtable, rather than inferred from an anonymous decompiler call.
+
+## Owners and selected collection mapping
+
+The host traversal uses its per-peer map at Host+0x568. A map node's payload at +0x28 supplies the peer record. That record begins with a resident identity, and its sixteen-family aggregate state begins at record+0x10. Each family occupies a sixteen-byte list header/count pair.
+
+The selected edit list is record+0x40, aggregate offset +0x30. The first selected array-group list is record+0x60, aggregate offset +0x50; its source collection is source+0x30. The second selected array-group list is record+0x70, aggregate offset +0x60; its source collection is source+0x60. The coordinate reply list is record+0x80, aggregate offset +0x70. The pending requested-coordinate list is separate, at record+0x110 with its count at +0x118. It is not one of those sixteen outgoing families.
+
+On the viewed side, the aggregate begins at Game+0x1970. Its corresponding selected lists are edits at Game+0x19A0, first-array groups at +0x19C0, second-array groups at +0x19D0, and coordinate replies at +0x19E0. Their native counts are respectively at +0x19A8, +0x19C8, +0x19D8, and +0x19E8. These are distinct owners from both the host peer aggregate and the viewed World's aggregate.
+
+## Source-dependent reply construction
+
+RVA 0xF33B0 appends ordinary World-state contributions to the peer's corresponding outgoing lists before it handles that peer's pending requested coordinates. The selected ordinary appends include edits, the two array-group families, and coordinate records. Consequently, the source-request branch appends to lists that may already contain other contributions; its coordinate records are not the only possible producers of record+0x80.
+
+The pending coordinate list is traversed forwards in its current list order, without a sort or deduplication in this branch. For each coordinate pair, the loaded-source lookup at call-site RVA 0xF381F uses the host path's map at Host+0x468. An entry must be present and its source pointer nonnull. An absent entry or null pointer skips all of the source-specific contributions for that request. This branch does not create a source, request generation, or append a coordinate reply for that missing source.
+
+For an admitted source, a nonempty edit list, represented by source+0xD8 and count +0xE0, contributes its existing edit records to peer record+0x40 through range-copy helper RVA 0x38070. The source's forward list order is preserved. This is a copy of the retained records, not a re-evaluation of terrain values during serialization.
+
+The source byte at +0xF9 is tested at RVA 0xF386A. A nonzero value admits the first-array snapshot made by helper RVA 0xF1AC0 at call site 0xF3883. That helper copies the source's signed 32-bit coordinates at +0x10 and +0x14 and its +0x30 array range into a separately constructed group and inner record list. The group is appended to peer record+0x60. The source byte at +0xFA is tested separately at RVA 0xF3946. A nonzero value admits the second-array snapshot made by RVA 0x9950 at call site 0xF395B, using the source's +0x60 array range and appending to peer record+0x70. An admitted flag can produce a group whose inner element count is zero; an empty selected array is not the same as an omitted group.
+
+After these optional edit and array contributions, RVA 0xF4420 at call site 0xF39BD appends the requested coordinate pair to record+0x80. Within this explicit request branch, this append depends on finding a nonnull loaded source, not on either selected-array flag or a nonempty edit list. Source+0xF8 is neither tested nor copied nor reset in this branch. No meaning for the coordinate beyond this proved construction and the later viewed write is inferred.
+
+After the traversal, the whole pending-request list is emptied. Its count is zeroed at RVA 0xF39EF and its nodes are released by the path through 0xF3A0C. Missing-source requests are included in that clearing. Repeated requested coordinates remain repeated contributions when admitted, and can duplicate state already appended by the earlier ordinary contributions. This branch supplies no automatic retention or retry for a skipped request.
+
+The inspected ordinary caller invokes this builder at RVA 0xF69B4 while holding the host path's World+0x3C8 guard, entered at 0xF68CD and released at 0xF69F8. Host+0x5F8 is also held across this part of RVA 0xF5520. These are the directly established scopes for the inspected caller. They do not prove every source-map writer, every alternative builder caller, or general race freedom.
+
+## Outgoing capture, clearing and message layout
+
+In the earlier outgoing traversal of RVA 0xF5520, the peer's resident identity must also resolve to a nonnull actor through the host path's actor map at Host+0x458 before this aggregate capture/send branch is reached. If it does not, this branch skips its capture, clearing and send. Other record writers or cleanup routes remain outside this claim.
+
+At RVA 0xF5D7E, helper RVA 0xF1B50 copies the peer aggregate beginning at record+0x10 into a local aggregate. The native argument was checked at the call site; the copied base is not the peer-record base. The helper copies each of the sixteen list families. Selected array groups and their nested records are copied through their family constructors, including RVAs 0xF1360 and 0xF1480 and forward range inserters 0xEF990 and 0xEFBA0. The later serializer reads these copied queued values, rather than looking up the source again or retaining the selected raw source pointer.
+
+The peer aggregate is replaced with an empty aggregate through RVA 0x83640 at call site 0xF5FB8, before its copied state is serialized and routed. Temporary list destruction follows the ordinary aggregate helpers. This clearing is not conditional on a proved transport-success result.
+
+The outer state message has a 32-bit identifier with value 7, written at RVA 0xF63A5. The serialized aggregate is transformed by the original encode wrapper RVA 0x66C10 at call site 0xF65C8. Following identifier 7, the outer message contains a 32-bit encoded-byte count and exactly that encoded byte block. The wrapper's reached opaque codec was not audited, so this contract does not assign a codec name or specify its internal format.
+
+Within the decoded aggregate block, the directly inspected prefix is ordered as follows. First is the edit family: a 32-bit record count followed by 0x1C bytes per record, serialized through RVA 0xF0DE0 at 0xF63D0. Next are two other fixed-record families, aggregate offsets +0x00 and +0x20, each with a 32-bit count and 0x48-byte records. Aggregate offset +0x10 follows with 0x30-byte records, then offset +0x40 with 0x80-byte records. Those intervening families are layout facts here; their gameplay semantics are outside this audit.
+
+Next comes the second-array group family, aggregate offset +0x60, followed by the first-array group family, aggregate offset +0x50. Each has an outer 32-bit group count. Each group contains an eight-byte coordinate pair, a 32-bit inner element count, and 0xE0 bytes per inner element. The selected inner serializer is RVA 0xF1120, called at 0xF649A for the second family and 0xF652A for the first. Thus the wire order is second array before first array, despite their numerical aggregate offsets and later application order.
+
+The coordinate reply family, aggregate offset +0x70, follows these groups through RVA 0xF1220 at call site 0xF6547. It has a 32-bit count and eight bytes per coordinate pair. Other aggregate families follow; their full layouts are not covered here. The edit payload contains three leading signed 32-bit coordinates and sixteen further payload bytes. No complete business meaning is assigned to those remaining bytes. The selected array records are full 224-byte value payloads, not serialized source-object pointers.
+
+Counts are obtained from native list counts and narrowed to the emitted 32-bit count fields. Coordinate pairs retain signed 32-bit X followed by signed 32-bit Y. Primitive copies use the supported x64 image's little-endian representation. Forward list traversal determines element order; the selected serializers add no sorting or deduplication. These facts describe supported, well-formed data. Oversized counts, corrupt lengths, truncation and malformed-message safety are not established.
+
+The completed outer packet is passed to RVA 0xF4F50 at call site 0xF6660. The encoded buffer, packet buffer and copied aggregate are destroyed after the routing call. Later in this same inspected RVA 0xF5520 invocation, World updates at 0xF6917 and 0xF692D and dirty publication at 0xF6947 precede the reply builder at 0xF69B4. The World aggregate empty exchange at 0xF69E3 follows the builder. Accordingly, explicit source-request replies assembled at this later point are not in the earlier already-captured outgoing aggregate of that invocation. This is call order, not a promised frame interval or delivery time.
+
+## Direct local and network routes
+
+RVA 0xF4F50 compares the destination identity with the global identity at image RVA 0x5516F8. Equality selects the local callback path. If Host+0x5C8 is nonnull, it resets the packet cursor at 0xF4F80 and invokes that object's first virtual slot at 0xF4F98. A null callback returns from this local branch without falling through to the network route.
+
+The concrete registration is visible in the original Game constructor: RVA 0x7F84A chooses callback RVA 0x3CB50, 0x7F851 captures the Connection object at Game+0xD18, and 0x7F85B calls registration helper 0x7D140. That helper stores a functor at Host+0x5C8 with the captured object at functor+0x8 and method at +0x10. Its original vtable at image RVA 0x437E98 resolves its first slot to RVA 0x8A360. The original thunk invokes the captured method on the captured object. The registered local destination is therefore RVA 0x3CB50, not an immediate call to the message decoder.
+
+RVA 0x3CB50 allocates an owned message wrapper and copies the entire packet bytes through RVA 0x3A970 at call site 0x3CB94, giving the copy a zero read cursor. Under Connection+0xA18, entered at 0x3CBB1 and released at 0x3CC1D, it appends the sender identity and owned message pointer to Connection+0xA40, with count at +0xA48. The copied bytes survive return to the caller and release of the original outgoing packet buffer.
+
+The unequal-identity branch of RVA 0xF4F50 calls the native outgoing interface at 0xF4FD6 with the packet byte pointer and byte length and literal trailing arguments 2 and 0. No external API enum meaning, reliability, successful delivery or retry behavior is assigned to those literals.
+
+The inspected native receive loop at RVA 0x3BAE0 takes a successful receive result, copies its bytes into the same kind of owned message wrapper through RVA 0x3A970 at 0x3BBE6, and queues the sender/message pair at Connection+0xA40 under Connection+0xA18. Its selected guard entry and queue access are at 0x3BC04 and 0x3BC14. The temporary receive storage can then be released. This establishes convergence of the direct local reply and reached native receive path on the same queue, without promising thread counts or arrival order.
+
+RVA 0x3F4F0 enters Connection+0xA18 at 0x3F532, copies the queued entries into a local snapshot through RVA 0x3A850 at 0x3F54D, clears the original queue's links and count and frees its list nodes, then unlocks at 0x3F587. The selected copy helper and RVA 0x37BA0 preserve forward list order. The snapshot is traversed forwards, calling decoder RVA 0x3E450 at 0x3F5B8 for each entry. Its owned message wrapper is released after handling. Messages appended after the snapshot remain in the original queue for a later drain. No order among concurrent enqueues is inferred.
+
+## Viewed decoding and destination copies
+
+RVA 0x3E450 reads the 32-bit outer message identifier. Message 7 is admitted on the inspected path only for a sender matching Connection+0x70. A different sender does not reach this case; the separate exceptions for identifiers 0 and 2 do not admit message 7. For the matching sender, the owner timestamp is refreshed at 0x3E4E0. Case 7 has no source-map lookup or World+0x358 gate.
+
+The decoder reads the encoded-byte count, copies the block into temporary storage through RVA 0x3E3F0, and calls the original decode wrapper RVA 0x66D10 at 0x3EE01. It constructs an empty local aggregate, then parses the decoded families in the same wire order described above.
+
+The edits are parsed through RVA 0x39840 at 0x3EE1A. The second-array groups precede the first-array groups: their 0xE0-byte records are parsed respectively through RVA 0x39DD0 at 0x3EEFC and RVA 0x3A390 at 0x3EFFC. Their outer group records retain the coordinate pair and inner list, including a zero-count inner list. Coordinate pairs are parsed through RVA 0x3A5A0 at 0x3F06B. Parser loops use positive signed 32-bit counts on this inspected path; malformed count behavior is not extended into a protocol guarantee.
+
+After the remaining aggregate families have been parsed, copies are appended through the Connection's Game backpointer at +0xA50. Edits append to Game+0x19A0 through RVA 0x38E00 at 0x3F0ED. First-array groups append to Game+0x19C0 through RVA 0x38F00 at 0x3F1AE. Second-array groups append to Game+0x19D0 through RVA 0x39080 at 0x3F1D4. Coordinate replies append to Game+0x19E0 through RVA 0x39280 at 0x3F1FA.
+
+These range inserters use helpers 0x38070, 0x381D0, 0x383E0 and 0x386A0 to copy forward source entries to the destination tail. Existing Game entries are not cleared, sorted or deduplicated by these appends. The decoder destroys its temporary aggregate at 0x3F30F and decoded byte buffer at 0x3F319 after the copies. Game application therefore does not depend on the decoder's temporary byte-buffer lifetime. Across packets handled by one drain, destination order follows handler invocation order; no broader transport sequence guarantee follows.
+
+## Ordinary viewed application and clearing
+
+The inspected ordinary Game update applies these selected lists while holding its viewed World+0x3C8 guard, entered at RVA 0xA6464 and released at 0xADB23. Its order is edits, coordinate replies, first-array groups, then second-array groups. This differs from both wire ordering and the order of the decoder's final append calls.
+
+Each edit first reaches one of two mutation routes. If the received list node's bytes at +0x26 and +0x27 are both zero, the update calls RVA 0x91160 at 0xA80DB. Otherwise it passes the received value beginning at node+0x22 to RVA 0xA37D0 at 0xA80FA. The selected helpers query loaded data: 0xA37D0 uses the loaded source map; 0x91160 reaches loaded-column getter 0x935E0 and has its own existing-column and vertical-range admission. Neither inspected route creates or queues a missing source. The full terrain-write semantics of their deeper callees are outside this mapping contract.
+
+After that mutation attempt, the update separately looks up the source using the edit's signed block coordinates reduced to signed floor-divided zone coordinates. If a nonnull source exists, it appends the complete received edit record to source+0xD8 through RVA 0xA1680 at 0xA817F. This append is not conditioned on a success result from the earlier mutation call. Missing source skips this retained-edit contribution.
+
+Coordinate replies are then traversed. Loaded-source getter RVA 0x16E00 is called at 0xA821B. A nonnull result receives a direct zero write to source+0xF8 at 0xA8225. A missing or null result is skipped. No source is created by that getter, and the coordinate branch does not replace either selected array.
+
+For each first-array group, the getter is called at 0xA828B. An existing source has its +0x30 array used range reset to empty and the received inner records inserted through RVA 0x7D4A0 at 0xA82CF. An admitted empty inner list therefore clears the existing array. This branch does not itself write source+0xF9 or insert the source into World+0x190.
+
+For each second-array group, the getter is called at 0xA834B. An existing source has its +0x60 array reset and the received inner records inserted through RVA 0x7D420 at 0xA8396. The branch then inserts the source into World+0x1A0 through RVA 0x7D360 at 0xA83B1 and calls RVAs 0x31D470 and 0x31D700 at 0xA83BD and 0xA83C9. These steps are reached even for an admitted empty inner list. Their wider gameplay semantics are not inferred here. The later publication call is RVA 0x2E30B0 at 0xA8498.
+
+Repeated admitted groups for the same existing source replace that source's corresponding array in list order. The last such admitted group in that list determines its resulting array contents. Missing or null sources skip the replacement. That admission does not turn the message into a generation or prefetch request.
+
+Later in this same ordinary update, the whole Game aggregate at +0x1970 is replaced with an empty aggregate through RVA 0x83640 at 0xA996D, with temporary destruction through 0x3B420 at 0xA9979. This empties the selected collections even for entries whose sources were absent or null. These Game queues do not retain such skipped entries for an automatic retry.
+
+The inspected Connection queue drain occurs later, through RVA 0x3F4F0 at 0xAAEBF. Newly decoded message-7 entries from that drain are appended after the preceding selected application and Game-aggregate clear. They are available to a subsequent application path rather than being retroactively included in the earlier pass. No exact frame count, elapsed delay, transport latency, or exclusion of other callers is established. The still later empty exchange at RVA 0xADB0E concerns the viewed World aggregate at World+0x90, not Game+0x1970.
+
+## Evidence limits and held status
+
+This closes the selected record+0x80 coordinate, first-array, second-array and edit mapping through message 7 into the viewed Game collections and their directly inspected ordinary application. It does not establish all producers of any list, the incoming request message identifier or its entire production route, the codec algorithm, complete layouts of later aggregate families, malformed-input behavior, transport success, packet retry, all queue-drain callers, a universal source-locking discipline, or arrival order across threads. Other message types, alternate source installers and indirect writers remain unresolved.
+
+The directly inspected source paths separate three decisions: whether a host source exists when a reply contribution is copied, whether an aggregate reaches the outgoing actor-admitted capture, and whether a viewed source exists when decoded data is later applied. None of these alone proves that the source remains resident at a later boundary. Owned copies establish the selected data lifetimes across serialization, local queueing, decoding and destination-list insertion; they do not establish general World source lifetime.
+
+FINAL / STABLE / HELD. The complete final file has been designated for full readback and then no further edits. All earlier held files remain unchanged. Exposure status: clean; only the standalone author policy and individually selected original Steam evidence were read for this assignment. No implementation, reconstruction, dependency/SDK header, project history, test, capture or log material was used.

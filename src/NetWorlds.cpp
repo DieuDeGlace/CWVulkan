@@ -1,4 +1,5 @@
 #include "NetWorlds.h"
+#include "SteamZoneDemand.h"
 
 #include <algorithm>
 #include <cstring>
@@ -110,18 +111,16 @@ void MirrorSide::dayChange(int32_t newDay) {
 
 std::vector<cwnet::ZoneKey> MirrorSide::neededZones() {
     const uint8_t *me = world.localRecord();
-    if (!me)
+    if (!me || !world.remoteClient())
         return {};
-    int64_t at[2];
-    std::memcpy(at, me + cwnet::creature::POSITION, sizeof at);
-    // The player's block (while flying on the eagle, ability 0x9c, the pair at +0x1b0 instead).
-    constexpr uint8_t EAGLE_FLIGHT = 0x9c;
-    constexpr size_t ABILITY = 0x68, FLIGHT_BLOCK = 0x1b0;
-    int64_t blockX = at[0] >> 16, blockY = at[1] >> 16;
-    if (me[ABILITY] == EAGLE_FLIGHT) {
-        int32_t pair[2];
-        std::memcpy(pair, me + FLIGHT_BLOCK, sizeof pair);
-        blockX = pair[0], blockY = pair[1];
+    std::array<int64_t, 3> at;
+    std::memcpy(at.data(), me + cwnet::creature::POSITION, sizeof at);
+    std::optional<zonedemand::BlockPoint> anchor;
+    if (me[0x68] == 0x9c) {
+        zonedemand::BlockPoint destination;
+        std::memcpy(destination.data(), me + 0x1b0, sizeof destination);
+        anchor = destination;
     }
-    return world.zonesNeedingState(blockX, blockY);
+    const auto point = zonedemand::sourcePoint(at, anchor);
+    return world.zonesNeedingState(point[0], point[1]);
 }

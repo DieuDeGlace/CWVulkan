@@ -1,5 +1,43 @@
 # Source review checkpoint — 2026-11-07
 
+## Physical source request/control lifetime - 2026-11-07
+
+The state-request flag now belongs to each loaded physical source identity. Fresh
+sources start flagged; COW terrain replacements share that control, while source
+retirement and reload establish a fresh flag. A coordinate reply clears only the
+currently loaded source, and a reply received while absent cannot suppress a
+later source's requests. Logical ground/object list creation and retirement no
+longer own a separate request-key set.
+
+The viewed request scan uses loaded sources in its X-major nine-by-nine square.
+Player fixed positions truncate and narrow before the bounds are built; eagle
+flight substitutes its destination block point. Selection neither creates sources
+nor changes their flags or recency. The existing viewed role predicate skips the
+scan when zero. Connection reset flags every loaded source, including those with
+no logical lists or edit history, and reverses existing loaded edit journals.
+
+Host replies additionally require an existing physical source, whose lease is
+retained while reply values are copied. Old logical lists cannot admit a reply
+for a missing physical source. Reply admission does not depend on host F8.
+
+Nine pre-change regressions pass, with fresh/repeated requests, loaded-only
+clears, COW identity, factory hits, empty-history reset, retire/reload with old
+leases, stale logical host lists, ordered bounds, negative fractions, eagle input
+and reverse edit replay. Full required-owner CPU, Vulkan groups and extractor
+SDK-independence checks pass. See the independent
+[F8 contract](specs/steam-source-f8-control-lifetime-20261107.md) and
+[reply mapping](specs/steam-source-state-reply-mapping-20261107.md).
+
+Hidden offline/no-save scene checks also pass: Source=Game with Steam look and
+native water at the negative-half-block start in 44.953 seconds; Alpha terrain
+with Steam look and Omega water in 80.078 seconds. Both images were inspected for
+loaded terrain, vegetation and HUD; their executable hashes match the tested
+build. These are bounded startup checks, not FPS or original-pixel acceptance.
+
+This closes the selected physical control and host-admission paths. It does not
+close all World+0x358 writers, connection timing/queue phase, full five-field
+physical binding, wider synchronization, logical residency or periodic persistence.
+
 ## Retained source helper flags and gates - 2026-11-07
 
 Restoring a saved ground-item array now preserves its source override flag, as
