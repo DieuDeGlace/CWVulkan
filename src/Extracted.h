@@ -313,5 +313,5 @@ class ExtractedWorld {
     std::shared_ptr<Zone> cached(int ax, int ay); // as load, but only from the cache
     static std::shared_ptr<const std::vector<ModelRecord>> readModels(const std::filesystem::path &file);
     static std::shared_ptr<Zone> readZone(const std::filesystem::path &file, bool decode, std::string &error, bool storedOnly = false);
-    static std::shared_ptr<Zone> generateZone(int ax, int ay);
+    static std::shared_ptr<Zone> generateZone(int ax, int ay, bool eagerLight);
 };

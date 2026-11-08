@@ -138,7 +138,7 @@ void ExtractedWorld::loadSpriteTables(const fs::path &dir) {
     }
 }
 
-std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int ay) {
+std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int ay, bool eagerLight) {
     auto zone = std::make_shared<Zone>();
     worldgen::Int2 r = worldgen::regionAt(ax * 64 + 32, ay * 64 + 32);
     zone->region = worldgen::regionBiome(r.x, r.y);
@@ -166,7 +166,11 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     zone->models = std::move(models);
     zone->objects = worldgen::zoneObjects(ax, ay);
     zone->objectsMade = true;
-    const std::vector<worldgen::TerrainColumn> columns = worldgen::litZone(ax, ay);
+    // Native source admission preserves the generator's per-path bytes. The
+    // actual mesh prepass later publishes stored light; compatibility readers
+    // retain their existing eager-lighting policy.
+    std::vector<worldgen::TerrainColumn> lit;
+    const auto &columns = eagerLight ? (lit = worldgen::litZone(ax, ay)) : zone->things->terrain.columns;
     for (size_t i = 0; i < columns.size(); i++) {
         Column &c = zone->columns[i];
         c.base = columns[i].base;
@@ -298,7 +302,7 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
         return nullptr;
     std::string error;
     auto zone =
-        generate ? generateZone(ax, ay) : readZone(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".cwz"), true, error);
+        generate ? generateZone(ax, ay, !clientStreaming) : readZone(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".cwz"), true, error);
     if (!zone)
         return nullptr;
     if (!generate) {

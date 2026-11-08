@@ -290,3 +290,52 @@ int nativeSourceStreamingTests() {
     std::printf("Native source streaming: %d failures\n", failures);
     return failures;
 }
+
+// Without retained edits or intervening writers, native source creation preserves
+// the canonical generator bytes. Block queries apply their own effective-water rules.
+int nativeSourceCreationTests() {
+    int failures = 0;
+    auto check = [&](bool pass, const char *message) {
+        if (!pass) { ++failures; std::printf("FAIL source creation: %s\n",message); }
+    };
+    if (worldgen::modHooksSet() || worldgen::usingAlphaTerrain()) {
+        check(false,"fixture requires an independent default Steam generator");
+        return failures;
+    }
+    const auto previous = renderStyle();
+    setRenderStyle(RenderStyle::Steam);
+    worldgen::forgetZones();
+    ExtractedWorld reader;
+    reader.openGenerated(0,0);
+    reader.setClientStreaming(true);
+    size_t checked = 0, airWater = 0, different = 0;
+    const std::pair<int,int> coordinates[] = {{0,0},{100,100},{-100,-100}};
+    for (const auto &[zx,zy] : coordinates) {
+        const auto raw = worldgen::zone(zx,zy);
+        check(reader.loadSourceZone(zx,zy),"requested source is admitted without a mesh or loaded neighborhood");
+        for (int x = 0; x < 64; ++x)
+            for (int y = 0; y < 64; ++y) {
+                const auto &column = raw->terrain.columns[size_t(x)*64+size_t(y)];
+                for (size_t i = 0; i < column.blocks.size(); ++i) {
+                    const int z = column.base+int(i);
+                    const auto &block = column.blocks[i];
+                    ExtractedWorld::GameBlock expected{block.r,block.g,block.b,block.glow,block.type,block.flags};
+                    if (!block.type && z <= 0 && !(block.flags & 2)) expected = {255,255,255,0,2,0};
+                    const auto actual = reader.gameBlock(int64_t(zx)*64+x,int64_t(zy)*64+y,z);
+                    ++checked;
+                    airWater += block.type == 0 || block.type == 2;
+                    different += actual != expected;
+                }
+            }
+    }
+    check(checked > 0 && airWater > 0 && different == 0,
+          "new native sources retain canonical per-path block bytes before mesh lighting");
+    check(reader.loadedSourceCount() == 3 && !reader.gameZoneLoaded(1,0) && !reader.gameZoneLoaded(100,99),
+          "source admission does not pad the actual loaded map");
+    std::printf("Source creation: checked %zu stored records (%zu air/water), %zu mismatches\n",checked,airWater,different);
+    reader.setClientStreaming(false);
+    setRenderStyle(previous);
+    worldgen::forgetZones();
+    std::printf("Native source creation: %d failures\n",failures);
+    return failures;
+}

@@ -1,5 +1,43 @@
 # Source review checkpoint — 2026-11-07
 
+## Native source bytes before mesh lighting - 2026-11-07
+
+Native client source creation now retains the canonical generator's per-path
+bytes instead of unconditionally running a neighborhood light solve. Actual mesh
+preparation still solves and publishes stored light. No uniform zero/white byte
+rule is introduced; retained edits, effective block queries and compatibility
+readers keep their separate behavior. Alpha rendering, capture replay and the
+current host adapter retain their eager policy. See the independent
+[initial-byte contract](specs/steam-source-initial-block-light-20261107.md).
+
+The isolated public API test reproduced 20,303 premature byte changes among
+44,485 stored records in three zones. The corrected path has zero mismatches and
+performs three requested raw generations, versus 27 before. The reference is the
+independently implemented canonical generator; this is a stage-boundary check,
+not a new original-runtime capture or a universal transitive-helper proof.
+
+In matched 30-second Alpha-terrain/Steam-look/Omega runs, generations fall from
+685 to 367, excess productions from 370 to 31, and completed mesh jobs rise from
+164 to 250. Timing sums are overlapping elapsed job time. With profiling off,
+the matching full-load capture completes in 77.511 seconds total versus 130.589
+before this change; both exit zero with nonblank images. Arguments/settings match
+except private output paths and the measured executable hash matches the build.
+A minimum-distance Steam-terrain/Native-water process exits zero in 8.653 seconds,
+but its mostly-sky image gives inconclusive ground coverage. Repeating at default
+distance reaches the observation deadline in 125.891 seconds with 665 prepared zones,
+767 loaded sources and 4 source jobs, without an image. Native default-distance
+cold-load acceptance remains open; these cases do not qualify the Alpha result.
+
+All five targets, full required-oracle CPU with no skips, Vulkan groups
+(92 shader, 2 camera, 102 GUI, 17 map, 14 native-water, shared water and Alpha
+scenery), source-streaming regressions and extractor SDK independence pass.
+No original game was started or owner saves/mods/display changed. Evidence is private
+under build/source-creation-validation. Broader travel, memory, FPS and native
+visual acceptance remain open, as do complete retained-state/remote gates and
+native host source-loader work. Alpha terrain, lighting, Omega water and other
+enhancements remain configured.
+
+
 ## Native loaded sources and independent preparation - 2026-11-07
 
 Generated Steam-look clients now load source zones separately from mesh work.

@@ -45,13 +45,32 @@ block queries return the solid fallback. Client shutdown joins both work groups
 and clears loaded membership. Existing local block journals replay in order after
 fresh generation; an emptied journal does not revive older changes. Full native
 retained-array/collection/scalar handling, connection-dependent restore gates,
-host source-loader cadence and initial stored-light timing remain separate work.
+host source-loader cadence and complete state restoration remain separate work.
 
 Independent contracts cover [retention](specs/steam-terrain-source-retention-20261107.md),
 [query admission](specs/steam-client-source-query-admission-20261107.md),
 [generation ordering](specs/steam-source-generation-batch-order-20261107.md),
 [map traversal](specs/steam-source-map-traversal-20261107.md) and
 [retired state](specs/steam-source-retired-state-20261107.md).
+
+## Source creation and the later light prepass
+
+Native client source creation copies the canonical generator result without an
+extra neighborhood lighting solve. Stored byte zero can initially be a color
+component: the independent paths include zero-filled gaps, converted water 127
+and direct 255 records. Query fallbacks and retained edits have separate rules.
+The mesh prepass later solves lighting from resident neighbors and replaces only
+stored byte zero for types 0/2. Other bytes and generator inputs stay unchanged.
+No universal absence of transitive feature-helper lighting or writes is claimed.
+
+The public API boundary test compares 44,485 stored records across three separated
+Steam zones, applying effective-query water normalization. The prior wrapper
+changed 20,303 air/water records before a mesh existed; the native path now matches
+the canonical bytes. Isolated production tracing falls from 27 raw generations to
+exactly the three requested coordinates. Compatibility Alpha rendering, capture
+adapters and the current host reader retain their existing eager-lighting policy.
+The [initial-byte contract](specs/steam-source-initial-block-light-20261107.md)
+records stage distinctions and limits; no blanket air/water initialization is used.
 
 ## Optional diagnostics
 

@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Native client source creation preserves canonical per-path bytes until the
+  actual mesh light prepass. A three-zone boundary test reproduces 20,303 premature
+  changes and now matches all 44,485 records; isolated raw production falls from
+  27 zones to the three requested. The matched Alpha/Steam/Omega full-load case
+  completes in 77.511 seconds versus 130.589 before. A separate default-distance
+  Steam/Native-water capture still reaches its deadline and remains open.
+  Full CPU/Vulkan/SDK and streaming checks pass.
+  Compatibility adapters retain their lighting policy. Broader native/travel/FPS/
+  memory acceptance and host source loading remain open. See
+  [source creation](terrain-loading.md#source-creation-and-the-later-light-prepass).
+
 - [x] Generated Steam-look clients now separate four-coordinate source loading
   from loaded-neighbor-only mesh preparation. Eight retirement calls follow mesh
   completion and resample physical retention independently of destination demand.
