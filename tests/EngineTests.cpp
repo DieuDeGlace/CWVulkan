@@ -125,6 +125,7 @@ int plasmaNodeAnimationTests();
 int plasmaInputTests();
 int alphaTerrainTests();
 int generatorCacheTests();
+int nativeSourceStreamingTests();
 int plasmaLayoutTests();
 int fontCatalogTests();
 int chatCacheTests();
@@ -9527,6 +9528,8 @@ int main(int argc, char **argv) {
         return particleTests();
     if (argc == 2 && std::string(argv[1]) == "blockedits")
         return blockMutationTests();
+    if (argc == 2 && std::string(argv[1]) == "sourcestreaming")
+        return nativeSourceStreamingTests();
     if (argc == 2 && std::string(argv[1]) == "generatorcache")
         return generatorCacheTests();
     if (argc == 2 && std::string(argv[1]) == "steampreparation")
@@ -10816,6 +10819,7 @@ int main(int argc, char **argv) {
     failures += plasmaInputTests();
     failures += alphaTerrainTests();
     failures += generatorCacheTests();
+    failures += nativeSourceStreamingTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();
     failures += chatCacheTests();

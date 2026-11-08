@@ -30,6 +30,8 @@
 #include <thread>
 #include <vector>
 
+template <class Value> class NativeSourceMap;
+
 class ExtractedWorld {
     struct Zone;
 
@@ -194,6 +196,12 @@ class ExtractedWorld {
     // walk and see by their blocks). Called every frame.
     // The streaming LRU retains up to96 additional unpinned zones; explicit keeps
     // do not consume that budget. In-flight snapshots can outlive eviction.
+    // Native client residency is retired explicitly; it is not an LRU/prefetch keep.
+    // Select only while this reader's owners are quiescent (World construction/destruction).
+    void setClientStreaming(bool enabled);
+    bool loadSourceZone(int ax, int ay); // explicit loader/inspector admission
+    size_t loadedSourceCount() const;
+    std::optional<std::pair<int, int>> retireClientSource(std::pair<int, int> center, int radius);
     void keepAround(int ax, int ay, int radius);
     // The same for several centres, on behalf of `owner`: each owner (a world, the view) keeps its
     // own centres, which replace its previous ones, and a zone stays while any owner keeps it.
@@ -276,11 +284,13 @@ class ExtractedWorld {
     std::set<Key> zones; // Absolute zone coordinates present on disk.
     int originX = 0, originY = 0, seedValue = 0;
     bool generatedMode = false;
+    std::atomic<bool> clientStreaming{false};
     glm::vec3 homeLocal{0};
     // Small cache of decoded zones shared by the worker threads.
     std::mutex terrainWriterMutex; // serialize COW commits; readers retain immutable snapshots
     mutable std::mutex cacheMutex;
     std::list<std::pair<Key, std::shared_ptr<Zone>>> cache;
+    std::unique_ptr<NativeSourceMap<std::shared_ptr<Zone>>> clientMap;
     struct Kept {
         std::vector<Key> centres;
         int radius = -1;

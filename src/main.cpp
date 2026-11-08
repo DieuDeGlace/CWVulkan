@@ -837,7 +837,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 logLine("World: no native creatures (" + why + "); the recorded actors stand in");
         }
     }
-    World world(terrain, assets, renderer, viewZones, useExtracted ? &extractedWorld : nullptr);
+    World world(terrain, assets, renderer, viewZones, useExtracted ? &extractedWorld : nullptr, !serverMode);
     world.setSourceRenderDistance(gameOptions.renderDistance);
     world.setCpuPerformance(gameOptions.cpuPerformance);
     // The zones' stored states in Save/world.db go on the zones as they are made, and what changed
@@ -8603,7 +8603,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 break;
             if (time > 120 + runSeconds) {
                 logLine("Capture failed: the world did not settle before the observation deadline (" +
-                        std::to_string(world.zoneCount()) + " prepared zones, " + std::to_string(world.pendingCount()) + " pending jobs).");
+                        std::to_string(world.zoneCount()) + " prepared zones, " + std::to_string(world.pendingCount()) + " pending jobs, " +
+                        std::to_string(world.loadedSourceCount()) + " loaded source zones, " +
+                        std::to_string(world.pendingSourceCount()) + " source jobs).");
                 exitCode = 1;
                 break;
             }

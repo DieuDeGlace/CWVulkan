@@ -1,5 +1,6 @@
 #include "Extracted.h"
 #include "MeshProfile.h"
+#include "NativeSourceMap.h"
 #include "ObjectOccupancyCapture.h"
 #include "SteamSceneRange.h"
 #include "GameMath.h"
@@ -279,11 +280,16 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     Key key{ax, ay};
     {
         std::lock_guard lock(cacheMutex);
-        for (auto it = cache.begin(); it != cache.end(); ++it)
-            if (it->first == key) {
-                cache.splice(cache.begin(), cache, it); // Most recent first.
-                return cache.front().second;
-            }
+        if (clientMap) {
+            const auto found = clientMap->find(key);
+            if (found != cache.end()) return found->second;
+        } else {
+            for (auto it = cache.begin(); it != cache.end(); ++it)
+                if (it->first == key) {
+                    cache.splice(cache.begin(), cache, it);
+                    return cache.front().second;
+                }
+        }
     }
     // A zone the generator's hooks (a mod's) change is made anew, as the game makes every zone
     // when it loads; the others are as extracted.
@@ -306,22 +312,30 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
     std::lock_guard lock(cacheMutex);
     // A foreground query and prefetch can finish the same read concurrently. Preserve
     // the resident zone's identity instead of inserting another copy of the same key.
-    for (auto it = cache.begin(); it != cache.end(); ++it)
-        if (it->first == key) {
-            cache.splice(cache.begin(), cache, it);
-            return cache.front().second;
-        }
-    cache.emplace_front(key, zone);
+    if (clientMap) {
+        const auto found = clientMap->find(key);
+        if (found != cache.end()) return found->second;
+        clientMap->insert(key, zone);
+    } else {
+        for (auto it = cache.begin(); it != cache.end(); ++it)
+            if (it->first == key) {
+                cache.splice(cache.begin(), cache, it);
+                return cache.front().second;
+            }
+        cache.emplace_front(key, zone);
+    }
     // Explicit keeps can exceed the normal cache budget (the native player
     // radius alone pins121 zones). Keep a separate bounded LRU for unpinned
     // readers, or every farther mesh request would evict its own source at once.
-    constexpr size_t UNPINNED_LIMIT = 96;
-    size_t unpinned = size_t(std::count_if(cache.begin(), cache.end(), [&](const auto &entry) { return !kept(entry.first); }));
-    for (auto it = cache.end(); unpinned > UNPINNED_LIMIT && it != cache.begin();) {
-        --it;
-        if (!kept(it->first)) {
-            it = cache.erase(it);
-            --unpinned;
+    if (!clientStreaming) {
+        constexpr size_t UNPINNED_LIMIT = 96;
+        size_t unpinned = size_t(std::count_if(cache.begin(), cache.end(), [&](const auto &entry) { return !kept(entry.first); }));
+        for (auto it = cache.end(); unpinned > UNPINNED_LIMIT && it != cache.begin();) {
+            --it;
+            if (!kept(it->first)) {
+                it = cache.erase(it);
+                --unpinned;
+            }
         }
     }
     cacheRevision = nextZoneCacheRevision();
@@ -343,6 +357,8 @@ void ExtractedWorld::clearCache() {
     if (keeper.joinable())
         keeper.join();
     std::lock_guard lock(cacheMutex);
+    clientMap.reset();
+    clientStreaming = false;
     cache.clear();
     keptBy.clear();
     absent.clear();
@@ -360,9 +376,58 @@ ExtractedWorld::~ExtractedWorld() {
         keeper.join();
 }
 
+void ExtractedWorld::setClientStreaming(bool enabled) {
+    if (keeper.joinable()) keeper.join();
+    if (enabled) {
+        std::lock_guard lock(cacheMutex);
+        if (!clientMap) clientMap = std::make_unique<NativeSourceMap<std::shared_ptr<Zone>>>(cache);
+        clientStreaming = true;
+    } else if (clientStreaming.exchange(false)) {
+        // Final deletion follows guard release; snapshots and edit journals
+        // retain their separate lifetimes.
+        decltype(cache) retired;
+        {
+            std::lock_guard lock(cacheMutex);
+            clientMap.reset();
+            retired.splice(retired.begin(), cache);
+            keptBy.clear();
+            absent.clear();
+            cacheRevision = nextZoneCacheRevision();
+        }
+    }
+}
+bool ExtractedWorld::loadSourceZone(int ax, int ay) { return bool(load(ax, ay)); }
+size_t ExtractedWorld::loadedSourceCount() const {
+    std::lock_guard lock(cacheMutex);
+    return cache.size();
+}
+std::optional<std::pair<int, int>> ExtractedWorld::retireClientSource(Key center, int radius) {
+    if (!clientStreaming || radius <= 0) return {};
+    std::shared_ptr<Zone> retired; // Released after cacheMutex, like the source-object destructor boundary.
+    std::lock_guard lock(cacheMutex);
+    const double r = radius;
+    double best = r * r;
+    auto selected = cache.end();
+    for (auto it = cache.begin(); it != cache.end(); ++it) {
+        if (!it->second) continue;
+        const int64_t dx = int64_t(it->first.first) - center.first;
+        const int64_t dy = int64_t(it->first.second) - center.second;
+        const double distance = std::abs(dx) > int64_t(radius) * 2 || std::abs(dy) > int64_t(radius) * 2
+            ? 4 * r * r : double(dx) * double(dx) + double(dy) * double(dy);
+        if (distance > best) { best = distance; selected = it; }
+    }
+    if (selected == cache.end()) return {};
+    const Key removed = selected->first;
+    retired = std::move(selected->second);
+    clientMap->erase(selected);
+    cacheRevision = nextZoneCacheRevision();
+    return removed;
+}
+
 void ExtractedWorld::keepAround(int ax, int ay, int radius) { keepAround(nullptr, {{ax, ay}}, radius); }
 
 void ExtractedWorld::keepAround(const void *owner, const std::vector<std::pair<int, int>> &centres, int radius) {
+    if (clientStreaming) return; // Admission belongs to the separate client loader.
     {
         std::lock_guard lock(cacheMutex);
         keptBy[owner] = {centres, radius};
@@ -396,9 +461,12 @@ void ExtractedWorld::keepAround(const void *owner, const std::vector<std::pair<i
 
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cached(int ax, int ay) {
     std::lock_guard lock(cacheMutex);
+    if (clientMap) {
+        const auto found = clientMap->find({ax, ay});
+        return found == cache.end() ? nullptr : found->second;
+    }
     for (auto &[key, zone] : cache)
-        if (key.first == ax && key.second == ay)
-            return zone;
+        if (key.first == ax && key.second == ay) return zone;
     return nullptr;
 }
 
@@ -642,6 +710,12 @@ std::vector<std::pair<int, int>> ExtractedWorld::takeChangedModels() {
 
 std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
+    if (clientMap) {
+        const auto found = clientMap->find({x, y});
+        if (found == cache.end() || !found->second) return std::nullopt;
+        const auto &zone = found->second;
+        return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
+    }
     for (const auto &[key, zone] : cache)
         if (key == Key{x, y} && zone)
             return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
@@ -650,6 +724,10 @@ std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x
 
 bool ExtractedWorld::gameZoneLoaded(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
+    if (clientMap) {
+        const auto found = clientMap->find({x, y});
+        return found != cache.end() && bool(found->second);
+    }
     return std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == Key{x, y} && entry.second; });
 }
 
@@ -1538,9 +1616,14 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
     if (ax <= INT32_MIN || ax >= INT32_MAX || ay <= INT32_MIN || ay >= INT32_MAX)
         return std::nullopt;
     std::shared_ptr<Zone> around[3][3];
-    for (int j = -1; j <= 1; ++j)
-        for (int i = -1; i <= 1; ++i)
-            around[j + 1][i + 1] = load((int)ax + i, (int)ay + j);
+    if (clientStreaming) {
+        std::lock_guard lock(cacheMutex);
+        if (clientMap) clientMap->neighborhood({(int)ax, (int)ay}, around);
+    } else {
+        for (int j = -1; j <= 1; ++j)
+            for (int i = -1; i <= 1; ++i)
+                around[j + 1][i + 1] = load((int)ax + i, (int)ay + j);
+    }
     return boundsFor((int)ax, (int)ay, around);
 }
 
@@ -1559,9 +1642,14 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         return false;
     const int ax = (int)absoluteX, ay = (int)absoluteY;
     std::shared_ptr<Zone> around[3][3];
-    for (int j = -1; j <= 1; j++)
-        for (int i = -1; i <= 1; i++)
-            around[j + 1][i + 1] = load(ax + i, ay + j);
+    if (clientStreaming) {
+        std::lock_guard lock(cacheMutex);
+        if (clientMap) clientMap->neighborhood({ax, ay}, around);
+    } else {
+        for (int j = -1; j <= 1; ++j)
+            for (int i = -1; i <= 1; ++i)
+                around[j + 1][i + 1] = load(ax + i, ay + j);
+    }
     profile.mark(meshprofile::Load);
     auto self = around[1][1];
     if (!self)

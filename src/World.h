@@ -33,7 +33,7 @@ class World {
     // With `extracted`, zones come from the game's extracted blocks instead of
     // the generator (zones outside the extracted area stay empty).
     World(const Terrain &terrain, const Assets &assets, Renderer &renderer, int viewZones,
-          class ExtractedWorld *extracted = nullptr);
+          class ExtractedWorld *extracted = nullptr, bool clientView = true);
     ~World();
     // Starts and finishes zone jobs around `focus`; drops zones out of range.
     void update(glm::vec3 focus);
@@ -98,9 +98,11 @@ class World {
     const Terrain &terrain() const { return land; }
     size_t zoneCount() const { return zones.size(); }
     size_t pendingCount() const { return jobs.size(); }
+    size_t pendingSourceCount() const { return sourceJobs.size(); }
+    size_t loadedSourceCount() const;
     // Clean zero-cost native refreshes continue without blocking settled captures.
     bool preparingTerrain() const {
-        return !stale.empty() || std::any_of(jobs.begin(), jobs.end(), [](const auto &job) { return job.second.required; });
+        return sourcePending || !stale.empty() || std::any_of(jobs.begin(), jobs.end(), [](const auto &job) { return job.second.required; });
     }
     size_t modelCount() const { return models.size(); }
     std::vector<std::string> missingModels;
@@ -196,6 +198,10 @@ class World {
         bool required = true;
     };
     std::map<Key, Job> jobs;
+    bool clientSources = false, sourcePending = false;
+    std::unique_ptr<TaskPool> sourcePool;
+    std::vector<std::future<bool>> sourceJobs;
+    void updateSources(const scenerange::Player &player);
     std::unique_ptr<TaskPool> nativePool;
     std::vector<Key> nativeOrder;
     int cpuPerformance = 1, sampledCpuPerformance = 1;

@@ -8,6 +8,18 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Generated Steam-look clients now separate four-coordinate source loading
+  from loaded-neighbor-only mesh preparation. Eight retirement calls follow mesh
+  completion and resample physical retention independently of destination demand.
+  Native source-map hashing/insertion/growth/read/erase order is preserved; client
+  snapshots and host-only source ownership remain distinct. Staged regressions
+  cover source batching, retirement, tied map order, ready-cache displacement and
+  dedicated-server isolation, plus local journal replay and Alpha compatibility.
+  Two matched full-load observations complete with nonblank captures, including
+  the final compiled build; broader cold/travel/memory/native acceptance stays open. Initial stored-light timing,
+  complete retained state/remote gates and host generation cadence remain work.
+  See [terrain loading](terrain-loading.md).
+
 - [x] Generated terrain reuses immutable results still held by decoded terrain or
   resident consumers after the 96-entry ready LRU evicts them. Weak indexing adds
   no permanent terrain keep; full generation keys and flush retirement remain.

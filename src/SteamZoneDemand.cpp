@@ -17,6 +17,20 @@ BlockPoint preparationCenter(const std::array<int64_t, 3> &physical, const std::
     return anchor ? BlockPoint{floorZone((*anchor)[0]), floorZone((*anchor)[1])}
                   : BlockPoint{gamemath::floorFixedZone(physical[0]), gamemath::floorFixedZone(physical[1])};
 }
+BlockPoint sourcePoint(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor) {
+    return anchor ? *anchor : BlockPoint{signedBits(uint32_t(physical[0] / 65536)), signedBits(uint32_t(physical[1] / 65536))};
+}
+int32_t generationPriority(BlockPoint zone, BlockPoint sampledBlocks) {
+    uint32_t squared = 0;
+    for (int axis = 0; axis < 2; ++axis) {
+        const int32_t lower = signedBits(uint32_t(zone[axis]) * 64u);
+        const int32_t upper = signedBits(uint32_t(lower) + 64u);
+        const uint32_t distance = sampledBlocks[axis] < lower ? uint32_t(lower) - uint32_t(sampledBlocks[axis])
+            : sampledBlocks[axis] > upper ? uint32_t(sampledBlocks[axis]) - uint32_t(upper) : 0;
+        squared += distance * distance;
+    }
+    return signedBits(squared);
+}
 Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
                     const std::optional<BlockPoint> &anchor) {
     int32_t radius = signedBits(uint32_t(renderDistance) * 1920u) / 100;
@@ -25,9 +39,10 @@ Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistan
     Window result;
     const uint32_t zones = uint32_t(radius / 64 + 1);
     result.radiusSquared = signedBits(zones * zones);
+    const auto point = sourcePoint(physical, anchor);
     for (int axis = 0; axis < 2; ++axis) {
         // Source demand truncates and narrows; it has no mesh/camera negative correction.
-        const int32_t block = anchor ? (*anchor)[axis] : signedBits(uint32_t(physical[axis] / 65536));
+        const int32_t block = point[axis];
         result.center[axis] = floorZone(block);
         result.minimum[axis] = floorZone(signedBits(uint32_t(block) - uint32_t(radius)));
         result.maximum[axis] = floorZone(signedBits(uint32_t(block) + uint32_t(radius)));
@@ -37,8 +52,9 @@ Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistan
 Window hostWindow(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor) {
     Window result;
     result.radiusSquared = 25;
+    const auto point = sourcePoint(physical, anchor);
     for (int axis = 0; axis < 2; ++axis) {
-        const int32_t block = anchor ? (*anchor)[axis] : signedBits(uint32_t(physical[axis] / 65536));
+        const int32_t block = point[axis];
         result.center[axis] = floorZone(block);
         result.minimum[axis] = floorZone(signedBits(uint32_t(block) - 270u));
         result.maximum[axis] = floorZone(signedBits(uint32_t(block) + 270u));

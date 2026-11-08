@@ -1,5 +1,53 @@
 # Source review checkpoint — 2026-11-07
 
+## Native loaded sources and independent preparation - 2026-11-07
+
+Generated Steam-look clients now load source zones separately from mesh work.
+Four-coordinate source batches use the native footprint, signed rectangle-distance
+priority and shared key-only sorter. Mesh work requires loaded neighbors, captures all nine pointers under one source
+cache guard and does not generate padding. At a completed mesh boundary, eight independent physical
+center samples each permit one native distance-based retirement. Active geometry
+follows loaded-source membership; snapshots and Vulkan retirement keep their
+separate safe lifetimes. Alpha terrain remains available and Alpha rendering,
+Omega water and enhancements keep their settings.
+
+A clean implementation of the loaded map preserves native hashing, bucket segments,
+growth reordering, read stability and tied retirement choices. Conditional serial
+examples, eight hash words and growth boundaries exercise those rules. Startup
+compatibility prehistory, native runtime priority/interleavings and broad original
+acceptance are not claimed. Dedicated-server source ownership is explicit so its
+unused renderer cannot suppress host admission or clear host terrain at teardown.
+
+Three streaming failures, one map-order failure and one ready-working-set failure
+were reproduced in staged baselines. Two additional dedicated-server ownership
+failures were reproduced during final review. Local edit replay/empty replacement,
+missing-data fallback, snapshot/memo invalidation, far-distance clamp, retained
+boundary, four-source/eight-retirement limits and Alpha adapter checks add coverage.
+The existing provider/journal model does not establish complete native retained
+arrays, ordered state, scalar or connection-dependent restoration behavior.
+
+Weak recovery no longer promotes an already-owned result into the 96-entry ready
+LRU. In one matched 30-second Alpha-terrain/Steam-look/Omega profile, generations
+fell from 768 to 685, distinct keys rose from 287 to 315 and completed meshes rose
+from 146 to 164. Excess productions fell from 481 to 370. These overlapping elapsed
+job measurements establish neither FPS nor a general speedup. Repeated generation
+and source-creation work remain measured follow-ups.
+
+Two matching full-load observations produced nonblank captures and exited zero
+with profiling off: 129.977 seconds before the final role/snapshot refinements and
+130.589 seconds for the final compiled build. The latter's binary hash was checked.
+The preceding case hit its observation deadline with 621 prepared zones, 769 loaded
+sources and four source jobs. These two observations do not close broader cold,
+travel, memory, FPS or native visual acceptance. Evidence is private under
+build/source-retention-validation and build/alpha-steam-fill-source-final.
+See [terrain loading](terrain-loading.md) and its independently held contracts.
+
+
+All five targets and the final required-oracle CPU/owner-data suite pass without
+skips. Vulkan checks pass: 92 shader, 2 camera, 102 GUI, 17 map, 14 native-water,
+shared water and Alpha scenery. The extractor SDK-independence audit passes.
+No original game was started or owner saves, mods or display settings changed.
+
 ## Live generated-terrain reuse and loading measurements - 2026-11-07
 
 Decoded terrain and resident consumers can outlive the generator's 96 ready

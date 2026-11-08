@@ -56,9 +56,12 @@ SkyColumn skyColumnAt(int32_t x, int32_t y) {
 }
 } // namespace
 
-World::World(const Terrain &t, const Assets &a, Renderer &r, int view, ExtractedWorld *ex)
+World::World(const Terrain &t, const Assets &a, Renderer &r, int view, ExtractedWorld *ex, bool clientView)
     : land(t), assets(a), renderer(r), viewZones(view), extracted(ex) {
     renderer.resetSceneRange();
+    clientSources = clientView && extracted && extracted->generated() && renderStyle() == RenderStyle::Steam;
+    sourcePending = clientSources;
+    if (clientSources) extracted->setClientStreaming(true);
     proceduralModels = std::make_unique<proceduralitem::OwnerCache>(a.gameDir() / "Extract" / "procedural-items");
     beamMesh = renderer.upload(lightbeam::mesh());
     // What the Alpha look asks about the world around the camera.
@@ -157,6 +160,9 @@ World::~World() {
     for (auto &[key, job] : jobs)
         job.result.wait();
     nativePool.reset(); // join worker lanes before releasing their World inputs
+    for (auto &job : sourceJobs) job.wait();
+    sourcePool.reset();
+    if (clientSources) extracted->setClientStreaming(false);
     for (const auto &[key, zone] : zones)
         releaseTerrain(zone);
 }
@@ -639,6 +645,38 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
     }
 }
 
+size_t World::loadedSourceCount() const { return extracted ? extracted->loadedSourceCount() : 0; }
+
+void World::updateSources(const scenerange::Player &player) {
+    if (!clientSources) return;
+    if (!sourceJobs.empty()) {
+        if (!sourcePool->idle()) return;
+        for (auto &job : sourceJobs) job.get();
+        sourceJobs.clear();
+    }
+    const auto anchor = zonedemand::eagleAnchor(player.ability, player.eagleDestination);
+    const auto point = zonedemand::sourcePoint(player.physical, anchor);
+    const auto window = zonedemand::clientWindow(player.physical, sourceRenderDistance, anchor);
+    struct Candidate { Key key; int32_t priority; };
+    std::vector<Candidate> missing;
+    for (int64_t x = window.minimum[0]; x <= window.maximum[0]; ++x)
+        for (int64_t y = window.minimum[1]; y <= window.maximum[1]; ++y)
+            if (window.contains(x, y) && !extracted->gameZoneLoaded(int32_t(x), int32_t(y)) &&
+                worldgen::terrainZoneAvailable(int32_t(x), int32_t(y))) {
+                missing.push_back({{int(x), int(y)}, zonedemand::generationPriority({int32_t(x), int32_t(y)}, point)});
+            }
+    sourcePending = !missing.empty();
+    if (!sourcePending) return;
+    // The shared native sorter compares signed priorities only. Parallel delivery
+    // does not promise source construction/publication in this selected order.
+    keyorder::sort(missing, [](const Candidate &candidate) { return candidate.priority; });
+    if (!sourcePool) sourcePool = std::make_unique<TaskPool>(std::min(4u, std::max(2u, std::thread::hardware_concurrency()) - 1));
+    for (size_t i = 0; i < std::min(size_t(4), missing.size()); ++i) {
+        const Key key = missing[i].key;
+        sourceJobs.push_back(sourcePool->submit([source = extracted, key] { return source->loadSourceZone(key.first, key.second); }));
+    }
+}
+
 void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Player &player) const {
     struct Candidate {
         Key key;
@@ -658,6 +696,10 @@ void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, con
         const Key key{int(x), int(y)};
         const auto [entry, inserted] = sourceAvailability.try_emplace(key, false);
         if (inserted) {
+            if (clientSources) {
+                entry->second = extracted->gameZoneLoaded(int32_t(x + extracted->originZoneX()), int32_t(y + extracted->originZoneY()));
+                return entry->second;
+            }
             if (!extracted->generated()) {
                 // Partial owner captures retain their existing missing-neighbor replay policy.
                 entry->second = extracted->has(key.first, key.second);
@@ -729,11 +771,14 @@ void World::update(glm::vec3 focus) {
             cy = center[1] - extracted->originZoneY();
         }
     }
+    updateSources(streaming);
     auto inWindow = [&](const Key &key, int x, int y) {
         return std::max(std::abs(int64_t(key.first) - x), std::abs(int64_t(key.second) - y)) <= int64_t(viewZones) + 1;
     };
     // Travel retains current terrain while the destination view is prepared.
     auto retained = [&](const Key &key) {
+        if (clientSources)
+            return extracted->gameZoneLoaded(key.first + extracted->originZoneX(), key.second + extracted->originZoneY());
         return inWindow(key, cx, cy) || (anchor && inWindow(key, physicalCx, physicalCy));
     };
     const bool nativePreparation = extracted && renderStyle() == RenderStyle::Steam;
@@ -843,6 +888,15 @@ void World::update(glm::vec3 focus) {
     // publication. Object/model updates above keep their independent frame path.
     if (batchBusy)
         return;
+    if (clientSources) {
+        for (int i = 0; i < 8; ++i) {
+            auto physical = streaming.physical;
+            if (scenePlayerProvider)
+                if (const auto player = scenePlayerProvider()) physical = player->physical;
+            const auto center = zonedemand::preparationCenter(physical);
+            extracted->retireClientSource({center[0], center[1]}, viewZones + 1);
+        }
+    }
     // Drop zones out of range.
     for (auto it = zones.begin(); it != zones.end();) {
         if (!retained(it->first)) {

@@ -241,7 +241,8 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
             if (auto result = live->second.lock()) {
                 meshprofile::Sample reused(zx, zy, bool(settings.alpha), "generation_reuse");
                 reused.context(version, options, original);
-                remember(key, result);
+                // Existing consumers keep this result alive. Do not displace
+                // unowned neighboring inputs from the bounded ready cache.
                 reused.complete(0, 0, 0, 0, 0);
                 return result;
             }

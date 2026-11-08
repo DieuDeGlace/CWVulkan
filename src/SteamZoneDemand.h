@@ -12,6 +12,10 @@ struct Window {
 };
 using BlockPoint = std::array<int32_t, 2>;
 std::optional<BlockPoint> eagleAnchor(uint8_t ability, const BlockPoint &destination);
+// Source loaders sample whole blocks by truncation, unlike mesh retention floors.
+BlockPoint sourcePoint(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor = {});
+// Signed32 squared distance to the zone's closed block rectangle; ordinary inputs.
+int32_t generationPriority(BlockPoint zone, BlockPoint sampledBlocks);
 Window clientWindow(const std::array<int64_t, 3> &physical, int32_t renderDistance,
                     const std::optional<BlockPoint> &anchor = {});
 Window hostWindow(const std::array<int64_t, 3> &physical, const std::optional<BlockPoint> &anchor = {});

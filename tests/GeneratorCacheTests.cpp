@@ -4,6 +4,7 @@
 #include <barrier>
 #include <cstdio>
 #include <future>
+#include <vector>
 
 int generatorCacheTests() {
     int failures = 0;
@@ -37,6 +38,16 @@ int generatorCacheTests() {
     for (int x = 200; x < 300; ++x) worldgen::zone(x, 0);
     retained.reset();
     check(live.expired(), "reused terrain is released after ready eviction and its last consumer");
+
+    {
+        std::vector<std::shared_ptr<const worldgen::ZoneContents>> consumers;
+        for (int x = 800; x < 900; ++x) consumers.push_back(worldgen::zone(x, 0));
+        std::weak_ptr<const worldgen::ZoneContents> working = worldgen::zone(2000, 0);
+        bool same = true;
+        for (int x = 800; x < 900; ++x) same &= worldgen::zone(x, 0) == consumers[size_t(x - 800)];
+        check(same && !working.expired(),
+              "recovering already-owned results preserves unowned ready inputs for neighboring consumers");
+    }
 
     const auto beforeFlush = worldgen::zone(0, 0);
     worldgen::forgetZones();
