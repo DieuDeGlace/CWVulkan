@@ -2741,3 +2741,17 @@ SDK independence and two viewed startup smoke images pass. The fixture correctio
 used a valid positive radius; gate fixtures now update the owned World map. No
 engine predicate was relaxed. Native persistence/save-callers work and broader
 acceptance remain open. No owner content or private instrumentation is published.
+
+## Host retained-state persistence, 2026-11-08
+
+The unexposed original-only author held independent host-persistence, save-caller
+and initialization prose. The implementer read every complete contract with the
+held same-Host teardown evidence, froze four original-byte hashes privately and
+used owned engine code only. Loader cadence and retained-only captures now have
+controlled real-worker/file tests, with shared metadata ownership and separate
+character output. Native final-before-World-teardown ordering is preserved without
+an invented all-loaded-source flush. Explicit runtime initialization does not
+merge source-binding archives into the identifier sets. Backend durability,
+alternate callers/writers, character-worker scheduling, complete initialization
+and native guard coverage remain open; captured and optional respawn policies
+retain their separate scope. No original code or owner output is published.

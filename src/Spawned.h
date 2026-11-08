@@ -44,6 +44,9 @@ class Collection;
 
 class SpawnedCreatures {
   public:
+    SpawnedCreatures() = default;
+    SpawnedCreatures(const SpawnedCreatures &) = delete;
+    SpawnedCreatures &operator=(const SpawnedCreatures &) = delete;
     // Reads the game's model list (id -> sprite, size). False without it.
     bool init(const std::filesystem::path &extractDir, std::string *why = nullptr);
     // Admit residents from loaded sources near actual players; mirrors make none.
@@ -146,7 +149,7 @@ class SpawnedCreatures {
     }
     const hudcontext::State &hudContext() const { return contextState; }
     const nativesaves::Item &vehicleItem() const { return vehicleSelection; }
-    void setClock(int32_t day, float timeOfDayMs) { dayCount = day, dayMs = timeOfDayMs; }
+    void setClock(int32_t day, float timeOfDayMs) { auto guard = sourceGuard(); dayCount = day; dayMs = timeOfDayMs; }
     void setClockRate(double gameMsPerMs) { clockRate = gameMsPerMs; }
     void advanceClock(double dtMs);
     // The world reset (native-saves.md §5.6, 0x2c34c0, the world's side): the dead set and the
@@ -160,8 +163,8 @@ class SpawnedCreatures {
     // Lays an item (0xa0 bytes) on the ground at `pos` (1/65536 block), `count` of it, as a drop
     // lays one (0x2a5b70): into its zone's ground items. For mods and tests.
     void layItem(ExtractedWorld &ew, const uint8_t *item, const int64_t pos[3], int count);
-    void markDead(int64_t id) { worldDead.insert(id); } // a kill credit's dead (world+0x20)
-    void clearDead() { worldDead.clear(); }
+    void markDead(int64_t id) { auto guard = sourceGuard(); worldDead.insert(id); } // a kill credit's dead (world+0x20)
+    void clearDead() { auto guard = sourceGuard(); worldDead.clear(); }
     // A world update's lists the client's own consumers take (netcode-roles.md §8 step 9):
     // sounds (also heard), particles, block changes, pick-ups, kill credits, feats, calls, sleeps.
     void keepReceived(const cwnet::WorldEvents &received);
@@ -282,6 +285,8 @@ class SpawnedCreatures {
     void recordAllZones();
     // Copy already-retained source values on the owner thread; never records live sources.
     void copyRetainedZones(nativesaves::WorldState &destination) const;
+    bool physicalSourceState() const { return zoneStates.physicalSources(); }
+    std::vector<std::string> takeSourceSaveErrors();
     // The cast bar (Interface's update): shown while a spell is cast, stealth or block power
     // is not full, or an assassination strikes; its fill, and its name: a literal
     // ("Stealth", "Assassinate", "Block Power") or the ability being cast (`ability`).
@@ -327,7 +332,8 @@ class SpawnedCreatures {
     void endPlayerBuff(int type);
     // The world's dead (world+0x20): creatures that died here or in the owner's game. The
     // game keeps them dead: a zone does not make them again.
-    void setWorldDead(const std::set<int64_t> &ids) { worldDead = ids; }
+    void setWorldDead(const std::set<int64_t> &ids) { auto guard = sourceGuard(); worldDead = ids; }
+    void setWorldRewards(const std::set<int64_t> &ids) { auto guard = sourceGuard(); rewarded = ids; }
     bool isWorldDead(int64_t id) const { return worldDead.count(id) != 0; }
     // A near zone's mission creatures (zone+0x498), by absolute zone; empty when it is not
     // near or has none.
@@ -517,7 +523,17 @@ class SpawnedCreatures {
     bool client = false;          // world+0x358: a remote client (a mirror of a host)
     int64_t localId = 1;          // the local player's creature id
     cwnet::WorldEvents worldEvents; // world+0x90 .. +0x170
-    int32_t dayCount = 0;         // world+0x08
+    struct SaveMetadata final : sourcestates::Metadata {
+        int32_t day = 0;
+        float timeMs = 0;
+        std::set<int64_t> dead, rewards;
+        enemyrespawn::Deaths temporary;
+        std::set<int64_t> persistentDead() const;
+        void capture(nativesaves::WorldState &) const override;
+    };
+    // Simulation aliases one shared owned value; the loader never captures this actor.
+    std::shared_ptr<SaveMetadata> saveMetadata = std::make_shared<SaveMetadata>();
+    int32_t &dayCount = saveMetadata->day; // world+0x08
     double clockRate = 0;         // game ms a real ms (0: the clock is set from outside)
     // The event lists' records, from the native modules' arrays.
     void keepRecords(const std::vector<std::array<uint8_t, 0x30>> &sounds, const std::vector<std::array<uint8_t, 0x48>> &particles,
@@ -577,7 +593,7 @@ class SpawnedCreatures {
     double aiCarried = 0;                                 // ms since the AI's last tick
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
     uint32_t aiRand = 1;                                  // separate engine AI state; native worker-entry state is unverified
-    float dayMs = 0;                                      // the time of day (world+0xc) at the last tick
+    float &dayMs = saveMetadata->timeMs; // world+0x0c, raw float milliseconds
     hudcontext::State contextState;
     nativesaves::Item vehicleSelection{}; // derived CharacterData+0x148; not a saved equipment slot
     const hudcontext::Tabs *contextInventory = nullptr; // borrowed canonical session inventory
@@ -591,10 +607,10 @@ class SpawnedCreatures {
     int innNights = 0;                    // nights slept at an inn, for main's day and clock
     std::list<nativeeffects::Effect> effects; // world+0x60: shots and areas in flight
     std::set<int64_t> dead;          // creatures whose death was reported
-    std::set<int64_t> rewarded;      // world+0x30: the residents who gave their reward
-    std::set<int64_t> worldDead;     // the world's dead (not made again)
+    std::set<int64_t> &rewarded = saveMetadata->rewards; // world+0x30
+    std::set<int64_t> &worldDead = saveMetadata->dead; // world+0x20
     enemyrespawn::Settings respawnSettings{enemyrespawn::Mode::Permanent, 300};
-    enemyrespawn::Deaths enemyDeaths;
+    enemyrespawn::Deaths &enemyDeaths = saveMetadata->temporary;
     std::set<int64_t> protectedDead; // renamed by taming: not a defeated enemy
     void releaseDeaths(const std::vector<int64_t> &ids);
     std::vector<int64_t> markedDead; // dead by taming, for the save

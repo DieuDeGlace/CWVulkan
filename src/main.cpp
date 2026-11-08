@@ -1207,6 +1207,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         saveGame.killed.assign(kills.begin(), kills.end());
         spawned.setWorldDead(dead);
         hostWorld.setWorldDead(dead);
+        spawned.setWorldRewards(saves.world().rewards);
+        hostWorld.setWorldRewards(saves.world().rewards);
         logLine("Dead creatures: " + std::to_string(fromWorld) + " in Save/world.db, " + std::to_string(kills.size()) +
                 " known to this character; " + std::to_string(marked) + " of the recorded creatures stay dead");
         const char *deathMode = enemyRespawns.mode == enemyrespawn::Mode::Timed ? "Timed" :
@@ -3066,6 +3068,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             session.start(setup, why);
         }
         hostWorld.setStoredZones(authorityTerrain(), &saves.world(), false);
+        if (hostWorld.physicalSourceState())
+            authorityTerrain().sourceStateStore()->setPersistence(saves.folder() / "world.db",
+                                                                 savesWritable && saves.isOpen() && !gameWorldName.empty());
         switch (session.way()) {
         case Multiplayer::Way::Steam:
             logLine("Multiplayer: through Steam as " + steam.personaName() + "; friends invite and join with the multiplayer menu");
@@ -3195,7 +3200,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         saveGame.regionHistory = spawned.mapHistory().snapshot();
         saveGame.savedAt = (long long)std::time(nullptr);
         // A guest's own world is left alone: only its character is written (netcode-roles.md §7).
-        if (!saves.save(saveGame, haveGear ? &gear : nullptr, std::max(0.0f, playerHp), saveFrame, !session.guestElsewhere())) {
+        if (!saves.save(saveGame, haveGear ? &gear : nullptr, std::max(0.0f, playerHp), saveFrame, !session.guestElsewhere() && !hostWorld.physicalSourceState())) {
             logLine("Save: could not write " + utf8(saves.folder()));
             return "";
         }
@@ -8471,7 +8476,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             // The shared world is saved as the game's host saves it, once a minute (native-saves.md §5.5).
             static double worldSaved = 0;
-            if (spawnedReady && savesWritable && saves.isOpen() && time - worldSaved > 60) {
+            if (spawnedReady && !hostWorld.physicalSourceState() && savesWritable && saves.isOpen() && time - worldSaved > 60) {
                 worldSaved = time;
                 const auto persistentDead = hostWorld.persistentDeadSet();
                 hostWorld.copyRetainedZones(saves.world());
@@ -8541,6 +8546,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             worldClockMs += frameMs;
             world.advanceClock(frameMs); // (the plants sway by it, vegetation-wind.md §2)
         }
+        for (const auto &error : hostWorld.takeSourceSaveErrors()) logLine("Save: " + error);
         audio.update();
 
         framesSinceTitle++;
@@ -8629,9 +8635,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 " clock " + std::to_string(bubble.elapsedMs) + " visible " + std::to_string(bubble.visible) +
                 " at " + std::to_string(bubble.screenPoint.x) + "," + std::to_string(bubble.screenPoint.y));
     }
-    if (spawnedReady) // every zone in memory records what changed in it (native-saves.md open question 3)
+    if (spawnedReady && !hostWorld.physicalSourceState()) // captured adapter explicit archive path
         hostWorld.recordAllZones();
-    if (serverMode && spawnedReady && savesWritable && saves.isOpen()) {
+    if (serverMode && spawnedReady && !hostWorld.physicalSourceState() && savesWritable && saves.isOpen()) {
         const auto persistentDead = hostWorld.persistentDeadSet();
         hostWorld.copyRetainedZones(saves.world());
         saves.world().dead = persistentDead;
@@ -8645,6 +8651,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     for (auto &name : world.missingModels)
         logLine("Missing sprite: " + name + ".cub");
     mods.shutdown();
+    if (auto *host = session.hostSide()) host->stopSources(); // final loader capture, before reader teardown
+    for (const auto &error : hostWorld.takeSourceSaveErrors()) logLine("Save: " + error);
     if (returnToTitle)
         hud.discardRendererBindings();
     renderer.shutdown();

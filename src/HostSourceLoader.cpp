@@ -4,8 +4,15 @@
 #include <chrono>
 #include <set>
 
-HostSourceLoader::HostSourceLoader(ExtractedWorld &world, std::vector<zonedemand::BlockPoint> initial)
-    : world(world), centres(std::move(initial)), worker([this](std::stop_token stop) { run(stop); }) {}
+namespace {
+uint32_t milliseconds() {
+    return uint32_t(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+}
+HostSourceLoader::HostSourceLoader(ExtractedWorld &world, std::vector<zonedemand::BlockPoint> initial, Clock clock)
+    : world(world), centres(std::move(initial)), now(clock ? std::move(clock) : Clock(milliseconds)),
+      worker([this](std::stop_token stop) { run(stop); }) {}
 
 HostSourceLoader::~HostSourceLoader() {
     worker.request_stop();
@@ -22,12 +29,14 @@ void HostSourceLoader::setCentres(std::vector<zonedemand::BlockPoint> next) {
 
 void HostSourceLoader::run(std::stop_token stop) {
     try {
+        HostSaveCadence saves(now());
         while (!stop.stop_requested()) {
             std::vector<zonedemand::BlockPoint> sampled;
             {
                 std::lock_guard lock(mutex);
                 sampled = centres;
             }
+            const uint32_t cycleTime = now(); // after centre snapshot, before retirement/generation
             std::set<std::pair<int, int>> required;
             for (const auto &point : sampled) {
                 const auto window = zonedemand::hostWindow({int64_t(point[0]) * 65536, int64_t(point[1]) * 65536, 0});
@@ -58,12 +67,19 @@ void HostSourceLoader::run(std::stop_token stop) {
             for (const auto &candidate : missing)
                 world.loadSourceZone(candidate.key.first, candidate.key.second);
             selected.store(0, std::memory_order_release);
+            if (saves.due(cycleTime, !stop.stop_requested())) {
+                world.sourceStateStore()->persist();
+                saves.completed(cycleTime); // reset even when the writer is gated or returns failure
+            }
             if (missing.empty()) {
                 std::unique_lock lock(mutex);
                 wake.wait_for(lock, stop, std::chrono::milliseconds(5), [] { return false; });
             }
             std::this_thread::yield();
         }
+        // Successful stop drains the admitted prefix, captures already retained
+        // values once, and returns before reader destruction records loaded sources.
+        world.sourceStateStore()->persist();
     } catch (...) {
         std::lock_guard lock(mutex);
         failure = std::current_exception();

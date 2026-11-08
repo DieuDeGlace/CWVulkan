@@ -115,24 +115,39 @@ bool SpawnedCreatures::init(const std::filesystem::path &extractDir, std::string
 }
 
 void SpawnedCreatures::setEnemyRespawn(enemyrespawn::Settings settings) {
+    auto metadataScope = sourceGuard();
     respawnSettings = settings;
     enemyDeaths = enemyrespawn::Deaths(settings);
 }
 
 void SpawnedCreatures::advanceRespawns(double elapsedMs) {
+    auto metadataScope = sourceGuard();
     if (!client)
         releaseDeaths(enemyDeaths.advance(elapsedMs / 1000.0));
 }
 
-std::set<int64_t> SpawnedCreatures::persistentDeadSet() const {
+std::set<int64_t> SpawnedCreatures::SaveMetadata::persistentDead() const {
     std::set<int64_t> saved;
-    for (int64_t id : worldDead)
-        if (!enemyDeaths.contains(id))
-            saved.insert(id);
+    for (int64_t id : dead)
+        if (!temporary.contains(id)) saved.insert(id);
     return saved;
+}
+void SpawnedCreatures::SaveMetadata::capture(nativesaves::WorldState &out) const {
+    out.day = day;
+    out.timeMs = timeMs;
+    out.dead = persistentDead();
+    out.rewards = rewards;
+}
+std::set<int64_t> SpawnedCreatures::persistentDeadSet() const {
+    auto guard = sourceGuard();
+    return saveMetadata->persistentDead();
+}
+std::vector<std::string> SpawnedCreatures::takeSourceSaveErrors() {
+    return zoneStates.physicalSources() ? zoneStates.sourceStore()->takeSaveErrors() : std::vector<std::string>{};
 }
 
 void SpawnedCreatures::releaseDeaths(const std::vector<int64_t> &ids) {
+    auto metadataScope = sourceGuard();
     for (int64_t id : ids) {
         remove(id);
         made.erase(id);
@@ -382,6 +397,7 @@ worldgen::ResidentWorld SpawnedCreatures::residentWorld(const residentpass::Coll
 }
 
 void SpawnedCreatures::arenaStage(worldgen::CreatureRecord &master) {
+    auto metadataScope = sourceGuard();
     // The zones within 64 blocks of where it lives (+0x1b8).
     const int64_t hx = get<int64_t>(master, worldgen::creature::HOME), hy = get<int64_t>(master, worldgen::creature::HOME + 8);
     auto zoneOf = [](int64_t dots) { return floorDiv((int)(dots >> 16), 64); };
@@ -1995,6 +2011,7 @@ void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldStat
             state.deadTracked = 0; // temporary deaths from an earlier instance have ended
     if (ew.generated()) {
         ew.configureSourceStates(world, skipRestore);
+        ew.sourceStateStore()->setMetadata(saveMetadata);
         zoneStates = zonestates::ZoneStates(ew.sourceStateStore());
         storedZones = &ew.sourceStateStore()->retained();
         return;
@@ -2027,6 +2044,7 @@ nativesaves::ZoneLists *SpawnedCreatures::zoneLists(ExtractedWorld &ew, int zx, 
 }
 
 std::optional<int32_t> SpawnedCreatures::deadTrackedIn(std::pair<int, int> zone) const {
+    auto metadataScope = sourceGuard();
     auto it = zoneTracked.find(zone);
     if (it == zoneTracked.end())
         return std::nullopt;
@@ -2579,6 +2597,7 @@ uint8_t *SpawnedCreatures::networkCreature(int64_t id, bool &made) {
 }
 
 void SpawnedCreatures::receivedUpdate(int64_t id, bool fresh) {
+    auto metadataScope = sourceGuard();
     Creature *cr = find(id);
     if (!cr)
         return;
@@ -2966,6 +2985,7 @@ void SpawnedCreatures::zoneChangeLists() {
 std::set<std::pair<int, int>> SpawnedCreatures::takeReplacedGround() { return std::exchange(replacedGround, {}); }
 
 void SpawnedCreatures::advanceClock(double dtMs) {
+    auto metadataScope = sourceGuard();
     if (clockRate <= 0)
         return;
     constexpr double DAY_MS = 86400000.0;
@@ -2982,6 +3002,7 @@ void SpawnedCreatures::advanceClock(double dtMs) {
 }
 
 void SpawnedCreatures::rememberEnemyDeath(int64_t id, std::pair<int, int> zone, uint8_t kind) {
+    auto metadataScope = sourceGuard();
     if (client || !enemyrespawn::isEnemy(kind) || enemyDeaths.contains(id))
         return;
     if (const auto source = zoneResidents.find(zone); source != zoneResidents.end() && source->second->spawns.points.count(id))

@@ -1,5 +1,56 @@
 # Source review checkpoint — 2026-11-08
 
+## Host retained-state persistence - 2026-11-08
+
+Generated host sessions now capture state from the source loader's own wall
+clock. The unsigned elapsed threshold is strictly greater than 60,000 ms. Each
+cycle samples after its centre snapshot and before source retirement/generation;
+a due capture follows the admitted batch while the loader is running. After the
+wrapper returns, even when writing is gated or fails, the baseline becomes that
+cycle's sample. Large elapsed gaps cause one capture rather than catch-up writes.
+The accelerated World calendar does not drive this threshold.
+
+The loader copies the already-retained map, current day, raw float time and both
+identifier sets under the owned World guard, then serializes through the existing
+state codec outside that acquisition. Shared owned metadata survives actor and
+input-save lifetimes without a raw callback into either object. Runtime metadata
+is initialized explicitly; binding a retained source archive does not merge old
+identifier sets into it. The two World reward sets are restored separately.
+
+Normal source-worker exit drains its admitted work and captures once before its
+reader's later teardown records still-loaded sources. Periodic and final captures
+do not first record every loaded source. Generated character saves consequently
+write character output separately; the captured-playback adapter retains its
+explicit archive-save route. Write failures return through an owner-consumed
+error queue, and no-save never opens its target or creates a directory.
+
+Controlled real-worker/file tests cover strict boundaries, unsigned wrap, gated
+and failed-write baseline reset, large gaps, calendar independence, final capture
+before later retention, deep snapshot independence, raw float/identifier/map
+round trips, reader reuse and metadata lifetime after actor destruction.
+
+All five targets build. The new focused tests and full required-owner CPU suite
+pass without skips. Vulkan checks pass: 92 shader, 2 camera, 102 GUI, 17 map,
+14 native-water, shared-water and Alpha-scenery groups; SDK independence passes.
+Hidden offline/no-save Steam/native-water and Alpha/Steam/Omega captures exit zero
+in 43.438 and 94.984 seconds, respectively. Both images were inspected against
+the tested executable. Ground, vegetation and HUD remain present; the existing
+oversized map-like triangle remains visible. Native combat, original pixels,
+performance and broader save/travel acceptance are not inferred from these runs.
+No original game, owner Save/Mods/display change or binary publication was needed.
+
+The separate original-only author finalized and held the complete
+[persistence](specs/steam-host-retained-state-persistence-20261107.md),
+[save-caller](specs/steam-world-state-save-callers-20261107.md) and
+[initialization](specs/steam-world-state-initialization-20261108.md) prose; the
+implementer read it without original or reconstruction code exposure. Four held
+hashes, including the earlier same-Host teardown audit, are retained privately.
+Backend durability, alternative save callers, complete initialization/reload,
+character-worker scheduling, untraced identifier writers/guards and broader
+native runtime parity remain open. Existing migration, optional respawn and
+captured-playback behavior are separate engine policies. Alpha terrain/lighting,
+Omega water and other requested enhancements remain supported.
+
 ## Physical source payload ownership - 2026-11-08
 
 Generated Worlds now bind ground/static arrays, ordered edit history, coordinate

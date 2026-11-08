@@ -10,9 +10,12 @@ HostSide::HostSide(SpawnedCreatures &world, ExtractedWorld &blocks) : world(worl
     blocks.setHostStreaming(true);
     ownsSourceWorker = blocks.hostSourceStreaming();
 }
-HostSide::~HostSide() {
-    if (ownsSourceWorker)
+HostSide::~HostSide() { stopSources(); }
+void HostSide::stopSources() {
+    if (ownsSourceWorker) {
         blocks.setHostStreaming(false);
+        ownsSourceWorker = false;
+    }
 }
 
 void HostSide::creatures(std::vector<cwnet::CreatureView> &out) {
@@ -25,6 +28,7 @@ void HostSide::creatures(std::vector<cwnet::CreatureView> &out) {
 }
 
 void HostSide::receiveCreature(const cwnet::CreatureDelta &delta) {
+    auto guard = blocks.lockSourceState();
     bool made = false;
     if (uint8_t *record = world.networkCreature(delta.id, made)) {
         cwnet::applyDelta(delta, record);

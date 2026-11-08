@@ -12,6 +12,11 @@ namespace worldgen { struct ZoneContents; }
 namespace sourcestates {
 using nativesaves::Cell;
 using nativesaves::Record;
+// Implementations own the metadata they expose; the Store never borrows an actor.
+struct Metadata {
+    virtual ~Metadata() = default;
+    virtual void capture(nativesaves::WorldState &) const = 0;
+};
 struct Source {
     Cell key{};
     uint64_t order = 0;
@@ -22,6 +27,14 @@ class Store {
   public:
     using Guard = std::unique_lock<std::recursive_mutex>;
     using Publish = std::function<void(Cell, const std::vector<Record> &)>;
+    using Clock = std::function<uint32_t()>;
+    void setMetadata(std::shared_ptr<const Metadata>);
+    void setPersistence(std::filesystem::path file, bool allowWrites);
+    // Configure clock selection while the loader is stopped; a captured replay clock may advance.
+    void setHostClock(Clock);
+    Clock hostClock() const;
+    void persist(); // capture under World guard, serialize/write after releasing it
+    std::vector<std::string> takeSaveErrors();
     Guard lock() const { return Guard(mutex); }
     // Replace retained values and the fresh-source gate; loaded instances remain intact.
     void configure(const nativesaves::WorldState *initial, bool skipRestore);
@@ -54,5 +67,10 @@ class Store {
     nativesaves::WorldState archive;
     std::map<Cell, std::weak_ptr<Source>> loaded;
     Pending groundPending, objectPending;
+    std::shared_ptr<const Metadata> metadata;
+    std::filesystem::path saveFile;
+    bool allowWrites = false;
+    Clock clock;
+    std::vector<std::string> saveErrors;
 };
 } // namespace sourcestates

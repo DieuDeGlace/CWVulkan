@@ -8,13 +8,26 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Generated host persistence follows the source-loader unsigned wall clock,
+  strict >60,000-ms gate, cycle-sample baseline and one normal-exit capture.
+  Owned metadata and retained-map snapshots precede serialization outside the
+  World guard; still-loaded sources are not recorded first. Generated character
+  output is separate, with captured playback retaining its archive adapter.
+  Real-worker/file boundary, failure, ownership and teardown tests pass, with
+  all-five-target, full required-owner CPU without skips, Vulkan, SDK and both
+  native/Alpha startup checks. Broader
+  character scheduling, initialization/reload, writers/guards, durability and
+  native runtime acceptance remain open. See the
+  [persistence contract](specs/steam-host-retained-state-persistence-20261107.md)
+  and [checkpoint](release-status.md#host-retained-state-persistence---2026-11-08).
+
 - [x] Generated source identities own both arrays, history and summaries through
   factory restoration, COW, actual retirement and reload. Loaded empty/zero counts
   override retained values. Dirty membership and sticky flags have distinct
   publication boundaries; owned guards protect borrowed views and save input is
   copied. Boundary/lifetime and ten focused groups, full required-owner CPU,
-  Vulkan, SDK and native plus Alpha/Omega startup checks pass. Native persistence,
-  broader connection/producer/guard behavior, performance and runtime acceptance
+  Vulkan, SDK and native plus Alpha/Omega startup checks pass. Broader
+  connection/producer/guard behavior, performance and runtime acceptance
   remain open. See [physical ownership](specs/steam-physical-source-retention-boundaries-20261107.md)
   and [terrain loading](terrain-loading.md#physical-source-gameplay-state).
 

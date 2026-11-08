@@ -25,6 +25,7 @@ class HostSide : public cwnet::HostWorld {
   public:
     HostSide(SpawnedCreatures &world, ExtractedWorld &blocks);
     ~HostSide() override;
+    void stopSources(); // owner is quiescent; never call while holding its World guard
 
     // Where the zones are kept before any player has joined (local blocks).
     glm::vec3 standIn{0};

@@ -17,6 +17,9 @@ void Store::reset() {
     archive = nativesaves::WorldState{};
     loaded.clear(); groundPending.clear(); objectPending.clear();
     skip = false; ready = false;
+    metadata.reset();
+    saveFile.clear(); allowWrites = false;
+    clock = {}; saveErrors.clear();
 }
 std::shared_ptr<Source> Store::make(Cell key, uint64_t order, std::vector<Record> ground,
                                    std::vector<Record> objects, std::shared_ptr<const worldgen::ZoneContents> catalog) {
@@ -115,5 +118,38 @@ int32_t Store::counter(Cell zone, Cell key) const {
     const auto stored = archive.zones.find(zone);
     return stored == archive.zones.end() ? 0 : read(stored->second.placeCounters);
 }
-nativesaves::WorldState Store::snapshot() const { auto guard = lock(); return archive; }
+nativesaves::WorldState Store::snapshot() const {
+    auto guard = lock();
+    auto captured = archive;
+    if (metadata) metadata->capture(captured);
+    return captured;
+}
+void Store::setMetadata(std::shared_ptr<const Metadata> value) {
+    auto guard = lock(); metadata = std::move(value);
+}
+void Store::setPersistence(std::filesystem::path file, bool writable) {
+    auto guard = lock(); saveFile = std::move(file); allowWrites = writable;
+}
+void Store::setHostClock(Clock value) { auto guard = lock(); clock = std::move(value); }
+Store::Clock Store::hostClock() const { auto guard = lock(); return clock; }
+void Store::persist() {
+    nativesaves::WorldState captured;
+    std::filesystem::path destination;
+    bool writable;
+    {
+        auto guard = lock();
+        captured = snapshot();
+        destination = saveFile;
+        writable = allowWrites && !destination.empty();
+    }
+    if (!writable) return; // no-save/unnamed owner still completed the capture route
+    std::string why;
+    if (!nativesaves::writeWorldFile(destination, captured, &why)) {
+        auto guard = lock();
+        saveErrors.push_back(why.empty() ? "World state was not written" : std::move(why));
+    }
+}
+std::vector<std::string> Store::takeSaveErrors() {
+    auto guard = lock(); return std::exchange(saveErrors, {});
+}
 } // namespace sourcestates

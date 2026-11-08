@@ -232,12 +232,18 @@ instances cannot target a later coordinate replacement. Discarding invalid owned
 memberships is a safety policy; native per-source erasure was not established.
 The mirror keeps its existing outbound-array suppression while preserving flags.
 
-Retained save input is owned, so background factories/removers never capture an
-external save-file object. The current owner copies retained values back through
-an explicit snapshot operation. Native host periodic/exit capture and character-
-save scheduling are the next separate work; current explicit archive-save behavior
-does not establish that native sequence. See the [checkpoint](release-status.md)
-for tests, scene observations and the broader performance/visual limits.
+Retained save input and current metadata have shared owned lifetimes, so the
+background loader never captures an external save object or actor. Its separate
+unsigned wall clock admits a capture only after more than 60,000 ms; the sampled
+cycle time becomes the baseline after the wrapper returns, including gated or
+failed writes. Current day/raw float time, both identifier sets and already-
+retained source values are copied under the World guard and serialized outside
+that acquisition. A normal exit captures after draining admitted work, before
+reader teardown records still-loaded sources. These saves do not first enumerate
+all loaded sources. Generated character output remains separate; captured replay
+keeps its explicit archive adapter. See the [persistence contract](specs/steam-host-retained-state-persistence-20261107.md)
+and [checkpoint](release-status.md) for ownership/failure tests, evidence limits
+and remaining character scheduling, durability and native runtime acceptance.
 
 ## Optional diagnostics
 

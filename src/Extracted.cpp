@@ -493,7 +493,7 @@ void ExtractedWorld::setHostStreaming(bool enabled) {
         }
         hostStreaming = true;
         try {
-            hostSources = std::make_unique<HostSourceLoader>(*this, std::move(initialHostCentres));
+            hostSources = std::make_unique<HostSourceLoader>(*this, std::move(initialHostCentres), sourceStates->hostClock());
         } catch (...) {
             hostStreaming = false;
             std::lock_guard lock(cacheMutex);
