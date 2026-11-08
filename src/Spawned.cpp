@@ -1278,20 +1278,9 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             nativesaves::ZoneLists *lists = zoneLists(ew, visit.key[0], visit.key[1]);
             if (!lists)
                 continue;
-            lists->placeCounters.clear();
             const auto residents = zoneResidents.find({visit.key[0], visit.key[1]});
             const auto source = residents != zoneResidents.end() ? residents->second : worldgen::zone(visit.key[0], visit.key[1]);
-            for (const auto &[id, spawn] : source->spawns.points) {
-                if (spawn.area.empty() || !u.byId(id))
-                    continue;
-                std::set<nativeobjects::Cell> area;
-                for (const auto &cell : spawn.area)
-                    area.insert({cell.x, cell.y});
-                for (const auto &cell : area) {
-                    auto &count = lists->placeCounters[cell];
-                    count = gamemath::add32(count, 1);
-                }
-            }
+            zonestates::rebuildSourceSummaries(*lists, source->spawns, worldDead);
         }
         for (const auto &visit : selected) {
             nativesaves::ZoneLists *lists = zoneStates.find(visit.key);

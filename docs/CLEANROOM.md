@@ -2681,3 +2681,15 @@ require a physical source lease. Nine reproduced failures and selected integrati
 checks exercise these paths. Broader connection timing/writers, full retained
 payload binding and synchronization remain open. The private receipt freezes both
 held hashes; no owner data is published.
+
+## Source prerequisite summary producers, 2026-11-07
+
+The isolated original-only author independently supplied the held summary
+producer/consumer contract. The implementer read the complete prose and owned
+sources only. Catalog membership now uses the World+0x20 lane instead of admitted
+live actors; the separate tracked-list scalar is rebuilt independently. One
+reproduced generated-gate failure and bounded value checks pass with full required-
+owner CPU, Vulkan and SDK checks. The older guard prose's “live” wording is not
+used as evidence of resident-map membership. Physical ownership/freshness,
+consumer routing and ordinary update/admission order remain open. The private
+receipt freezes the held bytes; no owner data is published.

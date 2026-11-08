@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Selected source summaries use recorded catalog-identity membership rather
+  than admitted live actors. The separate tracked-list scalar resets and counts
+  its own matching entries, including repeats. One reproduced generated-gate
+  failure and focused value checks pass, together with full required-owner CPU,
+  Vulkan and SDK checks. Physical cached ownership/freshness, consumer routing
+  and update/admission order remain open. See the
+  [summary contract](specs/steam-source-prerequisite-summaries-20261107.md).
+
 - [x] State-request control now follows physical source identity through COW,
   replies, reset and reload. Loaded-only X-major request bounds use truncated
   player blocks or the eagle anchor. Host replies require a physical source even

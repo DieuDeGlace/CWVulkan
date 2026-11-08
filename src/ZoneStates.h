@@ -43,6 +43,11 @@ Cell zoneOfFixed(int64_t x, int64_t y);
 // A block change entry (28 bytes, §5.3): the block, as it was and as it is now.
 BlockChange blockChange(int32_t x, int32_t y, int32_t z, const std::array<uint8_t, 6> &was, const std::array<uint8_t, 6> &now);
 
+// Rebuild only the two source summaries from catalog/list identity membership
+// (steam-source-prerequisite-summaries-20261107.md). No resident admission or array notice.
+void rebuildSourceSummaries(nativesaves::ZoneLists &live, const worldgen::ZoneSpawns &catalog,
+                            const std::set<int64_t> &identifiers);
+
 class ZoneStates {
   public:
     using BlocksChanged = std::function<void(Cell zone, const std::vector<BlockChange> &changes)>;

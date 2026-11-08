@@ -119,6 +119,20 @@ Full selected-state retention/restoration, logical resident gates, native period
 persistence and exact producer/worker timing remain separate work. See the
 [host contract](specs/steam-host-source-cycle-20261107.md).
 
+## Source summary producers
+
+The selected-source prelude clears and rebuilds coordinate counters using exact
+catalog-entry membership in the World+0x20 identifier lane. It then independently
+resets the scalar and counts matching entries of the source's tracked list. A
+matching catalog template can contribute to multiple coordinate keys; two
+matching templates can increment the same key. Repeated tracked identities count
+per list entry. A template's own ID is not substituted for its catalog-entry key.
+The pass does not query admitted live actors or change arrays, override flags or
+edit history. See the
+[summary contract](specs/steam-source-prerequisite-summaries-20261107.md).
+Physical cached-summary binding and freshness, loaded/retained consumer routing
+and complete update/admission order remain separate work.
+
 ## Physical source request control
 
 Source F8 is loaded-lifetime control, separate from the saved ground/object flags.

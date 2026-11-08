@@ -1,5 +1,32 @@
 # Source review checkpoint — 2026-11-07
 
+## Source summary identity membership - 2026-11-07
+
+The selected-source prelude now rebuilds coordinate counters from catalog-entry
+identities present in the World+0x20 lane, represented by `worldDead`, instead of
+querying the admitted live-actor map. Its separate tracked-list scalar is reset
+and rebuilt independently, counting each matching list entry, including repeats.
+The existing projection of each template's coordinate-key tree is preserved.
+Source arrays, saved override flags and edit history are untouched by this pass.
+
+A generated gate regression failed when the relevant catalog identifier was
+recorded but no matching live actor had been admitted. It now opens and publishes
+its state. Value checks cover the outer catalog key versus the template's own ID,
+shared coordinate keys, the independent tracked list, repeated list identities,
+and authoritative empty/zero replacement. All five targets, the full required-
+owner CPU suite without skips, Vulkan image groups and the SDK-independence audit
+pass. No extra startup screenshot was required for this producer-only change.
+
+The older guard contract's membership address is World+0x20; its use of “live”
+does not establish a lookup in World+0x450's resident map. The independent
+[summary contract](specs/steam-source-prerequisite-summaries-20261107.md) explicitly
+separates these identity lanes and the two source input collections.
+
+This closes the selected producer correction. Full physical summary ownership and
+freshness, loaded-versus-retained consumer routing, broader prerequisite control,
+and ordinary update/admission ordering remain open alongside the other retained-
+state and persistence work. This is not complete resident or gate parity.
+
 ## Physical source request/control lifetime - 2026-11-07
 
 The state-request flag now belongs to each loaded physical source identity. Fresh

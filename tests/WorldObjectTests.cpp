@@ -2,6 +2,7 @@
 #include "NativeInteract.h"
 #include "NativePose.h"
 #include "Spawned.h"
+#include "ZoneStates.h"
 #include "Extracted.h"
 #include "GameMath.h"
 #include "ObjectOccupancyCapture.h"
@@ -148,6 +149,41 @@ void capturedGateFootprint(const std::filesystem::path &root, const auto &check)
     clearFootprint(0x80);
 }
 
+void sourceSummaryValues(const auto &check) {
+    worldgen::ZoneSpawns catalog;
+    catalog.points[11].id = 999; // Membership uses the catalog key, not the template's own ID.
+    catalog.points[11].area = {{-1, 2}, {3, -4}};
+    catalog.points[22].area = {{-1, 2}};
+    catalog.points[33].area = {{9, 9}};
+    catalog.tracked = {41, 41, 22, 1234};
+    nativesaves::ZoneLists live;
+    live.groundItems.resize(1);
+    live.groundItems[0][0] = 0x55;
+    live.staticObjects.resize(1);
+    live.staticObjects[0][0] = 0x66;
+    live.groundItemsChanged = true;
+    live.blockChanges.resize(1);
+    live.blockChanges[0].bytes[0] = 0x77;
+    live.placeCounters[{88, 99}] = 123;
+    live.deadTracked = 456;
+    zonestates::rebuildSourceSummaries(live, catalog, {11, 22, 41, 1000});
+    const std::map<nativesaves::Cell, int32_t> expected{{{-1, 2}, 2}, {{3, -4}, 1}};
+    check(live.placeCounters == expected && live.deadTracked == 3,
+          "catalog-key visits and tracked-list identities rebuild independent source summaries");
+    check(live.groundItems[0][0] == 0x55 && live.staticObjects[0][0] == 0x66 &&
+              live.groundItemsChanged && !live.staticObjectsChanged && live.blockChanges[0].bytes[0] == 0x77,
+          "source-summary rebuild preserves arrays, override flags and edit history");
+    zonestates::rebuildSourceSummaries(live, catalog, {999, 33});
+    check(live.placeCounters == std::map<nativesaves::Cell, int32_t>{{{9, 9}, 1}} && live.deadTracked == 0,
+          "template identity alone does not admit its outer catalog key, and old scalar is cleared");
+    zonestates::rebuildSourceSummaries(live, catalog, {41});
+    check(live.placeCounters.empty() && live.deadTracked == 2,
+          "repeated tracked-list entries count independently of an empty admitted key map");
+    zonestates::rebuildSourceSummaries(live, {}, {11, 41});
+    check(live.placeCounters.empty() && live.deadTracked == 0,
+          "empty selected source inputs replace both old summaries with empty or zero");
+}
+
 void generatedGateIntegration(const auto &check) {
     struct SeedScope {
         int32_t saved = worldgen::currentWorld().seed;
@@ -183,6 +219,40 @@ void generatedGateIntegration(const auto &check) {
               "generated gate and owner threshold match the recorded test case");
         if (door == source->objects.end() || threshold == source->gateThresholds.end())
             continue;
+        if (gate.countRoute && gate.threshold == 1) {
+            std::set<int64_t> identifiers;
+            for (const auto &[id, point] : source->spawns.points)
+                if (std::any_of(point.area.begin(), point.area.end(), [&](const auto &cell) {
+                        return cell.x == gate.cell[0] && cell.y == gate.cell[1];
+                    }))
+                    identifiers.insert(id);
+            check(!identifiers.empty(), "catalog fixture supplies a source key for the gate");
+            if (!identifiers.empty()) {
+                auto markedTerrain = terrain.forkSource();
+                markedTerrain->loadSourceZone(gate.zone[0], gate.zone[1]);
+                markedTerrain->loadSourceZone(gamemath::floorFixedZone(gate.approach[0] * BLOCK),
+                                             gamemath::floorFixedZone(gate.approach[1] * BLOCK));
+                nativesaves::WorldState archive;
+                SpawnedCreatures marked;
+                marked.setStoredZones(*markedTerrain, &archive, false);
+                marked.setNativePlayer(true);
+                const int64_t at[] = {int64_t(gate.approach[0]) * BLOCK, int64_t(gate.approach[1]) * BLOCK, door->z};
+                marked.setPlayer(*markedTerrain, markedTerrain->toLocal(at), 0, {}, 100, 1, true);
+                marked.setWorldDead(identifiers);
+                check(std::none_of(identifiers.begin(), identifiers.end(), [&](int64_t id) { return marked.hasCreature(id); }),
+                      "recorded source identifiers have no admitted live actors");
+                marked.simulate(*markedTerrain, 0);
+                marked.zoneChangeLists();
+                cwnet::ZoneAnswer reply;
+                const bool answered = marked.zoneAnswer(*markedTerrain, {gate.zone[0], gate.zone[1]}, reply);
+                check(answered && reply.staticObjects && std::any_of(reply.staticObjects->begin(), reply.staticObjects->end(), [&](const auto &o) {
+                          return get<int32_t>(o.data(), nativeinteract::OBJECT_TYPE) == door->type &&
+                                 get<int64_t>(o.data(), nativeinteract::OBJECT_POSITION) == door->x &&
+                                 get<int64_t>(o.data(), nativeinteract::OBJECT_POSITION + 8) == door->y &&
+                                 !o[nativeinteract::OBJECT_STATE];
+                      }), "recorded catalog identifiers open the gate without admitted live residents");
+            }
+        }
         const int32_t dx = gamemath::floorFixedBlock(door->x), dy = gamemath::floorFixedBlock(door->y);
         const int32_t dz = gamemath::floorFixedBlock(door->z);
         check(terrain.gameBlock(dx, dy, dz)[5] & 0x40, "closed generated gate marks its footprint");
@@ -663,6 +733,7 @@ int worldObjectTests() {
         capturedGateFootprint(root, check);
         std::filesystem::remove_all(root);
     }
+    sourceSummaryValues(check);
     generatedGateIntegration(check);
     std::printf("World objects, gate transitions, trap state/hits/sounds and facade timing: %s\n", failures ? "FAIL" : "PASS");
     return failures;

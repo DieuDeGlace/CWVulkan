@@ -98,6 +98,27 @@ BlockChange blockChange(int32_t x, int32_t y, int32_t z, const std::array<uint8_
     return c;
 }
 
+void rebuildSourceSummaries(nativesaves::ZoneLists &live, const worldgen::ZoneSpawns &catalog,
+                            const std::set<int64_t> &identifiers) {
+    live.placeCounters.clear();
+    for (const auto &[id, point] : catalog.points) {
+        if (point.area.empty() || !identifiers.contains(id))
+            continue;
+        // The engine's vector projects the native template's coordinate-key tree.
+        std::set<Cell> keys;
+        for (const auto &key : point.area)
+            keys.insert({key.x, key.y});
+        for (const auto &key : keys) {
+            auto &count = live.placeCounters[key];
+            count = gamemath::add32(count, 1);
+        }
+    }
+    live.deadTracked = 0;
+    for (int64_t id : catalog.tracked)
+        if (identifiers.contains(id))
+            live.deadTracked = gamemath::add32(live.deadTracked, 1);
+}
+
 ZoneStates::ZoneStates(nativesaves::WorldState *w, bool skip, BlocksChanged b) : world(w), skipRestore(skip), blocks(std::move(b)) {}
 
 nativesaves::ZoneLists *ZoneStates::find(Cell zone) {
