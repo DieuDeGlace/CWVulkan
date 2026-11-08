@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <cstdlib>
+#include <stdexcept>
 
 namespace zonestates {
 
@@ -121,17 +122,29 @@ void rebuildSourceSummaries(nativesaves::ZoneLists &live, const worldgen::ZoneSp
 
 ZoneStates::ZoneStates(nativesaves::WorldState *w, bool skip, BlocksChanged b) : world(w), skipRestore(skip), blocks(std::move(b)) {}
 
+ZoneStates::ZoneStates(std::shared_ptr<sourcestates::Store> store)
+    : physical(std::move(store)), world(&physical->retained()), skipRestore(false) {}
+
 nativesaves::ZoneLists *ZoneStates::find(Cell zone) {
+    if (physical) {
+        auto source = physical->find(zone);
+        return source ? &source->lists : nullptr;
+    }
     auto it = zones.find(zone);
     return it == zones.end() ? nullptr : &it->second;
 }
 
 const nativesaves::ZoneLists *ZoneStates::find(Cell zone) const {
+    if (physical) {
+        auto source = physical->find(zone);
+        return source ? &source->lists : nullptr;
+    }
     auto it = zones.find(zone);
     return it == zones.end() ? nullptr : &it->second;
 }
 
 int32_t ZoneStates::guardCount(Cell zone, Cell gate) const {
+    if (physical) return physical->counter(zone, gate);
     const auto countAt = [&](const std::map<Cell, int32_t> &counts) {
         const auto count = counts.find(gate);
         return count == counts.end() ? 0 : count->second;
@@ -149,6 +162,7 @@ int32_t ZoneStates::guardCount(Cell zone, Cell gate) const {
 }
 
 std::vector<Cell> ZoneStates::zonesInMemory() const {
+    if (physical) return physical->keys();
     std::vector<Cell> out;
     for (const auto &[zone, lists] : zones)
         out.push_back(zone);
@@ -157,7 +171,9 @@ std::vector<Cell> ZoneStates::zonesInMemory() const {
 
 void ZoneStates::advanceObjects(float milliseconds, const std::vector<Cell> &playerZones,
                                 const std::set<Cell> *usedCells) {
-    for (auto &[zone, lists] : zones) {
+    auto guard = physical ? physical->lock() : sourcestates::Store::Guard{};
+    for (const auto &zone : zonesInMemory()) {
+        auto &lists = *find(zone);
         bool nearPlayer = false;
         for (Cell player : playerZones)
             if (std::abs((int64_t)zone[0] - player[0]) <= 3 && std::abs((int64_t)zone[1] - player[1]) <= 3) {
@@ -173,6 +189,10 @@ void ZoneStates::advanceObjects(float milliseconds, const std::vector<Cell> &pla
 }
 
 nativesaves::ZoneLists &ZoneStates::load(Cell zone, std::vector<Record> groundItems, std::vector<Record> staticObjects) {
+    if (physical) {
+        if (auto *lists = find(zone)) return *lists;
+        throw std::logic_error("Physical source creation belongs to the reader factory");
+    }
     if (auto known = zones.find(zone); known != zones.end())
         return known->second;
     nativesaves::ZoneLists &lists = zones[zone];
@@ -187,6 +207,7 @@ nativesaves::ZoneLists &ZoneStates::load(Cell zone, std::vector<Record> groundIt
 }
 
 void ZoneStates::unload(Cell zone, std::optional<int32_t> deadTracked) {
+    if (physical) throw std::logic_error("Physical source retirement belongs to the reader");
     auto it = zones.find(zone);
     if (it == zones.end())
         return;
@@ -198,16 +219,19 @@ void ZoneStates::unload(Cell zone, std::optional<int32_t> deadTracked) {
 }
 
 void ZoneStates::unloadAll() {
+    if (physical) throw std::logic_error("Physical source retirement belongs to the reader");
     while (!zones.empty())
         unload(zones.begin()->first);
 }
 
 void ZoneStates::objectsChanged(Cell zone) {
+    if (physical) { physical->queueObjects(zone); return; }
     if (nativesaves::ZoneLists *lists = find(zone))
         lists->staticObjectsChanged = true;
 }
 
 void ZoneStates::groundItemsChanged(Cell zone) {
+    if (physical) { physical->queueGround(zone); return; }
     if (nativesaves::ZoneLists *lists = find(zone))
         lists->groundItemsChanged = true;
 }

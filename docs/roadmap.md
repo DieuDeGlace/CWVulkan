@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Generated source identities own both arrays, history and summaries through
+  factory restoration, COW, actual retirement and reload. Loaded empty/zero counts
+  override retained values. Dirty membership and sticky flags have distinct
+  publication boundaries; owned guards protect borrowed views and save input is
+  copied. Boundary/lifetime and ten focused groups, full required-owner CPU,
+  Vulkan, SDK and native plus Alpha/Omega startup checks pass. Native persistence,
+  broader connection/producer/guard behavior, performance and runtime acceptance
+  remain open. See [physical ownership](specs/steam-physical-source-retention-boundaries-20261107.md)
+  and [terrain loading](terrain-loading.md#physical-source-gameplay-state).
+
 - [x] Each ordinary zero-mode substep runs its source prelude before resident
   admission/retention and refreshes body views after registrations/removals.
   Movement uses prelude-selected membership with live fields, separate from the

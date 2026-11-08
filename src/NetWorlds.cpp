@@ -47,6 +47,7 @@ void HostSide::removeCreature(int64_t id) {
 }
 
 void HostSide::advance(uint32_t dtMs) {
+    auto sourceGuard = blocks.lockSourceState();
     // The native world advances in 16-ms slices, including its spawn and reset passes.
     // Reset notices remain queued until HostGame distributes the whole batch.
     const uint32_t frameMs = std::min(dtMs, uint32_t(1000));

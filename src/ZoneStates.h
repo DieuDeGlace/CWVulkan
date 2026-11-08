@@ -13,6 +13,7 @@
 //   ... lists.staticObjects[i][OBJECT_STATE] = 0; states.objectsChanged(zone);
 //   states.unload(zone, deadCount);
 #include "NativeSaves.h"
+#include "SourceStates.h"
 #include "worldgen/Generator.h"
 
 #include <functional>
@@ -57,7 +58,11 @@ class ZoneStates {
     // history on load; appending live history never invokes that callback.
     ZoneStates(nativesaves::WorldState *world = nullptr, bool skipRestore = false, BlocksChanged blocks = {});
 
-    bool loaded(Cell zone) const { return zones.count(zone) != 0; }
+    explicit ZoneStates(std::shared_ptr<sourcestates::Store> physical);
+    bool physicalSources() const { return bool(physical); }
+    const std::shared_ptr<sourcestates::Store> &sourceStore() const { return physical; }
+    sourcestates::Store::Guard lockSources() const { return physical ? physical->lock() : sourcestates::Store::Guard{}; }
+    bool loaded(Cell zone) const { return find(zone) != nullptr; }
     nativesaves::ZoneLists *find(Cell zone);
     const nativesaves::ZoneLists *find(Cell zone) const;
     int32_t guardCount(Cell zone, Cell gate) const;
@@ -87,6 +92,7 @@ class ZoneStates {
     bool appendBlockHistory(const BlockChange &change);
 
   private:
+    std::shared_ptr<sourcestates::Store> physical;
     nativesaves::WorldState *world;
     bool skipRestore;
     BlocksChanged blocks;

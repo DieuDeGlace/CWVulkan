@@ -1,4 +1,61 @@
-# Source review checkpoint — 2026-11-07
+# Source review checkpoint — 2026-11-08
+
+## Physical source payload ownership - 2026-11-08
+
+Generated Worlds now bind ground/static arrays, ordered edit history, coordinate
+counters and the tracked scalar to the actual loaded source identity. Raw
+production precedes retained restoration and edit replay; final installation
+publishes the restored payload. COW terrain replacements share that lifetime.
+Existing-source hits and archive rebinding preserve the live payload and sticky
+flags. Captured-data playback keeps its separate logical adapter.
+
+Viewed retirement records before unlinking; required-set host retirement unlinks
+before recording. Bulk teardown clears loaded membership before per-source
+recording. Source allocations are released after the owned guards. Alpha's LRU
+adapter also records its actual retiring payloads. Logical demand cleanup no
+longer substitutes for these boundaries. Old held leases cannot make a retired
+source count as loaded, and fresh reloads get a fresh identity and history.
+
+Source summaries and daily catalog ownership now follow that same physical
+instance. Keyed/scalar consumers prefer loaded values, including empty/zero,
+then retained values for absent sources. Dirty memberships are separate from
+sticky flags: publication snapshots current arrays in source order, including
+empty replacements, runs the final object pass and clears memberships. Incoming
+ground replacement creates no first-array membership; object replacement does.
+The mirror's existing network adapter continues suppressing outbound array echo.
+
+One owned recursive World guard protects mutable views and compound owner work;
+immutable terrain reads keep their existing path. Ordinary frame submission and
+worker joins run outside the broad owner scope; short scenery/light reads keep
+their required guards. Save input is copied into owned storage, and the
+owner explicitly copies retained values back for the existing save path. No
+background callback captures a caller's save object or actor container. Retired
+pending identities are discarded safely; native per-source dirty-set erasure
+and arbitrary native race behavior were not established by the separate audit.
+
+Ten focused groups and final all-five-target builds pass. The full required-owner
+CPU suite reports no skips; all Vulkan groups and the SDK-independence audit pass.
+Controlled cases cover both actual retirement paths, five-field empty/zero
+replacement, restore suppression, repeated edits, COW, rebinding, old leases,
+reloads, separate Worlds, ordered publication and a blocked concurrent remover.
+The first fixture used the API's disabled radius zero and was corrected to one.
+Two generated-gate fixtures now mutate the owned World retained map rather than
+the external input copy; their state, footprint and sound assertions still pass.
+
+Hidden offline/no-save startup captures complete in 46.500 seconds for Steam look/
+native water and 90.235 seconds for Alpha terrain/Steam look/Omega water. Both were
+inspected for ground, vegetation and HUD against the tested executable. The native
+test player takes damage during the wait, and the preexisting map-like triangle
+remains visible. These are bounded startup checks. Variable startup/FPS, broad
+original visual, travel/memory and hardware acceptance remain open.
+
+See the independent [physical boundaries](specs/steam-physical-source-retention-boundaries-20261107.md),
+[dirty producers](specs/steam-source-array-dirty-producers-20261107.md) and
+[pointer retirement](specs/steam-source-dirty-pointer-retirement-20261107.md).
+Native persistence cadence/capture ordering, complete connection and prerequisite
+behavior, untraced producers/guards and broader Steam parity remain open. Existing
+explicit archive-save behavior is separate from the native loader persistence
+work. Alpha/Omega defaults and the other requested enhancements are preserved.
 
 ## World-step admission and selected movement membership - 2026-11-07
 

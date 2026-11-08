@@ -7,6 +7,7 @@
 // precise (the game's block coordinates are in the hundreds of millions).
 // Game z = 0 is sea level; CubeVulkan adds Z_OFFSET to keep z positive.
 #include "NativeSaves.h"
+#include "SourceStates.h"
 #include "worldgen/Generator.h"
 #include "Mesher.h"
 #include "Terrain.h" // Biome, for skies and music
@@ -132,6 +133,11 @@ class ExtractedWorld {
     // r, g, b, -, type, flags. Only zones already in memory are read; elsewhere the game's
     // default for a missing zone (grey stone, type 1) and `loaded` false.
     using GameBlock = std::array<uint8_t, 6>;
+    // Mutable gameplay views require this World guard for their complete use.
+    sourcestates::Store::Guard lockSourceState() const { return sourceStates->lock(); }
+    std::shared_ptr<sourcestates::Store> sourceStateStore() const { return sourceStates; }
+    // Owner initialization: copy the archive, never capture its caller's lifetime.
+    void configureSourceStates(const nativesaves::WorldState *initial, bool skipRestore);
     GameBlock gameBlock(int64_t x, int64_t y, int z, bool *loaded = nullptr);
     // Thread-local write batch. This thread sees its edits immediately; mesh readers
     // keep the old immutable snapshots until the outer scope publishes one copy/zone.
@@ -146,6 +152,7 @@ class ExtractedWorld {
         explicit BlockEdits(ExtractedWorld &world);
         ExtractedWorld &world;
         BlockEdits *previous, *root;
+        sourcestates::Store::Guard sourceLock;
         std::unique_lock<std::mutex> writerLock;
         std::map<std::pair<int, int>, std::shared_ptr<Zone>> replacements;
     };
@@ -245,6 +252,7 @@ class ExtractedWorld {
     struct ZoneIdentity {
         // Loaded-source control is shared by COW storage, not by later reloads.
         mutable bool needsState = true; // guarded by cacheMutex, like the source map
+        mutable std::shared_ptr<sourcestates::Source> state; // guarded by the owning World scope
     };
     struct Zone {
         // Column replacements copy storage, not the loaded zone's lifetime/visit order.
@@ -299,6 +307,9 @@ class ExtractedWorld {
     std::vector<std::array<int32_t, 2>> initialHostCentres;
     glm::vec3 homeLocal{0};
     // Small cache of decoded zones shared by the worker threads.
+    std::shared_ptr<sourcestates::Store> sourceStates = std::make_shared<sourcestates::Store>();
+    void initializeSourceState(Zone &, int ax, int ay);
+    void retireAllSources();
     std::mutex terrainWriterMutex; // serialize COW commits; readers retain immutable snapshots
     mutable std::mutex cacheMutex;
     std::list<std::pair<Key, std::shared_ptr<Zone>>> cache;

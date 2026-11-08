@@ -199,6 +199,46 @@ readiness handling without extra player-provider reads. This is an owned
 diagnostic policy. Original frame comparison and broader runtime acceptance
 remain separate from obtaining a nonblank screenshot.
 
+## Physical source gameplay state
+
+Generated source identities share one mutable gameplay payload across their COW
+terrain snapshots. The payload holds ground/static arrays, edit history, keyed
+counts and the tracked scalar, with its own current source catalog. The owning
+World stores retained values by coordinate and weakly indexes loaded payloads;
+that index adds no permanent source keep. Retiring the physical cache entry ends
+loaded membership even when an old immutable terrain lease survives.
+
+Factory production happens before the guarded restoration/install boundary.
+Stored array flags and repeated edits are applied before an ordinary fresh source
+becomes visible. A quiescent bootstrap adapter can bind payloads after its initial
+raw home read; that initialization is separate from ordinary factory parity.
+Existing sources retain their live values when a retained archive is
+rebound. Actual viewed, host-required and whole-map retirement record selected
+fields in their specified relative order. The Alpha rendering adapter also
+records its real LRU removals. Captured replay retains its logical-list adapter.
+
+Mutable raw list views require a complete owner World scope. Scenery consumers
+and copied light sources hold that scope while reading; immutable column reads
+keep their existing memoized path. COW writers acquire the World scope before
+the terrain/cache guards. Ordinary frame submission and source-worker joins run
+outside the broad frame scope; scenery/resource preparation retains the guards
+needed by its borrowed state. This consistent owned locking is an engine policy;
+the original's universal writer/guard discipline and arbitrary races are unproved.
+
+Dirty memberships weakly identify current physical instances in unsigned source
+order. Publication sets sticky override flags, copies current arrays even when
+empty, performs the final object pass, then clears pending memberships. Retired
+instances cannot target a later coordinate replacement. Discarding invalid owned
+memberships is a safety policy; native per-source erasure was not established.
+The mirror keeps its existing outbound-array suppression while preserving flags.
+
+Retained save input is owned, so background factories/removers never capture an
+external save-file object. The current owner copies retained values back through
+an explicit snapshot operation. Native host periodic/exit capture and character-
+save scheduling are the next separate work; current explicit archive-save behavior
+does not establish that native sequence. See the [checkpoint](release-status.md)
+for tests, scene observations and the broader performance/visual limits.
+
 ## Optional diagnostics
 
 Set `CW_PROFILE_MESH` to a private CSV path before starting CubeVulkan. The parent

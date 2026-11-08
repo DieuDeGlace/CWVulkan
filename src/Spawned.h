@@ -280,6 +280,8 @@ class SpawnedCreatures {
     std::vector<std::pair<int, int>> takeUnloadedZones() { return std::exchange(unloadedZones, {}); }
     // Every zone's state recorded, as when the world closes or the title is shown.
     void recordAllZones();
+    // Copy already-retained source values on the owner thread; never records live sources.
+    void copyRetainedZones(nativesaves::WorldState &destination) const;
     // The cast bar (Interface's update): shown while a spell is cast, stealth or block power
     // is not full, or an assassination strikes; its fill, and its name: a literal
     // ("Stealth", "Assassinate", "Block Power") or the ability being cast (`ability`).
@@ -539,6 +541,8 @@ class SpawnedCreatures {
     zonestates::ZoneStates zoneStates;     // the zones in memory: their objects, ground items and block changes
     const std::set<nativesaves::Cell> *usedCells = nullptr;
     nativesaves::WorldState *storedZones = nullptr;
+    nativesaves::WorldState *archiveDestination = nullptr; // owner-thread explicit copy only
+    sourcestates::Store::Guard sourceGuard() const;
     std::vector<std::pair<int, int>> unloadedZones;
     // The zone's lists, made with the zone (its objects from the generator, the stored state on
     // top) once its blocks are in memory; null before.

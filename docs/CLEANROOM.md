@@ -2721,3 +2721,23 @@ full required-owner CPU/Vulkan and SDK checks pass. Startup captures complete,
 but repeated unprofiled native startup is slower; performance and broad native
 acceptance remain open. The private receipt freezes both held hashes; no owner
 content is published.
+
+## Physical source gameplay payloads, 2026-11-08
+
+The unexposed original-only author held separate physical-boundary, dirty-producer
+and pointer-retirement contracts. The implementer read the complete prose with
+the earlier field-lifetime, summary and phase-order specifications, froze six
+original-byte hashes privately, and changed owned source only. Five-field state
+now belongs to physical source lifetimes; retained restoration precedes publication
+and real retirement records before destruction. Loaded/retained summary routing
+and deferred dirty flags use those same instances.
+
+Shared owned state, consistent World/cache locking, immutable COW leases, safe
+pending-identity disposal and the mirror's existing no-echo network adapter are
+explicit engine policies. The source audit did not prove native per-source dirty
+pointer cleanup or universal race safety. Controlled lifetime/ordering checks,
+ten focused groups, final required-owner CPU without skips, every Vulkan group,
+SDK independence and two viewed startup smoke images pass. The fixture correction
+used a valid positive radius; gate fixtures now update the owned World map. No
+engine predicate was relaxed. Native persistence/save-callers work and broader
+acceptance remain open. No owner content or private instrumentation is published.

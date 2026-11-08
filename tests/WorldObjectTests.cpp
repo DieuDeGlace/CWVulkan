@@ -387,7 +387,8 @@ void generatedGateIntegration(const auto &check) {
 
         if (gate.countRoute) {
             // Four zones away is outside the live recount window but inside the gate's sum.
-            retained.zones[{gate.zone[0] + 4, gate.zone[1]}].placeCounters[gate.cell] = gate.threshold;
+            auto scope = terrain.lockSourceState();
+            terrain.sourceStateStore()->retained().zones[{gate.zone[0] + 4, gate.zone[1]}].placeCounters[gate.cell] = gate.threshold;
         } else {
             terrain.setGameBlock(px, py, pz, approachBlock);
             std::memcpy(actors.localPlayer()->record + worldgen::creature::POSITION, position, sizeof position);

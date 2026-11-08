@@ -1052,6 +1052,7 @@ void World::refreshModels(int zx, int zy) {
 }
 
 void World::syncObjectZones() {
+    auto sourceScope = extracted ? extracted->lockSourceState() : sourcestates::Store::Guard{};
     const auto player = scenePlayerProvider ? scenePlayerProvider() : std::nullopt;
     independentObjects = renderStyle() == RenderStyle::Steam && extracted && player.has_value();
     if (!independentObjects) {
@@ -1104,6 +1105,7 @@ void World::syncObjectZones() {
 }
 
 void World::collectScenery(const Zone &zone, int32_t ax, int32_t ay, std::vector<DrawItem> &out, bool updateObjects) const {
+    auto sourceScope = extracted ? extracted->lockSourceState() : sourcestates::Store::Guard{};
     const bool steamLook = renderStyle() == RenderStyle::Steam;
     const size_t first = out.size();
     out.insert(out.end(), zone.scenery.begin(), zone.scenery.end());

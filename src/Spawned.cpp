@@ -147,6 +147,7 @@ void SpawnedCreatures::releaseDeaths(const std::vector<int64_t> &ids) {
 }
 
 void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
+    auto sourceStateScope = ew.lockSourceState();
     if (!worldgen::creatureTablesLoaded())
         return;
     lastWorld = &ew;
@@ -209,7 +210,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
     else
         ew.keepAround(this, std::vector<std::pair<int, int>>(wantedSources.begin(), wantedSources.end()), 0);
     // A zone that leaves memory has its state recorded (0x2d3e20) and its lists let go.
-    for (const nativesaves::Cell &zone : zoneStates.zonesInMemory())
+    for (const nativesaves::Cell &zone : zoneStates.physicalSources() ? std::vector<nativesaves::Cell>{} : zoneStates.zonesInMemory())
         if (!near(zone[0], zone[1], NEAR_ZONES + 1)) {
             releaseDeaths(enemyDeaths.unload({zone[0], zone[1]}));
             zoneStates.unload(zone, deadTrackedIn({zone[0], zone[1]}));
@@ -250,9 +251,11 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         const std::pair<int, int> key{visit.key[0], visit.key[1]};
         auto [entry, created] = zoneResidents.try_emplace(key);
         auto &zone = entry->second;
+        const auto physical = zoneStates.physicalSources() ? ew.sourceStateStore()->find(visit.key) : nullptr;
+        if (physical) zone = physical->catalog;
         if (created) {
             zones.try_emplace(key);
-            zone = worldgen::zone(key.first, key.second);
+            if (!zone) zone = worldgen::zone(key.first, key.second);
             // Recover old deaths under the configured engine policy, without
             // overriding current timers or deaths protected by taming.
             if (respawnSettings.mode != enemyrespawn::Mode::Permanent)
@@ -273,6 +276,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
             worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
             zone = refreshed;
+            if (physical) physical->catalog = refreshed;
             for (const auto &[id, point] : refreshed->spawns.points)
                 if (enemyDeaths.contains(id) && !enemyrespawn::isEnemy(point.hostility)) {
                     enemyDeaths.forget(id);
@@ -287,6 +291,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
                 }
                 if (objects != lists->staticObjects) {
                     lists->staticObjects = std::move(objects);
+                    if (physical) lists->staticObjectsChanged = true; // native daily refresh also sets FA directly
                     zoneStates.objectsChanged({key.first, key.second});
                     objectsChanged.insert(key);
                 }
@@ -345,6 +350,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
 }
 
 worldgen::ResidentWorld SpawnedCreatures::residentWorld(const residentpass::Collection &participants) const {
+    auto sourceStateScope = sourceGuard();
     worldgen::ResidentWorld w;
     w.alive = [&participants](int64_t id) { return participants.contains(id); };
     w.nearPlayer = [&participants](int64_t x, int64_t y, int64_t z) { return participants.withinRange(x, y, z); };
@@ -353,6 +359,8 @@ worldgen::ResidentWorld SpawnedCreatures::residentWorld(const residentpass::Coll
     // saved counts of zones it had loaded; CubeVulkan, the zones it has made the creatures of
     // this session.
     w.deadTracked = [this](int32_t zx, int32_t zy) {
+        if (zoneStates.physicalSources())
+            return zoneStates.sourceStore()->scalar({zx, zy});
         if (const std::optional<int32_t> count = deadTrackedIn({zx, zy}))
             return *count;
         // A zone not made this session: the count its stored state kept.
@@ -409,6 +417,7 @@ void SpawnedCreatures::contacts(size_t &ground, size_t &water, size_t &all) cons
 
 bool SpawnedCreatures::nearestPerson(const ExtractedWorld &ew, glm::vec3 from, float range, int64_t &id, int &race,
                                      glm::vec3 &at) const {
+    auto sourceStateScope = ew.lockSourceState();
     float best = range;
     bool found = false;
     for (auto &[k, list] : zones)
@@ -519,6 +528,7 @@ void SpawnedCreatures::keepHealthShares(const std::function<void()> &change) {
 }
 
 bool SpawnedCreatures::positionOf(const ExtractedWorld &ew, int64_t id, glm::vec3 &at) const {
+    auto sourceStateScope = ew.lockSourceState();
     for (auto &[k, list] : zones)
         for (const Creature &cr : list)
             if (get<int64_t>(cr.record, worldgen::creature::ID) == id) {
@@ -549,6 +559,7 @@ bool SpawnedCreatures::homeOf(int64_t id, int32_t &x, int32_t &y) const {
 }
 
 std::string SpawnedCreatures::angriest(const ExtractedWorld &ew, glm::vec3 playerLocal) const {
+    auto sourceStateScope = ew.lockSourceState();
     const Creature *best = nullptr;
     float bestD = 1e9f;
     for (auto &[k, list] : zones)
@@ -610,6 +621,7 @@ std::vector<nativeai::Creature *> SpawnedCreatures::worldList() {
 }
 
 std::vector<SpawnedCreatures::Target> SpawnedCreatures::targets(const ExtractedWorld &ew, glm::vec3 near, float range) const {
+    auto sourceStateScope = ew.lockSourceState();
     std::vector<Target> out;
     for (auto &[zone, list] : zones)
         for (const Creature &cr : list) {
@@ -633,6 +645,7 @@ std::vector<SpawnedCreatures::Target> SpawnedCreatures::targets(const ExtractedW
 }
 
 std::vector<SpawnedCreatures::Label> SpawnedCreatures::labels(const ExtractedWorld &ew, glm::vec3 near, float range) const {
+    auto sourceStateScope = ew.lockSourceState();
     std::vector<Label> out;
     for (auto &[zone, list] : zones)
         for (const Creature &cr : list) {
@@ -750,6 +763,7 @@ void SpawnedCreatures::keepBlockChanges(const std::vector<std::array<uint8_t, 0x
 }
 
 nativedrop::World SpawnedCreatures::dropWorld(ExtractedWorld &ew) {
+    auto sourceStateScope = ew.lockSourceState();
     nativedrop::World dw;
     dw.rand = [this] { return drawWorldRandom(); };
     dw.creatures = worldList();
@@ -783,6 +797,7 @@ nativedrop::World SpawnedCreatures::dropWorld(ExtractedWorld &ew) {
 }
 
 void SpawnedCreatures::keepDrops(ExtractedWorld &ew, const nativedrop::World &dw, int64_t from, int32_t level, bool reward) {
+    auto sourceStateScope = ew.lockSourceState();
     for (const nativedrop::Drop &d : dw.drops) {
         drops.push_back({from, level, d, ew.toLocal(reinterpret_cast<const int64_t *>(d.data() + 0xa0)), reward});
         // The ground item joins its zone's list (0x2a5b70), which the zone keeps, saves and,
@@ -799,6 +814,7 @@ void SpawnedCreatures::keepDrops(ExtractedWorld &ew, const nativedrop::World &dw
 }
 
 void SpawnedCreatures::dropFrom(ExtractedWorld &ew, nativeai::Creature *dead) {
+    auto sourceStateScope = ew.lockSourceState();
     nativedrop::World dw = dropWorld(ew);
     nativedrop::drop(dw, dead);
     int64_t id;
@@ -854,6 +870,7 @@ void SpawnedCreatures::setPlayerClass(int cls) {
 }
 
 std::vector<SpawnedCreatures::Death> SpawnedCreatures::takeDeaths(const ExtractedWorld &ew) {
+    auto sourceStateScope = ew.lockSourceState();
     std::vector<Death> out;
     for (auto &[zone, list] : zones)
         for (const Creature &cr : list) {
@@ -901,6 +918,7 @@ void SpawnedCreatures::walking(size_t &moving, size_t &pathing) const {
 }
 
 bool SpawnedCreatures::nearest(const ExtractedWorld &ew, glm::vec3 from, int &race, glm::vec3 &at, int hostility) const {
+    auto sourceStateScope = ew.lockSourceState();
     float best = 1e30f;
     for (auto &[zone, list] : zones)
         for (const Creature &cr : list) {
@@ -915,6 +933,7 @@ bool SpawnedCreatures::nearest(const ExtractedWorld &ew, glm::vec3 from, int &ra
 }
 
 std::vector<std::pair<int, glm::vec3>> SpawnedCreatures::list(const ExtractedWorld &ew, int hostility) const {
+    auto sourceStateScope = ew.lockSourceState();
     std::vector<std::pair<int, glm::vec3>> out;
     for (auto &[zone, creatures] : zones)
         for (const Creature &cr : creatures)
@@ -926,6 +945,7 @@ std::vector<std::pair<int, glm::vec3>> SpawnedCreatures::list(const ExtractedWor
 
 void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::function<void()> &onReset,
                                 const std::function<void()> &admitResidents) {
+    auto sourceStateScope = ew.lockSourceState();
     lastWorld = &ew;
     auto blockEdits = ew.editBlocks();
     // Gameplay-camera §7.2.3: ordinary frames retain double milliseconds. The host
@@ -1312,7 +1332,9 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             if (!lists)
                 continue;
             const auto residents = zoneResidents.find({visit.key[0], visit.key[1]});
-            const auto source = residents != zoneResidents.end() ? residents->second : worldgen::zone(visit.key[0], visit.key[1]);
+            const auto physical = zoneStates.physicalSources() ? ew.sourceStateStore()->find(visit.key) : nullptr;
+            const auto source = physical ? physical->catalog :
+                residents != zoneResidents.end() ? residents->second : worldgen::zone(visit.key[0], visit.key[1]);
             zonestates::rebuildSourceSummaries(*lists, source->spawns, worldDead);
         }
         for (const auto &visit : selected) {
@@ -1636,6 +1658,7 @@ void SpawnedCreatures::startTrips(std::vector<Creature> &list) {
 }
 
 void SpawnedCreatures::advanceTrips(ExtractedWorld &ew, double dtMs) {
+    auto sourceStateScope = ew.lockSourceState();
     std::map<int64_t, worldgen::CreatureRecord *> byId;
     std::map<int64_t, const std::set<int64_t> *> groupOf;
     for (auto &[zone, list] : zones)
@@ -1695,6 +1718,7 @@ void SpawnedCreatures::advanceTrips(ExtractedWorld &ew, double dtMs) {
 
 void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, float headingRad, glm::vec3 velocity,
                                  float health, int level, bool onGround) {
+    auto sourceStateScope = ew.lockSourceState();
     worldgen::CreatureRecord &r = player.record;
     if (!hasPlayer) {
         worldgen::SpawnPoint sp; // the constructor's defaults, as the game makes a player
@@ -1900,6 +1924,7 @@ float SpawnedCreatures::playerAbilityEffectTime() const {
 }
 
 const std::vector<nativeai::Object> *SpawnedCreatures::zoneObjects(int zx, int zy) const {
+    auto sourceStateScope = sourceGuard();
     const nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     return lists ? &lists->staticObjects : nullptr;
 }
@@ -1917,6 +1942,7 @@ const nativesaves::Item *SpawnedCreatures::objectRewardRecord(int zx, int zy, in
 }
 
 SpawnedCreatures::ObjectContents SpawnedCreatures::objectContents(ExtractedWorld &ew, int zx, int zy, int index) {
+    auto sourceStateScope = ew.lockSourceState();
     const auto token = ew.gameZoneToken(zx, zy);
     if (!token)
         return {};
@@ -1934,6 +1960,7 @@ SpawnedCreatures::ObjectContents SpawnedCreatures::objectContents(ExtractedWorld
 }
 
 std::optional<objectvisual::State> SpawnedCreatures::objectVisual(int zx, int zy, const objectvisual::Key &key) const {
+    auto sourceStateScope = sourceGuard();
     const auto *objects = zoneObjects(zx, zy);
     if (!objects)
         return std::nullopt;
@@ -1954,20 +1981,35 @@ std::optional<objectvisual::State> SpawnedCreatures::objectVisual(int zx, int zy
     return std::nullopt;
 }
 
+sourcestates::Store::Guard SpawnedCreatures::sourceGuard() const {
+    return zoneStates.lockSources();
+}
+
 void SpawnedCreatures::setStoredZones(ExtractedWorld &ew, nativesaves::WorldState *world, bool skipRestore) {
+    auto guard = ew.lockSourceState();
+    archiveDestination = world;
     storedZones = world;
     lastWorld = &ew;
     if (world && respawnSettings.mode != enemyrespawn::Mode::Permanent)
         for (auto &[zone, state] : world->zones)
             state.deadTracked = 0; // temporary deaths from an earlier instance have ended
+    if (ew.generated()) {
+        ew.configureSourceStates(world, skipRestore);
+        zoneStates = zonestates::ZoneStates(ew.sourceStateStore());
+        storedZones = &ew.sourceStateStore()->retained();
+        return;
+    }
     zoneStates = zonestates::ZoneStates(world, skipRestore, [&ew](nativesaves::Cell zone, const std::vector<nativesaves::BlockChange> &changes) {
         ew.setBlockChanges(zone[0], zone[1], changes);
     });
 }
 
 nativesaves::ZoneLists *SpawnedCreatures::zoneLists(ExtractedWorld &ew, int zx, int zy) {
+    auto sourceStateScope = ew.lockSourceState();
     if (nativesaves::ZoneLists *lists = zoneStates.find({zx, zy}))
         return lists;
+    if (zoneStates.physicalSources())
+        return nullptr; // Physical factory admission owns all five fields.
     std::vector<nativesaves::Record> objectRecords, itemRecords;
     if (auto captured = ew.capturedLists(zx, zy)) {
         objectRecords = std::move(captured->staticObjects);
@@ -1995,11 +2037,13 @@ std::optional<int32_t> SpawnedCreatures::deadTrackedIn(std::pair<int, int> zone)
 }
 
 const std::vector<nativesaves::Record> *SpawnedCreatures::groundItems(ExtractedWorld &ew, int zx, int zy) {
+    auto sourceStateScope = ew.lockSourceState();
     nativesaves::ZoneLists *lists = zoneLists(ew, zx, zy);
     return lists ? &lists->groundItems : nullptr;
 }
 
 const nativesaves::Record *SpawnedCreatures::findGroundItem(const std::array<int32_t, 3> &key) const {
+    auto sourceStateScope = sourceGuard();
     const auto *lists = zoneStates.find({key[0], key[1]});
     if (!lists || key[2] < 0 || (size_t)key[2] >= lists->groundItems.size())
         return nullptr;
@@ -2007,6 +2051,7 @@ const nativesaves::Record *SpawnedCreatures::findGroundItem(const std::array<int
 }
 
 void SpawnedCreatures::takeGroundItem(int zx, int zy, size_t index) {
+    auto sourceStateScope = sourceGuard();
     nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     if (!lists || index >= lists->groundItems.size())
         return;
@@ -2015,6 +2060,7 @@ void SpawnedCreatures::takeGroundItem(int zx, int zy, size_t index) {
 }
 
 void SpawnedCreatures::setObjectActive(int zx, int zy, size_t index, bool active) {
+    auto sourceStateScope = sourceGuard();
     nativesaves::ZoneLists *lists = zoneStates.find({zx, zy});
     if (!lists || index >= lists->staticObjects.size())
         return;
@@ -2025,6 +2071,7 @@ void SpawnedCreatures::setObjectActive(int zx, int zy, size_t index, bool active
 }
 
 void SpawnedCreatures::changeBlock(ExtractedWorld &ew, int32_t x, int32_t y, int32_t z, const std::array<uint8_t, 6> &block) {
+    auto sourceStateScope = ew.lockSourceState();
     const auto zone = zonestates::zoneOfBlock(x, y);
     if (!zoneLists(ew, zone[0], zone[1]))
         return;
@@ -2039,7 +2086,20 @@ void SpawnedCreatures::changeBlock(ExtractedWorld &ew, int32_t x, int32_t y, int
     ew.invalidateGameBlock(x, y);
 }
 
+void SpawnedCreatures::copyRetainedZones(nativesaves::WorldState &destination) const {
+    auto guard = sourceGuard();
+    if (zoneStates.physicalSources())
+        destination.zones = zoneStates.sourceStore()->snapshot().zones;
+}
+
 void SpawnedCreatures::recordAllZones() {
+    auto guard = sourceGuard();
+    if (zoneStates.physicalSources()) {
+        auto states = zoneStates.sourceStore();
+        for (const auto &key : states->keys()) states->retain(states->find(key));
+        if (archiveDestination) copyRetainedZones(*archiveDestination);
+        return; // Explicit engine archive operation, not physical source deletion.
+    }
     for (const nativesaves::Cell &zone : zoneStates.zonesInMemory()) {
         zoneStates.unload(zone, deadTrackedIn({zone[0], zone[1]}));
         unloadedZones.push_back({zone[0], zone[1]});
@@ -2263,6 +2323,7 @@ void SpawnedCreatures::setPlayerGear(const worldgen::CreatureRecord &from, bool 
 
 bool SpawnedCreatures::playerState(const ExtractedWorld &ew, glm::vec3 &local, float &headingRad, glm::vec3 &velocity,
                                    bool &onGround) const {
+    auto sourceStateScope = ew.lockSourceState();
     if (!hasPlayer)
         return false;
     const worldgen::CreatureRecord &r = player.record;
@@ -2275,6 +2336,7 @@ bool SpawnedCreatures::playerState(const ExtractedWorld &ew, glm::vec3 &local, f
 }
 
 void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
+    auto sourceStateScope = ew.lockSourceState();
     aiCarried += dtMs;
     if (aiCarried < 40.0)
         return;
@@ -2380,6 +2442,7 @@ nativepose::Models SpawnedCreatures::poseModels() const {
 
 void SpawnedCreatures::draw(ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
                             std::vector<DrawItem> &out) {
+    auto sourceStateScope = ew.lockSourceState();
     const auto lookup = poseModels();
     const bool nativeWorld = renderStyle() == RenderStyle::Steam;
     const steampoints::Point renderOrigin{gamemath::subtractFixed(0, view.renderOffset[0]),
@@ -2604,6 +2667,7 @@ bool SpawnedCreatures::takePlayerInteraction(nativeai::Interaction &out) {
 }
 
 nativehit::World SpawnedCreatures::hitWorld(ExtractedWorld &ew, std::map<int64_t, nativeai::Creature *> &byId) {
+    auto sourceStateScope = ew.lockSourceState();
     nativehit::World hw;
     hw.client = client;
     hw.local = hasPlayer ? player.record.data() : nullptr;
@@ -2640,6 +2704,7 @@ void SpawnedCreatures::keepHitRecords(nativehit::World &hw) {
 }
 
 void SpawnedCreatures::applyGuestEvents(ExtractedWorld &ew, const cwnet::GuestEvents &caused) {
+    auto sourceStateScope = ew.lockSourceState();
     lastWorld = &ew;
     // 1. Their sounds join the world's list.
     worldEvents.sounds.insert(worldEvents.sounds.end(), caused.sounds.begin(), caused.sounds.end());
@@ -2719,6 +2784,7 @@ void SpawnedCreatures::flash(int64_t id) {
 }
 
 steampoints::GroundSources SpawnedCreatures::groundLights(ExtractedWorld &ew, int zx, int zy) {
+    auto sourceStateScope = ew.lockSourceState();
     steampoints::GroundSources sources;
     if (record(localId)) sources.player = localId;
     const auto *items = groundItems(ew, zx, zy);
@@ -2775,6 +2841,7 @@ bool SpawnedCreatures::isDead(int64_t id) const {
 }
 
 bool SpawnedCreatures::zoneAnswer(ExtractedWorld &ew, const cwnet::ZoneKey &zone, cwnet::ZoneAnswer &out) {
+    auto sourceStateScope = ew.lockSourceState();
     const auto source = ew.gameZoneToken(zone.x, zone.y);
     if (!source)
         return false; // Logical lists cannot admit a reply for a retired physical source.
@@ -2794,6 +2861,7 @@ bool SpawnedCreatures::zoneAnswer(ExtractedWorld &ew, const cwnet::ZoneKey &zone
 }
 
 void SpawnedCreatures::replaceGroundItems(ExtractedWorld &ew, const cwnet::ZoneObjects &zone) {
+    auto sourceStateScope = ew.lockSourceState();
     nativesaves::ZoneLists *lists = zoneLists(ew, zone.key.x, zone.key.y);
     if (!lists)
         return; // (only a zone in memory takes them)
@@ -2802,15 +2870,18 @@ void SpawnedCreatures::replaceGroundItems(ExtractedWorld &ew, const cwnet::ZoneO
 }
 
 void SpawnedCreatures::replaceStaticObjects(ExtractedWorld &ew, const cwnet::ZoneObjects &zone) {
+    auto sourceStateScope = ew.lockSourceState();
     nativesaves::ZoneLists *lists = zoneLists(ew, zone.key.x, zone.key.y);
     if (!lists)
         return;
     lists->staticObjects.assign(zone.records.begin(), zone.records.end());
     objectsChanged.insert({zone.key.x, zone.key.y}); // (queued for the object rebuild, world+0x1a0)
+    if (zoneStates.physicalSources()) zoneStates.objectsChanged({zone.key.x, zone.key.y});
     ew.markObjectBlocks(zone.key.x, zone.key.y, lists->staticObjects);
 }
 
 void SpawnedCreatures::appendBlockHistory(ExtractedWorld &ew, const cwnet::BlockChangeRecord &change) {
+    auto sourceStateScope = ew.lockSourceState();
     nativesaves::BlockChange kept;
     std::memcpy(kept.bytes.data(), change.data(), kept.bytes.size());
     const auto at = kept.block();
@@ -2851,6 +2922,7 @@ std::vector<cwnet::ZoneKey> SpawnedCreatures::zonesNeedingState(int64_t blockX, 
 }
 
 void SpawnedCreatures::undoBlockChanges(ExtractedWorld &ew) {
+    auto sourceStateScope = ew.lockSourceState();
     for (const auto &[x, y] : ew.resetSourceStateRequests()) {
         if (nativesaves::ZoneLists *lists = zoneStates.find({x, y}))
             lists->blockChanges.clear();
@@ -2859,6 +2931,20 @@ void SpawnedCreatures::undoBlockChanges(ExtractedWorld &ew) {
 }
 
 void SpawnedCreatures::zoneChangeLists() {
+    auto guard = sourceGuard();
+    if (zoneStates.physicalSources()) {
+        lastWorld->sourceStateStore()->publish(
+            [&](nativesaves::Cell key, const auto &records) {
+                if (!client) worldEvents.groundItems.push_back({{key[0], key[1]}, {records.begin(), records.end()}});
+            },
+            [&](nativesaves::Cell key, const auto &records) {
+                if (!client) worldEvents.staticObjects.push_back({{key[0], key[1]}, {records.begin(), records.end()}});
+            },
+            [&](nativesaves::Cell key, const auto &records) { lastWorld->markObjectBlocks(key[0], key[1], records); });
+        groundChanged.clear();
+        objectsChanged.clear();
+        return;
+    }
     // (A mirror's own step makes no lists to send: its zones change by the host's.)
     if (!client) {
         for (const auto &[zx, zy] : groundChanged)
@@ -2903,6 +2989,7 @@ void SpawnedCreatures::rememberEnemyDeath(int64_t id, std::pair<int, int> zone, 
 }
 
 void SpawnedCreatures::worldReset() {
+    auto sourceStateScope = sourceGuard();
     // Every creature that is not a player goes; the zones make them again, the dead included.
     for (auto &[zone, list] : zones)
         for (auto it = list.begin(); it != list.end();)
@@ -2948,6 +3035,7 @@ void SpawnedCreatures::keepReceived(const cwnet::WorldEvents &received) {
 }
 
 void SpawnedCreatures::layItem(ExtractedWorld &ew, const uint8_t *item, const int64_t pos[3], int count) {
+    auto sourceStateScope = ew.lockSourceState();
     nativedrop::World dw = dropWorld(ew);
     nativedrop::Place p;
     std::memcpy(p.item.data(), item, p.item.size());

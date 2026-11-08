@@ -211,6 +211,7 @@ int dialogueChoicesTests();
 int npcSpeechTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests(); // tests/ObjectClockTests.cpp
+int physicalSourceStateTests(); // tests/PhysicalSourceStateTests.cpp
 int worldObjectTests(); // tests/WorldObjectTests.cpp
 int worldGateCaptureCommand(const std::filesystem::path &);
 int blockMutationTests();
@@ -9538,6 +9539,8 @@ int main(int argc, char **argv) {
         return blockMutationTests();
     if (argc == 2 && std::string(argv[1]) == "sourcecreation")
         return nativeSourceCreationTests();
+    if (argc == 2 && std::string(argv[1]) == "physicalsource")
+        return physicalSourceStateTests();
     if (argc == 2 && std::string(argv[1]) == "sourcecontrol")
         return sourceControlTests();
     if (argc == 2 && std::string(argv[1]) == "retainedsource")
@@ -10841,6 +10844,7 @@ int main(int argc, char **argv) {
     failures += hostSourceTests();
     failures += sourceReadinessTests();
     failures += sourceControlTests();
+    failures += physicalSourceStateTests();
     failures += nativeSourceCreationTests();
     failures += plasmaLayoutTests();
     failures += fontCatalogTests();

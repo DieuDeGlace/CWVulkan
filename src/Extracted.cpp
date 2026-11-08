@@ -1,4 +1,5 @@
 #include "Extracted.h"
+#include "ZoneStates.h"
 #include "HostSourceLoader.h"
 #include <stdexcept>
 #include "MeshProfile.h"
@@ -321,7 +322,16 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
         if (records.markedObjectBlocks)
             zone->markedObjectBlocks = std::move(*records.markedObjectBlocks);
     }
-    applyBlockChanges(ax, ay, *zone);
+    // Generation runs without the World guard. Retained restoration and final
+    // installation share one owned scope; a concurrent completed hit wins.
+    std::vector<std::shared_ptr<Zone>> retired;
+    auto sourceGuard = lockSourceState();
+    if (auto existing = cached(ax, ay))
+        return existing;
+    if (sourceStates->configured())
+        initializeSourceState(*zone, ax, ay);
+    else
+        applyBlockChanges(ax, ay, *zone);
     std::lock_guard lock(cacheMutex);
     // A foreground query and prefetch can finish the same read concurrently. Preserve
     // the resident zone's identity instead of inserting another copy of the same key.
@@ -337,6 +347,8 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
             }
         cache.emplace_front(key, zone);
     }
+    if (zone->identity->state)
+        sourceStates->install(zone->identity->state);
     // Explicit keeps can exceed the normal cache budget (the native player
     // radius alone pins121 zones). Keep a separate bounded LRU for unpinned
     // readers, or every farther mesh request would evict its own source at once.
@@ -346,6 +358,9 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
         for (auto it = cache.end(); unpinned > UNPINNED_LIMIT && it != cache.begin();) {
             --it;
             if (!kept(it->first)) {
+                sourceStates->retain(it->second->identity->state);
+                sourceStates->unlink(it->second->identity->state);
+                retired.push_back(std::move(it->second));
                 it = cache.erase(it);
                 --unpinned;
             }
@@ -371,10 +386,11 @@ void ExtractedWorld::clearCache() {
     initialHostCentres.clear();
     if (keeper.joinable())
         keeper.join();
+    retireAllSources();
+    sourceStates->reset();
     std::lock_guard lock(cacheMutex);
     sourceMap.reset();
     clientStreaming = false;
-    cache.clear();
     keptBy.clear();
     absent.clear();
     estimatedScale.clear();
@@ -390,6 +406,73 @@ ExtractedWorld::~ExtractedWorld() {
     setHostStreaming(false);
     if (keeper.joinable())
         keeper.join();
+    retireAllSources();
+}
+
+void ExtractedWorld::initializeSourceState(Zone &zone, int ax, int ay) {
+    std::vector<nativesaves::Record> ground, objects;
+    if (zone.things)
+        for (const auto &item : zone.things->items)
+            ground.push_back(zonestates::groundItemRecord(item, worldgen::worldDay()));
+    for (const auto &object : zone.objects)
+        objects.push_back(zonestates::staticObjectRecord(object));
+    auto state = sourceStates->make({ax, ay}, uint64_t(reinterpret_cast<uintptr_t>(zone.identity.get())),
+                                    std::move(ground), std::move(objects), zone.things);
+    for (const auto &change : state->lists.blockChanges) {
+        const auto at = change.block();
+        writeGameBlock(zone, ax, ay, at[0], at[1], at[2], change.now());
+    }
+    {
+        std::lock_guard lock(changesMutex);
+        blockChanges[{ax, ay}] = state->lists.blockChanges;
+    }
+    zone.identity->state = std::move(state);
+}
+
+void ExtractedWorld::configureSourceStates(const nativesaves::WorldState *initial, bool skipRestore) {
+    auto edits = editBlocks();
+    sourceStates->configure(initial, skipRestore);
+    // Bootstrap adapters can bind after their initial raw home read. Normal
+    // factories perform the same restoration before loaded-map publication.
+    std::vector<Key> keys;
+    {
+        std::lock_guard lock(cacheMutex);
+        for (const auto &[key, zone] : cache) keys.push_back(key);
+    }
+    for (const auto &key : keys) {
+        const auto existing = cached(key.first, key.second);
+        if (existing && existing->identity->state) {
+            sourceStates->install(existing->identity->state);
+            continue; // Existing source: no restoration, flag reset or history loss.
+        }
+        undoBlockChanges(key.first, key.second); // raw bootstrap adapter, before its first binding
+        if (auto zone = writableZone(key.first, key.second)) {
+            initializeSourceState(*zone, key.first, key.second);
+            sourceStates->install(zone->identity->state);
+            if (!zone->identity->state->lists.blockChanges.empty()) {
+                std::lock_guard lock(changesMutex);
+                for (int dx = -1; dx <= 1; ++dx)
+                    for (int dy = -1; dy <= 1; ++dy)
+                        changedZones.insert({key.first + dx, key.second + dy});
+            }
+        }
+    }
+}
+
+void ExtractedWorld::retireAllSources() {
+    decltype(cache) retired;
+    {
+        auto sourceGuard = lockSourceState();
+        {
+            std::lock_guard lock(cacheMutex);
+            sourceMap.reset();
+            retired.splice(retired.begin(), cache);
+            sourceStates->clearLoaded(); // map removal precedes per-source recording
+            if (!retired.empty()) cacheRevision = nextZoneCacheRevision();
+        }
+        for (const auto &[key, zone] : retired)
+            if (zone) sourceStates->retain(zone->identity->state);
+    } // release both guards before dropping the source allocations
 }
 
 void ExtractedWorld::setHostStreaming(bool enabled) {
@@ -436,6 +519,7 @@ void ExtractedWorld::setHostSourceCentres(std::vector<std::array<int32_t, 2>> ce
 size_t ExtractedWorld::pendingHostSourceCount() const { return hostSources ? hostSources->pending() : 0; }
 size_t ExtractedWorld::retireHostSources(const std::set<std::pair<int, int>> &required) {
     std::vector<std::shared_ptr<Zone>> retired;
+    auto sourceGuard = lockSourceState();
     std::lock_guard lock(cacheMutex);
     if (!hostStreaming || !sourceMap)
         return 0;
@@ -447,6 +531,10 @@ size_t ExtractedWorld::retireHostSources(const std::set<std::pair<int, int>> &re
         const auto selected = it++;
         retired.push_back(std::move(selected->second));
         sourceMap->erase(selected);
+        if (retired.back()) {
+            sourceStates->unlink(retired.back()->identity->state);
+            sourceStates->retain(retired.back()->identity->state);
+        }
     }
     if (!retired.empty())
         cacheRevision = nextZoneCacheRevision();
@@ -464,11 +552,9 @@ void ExtractedWorld::setClientStreaming(bool enabled) {
     } else if (clientStreaming.exchange(false)) {
         // Final deletion follows guard release; snapshots and edit journals
         // retain their separate lifetimes.
-        decltype(cache) retired;
+        retireAllSources();
         {
             std::lock_guard lock(cacheMutex);
-            sourceMap.reset();
-            retired.splice(retired.begin(), cache);
             keptBy.clear();
             absent.clear();
             cacheRevision = nextZoneCacheRevision();
@@ -482,7 +568,8 @@ size_t ExtractedWorld::loadedSourceCount() const {
 }
 std::optional<std::pair<int, int>> ExtractedWorld::retireClientSource(Key center, int radius) {
     if (!clientStreaming || radius <= 0) return {};
-    std::shared_ptr<Zone> retired; // Released after cacheMutex, like the source-object destructor boundary.
+    std::shared_ptr<Zone> retired; // Released after both guards.
+    auto sourceGuard = lockSourceState();
     std::lock_guard lock(cacheMutex);
     const double r = radius;
     double best = r * r;
@@ -497,6 +584,8 @@ std::optional<std::pair<int, int>> ExtractedWorld::retireClientSource(Key center
     }
     if (selected == cache.end()) return {};
     const Key removed = selected->first;
+    sourceStates->retain(selected->second->identity->state);
+    sourceStates->unlink(selected->second->identity->state);
     retired = std::move(selected->second);
     sourceMap->erase(selected);
     cacheRevision = nextZoneCacheRevision();
@@ -557,6 +646,7 @@ thread_local ExtractedWorld::BlockEdits *ExtractedWorld::activeEdits = nullptr;
 ExtractedWorld::BlockEdits::BlockEdits(ExtractedWorld &owner) : world(owner), previous(activeEdits), root(owner.blockEdits()) {
     if (!root) {
         root = this;
+        sourceLock = world.lockSourceState();
         writerLock = std::unique_lock(world.terrainWriterMutex);
     }
     activeEdits = this;

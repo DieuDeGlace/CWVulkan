@@ -3166,6 +3166,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (spawnedReady && !session.guestElsewhere()) { // the world's dead are its host world's
             const auto persistentDead = hostWorld.persistentDeadSet();
             saveGame.killed.assign(persistentDead.begin(), persistentDead.end());
+            hostWorld.copyRetainedZones(saves.world());
             saves.world().dead = persistentDead;
         } else if (!spawnedReady && enemyRespawns.mode != enemyrespawn::Mode::Permanent)
             saveGame.killed.clear();
@@ -3671,6 +3672,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         preview.infoIcon = it.sprite;
     };
     while (!glfwWindowShouldClose(window)) {
+        auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();
         input.gamepadSampled = false;
         input.pointerSampled = false;
@@ -8472,10 +8474,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (spawnedReady && savesWritable && saves.isOpen() && time - worldSaved > 60) {
                 worldSaved = time;
                 const auto persistentDead = hostWorld.persistentDeadSet();
+                hostWorld.copyRetainedZones(saves.world());
                 saves.world().dead = persistentDead;
                 saves.saveWorld(hostWorld.day(), hostWorld.timeOfDay(), persistentDead);
             }
-            Sleep(16);
         } else {
             renderer.setWorldDay(day); // the moon's phase
             if (spawnedReady) {
@@ -8486,6 +8488,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (spawned.playerBuff(0x13, strength, remainingMs))
                     lighting.effect13RemainingMs = remainingMs;
             }
+            sourceStateScope.unlock(); // draw uses immutable meshes and copied source inputs
             renderer.frame(camera, lighting, player.position, time, opaque, water);
         }
         auto column = columnAt(player.position.x, player.position.y);
@@ -8583,6 +8586,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
             }
         }
+        if (sourceStateScope.owns_lock()) sourceStateScope.unlock();
+        if (serverMode) Sleep(16);
         // The FPS limit (minTimeStep): a frame lasts at least that many milliseconds. CPU usage
         // REDUCED: what the game does differently is not specified (frontend-options.md §1.2);
         // CubeVulkan gives the processor up for a millisecond each frame.
@@ -8628,6 +8633,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         hostWorld.recordAllZones();
     if (serverMode && spawnedReady && savesWritable && saves.isOpen()) {
         const auto persistentDead = hostWorld.persistentDeadSet();
+        hostWorld.copyRetainedZones(saves.world());
         saves.world().dead = persistentDead;
         logLine(saves.saveWorld(hostWorld.day(), hostWorld.timeOfDay(), persistentDead) ? "Save: world written"
                                                                                     : "Save: world not written");
