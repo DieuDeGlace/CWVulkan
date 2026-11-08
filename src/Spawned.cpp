@@ -3009,6 +3009,13 @@ void SpawnedCreatures::rememberEnemyDeath(int64_t id, std::pair<int, int> zone, 
         enemyDeaths.killed(id, zone);
 }
 
+void SpawnedCreatures::resetWorldState() {
+    auto guard = sourceGuard();
+    worldDead.clear();
+    if (storedZones)
+        nativesaves::resetWorld(*storedZones);
+}
+
 void SpawnedCreatures::worldReset() {
     auto sourceStateScope = sourceGuard();
     // Every creature that is not a player goes; the zones make them again, the dead included.
@@ -3028,7 +3035,7 @@ void SpawnedCreatures::worldReset() {
     made.clear();
     // Loaded zones and their previous refresh day survive the native reset. Keeping
     // that day lets the next visited-zone pass restore the new day's base objects.
-    worldDead.clear();
+    resetWorldState();
     if (respawnSettings.mode != enemyrespawn::Mode::Permanent) {
         // Native resets must not bypass either configured enemy lifecycle.
         const auto pending = enemyDeaths.ids();
@@ -3038,8 +3045,6 @@ void SpawnedCreatures::worldReset() {
     protectedDead.clear();
     dead.clear();
     seenAlive.clear();
-    if (storedZones)
-        nativesaves::resetWorld(*storedZones);
 }
 
 void SpawnedCreatures::keepReceived(const cwnet::WorldEvents &received) {

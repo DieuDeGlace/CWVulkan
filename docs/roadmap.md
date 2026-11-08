@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Incoming different-day clock messages reset both death IDs and retained
+  source state before scalar stores, preserving reward IDs, loaded physical
+  payloads and residents. A real client/packet/source fixture reproduces two
+  prior failures and now passes same/backward-day, signed victim-ID, duplicate
+  event, peer and lifetime cases. Full viewed packet-dispatch timing and untraced
+  writers/guards remain open. See the
+  [identifier contract](specs/steam-world-identifier-state-writers-20261108.md).
+
 - [x] Generated host persistence follows the source-loader unsigned wall clock,
   strict >60,000-ms gate, cycle-sample baseline and one normal-exit capture.
   Owned metadata and retained-map snapshots precede serialization outside the

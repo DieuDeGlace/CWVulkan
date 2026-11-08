@@ -109,7 +109,7 @@ void MirrorSide::startOver() {
 }
 
 void MirrorSide::dayChange(int32_t newDay) {
-    world.clearDead(); // the world's side of 0x2c34c0: its dead set (a mirror keeps no zone states)
+    world.resetWorldState(); // packet8 resets retained metadata before its new scalar stores
     if (dayChanged)
         dayChanged(newDay);
 }

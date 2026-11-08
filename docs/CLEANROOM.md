@@ -2755,3 +2755,15 @@ merge source-binding archives into the identifier sets. Backend durability,
 alternate callers/writers, character-worker scheduling, complete initialization
 and native guard coverage remain open; captured and optional respawn policies
 retain their separate scope. No original code or owner output is published.
+
+## Viewed metadata reset, 2026-11-08
+
+The original-only author finalized and held the identifier runtime-writer prose
+before its research context was lost during workspace reload. The implementer
+read the entire held file, froze its original-byte hash and used owned source
+only. A real client/source fixture reproduced two missing retained-state reset
+failures; metadata reset now has a distinct shared operation, preserving reward
+IDs and loaded lifetimes. Signed victim-ID and packet peer/clock checks retain
+their bounded scope. A fresh isolated author is separately tracing complete
+viewed dispatch phases; no unfinished phase output is accepted. Other writers,
+individual erasure, universal guards and broad native runtime parity remain open.

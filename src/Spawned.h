@@ -152,8 +152,11 @@ class SpawnedCreatures {
     void setClock(int32_t day, float timeOfDayMs) { auto guard = sourceGuard(); dayCount = day; dayMs = timeOfDayMs; }
     void setClockRate(double gameMsPerMs) { clockRate = gameMsPerMs; }
     void advanceClock(double dtMs);
-    // The world reset (native-saves.md §5.6, 0x2c34c0, the world's side): the dead set and the
-    // stored zone states emptied, every creature not a player let go (they are made again).
+    // Metadata reset (0x2c34c0): clear World+0x20/+0x10, preserving reward IDs,
+    // day/time, live residents and physical source payloads. Clock packets use this boundary.
+    void resetWorldState();
+    // Authoritative day/reset notices additionally release non-player actors; optional
+    // enemy-respawn policy retains its configured timers across that broader cleanup.
     void worldReset();
     const std::set<int64_t> &worldDeadSet() const { return worldDead; }
     void setEnemyRespawn(enemyrespawn::Settings settings);

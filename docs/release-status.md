@@ -1,5 +1,40 @@
 # Source review checkpoint — 2026-11-08
 
+## Viewed World metadata reset - 2026-11-08
+
+An incoming clock message whose day differs now clears both the viewed World's
+death identifiers and retained source map before the new day/time are stored.
+Previously the mirror cleared only death IDs, leaving retained zone state behind.
+Same-day messages update the time without resetting metadata; a backward day
+change reaches the same reset boundary as a forward change.
+
+The reset preserves reward-marker IDs, current day/time until the later stores,
+live residents and actual loaded source identity, arrays, flags and summaries.
+The broader authority reset reuses this metadata operation while retaining its
+separate actor cleanup and optional enemy-respawn policy.
+A real loopback client and physical-source fixture reproduced two prior failures.
+It now passes those cases and checks reset-before-clock order, same-day admission,
+backward days, peer rejection, reward retention and loaded payload/resident
+survival. Packet7 checks cover deferred victim-ID application, zero/negative/
+minimum signed64 values, duplicate membership and preservation of all event
+records independently of the credit identifier. The initial fixture compilation
+used a constant private to another test and was corrected without changing an
+engine predicate. Main-frame packet-dispatch timing remains separate work.
+
+All five targets build. Focused and full required-owner CPU checks pass without
+skips, including the earlier persistence and optional respawn groups. Vulkan
+checks pass: 92 shader, 2 camera, 102 GUI, 17 map, 14 native-water, shared-water
+and Alpha-scenery groups. SDK independence passes. No new live scene capture was
+needed for this metadata change; the earlier startup images retain their own
+executable/evidence scope. Native runtime/save-travel acceptance remains open.
+
+The isolated original-only author held the complete
+[identifier-writer contract](specs/steam-world-identifier-state-writers-20261108.md).
+The implementer read that code-free prose and owned source only; its original-byte
+hash is retained privately. Individual-ID erasure, other reward producers,
+untraced callers/guards and broader native runtime parity remain unresolved.
+Alpha terrain/lighting, Omega water and the other enhancements remain supported.
+
 ## Host retained-state persistence - 2026-11-08
 
 Generated host sessions now capture state from the source loader's own wall

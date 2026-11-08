@@ -245,6 +245,16 @@ keeps its explicit archive adapter. See the [persistence contract](specs/steam-h
 and [checkpoint](release-status.md) for ownership/failure tests, evidence limits
 and remaining character scheduling, durability and native runtime acceptance.
 
+## Incoming day changes and retained state
+
+The viewed metadata reset clears its death-ID set and retained source map before
+a different-day clock message installs the new scalar values. Same-day messages
+leave those collections intact. The separate reward-marker set, loaded sources
+and their current arrays/flags/summaries survive; later physical retirement can
+record those payloads again through its normal boundary. This does not replace
+the authority's separate actor cleanup or establish a complete packet-dispatch
+schedule. See the [identifier contract](specs/steam-world-identifier-state-writers-20261108.md).
+
 ## Optional diagnostics
 
 Set `CW_PROFILE_MESH` to a private CSV path before starting CubeVulkan. The parent
