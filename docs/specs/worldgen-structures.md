@@ -339,11 +339,23 @@ Otherwise when (dx ≤ 1 or dy ≤ 1) and dx ≤ e and dy ≤ e → 0; when cw(1
 a = R(c1, 0x6b0e8) & 1, b = R(c1, 0xb2234) & 1, true for (bx′, ay) when a, for (ax, ay + dy′) when
 b, for (bx′, ay + dy′) when a or b.
 
-**15. Kind 2.** (bx, by) = (⌊cx/3⌋, ⌊cy/3⌋), point (48 bx + 16, 48 by + 16), w′ = place weight (2,
-big, warped distance to it). When w′ > 0.5: (ax, ay) → 24; within |·| < 2 of it → the side pair
-test as in rule 13 (returning (R(cx, cy, 0x23b0d) & 1) + 22), and nothing else for those cells;
-farther: when R(bx, by, 0x49f7f4) & 3 ≠ 0 and the roads at that point (kind 2, w′) < 0.4 →
-R(bx, by, 0x4f60c1) mod 7 + 27.
+**15. Kind 2.** The independent
+[branch-control contract](steam-category-two-cell-branch-control-flow-20261108.md)
+is authoritative for this route. It supersedes the category-two threshold and
+miss interpretation in the earlier complete classifier handoff. The query point
+is (48 bx + 16, 48 by + 16), with bx and by the signed floors of the original
+cell coordinates divided by three. Its own displaced distance gives the weight;
+the stored record weight at Q is a different operand. A weight at most 0.5 skips
+all category-two marker work and continues to the shared canonical lookup.
+
+Only a weight strictly greater than 0.5 admits the centre and selected side-pair
+markers, as in rule 13. A missed point inside the strict-less-than-two box
+continues to the shared canonical lookup, without the outside-box query. Only an
+outside-box point can admit the group hash and road predicate. A road value
+strictly below stored binary32 0.4 returns the unsigned-remainder family
+27 through 33. All other category-two misses continue. The independently
+specified comparison order also bounds unordered cases; no native numerical
+provider or floating-point environment is inferred.
 
 **16. Kind 7.** d²(ax, ay) < 16 → 52 at (ax, ay), else 0.
 
@@ -421,11 +433,21 @@ double.
 
 ### 6.4 Town helpers
 
+The complete [cell-classifier contract](steam-cell-object-classifier-and-world-table-admission-20261108.md)
+clarifies the selected pre-canonical query routes. Their hash remainders by five,
+seven, ten, three, one thousand and eleven are unsigned where individually
+specified there, including wrapped-negative hash words. Signed coordinate floors,
+truncation quotients and coordinate remainders remain distinct. The successful
+ordinary table shape is nonempty with sixteen entries per row; CubeVulkan's
+in-window empty-vector return of zero is a safe engine policy, not native malformed-state behavior.
+
 **Town block 0x2af7b0** (cx, cy, kind): 0 unless kind 5. (bx, by) = (⌊cx/3⌋, ⌊cy/3⌋); the place
 cell (px, py) = 2⌊⌊16 cx / 1024⌋ / 2⌋ (and y), big = 0x36160 (px, py), centre c = 0x362a0 (px,
 py, big); (ox, oy) = (⌊⌊c.x/16⌋/3⌋ − 2, ⌊⌊c.y/16⌋/3⌋ − 2). When ox ≤ bx < ox + 4 and oy ≤ by <
-oy + 4: v = layout[rnd(H(px, py)) mod 64] entry (row by − oy, column bx − ox) (tables T10);
-when v ≠ 0 return it. Then d² = warped distance from c to (48 bx + 16, 48 by + 16); r² = 250000
+oy + 4: select the current World table using the unsigned hash remainder by the
+current outer-vector count; its entry is row by − oy, column bx − ox (tables T10).
+The count is 64 after the ordinary fresh configuration; the query does not hard-code it.
+A nonzero selected entry returns immediately. Then d² = warped distance from c to (48 bx + 16, 48 by + 16); r² = 250000
 (big) or 62500; d² ≥ r² → 0; w = (1 − d²/r²)²; 0.5 > w or the roads (that point, 5, w) > 0.4 →
 0; v = R(bx, by, 0x11b98f) mod 1000; when float of v > w × 800, return 13 when v is even, else 0;
 otherwise 1.

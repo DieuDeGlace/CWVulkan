@@ -1,5 +1,48 @@
 # Source review checkpoint — 2026-11-08
 
+## Cell-object continuation and current World tables - 2026-11-08
+
+An unmatched nearby category-two marker now continues to the shared canonical
+lookup instead of returning zero. The existing strict weight-greater-than-0.5
+gate is retained; only points outside the nearby box can run the group/road
+query. Unsigned remainders now preserve the specified rare hash tail in anchors,
+town/marker choices and even-group canonical selection. Town queries use the
+current outer-table count, retain row-major entries and still run fallback for
+zero slots or out-of-window groups. Empty in-window storage returns zero as an
+explicit safe engine policy; this is not native malformed-vector behavior.
+
+The initial full classifier handoff reversed the category-two threshold. A full
+recorded-cell check caught 29 mismatches, so that attempt was retained and
+excluded. A separately held original-only branch-control audit independently
+resolved both the threshold and nearby-miss continuation. Both complete handoffs
+remain unchanged for provenance. The
+[branch-control contract](specs/steam-category-two-cell-branch-control-flow-20261108.md)
+supersedes the category-two paragraphs in the
+[earlier classifier handoff](specs/steam-cell-object-classifier-and-world-table-admission-20261108.md);
+the latter's bounded table/unsigned facts remain the basis for those paths.
+The source author received no implementation, tests, captures or results.
+
+An exact owned published CellObjects translation unit, recompiled privately with
+otherwise unchanged providers, reproduces seven supported failures: two anchors,
+two table counts, one rare canonical choice and two nearby misses. This is not a
+historical whole-executable or original-game run. The corrected build matches all
+60,000 recorded cells, and expanded focused checks, all five targets, full
+required-owner CPU without skips, every Vulkan group and SDK independence pass.
+Actual writable/read-only native and read-only Alpha/Omega creation pass, including
+the complete first record and unchanged read-only databases. Matched native and
+Alpha/Omega scenes pass in 45.266 and 83.359 seconds; both images are inspected
+with the same settings, 150-second deadlines/readiness and Alpha profile identity.
+
+Alpha terrain/lighting, Omega water and existing extensions remain implemented.
+The oversized projected minimap is unchanged; native pixel equality, performance,
+cold-start reliability and whole-world coverage are not established here.
+Original-game reference launches exited before capture with and without mods;
+their cause remains unproved. Original saves, Mods, ReShade and root settings/logs
+were restored and byte-verified, including after the engine checks. No owner
+content or private evidence is published. Broader gameplay, provider/concurrency,
+original-peer/two-account, hardware/fresh-install and provenance gates stay open.
+
+
 ## Material-only terrain probe optimization - 2026-11-08
 
 Material probes in the native terrain mesher now skip the solved-red overlay

@@ -3004,3 +3004,30 @@ claimed as a new contract for this refactor. Fixture timing results are bounded;
 the earlier native readiness miss and broader provenance/parity gates stay open.
 Source researchers have not seen implementation, tests or timing results. Owner
 content and private evidence remain outside both packages and GitHub.
+
+
+## Cell-object branch correction and World table queries, 2026-11-08
+
+The unexposed source-side author held the complete cell-classifier/table prose,
+then independently re-derived category-two control flow from complete original
+instruction bodies without reading the earlier handoff or receiving implementation,
+test or owner-output feedback. The implementer read both entire held artifacts,
+froze their hashes and used owned code only. The initial threshold interpretation
+failed the unchanged 60,000-cell comparison in 29 places and was retained/excluded.
+The independent
+[branch-control contract](specs/steam-category-two-cell-branch-control-flow-20261108.md)
+is authoritative for category two and supersedes that part of the
+[earlier full handoff](specs/steam-cell-object-classifier-and-world-table-admission-20261108.md).
+Neither held artifact was silently edited.
+
+The final change preserves the existing weight gate, continues an unmatched nearby
+point through canonical selection, retains outside-box-only query admission, uses
+the specified unsigned reductions and indexes the current table count. Typed
+empty-vector safety and existing immutable/provider bindings remain engine policies.
+Seven supported failures in a privately recompiled owned baseline unit are distinct
+from the eight rejected initial specification expectations. All five targets,
+focused checks, full required-owner CPU without skips, Vulkan, SDK independence,
+three actual creation cases and both inspected native/Alpha/Omega scenes pass.
+No whole native/provider/thread or visual parity follows. Owner state was restored
+and byte-verified; code, content, captures, saves and private evidence remain
+separated. Only the audited source payload is intended for GitHub.

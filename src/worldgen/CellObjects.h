@@ -28,7 +28,8 @@ int placeLandmark(int kind, Int2 placeCell);
 // --- Town helpers (§6.4) -------------------------------------------------------------------
 
 // The town block of a cell (0x2af7b0): 0 unless kind 5; else the layout's entry (2..11), 13 for a
-// farm block, 1 for a plain town block, 0 outside.
+// farm block or 1 for a plain town block. Zero table slots and out-of-window
+// groups still run fallback. An empty in-window table vector safely returns zero.
 int townBlock(const WorldValues &world, int32_t cx, int32_t cy, int kind);
 // A town block's corner cell (0x2b5760).
 Int2 blockCorner(int32_t bx, int32_t by);

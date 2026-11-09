@@ -1,4 +1,6 @@
-// The cell objects, written from docs/specs/worldgen-structures.md §6 (rules cited by number).
+// Cell objects: worldgen-structures.md §6 and the complete independent
+// steam-cell-object-classifier-and-world-table-admission-20261108.md contract.
+// Category two uses the independent steam-category-two-cell-branch-control-flow-20261108.md correction.
 #include "worldgen/CellObjects.h"
 
 #include "worldgen/BlockColours.h"
@@ -86,8 +88,8 @@ Int2 structureAnchor(int32_t px, int32_t py, int kind, bool big) {
     Int2 a{8 * floorDiv(p.x, 7) + 4, 8 * floorDiv(p.y, 7) + 4};
     const bool fixed = kind == 9 || kind == 42 || kind == 44 || kind == 45 || kind == 46 || kind == 47;
     if (!fixed) {
-        a.x += (cellRandom(px, py, 0x8a4d5) % 5) * 8 - 16;
-        a.y += (cellRandom(px, py, 0x47940) % 5) * 8 - 16;
+        a.x += (int32_t(cellRandomUnsigned(px, py, 0x8a4d5) % 5u)) * 8 - 16;
+        a.y += (int32_t(cellRandomUnsigned(px, py, 0x47940) % 5u)) * 8 - 16;
     }
     const int32_t span = big ? 127 : 63;
     auto clampTo = [span](int32_t v, int32_t lo) { return v < lo ? lo : (v > lo + span ? lo + span : v); };
@@ -124,7 +126,11 @@ int townBlock(const WorldValues &world, int32_t cx, int32_t cy, int kind) {
     const Int2 c = worldgen::cellPoint(px, py, big);
     const int32_t ox = floorDivBy(cellOfBlock(c.x), 3) - 2, oy = floorDivBy(cellOfBlock(c.y), 3) - 2;
     if (ox <= bx && bx < ox + 4 && oy <= by && by < oy + 4) {
-        const auto &layout = world.townLayouts[random(cellKey(px, py)) % 64u];
+        // Unconfigured storage is an engine safety policy; native valid inputs
+        // require a nonempty outer vector and sixteen entries per selected row.
+        if (world.townLayouts.empty())
+            return 0;
+        const auto &layout = world.townLayouts[random(cellKey(px, py)) % world.townLayouts.size()];
         const int32_t v = layout[(size_t)((by - oy) * 4 + (bx - ox))];
         if (v != 0)
             return v;
@@ -138,7 +144,7 @@ int townBlock(const WorldValues &world, int32_t cx, int32_t cy, int kind) {
     w = w * w;
     if (0.5f > w || roads(x, y, 5, w) > 0.4f)
         return 0;
-    const int32_t v = cellRandom(bx, by, 0x11b98f) % 1000;
+    const uint32_t v = cellRandomUnsigned(bx, by, 0x11b98f) % 1000u;
     if ((float)v > w * 800.0f)
         return v % 2 == 0 ? 13 : 0;
     return 1;
@@ -248,8 +254,8 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
     // 2. A place landmark.
     if (k != 0 && w > 0.5f) {
         if (const int m = placeLandmark(k, c1)) {
-            const int32_t mx = cellRandom(c1, 0x890d5) % 7 - 3 + cellOfBlock(p.point.x);
-            const int32_t my = cellRandom(c1, 0x10275) % 7 - 3 + cellOfBlock(p.point.y);
+            const int32_t mx = int32_t(cellRandomUnsigned(c1.x, c1.y, 0x890d5) % 7u) - 3 + cellOfBlock(p.point.x);
+            const int32_t my = int32_t(cellRandomUnsigned(c1.x, c1.y, 0x10275) % 7u) - 3 + cellOfBlock(p.point.y);
             if (cx == mx && cy == my)
                 return m;
             if (sq(cx - mx) + sq(cy - my) < sq(cellReach(m) + 1))
@@ -263,12 +269,12 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
     if (k == 5) {
         const int t = townBlock(*world_, cx, cy, k);
         if (t == 0) {
-            if (cx % 2 == 0 && cy % 2 == 0 && cellRandom(cx, cy, 0x723db) % 10 == 0 && w > 0.5f)
+            if (cx % 2 == 0 && cy % 2 == 0 && cellRandomUnsigned(cx, cy, 0x723db) % 10u == 0 && w > 0.5f)
                 return warmth(neighbourhood(q.x, q.y), k, w) > 0.75f ? 7 : 6;
         } else if (t == 13) {
             if (forestRegion(neighbourhood(q.x, q.y), k, w) > 0.5f)
                 return 34;
-            return cellRandom(bx, by, 0x4f60c1) % 7 + 27;
+            return int(cellRandomUnsigned(bx, by, 0x4f60c1) % 7u) + 27;
         } else if (posMod(cx, 3) != 2 && posMod(cy, 3) != 2) {
             const Int2 g = blockCorner(bx, by);
             const bool corner = cx == g.x && cy == g.y;
@@ -283,7 +289,7 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
                 if (t == 7 && u == 1)
                     return 26;
                 if (u < (t == 7 ? 4 : 3) || (cellRandom(cx, cy, 0xfcc8) & 1)) {
-                    switch (cellRandom(cx, cy, 0x310c07) % 3) {
+                    switch (cellRandomUnsigned(cx, cy, 0x310c07) % 3u) {
                     case 0: return 26;
                     case 1: return corner ? 24 : 22;
                     case 2: return 25;
@@ -291,10 +297,10 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
                     }
                 }
             } else {
-                const bool house = corner || (cx == g.x && cellRandom(bx, by, 0x45982d) % 3 == 0) ||
-                                   (cy == g.y && cellRandom(bx, by, 0x43dcd) % 3 == 0) || (cellRandom(bx, by, 0xf794) & 7) == 0;
+                const bool house = corner || (cx == g.x && cellRandomUnsigned(bx, by, 0x45982d) % 3u == 0) ||
+                                   (cy == g.y && cellRandomUnsigned(bx, by, 0x43dcd) % 3u == 0) || (cellRandom(bx, by, 0xf794) & 7) == 0;
                 if (house)
-                    return corner ? 24 : cellRandom(cx, cy, 0x12a915) % 10 == 0 ? 23 : 22;
+                    return corner ? 24 : cellRandomUnsigned(cx, cy, 0x12a915) % 10u == 0 ? 23 : 22;
             }
         }
     }
@@ -402,10 +408,13 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
         if (k == 2) {
             if (atCentre)
                 return 24;
-            if (near)
-                return sidePair(cx, cy, c1, ax, ay) ? (cellRandom(cx, cy, 0x23b0d) & 1) + 22 : 0;
+            if (near) {
+                if (sidePair(cx, cy, c1, ax, ay))
+                    return (cellRandom(cx, cy, 0x23b0d) & 1) + 22;
+                break; // A nearby miss continues; it does not enter the outside-box query.
+            }
             if ((cellRandom(bx, by, 0x49f7f4) & 3) != 0 && roads(x, y, 2, wb) < 0.4f)
-                return cellRandom(bx, by, 0x4f60c1) % 7 + 27;
+                return int(cellRandomUnsigned(bx, by, 0x4f60c1) % 7u) + 27;
             break;
         }
         int32_t tx = 8 * floorDiv(p.point.x, 7) + 4, ty = 8 * floorDiv(p.point.y, 7) + 4;
@@ -445,11 +454,11 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
         const float wb = placeWeight(12, big, warpedDist2(lp, mx, my));
         if (!(wb > 0.5f))
             break;
-        if (!(cx % 5 == 0 || cy % 5 == 0 || signedRandom(cellKey(cx / 5, cy / 5)) % 5 == 0))
+        if (!(cx % 5 == 0 || cy % 5 == 0 || random(cellKey(cx / 5, cy / 5)) % 5u == 0))
             return 0;
         if (groundHeight(mx, my, 0) < 1.0f || roads(mx, my, 12, wb) > 0.5f)
             return 0;
-        return (cx + 3 * cy) % 5 == 0 ? 43 : 41;
+        return wrapAdd(cx, wrapMul(3, cy)) % 5 == 0 ? 43 : 41;
     }
     case 22: // 19.
         if (atCentre)
@@ -478,7 +487,7 @@ int CellObjects::compute(int32_t cx, int32_t cy) const {
         if ((qx + qy) & 1)
             type = 53;
         else
-            switch (cellRandom(l, 0x8ae21) % 11) {
+            switch (cellRandomUnsigned(l.x, l.y, 0x8ae21) % 11u) {
             case 1: type = 15, reach = 2; break;
             case 2: type = 37, reach = 2; break;
             case 3: type = 55; break;
