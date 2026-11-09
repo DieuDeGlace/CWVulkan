@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Creation retains its live actor through reset, style, Create, Help and Main
+  entry, with separate disk/list ownership and current raw commit values. Shared
+  finite copy/reset paths retain all specified gaps and separate lifetimes. Twelve
+  starter failures are fixed, with exact19/20 templates and fresh inventory/counters.
+  Expanded checks, all5/full required-owner CPU without skips/Vulkan/SDK, native
+  writable/read-only and Alpha/Omega read-only creation, four raw-load cases and
+  both inspected scenes pass; SQLite verifies first-write order/full blob. Alpha
+  profile unchanged. Home/provider/scheduling/crafting and broader acceptance stay
+  open. See [the checkpoint](release-status.md#native-creation-state-and-commit-ownership---2026-11-08).
+
 - [x] Client timeout/fallback uses fresh matching-dispatch/connect samples and
   strict unsigned age above5000 after the fixed batch. Fallback bypasses expiry
   and ordinary sends; shared process32/request1000 clocks retain distinct readings

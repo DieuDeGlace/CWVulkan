@@ -970,6 +970,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     std::vector<CharacterEntry> recordedOnly = listCharacters(assets.gameDir());
     front.recorded = &recordedOnly;
     std::optional<hair::Style> createdHairStyle;
+    std::shared_ptr<const nativesaves::Character> createdNativeCharacter;
     std::optional<glm::vec3> enteredAt; // where the front screens put the player (frontend-title.md §6.1)
     std::optional<frontend::OrbitCamera> enteredCamera;
     std::optional<cameraposition::State> enteredCameraPosition;
@@ -995,6 +996,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (result.placed)
             enteredAt = result.feet;
         createdHairStyle = result.createdHairStyle;
+        if (nativePlayer && spawnedReady) createdNativeCharacter = result.createdCharacter;
         enteredCamera = result.camera;
         enteredCameraPosition = result.cameraPosition;
         characters = everyCharacter(); // (creation may have made one)
@@ -1002,6 +1004,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         for (const CharacterEntry &c : characters)
             if (c.native && c.slot == result.slot)
                 chosen = &c;
+        if (createdNativeCharacter && !chosen) {
+            CharacterEntry entry;
+            nativeprogress::entryFor(*createdNativeCharacter, result.slot, recordedOnly, sprites, entry);
+            characters.push_back(std::move(entry)); // read-only creation has no database row
+            chosen = &characters.back();
+        }
         renderSettings = renderer.settings;
     }
 
@@ -1014,23 +1022,33 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // A capture with --save-folder loads that folder's character too (read only: it writes
     // nothing back), so a test save's progress shows in the screenshot.
     const bool loading = saving || (chosen && saves.isOpen() && !saveFolder.empty() && std::isnan(startX) && !serverMode);
-    if (loading) {
+    bool retainingCreationStartup = createdNativeCharacter && spawned.playerRecord();
+    if (loading || createdNativeCharacter) {
         saves.play(*chosen);
-        auto raw = std::make_shared<nativesaves::Character>();
-        const bool had = saves.load(saveGame, saveFrame, savedWorldName, [&](const nativesaves::Item &it) {
+        const auto itemSprite = [&](const nativesaves::Item &it) {
             return spawnedReady ? spawned.itemSprite(it.data()) : std::string();
-        }, raw.get());
-        if (had && chosen->native && nativePlayer) {
-            loadedNativeCharacter = std::move(raw);
-            saveGame.level = loadedNativeCharacter->level;
+        };
+        bool had;
+        if (createdNativeCharacter) {
+            SaveGame metadata;
+            metadata.hairStyle = createdHairStyle;
+            saves.restore(saveGame, *createdNativeCharacter, metadata.text(), saveFrame, savedWorldName, itemSprite);
+            loadedNativeCharacter = createdNativeCharacter;
+            had = true;
+        } else {
+            auto raw = std::make_shared<nativesaves::Character>();
+            had = saves.load(saveGame, saveFrame, savedWorldName, itemSprite, raw.get());
+            if (had && chosen->native && nativePlayer) loadedNativeCharacter = std::move(raw);
         }
-        logLine(std::string("Save: ") + (had ? "loaded character " + std::to_string(saves.slot()) : "new character") + " of " +
-                utf8(saves.folder() / "characters.db"));
+        if (loadedNativeCharacter) saveGame.level = loadedNativeCharacter->level;
+        logLine(std::string("Save: ") + (had ? (createdNativeCharacter ? "continuing created character " : "loaded character ") +
+                std::to_string(saves.slot()) : "new character") + " of " + utf8(saves.folder() / "characters.db"));
     }
     std::array<uint8_t, 0xb0> loadedAppearance{};
     const bool hasLoadedAppearance = loadedNativeCharacter &&
         nativeprogress::appearanceOf(loadedNativeCharacter->looks, loadedAppearance);
-    spawned.restoreMapHistory(saveGame.regionHistory.value_or(std::vector<maphistory::Region>{}));
+    if (!retainingCreationStartup)
+        spawned.restoreMapHistory(saveGame.regionHistory.value_or(std::vector<maphistory::Region>{}));
     Player player;
     const bool nativeCameraStartup = useExtracted && nativePlayer;
     if (nativeCameraStartup)
@@ -1509,7 +1527,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     std::to_string(n.armor) + ", resistance " + std::to_string(n.resistance) + ", critical " +
                     std::to_string(n.critical));
         }
-        if (nativePlayer) // the native player's own record wears it too
+        if (nativePlayer && !retainingCreationStartup) // creation already owns its current live equipment
             spawned.setPlayerGear(nativeRecord(-1, nullptr), !inventoryAction);
         float fraction = playerMaxHp > 0 ? playerHp / playerMaxHp : 1;
         playerMaxHp = s.maxHp;
@@ -3494,11 +3512,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             (*characterSaveGates)[i].store(values[i], std::memory_order_release);
     };
     publishCharacterSaveGates();
-    if (loadedNativeCharacter) {
+    if (loadedNativeCharacter && !retainingCreationStartup) {
         spawned.seedPlayerSave(loadedNativeCharacter); // read-only and writable native loads share the same state path
         // Complete the selected load before entering the generation cadence.
         spawned.setPlayer(extractedWorld, player.position, heading, {}, playerHp, playerLevel,
                           player.verticalSpeed == 0 && !player.fly);
+    }
+    if (retainingCreationStartup) {
+        playerHp = spawned.playerHealth();
+        retainingCreationStartup = false;
+        logLine("Characters: retained created actor through Help and gameplay entry");
     }
     if (saving && loadedNativeCharacter && nativeInventory && spawned.physicalSourceState()) {
         auto base = loadedNativeCharacter;

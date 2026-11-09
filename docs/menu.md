@@ -175,18 +175,31 @@ Ordinary Buttons initialize their owner release/leave sequences; enter/leave ani
 instance values. Size requests are not reapplied every draw. Full GUI capture, cached mask/shine
 composition, preview creatures and wider frontend rendering comparisons remain open.
 
-**Character creation** resets the player to a level 1 warrior at the start spot. The camera is at distance 8,
-pitch 90, yaw 0.
+**Character creation** resets the retained player for a level 1 Warrior at the start spot.
+Its camera has distance 8, pitch 90 and yaw 0. Reset, home placement and fresh
+character-owned data precede the initial zero-seed style rebuild; later rebuilds
+use the current account-derived field. Separate surviving Entity state is retained.
 
-- **The look panel** is 300 × 330, at the bottom left:
-  - five rows with arrows: race (8), gender, class (4), face and haircut (wrapped by the race's counts);
-  - the 16 × 7 hair grid. Hovering a cell previews its colour on the player; a click commits it.
-- Every change rebuilds:
-  - the looks record;
-  - the appearance, through the looks routine (`worldgen::makeLooks` with the record's choices);
-  - the class's starting kit, with `srand` of the Steam account's low 32 bits and the default recipes.
-- **The name field** (`edit`) takes 2 to 15 UTF-16 units. **Create Character** appears with a valid name. It
-  writes the character with `num`/`slot`, shows the help sheet, and then the game starts.
+- The look panel is 300 × 330 at the bottom left, with race, gender, class, face
+  and haircut arrows and the 16 × 7 hair-color grid. Hover previews a color; clicking
+  commits it.
+- Each native style rebuild replaces appearance, starter equipment, six inventory
+  categories, cursor, gold/counter and HP. Templates total 19 for Warrior and 20 for
+  Ranger, Mage and Rogue. Current Entity region words stamp the randomized items.
+  AI reads the actual owned inventory; there is no per-frame preview copy.
+- The editor's button gate accepts 2–15 UTF-16 units. Create copies each unit's low
+  byte into the native name, sets level 1 and inserts the current home key, then
+  saves the live actor's current values without another heal or placement.
+- Successful persistence writes `num`, the numbered character and `slot` in order.
+  The subsequent character-list snapshot has its own identity and limited data;
+  full progress belongs to the saved/live character. Help and gameplay entry keep
+  the created actor. Backend failures and malformed/oversized names use safe engine
+  handling.
+
+See the complete [creation contract](specs/steam-new-character-initialization-and-commit-20261108.md)
+and [checkpoint](release-status.md#native-creation-state-and-commit-ownership---2026-11-08).
+Home-query closure, native callback/update scheduling, imported random-provider state
+and the full crafting refresh remain outside this bounded change.
 
 ## Ring Menu and selected Quick Item
 
@@ -361,6 +374,13 @@ features have been removed.
   are CubeVulkan's.
 
 ## Captures
+
+For a disposable automated creation check, `--menu-page create-test:NAME` fills
+the editor; the existing `--pointer X Y --click-after S` activates ordinary Create.
+A following diagnostic click closes Help through its normal callback. Use hidden
+runs with private `--save-folder` and `--settings-folder`; `--no-save` also exercises
+the owned creation handoff when no numeric record is written. This diagnostic does
+not establish physical keyboard/mouse or native scheduling behavior.
 
 `CubeVulkan.exe --menu [--menu-page characters|create|options|controls] --capture FILE.png --run-seconds N`
 makes a screenshot. Capture runs open the saves read-only and write nothing. `--save-folder DIR` points at

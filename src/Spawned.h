@@ -6,6 +6,7 @@
 #include "Extracted.h"
 #include "CreatureScene.h"
 #include "NativeAI.h"
+#include "CharacterCreation.h"
 #include "NativeUpkeep.h"
 #include "CameraPosition.h"
 #include "NativeAbility.h"
@@ -148,6 +149,12 @@ class SpawnedCreatures {
     // Caller holds the shared source World guard while invoking this owned source.
     std::function<bool(nativesaves::Character &)> playerSaveSource() const;
     void seedPlayerSave(std::shared_ptr<const nativesaves::Character>);
+    // Creation retains the live actor/registration, with owned canonical preview data.
+    bool beginCharacterCreation(std::shared_ptr<nativesaves::Character>, const charactercreation::FindHome &);
+    bool rebuildCharacterCreation(nativesaves::Character &, nativesaves::Looks, uint8_t characterClass);
+    bool confirmCharacterCreation(nativesaves::Character &, std::string_view name);
+    std::optional<charactercreation::SelectionSnapshot> creationSelectionSnapshot(const nativesaves::Character &) const;
+    void publishPlayerAccount(uint64_t account);
     void setPlayerInventorySource(nativeai::InventorySource source) {
         auto guard = sourceGuard();
         player.side.inventorySource = std::move(source);

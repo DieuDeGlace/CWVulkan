@@ -2928,3 +2928,28 @@ disposable load cases and both inspected native/Alpha/Omega scenes pass with
 unchanged settings, deadlines and Alpha profile. Provider resolution, original thread/socket lifecycle,
 other writers and broad original-peer/provenance acceptance remain open. No owner
 content, original code, private evidence or memory is published.
+
+## Retained creation state and commit, 2026-11-08
+
+The unexposed original-only author independently finalized/read back/held the
+complete creation/style/first-save/list-handoff prose. The implementer read the
+whole artifact and the earlier complete finite-core-copy contract, froze both
+hashes, and used owned code only. Shared finite reset/copy/capture operations keep
+reset-alone distinct from the decoder's default assignment. Creation owns its
+canonical inventory, current actor snapshot and separately constructed list data.
+No original or reconstruction implementation was inspected.
+
+Twelve pre-change starter failures were reproduced. Exact copied/omitted-byte,
+retained-container/identity, search-boundary, zero/current seed, template/counter,
+raw/Unicode commit and disk/list tests pass. All5/full required-owner CPU without
+skips/Vulkan/SDK, actual writable/read-only native and read-only Alpha/Omega
+creation, four raw-load cases and both inspected scenes pass. Private SQLite
+triggers verify count/numeric/slot order and complete first-record parsing; no
+owner files or private evidence are published. Alpha's profile remains unchanged.
+
+Safe name bounds, typed unwritten defaults, backend failure recovery, guarded
+snapshot/serialization ownership and startup adapters are explicit engine policies.
+Native uninitialized values and unsafe race behavior are not reproduced. Complete
+home/appearance/crafting routes, provider/shared random state, input/update/draw/
+Help interleavings and broad gameplay/native-pixel/provenance acceptance remain
+open. The separate home-search contract and scheduling audit are future work.

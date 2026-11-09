@@ -117,6 +117,19 @@ A character keeps:
 
 Fields CubeVulkan does not model are kept as they were read.
 
+**Creating a native character.** Style rebuilding starts a fresh six-category
+starter aggregate, including its cursor and both counters. Create saves current
+live position, raw HP, experience, specialization, inventory, buffs and full
+character-owned collections after setting the name/level and inserting the home
+key. It does not reload or reheal the player. The first successful writes are
+`num`, the numeric record and `slot`; no atomic transaction/durability guarantee
+is inferred. A separately constructed list snapshot keeps only the specified
+header/templates and actor/inventory fields. The created actor continues through
+Help and gameplay entry. Read-only creation keeps owned state without a new row;
+actual native and Alpha/Omega cases leave both databases unchanged. See the
+[creation contract](specs/steam-new-character-initialization-and-commit-20261108.md)
+and [checkpoint](release-status.md#native-creation-state-and-commit-ownership---2026-11-08).
+
 **Loading a native character.** Writable and read-only sessions use the same raw
 decoded character. Saved fixed coordinates, including the origin, remain valid;
 health is not clamped or reconstructed from a fraction. Zero, negative, signed-zero

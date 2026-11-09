@@ -278,8 +278,8 @@ void startingKit() {
     FRONT_CHECK(i32(rogue.equipment[6], 4) == 3 && i32(rogue.equipment[7], 4) == 3 && rogue.equipment[2][0x1c] == 28);
     const nativesaves::Character mage = kitFor(3);
     FRONT_CHECK(i32(mage.equipment[7], 4) == 10 && mage.inventory[0][0].item[0x1c] == 11 && mage.inventory[0][1].item[0x1c] == 11);
-    // Recipes: the seven of argument 1, plus 7 + 2, the class's one and four of argument 0.
-    FRONT_CHECK(w.recipes.size() == 7 + 9 + 4 && mage.recipes.size() == 7 + 9 + 1 + 4);
+    // Held creation contract: seven common, 7 + 2, the class's one and three materials.
+    FRONT_CHECK(w.recipes.size() == 19 && mage.recipes.size() == 20);
     nativesaves::Character none;
     addDefaultRecipes(none, 1);
     FRONT_CHECK(none.recipes.size() == 7 && none.recipes[0][0x14] == 1);
@@ -291,7 +291,7 @@ void startingKit() {
     modified[0x1d] = 7;
     loaded.recipes = {modified};
     addDefaultRecipes(loaded, 0);
-    FRONT_CHECK(loaded.recipes.size() == 21 && loaded.recipes.front() == modified && loaded.recipes[1] == nativesaves::makeItem(1,1));
+    FRONT_CHECK(loaded.recipes.size() == 20 && loaded.recipes.front() == modified && loaded.recipes[1] == nativesaves::makeItem(1,1));
     loaded.recipes[1][1] = 0x55;
     loaded.recipes[1][0x16] = 0x66;
     loaded.recipes[1][0x90] = 0x77;

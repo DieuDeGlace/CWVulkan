@@ -378,6 +378,7 @@ void giveStartingKit(nativesaves::Character &c, uint32_t account, nativesaves::C
     talkgen::CRand rand;
     rand.seed(account);
     c.equipment = {};
+    c.gold = 0; c.fieldAb0 = 0;
     inventoryslots::Inventory inventory;
     inventory.initializeKitTabs();
     if (c.classType >= 1 && c.classType <= 4) {
@@ -431,7 +432,7 @@ void addDefaultRecipes(nativesaves::Character &c, int argument) {
         add(0xb, 9, 0x1a);
         add(0xb, 9, 0x1a); // (asked twice by the game; the second changes nothing)
     }
-    for (int material : {1, 2, 11, 12})
+    for (int material : {1, 2, 11})
         add(0xb, 10, material);
 }
 

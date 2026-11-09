@@ -1774,6 +1774,44 @@ void SpawnedCreatures::seedPlayerSave(std::shared_ptr<const nativesaves::Charact
     playerSaveSeed = std::move(seed);
     applyPlayerSaveSeed();
 }
+bool SpawnedCreatures::beginCharacterCreation(std::shared_ptr<nativesaves::Character> data,
+                                               const charactercreation::FindHome &home) {
+    auto guard = sourceGuard();
+    if (!nativePlayer || !hasPlayer || !data || !home) return false;
+    playerSaveSeed.reset(); savedPlacementPending = false;
+    player.side.inventorySource = [owner = data](const nativeai::InventoryVisitor &visit) {
+        for (auto &tab : owner->inventory)
+            for (auto &stack : tab)
+                if (!visit({&stack.count, stack.item.data()})) return;
+    };
+    charactercreation::begin(player.record, player.side, *data, home);
+    regionHistory = maphistory::History({});
+    contextState = {}; vehicleSelection = {}; // fresh CharacterData-derived caches
+    placed = true;
+    return true;
+}
+bool SpawnedCreatures::rebuildCharacterCreation(nativesaves::Character &data, nativesaves::Looks looks, uint8_t cls) {
+    auto guard = sourceGuard();
+    if (!nativePlayer || !hasPlayer) return false;
+    charactercreation::rebuild(player.record, player.side, data, looks, cls);
+    return true;
+}
+bool SpawnedCreatures::confirmCharacterCreation(nativesaves::Character &data, std::string_view name) {
+    auto guard = sourceGuard();
+    if (!nativePlayer || !hasPlayer) return false;
+    charactercreation::confirm(player.record, player.side, data, name);
+    data.regionHistory = regionHistory.snapshot();
+    return true;
+}
+std::optional<charactercreation::SelectionSnapshot> SpawnedCreatures::creationSelectionSnapshot(const nativesaves::Character &data) const {
+    auto guard = sourceGuard();
+    if (!nativePlayer || !hasPlayer) return {};
+    return charactercreation::selectionSnapshot(player.record, player.side, data);
+}
+void SpawnedCreatures::publishPlayerAccount(uint64_t account) {
+    auto guard = sourceGuard();
+    if (nativePlayer && hasPlayer) charactercreation::publishAccount(player.record, account);
+}
 void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
     auto guard = sourceGuard();
     if (nativePlayer && hasPlayer) {
@@ -1784,21 +1822,7 @@ void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
 std::function<bool(nativesaves::Character &)> SpawnedCreatures::playerSaveSource() const {
     return [owner = playerStorage](nativesaves::Character &out) {
         if (!owner->ready) return false;
-        const auto &r = owner->creature.record;
-        std::memcpy(out.position.data(), r.data() + 0x10, 24);
-        std::memcpy(out.orientation.data(), r.data() + 0x28, 12);
-        out.health = get<float>(r, 0x180);
-        out.level = get<int32_t>(r, 0x144);
-        out.experience = get<int32_t>(r, 0x148);
-        out.classType = r[0x14c]; out.specialization = r[0x14d];
-        out.field9a4 = get<float>(r, 0x9a4); out.field9a8 = get<float>(r, 0x9a8);
-        std::memcpy(out.equipment.data(), r.data() + 0x278, 11 * nativesaves::ITEM_SIZE);
-        const auto first = r.begin() + 0x958, last = first + 16;
-        out.name.assign(first, std::find(first, last, uint8_t(0)));
-        std::memcpy(out.homeCell.data(), r.data() + 0x1d0, 8);
-        out.buffs.clear();
-        out.buffs.reserve(owner->creature.side.buffs.size());
-        for (const auto &buff : owner->creature.side.buffs) out.buffs.push_back({buff});
+        characterstate::capture(owner->creature.record.data(), owner->creature.side, out);
         out.regionHistory = owner->history.snapshot();
         return true;
     };

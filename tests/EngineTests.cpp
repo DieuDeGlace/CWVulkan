@@ -214,6 +214,7 @@ int objectClockTests(); // tests/ObjectClockTests.cpp
 int physicalSourceStateTests(); // tests/PhysicalSourceStateTests.cpp
 int nativePersistenceTests(); // tests/NativePersistenceTests.cpp
 int worldIdentifierStateTests(); // tests/WorldIdentifierStateTests.cpp
+int characterCreationTests(); // tests/CharacterCreationTests.cpp
 int clientTimingTests(); // tests/ClientTimingTests.cpp
 int viewedNetworkPhaseTests(); // tests/ViewedNetworkPhaseTests.cpp
 int worldClockTests(); // tests/WorldClockTests.cpp
@@ -9550,6 +9551,8 @@ int main(int argc, char **argv) {
         if (a.locate(""))
             worldgen::loadCreatureTables(spawnsDir(a.gameDir()));
     }
+    if (argc == 2 && std::string(argv[1]) == "charactercreation")
+        return characterCreationTests();
     if (argc == 2 && std::string(argv[1]) == "clienttiming")
         return clientTimingTests();
     if (argc == 2 && std::string(argv[1]) == "net")
@@ -10891,6 +10894,7 @@ int main(int argc, char **argv) {
     failures += physicalSourceStateTests();
     failures += nativePersistenceTests();
     failures += worldIdentifierStateTests();
+    failures += characterCreationTests();
     failures += clientTimingTests();
     failures += viewedNetworkPhaseTests();
     failures += worldClockTests();

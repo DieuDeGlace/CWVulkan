@@ -1,5 +1,51 @@
 # Source review checkpoint — 2026-11-08
 
+## Native creation state and commit ownership - 2026-11-08
+
+New selection now resets the retained live Entity without applying the separate
+load decoder's default-core assignment. Identity, separate sets/ranges, active
+item, surviving bookkeeping and omitted widths remain intact. Reset and preliminary
+HP/equipment precede home search; fresh character-owned data follows placement.
+The immediate starter rebuild uses the reset zero seed. Later styles use the
+current identifier's low word and surviving region operands. Account publication
+is a separate ordinary update step.
+
+Style changes replace the starter inventory, cursor, counters, equipment and
+freshly computed HP. The exact template list has 19 entries for Warrior and 20
+for the other classes; the previous extra material was incorrect. Creation's AI
+visits the current owned inventory directly. A shared finite copy/reset/capture
+path avoids separate load/creation definitions and per-frame inventory snapshots.
+The complete core-copy regression covers 2,302 copied and 114 omitted bytes.
+
+Create now captures the current actor's raw position, HP, experience,
+specialization and buffs. It sets the name and level and inserts the live home
+key without another heal or placement. Ordinary names narrow each UTF-16 unit to
+its low byte, including the first zero-byte terminator; the engine bounds oversized
+or malformed input safely. The successful writes remain count, numeric record,
+then selected slot. Disk receives full character-owned data; the later list
+snapshot has its own Entity identity/defaults and copies only the specified core,
+header/templates, inventory and buffs. The live actor survives Help and Main
+adopts its current owned data through a separate creation path.
+
+Twelve pre-change starter failures were reproduced. Expanded reset/copy/seed/
+canonical-inventory/raw-commit/Unicode/disk/list checks, all five targets, full
+required-owner CPU without skips, every Vulkan group and SDK independence pass.
+Actual hidden writable and read-only creation pass; SQLite tracing verifies the
+first three writes and the complete first blob. Alpha/Omega read-only creation
+also passes. Both read-only runs leave their databases unchanged. Four existing
+raw-load cases pass. Matched native and Alpha/Omega scenes pass in 42.625 and
+82.438 seconds, with both images inspected and unchanged Alpha profile identity.
+
+The implementer read the complete held
+[creation contract](specs/steam-new-character-initialization-and-commit-20261108.md)
+and [finite core-copy contract](specs/steam-selected-character-default-core-copy-20261108.md);
+both hashes remain frozen. Safe backend recovery, typed defaults for unwritten
+values, serialization ownership and engine startup boundaries remain adapters.
+Full home-query/appearance/crafting closure, imported provider/global random state,
+native update/input/draw/Help scheduling and broader gameplay/provenance acceptance
+remain open. These checks do not establish native pixels, performance or reliable
+cold-start timing. Alpha terrain/lighting and Omega water remain implemented.
+
 ## Client timeout and outgoing clock admission - 2026-11-08
 
 The client now keeps connection, matching-sender, invitation and process-output

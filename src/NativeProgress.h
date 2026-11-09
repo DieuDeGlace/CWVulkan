@@ -116,6 +116,10 @@ class ProgressFile {
     // Optional raw destination retains complete native values alongside the legacy presentation view.
     bool load(SaveGame &out, const Frame &frame, const std::string &worldName,
               const std::function<std::string(const nativesaves::Item &)> &itemSprite, nativesaves::Character *raw = nullptr);
+    // Restore already-owned creation data without a second database decode or Entity reset.
+    void restore(SaveGame &out, const nativesaves::Character &, const std::string &notes,
+                 const Frame &, const std::string &worldName,
+                 const std::function<std::string(const nativesaves::Item &)> &itemSprite) const;
     // Writes the character (with `gear` and its health) and the world (day, time of day in hours,
     // the dead). False when either write failed.
     // With `world` false (the player is a guest in a friend's world) only the character is written:

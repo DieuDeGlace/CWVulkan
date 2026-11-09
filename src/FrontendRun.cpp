@@ -345,7 +345,8 @@ class Session {
     void layoutCharacterFrames();
 
     // The player on stage: the native player when the game's creatures run, else a stand-in.
-    nativesaves::Character stage;
+    std::shared_ptr<nativesaves::Character> stageOwner = std::make_shared<nativesaves::Character>();
+    nativesaves::Character &stage = *stageOwner;
     std::array<uint8_t, 0xb0> stageLooks{};
     bool stageHasLooks = false;
     glm::vec3 riderFeet{0}; // local blocks (the stand-in's)
@@ -565,6 +566,11 @@ void Session::loadList() {
 void Session::makePreviews() {
     for (Listed &l : listed) {
         Preview &p = l.preview;
+        if (p.loaded) continue;
+        if (!p.creature.empty()) {
+            p.native = p.loaded = l.playable = true;
+            continue;
+        }
         std::array<uint8_t, 0xb0> appearance;
         if (s.spawned && s.world && nativeprogress::appearanceOf(l.character.looks, appearance)) {
             p.creature = recordOf(l.character, &appearance);
@@ -880,17 +886,22 @@ nativesaves::Cell Session::startCell(std::array<int64_t, 3> &position) const {
 // (the preview colour), the appearance rebuilt and the starting kit given.
 void Session::applyLook(bool preview) {
     previewing = preview;
-    stage.classType = (uint8_t)(look.cls + 1);
     look.wrap();
-    stage.looks = look.record();
-    const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
-    const glm::vec3 feet = nativeprogress::localFeet(stage.position, frame);
-    const worldgen::Int2 region = worldgen::regionAt((int32_t)std::floor(feet.x + (float)(frame.originX >> 16)),
-                                                     (int32_t)std::floor(feet.y + (float)(frame.originY >> 16)));
-    giveStartingKit(stage, account(), {region.x, region.y});
-    stage.health = nativeprogress::maxHealth(stage);
+    const auto choices = look.record();
+    const uint8_t cls = uint8_t(look.cls + 1);
+    const bool live = s.spawned && s.spawned->rebuildCharacterCreation(stage, choices, cls);
+    if (!live) {
+        stage.classType = cls;
+        stage.looks = choices;
+        const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
+        const glm::vec3 feet = nativeprogress::localFeet(stage.position, frame);
+        const auto region = worldgen::regionAt((int32_t)std::floor(feet.x + (float)(frame.originX >> 16)),
+                                               (int32_t)std::floor(feet.y + (float)(frame.originY >> 16)));
+        giveStartingKit(stage, account(), {region.x, region.y});
+        stage.health = nativeprogress::maxHealth(stage);
+    }
     stageHasLooks = nativeprogress::appearanceOf(stage.looks, stageLooks);
-    if (s.spawned)
+    if (!live && s.spawned)
         s.spawned->setPlayerGear(recordOf(stage, stageHasLooks ? &stageLooks : nullptr));
     applyHairStyle();
 }
@@ -909,16 +920,26 @@ void Session::startCreation() {
     selectedSlot = (int)listed.size();
     camera.set(90, 0, 0, 8);
     creationShown = true;
-    std::array<int64_t, 3> position{};
-    const nativesaves::Cell home = startCell(position);
-    stage = newCharacter(home, position);
     name.clear();
     look.reset();
     hairEditor.reset(s.newHairStyle);
-    applyLook(false);
+    const auto home = [&] {
+        charactercreation::Placement placement;
+        placement.home = startCell(placement.position);
+        return placement;
+    };
+    const bool live = s.spawned && s.spawned->beginCharacterCreation(stageOwner, home);
+    if (!live) {
+        const auto placement = home();
+        stage = newCharacter(placement.home, placement.position);
+        applyLook(false);
+    } else {
+        stageHasLooks = nativeprogress::appearanceOf(stage.looks, stageLooks);
+        applyHairStyle();
+    }
     const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
-    riderFeet = nativeprogress::localFeet(position, frame);
-    if (s.spawned && s.extracted) {
+    riderFeet = nativeprogress::localFeet(stage.position, frame);
+    if (!live && s.spawned && s.extracted) {
         s.spawned->setPlayer(*s.extracted, riderFeet, 0, glm::vec3(0), stage.health, 1, true);
         if (nativeai::Creature *p = s.spawned->localPlayer()) {
             p->record[ABILITY] = 0;
@@ -1380,14 +1401,17 @@ void Session::handleClick(bool inGame) {
         if (pointerUp && nameAccepted(name) && inside(mouse, createAt, CREATE_SIZE)) {
             // Create Character (frontend-characters.md §5.8).
             creationShown = false;
-            stage.name = name;
-            nativesaves::prepareNewCharacter(stage);
-            stage.health = nativeprogress::maxHealth(stage);
+            if (!(s.spawned && s.spawned->confirmCharacterCreation(stage, name))) {
+                stage.name = charactercreation::nameBytes(name);
+                nativesaves::prepareNewCharacter(stage);
+            }
+            helpOpen = playAfterHelp = true;
             int index = (int)listed.size();
             if (!req.readOnly && s.store)
                 index = s.store->create(stage);
             if (!req.readOnly && s.store && index < 0) {
                 creationShown = true;
+                helpOpen = playAfterHelp = false;
                 log("Characters: could not save the new character");
                 return;
             }
@@ -1398,10 +1422,22 @@ void Session::handleClick(bool inGame) {
                     log("Characters: could not save the dual-tone appearance settings");
             }
             log("Characters: created \"" + name + "\" as character " + std::to_string(index));
-            outcome.slot = index;
+            Listed entry;
+            entry.character = stage;
+            if (s.spawned)
+                if (auto snapshot = s.spawned->creationSelectionSnapshot(stage)) {
+                    entry.character = std::move(snapshot->character);
+                    entry.preview.creature = std::move(snapshot->record);
+                }
+            entry.hairStyle = hairEditor.committed;
+            if (s.recorded && s.sprites)
+                entry.playable = nativeprogress::entryFor(entry.character, index, *s.recorded, *s.sprites, entry.entry);
+            listed.push_back(std::move(entry));
+            cards.clear(); cardScale = 0;
+            makePreviews();
+            selectedSlot = outcome.slot = index;
             outcome.created = true;
             outcome.createdHairStyle = hairEditor.committed;
-            helpOpen = playAfterHelp = true; // the help sheet; the world follows when it is closed
         }
     }
 }
@@ -1412,6 +1448,7 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
                         std::vector<DrawItem> &water) {
     hour = std::fmod(hour + (float)(dtMs / 60000.0) * s.minutesPerSecond / 60.0f * 60.0f, 24.0f);
     s.world->advanceClock(dtMs); // (the plants sway by the world's clock, vegetation-wind.md §2)
+    if (s.spawned && s.steam) s.spawned->publishPlayerAccount(s.steam->steamId());
     glm::vec3 lookAt;
     nativeai::Creature *p = s.spawned && s.extracted ? s.spawned->localPlayer() : nullptr;
     if (p) {
@@ -1954,6 +1991,8 @@ bool Session::frame() {
     if (req.clickAfter >= 0 && !testClicked && seconds >= req.clickAfter && s.world->pendingCount() == 0) {
         clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;
+    } else if (req.page.starts_with("create-test:") && testClicked && outcome.created && helpOpen) {
+        clicked = pointerDown = pointerUp = true; // diagnostic continuation through the ordinary Help callback
     }
     (void)buildScreen(false); // Publish the controller's active objects before its pointer decisions.
     handleClick(false);
@@ -2011,8 +2050,11 @@ bool Session::frame() {
 Result Session::runTitle() {
     if (req.page == "characters")
         titleShown = false, charactersShown = true;
-    else if (req.page == "create")
-        titleShown = false, startCreation();
+    else if (req.page == "create" || req.page.starts_with("create-test:")) {
+        titleShown = false;
+        startCreation();
+        if (req.page.starts_with("create-test:")) name = req.page.substr(12);
+    }
     else if (req.page == "options")
         openOptions();
     else if (req.page == "controls")
@@ -2036,16 +2078,24 @@ Result Session::runTitle() {
     return outcome;
 }
 
-// Continue, Select and Create Character put the player in the world (frontend-title.md §6.1):
-// the record is rebuilt from the character as saved, every field the save does not hold at a
-// new creature's value (no velocity, no ability, no eagle flight), the position exactly as
-// saved and the facing yaw 0. Only then do the front screens stop riding it. Nothing searches
-// for ground: zones not loaded yet read as solid, so the player waits on them.
+// Confirmed creation keeps its already-live Entity through Help and gameplay entry.
+// Continue/Select retain their separate saved-character entry path.
 void Session::enterWorld() {
+    if (outcome.created) {
+        if (s.spawned && s.extracted) {
+            auto guard = s.extracted->lockSourceState();
+            s.spawned->playerSaveSource()(stage); // current actor after Help, without a second decoder/reset
+        }
+        outcome.createdCharacter = stageOwner;
+        const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
+        outcome.feet = nativeprogress::localFeet(stage.position, frame);
+        outcome.placed = true;
+        titleShown = charactersShown = creationShown = false;
+        s.renderer->cutHistory();
+        return;
+    }
     const nativesaves::Character *saved = nullptr;
-    if (outcome.created)
-        saved = &stage; // (just made: what was written)
-    else if (outcome.slot >= 0 && outcome.slot < (int)listed.size())
+    if (outcome.slot >= 0 && outcome.slot < (int)listed.size())
         saved = &listed[(size_t)outcome.slot].character;
     if (!saved)
         return;

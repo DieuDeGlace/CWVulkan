@@ -240,8 +240,8 @@ struct HairEditor {
 glm::vec2 secondHairPanelAt(glm::vec2 window);
 bool secondHairCellAt(glm::vec2 point, int &column, int &row);
 
-// The starting kit (0x913b0): equipment, inventory and recipes for the class, the random parts
-// from srand(the account's low 32 bits); `region` is where the player stands.
+// The starting kit (0x913b0): equipment, fresh inventory/counters and templates.
+// Seed is the current Entity+968 low word; region is its surviving150/154 pair.
 void giveStartingKit(nativesaves::Character &c, uint32_t account, nativesaves::Cell region);
 // The default recipes (0x9afb0) with its argument.
 void addDefaultRecipes(nativesaves::Character &c, int argument);
@@ -409,6 +409,7 @@ struct Result {
     int slot = -1;        // the character to play
     bool created = false; // made in character creation (its help sheet was shown)
     std::optional<hair::Style> createdHairStyle;
+    std::shared_ptr<const nativesaves::Character> createdCharacter; // current retained actor/data after Help
     std::optional<OrbitCamera> camera;                   // Play keeps both displayed and target values.
     std::optional<cameraposition::State> cameraPosition; // Completed fixed eye/look-at; no transition priming.
     // Play: the player was rebuilt from the save and stands at `feet` (local blocks, CubeVulkan's

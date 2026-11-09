@@ -828,10 +828,19 @@ bool ProgressFile::load(SaveGame &out, const Frame &frame, const std::string &wo
         return false;
     std::string notes;
     store_->readNotes(slot_, notes);
-    SaveGame s = toProgress(c, notes, frame, itemSprite);
-    s.day = out.day, s.hour = out.hour, s.world = worldName, s.killed = out.killed;
-    out = std::move(s);
+    restore(out, c, notes, frame, worldName, itemSprite);
     return true;
+}
+
+void ProgressFile::restore(SaveGame &out, const Character &character, const std::string &notes,
+                            const Frame &frame, const std::string &worldName,
+                            const std::function<std::string(const Item &)> &itemSprite) const {
+    SaveGame restored = toProgress(character, notes, frame, itemSprite);
+    restored.day = world_.day;
+    restored.hour = std::fmod(world_.timeMs / 3600000.0f, 24.0f);
+    restored.world = worldName;
+    restored.killed.assign(world_.dead.begin(), world_.dead.end());
+    out = std::move(restored);
 }
 
 bool ProgressFile::saveWorld(int32_t day, float timeMs, const std::set<int64_t> &dead) {
