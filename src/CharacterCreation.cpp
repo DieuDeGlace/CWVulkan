@@ -85,9 +85,11 @@ void begin(worldgen::CreatureRecord &record, nativeai::Creature &side, nativesav
     data.looks.set(0, 0, 0, 0, {255, 255, 255});
     rebuild(record, side, data, data.looks, 1); // immediate reset cleared the seed to zero
 }
-void publishAccount(worldgen::CreatureRecord &record, uint64_t account) {
-    if (read<uint64_t>(record, 0x968) == 0)
-        put(record, 0x968, account);
+void publishAccount(worldgen::CreatureRecord &record, const AccountProvider &provider) {
+    if (read<uint64_t>(record, 0x968) == 0 && provider) {
+        const uint64_t account = provider();
+        put(record, 0x968, account); // no second test after the provider returns
+    }
 }
 std::string nameBytes(std::string_view utf8) {
     std::string out;

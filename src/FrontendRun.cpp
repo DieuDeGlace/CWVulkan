@@ -282,6 +282,7 @@ class Session {
     Request req;
     Hud ownHud;
     Hud &hud;
+    const charactercreation::AccountProvider accountProvider = [steam = s.steam] { return steam ? steam->steamId() : 0; };
     VkExtent2D size{0, 0};
     float guiScale = 1;
     glm::vec2 window{0}, mouse{0}; // GUI units
@@ -363,7 +364,6 @@ class Session {
     HairEditor hairEditor;
     hair::Style appliedHairStyle;
     std::string name;
-    bool previewing = false;
 
     OptionsScreen options;
     ControlsScreen controls;
@@ -385,7 +385,7 @@ class Session {
     void putOnStage(const nativesaves::Character &c, bool riding);
     void enterWorld(); // Continue, Select, Create Character: the player rebuilt from the save
     void stageDefaultPlayer();
-    void applyLook(bool preview);
+    void applyLook();
     void applyHairStyle();
     void secondHairItems(Hud::Screen &out);
     void startCreation();
@@ -890,8 +890,7 @@ nativesaves::Cell Session::startCell(std::array<int64_t, 3> &position) const {
 
 // Applying the look (frontend-characters.md §5.4): race, class, wrapped choices, the looks record
 // (the preview colour), the appearance rebuilt and the starting kit given.
-void Session::applyLook(bool preview) {
-    previewing = preview;
+void Session::applyLook() {
     look.wrap();
     const auto choices = look.record();
     const uint8_t cls = uint8_t(look.cls + 1);
@@ -938,7 +937,7 @@ void Session::startCreation() {
     if (!live) {
         const auto placement = home();
         stage = newCharacter(placement.home, placement.position);
-        applyLook(false);
+        applyLook();
     } else {
         stageHasLooks = nativeprogress::appearanceOf(stage.looks, stageLooks);
         applyHairStyle();
@@ -1393,14 +1392,14 @@ void Session::handleClick(bool inGame) {
             if (pointerDown && direction) {
                 playSound(SOUND_MENU_SELECT);
                 look.arrow(row, direction);
-                applyLook(false);
+                applyLook();
                 return;
             }
         }
         int column, gridRow;
         if (pointerDown && hairCellAt(m, column, gridRow)) { // committing the colour (0x272470)
             look.committed = look.preview;
-            applyLook(false);
+            applyLook();
             return;
         }
         const glm::vec2 createAt{window.x - CREATE_SIZE.x, window.y - CREATE_FROM_BOTTOM - CREATE_SIZE.y};
@@ -1452,9 +1451,9 @@ void Session::handleClick(bool inGame) {
 
 void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vector<DrawItem> &opaque,
                         std::vector<DrawItem> &water) {
+    if (s.spawned && s.steam) s.spawned->publishPlayerAccount(accountProvider);
     hour = std::fmod(hour + (float)(dtMs / 60000.0) * s.minutesPerSecond / 60.0f * 60.0f, 24.0f);
     s.world->advanceClock(dtMs); // (the plants sway by the world's clock, vegetation-wind.md §2)
-    if (s.spawned && s.steam) s.spawned->publishPlayerAccount(s.steam->steamId());
     glm::vec3 lookAt;
     nativeai::Creature *p = s.spawned && s.extracted ? s.spawned->localPlayer() : nullptr;
     if (p) {
@@ -1677,16 +1676,15 @@ void Session::secondHairItems(Hud::Screen &out) {
 void Session::creationItems(Hud::Screen &out) {
     secondHairItems(out);
     const glm::vec2 panel = lookPanelAt(), m = mouse - panel;
-    // Hovering the grid previews its colour on the player; leaving it restores the committed one.
-    look.preview = look.committed;
-    int column, gridRow;
-    if (!optionsOpen && hairCellAt(m, column, gridRow)) {
-        const glm::vec3 c = hairCellColour(column, gridRow) * 255.0f;
-        look.preview = {(uint8_t)c.r, (uint8_t)c.g, (uint8_t)c.b};
-    }
-    if (look.preview != stage.looks.hairColour())
-        applyLook(true);
     out.push_back(widget("blackwidget", panel, LOOK_PANEL_SIZE)); // native outer look-panel source
+    out.back().instance = "character-style";
+    // Publishing navigation/layout must not rebuild equipment. The owner callback
+    // runs only when the actual widget draw is admitted by the scene traversal.
+    out.back().drawModels = [this](const Hud::ScreenItem::ModelContext &) {
+        if (look.drawPalette(mouse - lookPanelAt()))
+            applyLook();
+        return std::vector<guiitem::Request>{};
+    };
     static const char *const LABELS[LOOK_ROWS] = {"Race", "Gender", "Class", "Face", "Haircut"};
     const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
     for (int row = 0; row < LOOK_ROWS; row++) {

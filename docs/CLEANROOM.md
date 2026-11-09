@@ -2971,3 +2971,22 @@ are inspected with unchanged readiness/deadlines; Alpha identity is unchanged.
 These bounded checks do not establish native pixels, performance or cold-start
 reliability. Owner assets, saves, Mods and display settings are untouched and
 excluded from source/runtime packages.
+
+## Character style draw and provider admission, 2026-11-08
+
+The independent original-only author held the complete application/update/draw/
+creation/Help scheduling prose without implementation, tests, SDK or owner-output
+access. The implementer read that full prose and owned code only. Palette side
+effects now use the existing admitted owner-draw hook instead of layout/navigation
+publication, retaining separate base/working bytes and changed-byte rebuilds.
+The opaque provider is queried only under the full eight-byte zero gate, before
+World substeps, without inferring imported provider internals. Focused actual-owner
+and synthetic state checks, full required-owner CPU without skips, all Vulkan
+checks, SDK independence and disposable creation/raw-load runs pass. The initial
+native readiness miss is retained/excluded; an unchanged native retry and the
+Alpha/Omega scene pass, with both images inspected and unchanged Alpha identity.
+This does not establish a root cause or reliable cold-start/performance behavior. Full native caching, resource/Help/control integration,
+provider/thread interleavings and broad parity/provenance acceptance remain open.
+No original source, SDK or reconstruction implementation was read by the implementer.
+Owner assets, saves, Mods and display settings remain untouched and excluded from
+source/runtime packages. Alpha terrain/lighting and Omega water remain implemented.

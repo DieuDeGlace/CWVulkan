@@ -313,6 +313,20 @@ void Look::reset() {
     preview = {255, 255, 255};
 }
 
+bool Look::drawPalette(glm::vec2 localPointer) {
+    const auto previous = preview;
+    preview = committed;
+    int column, row;
+    if (hairCellAt(localPointer, column, row)) {
+        const auto color = hairCellColour(column, row);
+        const uint8_t blue = uint8_t(int64_t(color.b * 255.f));
+        const uint8_t green = uint8_t(int64_t(color.g * 255.f));
+        const uint8_t red = uint8_t(int64_t(color.r * 255.f));
+        preview = {red, green, blue};
+    }
+    return preview != previous;
+}
+
 void Look::arrow(int row, int direction) {
     switch (row) {
     case ROW_RACE: race = wrapped(race + direction, 8); break;

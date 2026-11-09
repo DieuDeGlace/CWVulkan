@@ -154,7 +154,7 @@ class SpawnedCreatures {
     bool rebuildCharacterCreation(nativesaves::Character &, nativesaves::Looks, uint8_t characterClass);
     bool confirmCharacterCreation(nativesaves::Character &, std::string_view name);
     std::optional<charactercreation::SelectionSnapshot> creationSelectionSnapshot(const nativesaves::Character &) const;
-    void publishPlayerAccount(uint64_t account);
+    void publishPlayerAccount(const charactercreation::AccountProvider &);
     void setPlayerInventorySource(nativeai::InventorySource source) {
         auto guard = sourceGuard();
         player.side.inventorySource = std::move(source);

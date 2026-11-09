@@ -1,5 +1,45 @@
 # Source review checkpoint — 2026-11-08
 
+## Character style draw and account-provider admission - 2026-11-08
+
+Publishing the creation screen's navigation/layout no longer changes the live
+character. Palette effects now run through the existing admitted widget-draw
+callback, after the ordinary World phase. The working color is saved, restored
+from the base triple and optionally replaced by the hovered palette color. Only
+a difference from the saved working bytes triggers a synchronous style rebuild.
+It no longer compares against a separate staged-character mirror. Hovering does
+not commit base color, and an unchanged draw does not regenerate items or HP.
+The initial white working triple and synchronous zero-seed rebuild remain
+separate from the first later palette draw.
+
+The opaque account provider is now deferred until the full eight-byte entity
+operand is zero. A nonzero high half suppresses the provider even when the seed's
+low word is zero; returned zero remains eligible for a later update. The return
+is stored directly without a second admission test after the provider callback.
+Frontend and gameplay reuse their provider binding before World substeps. The
+initial reset, later publication, draw-triggered rebuild and Create commit keep
+their distinct lifetimes. Unavailable engine actors/providers are handled safely.
+
+Focused checks cover provider call counts, zero/high-word cases, callback stores,
+missing owners, literal palette rows/truncation and working/base retention.
+Actual owner-template checks distinguish layout publication from draw and verify
+principal/creation-ancestor visibility and disabled-owner admission. All five
+builds, full required-owner CPU without skips, all Vulkan groups, SDK independence,
+disposable writable/read-only and Alpha/Omega creation and four raw-load cases
+pass. The initial native scene missed its observation deadline with four source
+jobs still active. That failure is retained and excluded from pass evidence. An
+unchanged native retry passes in 60.531 seconds and Alpha/Omega in 113.703 seconds;
+both images are inspected with unchanged settings/deadlines/readiness and Alpha
+profile. No root cause or reliable cold-start/performance result is inferred.
+
+The complete held [original-only update/draw/Help contract](specs/steam-character-creation-update-draw-and-help-handoff-20261108.md)
+was read before implementation; its hash remains frozen and the author remains
+unexposed. The shared widget callback is an engine binding, without a claim to
+exhaust native caching, resource hierarchy or Windows/provider interleavings.
+Complete Help/control integration, crafting/appearance closure, imported random
+state and broader gameplay, native-pixel and provenance acceptance remain open.
+Alpha terrain/lighting and Omega water remain implemented.
+
 ## Native home-search progression and admission - 2026-11-08
 
 Home search now takes the two signed provider samples in order, converts the

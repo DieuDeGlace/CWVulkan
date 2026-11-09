@@ -69,6 +69,62 @@ void equipmentCallbacks() {
     hud.addItemIcon("synthetic-equipment", cub);
     hud.setGuiScale(1);
     hud.layout(renderer, {1920, 1080});
+    // CharacterStyleWidget effects belong to the admitted draw, never layout publication.
+    {
+        frontend::Look style;
+        style.reset();
+        int draws = 0, rebuilds = 0;
+        glm::vec2 pointer{-100, -100};
+        Hud::ScreenItem panel;
+        panel.kind = Hud::ScreenItem::Template;
+        panel.name = "blackwidget";
+        panel.instance = "character-style-phase-test";
+        panel.branch = uiroot::Branch::Creation;
+        panel.size = frontend::LOOK_PANEL_SIZE;
+        panel.drawModels = [&](const Hud::ScreenItem::ModelContext &) {
+            ++draws;
+            if (style.drawPalette(pointer)) ++rebuilds;
+            return std::vector<guiitem::Request>{};
+        };
+        uiroot::State state;
+        state.frontend[2] = true;
+        hud.setInterfaceState(state);
+        hud.publishFrontendScreen({panel});
+        GUI_CHECK(draws == 0 && rebuilds == 0 && style.preview == (std::array<uint8_t, 3>{255, 255, 255}));
+        std::vector<OverlayVertex> vertices;
+        hud.drawScreen({panel}, vertices);
+        GUI_CHECK(draws == 1 && rebuilds == 1 && style.preview == style.committed);
+        pointer = {13, 197};
+        hud.publishFrontendScreen({panel});
+        GUI_CHECK(draws == 1 && rebuilds == 1 && style.preview == style.committed);
+        hud.drawScreen({panel}, vertices);
+        GUI_CHECK(draws == 2 && rebuilds == 2 && style.preview == (std::array<uint8_t, 3>{51, 0, 0}));
+        hud.drawScreen({panel}, vertices);
+        GUI_CHECK(draws == 3 && rebuilds == 2);
+        hud.setInterfaceShown(false);
+        pointer = {-100, -100};
+        hud.drawScreen({panel}, vertices);
+        GUI_CHECK(draws == 3 && rebuilds == 2 && style.preview == (std::array<uint8_t, 3>{51, 0, 0}));
+        hud.setInterfaceShown(true);
+        hud.setInterfaceState({}); // hidden creation ancestor, independent of principal visibility
+        hud.drawScreen({panel}, vertices);
+        GUI_CHECK(draws == 3 && rebuilds == 2);
+        hud.setInterfaceState(state);
+        const auto *branch = hud.interfaceBranchRoot(uiroot::Branch::Creation);
+        GUI_CHECK(branch && !branch->children.empty());
+        if (branch && !branch->children.empty()) {
+            auto &owner = *branch->children.back();
+            const auto flags = owner.flags;
+            owner.flags |= plx::NODE_DISABLED;
+            hud.drawScreen({panel}, vertices);
+            GUI_CHECK(draws == 3 && rebuilds == 2);
+            owner.flags = flags;
+        }
+        hud.drawScreen({panel}, vertices);
+        GUI_CHECK(draws == 4 && rebuilds == 3 && style.preview == style.committed);
+        hud.publishFrontendScreen({});
+        hud.setInterfaceState({});
+    }
     // Window and controller callbacks share one stored mask, independent of physical polling.
     {
         MenuInput messages;

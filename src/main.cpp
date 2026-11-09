@@ -3798,6 +3798,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // This does not claim native OS-thread/message-loop interleaving.
     if (workerCharacterSaving)
         world.characterSaveSession()->start();
+    const charactercreation::AccountProvider accountProvider = [&steam] { return steam.steamId(); };
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();
@@ -3861,6 +3862,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             default:
                 break;
             }
+        // The ordinary frame publishes the opaque account operand before World
+        // substeps. The provider is never queried for an already-published value.
+        if (spawnedReady)
+            spawned.publishPlayerAccount(accountProvider);
         if (!menusReady) {
             input.gamepadPointer = {}; // No frontend callback producer is active in this compatibility path.
             input.routeInterfaceMessages(hud, [&](int delta, glm::vec2 point) {

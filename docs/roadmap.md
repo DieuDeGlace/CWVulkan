@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Creation navigation/layout publication no longer rebuilds the actor; the
+  admitted owner draw updates working palette bytes and rebuilds only on change.
+  The full-width account gate defers provider reads and runs before World substeps
+  in frontend and gameplay. Expanded actual-owner/provider/palette checks and all5/
+  full required-owner CPU without skips/Vulkan/SDK plus disposable creation/raw-load
+  cases pass. An initial native readiness miss is retained; unchanged native retry
+  and Alpha/Omega scenes pass and are inspected, Alpha profile unchanged. No cold-
+  start reliability claim. Help/control/cache/provider and broader parity remain open. See [the checkpoint](release-status.md#character-style-draw-and-account-provider-admission---2026-11-08).
+
 - [x] Home search now uses the native coarse-grid scale and preincremented X,
   ordered lazy terrain admission, descriptor exclusion and exact fixed placement.
   Seven original failures plus one later unsigned-hash failure are fixed. Expanded

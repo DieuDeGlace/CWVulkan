@@ -1808,9 +1808,9 @@ std::optional<charactercreation::SelectionSnapshot> SpawnedCreatures::creationSe
     if (!nativePlayer || !hasPlayer) return {};
     return charactercreation::selectionSnapshot(player.record, player.side, data);
 }
-void SpawnedCreatures::publishPlayerAccount(uint64_t account) {
+void SpawnedCreatures::publishPlayerAccount(const charactercreation::AccountProvider &provider) {
     auto guard = sourceGuard();
-    if (nativePlayer && hasPlayer) charactercreation::publishAccount(player.record, account);
+    if (nativePlayer && hasPlayer) charactercreation::publishAccount(player.record, provider);
 }
 void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
     auto guard = sourceGuard();

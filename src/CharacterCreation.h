@@ -13,7 +13,8 @@ using FindHome = std::function<Placement()>;
 void begin(worldgen::CreatureRecord &, nativeai::Creature &, nativesaves::Character &, const FindHome &);
 void rebuild(worldgen::CreatureRecord &, nativeai::Creature &, nativesaves::Character &,
              nativesaves::Looks, uint8_t characterClass);
-void publishAccount(worldgen::CreatureRecord &, uint64_t account);
+using AccountProvider = std::function<uint64_t()>;
+void publishAccount(worldgen::CreatureRecord &, const AccountProvider &);
 std::string nameBytes(std::string_view utf8);
 // No UI name gate or HP/position reset here. Malformed/oversized names are bounded safely.
 void confirm(worldgen::CreatureRecord &, nativeai::Creature &, nativesaves::Character &, std::string_view name);

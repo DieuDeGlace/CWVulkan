@@ -215,6 +215,8 @@ struct Look {
     int race = 0, cls = 0, sex = 0, face = 0, haircut = 0; // R (0..7), C (0..3), S, F, K
     std::array<uint8_t, 3> committed{255, 200, 50}, preview{255, 255, 255};
     void reset();
+    // Only an admitted palette draw updates working color and reports a rebuild.
+    bool drawPalette(glm::vec2 localPointer);
     // An arrow (−1 left, +1 right) on a row (§5.3).
     void arrow(int row, int direction);
     int32_t raceId() const; // from R and S

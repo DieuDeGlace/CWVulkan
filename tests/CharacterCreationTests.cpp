@@ -172,8 +172,10 @@ void retainedCreation(const auto &check) {
     check(data->inventory[0][0].count == 9 && entity->inventory.empty(),
           "preview inventory is the current owned canonical source");
     constexpr uint64_t account = 0x11223344aabbccddull;
-    actor.publishPlayerAccount(account);
-    actor.publishPlayerAccount(0x9988776655443322ull);
+    int providerCalls = 0;
+    actor.publishPlayerAccount([&] { ++providerCalls; return account; });
+    actor.publishPlayerAccount([&] { ++providerCalls; return 0x9988776655443322ull; });
+    check(providerCalls == 1, "the actual actor facade skips provider reads after full-width publication");
     put(record, 0x150, int32_t(123));
     put(record, 0x154, int32_t(-456));
     put(record, 0x148, int32_t(73));
@@ -274,6 +276,70 @@ void retainedCreation(const auto &check) {
               restored.world == "creation-profile",
           "Main can restore owned creation data without opening/reading a database or resetting its actor");
 }
+void lazyAccountPublication(const auto &check) {
+    auto record = worldgen::newCreature(7);
+    put(record.data(), 0x968, uint64_t(0));
+    int calls = 0;
+    uint64_t result = 0;
+    const charactercreation::AccountProvider provider = [&] { ++calls; return result; };
+    charactercreation::publishAccount(record, provider);
+    charactercreation::publishAccount(record, provider);
+    check(calls == 2 && read<uint64_t>(record.data(), 0x968) == 0,
+          "zero provider results remain eligible for a fresh query at the next reached ordinary update");
+    result = 0x1122334400000000ull;
+    charactercreation::publishAccount(record, provider);
+    result = 0xffeeddccbbaa9988ull;
+    charactercreation::publishAccount(record, provider);
+    check(calls == 3 && read<uint64_t>(record.data(), 0x968) == 0x1122334400000000ull,
+          "a nonzero high half suppresses the entire provider even when its seed low word is zero");
+    put(record.data(), 0x968, uint64_t(0));
+    charactercreation::publishAccount(record, [&] {
+        ++calls;
+        put(record.data(), 0x968, uint64_t(0x76543210));
+        return uint64_t(0x8877665544332211ull);
+    });
+    check(calls == 4 && read<uint64_t>(record.data(), 0x968) == 0x8877665544332211ull,
+          "the provider's returned full word is stored without repeating the admission test after its call");
+    put(record.data(), 0x968, uint64_t(0));
+    charactercreation::publishAccount(record, {});
+    check(read<uint64_t>(record.data(), 0x968) == 0,
+          "a missing engine provider is a safe adapter rather than an invented native account");
+    SpawnedCreatures absent;
+    absent.publishPlayerAccount(provider);
+    absent.setNativePlayer(true);
+    absent.publishPlayerAccount(provider);
+    check(calls == 4, "an unavailable actor facade never queries the provider");
+}
+void paletteDrawState(const auto &check) {
+    frontend::Look look;
+    look.reset();
+    check(look.preview == std::array<uint8_t, 3>{255, 255, 255},
+          "synchronous new selection retains initial white working bytes before any actual palette draw");
+    check(look.drawPalette({-100, -100}) && look.preview == std::array<uint8_t, 3>{255, 200, 50},
+          "the first admitted off-grid draw restores base color and requests its one changed-color rebuild");
+    check(!look.drawPalette({-100, -100}), "an unchanged actual draw does not request another inventory/HP rebuild");
+    struct Entry { int column, row; std::array<uint8_t, 3> bytes; };
+    const std::array<Entry, 10> entries{{
+        {0, 0, {51, 0, 0}}, {0, 1, {114, 0, 0}}, {0, 2, {178, 0, 0}},
+        {0, 3, {255, 0, 0}}, {0, 4, {255, 63, 63}}, {0, 5, {255, 127, 127}},
+        {0, 6, {255, 191, 191}}, {9, 3, {0, 63, 255}},
+        {11, 0, {12, 0, 51}}, {15, 2, {89, 89, 89}}
+    }};
+    for (const auto &entry : entries) {
+        const glm::vec2 point{13.f + 17.f * entry.column + 8.5f, 197.f + 17.f * entry.row + 8.5f};
+        look.drawPalette(point);
+        check(look.preview == entry.bytes && look.committed == std::array<uint8_t, 3>{255, 200, 50},
+              "independent palette row/column literals retain float scaling and truncation without committing base");
+        check(!look.drawPalette(point), "identical hovered working bytes suppress a repeat draw-triggered rebuild");
+    }
+    look.committed = look.preview; // separate native color-commit callback
+    check(!look.drawPalette({-100, -100}), "committing the retained working triple makes later off-grid draws unchanged");
+    look.preview = {9, 8, 7};
+    look.arrow(frontend::ROW_CLASS, 1);
+    check(look.record().hairColour() == std::array<uint8_t, 3>{9, 8, 7},
+          "an arrow callback uses current working bytes without performing a palette draw first");
+}
+
 } // namespace
 int characterCreationTests() {
     int failures = 0;
@@ -285,6 +351,8 @@ int characterCreationTests() {
         }
     };
     starterReplacement(check);
+    lazyAccountPublication(check);
+    paletteDrawState(check);
     coreFootprint(check);
     retainedCreation(check);
     check(charactercreation::nameBytes("\xc3\xa9\xf0\x9f\x98\x80"
