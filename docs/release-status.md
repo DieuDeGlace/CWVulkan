@@ -1,5 +1,41 @@
 # Source review checkpoint — 2026-11-08
 
+## Alpha landmark transition continuity - 2026-11-08
+
+Alpha's hybrid terrain now approaches preserved Steam landmarks through a
+256-block rounded halo, including when the surrounding Alpha solid ground is
+below sea level. Liquid surfaces remain fixed in world Z. The same field drives
+terrain, map heights and nonlocal record reanchoring. Construction footprints,
+rooms, layouts and exact native core columns are retained; ordinary Game
+generation and the raw Alpha terrain formulas do not change. The composition
+profile advances to compose-v2, isolating earlier terrain caches and saves.
+
+A reproduced forest mound/coast boundary changes from a282-block neighboring
+column step to1, while the mound and volcano peaks retain281 and269. Read-only
+32-block overview samples reduce maximum steps192 to64 and256 to96 respectively;
+core masks/heights and sampled raw Alpha height values are unchanged. These are
+bounded procedural results. They do not establish universal gradients or live
+visual parity. Three alternating CPU probe processes per version measured
+1.687 to1.860 seconds by median, about10.3 percent more composition-probe time;
+this is not a whole-game FPS or cold-start claim.
+
+All five targets, meaningful before/after continuity cases, fixed-sea/raised-pool/
+dry-air/metadata/overflow checks, full required-owner CPU without skips, all
+Vulkan groups and SDK independence pass. The existing60,000 native-cell
+comparison remains exact. The prior classifier handoffs remain frozen payload
+provenance; this user-requested owned Alpha extension imports no new native
+behavior and does not use the separate held landform research.
+
+Live native and Alpha/Omega scenes, landmark/material/water visual review and
+new-profile first-use/save acceptance are still pending Steam reconnection.
+The first native capture timed out without an image while its log reported the
+Steam account offline; it is retained and excluded, with no performance cause
+asserted. This is an audited development source update, not a final binary
+release. Original saves/Mods/display were untouched. Broader native gameplay,
+visual, concurrency/provider, original-peer/two-account, hardware/fresh-install
+and clean-room provenance gates remain open. See
+[Alpha generation](alpha-generation.md) for the composition and evidence limits.
+
 ## Cell-object continuation and current World tables - 2026-11-08
 
 An unmatched nearby category-two marker now continues to the shared canonical

@@ -17,6 +17,9 @@ class LandscapeStore;
 // Alpha's packed type/flags byte is not a Steam type byte. Unsupported materials
 // fail explicitly until their gameplay/render semantics have a defined bridge.
 std::optional<worldgen::Block> steamBlock(Block);
+// Hybrid policy: translate solid terrain while keeping liquid levels in world Z.
+// Source storage is immutable; invalid height ranges return no column.
+std::optional<worldgen::TerrainColumn> shiftedTerrainColumn(const worldgen::TerrainColumn &, int32_t shift);
 // Plant XY is already in Steam block coordinates; shift is the composed column's
 // vertical translation. Native constructor flags and fixed placement are explicit.
 std::optional<worldgen::Model> steamPlant(const Plant &, const PlantModels &, int32_t shift = 0);

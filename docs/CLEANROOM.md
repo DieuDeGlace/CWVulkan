@@ -1,5 +1,22 @@
 # Clean-room process
 
+## Owned Alpha transition extension, 2026-11-08
+
+The wider rounded landmark transition and fixed-liquid column translation are
+user-requested hybrid policies, implemented from CubeVulkan's owned composition
+and bridge code. The implementer did not inspect original, decompiled, SDK or
+Infinite-Cubes reconstruction source, and did not use the separate new held
+landform contract. Prior published classifier handoffs are unchanged provenance
+payloads only; they are not new native authority for this extension.
+
+Private before/after procedural cross-sections, actual composed columns and
+asset-free water/storage cases validate the bounded change. Raw Alpha formulas,
+Steam construction cores and normal Game generation remain intact. The
+composition identity advances independently to v2. All build, required-owner CPU,
+Vulkan and SDK-independence checks pass; Steam-disconnected live visual and
+new-profile acceptance remain explicitly open. No owner data, imagery, binaries
+or private memory enter the public source payload.
+
 **Role boundary:** this document includes implementation history below the process
 rules. Source-side specification authors must read the standalone
 [author policy](CLEANROOM_AUTHOR.md) instead and must not read this combined file.

@@ -1,4 +1,6 @@
 #include "alphagen/SteamBridge.h"
+#include <algorithm>
+#include <limits>
 #include "alphagen/ReliefStore.h"
 #include "alphagen/LandscapeStore.h"
 
@@ -53,6 +55,78 @@ std::optional<worldgen::Block> steamBlock(Block input) {
     }
     if (input.type() == alphagen::AIR && (input.typeByte & DRY_AIR))
         result.flags = 2; // Steam keep-air flag; Alpha's 0x20/0x80 construction markers are not copied.
+    return result;
+}
+
+std::optional<worldgen::TerrainColumn> shiftedTerrainColumn(const worldgen::TerrainColumn &source, int32_t shift) {
+    using namespace worldgen;
+    const int64_t oldTop = int64_t(source.base) + int64_t(source.blocks.size());
+    const int64_t newBase = int64_t(source.base) + shift;
+    const int64_t newShift = int64_t(source.sourceShift) + shift;
+    const int64_t newTop = oldTop + shift;
+    if (source.blocks.size() > size_t(INT32_MAX) || oldTop > INT32_MAX || newBase < INT32_MIN ||
+        newBase > INT32_MAX || newTop > INT32_MAX || newShift < INT32_MIN || newShift > INT32_MAX)
+        return std::nullopt;
+    TerrainColumn result = source;
+    if (!shift)
+        return result;
+    result.base = int32_t(newBase);
+    result.sourceShift = int32_t(newShift);
+
+    int64_t waterLevel = 0;
+    worldgen::Block water = SEA_WATER;
+    for (size_t i = 0; i < source.blocks.size(); ++i) {
+        if (source.blocks[i].type != blocktype::WATER)
+            continue;
+        const int64_t z = int64_t(source.base) + int64_t(i);
+        if (z > waterLevel) {
+            waterLevel = z;
+            water = source.blocks[i];
+        }
+        result.blocks[i] = AIR_BLOCK;
+    }
+
+    // Sea water remains implicit at z <= 0. Retain an explicit raised pool at its
+    // original level, filling only open cells down to its newly translated floor.
+    if (waterLevel > 0 && waterLevel >= newBase) {
+        const int64_t required = waterLevel - newBase + 1;
+        if (required > INT32_MAX)
+            return std::nullopt;
+        if (required > int64_t(result.blocks.size()))
+            result.blocks.resize(size_t(required), AIR_BLOCK);
+        for (int64_t z = waterLevel; z >= std::max<int64_t>(1, newBase); --z) {
+            auto &block = result.blocks[size_t(z - newBase)];
+            if (!isOpen(block) || (block.type == blocktype::AIR && (block.flags & 2)))
+                break;
+            const int64_t oldIndex = z - source.base;
+            block = oldIndex >= 0 && oldIndex < int64_t(source.blocks.size()) &&
+                            source.blocks[size_t(oldIndex)].type == blocktype::WATER
+                        ? source.blocks[size_t(oldIndex)]
+                        : water;
+        }
+    }
+    // Preserve original stored sea-water colors where the translated solid has
+    // left their old world coordinates open; never move those cells above sea.
+    for (size_t i = 0; i < source.blocks.size(); ++i) {
+        const auto &block = source.blocks[i];
+        const int64_t z = int64_t(source.base) + int64_t(i);
+        const int64_t index = z - newBase;
+        if (block.type == blocktype::WATER && z <= 0 && index >= 0 && index < int64_t(result.blocks.size())) {
+            auto &destination = result.blocks[size_t(index)];
+            if (isOpen(destination) && !(destination.type == blocktype::AIR && (destination.flags & 2)))
+                destination = block;
+        }
+    }
+    while (!result.blocks.empty()) {
+        const auto &last = result.blocks.back();
+        if (last.type != blocktype::AIR || last.flags || last.glow)
+            break;
+        result.blocks.pop_back();
+    }
+    // A nonempty source also owns implicit rock below its base. An all-water
+    // stored run still needs one open cell to retain that translated boundary.
+    if (result.blocks.empty() && !source.blocks.empty())
+        result.blocks.push_back(AIR_BLOCK);
     return result;
 }
 

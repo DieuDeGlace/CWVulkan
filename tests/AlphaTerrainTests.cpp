@@ -24,6 +24,8 @@
 #include <cmath>
 #include <cstdio>
 
+int alphaTransitionTests();
+
 int alphaTerrainTests() {
     int failures = 0;
     auto check = [&](bool pass, const char *what) {
@@ -910,6 +912,7 @@ int alphaTerrainTests() {
               "leased block and surface remain readable without the world store");
     held.reset();
     check(pinned.expired(), "the last lease releases its parent stage");
+    failures += alphaTransitionTests();
     std::printf("Alpha surface generation core: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

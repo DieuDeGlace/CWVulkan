@@ -6,22 +6,25 @@
 #include <bit>
 #include <cmath>
 #include <limits>
+#include <tuple>
 namespace worldgen {
 namespace {
-constexpr int BLEND = 32;
+constexpr int BLEND = 256;
 // Parallel terrain/neighbor requests need more than sixteen Alpha parents.
 // LandscapeStore also bounds the estimated allocated ready-stage payload.
 constexpr std::size_t LANDSCAPE_CACHE_PARENTS = 64;
 struct Box {
     int64_t x0, y0, x1, y1;
+    bool operator==(const Box &) const = default;
 };
 std::vector<Box> constructionBoxes(const WorldValues &world, int32_t zx, int32_t zy) {
     std::vector<Box> boxes;
     auto &cells = cellObjectsFor(world);
     BuildingRules rules(cells);
-    // The native cell pass admits two surrounding cells; add the transition band.
-    for (int dx = -6; dx < 10; ++dx)
-        for (int dy = -6; dy < 10; ++dy) {
+    // Include the whole halo plus the conservative native admission margin.
+    constexpr int padding = BLEND / 16 + 4;
+    for (int dx = -padding; dx < 4 + padding; ++dx)
+        for (int dy = -padding; dy < 4 + padding; ++dy) {
             const int32_t cx = int32_t(int64_t(zx) * 4 + dx), cy = int32_t(int64_t(zy) * 4 + dy);
             const int type = rules.type(cx, cy);
             if (type < 22 && type != 6 && type != 7 && rules.castleCell(cx, cy).kind == 0)
@@ -33,22 +36,27 @@ std::vector<Box> constructionBoxes(const WorldValues &world, int32_t zx, int32_t
             const int lowY = -floorDivBy(-(cy - 3 - reach), 4), highY = floorDivBy(cy + reach, 4);
             boxes.push_back({int64_t(lowX) * 64, int64_t(lowY) * 64, int64_t(highX + 1) * 64, int64_t(highY + 1) * 64});
         }
+    std::sort(boxes.begin(), boxes.end(), [](const Box &a, const Box &b) {
+        return std::tie(a.x0, a.y0, a.x1, a.y1) < std::tie(b.x0, b.y0, b.x1, b.y1);
+    });
+    boxes.erase(std::unique(boxes.begin(), boxes.end()), boxes.end());
     return boxes;
 }
 float constructionWeight(const std::vector<Box> &boxes, int32_t x, int32_t y) {
-    float weight = 0;
+    int64_t nearest = int64_t(BLEND) * BLEND;
     for (const auto &box : boxes) {
         const int64_t dx = std::max({box.x0 - x, int64_t(x) - box.x1 + 1, int64_t(0)});
         const int64_t dy = std::max({box.y0 - y, int64_t(y) - box.y1 + 1, int64_t(0)});
-        const auto distance = std::max(dx, dy);
-        if (!distance)
+        if (!dx && !dy)
             return 1;
-        if (distance >= BLEND)
+        if (dx >= BLEND || dy >= BLEND)
             continue;
-        const float t = float(distance) / BLEND;
-        weight = std::max(weight, 1.f - t * t * (3.f - 2.f * t));
+        nearest = std::min(nearest, dx * dx + dy * dy);
     }
-    return weight;
+    if (nearest >= int64_t(BLEND) * BLEND)
+        return 0;
+    const float t = std::sqrt(float(nearest)) / BLEND;
+    return 1.f - t * t * (3.f - 2.f * t);
 }
 float ground(const TerrainColumn &column) {
     for (int64_t i = int64_t(column.blocks.size()) - 1; i >= 0; --i) {
@@ -67,8 +75,9 @@ float alphaGround(const alphagen::Column &column) {
     return float(column.bottom);
 }
 int32_t transition(float alpha, float native, float weight) {
-    // Keep the Alpha sea plane fixed; ocean columns must not be lifted into lakes.
-    return alpha > 1 && native > 1 ? int32_t(std::lround((native - alpha) * weight)) : 0;
+    // Blend the solid surface through sea level; the column bridge keeps liquid
+    // planes fixed independently of this ground translation.
+    return int32_t(std::lround((native - alpha) * weight));
 }
 } // namespace
 AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeModels> palms, int32_t steamSeed,
@@ -76,7 +85,7 @@ AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeMo
     : seed(seed), steamSeed(steamSeed), source(seed, {}, LANDSCAPE_CACHE_PARENTS, true, std::move(palms)), plantModels(std::move(plants)) {
 }
 std::string AlphaTerrain::identity(double scale) const {
-    return "alpha-v" + std::to_string(alphagen::LandscapeStage::VERSION) + "-compose-v1-seed-" + std::to_string(seed) + "-steam-seed-" +
+    return "alpha-v" + std::to_string(alphagen::LandscapeStage::VERSION) + "-compose-v2-seed-" + std::to_string(seed) + "-steam-seed-" +
            std::to_string(steamSeed) + "-scale-bits-" + std::to_string(std::bit_cast<uint64_t>(scale));
 }
 bool AlphaTerrain::coversZone(int32_t zx, int32_t zy) const {
@@ -151,21 +160,27 @@ void AlphaTerrain::composeMap(MapRegion &map) {
             // Close map views sample real landscape voxels, including tree crowns.
             // Distant views use the cheaper H overview rather than generating every
             // off-screen parent. Neither path moves the Steam marker XY/layouts.
-            float top = std::max(1.f, std::floor(field->height) + 1);
-            float baseGround = top;
+            float top = std::floor(field->height) + 1;
+            float baseGround = top, waterTop = 1;
             auto colour = field->colour;
             if (map.unit <= 16) {
                 if (const auto column = source.column(x, y)) {
-                    baseGround = alphaGround(column->raw());
-                    top = column->surface();
+                    const auto &raw = column->raw();
+                    baseGround = alphaGround(raw);
+                    top = column->surface(false);
                     colour = column->block(int32_t(top) - 1);
+                    for (size_t k = 0; k < raw.blocks.size(); ++k)
+                        if (raw.blocks[k].type() == alphagen::WATER)
+                            waterTop = std::max(waterTop, float(int64_t(raw.bottom) + int64_t(k) + 1));
                 }
             }
             const float native = std::floor(groundHeight(x, y)) + 1;
             top += transition(baseGround, native, weight);
+            const bool waterVisible = waterTop > top;
+            top = std::max(top, waterTop);
             projection.top = int32_t(std::floor(top / map.unit));
             // The Steam map vertex encoder expects half-intensity bytes.
-            projection.rgb = colour.type() == alphagen::WATER || top <= 1
+            projection.rgb = waterVisible
                                  ? std::array<uint8_t, 3>{38, 51, 127}
                                  : std::array<uint8_t, 3>{uint8_t(colour.r / 2), uint8_t(colour.g / 2), uint8_t(colour.b / 2)};
             if (projection.rgb == std::array<uint8_t, 3>{})
@@ -211,7 +226,7 @@ void AlphaTerrain::composeMap(MapRegion &map) {
         const float weight = constructionWeight(entry->second, x, y);
         if (weight == 1)
             return old;
-        float alpha = std::max(1.f, std::floor(field->height) + 1);
+        float alpha = std::floor(field->height) + 1;
         if (map.unit <= 16)
             if (const auto column = source.column(x, y))
                 alpha = alphaGround(column->raw());
@@ -251,14 +266,27 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
             const float weight = constructionWeight(boxes, x, y);
             if (weight == 1)
                 continue; // Preserve the complete Steam column, including below-ground rooms.
-            auto column = tile->columns()[index];
-            const float alpha = ground(column), native = ground(zone.terrain.columns[index]);
+            const auto &original = tile->columns()[index];
+            const float alpha = ground(original), native = ground(zone.terrain.columns[index]);
             const auto shift = transition(alpha, native, weight);
-            column.base += shift;
-            column.sourceShift += shift;
+            auto column = alphagen::shiftedTerrainColumn(original, shift);
+            if (!column) {
+                error = "Alpha transition exceeds the supported height range";
+                return false;
+            }
             offsets[index] = int32_t(std::lround(alpha + shift - native));
-            result.terrain.columns[index] = std::move(column);
+            result.terrain.columns[index] = std::move(*column);
         }
+    std::map<std::pair<int32_t, int32_t>, std::vector<Box>> surroundingBoxes;
+    const auto weightAt = [&](int32_t x, int32_t y) {
+        const auto key = std::make_pair(floorDivBy(x, ZONE_SIZE), floorDivBy(y, ZONE_SIZE));
+        if (key.first == zx && key.second == zy)
+            return constructionWeight(boxes, x, y);
+        auto [entry, fresh] = surroundingBoxes.try_emplace(key);
+        if (fresh)
+            entry->second = constructionBoxes(world, key.first, key.second);
+        return constructionWeight(entry->second, x, y);
+    };
     const auto offsetAt = [&](int64_t fx, int64_t fy) -> int32_t {
         const int64_t bx = fx >> 16, by = fy >> 16;
         if (bx < INT32_MIN || bx > INT32_MAX || by < INT32_MIN || by > INT32_MAX)
@@ -266,7 +294,7 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
         const auto x = int32_t(bx), y = int32_t(by);
         if (const auto index = setterColumn(zx, zy, x, y))
             return offsets[*index];
-        const float weight = constructionWeight(boxes, x, y);
+        const float weight = weightAt(x, y);
         if (weight == 1)
             return 0;
         const auto column = source.column(x, y);
@@ -278,7 +306,7 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
     };
     if (plantModels) {
         const auto replaceCover = [&](const Model &model) {
-            return model.groundCover && constructionWeight(boxes, blocksOf(model.x), blocksOf(model.y)) < 1;
+            return model.groundCover && weightAt(blocksOf(model.x), blocksOf(model.y)) < 1;
         };
         std::erase_if(result.models, replaceCover);
         std::erase_if(result.modelLights, replaceCover);

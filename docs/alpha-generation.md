@@ -1,5 +1,38 @@
 # Alpha terrain generation
 
+## Landmark transition checkpoint, 2026-11-08
+
+The user's flat-platform report was reproduced in the default Alpha landscape
+seed 1570745101 with Steam layout input 0. At a forest mound's construction/coast
+boundary, neighboring solid columns previously jumped 282 blocks, from -97 to
+185. The revised transition gives 184 and 185, a one-block step. The protected
+mound peak remains 281 and the sampled volcano peak remains 269; exact retained
+core column bytes, core map heights and construction masks stay unchanged.
+This changes the hybrid blend, not native Steam generation or the raw Alpha
+height formulas. It does not apply an arbitrary global relief multiplier.
+
+Read-only cross-sections sampled every32 blocks reduce maximum overview steps
+from256 to96 at the volcano and192 to64 at the forest mound. Those are bounded
+map samples, not a guarantee that every slope has a one-block step. All sampled
+raw Alpha height values are unchanged. Close map composition blends the solid
+height separately from the fixed liquid surface; distant views still use the
+existing H-based approximation.
+
+All five targets, focused continuity/water/metadata/core tests, full
+required-owner CPU without skips, every Vulkan group and SDK independence pass.
+The existing native cell comparison retains zero mismatches across60,000 cells.
+Three alternating CPU probe runs per version measured medians of1.687 and1.860
+seconds, about10.3 percent more time for the wider composition. This probe
+includes generation, map work and two composed zones; it is not gameplay FPS or
+cold-start acceptance.
+
+Live native, Alpha/Omega and landmark-specific views, new-profile first use and
+save acceptance remain pending because Steam reports the account offline.
+The first native capture timed out without an image and is excluded; no terrain
+or performance cause is inferred. Ownership checks and the150-second deadline
+remain intact. Current test results do not close broad visual, world, travel,
+hardware or multiplayer acceptance.
+
 `World.Source=Alpha` selects the project hybrid: independently implemented Alpha
 landscape and climate with Steam towns and dungeons preserved. Steam generation
 remains available separately as `World.Source=Game`; extracted owner zones use
@@ -90,9 +123,14 @@ numeric type. Glow13 becomes Steam light20 with full emission as a hybrid policy
 
 `worldgen::AlphaTerrain` preserves every native column in conservative Steam
 construction footprints, including rooms, openings, layouts and sizes. Outside
-those cores a32-block band shifts whole Alpha columns toward Steam ground; the
-Alpha sea plane is kept fixed. This intentionally retains some surrounding Steam
-terrain. Forest edges and steep transitions still need wider visual review.
+those cores a256-block smooth transition shifts solid Alpha terrain toward Steam
+ground. Distance from the nearest footprint uses a rounded Euclidean halo; box
+lookup covers that whole halo on either side of a publication-tile boundary.
+Duplicate footprints are removed before sampling. The blend continues through
+sea level, while sea and raised-pool water levels remain fixed in world Z. Dry
+air and immutable source colors/metadata are retained. This intentionally keeps
+some surrounding Steam terrain without the former abrupt coastal pad edge.
+Broader forest edges, material seams and steep transitions still need live review.
 
 Models, lights, emitters, objects, ground items, spawn/shop points and daily-refresh
 working lists are reanchored in Z; XY and model scale are retained. Object block
@@ -164,7 +202,11 @@ Steam region names, quest plans and difficulty-region identities remain in use.
 An Alpha profile identity includes landscape/composition versions, Alpha seed,
 Steam layout seed and exact scale bits. Its own `Save/<profile>/characters.db`
 and `world.db` keep deaths, terrain edits and progress separate from Steam saves.
-The existing Alpha composition keeps its Steam layout input 0 and profile identity.
+Alpha composition keeps its Steam layout input 0. The wider landmark transitions
+advance its separate composition identity from compose-v1 to compose-v2; existing
+compose-v1 folders remain untouched, and no geographic state is migrated into the
+new profile. The landscape generation version remains v2. Compatible engine peers
+must agree on the full new identity.
 Normal Game-generated Steam sessions use the separately verified native startup
 input 123. Keeping these explicit avoids silently changing existing Alpha geography;
 the Alpha composition choice is an engine extension policy rather than a claim
