@@ -1,5 +1,33 @@
 # Source review checkpoint — 2026-11-08
 
+## Material-only terrain probe optimization - 2026-11-08
+
+Material probes in the native terrain mesher now skip the solved-red overlay
+when they consume only block type. Corner probes still read their required light
+sample, and the whole-water shortcut explicitly requests the red byte it tests.
+Filler, dry-air, implicit sea, border and material decisions are unchanged, as are
+RGB/corner arithmetic and gameplay/model stored-light publication. This is a
+refactor of owned code; it introduces no new native behavior.
+
+A private timing run identified solid terrain as its largest mesh stage. Its 766
+generation samples contained no repeated generation key; this is one observation,
+not a universal cache or missed-deadline diagnosis. Five isolated light-publication
+fixture runs per version produced 30 Steam solid-stage samples each. The median
+fell from 23.1095 ms to 18.718 ms, about 19 percent. Runs were sequential and not
+interleaved. This focused result is not a whole-game FPS, native performance or
+cold-start reliability claim; no Alpha performance improvement is asserted.
+
+All five targets, focused light-publication/voxel checks, full required-owner CPU
+without skips, every Vulkan group and SDK independence pass. Matched native and
+Alpha/Omega scenes complete in 48.360 and 93.750 seconds; both images are inspected
+with unchanged settings, readiness/deadlines and Alpha profile identity. Alpha
+terrain/lighting and Omega water remain implemented. The earlier native readiness
+miss remains recorded; no root cause or reliability fix is claimed here.
+
+The prior complete creation-phase handoff remains frozen and unchanged in the
+source payload. It is not a new source contract for this owned-only refactor.
+Broader native generation, visuals, gameplay and provenance acceptance stay open.
+
 ## Character style draw and account-provider admission - 2026-11-08
 
 Publishing the creation screen's navigation/layout no longer changes the live

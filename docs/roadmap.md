@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Material-only native terrain probes skip the unused solved-red overlay;
+  corner light samples and the whole-water red gate remain intact. Five fixture
+  runs per version reduce the Steam solid-stage median from23.1095 to18.718ms;
+  this is not a whole-game performance claim. All5/full required-owner CPU without
+  skips/Vulkan/SDK and both inspected native/Alpha scenes pass, Alpha profile
+  unchanged. Earlier readiness variability remains open. See
+  [the checkpoint](release-status.md#material-only-terrain-probe-optimization---2026-11-08).
+
 - [x] Creation navigation/layout publication no longer rebuilds the actor; the
   admitted owner draw updates working palette bytes and rebuilds only on change.
   The full-width account gate defers provider reads and runs before World substeps

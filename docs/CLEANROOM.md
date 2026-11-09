@@ -2990,3 +2990,17 @@ provider/thread interleavings and broad parity/provenance acceptance remain open
 No original source, SDK or reconstruction implementation was read by the implementer.
 Owner assets, saves, Mods and display settings remain untouched and excluded from
 source/runtime packages. Alpha terrain/lighting and Omega water remain implemented.
+
+## Owned material-probe refactor, 2026-11-08
+
+The implementer reviewed owned meshing code and measured its existing profiler.
+No new native behavior or original-source interpretation is introduced. Material-
+only queries skip a pure solved-light read whose red byte was discarded; the
+actual water red-byte consumer and required corner samples retain their reads.
+Existing light-publication, voxel, full CPU/owner and Vulkan checks pass, as do
+SDK independence and both inspected native/Alpha scenes. The prior creation-phase
+held artifact is verified unchanged as part of the source payload, rather than
+claimed as a new contract for this refactor. Fixture timing results are bounded;
+the earlier native readiness miss and broader provenance/parity gates stay open.
+Source researchers have not seen implementation, tests or timing results. Owner
+content and private evidence remain outside both packages and GitHub.

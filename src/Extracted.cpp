@@ -1858,7 +1858,9 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         out = c.blocks[i];
         return true;
     };
-    auto effectiveBlock = [&](int x, int y, int64_t z) -> Block {
+    // Material probes consume only the type. Skip solved-red reads unless the
+    // caller actually needs that byte, as the whole-water shortcut does below.
+    auto effectiveBlock = [&](int x, int y, int64_t z, bool storedRed = false) -> Block {
         const auto &c = column(x, y);
         if (z < c.base)
             return {200, 200, 200, 0, 1, 0};
@@ -1867,7 +1869,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             auto block = c.blocks[(size_t)index];
             // Native2a3260 writes solved red onto target-zone stored air/water
             // before mesh queries. Overlay it on this immutable job snapshot.
-            if (nativeEncoding && x >= 0 && y >= 0 && x < 64 && y < 64 && (block.type == 0 || block.type == 2))
+            if (storedRed && nativeEncoding && x >= 0 && y >= 0 && x < 64 && y < 64 && (block.type == 0 || block.type == 2))
                 block.r = solvedLight.at((int64_t)ax * 64 + x, (int64_t)ay * 64 + y, z);
             if (block.type || z > 0 || (block.flags & DRY_AIR))
                 return block;
@@ -2023,7 +2025,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     bool wholeWater = nativeEncoding && nativeBox && nativeBox->lowest < 1 && nativeBox->upper >= 0;
     for (int x = 0; x < 64 && wholeWater; ++x)
         for (int y = 0; y < 64; ++y)
-            if (effectiveBlock(x, y, 0).type != WATER_TYPE || effectiveBlock(x, y, 1).r != 255) {
+            if (effectiveBlock(x, y, 0).type != WATER_TYPE || effectiveBlock(x, y, 1, true).r != 255) {
                 wholeWater = false;
                 break;
             }
