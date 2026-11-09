@@ -8,12 +8,23 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Normal Game generation uses the supported native startup input 123 through
+  the same shared default as game metadata. Five reproduced input/derived-field/
+  identity failures are fixed; independent owner values 15376/10211/5983 match and
+  explicit 0 remains valid. Alpha composition retains its existing 0 profile;
+  captured sources retain their supplied input. All five targets, full required-
+  owner CPU without skips, Vulkan, SDK and four live cases confirming the native
+  input pass. Both scene images pass with unchanged Alpha profile identity;
+  whole-world dependence and broader acceptance stay open.
+  See [the checkpoint](release-status.md#native-steam-startup-configuration---2026-11-08).
+
 - [x] Character cadence begins explicitly after UI, actual selected-actor loading
   and derived startup, rather than early World storage construction. The second
   of three entry samples supplies the baseline; entry/rebinding never restarts it.
   Stop-before-entry, unentered ownership, strict/wrapping thresholds and explicit
   writers have focused checks; all5/full required-owner CPU without skips, Vulkan
-  and SDK checks pass. Live checks await Steam sign-in. Exact native
+  and SDK checks pass. Four disposable cases, a periodic write well before exit,
+  and inspected native/Alpha/Omega scenes pass on the entry build. Exact native
   thread/timer/scheduler interleavings and process-byte producers remain open.
   See [the checkpoint](release-status.md#generation-cadence-entry-after-initialization---2026-11-08).
 
@@ -24,7 +35,8 @@ individual feature documents.
   and controlled-player AI consumes current owned canonical slots without a second
   inventory. Reproduced load/reset/ownership regressions, count-width literals,
   full required-owner CPU without skips, every Vulkan group and SDK checks pass.
-  Current-binary extended runtime/scene repetitions await Steam sign-in; caller/UI,
+  Follow-up entry-build load/read-only runtimes and inspected native/Alpha scenes
+  pass; caller/UI,
   worker timing and broader native acceptance remain open. See
   [the checkpoint](release-status.md#selected-character-loading-and-live-inventory---2026-11-08)
   and [save behavior](saves.md).

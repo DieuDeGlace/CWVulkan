@@ -2863,9 +2863,9 @@ defined unsigned wrap arithmetic removes language-level overflow ambiguity rathe
 than claiming a new numeric mismatch. Shared canonical inventory ownership avoids
 per-frame snapshots and stale aliases; NPC byte records retain their separate path.
 All-five-target, required-owner CPU without skips, Vulkan and SDK checks pass.
-Earlier disposable load/read-only runtimes and the current zero-health runtime
-pass; remaining current-binary runtime/scene checks await Steam sign-in, with the
-blocked attempt retained. Complete caller/UI initialization, worker baseline/global
+Follow-up on the entry build passes all four disposable load/read-only runtimes,
+a periodic write before exit, and both inspected native/Alpha/Omega scenes.
+The earlier sign-in-blocked attempt is retained and excluded. Complete caller/UI initialization, worker baseline/global
 mode/interleavings, alternate writers, durability and broad native acceptance
 remain open. No owner data, private evidence, memory or original code is published.
 
@@ -2882,7 +2882,29 @@ timer-domain identity remain outside the claim.
 
 Two before-fix clock-read failures and delayed/second-sample/rebinding/stop/explicit
 write checks pass with all5, full required-owner CPU without skips, all Vulkan
-checks and SDK independence. Live checks await Steam sign-in. No nonzero process-byte
+checks and SDK independence. Subsequent four-case/periodic native runtime and
+inspected native/Alpha/Omega scene checks pass on the entry executable after manual
+Steam reconnection. The earlier offline failure is retained. No nonzero process-byte
 producer or user-facing toggle was invented. No original code, owner data, private
 evidence or memory is published; full initialization and broader provenance/parity
 acceptance remain open.
+
+## Native startup input and derived configuration, 2026-11-08
+
+The unexposed original-only author separately held complete startup-selection and
+configuration/random/table/consumer prose. The implementer read both entire files
+and froze their original hashes. Source-established ordinary caller input 123 is
+separate from the owner-oracle values 15376/10211/5983; the source audit does not
+calculate an imported runtime provider sequence. Existing owned generator code
+supplies the derivation. No original or reconstruction implementation was read.
+
+Five pre-fix default/derived-word/identity mismatches were reproduced. A shared
+native default now connects normal Main generation and game metadata; explicit 0
+and the existing Alpha/capture profiles retain their separate semantics. This is
+a startup correction, separate from generic native reconfiguration or whole-seed
+coverage. Older experimental 0 geography is not silently converted. All five
+targets, full required-owner CPU without skips, Vulkan, SDK and four live cases
+confirming the native input pass. Both scene images pass with matched settings and
+unchanged Alpha profile identity. No owner content, memory or private
+probe is published. Provider concurrency, UI reconfiguration, full generation and
+final provenance/parity acceptance remain open.

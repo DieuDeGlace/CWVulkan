@@ -1,5 +1,49 @@
 # Source review checkpoint — 2026-11-08
 
+## Native Steam startup configuration - 2026-11-08
+
+Normal Game-generated Steam sessions now configure the generator with input 123.
+The old startup passed 0 while its game metadata already said 123. A shared native
+startup constant now supplies both metadata and the generator's default entry;
+explicit inputs remain valid. Existing Alpha composition keeps its established
+input 0 and profile identity, with its own landscape seed separate. Captured worlds
+continue using their recorded input.
+
+The independent startup audit establishes 123 at both original World configuration
+calls. A separate complete configuration audit distinguishes that stored argument
+from the shuffled layout rows and 77 derived fields. It proves concrete consumers
+and separate fixed-coordinate noise/name paths; it does not establish the imported
+random provider's sequence or universal output dependence. The existing owner-data
+oracle separately establishes input 123 with zone value 15376 and sand offsets
+10211 and 5983.
+
+Five before-fix checks reproduced the wrong startup input, three derived words and
+unchanged source identity. The shared default now matches all four independent
+values, and explicit 0 still restores its previous identity. The regression uses
+the same default entry as Main; existing owner-generation checks remain separate.
+Character-associated selection values and retained World data do not silently
+reconfigure the generator.
+
+This corrects newly generated native content previously initialized from 0.
+Geographic or retained data from that experimental input is not automatically
+translated. Alpha input 0 is a versioned extension policy, separate from native
+input 123; its existing profile and captured-world inputs remain distinct.
+
+All five targets, focused startup/load/persistence, full required-owner CPU without
+skips, all Vulkan groups and extractor SDK independence pass. All four disposable
+load/read-only cases also pass with the running engine reporting native input 123.
+Native and Alpha/Omega scenes pass in 52.469 and 92.203 seconds; both images were
+inspected with matched settings and unchanged deadlines/readiness. The Alpha profile
+identity matches the prior build exactly. These remain bounded smoke checks.
+The preceding entry-build periodic-write evidence is recorded below.
+
+The implementer read the complete held
+[startup selection contract](specs/steam-startup-world-seed-selection-and-overrides-20261108.md)
+and [configuration/consumer contract](specs/steam-world-configuration-random-tables-and-derived-fields-20261108.md)
+from the unexposed original-only author and froze both hashes privately. No native
+world-selection reconfiguration, generic repeated-configuration table semantics,
+provider/thread identity or complete world/theme/dungeon parity is claimed.
+
 ## Generation cadence entry after initialization - 2026-11-08
 
 Character-save storage construction and source binding no longer sample the
@@ -27,7 +71,13 @@ distinct second-sample boundaries, repeated entry/rebinding, pre-entry stop,
 never-entered storage and explicit writes now pass with the existing real-worker,
 owned-database, unsigned-wrap and selective-load tests. All five targets and the
 full required-owner CPU suite without skips, every Vulkan group and extractor
-SDK independence pass. Fresh live runtime and scene checks await manual Steam sign-in.
+SDK independence pass. Follow-up on this entry checkpoint's tested executable
+completed all four zero/negative/signed-zero/read-only runtimes. A disposable
+periodic row changed at 62.782 seconds before the normal 89.610-second exit;
+two complete blobs were checked. Native and Alpha/Omega scenes passed in 51.062
+and 99.734 seconds and both images were inspected, with unchanged settings,
+deadlines and readiness. These remain bounded smoke checks, not full native-pixel,
+performance or reliable cold-start acceptance.
 
 The isolated original-only author held the complete
 [worker-entry contract](specs/steam-generation-worker-entry-and-process-mode-20261108.md).
@@ -71,12 +121,13 @@ Vulkan groups and extractor SDK independence pass. Shutdown test synchronization
 now establishes stop-before-join before releasing generation; engine gates and
 expected final writes were unchanged.
 
-Four disposable load/save and read-only runs passed on an earlier build. The
-current executable also passed its zero-health/zero-position writable run.
-Steam then requested sign-in before the next load; that failed attempt is retained
-and excluded. Final negative/signed-zero/read-only repetitions and fresh native/
-Alpha/Omega scene checks remain pending Steam reconnection. No ownership check,
-deadline or scene setting was weakened. Owner saves, Mods and display were untouched.
+Four disposable load/save and read-only repetitions now pass on the subsequent
+generation-entry checkpoint's executable. Zero/negative/signed-zero health remains
+exact, zero coordinates load, writable orientation is zeroed, and both read-only
+databases remain unchanged. Its periodic write and inspected native/Alpha/Omega
+scene checks also pass. The earlier Steam sign-in failure is retained and excluded;
+the user reconnected manually. No ownership check, deadline or scene setting was
+weakened. Owner saves, Mods and display were untouched.
 
 The isolated original-only author held the complete
 [load contract](specs/steam-selected-character-load-state-and-health-20261108.md),

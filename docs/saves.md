@@ -167,6 +167,13 @@ producer, backend durability and complete initialization remain unverified.
 **The world.** `world.db`'s day and time drive the world's clock and the generator's world day. Its dead
 creatures stay dead.
 
+Normal Game-generated Steam startup uses configuration input 123. The retained
+World format does not restore another configuration input, and decoded character
+selection metadata does not choose a replacement generator configuration on load.
+Alpha composition retains its separate established input 0/profile. Geographic
+records from the older experimental Game input 0 are not automatically translated
+by this startup correction.
+
 **The zones' states** (`src/ZoneStates.*`, native-saves.md §5.3). With the game's creatures, each zone near the
 player keeps the game's lists: its static objects (the AI's and the use key's, with each object's active byte),
 its ground items, its block changes, its place counters and its count of dead tracked creatures. When a zone is

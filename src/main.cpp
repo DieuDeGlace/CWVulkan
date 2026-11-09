@@ -729,12 +729,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // before anything is generated. They go by the game's single-player world, which Game
     // (0x7ea80) names "world" with seed 0x7b, as the extractions are of it.
     const std::string gameWorldName = alphaGeneration ? terrainSaveProfile : "world";
-    const int32_t gameWorldSeed = 0x7b;
+    const int32_t gameWorldSeed = worldgen::STEAM_STARTUP_SEED;
     if (config.flag("Events", "Enabled", false) && config.flag("Events", "ReplaceTravelLocations", true))
         OverworldEvents::replaceTravelLocations(gameWorldSeed, gameWorldName);
     worldgen::setAlphaTerrain({});
     if (worldSource == "Game" || alphaGeneration) {
-        worldgen::setWorldSeed(0); // Canonical Steam layout seed; Alpha's landscape seed is separate.
+        if (alphaGeneration)
+            worldgen::setWorldSeed(0); // Existing Alpha composition profile, independent of its landscape seed.
+        else
+            worldgen::setWorldSeed();
         worldgen::setWorldScale(config.number("World", "Scale", 1, 1, 4));
         if (alphaGeneration) {
             std::string why;

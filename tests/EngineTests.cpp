@@ -3419,6 +3419,24 @@ static int genCellsMatchGame(bool verbose) {
     return wrong;
 }
 
+// Supported startup configuration and the independent owner-oracle header values.
+static void nativeWorldStartup() {
+    worldgen::setWorldSeed(0); // previous Alpha composition or an explicit configuration
+    const std::string previous = worldgen::terrainIdentity();
+    worldgen::setWorldSeed(); // same default entry used by normal Game startup
+    const auto &world = worldgen::currentWorld();
+    std::printf("Native world startup: seed %d, zone %d, sand %d %d\n",
+                world.seed, world.zoneSeed(), world.sandX(), world.sandY());
+    CHECK(world.seed == 123);
+    CHECK(world.zoneSeed() == 15376);
+    CHECK(world.sandX() == 10211);
+    CHECK(world.sandY() == 5983);
+    CHECK(worldgen::terrainIdentity() != previous);
+    worldgen::setWorldSeed(0); // retain the explicit profile for the following scale fixture
+    CHECK(worldgen::currentWorld().seed == 0);
+    CHECK(worldgen::terrainIdentity() == previous);
+}
+
 // [World] Scale: at 1.5 a square of land holds about 1.5^2 = 2.25x fewer regions (regions,
 // landmasses and oceans are wider); at 1 the game's world is unchanged.
 static void worldScaleWidensRegions() {
@@ -3431,9 +3449,6 @@ static void worldScaleWidensRegions() {
             }
         return (int)seen.size();
     };
-    // The zone seed the game derives from world seed 123 (read from world+0x244 in game).
-    worldgen::setWorldSeed(123);
-    CHECK(worldgen::currentWorld().zoneSeed() == 15376);
     worldgen::setWorldSeed(0);
     float before = worldgen::groundHeight(5000, -7000);
     int normal = regions();
@@ -10766,6 +10781,10 @@ int main(int argc, char **argv) {
     }
     if (argc >= 2 && std::string(argv[1]) == "zones")
         return zonesPlaceKind = argc > 3 ? std::atoi(argv[3]) : 0, genZonesMatchExtracted(true, argc > 2 ? std::atoi(argv[2]) : 4) ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "startupworld") {
+        nativeWorldStartup();
+        return failures ? 1 : 0;
+    }
     if (argc >= 2 && std::string(argv[1]) == "wgterrain") // the new generator's terrain against the oracles, with timings
         return worldgenTerrainCommand(argc > 2 ? std::atoi(argv[2]) : 1000);
     if (argc >= 2 && std::string(argv[1]) == "wgstructures") // the new generator's structures against the oracles, with timings
@@ -10816,6 +10835,7 @@ int main(int argc, char **argv) {
     failures += worldgenTerrainTests();
     failures += worldgenStructureTests();
     failures += worldgenCreatureTests();
+    nativeWorldStartup();
     worldScaleWidensRegions();
     worldMapModel();
     monsterBehaviour();

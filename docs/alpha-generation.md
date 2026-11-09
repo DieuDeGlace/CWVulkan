@@ -164,6 +164,12 @@ Steam region names, quest plans and difficulty-region identities remain in use.
 An Alpha profile identity includes landscape/composition versions, Alpha seed,
 Steam layout seed and exact scale bits. Its own `Save/<profile>/characters.db`
 and `world.db` keep deaths, terrain edits and progress separate from Steam saves.
+The existing Alpha composition keeps its Steam layout input 0 and profile identity.
+Normal Game-generated Steam sessions use the separately verified native startup
+input 123. Keeping these explicit avoids silently changing existing Alpha geography;
+the Alpha composition choice is an engine extension policy rather than a claim
+that input 0 equals native Steam configuration.
+
 On first writable use only, characters may be copied from the engine's canonical
 save or configured read-only import. Identity, appearance, equipment, level and
 recipes carry over; coordinates, discoveries, missions, flight points and other

@@ -48,8 +48,10 @@ std::optional<glm::vec3> alphaImplicitColour(const TerrainColumn &, int32_t x, i
 
 // --- The world -----------------------------------------------------------------------------------
 
-// The world seed (world+0x244 comes from it); 0 by default. Set before generating.
-void setWorldSeed(int32_t seed);
+// Supported Steam startup input; World+0x244 is derived from it during configuration.
+// Explicit values, including zero for the existing Alpha composition, remain valid.
+inline constexpr int32_t STEAM_STARTUP_SEED = 123;
+void setWorldSeed(int32_t seed = STEAM_STARTUP_SEED); // select before generation workers start
 const WorldValues &currentWorld();
 // The world's day (world+8): some places' encounters depend on it.
 void setWorldDay(int32_t day);
