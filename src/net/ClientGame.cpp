@@ -10,9 +10,9 @@ constexpr size_t KILL_DEAD = 0x08;       // i64 in a kill credit: the dead creat
 constexpr size_t FEAT_CREATURE = 0x00;   // i64 in a feat notice
 } // namespace
 
-ClientGame::ClientGame(Transport &transport, MirrorWorld &world, std::function<void()> ownHostDropAll)
+ClientGame::ClientGame(Transport &transport, MirrorWorld &world, std::function<void()> ownHostDropAll, GuestLink::Timing timing)
     : world(world), guestLink(transport, GuestLink::World{[&world] { world.startOver(); }, std::move(ownHostDropAll),
-                                                        [&world] { world.connected(); }}) {}
+                                                        [&world] { world.connected(); }}, std::move(timing)) {}
 
 void ClientGame::receive(uint32_t nowMs) {
     GuestLink::Inbox inbox;
@@ -94,16 +94,17 @@ void ClientGame::collectOwnEvents() {
 }
 
 void ClientGame::send(uint32_t nowMs) {
-    if (guestLink.checkTimers(nowMs))
+    if (guestLink.checkTimers(nowMs)) {
         wentHome = true;
-    if (guestLink.outbox.interactions.empty()) {
-        InteractionRecord record;
-        if (world.takeInteraction(record))
-            guestLink.outbox.interactions.push_back(record);
+        return;
     }
-    CreatureSnapshot me;
-    if (world.localSnapshot(me))
-        guestLink.sendTick(nowMs, me);
+    std::optional<CreatureSnapshot> me;
+    guestLink.sendTick(nowMs,
+        [&]() -> const CreatureSnapshot * {
+            me.emplace();
+            return world.localSnapshot(*me) ? &*me : nullptr;
+        },
+        [&](InteractionRecord &record) { return world.takeInteraction(record); });
 }
 
 } // namespace cwnet

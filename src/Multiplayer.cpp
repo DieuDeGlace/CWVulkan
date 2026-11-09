@@ -111,10 +111,12 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
         };
     if (setup.clientWorld && setup.blocks) {
         mirrorWorld = std::make_unique<MirrorSide>(*setup.clientWorld, *setup.blocks);
+        // Native send/request clocks belong to the process, across client lifetimes.
+        static const auto processClocks = std::make_shared<cwnet::GuestLink::Clocks>();
         client = std::make_unique<cwnet::ClientGame>(*transport, *mirrorWorld, [this] {
             if (hostGame)
                 hostGame->link().dropAll();
-        });
+        }, setup.clientTiming.value_or(cwnet::GuestLink::Timing{clockNow, processClocks, {}}));
         client->link().waitForWorldHandshake(worldIdentityRequired);
         client->extra = [this](const cwnet::CubeVulkanMessage &message) {
             if (message.channel == "cwv.world-generation.v1") {

@@ -32,6 +32,7 @@
 #include <functional>
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,8 @@ class Multiplayer {
         // Client terrain/source; a combined session creates an independent host reader.
         // A dedicated host uses this reader directly.
         ExtractedWorld *blocks = nullptr;
+        // Optional deterministic clock/storage injection; production uses fresh process clocks.
+        std::optional<cwnet::GuestLink::Timing> clientTiming;
     };
 
     Multiplayer();

@@ -35,6 +35,7 @@ int failures = 0;
     do {                                                                                                                                   \
         if (!(__VA_ARGS__)) {                                                                                                              \
             std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__);                                                             \
+            std::fflush(stdout); \
             failures++;                                                                                                                    \
         }                                                                                                                                  \
     } while (0)
@@ -433,8 +434,11 @@ void loopbackSession() {
     TestWorld hostWorld;
     HostLink host(*hostEnd, hostWorld.links());
     int resets = 0;
-    GuestLink guest(*guestEnd, {[&] { resets++; }, nullptr});
-    uint32_t now = 1000;
+    // Wire/queue semantics here start with already-running process output clocks.
+    auto clocks = std::make_shared<GuestLink::Clocks>();
+    clocks->send = 0; clocks->requests = 0;
+    GuestLink guest(*guestEnd, {[&] { resets++; }, nullptr}, {{},clocks,{}});
+    uint32_t now = 1001; // both independent output intervals are overdue
 
     // Invitation: shown once, then refreshed.
     host.invite(GUEST_MACHINE, now);
@@ -699,7 +703,8 @@ void singlePlayer() {
     GuestLink::Inbox in;
     client.receive(0, in);
     NET_CHECK(client.localId() == 1 && !client.isGuestElsewhere());
-    client.sendTick(0, testCreature(3));
+    NET_CHECK(!client.sendTick(0, testCreature(3)));
+    NET_CHECK(client.sendTick(33, testCreature(3))); // after the initial process send interval
     hin = {};
     host.receive(hin);
     NET_CHECK(hin.creatureUpdates.size() == 1);
@@ -1007,6 +1012,7 @@ void hostAndClientGames() {
     hostWorld.add(5005, 1, 0, -260, 0x2000);
     hostWorld.add(9, 0, 5000, 5000); // a player, any distance
     client.link().goHome(now);
+    frame(client); // prime the native process clocks before the first host/game step
     tick(); // join, id 1, the player's first record
     NET_CHECK(client.link().localId() == 1 && mirror.local == 1);
     tick();
@@ -1080,6 +1086,7 @@ void hostAndClientGames() {
     ClientGame other(*b, otherMirror, [&] { otherHost.link().dropAll(); });
     other.link().goHome(now);
     other.link().connectTo(HOST_MACHINE, now);
+    frame(other); // this endpoint models another process with its own initial clocks
     NET_CHECK(other.link().isGuestElsewhere()); // (its own host idles now)
     for (int i = 0; i < 12; i++) {
         now += 33;

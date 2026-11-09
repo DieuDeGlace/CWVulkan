@@ -23,7 +23,8 @@ namespace cwnet {
 class ClientGame {
   public:
     // `ownHostDropAll`: connecting anywhere makes this machine's own host drop its guests.
-    ClientGame(Transport &transport, MirrorWorld &world, std::function<void()> ownHostDropAll = {});
+    ClientGame(Transport &transport, MirrorWorld &world, std::function<void()> ownHostDropAll = {},
+               GuestLink::Timing timing = {});
 
     GuestLink &link() { return guestLink; }
     const GuestLink &link() const { return guestLink; }

@@ -1,4 +1,5 @@
 #include "net/Session.h"
+#include <utility>
 #include "net/Worlds.h"
 
 #include <type_traits>
@@ -191,7 +192,12 @@ bool HostLink::sendExtra(PeerId to, const CubeVulkanMessage &message) {
 
 // --- GuestLink ---------------------------------------------------------------------------------
 
-GuestLink::GuestLink(Transport &transport, World world) : transport(transport), world(std::move(world)) {
+GuestLink::GuestLink(Transport &transport, World world, Timing timing)
+    : transport(transport), world(std::move(world)), timing(std::move(timing)) {
+    if (!this->timing.shared) this->timing.shared = std::make_shared<Clocks>();
+}
+uint32_t GuestLink::sampleTime(uint32_t fallback) const {
+    return timing.sample ? timing.sample() : fallback;
 }
 
 void GuestLink::send(PeerId to, const Packet &packet) {
@@ -199,6 +205,7 @@ void GuestLink::send(PeerId to, const Packet &packet) {
 }
 
 void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
+    drainTime.reset();
     ++connectionVersion;
     worldReady = !requireWorldHandshake || host == transport.self();
     if (requireWorldHandshake)
@@ -225,19 +232,20 @@ void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
         world.ownHostDropAll();
     // 5. and 6. Join the new host.
     send(host, Join{});
-    lastHeard = nowMs;
+    fallbackBaseline = sampleTime(nowMs);
     currentHost = host;
     if (world.mirrorConnected)
         world.mirrorConnected();
 }
 
 void GuestLink::receive(uint32_t nowMs, Inbox &inbox, MirrorWorld *receiver) {
+    drainTime.reset();
     auto batch = transport.receiveBatch(Channel::ToClient);
     for (auto &entry : batch) {
         Received in = std::move(entry); // release this packet after dispatch, before the next entry
-        const bool fromHost = transport.valid(currentHost) && in.from == currentHost;
+        const bool fromHost = in.from == currentHost;
         if (fromHost)
-            lastHeard = nowMs;
+            fallbackBaseline = sampleTime(nowMs);
         Packet packet = decode(in.bytes, Direction::ToClient);
         if (!worldReady && !std::holds_alternative<Invitation>(packet) && !std::holds_alternative<Leave>(packet) &&
             !std::holds_alternative<YourId>(packet) && !std::holds_alternative<CubeVulkanHello>(packet) &&
@@ -251,13 +259,13 @@ void GuestLink::receive(uint32_t nowMs, Inbox &inbox, MirrorWorld *receiver) {
                 using T = std::decay_t<decltype(p)>;
                 if constexpr (std::is_same_v<T, Invitation>) {
                     if (p.version == GAME_VERSION) {
-                        if (!invitedBy.count(in.from))
-                            inbox.invitations.push_back(in.from);
-                        invitedBy[in.from] = nowMs;
+                        auto [invitation, inserted] = invitedBy.try_emplace(in.from, 0);
+                        if (inserted) inbox.invitations.push_back(in.from);
+                        invitation->second = sampleTime(nowMs); // after insertion/lookup, on every renewal
                     } else
                         send(in.from, VersionMismatch{GAME_VERSION});
                 } else if constexpr (std::is_same_v<T, Leave>) {
-                    if (fromHost) {
+                    if (in.from == currentHost) {
                         connectTo(transport.self(), nowMs);
                         inbox.wentHome = true;
                     }
@@ -316,21 +324,47 @@ void GuestLink::receive(uint32_t nowMs, Inbox &inbox, MirrorWorld *receiver) {
 }
 
 bool GuestLink::checkTimers(uint32_t nowMs) {
-    for (auto it = invitedBy.begin(); it != invitedBy.end();)
-        it = nowMs - it->second > INVITATION_LIFE_MS ? invitedBy.erase(it) : std::next(it);
-    if (transport.valid(currentHost) && nowMs - lastHeard > HOST_SILENCE_MS) {
-        goHome(nowMs);
-        return true;
+    DrainTime phase{sampleTime(nowMs), 0, false};
+    {
+        std::lock_guard lock(timing.shared->guard);
+        if (!timing.shared->send) timing.shared->send = sampleTime(nowMs);
     }
+    phase.comparison = sampleTime(nowMs);
+    if (uint32_t(phase.comparison - fallbackBaseline) > HOST_SILENCE_MS) {
+        goHome(nowMs); // the connection takes its own fresh sample after the request attempt
+        phase.fallback = true;
+        drainTime = phase;
+        return true; // invitation expiry and ordinary output belong only to nonfallback drains
+    }
+    for (auto it = invitedBy.begin(); it != invitedBy.end();)
+        it = uint32_t(phase.comparison - it->second) > INVITATION_LIFE_MS ? invitedBy.erase(it) : std::next(it);
+    drainTime = phase;
     return false;
 }
 
 bool GuestLink::sendTick(uint32_t nowMs, const CreatureSnapshot &player) {
-    if (!transport.valid(currentHost) || !worldReady)
-        return false;
-    if (lastSendTick && nowMs - *lastSendTick <= SEND_INTERVAL_MS)
-        return false;
-    lastSendTick = nowMs;
+    return sendTick(nowMs, [&] { return &player; }, {});
+}
+
+bool GuestLink::sendTick(uint32_t nowMs, const SnapshotSource &source, const InteractionSource &interaction) {
+    if (!drainTime) checkTimers(nowMs);
+    const DrainTime phase = *std::exchange(drainTime, std::nullopt);
+    if (phase.fallback) return false;
+    const auto finish = [&](bool sent) {
+        const uint32_t duration = sampleTime(nowMs) - phase.began;
+        if (duration > 8 && timing.slowDrain) timing.slowDrain(duration);
+        return sent;
+    };
+    bool due;
+    {
+        std::lock_guard lock(timing.shared->guard);
+        due = uint32_t(phase.comparison - *timing.shared->send) > SEND_INTERVAL_MS;
+        if (due) timing.shared->send = phase.comparison;
+    }
+    if (!due || !transport.valid(currentHost) || !worldReady) return finish(false);
+    const CreatureSnapshot *snapshot = source ? source() : nullptr;
+    if (!snapshot) return finish(false); // safe engine handling before a local entity exists
+    const auto &player = *snapshot;
     const PeerId to = currentHost;
     // [3] The player's record, against the last copy sent (or whole).
     send(to, CreatureUpdate{makeDelta(myId, player, lastSent ? &*lastSent : nullptr)});
@@ -342,6 +376,10 @@ bool GuestLink::sendTick(uint32_t nowMs, const CreatureSnapshot &player) {
         outbox.chat.pop_front();
     }
     // [9] One interaction.
+    if (outbox.interactions.empty() && interaction) {
+        InteractionRecord record;
+        if (interaction(record)) outbox.interactions.push_back(record);
+    }
     if (!outbox.interactions.empty()) {
         send(to, Interaction{outbox.interactions.front()});
         outbox.interactions.pop_front();
@@ -359,13 +397,22 @@ bool GuestLink::sendTick(uint32_t nowMs, const CreatureSnapshot &player) {
     outbox.sounds.clear();
     outbox.buffs.clear();
     outbox.effects.clear();
-    // [15] Once a second, every zone still needing its state.
-    if (!lastZoneRound || nowMs - *lastZoneRound > ZONE_REQUEST_MS) {
-        lastZoneRound = nowMs;
+    // [15] Its separate process clock samples fresh, inside the admitted send path.
+    {
+        std::lock_guard lock(timing.shared->guard);
+        if (!timing.shared->requests) timing.shared->requests = sampleTime(nowMs);
+    }
+    const uint32_t requestSample = sampleTime(nowMs);
+    bool requestDue;
+    {
+        std::lock_guard lock(timing.shared->guard);
+        requestDue = uint32_t(requestSample - *timing.shared->requests) > ZONE_REQUEST_MS;
+        if (requestDue) timing.shared->requests = requestSample;
+    }
+    if (requestDue)
         for (const ZoneKey &zone : outbox.neededZones)
             send(to, ZoneRequest{zone});
-    }
-    return true;
+    return finish(true);
 }
 
 void GuestLink::queueOwnEvents(const WorldEvents &events) {

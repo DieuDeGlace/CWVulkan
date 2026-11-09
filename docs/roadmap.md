@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Client timeout/fallback uses fresh matching-dispatch/connect samples and
+  strict unsigned age above5000 after the fixed batch. Fallback bypasses expiry
+  and ordinary sends; shared process32/request1000 clocks retain distinct readings
+  and exact admission order. Snapshot/interaction reads are deferred. Eight
+  reproduced failures and expanded ordering/wrap/lifetime/empty-round checks pass;
+  all5/full required-owner CPU without skips, Vulkan, SDK, four disposable runtime
+  cases and both inspected native/Alpha/Omega scenes pass. Alpha's profile remains
+  unchanged. Native provider/thread/socket and
+  original-peer acceptance remain open. See
+  [the checkpoint](release-status.md#client-timeout-and-outgoing-clock-admission---2026-11-08).
+
 - [x] Normal Game generation uses the supported native startup input 123 through
   the same shared default as game metadata. Five reproduced input/derived-field/
   identity failures are fixed; independent owner values 15376/10211/5983 match and

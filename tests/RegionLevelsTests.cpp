@@ -136,8 +136,10 @@ int regionLevelsTests() {
         guest.setRegionScaling(true);
         homePlayer.setPlayer(terrain, firstPosition, 0, {}, 20, 18, true);
         guestPlayer.setPlayer(terrain, firstPosition, 0, {}, 20, 77, true);
+        auto clock = std::make_shared<uint32_t>(Multiplayer::clockNow());
         Multiplayer::Setup setup;
         setup.way = Multiplayer::Way::Address;
+        setup.clientTiming = cwnet::GuestLink::Timing{[clock] { return *clock; },{}, {}};
         setup.hostWorld = &homeWorld;
         setup.clientWorld = &homePlayer;
         setup.blocks = &terrain;
@@ -149,7 +151,7 @@ int regionLevelsTests() {
         const bool guestOpened = guest.start(setup, error);
         check(guestOpened, "local UDP guest opens");
         if (homeOpened && guestOpened) {
-            uint32_t now = Multiplayer::clockNow();
+            uint32_t &now = *clock;
             auto frames = [&] {
                 for (int i = 0; i < 18; ++i) {
                     now += 32;

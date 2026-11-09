@@ -2908,3 +2908,23 @@ confirming the native input pass. Both scene images pass with matched settings a
 unchanged Alpha profile identity. No owner content, memory or private
 probe is published. Provider concurrency, UI reconfiguration, full generation and
 final provenance/parity acceptance remain open.
+
+## Client timeout and process-output clocks, 2026-11-08
+
+The unexposed original-only author finalized/read back/held the complete timeout,
+dispatch/connect writers and outgoing-clock contract independently. The implementer
+read the entire artifact, froze its hash privately and used owned engine code only.
+Fresh clock reads retain their separate store/admission positions. Safe malformed
+content handling, missing-entity handling, synchronized shared clock storage and
+world-identity negotiation remain explicit engine policies; native stack remnants
+and unsafe thread races are not reproduced.
+
+Eight pre-change admission failures were reproduced. Expanded clock/order/wrap/
+lifetime/deferred-source checks pass. Old protocol fixtures now explicitly establish
+the clock state that their packet assertions require, and synthetic UDP frames bind
+an owned logical clock; production binds fresh process readings. All five targets,
+full required-owner CPU without skips, all Vulkan groups, SDK independence, four
+disposable load cases and both inspected native/Alpha/Omega scenes pass with
+unchanged settings, deadlines and Alpha profile. Provider resolution, original thread/socket lifecycle,
+other writers and broad original-peer/provenance acceptance remain open. No owner
+content, original code, private evidence or memory is published.

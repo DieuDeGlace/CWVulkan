@@ -15,8 +15,8 @@
 // queues and send calls. Wiring them to CubeVulkan's worlds (mirror mode, host mode) is the
 // integration's job.
 //
-// Times are milliseconds from any steady clock (the game uses timeGetTime), passed in so the
-// links can be tested.
+// Times are uint32 milliseconds (native timeGetTime). Production clients bind fresh
+// samples/process clocks; explicit frame times and isolated clocks support protocol fixtures.
 //
 // CubeVulkan extras: after a guest gets its id, it says hello (packet 25); a CubeVulkan host
 // answers in kind. Packet 26 messages then pass between those two only (sendExtra refuses
@@ -27,6 +27,8 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -135,7 +137,7 @@ class HostLink {
 
 class GuestLink {
   public:
-    static constexpr uint32_t HOST_SILENCE_MS = 5000;    // longer than this without a packet: back home
+    static constexpr uint32_t HOST_SILENCE_MS = 5000;    // age of connect/matching-dispatch sample
     static constexpr uint32_t INVITATION_LIFE_MS = 6000; // an invitation not renewed for this long expires
     static constexpr uint32_t SEND_INTERVAL_MS = 32;     // a send tick at most this often
     static constexpr uint32_t ZONE_REQUEST_MS = 1000;    // zone requests at most once a second
@@ -182,7 +184,21 @@ class GuestLink {
     };
     Outbox outbox;
 
-    GuestLink(Transport &transport, World world);
+    using Clock = std::function<uint32_t()>;
+    struct Clocks {
+        std::mutex guard;
+        std::optional<uint32_t> send, requests; // process clocks, distinct from the peer baseline
+    };
+    struct Timing {
+        Clock sample;
+        std::shared_ptr<Clocks> shared;
+        std::function<void(uint32_t)> slowDrain;
+    };
+    // Borrowed only during sendTick, after admission; neither producer is retained.
+    using SnapshotSource = std::function<const CreatureSnapshot *()>;
+    using InteractionSource = std::function<bool(InteractionRecord &)>;
+
+    GuestLink(Transport &transport, World world, Timing timing = {});
 
     // §4.3: leaves the current host (packet 2), resets, and joins `host` (packet 1). Joining a
     // friend, leaving (to one's own host) and the timeouts all come through here.
@@ -221,6 +237,7 @@ class GuestLink {
     // [13]s -> and once a second one [15] per needed zone. `player` is the local player's record.
     // Returns whether a send tick happened.
     bool sendTick(uint32_t nowMs, const CreatureSnapshot &player);
+    bool sendTick(uint32_t nowMs, const SnapshotSource &, const InteractionSource &);
 
     // End of the client frame (0x3cc40): takes from the client world's event lists the ones the
     // local player caused into the outbox (damage numbers by attacker, sounds by owner, buff
@@ -234,7 +251,7 @@ class GuestLink {
     Transport &transport;
     World world;
     PeerId currentHost = 0;                   // client+0x70
-    uint32_t lastHeard = 0;                   // client+0x9ec
+    uint32_t fallbackBaseline = 0;            // client+0x9ec: connect or matching-dispatch sample
     std::optional<CreatureSnapshot> lastSent; // client+0x78; empty: the full-update flag is set
     std::set<int64_t> heard;                  // client+0x9f0
     std::map<PeerId, uint32_t> invitedBy;     // client+0xa00
@@ -243,7 +260,10 @@ class GuestLink {
     bool helloSent = false;
     bool requireWorldHandshake = false, worldReady = true;
     uint64_t connectionVersion = 0;
-    std::optional<uint32_t> lastSendTick, lastZoneRound;
+    Timing timing;
+    struct DrainTime { uint32_t began, comparison; bool fallback; };
+    std::optional<DrainTime> drainTime;
+    uint32_t sampleTime(uint32_t fallback) const;
 
     void send(PeerId to, const Packet &packet);
 };

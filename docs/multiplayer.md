@@ -1,7 +1,7 @@
 # Multiplayer
 
-CubeVulkan plays multiplayer the way Steam Cube World does, on the game's own wire protocol, so
-CubeVulkan players and players of the original game can share a world. The behaviour comes from
+CubeVulkan implements Steam Cube World's wire protocol for compatibility with original-game
+peers; an actual original-peer/two-account session remains an acceptance gate. The behaviour comes from
 the clean-room specs `docs/specs/netcode-transport.md`, `netcode-roles.md`, `netcode-packets.md`
 and `netcode-compatibility.md`. The protocol layer has been checked byte for byte against
 172,964 packets recorded from the original game (`EngineTests netdecode`).
@@ -71,6 +71,18 @@ interactions; its player's interactions go to the host one at a time.
 * **What this player caused** goes back to the host each frame: its hits, sounds, buff notices
   and effect objects, together with its record.
 
+The client finishes its fixed receive batch before checking timeout or periodic
+output. A matching sender refreshes the peer baseline before content admission;
+shared connect supplies a fresh baseline after its request attempt. Strict unsigned
+age above 5000 returns through the full local transition and skips ordinary sends
+for that drain. Otherwise the process-wide send clock admits work strictly above
+32 ms, before the peer predicate. Snapshot construction and interaction consumption
+wait for their admitted stages. The distinct fresh zone-request clock admits above
+1000 ms and advances even for an empty request list. Process clocks survive client
+replacement. The final above-8-ms diagnostic is not a receive budget. See the
+[bounded clock contract](specs/steam-client-timeout-clock-and-fallback-admission-20261108.md)
+for initial zero, fresh sample order, invitation clocks, wrap and evidence limits.
+
 Each player's character, inventory, gold, experience and quests are their own (in
 `Save/characters.db`). Nothing of them is shared: kills give experience to the player whose
 kill credit it is, and loot lies on the ground in the host's zones for whoever picks it up.
@@ -133,6 +145,9 @@ no client:
     machine joining and leaving);
   * the mirror's swing timing on a real `SpawnedCreatures` world;
   * the multiplayer menu's rows (`tests/FrontendTests.cpp`).
+* `EngineTests clienttiming` checks fresh clock/store order, fallback bypass,
+  strict/wrapping boundaries, shared process lifetime, empty request rounds and
+  deferred snapshot/interaction reads. It also runs in the full CPU suite.
 * `EngineTests netdecode <files>` decodes recordings of the original game's packets
   (ZoneExtractor's `Extract\net\*.bin`) and checks that each encodes back to its bytes.
 * For multi-process tests on one machine, run every instance hidden: `--hidden` (a window that

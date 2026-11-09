@@ -1,5 +1,49 @@
 # Source review checkpoint — 2026-11-08
 
+## Client timeout and outgoing clock admission - 2026-11-08
+
+The client now keeps connection, matching-sender, invitation and process-output
+clocks distinct. Construction leaves the peer baseline at literal zero. Shared
+connect samples after its request attempt and before publishing the peer/role;
+matching-sender dispatch samples before decoding content, including unknown kinds
+and short prefixes. Safe bounded decoding remains an explicit engine policy.
+Invitation insertion precedes its own separate fresh timestamp.
+
+After the complete fixed receive batch and core-reset notices, distinct diagnostic,
+lazy send-clock initialization and age-comparison readings follow the held native
+order. Strict unsigned age above 5000 takes the full local connection transition,
+including when the selection is invalid or already local. That branch preserves
+earlier batch effects and skips invitation expiry, ordinary output, request work
+and the later duration diagnostic. The transition takes its own new clock reading.
+
+On a nonfallback drain, the held comparison expires invitations strictly above
+6000. The shared process send clock advances strictly above 32 before testing the
+selected peer; a separate process request clock initializes and samples fresh only
+inside an admitted send and advances strictly above 1000 before testing the zone
+list. Both clocks survive client replacement. Snapshot storage and interaction
+reads are deferred until their admitted output stages. The final strict-above-8
+duration check is a diagnostic; it does not budget the receive batch or cancel sends.
+
+Eight pre-change admission failures were reproduced. Expanded regressions cover
+fresh sample order, insertion/Leave writers, unknown and short content, delayed
+batch handlers, unsigned wrap, strict boundaries, empty request rounds, process
+lifetime and deferred reads. Protocol fixtures now establish their intended clock
+state explicitly; their packet payload/order/count assertions remain unchanged.
+All five targets, full required-owner CPU without skips, all Vulkan groups and
+extractor SDK independence pass. Four disposable raw-load/read-only cases pass.
+Native and Alpha/Omega sessions complete in 54.328 and 97.703 seconds; both images
+were inspected with matched settings and unchanged readiness/deadlines. The Alpha
+profile is unchanged. These are bounded smoke checks, without native-pixel,
+performance or reliable cold-start acceptance claims.
+
+The implementer read the complete held
+[original-only clock contract](specs/steam-client-timeout-clock-and-fallback-admission-20261108.md)
+and froze its hash. Short synchronized engine clock storage, deterministic test
+injection, world-identity negotiation and handling of a missing local snapshot are
+explicit engine adapters. Provider resolution, native thread interleavings, socket
+lifecycle and actual original-peer/two-account acceptance remain open. Alpha
+terrain/lighting and Omega water remain implemented.
+
 ## Native Steam startup configuration - 2026-11-08
 
 Normal Game-generated Steam sessions now configure the generator with input 123.
