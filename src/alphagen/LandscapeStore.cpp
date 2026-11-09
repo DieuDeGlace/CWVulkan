@@ -76,15 +76,25 @@ std::optional<ColumnLease> LandscapeStore::column(int32_t x, int32_t y) {
         return std::nullopt;
     return ColumnLease{std::shared_ptr<const Zone>(stage, stage->zone.get()), *point};
 }
-std::optional<TerrainSample> LandscapeStore::sample(int32_t x, int32_t y) {
+std::optional<alphacoords::Point> LandscapeStore::preparedPoint(int32_t x, int32_t y) const {
     const auto point = frame.point(x, y);
     if (!point)
         return std::nullopt;
-    const auto ax = point->x, ay = point->y;
     // Match the surface stage's preparation window without allocating voxel zones.
     for (int i = -1; i <= 1; ++i)
         for (int j = -1; j <= 1; ++j)
-            terrain.prepareRegion(ax / REGION + i, ay / REGION + j);
+            terrain.prepareRegion(point->x / REGION + i, point->y / REGION + j);
+    return point;
+}
+std::optional<float> LandscapeStore::height(int32_t x, int32_t y) {
+    const auto point = preparedPoint(x, y);
+    return point ? std::optional<float>(terrain.height(point->x, point->y)) : std::nullopt;
+}
+std::optional<TerrainSample> LandscapeStore::sample(int32_t x, int32_t y) {
+    const auto point = preparedPoint(x, y);
+    if (!point)
+        return std::nullopt;
+    const auto ax = point->x, ay = point->y;
     TerrainSample result;
     result.warmth = world.warmth(ax, ay);
     result.moisture = world.moisture(ax, ay);

@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Alpha hybrid retains Steam land floors and biome ground palettes, including
+  purple Undead Lands; savannahs keep their gentler native columns and map relief.
+  Actual dry-column losses2,063/4,096 in representative baselines become zero.
+  Exact RGB/relief, map, landmark continuity and raw-source checks pass with all5,
+  full required-owner CPU without skips, Vulkan and SDK independence. Compose-v3
+  separates prior geography. Broad native and biome acceptance remain open. See
+  [the checkpoint](release-status.md#steam-land-biomes-and-terrain-palettes---2026-11-09).
+
 - [x] Material-only native terrain probes skip the unused solved-red overlay;
   corner light samples and the whole-water red gate remain intact. Five fixture
   runs per version reduce the Steam solid-stage median from23.1095 to18.718ms;

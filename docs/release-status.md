@@ -1,5 +1,52 @@
 # Source review checkpoint — 2026-11-08
 
+## Steam land biomes and terrain palettes - 2026-11-09
+
+The Alpha hybrid now keeps Steam land floors instead of letting its independent
+ocean field flood named land biomes. Higher Alpha relief remains available;
+savannahs retain their gentler native columns and map relief. A smooth regional
+halo joins the policies to surrounding terrain, while the earlier rounded
+construction transition and exact native cores remain intact. Liquid surfaces
+stay fixed independently of translated ground.
+
+Ground colors now come from the actual native terrain columns, matched by depth,
+and maps retain their native biome palette. This keeps purple Undead Lands and
+other distinctive ground colors. Alpha landscape and voxel-tree geometry remain
+outside native savannahs and protected cores. Hybrid blocks use Steam color
+encoding; raw Alpha generation and its separate full-RGB provider tests remain
+unchanged. Alpha lighting and Omega water stay implemented.
+
+A retained owned baseline loses2,063 dry columns in the sampled Undead Lands zone
+and4,096 in a sampled savannah zone. The corrected probes lose none. Two savannah
+cases, including higher Alpha terrain, retain exact native columns and overview
+heights. RGB, map/voxel land coverage, earlier landmark continuity and source
+immutability checks pass. Three alternating processes per version measure a
+2.899-second baseline median and2.876-second candidate median for the bounded
+search/map/zone probe; this establishes no meaningful slowdown or gameplay-FPS
+claim. All five builds, full required-owner CPU without skips, every Vulkan group
+and SDK independence pass.
+
+The final build also narrows cover-only queries to the same prepared Alpha H
+without unrelated climate/color work, and reuses identical XY decisions within
+composition. Independent fresh stores match exact height words and finite
+admission. Plant-enabled whole-column/model/light/emitter fingerprints remain
+identical. Three alternating probe processes measure warmed composition medians
+of320.520 and310.140ms; variability limits this small result, with no FPS claim.
+
+Fresh final Native and Alpha/Omega scenes, the corrected purple-land mound view,
+and a normal-distance savannah view complete and are inspected. Current writable,
+read-only and reopen checks pass, including complete character payloads and
+unchanged canonical/previous-compose-v2 database bytes. Earlier readiness failures
+remain retained; current scene timings are variable, so reliable cold-start and
+broad performance acceptance remain open. No deadline or readiness gate was lowered.
+
+The hybrid selects compose-v3, keeping previous profile folders separate without
+geographic migration. This is an owned extension correction, implemented from
+project code and permitted data; the separate new GUI source contract is held
+and unused. Broad native pixels/world/gameplay, provider/thread, multiplayer and
+final provenance acceptance remain open. Only audited source is published;
+owner data, captures, private evidence and binaries remain local.
+
 ## Exact height rounding and fixed-water plants - 2026-11-09
 
 The Steam final-height path now rounds the peak mask-times-height-gate product

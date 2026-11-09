@@ -716,6 +716,24 @@ int alphaTerrainTests() {
         check(constructionChecked, "construction preservation fixture is exercised");
     }
     {
+        // Independent fresh stores exercise identical preparation, including
+        // finite-world edges; the narrow query must preserve every H bit.
+        for (uint32_t seed : {123u, 1570745101u}) {
+            alphagen::LandscapeStore full(seed), heights(seed);
+            for (const auto point : {worldgen::Int2{0, 0}, worldgen::Int2{12512, -11575},
+                                     worldgen::Int2{-27136, 10240}, worldgen::Int2{9920, -10784},
+                                     worldgen::Int2{-alphacoords::HOME, 0},
+                                     worldgen::Int2{alphacoords::WORLD_SIDE - alphacoords::HOME - 1, 0},
+                                     worldgen::Int2{INT32_MAX, 0}}) {
+                const auto sample = full.sample(point.x, point.y);
+                const auto height = heights.height(point.x, point.y);
+                check(bool(sample) == bool(height) && (!sample || std::bit_cast<uint32_t>(sample->height) ==
+                                                                  std::bit_cast<uint32_t>(*height)),
+                      "height-only reads preserve full-sample words and finite admission in independent stores");
+            }
+        }
+    }
+    {
         const auto seed = worldgen::currentWorld().seed;
         auto profile = std::make_shared<worldgen::AlphaTerrain>(123, nullptr, seed);
         const auto steamIdentity = worldgen::terrainIdentity();
@@ -761,7 +779,7 @@ int alphaTerrainTests() {
                 break;
             }
         }
-        check(mapColumn.fullColour && mapTop == (std::max(1, columnTop) / alphaMap.unit) * alphaMap.unit,
+        check(!mapColumn.fullColour && mapTop == (std::max(1, columnTop) / alphaMap.unit) * alphaMap.unit,
               "close Alpha map top agrees with the playable landscape at the same coordinate");
         check(worldgen::usingAlphaTerrain() && worldgen::terrainIdentity() != steamIdentity &&
                   worldgen::terrainIdentity() == profile->identity(worldgen::worldScale()),
@@ -781,13 +799,15 @@ int alphaTerrainTests() {
             const ExtractedWorld::GameBlock target{12, 34, 56, 0, 6, 0};
             check(reader.setGameBlock(0, 0, base - 4, target), "Alpha reader admits a full setter below its stored run");
             const auto gap = reader.gameBlock(0, 0, base - 2);
-            const auto expected = terrain.rock(alphacoords::HOME, alphacoords::HOME, base - 2 - sourceColumn.sourceShift);
-            auto nativeColumn = sourceColumn;
-            nativeColumn.fullColour = false;
-            check(worldgen::alphaImplicitColour(sourceColumn, 0, 0, base - 2) &&
-                      !worldgen::alphaImplicitColour(nativeColumn, 0, 0, base - 2),
-                  "implicit Alpha colour selection leaves native Steam columns unchanged");
-            auto renderColumn = sourceColumn;
+            const auto &nativeInputs = worldgen::zone(0, 0)->terrain;
+            const auto expected = worldgen::toBlock(worldgen::buriedColour(0, 0, base - 2,
+                nativeInputs.retainedColours[0], nativeInputs.sand));
+            auto alphaColumn = sourceColumn;
+            alphaColumn.fullColour = true; // Raw full-RGB source remains a separate provider.
+            check(worldgen::alphaImplicitColour(alphaColumn, 0, 0, base - 2) &&
+                      !worldgen::alphaImplicitColour(sourceColumn, 0, 0, base - 2),
+                  "raw Alpha color remains separate from the hybrid's Steam biome palette");
+            auto renderColumn = alphaColumn;
             renderColumn.base = 10;
             renderColumn.sourceShift = 7;
             renderColumn.blocks = {{10, 20, 30, 0, worldgen::blocktype::ROCK, 0}};
@@ -824,9 +844,9 @@ int alphaTerrainTests() {
             }
             check(retainedPrecision, "corner shading retains sub-byte implicit colour until final vertex packing");
             check(gap[0] == uint8_t(int32_t(expected.r)) && gap[1] == uint8_t(int32_t(expected.g)) &&
-                      gap[2] == uint8_t(int32_t(expected.b)) && gap[4] == worldgen::blocktype::ROCK &&
+                      gap[2] == uint8_t(int32_t(expected.b)) && gap[4] == expected.type &&
                       reader.gameBlock(0, 0, base - 4) == target,
-                  "Alpha downward gaps use full RGB from the source rock palette and retain all target bytes");
+                  "hybrid downward gaps retain the Steam biome palette and all target bytes");
             auto fork = reader.forkSource();
             float forkHeight = 0;
             check(fork->sourceIdentity() == reader.sourceIdentity() && fork->surface(0, 0, forkHeight) && forkHeight == surface,

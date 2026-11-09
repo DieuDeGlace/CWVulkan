@@ -1,5 +1,35 @@
 # Alpha terrain generation
 
+## Steam land and biome-color continuity, 2026-11-09
+
+The hybrid preserves the Steam land floor beneath named land biomes, including
+Undead Lands, while keeping higher Alpha relief. Savannahs keep their gentler
+native geometry and map relief. A smooth256-block regional halo joins the
+policies; exact construction cores and the rounded landmark approach are retained.
+The independent raw Alpha ocean field no longer replaces those land floors.
+
+Composed soil samples use the native column's stored palette at the corresponding
+depth. Purple Undead Lands, snow, sand and other biome ground colors therefore
+follow Steam membership. Map land colors use the native map palette. Alpha voxel
+geometry and forests remain outside native savannahs and construction cores;
+raw source colors and random streams are unchanged. The composed blocks use Steam
+half-intensity encoding, including quantized Alpha foliage, and ordinary retained
+native inputs fill downward edits. Raw full-RGB source/provider paths remain
+separate and tested. Alpha lighting and Omega water remain enabled.
+
+Actual baseline/candidate probes reduce sampled Deadlands and savannah flooding
+to zero; both savannah cases retain native terrain and overview heights. All five
+builds, full required-owner CPU without skips, every Vulkan group and SDK
+independence pass. The bounded three-process median changes from2.899 to2.876
+seconds; no gameplay speedup is claimed. The composition identity advances to
+compose-v3. Existing compose-v1/v2 folders are retained without geographic migration.
+Final current-binary Native/Alpha scenes and purple-land/savannah views complete
+and are inspected. Creation, read-only and reopen checks preserve canonical and
+previous-compose-v2 bytes. Earlier readiness failures remain retained; startup
+timings remain variable. Height-only cover reads and per-compose XY reuse preserve
+exact H words and composed terrain/model fingerprints. Broader biome edges, native
+pixels, reliable startup, travel and final acceptance remain open.
+
 ## Fixed-water plant follow-up, 2026-11-09
 
 Water lilies now retain their original water-surface Z when the hybrid moves
@@ -133,8 +163,9 @@ through eviction without retaining a mutable generator pointer.
 `SteamBridge` converts four-byte Alpha materials into six-byte engine blocks with
 explicit type and flag rules. It transposes XY indexing, preserves original RGB,
 and records full-color column metadata separately from native block flags. Alpha
-lighting consumes those full RGB values directly; retained Steam construction
-columns keep their half-intensity encoding. The Steam lighting adapter quantizes
+lighting can consume those full RGB values directly. The current hybrid then
+selects native biome terrain palettes and half-intensity encoding; its geometry
+and the immutable full-RGB source remain separate. The raw Steam lighting adapter quantizes
 full RGB to the Steam vertex representation. Dry air, leaves and glowing material
 have named conversions; unknown materials fail rather than sharing a coincidental
 numeric type. Glow13 becomes Steam light20 with full emission as a hybrid policy.
@@ -146,7 +177,8 @@ ground. Distance from the nearest footprint uses a rounded Euclidean halo; box
 lookup covers that whole halo on either side of a publication-tile boundary.
 Duplicate footprints are removed before sampling. The blend continues through
 sea level, while sea and raised-pool water levels remain fixed in world Z. Dry
-air and immutable source colors/metadata are retained. This intentionally keeps
+air and immutable source metadata are retained. Composed palette bytes are selected
+separately as described above. This intentionally keeps
 some surrounding Steam terrain without the former abrupt coastal pad edge.
 Broader forest edges, material seams and steep transitions still need live review.
 
@@ -156,13 +188,13 @@ marking runs again at the resulting positions. Composition is transactional. The
 canonical generator, collision, water, lighting, local host and mirror readers all
 consume these composed columns; H alone never places the player.
 
-Alpha downward edits fill newly stored gaps with the source rock palette, sampled
-at the original Alpha Z even inside translated transition columns. The caller's
-target block bytes stay intact. Missing material input fails without a partial
-column edit; Steam setters retain their existing material path.
+Current hybrid downward edits use retained native biome color inputs. Explicit
+full-RGB Alpha columns still fill gaps from source rock at the original Alpha Z,
+including translated columns. The caller's target bytes stay intact. Missing
+material input fails without a partial edit; native Steam setters are unchanged.
 
-Implicit buried mesh faces blend the first stored solid block toward procedural
-rock over ten blocks. Air/water/empty references use pure rock. The independently
+For explicit full-RGB Alpha columns, implicit buried mesh faces blend the first
+stored solid block toward procedural rock over ten blocks. Air/water/empty references use pure rock. The independently
 specified scalar float stages remain unquantized through corner shading, with
 byte packing only at the vertex. This changes face color, not collision storage
 or block light. The Steam-look adapter keeps its explicit vertex-format policy.
@@ -211,7 +243,8 @@ original cache/preparation and render-origin lifetime still need broader review.
 The Steam-style map keeps its UI, marker XY, region identities and protected
 construction geometry. Close views sample actual landscape voxels, including tree
 crowns; distant views use an H-based overview to avoid generating entire off-screen
-regions. Map colors are adapted to the Steam vertex format. Distant overview and
+regions. Current composed land uses the native biome map palette; water remains
+separate. Distant overview and
 transition bands are project policies, not a native Alpha map parity claim.
 Steam region names, quest plans and difficulty-region identities remain in use.
 
@@ -220,10 +253,10 @@ Steam region names, quest plans and difficulty-region identities remain in use.
 An Alpha profile identity includes landscape/composition versions, Alpha seed,
 Steam layout seed and exact scale bits. Its own `Save/<profile>/characters.db`
 and `world.db` keep deaths, terrain edits and progress separate from Steam saves.
-Alpha composition keeps its Steam layout input 0. The wider landmark transitions
-advance its separate composition identity from compose-v1 to compose-v2; existing
-compose-v1 folders remain untouched, and no geographic state is migrated into the
-new profile. The landscape generation version remains v2. Compatible engine peers
+Alpha composition keeps its Steam layout input 0. Landmark transitions previously
+advanced compose-v1 to compose-v2; land/biome corrections now select compose-v3.
+Existing compose-v1/v2 folders remain untouched, with no geographic migration.
+The landscape generation version remains v2. Compatible engine peers
 must agree on the full new identity.
 Normal Game-generated Steam sessions use the separately verified native startup
 input 123. Keeping these explicit avoids silently changing existing Alpha geography;

@@ -19,11 +19,14 @@ class LandscapeStore {
     std::vector<Plant> plantsForTile(int32_t steamZoneX, int32_t steamZoneY);
     std::optional<ColumnLease> column(int32_t steamX, int32_t steamY);
     std::optional<TerrainSample> sample(int32_t steamX, int32_t steamY);
+    // Same prepared H as sample, without unrelated climate/color queries.
+    std::optional<float> height(int32_t steamX, int32_t steamY);
     std::optional<glm::vec3> rockColour(int32_t steamX, int32_t steamY, int32_t sourceZ);
     std::optional<Block> rock(int32_t steamX, int32_t steamY, int32_t sourceZ);
     std::optional<alphacoords::Coverage> coverage(int32_t steamZoneX, int32_t steamZoneY) const;
 
   private:
+    std::optional<alphacoords::Point> preparedPoint(int32_t steamX, int32_t steamY) const;
     World world;
     Terrain terrain;
     const alphacoords::Mapping frame;

@@ -1,5 +1,21 @@
 # Clean-room process
 
+## Owned biome land and palette correction, 2026-11-09
+
+The implementer used project-owned composition, region, map and stored-color
+paths plus permitted runtime data to correct the user-reported hybrid flooding.
+No original/reconstruction/SDK source or new source-side findings were used.
+The independent GUI keyboard/editor handoff is held and remains unused here.
+Steam biome land floors, native savannah relief and palette selection are explicit
+hybrid policies, separate from unchanged native Steam and raw Alpha algorithms.
+
+Actual owned baseline/candidate probes, material/land/map/continuity regressions,
+all targets, full required-owner CPU without skips, Vulkan and SDK independence
+pass. Previous profiles are separated through compose-v3; no geographic migration
+is implied. Native pixels, broader biome/world/gameplay and final provenance
+acceptance remain open. Owner files, captures and private evidence are excluded
+from public source and runtime payloads.
+
 ## Scalar-order and floating-plant follow-up, 2026-11-09
 
 An isolated original-only author independently reread the complete preparation

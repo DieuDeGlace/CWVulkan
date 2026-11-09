@@ -149,6 +149,62 @@ int alphaTransitionTests() {
     check(mapStep <= 64, "coarse map samples show the blended approach instead of a rectangular pad edge");
     check(mapTop(map, 9920, -10784) == retainedTop, "native map core retains its complete original height");
 
+    // Steam biome membership and stored colors remain authoritative in the
+    // hybrid, including where the independent Alpha seed supplies ocean.
+    struct BiomeCase { int type, x, y; };
+    for (const auto test : {BiomeCase{12, 12288, -11776}, BiomeCase{10, -27136, 10240},
+                            BiomeCase{10, 25766, -1334}}) {
+        const int zx = floorDivBy(test.x, 64), zy = floorDivBy(test.y, 64);
+        auto zone = generateZone(world, zx, zy);
+        const auto original = zone.terrain.columns;
+        check(alpha.compose(zone, world, error), "representative land biome composes");
+        bool dry = true, palette = true, gentle = true;
+        int compared = 0;
+        for (int lx = 0; lx < 64; ++lx)
+            for (int ly = 0; ly < 64; ++ly) {
+                const int x = zx * 64 + lx, y = zy * 64 + ly;
+                if (biomeAt(x, y) != test.type)
+                    continue;
+                const auto index = ZoneTerrain::index(lx, ly);
+                const auto &before = original[index], &after = zone.terrain.columns[index];
+                const int nativeTop = ground(before), hybridTop = ground(after);
+                if (nativeTop > 1)
+                    dry &= hybridTop > 1;
+                const auto at = [](const TerrainColumn &column, int z) {
+                    const auto k = int64_t(z) - column.base;
+                    return k >= 0 && k < int64_t(column.blocks.size()) ? column.blocks[size_t(k)] : SOLID_GREY;
+                };
+                const auto a = at(before, nativeTop - 1), b = at(after, hybridTop - 1);
+                palette &= !after.fullColour && a.r == b.r && a.g == b.g && a.b == b.b;
+                gentle &= before.base == after.base && before.blocks == after.blocks;
+                ++compared;
+            }
+        std::printf("Alpha biome %d: %d compared, dry %d, palette %d, native geometry %d\n",
+                    test.type, compared, dry, palette, gentle);
+        check(compared > 0 && dry, "Steam land does not become Alpha sea");
+        check(palette, "actual hybrid ground retains each Steam biome's stored RGB encoding");
+        if (test.type == 10)
+            check(gentle, "savannah retains native terrain instead of ocean or excessive Alpha relief");
+
+        const int rx = floorDivBy(test.x, 512), ry = floorDivBy(test.y, 512);
+        auto overview = mapRegion(rx, ry, 3);
+        const auto nativeMap = overview;
+        alpha.composeMap(overview);
+        bool mapDry = true, mapGentle = true;
+        for (int x = rx * 512; x < (rx + 1) * 512; x += 32)
+            for (int y = ry * 512; y < (ry + 1) * 512; y += 32) {
+                if (biomeAt(x, y) != test.type)
+                    continue;
+                const int before = mapTop(nativeMap, x, y), after = mapTop(overview, x, y);
+                if (before > 64)
+                    mapDry &= after > 32;
+                mapGentle &= before == after;
+            }
+        check(mapDry, "map land coverage agrees with the corrected playable biome");
+        if (test.type == 10)
+            check(mapGentle, "savannah overview retains native relief");
+    }
+
     setWorldSeed(oldSeed);
     setWorldScale(oldScale);
     std::printf("Alpha hybrid transitions: %d failure(s)\n", failures);

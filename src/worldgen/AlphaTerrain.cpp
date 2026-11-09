@@ -1,6 +1,7 @@
 #include "worldgen/AlphaTerrain.h"
 #include "alphagen/SteamBridge.h"
 #include "worldgen/MapModel.h"
+#include "worldgen/Regions.h"
 #include <map>
 #include <algorithm>
 #include <bit>
@@ -74,10 +75,70 @@ float alphaGround(const alphagen::Column &column) {
     }
     return float(column.bottom);
 }
-int32_t transition(float alpha, float native, float weight) {
-    // Blend the solid surface through sea level; the column bridge keeps liquid
-    // planes fixed independently of this ground translation.
-    return int32_t(std::lround((native - alpha) * weight));
+struct Blend {
+    float construction = 0, land = 0, savannah = 0;
+    int32_t shift(float alpha, float native) const {
+        const float difference = native - alpha;
+        // Steam land retains its floor; Alpha can add higher relief. Savannah
+        // keeps its gentler native profile. The liquid planes remain independent.
+        float delta = std::max(difference, 0.f) * land;
+        delta += (difference - delta) * savannah;
+        return int32_t(std::lround(delta + (difference - delta) * construction));
+    }
+};
+Blend blendAt(const std::vector<Box> &boxes, int32_t x, int32_t y) {
+    const auto regions = neighbourhood(x, y);
+    float landDistance = std::numeric_limits<float>::max();
+    float savannahDistance = landDistance;
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) {
+            if (regions.biome[i][j] != biomes::OCEAN)
+                landDistance = std::min(landDistance, regions.dist2[i][j]);
+            if (regions.biome[i][j] == 10)
+                savannahDistance = std::min(savannahDistance, regions.dist2[i][j]);
+        }
+    const float nearest = std::sqrt(std::max(0.f, regions.nearestDist2));
+    const auto halo = [nearest](float distance) {
+        const float t = std::clamp((std::sqrt(distance) - nearest) / BLEND, 0.f, 1.f);
+        return 1.f - t * t * (3.f - 2.f * t);
+    };
+    return {constructionWeight(boxes, x, y), halo(landDistance), halo(savannahDistance)};
+}
+bool soil(const Block &block) {
+    return !isOpen(block) && block.type != blocktype::WOOD && block.type != blocktype::LEAVES && block.type != 11 &&
+           block.type != blocktype::LIGHT;
+}
+void biomePalette(TerrainColumn &column, const TerrainColumn &native, int32_t alphaGround, int32_t nativeGround) {
+    // Geometry stays Alpha, while soil samples retain the Steam biome's actual
+    // stored palette. All resulting bytes use the ordinary Steam encoding.
+    const auto at = [&](int64_t z) {
+        if (native.blocks.empty())
+            return SOLID_GREY;
+        const auto index = size_t(std::clamp(z - native.base, int64_t(0), int64_t(native.blocks.size()) - 1));
+        const auto &block = native.blocks[index];
+        if (soil(block))
+            return block;
+        const auto surface = int64_t(nativeGround) - 1 - native.base;
+        return surface >= 0 && surface < int64_t(native.blocks.size()) ? native.blocks[size_t(surface)] : SOLID_GREY;
+    };
+    for (size_t i = 0; i < column.blocks.size(); ++i) {
+        auto &block = column.blocks[i];
+        if (!soil(block)) {
+            block.r /= 2;
+            block.g /= 2;
+            block.b /= 2;
+            continue;
+        }
+        const int64_t depth = int64_t(alphaGround) - 1 - (int64_t(column.base) + int64_t(i));
+        const auto colour = at(int64_t(nativeGround) - 1 - depth);
+        block.r = colour.r;
+        block.g = colour.g;
+        block.b = colour.b;
+        block.glow = colour.glow;
+        if (!depth)
+            block.type = colour.type;
+    }
+    column.fullColour = false;
 }
 } // namespace
 AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeModels> palms, int32_t steamSeed,
@@ -85,7 +146,7 @@ AlphaTerrain::AlphaTerrain(uint32_t seed, std::shared_ptr<const alphagen::TreeMo
     : seed(seed), steamSeed(steamSeed), source(seed, {}, LANDSCAPE_CACHE_PARENTS, true, std::move(palms)), plantModels(std::move(plants)) {
 }
 std::string AlphaTerrain::identity(double scale) const {
-    return "alpha-v" + std::to_string(alphagen::LandscapeStage::VERSION) + "-compose-v2-seed-" + std::to_string(seed) + "-steam-seed-" +
+    return "alpha-v" + std::to_string(alphagen::LandscapeStage::VERSION) + "-compose-v3-seed-" + std::to_string(seed) + "-steam-seed-" +
            std::to_string(steamSeed) + "-scale-bits-" + std::to_string(std::bit_cast<uint64_t>(scale));
 }
 bool AlphaTerrain::coversZone(int32_t zx, int32_t zy) const {
@@ -146,12 +207,12 @@ void AlphaTerrain::composeMap(MapRegion &map) {
             auto [entry, fresh] = boxes.try_emplace(key);
             if (fresh)
                 entry->second = constructionBoxes(world, key.first, key.second);
-            const float weight = constructionWeight(entry->second, x, y);
+            const auto blend = blendAt(entry->second, x, y);
             const auto field = source.sample(x, y);
             if (!field)
                 continue;
             projection.present = true;
-            projection.retained = weight == 1;
+            projection.retained = blend.construction == 1 || blend.savannah == 1;
             if (projection.retained) {
                 low = std::min(low, oldBase);
                 high = std::max(high, oldBase + map.sizeZ - 1);
@@ -175,7 +236,7 @@ void AlphaTerrain::composeMap(MapRegion &map) {
                 }
             }
             const float native = std::floor(groundHeight(x, y)) + 1;
-            top += transition(baseGround, native, weight);
+            top += blend.shift(baseGround, native);
             const bool waterVisible = waterTop > top;
             top = std::max(top, waterTop);
             projection.top = int32_t(std::floor(top / map.unit));
@@ -183,6 +244,15 @@ void AlphaTerrain::composeMap(MapRegion &map) {
             projection.rgb = waterVisible
                                  ? std::array<uint8_t, 3>{38, 51, 127}
                                  : std::array<uint8_t, 3>{uint8_t(colour.r / 2), uint8_t(colour.g / 2), uint8_t(colour.b / 2)};
+            if (!waterVisible && native > 1) {
+                for (int k = map.sizeZ - 1; k >= 0; --k) {
+                    const auto *rgb = map.voxel(i, j, k);
+                    if (rgb[0] || rgb[1] || rgb[2]) {
+                        std::copy_n(rgb, 3, projection.rgb.begin());
+                        break;
+                    }
+                }
+            }
             if (projection.rgb == std::array<uint8_t, 3>{})
                 projection.rgb = {1, 1, 1};
             low = std::min(low, projection.top);
@@ -223,15 +293,15 @@ void AlphaTerrain::composeMap(MapRegion &map) {
         auto [entry, fresh] = boxes.try_emplace(key);
         if (fresh)
             entry->second = constructionBoxes(world, key.first, key.second);
-        const float weight = constructionWeight(entry->second, x, y);
-        if (weight == 1)
+        const auto blend = blendAt(entry->second, x, y);
+        if (blend.construction == 1 || blend.savannah == 1)
             return old;
         float alpha = std::floor(field->height) + 1;
         if (map.unit <= 16)
             if (const auto column = source.column(x, y))
                 alpha = alphaGround(column->raw());
         const float native = std::floor(groundHeight(x, y)) + 1;
-        return old + int32_t(std::lround(alpha + transition(alpha, native, weight) - native));
+        return old + int32_t(std::lround(alpha + blend.shift(alpha, native) - native));
     };
     for (auto &marker : map.markers)
         marker.z = moveHeight(marker.x, marker.y, marker.z);
@@ -254,6 +324,7 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
     }
     const auto boxes = constructionBoxes(world, zx, zy);
     std::array<int32_t, ZONE_COLUMNS> offsets{};
+    std::array<Blend, ZONE_COLUMNS> blends{};
     ZoneContents result = zone;
     for (int lx = 0; lx < ZONE_SIZE; ++lx)
         for (int ly = 0; ly < ZONE_SIZE; ++ly) {
@@ -263,29 +334,43 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
                 return false;
             }
             const auto index = ZoneTerrain::index(lx, ly);
-            const float weight = constructionWeight(boxes, x, y);
-            if (weight == 1)
-                continue; // Preserve the complete Steam column, including below-ground rooms.
+            const auto blend = blends[index] = blendAt(boxes, x, y);
+            if (blend.construction == 1 || blend.savannah == 1)
+                continue; // Exact construction cores and gentler native savannah columns.
             const auto &original = tile->columns()[index];
             const float alpha = ground(original), native = ground(zone.terrain.columns[index]);
-            const auto shift = transition(alpha, native, weight);
+            const auto shift = blend.shift(alpha, native);
             auto column = alphagen::shiftedTerrainColumn(original, shift);
             if (!column) {
                 error = "Alpha transition exceeds the supported height range";
                 return false;
             }
             offsets[index] = int32_t(std::lround(alpha + shift - native));
+            biomePalette(*column, zone.terrain.columns[index], int32_t(alpha) + shift, int32_t(native));
             result.terrain.columns[index] = std::move(*column);
         }
     std::map<std::pair<int32_t, int32_t>, std::vector<Box>> surroundingBoxes;
-    const auto weightAt = [&](int32_t x, int32_t y) {
+    const auto blendFor = [&](int32_t x, int32_t y) {
         const auto key = std::make_pair(floorDivBy(x, ZONE_SIZE), floorDivBy(y, ZONE_SIZE));
-        if (key.first == zx && key.second == zy)
-            return constructionWeight(boxes, x, y);
+        if (const auto index = setterColumn(zx, zy, x, y))
+            return blends[*index];
         auto [entry, fresh] = surroundingBoxes.try_emplace(key);
         if (fresh)
             entry->second = constructionBoxes(world, key.first, key.second);
-        return constructionWeight(entry->second, x, y);
+        return blendAt(entry->second, x, y);
+    };
+    std::map<std::pair<int32_t, int32_t>, bool> coverDecisions;
+    const auto retainCover = [&](int32_t x, int32_t y) {
+        auto [entry, fresh] = coverDecisions.try_emplace({x, y}, false);
+        if (!fresh)
+            return entry->second;
+        const auto blend = blendFor(x, y);
+        if (blend.construction == 1 || blend.savannah == 1)
+            return entry->second = true;
+        if (blend.land != 1)
+            return false;
+        const auto height = source.height(x, y);
+        return entry->second = height && *height < 1;
     };
     const auto offsetAt = [&](int64_t fx, int64_t fy) -> int32_t {
         const int64_t bx = fx >> 16, by = fy >> 16;
@@ -294,19 +379,19 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
         const auto x = int32_t(bx), y = int32_t(by);
         if (const auto index = setterColumn(zx, zy, x, y))
             return offsets[*index];
-        const float weight = weightAt(x, y);
-        if (weight == 1)
+        const auto blend = blendFor(x, y);
+        if (blend.construction == 1 || blend.savannah == 1)
             return 0;
         const auto column = source.column(x, y);
         if (!column)
             return 0;
         const float native = std::floor(groundHeight(x, y)) + 1;
         const float alpha = alphaGround(column->raw());
-        return int32_t(std::lround(alpha + transition(alpha, native, weight) - native));
+        return int32_t(std::lround(alpha + blend.shift(alpha, native) - native));
     };
     if (plantModels) {
         const auto replaceCover = [&](const Model &model) {
-            return model.groundCover && weightAt(blocksOf(model.x), blocksOf(model.y)) < 1;
+            return model.groundCover && !retainCover(blocksOf(model.x), blocksOf(model.y));
         };
         std::erase_if(result.models, replaceCover);
         std::erase_if(result.modelLights, replaceCover);
@@ -344,14 +429,14 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
     if (plantModels) {
         for (const auto &plant : source.plantsForTile(zx, zy)) {
             const auto index = setterColumn(zx, zy, plant.x, plant.y);
-            if (!index || constructionWeight(boxes, plant.x, plant.y) == 1)
+            if (!index || retainCover(plant.x, plant.y))
                 continue;
             const bool floating = plant.kind == 31 || plant.kind == 32;
             if (floating && (plant.z <= 0 ||
                              result.terrain.read(plant.x, plant.y, plant.z - 1).type != blocktype::WATER ||
                              result.terrain.read(plant.x, plant.y, plant.z).type != blocktype::AIR))
                 continue; // The composed floor or scenery can cover the former water surface.
-            const int32_t shift = result.terrain.columns[*index].base - tile->columns()[*index].base;
+            const int32_t shift = result.terrain.columns[*index].sourceShift - tile->columns()[*index].sourceShift;
             const auto model = alphagen::steamPlant(plant, *plantModels, shift);
             if (!model) {
                 error = "unmapped Alpha ground-cover model or flags";

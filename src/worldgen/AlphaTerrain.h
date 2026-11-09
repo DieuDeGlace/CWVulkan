@@ -1,6 +1,7 @@
 #pragma once
-// Project hybrid policy: Alpha landscape outside conservative Steam construction
-// footprints. Steam generation itself remains unchanged.
+// Project hybrid policy: Alpha relief with Steam land floors, biome palettes and
+// conservative construction cores. Savannah retains its gentler native terrain.
+// Steam generation and the raw Alpha generator remain unchanged.
 #include "alphagen/LandscapeStore.h"
 #include "alphagen/PlantModels.h"
 #include "worldgen/Structures.h"
