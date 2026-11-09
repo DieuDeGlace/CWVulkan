@@ -89,6 +89,10 @@ struct World {
     std::vector<nativebuffs::Notice> buffNotes;      // the buffs the special skill key gave
 };
 
+// Early Game publication before World substeps. Help is independent of these roots.
+// steam-help-state-and-control-admission-20261108.md.
+void frontendState(uint8_t *player, bool mainShown, bool charactersShown, bool creationShown);
+
 // The movement routine (spec 3) on the local player's record; dt in ms.
 void control(const Input &in, State &state, uint8_t *player, double dt, const World &world);
 

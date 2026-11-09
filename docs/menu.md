@@ -40,8 +40,10 @@ Normal start-up opens the title. `--play` goes straight into gameplay.
 Title, Characters, Creation, Worlds and New World have separate branches under
 one scene root. The last two are reserved for the corresponding frontend paths.
 The gameplay branch is active only when all five frontend branches are inactive.
-Options and Controls are independent siblings. `InterfaceRoot.h` owns these
-borrowed branch references; `Scene` owns the nodes.
+Options and Controls are independent siblings. Help is a child of the gameplay
+HUD branch with its own retained selected value. Frontend or F4 ancestor hiding
+does not dismiss it. `InterfaceRoot.h` owns these borrowed branch references;
+`Scene` owns the nodes.
 
 `publishFrontendScreen` places retained template instances before pointer decisions
 and hides frontend-managed instances omitted from the current screen. Layout-only
@@ -61,6 +63,15 @@ existing controls and their state. The separate
 [visibility and cancellation contract](specs/steam-interface-visibility-and-cancellation.md)
 bounds the original focus messages and distinguishes window capture from scene
 capture. The complete live pointer sequence remains unfinished.
+
+Help's selected value is owned separately from ancestor visibility. It does not
+enter the ordinary-UI or modal input gate, and generic clicks, Escape and
+controller panel dismissal leave it selected. See the complete
+[Help contract](specs/steam-help-state-and-control-admission-20261108.md).
+The current binding list is an engine layout; native class/action-specific text,
+the actual help-menu resource callback, cached rendering and same-message-pump
+confirmation/F1 interleaving remain open. Live current-binary checks await Steam
+reconnection.
 
 The bound inventory, crafting and shop draws retain a physical cell index.
 Later item queries validate that index against the live collection and current
@@ -192,9 +203,11 @@ use the current account-derived field. Separate surviving Entity state is retain
   saves the live actor's current values without another heal or placement.
 - Successful persistence writes `num`, the numbered character and `slot` in order.
   The subsequent character-list snapshot has its own identity and limited data;
-  full progress belongs to the saved/live character. Help and gameplay entry keep
-  the created actor. Backend failures and malformed/oversized names use safe engine
-  handling.
+  full progress belongs to the saved/live character. Confirmation selects Help
+  before persistence and enters ordinary gameplay without an extra dismissal.
+  The shared HUD keeps Help selected and the created actor remains live; entry
+  does not call a second decoder or reset. Backend failures and malformed/oversized
+  names use safe engine handling.
 
 See the complete [creation contract](specs/steam-new-character-initialization-and-commit-20261108.md)
 and [checkpoint](release-status.md#native-creation-state-and-commit-ownership---2026-11-08).
@@ -252,7 +265,8 @@ can be requested with `--play --character slot-0 --no-save --ring-menu --capture
     "Press a key".
   - Defaults, OK (writes `controls.cfg`) and Cancel.
 - **The keys.**
-  - F1 shows the help sheet.
+  - F1 toggles Help on every dispatched key-down, including repeats. Help does
+    not block ordinary controls or consume gameplay input by itself.
   - F2 and F3 change the interface's scale, F5 and F6 the map's; both are saved.
   - F4 hides the interface.
 - **The system menu** (150 × 150; Options, Controls, Start Menu, Exit Game) opens with the System Menu binding
@@ -377,8 +391,8 @@ features have been removed.
 
 For a disposable automated creation check, `--menu-page create-test:NAME` fills
 the editor; the existing `--pointer X Y --click-after S` activates ordinary Create.
-A following diagnostic click closes Help through its normal callback. Use hidden
-runs with private `--save-folder` and `--settings-folder`; `--no-save` also exercises
+Successful confirmation enters gameplay with Help selected; no second diagnostic
+click is generated. Use hidden runs with private `--save-folder` and `--settings-folder`; `--no-save` also exercises
 the owned creation handoff when no numeric record is written. This diagnostic does
 not establish physical keyboard/mouse or native scheduling behavior.
 

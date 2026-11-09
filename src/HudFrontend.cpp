@@ -34,13 +34,22 @@ void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) con
 }
 
 void Hud::setInterfaceState(const uiroot::State &state) {
-    if (interfaceBranches)
-        interfaceBranches->apply(state);
+    if (interfaceBranches) {
+        auto current = state;
+        current.help = helpRootShown;
+        interfaceBranches->apply(current);
+    }
 }
 void Hud::setInterfaceShown(bool shown) {
     interfaceRootShown = shown;
     if (scene)
         scene->root().visible = shown;
+}
+
+void Hud::setHelpShown(bool shown) {
+    helpRootShown = shown;
+    if (interfaceBranches)
+        interfaceBranches->node(uiroot::Branch::Help)->visible = shown;
 }
 
 const plasma::SceneNode *Hud::interfaceBranchRoot(uiroot::Branch branch) const {

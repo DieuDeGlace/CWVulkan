@@ -16,6 +16,7 @@
 #include "MapLook.h"
 #include "PanelScroll.h"
 #include "NativePlayer.h"
+#include "NativeControl.h"
 #include "NativeRules.h"
 #include "Spawned.h"
 #include "SteamSession.h"
@@ -47,10 +48,20 @@ MenuInput::MouseEdges MenuInput::windowMouseEdges() const {
         case InterfaceMessage::MiddleDown: out.pressed.push_back(2); break;
         case InterfaceMessage::MiddleUp: out.released.push_back(2); break;
         case InterfaceMessage::ToggleVisibility:
+        case InterfaceMessage::ToggleHelp:
         case InterfaceMessage::Wheel: break;
         }
     }
     return out;
+}
+
+void MenuInput::keyMessage(int key, bool repeat) {
+    if (!repeat || key == GLFW_KEY_F1 || key == GLFW_KEY_F4)
+        pressed.push_back(key); // Retain raw edges for an active controls-binding capture.
+    if (key == GLFW_KEY_F1)
+        interfaceMessages.emplace_back(InterfaceMessage::ToggleHelp);
+    if (key == GLFW_KEY_F4)
+        interfaceMessages.emplace_back(InterfaceMessage::ToggleVisibility);
 }
 
 void MenuInput::wheelMessage(int16_t delta) {
@@ -73,6 +84,9 @@ void MenuInput::routeInterfaceMessages(Hud &hud, const WheelCallback &wheel) {
         case InterfaceMessage::MiddleUp: hud.interfaceSecondaryButton(2, false); break;
         case InterfaceMessage::ToggleVisibility:
             hud.setInterfaceShown(!hud.interfaceShown());
+            break;
+        case InterfaceMessage::ToggleHelp:
+            hud.setHelpShown(!hud.helpShown());
             break;
         case InterfaceMessage::Wheel:
             if (wheel)
@@ -119,7 +133,7 @@ constexpr int SOUND_MENU_OPEN = 0x56, SOUND_MENU_CLOSE = 0x57, SOUND_MENU_SELECT
 // The ability of rising on the eagle, and the record fields the title sets on the player.
 constexpr uint8_t EAGLE_RISE = 0x9d;
 constexpr size_t ABILITY = 0x68, TOGGLES = 0x128, HEALTH = 0x180, FLIGHT_POINT = 0x1b0, FLIGHT_START = 0x1b8;
-constexpr uint32_t FRONT_BIT = 0x80, LANTERN_BIT = 0x1;
+constexpr uint32_t LANTERN_BIT = 0x1;
 constexpr float NIGHT_FROM = 19.0f, NIGHT_UNTIL = 5.0f; // the lantern on the title (hours)
 
 // Buttons and sizes the spec gives (GUI units).
@@ -259,14 +273,14 @@ class Session {
     bool startInGame(std::string &error);
     Result::Action gameFrame(double dtMs);
     void gameDraw(std::vector<OverlayVertex> &out);
-    bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || helpOpen || friendsOpen; }
+    bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || hud.helpShown() || friendsOpen; }
     bool ordinaryUi() const { return systemShown || optionsOpen || controlsOpen || friendsOpen; }
     bool capturingControl() const { return controlsOpen && controls.waiting >= 0; }
     bool wheel(int nativeDelta, glm::vec2 cachedPointer);
     void hideSystemForMovement() { systemShown = false; }
     void hideMultiplayerForMovement() { friendsOpen = false; }
     void dismissMenus() {
-        while (anyOpen())
+        while (ordinaryUi())
             back(true);
     }
     void toggleSystemMenu() { systemShown = !systemShown; }
@@ -306,7 +320,7 @@ class Session {
 
     // The front layers (frontend-title.md §2) and the screens over them.
     bool titleShown = true, charactersShown = false, creationShown = false;
-    bool optionsOpen = false, controlsOpen = false, helpOpen = false;
+    bool optionsOpen = false, controlsOpen = false;
     bool riding() const { return titleShown || charactersShown; }
     bool front() const { return titleShown || charactersShown || creationShown; }
     void syncInterfaceState() {
@@ -458,18 +472,13 @@ class Session {
     glm::vec2 friendButtonAt(int row, bool right) const;
     void friendsItems(Hud::Screen &out);
     bool friendsClick();
-    bool done = false, playAfterHelp = false;
+    bool done = false;
     Result outcome;
     void decide(Result::Action action, int slot = -1) {
         done = true;
         outcome.action = action;
         if (slot >= 0)
             outcome.slot = slot;
-    }
-    void closeHelp() {
-        helpOpen = false;
-        if (playAfterHelp)
-            decide(Result::Play);
     }
 };
 
@@ -975,10 +984,6 @@ void Session::applyOptions() {
 
 // Back (0x9ddb0): creation to character select, character select to the title.
 void Session::back(bool inGame) {
-    if (helpOpen) {
-        closeHelp();
-        return;
-    }
     if (controlsOpen) {
         controlsOpen = false;
         return;
@@ -1121,12 +1126,6 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
     for (auto it = keys.begin(); it != keys.end();) {
         const int key = *it;
         switch (key) {
-        case GLFW_KEY_F1:
-            if (helpOpen)
-                closeHelp();
-            else
-                helpOpen = true;
-            break;
         case GLFW_KEY_F2:
         case GLFW_KEY_F3: { // the interface's scale, saved at once
             float g = hud.interfaceScale() * (key == GLFW_KEY_F3 ? 1.25f : 1.0f / 1.25f);
@@ -1140,8 +1139,9 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
             }
             break;
         }
+        case GLFW_KEY_F1:
         case GLFW_KEY_F4:
-            break; // Applied before the pointer poll.
+            break; // Window dispatch already applied these before the pointer poll.
         case GLFW_KEY_F5:
         case GLFW_KEY_F6:
             if (s.options) {
@@ -1192,7 +1192,7 @@ void Session::handleKeys(bool inGame) {
             back(inGame);
             break;
         case GLFW_KEY_BACKSPACE:
-            if (creationShown && !name.empty() && !optionsOpen && !helpOpen) {
+            if (creationShown && !name.empty() && !optionsOpen) {
                 while (!name.empty() && ((unsigned char)name.back() & 0xc0) == 0x80)
                     name.pop_back();
                 if (!name.empty())
@@ -1213,7 +1213,7 @@ void Session::handleKeys(bool inGame) {
             if (GameInput::buttonMatches((*s.controls)[gameoptions::SYSTEM_MENU], button) && !optionsOpen && !controlsOpen &&
                 controls.waiting < 0)
                 systemShown = false;
-    if (creationShown && !optionsOpen && !helpOpen)
+    if (creationShown && !optionsOpen)
         for (char c : in.typed)
             if (nameAccepted(name + c) || name.size() < 2) // (the field takes any characters)
                 name += c;
@@ -1227,11 +1227,6 @@ void Session::handleClick(bool inGame) {
         controls.waiting = -1;
     if (!clicked)
         return;
-    if (helpOpen) {
-        if (pointerDown)
-            closeHelp();
-        return;
-    }
     if (controlsOpen) {
         const glm::vec2 at = centred(CONTROLS_SIZE), m = mouse - at;
         const int rows = ControlsScreen::visibleRows();
@@ -1410,13 +1405,13 @@ void Session::handleClick(bool inGame) {
                 stage.name = charactercreation::nameBytes(name);
                 nativesaves::prepareNewCharacter(stage);
             }
-            helpOpen = playAfterHelp = true;
+            hud.setHelpShown(true);
             int index = (int)listed.size();
             if (!req.readOnly && s.store)
                 index = s.store->create(stage);
             if (!req.readOnly && s.store && index < 0) {
                 creationShown = true;
-                helpOpen = playAfterHelp = false;
+                hud.setHelpShown(false);
                 log("Characters: could not save the new character");
                 return;
             }
@@ -1443,6 +1438,7 @@ void Session::handleClick(bool inGame) {
             selectedSlot = outcome.slot = index;
             outcome.created = true;
             outcome.createdHairStyle = hairEditor.committed;
+            decide(Result::Play); // Help remains selected in the shared HUD; no dismissal is required.
         }
     }
 }
@@ -1458,19 +1454,17 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
     nativeai::Creature *p = s.spawned && s.extracted ? s.spawned->localPlayer() : nullptr;
     if (p) {
         uint8_t *r = p->record;
+        nativecontrol::frontendState(r, titleShown, charactersShown, creationShown);
         // The player on the eagle (frontend-title.md §3.1).
         int64_t position[3];
         std::memcpy(position, r + worldgen::creature::POSITION, sizeof position);
         if (riding()) {
-            r[ABILITY] = EAGLE_RISE;
             const int32_t block[2] = {(int32_t)(position[0] / 65536), (int32_t)(position[1] / 65536)};
             std::memcpy(r + FLIGHT_POINT, block, sizeof block);
             std::memcpy(r + FLIGHT_START, position, sizeof position);
-        } else if (r[ABILITY] == EAGLE_RISE)
-            r[ABILITY] = 0;
+        }
         uint32_t toggles;
         std::memcpy(&toggles, r + TOGGLES, 4);
-        toggles = front() ? toggles | FRONT_BIT : toggles & ~FRONT_BIT;
         if (front()) {
             const bool night = hour < NIGHT_UNTIL || hour >= NIGHT_FROM;
             toggles = night ? toggles | LANTERN_BIT : toggles & ~LANTERN_BIT;
@@ -1962,8 +1956,8 @@ Hud::Screen Session::buildScreen(bool inGame) {
         append(&Session::optionsItems, uiroot::Branch::Options);
     if (controlsOpen)
         append(&Session::controlsItems, uiroot::Branch::Controls);
-    if (helpOpen)
-        append(&Session::helpItems, uiroot::Branch::Root);
+    if (hud.helpShown() && !front())
+        append(&Session::helpItems, uiroot::Branch::Help);
     hud.publishFrontendScreen(out);
     if (!hud.interfaceShown()) {
         navigationPoints.clear();
@@ -1995,8 +1989,6 @@ bool Session::frame() {
     if (req.clickAfter >= 0 && !testClicked && seconds >= req.clickAfter && s.world->pendingCount() == 0) {
         clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;
-    } else if (req.page.starts_with("create-test:") && testClicked && outcome.created && helpOpen) {
-        clicked = pointerDown = pointerUp = true; // diagnostic continuation through the ordinary Help callback
     }
     (void)buildScreen(false); // Publish the controller's active objects before its pointer decisions.
     handleClick(false);
@@ -2082,13 +2074,13 @@ Result Session::runTitle() {
     return outcome;
 }
 
-// Confirmed creation keeps its already-live Entity through Help and gameplay entry.
+// Confirmed creation enters gameplay with its already-live Entity and Help selected.
 // Continue/Select retain their separate saved-character entry path.
 void Session::enterWorld() {
     if (outcome.created) {
         if (s.spawned && s.extracted) {
             auto guard = s.extracted->lockSourceState();
-            s.spawned->playerSaveSource()(stage); // current actor after Help, without a second decoder/reset
+            s.spawned->playerSaveSource()(stage); // current confirmed actor, without a second decoder/reset
         }
         outcome.createdCharacter = stageOwner;
         const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
@@ -2118,14 +2110,14 @@ void Session::enterWorld() {
     s.renderer->cutHistory();
 }
 
-// One frame in play: the interface keys always; while a screen is open, the frame's keys and
-// clicks are its own (and taken from the input, so the game does not act on them too).
+// Blocking panels consume their input. Help has its own visibility and never
+// clears gameplay input or delays the ordinary control/World paths.
 Result::Action Session::gameFrame(double frameMs) {
     readInput(false, frameMs);
-    const bool wasOpen = anyOpen();
+    const bool wasOpen = ordinaryUi();
     if (!wasOpen) {
         handleInterfaceKeys(s.input->pressed);
-        if (anyOpen()) // (F1 opened the help sheet: its keys start next frame)
+        if (ordinaryUi())
             playSound(SOUND_MENU_OPEN);
         return Result::Stay;
     }
@@ -2134,7 +2126,7 @@ Result::Action Session::gameFrame(double frameMs) {
     handleClick(true);
     s.input->finishPointerCallbacks();
     s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear(), s.input->typed.clear();
-    if (!anyOpen())
+    if (!ordinaryUi())
         playSound(SOUND_MENU_CLOSE);
     if (done) {
         done = false;
@@ -2170,19 +2162,19 @@ InGameMenus::InGameMenus(Services &s, const Request &request) : session(std::mak
 InGameMenus::~InGameMenus() { session->finish(); }
 bool InGameMenus::start(std::string &error) { return session->startInGame(error); }
 void InGameMenus::toggleSystemMenu() {
-    const bool wasOpen = session->anyOpen();
+    const bool wasOpen = session->ordinaryUi();
     session->toggleSystemMenu();
-    if (!wasOpen && session->anyOpen() && session->services().audio && !session->services().externalMenuSounds)
+    if (!wasOpen && session->ordinaryUi() && session->services().audio && !session->services().externalMenuSounds)
         session->services().audio->playInterface(SOUND_MENU_OPEN);
 }
 void InGameMenus::toggleMultiplayerMenu() {
-    const bool wasOpen = session->anyOpen();
+    const bool wasOpen = session->ordinaryUi();
     session->toggleMultiplayerMenu();
-    if (!wasOpen && session->anyOpen() && session->services().audio && !session->services().externalMenuSounds)
+    if (!wasOpen && session->ordinaryUi() && session->services().audio && !session->services().externalMenuSounds)
         session->services().audio->playInterface(SOUND_MENU_OPEN);
 }
 bool InGameMenus::open() const {
-    return session->anyOpen();
+    return session->ordinaryUi();
 }
 bool InGameMenus::ordinaryUi() const {
     return session->ordinaryUi();

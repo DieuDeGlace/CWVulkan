@@ -40,6 +40,25 @@ int controlPhaseTests() {
             ++failures;
         }
     };
+    // Frontend roots publish two distinct fields before World, independently of Help.
+    for (int mask = 0; mask < 8; ++mask) {
+        for (const uint8_t action : {uint8_t(0x9d), uint8_t(0x76)}) {
+            Record record;
+            nativeai::Creature actor;
+            setup(record, actor);
+            record[0x68] = action;
+            put<uint32_t>(record, 0x128, action == 0x9d ? 0xa5b55aa5u : 0xa5b55a25u);
+            auto expected = record;
+            const bool main = (mask & 1) != 0, characters = (mask & 2) != 0, creation = (mask & 4) != 0;
+            expected[0x68] = main || characters ? uint8_t(0x9d) : action == 0x9d ? uint8_t(0) : action;
+            uint16_t flags = get<uint16_t>(expected, 0x128);
+            flags = mask ? uint16_t(flags | 0x80u) : uint16_t(flags & ~0x80u);
+            put<uint16_t>(expected, 0x128, flags);
+            nativecontrol::frontendState(record.data(), main, characters, creation);
+            check(record == expected, "two-root action and three-root flag publication preserve every other record byte");
+        }
+    }
+    nativecontrol::frontendState(nullptr, false, false, false); // Missing engine actor has no storage to publish.
     {
         Record record;
         nativeai::Creature actor;

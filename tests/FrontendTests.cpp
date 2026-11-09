@@ -16,6 +16,9 @@
 #include "TalkGen.h"
 #include "worldgen/Generator.h"
 
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -54,6 +57,50 @@ void mouseDevicePhases() {
     FRONT_CHECK(device.lastUsedPad && device.lastUsedPadAtMousePoll);
     device.retainMouseDevice(true);
     FRONT_CHECK(!device.lastUsedPad && !device.lastUsedPadAtMousePoll);
+}
+
+void helpVisibilityAndInput() {
+    Hud hud;
+    MenuInput device;
+    frontend::Services services;
+    services.hud = &hud;
+    frontend::Request request;
+    frontend::InGameMenus menus(services, request);
+    FRONT_CHECK(!hud.helpShown() && !menus.open());
+    device.keyMessage(GLFW_KEY_W, false);
+    device.keyMessage(GLFW_KEY_F1, false);
+    device.routeInterfaceMessages(hud);
+    FRONT_CHECK(hud.helpShown() && !menus.open() && !menus.ordinaryUi());
+    FRONT_CHECK(device.pressed == std::vector<int>({GLFW_KEY_W, GLFW_KEY_F1}));
+    std::vector<bool> routedHelp;
+    device.keyMessage(GLFW_KEY_F1, true);
+    device.wheelMessage(120);
+    device.keyMessage(GLFW_KEY_F1, true);
+    device.wheelMessage(120);
+    device.routeInterfaceMessages(hud, [&](int, glm::vec2) { routedHelp.push_back(hud.helpShown()); });
+    FRONT_CHECK(hud.helpShown() && routedHelp == std::vector<bool>({false, true}));
+    device.keyMessage(GLFW_KEY_F1, true);
+    device.routeInterfaceMessages(hud);
+    FRONT_CHECK(!hud.helpShown());
+    device.keyMessage(GLFW_KEY_F1, false);
+    device.keyMessage(GLFW_KEY_F4, true);
+    device.routeInterfaceMessages(hud);
+    FRONT_CHECK(hud.helpShown() && !hud.interfaceShown() && !menus.open());
+    device.clear();
+    FRONT_CHECK(hud.helpShown());
+    menus.toggleSystemMenu();
+    FRONT_CHECK(menus.open() && hud.helpShown());
+    menus.dismiss();
+    FRONT_CHECK(!menus.open() && hud.helpShown());
+    device.keyMessage(GLFW_KEY_ESCAPE, false);
+    device.keyMessage(GLFW_KEY_ENTER, false);
+    device.buttons = {0};
+    device.routeInterfaceMessages(hud);
+    FRONT_CHECK(hud.helpShown() && device.buttons == std::vector<int>{0});
+    device.clear();
+    device.keyMessage(GLFW_KEY_F4, false);
+    device.routeInterfaceMessages(hud);
+    FRONT_CHECK(hud.interfaceShown() && hud.helpShown());
 }
 
 void titleCamera() {
@@ -792,6 +839,7 @@ void ownerCharacterButtons() {
 int frontendTests() {
     failures = 0;
     mouseDevicePhases();
+    helpVisibilityAndInput();
     optionsApplied();
     startSpot();
     zoneStatesRoundTrip();

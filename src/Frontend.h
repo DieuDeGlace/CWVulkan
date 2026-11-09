@@ -45,7 +45,7 @@ struct MenuInput {
     bool shiftDown = false; // Physical message state survives per-frame clear.
     bool controlDown = false;
     std::vector<int> pressed, buttons, released;
-    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, Wheel };
+    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, ToggleHelp, Wheel };
     struct WindowMessage {
         InterfaceMessage kind;
         int wheelDelta = 0;
@@ -56,6 +56,8 @@ struct MenuInput {
     struct MouseEdges { std::vector<int> pressed, released; };
     MouseEdges windowMouseEdges() const; // Actual window messages, independent of GLFW focus-loss releases.
     using WheelCallback = std::function<void(int, glm::vec2)>;
+    // Actual key-down dispatch; F1 and F4 repeat independently of control polling.
+    void keyMessage(int glfwKey, bool repeat);
     void wheelMessage(int16_t delta); // Normalize each actual message, including zero.
     void routeInterfaceMessages(Hud &, const WheelCallback & = {});
     void routeGamepadButtons(Hud &);
@@ -397,9 +399,9 @@ struct Request {
 struct Result {
     enum Action { Quit, Play, Resume, Title, Stay } action = Quit;
     int slot = -1;        // the character to play
-    bool created = false; // made in character creation (its help sheet was shown)
+    bool created = false; // confirmation selected Help and retained the live character
     std::optional<hair::Style> createdHairStyle;
-    std::shared_ptr<const nativesaves::Character> createdCharacter; // current retained actor/data after Help
+    std::shared_ptr<const nativesaves::Character> createdCharacter; // current retained actor/data at confirmation
     std::optional<OrbitCamera> camera;                   // Play keeps both displayed and target values.
     std::optional<cameraposition::State> cameraPosition; // Completed fixed eye/look-at; no transition priming.
     // Play: the player was rebuilt from the save and stands at `feet` (local blocks, CubeVulkan's
@@ -416,7 +418,7 @@ Result run(Services &s, const Request &request);
 class Session;
 // The screens over the game while it plays (frontend-options.md §3, §5): the system menu and the
 // options, controls and help screens, and the interface keys F1 to F6. The world keeps running
-// behind them; gameplay leaves the keys to them while one is open.
+// behind them. Help is an overlay; the other panels consume their input.
 //
 //   frontend::InGameMenus menus(services, request);
 //   menus.start(error);
@@ -430,7 +432,7 @@ class InGameMenus {
     void toggleSystemMenu();
     // The Multiplayer Menu binding (default J): shows the friends list, or hides it when shown.
     void toggleMultiplayerMenu();
-    // Whether a screen is open, which then has the keys and the pointer.
+    // Whether a blocking panel is open. Help visibility does not admit this gate.
     bool open() const;
     bool ordinaryUi() const;
     bool capturingControl() const;

@@ -125,6 +125,35 @@ void equipmentCallbacks() {
         hud.publishFrontendScreen({});
         hud.setInterfaceState({});
     }
+    // Help keeps its own selected value under the HUD across frontend/global hiding.
+    {
+        Hud::ScreenItem sheet;
+        sheet.kind = Hud::ScreenItem::Template;
+        sheet.name = "blackwidget";
+        sheet.instance = "help-visibility-test";
+        sheet.branch = uiroot::Branch::Help;
+        sheet.size = {40, 40};
+        std::vector<OverlayVertex> vertices;
+        hud.setHelpShown(true);
+        uiroot::State state;
+        state.frontend[2] = true;
+        hud.setInterfaceState(state);
+        const auto *help = hud.interfaceBranchRoot(uiroot::Branch::Help);
+        GUI_CHECK(help && help->visible && help->parent == hud.interfaceBranchRoot(uiroot::Branch::Gameplay));
+        const size_t before = vertices.size();
+        hud.drawScreen({sheet}, vertices);
+        GUI_CHECK(vertices.size() == before && hud.helpShown());
+        hud.setInterfaceState({});
+        hud.drawScreen({sheet}, vertices);
+        GUI_CHECK(vertices.size() > before && hud.helpShown());
+        hud.setInterfaceShown(false);
+        const size_t hidden = vertices.size();
+        hud.drawScreen({sheet}, vertices);
+        GUI_CHECK(vertices.size() == hidden && hud.helpShown());
+        hud.setInterfaceShown(true);
+        hud.setHelpShown(false);
+        hud.publishFrontendScreen({});
+    }
     // Window and controller callbacks share one stored mask, independent of physical polling.
     {
         MenuInput messages;

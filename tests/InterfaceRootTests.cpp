@@ -54,6 +54,24 @@ int interfaceRootTests() {
     branches.apply(state);
     check(!branches.node(uiroot::Branch::Gameplay)->visible && !scene.hitTest(scene.root(), {0, 0}),
           "creation branch excludes gameplay without exposing inactive title or probe nodes");
+    auto *help = target(uiroot::Branch::Help, "help-control");
+    state.help = true;
+    branches.apply(state);
+    check(branches.node(uiroot::Branch::Help)->parent == branches.node(uiroot::Branch::Gameplay) &&
+              branches.node(uiroot::Branch::Help)->visible && !scene.hitTest(scene.root(), {0, 0}),
+          "selected Help is retained but excluded by the hidden HUD ancestor during creation");
+    gameplay->visible = false; // Remove the unrelated synthetic whole-hit control above this subtree.
+    state.frontend = {};
+    branches.apply(state);
+    check(scene.hitTest(scene.root(), {0, 0}) == help, "Help becomes reachable with the same HUD ancestor");
+    scene.root().visible = false;
+    check(branches.node(uiroot::Branch::Help)->visible && !scene.hitTest(scene.root(), {0, 0}),
+          "global interface hiding retains Help's own selected value");
+    scene.root().visible = true;
+    state.frontend[0] = true;
+    branches.apply(state);
+    check(branches.node(uiroot::Branch::Help)->visible && scene.hitTest(scene.root(), {0, 0}) == title,
+          "returning to a frontend hides the HUD without dismissing Help");
     std::cout << "Interface root branches: " << (failures ? "FAIL" : "PASS") << '\n';
     return failures;
 }

@@ -445,6 +445,19 @@ void jump(const Input &in, State &st, Rec c, double dt, float duration, const Wo
 
 } // namespace
 
+void frontendState(uint8_t *player, bool mainShown, bool charactersShown, bool creationShown) {
+    if (!player)
+        return;
+    if (mainShown || charactersShown)
+        player[ABILITY] = 0x9d;
+    else if (player[ABILITY] == 0x9d)
+        player[ABILITY] = 0;
+    uint16_t flags;
+    std::memcpy(&flags, player + STATE_FLAGS, sizeof flags);
+    flags = mainShown || charactersShown || creationShown ? uint16_t(flags | 0x80u) : uint16_t(flags & ~0x80u);
+    std::memcpy(player + STATE_FLAGS, &flags, sizeof flags);
+}
+
 void control(const Input &in, State &st, uint8_t *player, double dt, const World &world) {
     const Rec c{player};
     const nativerules::HasBuff hasBuff = buffTest(world.hasBuff);

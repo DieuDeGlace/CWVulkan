@@ -1,5 +1,25 @@
 # Clean-room process
 
+## Help visibility/control continuation, 2026-11-08
+
+The independent native-only author finalized the complete Help state/control
+contract without implementation, SDK, tests, owner outputs or prior handoff
+access. The implementer read the entire held prose, verified its hash and copied
+it unchanged, then used only that contract and owned code. Retained Help
+visibility, dispatched F1 repeats, conditional input admission and early
+frontend record publication follow that bounded prose. No original or
+reconstruction code was inspected or copied by the implementer.
+
+Synthetic message/record/scene and owner-template checks cover the change.
+All targets, full required-owner CPU without skips, all Vulkan groups and SDK
+independence pass. Only CPU fixtures changed after the GPU run; its production
+source/library/executable hashes remain exact and the final full CPU rerun passes.
+Live current-binary Help and Alpha transition/profile acceptance await Steam
+reconnection and are not claimed. The existing aggregate frontend callback
+adapter, native help-menu/text/layout, cached rendering and universal input,
+provider/thread/lifecycle parity remain explicit limits. No owner content,
+private evidence or binaries enter the public source payload.
+
 ## Owned Alpha transition extension, 2026-11-08
 
 The wider rounded landmark transition and fixed-liquid column translation are

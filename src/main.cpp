@@ -648,11 +648,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.shiftDown = action != GLFW_RELEASE;
         if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
             input.controlDown = action != GLFW_RELEASE;
-        if (action == GLFW_PRESS || (action == GLFW_REPEAT && key == GLFW_KEY_F4)) {
-            input.pressed.push_back(key);
-            if (key == GLFW_KEY_F4)
-                input.interfaceMessages.push_back(MenuInput::InterfaceMessage::ToggleVisibility);
-        }
+        if (action == GLFW_PRESS || action == GLFW_REPEAT)
+            input.keyMessage(key, action == GLFW_REPEAT);
         if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
             chatInput.push_back({ChatInputEvent::Key, key, (modifiers & GLFW_MOD_SHIFT) != 0, action == GLFW_REPEAT});
     });
@@ -3864,8 +3861,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
         // The ordinary frame publishes the opaque account operand before World
         // substeps. The provider is never queried for an already-published value.
-        if (spawnedReady)
+        if (spawnedReady) {
             spawned.publishPlayerAccount(accountProvider);
+            if (auto *me = spawned.localPlayer())
+                nativecontrol::frontendState(me->record, false, false, false);
+        }
         if (!menusReady) {
             input.gamepadPointer = {}; // No frontend callback producer is active in this compatibility path.
             input.routeInterfaceMessages(hud, [&](int delta, glm::vec2 point) {

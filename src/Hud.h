@@ -499,6 +499,9 @@ class Hud {
     void setInterfaceState(const uiroot::State &);
     void setInterfaceShown(bool);
     bool interfaceShown() const { return interfaceRootShown; }
+    // Help owns a selected value under the HUD; ancestor hiding does not clear it.
+    void setHelpShown(bool);
+    bool helpShown() const { return helpRootShown; }
     void publishFrontendScreen(const Screen &) const;
     const plasma::SceneNode *interfaceBranchRoot(uiroot::Branch branch) const;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
@@ -603,6 +606,7 @@ class Hud {
     // Frontend templates and gameplay panels share their tree, scale and document geometry cache.
     std::unique_ptr<plasma::Scene> scene;
     bool interfaceRootShown = true;
+    bool helpRootShown = false;
     std::unique_ptr<uiroot::Branches> interfaceBranches;
     std::unique_ptr<plasma::Input> interfaceInput; // Detaches before its scene is destroyed.
     mutable std::optional<InventoryTabPress> pressedInventoryTab;

@@ -1,5 +1,46 @@
 # Source review checkpoint — 2026-11-08
 
+## Help visibility and ordinary control admission - 2026-11-08
+
+Help now keeps its selected value in the retained HUD, under the gameplay branch.
+Frontend and F4 ancestor hiding preserve that value. Each dispatched F1 key-down,
+including repeats, toggles it through the ordered interface-message route before
+polling; raw key edges remain available to binding capture. Help alone no longer
+admits the engine's modal-panel gate or clears ordinary gameplay input. Generic
+clicks, Escape and the controller panel-dismiss route do not dismiss Help.
+
+Successful creation selects Help before persistence and enters ordinary gameplay
+without another dismissal, retaining the live actor and character-owned data.
+The frontend and gameplay adapters share the early two-root action-byte and
+three-root two-byte flag publication before World work. Immediate entry therefore
+clears the stale title action/flag while preserving unrelated record bytes.
+Help does not become a World-step or character-name predicate. Other World,
+action, focus/chat and control admissions remain distinct.
+
+The complete independently held
+[Help contract](specs/steam-help-state-and-control-admission-20261108.md)
+is copied unchanged. The author received no implementation, tests or results.
+Owned review identified the earlier modal/dismissal behavior; no historical
+before-execution native failures are claimed. Actual message routing, retained
+owner/menu gates, scene and owner-template ancestry, and all root combinations
+with stale and clear flags are checked. All five targets, final full required-owner
+CPU without skips, every Vulkan group and SDK independence pass. After only CPU
+fixture changes, the full CPU suite was repeated; production sources, library and
+engine executable remain byte-identical to the passed GPU run. Existing native
+cell comparison still has zero differences across60,000 cells.
+
+Current-binary live creation/Help/control scenes and Alpha compose-v2 landmark,
+water/material and first-profile/save acceptance remain pending: Steam still
+reports offline. The Alpha continuity source checkpoint is preserved unchanged.
+No owner data, private evidence or binary release is public.
+
+The existing frontend pointer adapter still aggregates/defer-routes confirmation;
+native same-message-pump Create/F1 interleaving is not established. The actual
+help-menu resource callback, native class/action text/layout, cached draw/dirty
+state, other panel gates, complete provider/thread behavior and broad gameplay/
+visual/multiplayer/hardware/provenance acceptance remain open. This closes the
+bounded Help visibility/control integration, not those wider UI behaviors.
+
 ## Alpha landmark transition continuity - 2026-11-08
 
 Alpha's hybrid terrain now approaches preserved Steam landmarks through a
