@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Viewed source loading advances independently of rendering, retaining native
+  four-coordinate selection and completed-batch drain. An actual World progresses
+  from four to all nine sources without additional updates. Callback gates and
+  real source/readiness checks cover shutdown, destination changes, errors and
+  independent fringe replenishment. Broader worker/provider acceptance remains
+  open. All five builds, required-owner CPU without skips, Vulkan, SDK and fresh
+  native/Alpha scenes and disposable save/reopen checks pass. See
+  [the checkpoint](release-status.md#viewed-source-loading-independent-of-presentation---2026-11-09).
+
+
 - [x] Alpha hybrid retains Steam land floors and biome ground palettes, including
   purple Undead Lands; savannahs keep their gentler native columns and map relief.
   Actual dry-column losses2,063/4,096 in representative baselines become zero.

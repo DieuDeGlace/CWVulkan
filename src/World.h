@@ -16,6 +16,7 @@
 #include <memory>
 
 class TaskPool;
+class ClientSourceLoader;
 namespace characterpersistence { class Session; }
 class Assets;
 struct CubModel;
@@ -65,14 +66,12 @@ class World {
         if (viewZones != zones) {
             viewZones = zones;
             sourcePending = clientSources;
-            sourceReadinessContext.reset();
         }
     }
     void setSourceRenderDistance(int setting) {
         if (sourceRenderDistance != setting) {
             sourceRenderDistance = setting;
             sourcePending = clientSources;
-            sourceReadinessContext.reset();
         }
     }
     void setCpuPerformance(int setting) { cpuPerformance = setting; }
@@ -113,12 +112,10 @@ class World {
     const Terrain &terrain() const { return land; }
     size_t zoneCount() const { return zones.size(); }
     size_t pendingCount() const { return jobs.size(); }
-    size_t pendingSourceCount() const { return sourceJobs.size(); }
+    size_t pendingSourceCount() const;
     size_t loadedSourceCount() const;
     // Required source/mesh work blocks captures; native background refreshes continue.
-    bool preparingTerrain() const {
-        return sourcePending || !stale.empty() || std::any_of(jobs.begin(), jobs.end(), [](const auto &job) { return job.second.required; });
-    }
+    bool preparingTerrain() const;
     size_t modelCount() const { return models.size(); }
     std::vector<std::string> missingModels;
 
@@ -214,9 +211,7 @@ class World {
     };
     std::map<Key, Job> jobs;
     bool clientSources = false, sourcePending = false;
-    std::optional<std::pair<Key, Key>> sourceReadinessContext; // sampled block point and physical retention centre
-    std::unique_ptr<TaskPool> sourcePool;
-    std::vector<std::future<bool>> sourceJobs;
+    std::unique_ptr<ClientSourceLoader> sourceLoader;
     void updateSources(const scenerange::Player &player);
     std::shared_ptr<characterpersistence::Session> characterPersistence;
     bool characterSavesStopped = false;

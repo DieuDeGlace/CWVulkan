@@ -3103,3 +3103,28 @@ three actual creation cases and both inspected native/Alpha/Omega scenes pass.
 No whole native/provider/thread or visual parity follows. Owner state was restored
 and byte-verified; code, content, captures, saves and private evidence remain
 separated. Only the audited source payload is intended for GitHub.
+
+## Viewed source-worker cadence, 2026-11-09
+
+The original-only author held the complete generation selection, worker and
+drain prose before implementation, without receiving engine, tests, owner outputs
+or combined history. The implementer read the complete unchanged handoff and
+owned code only. Its hash is retained in the private checkpoint receipt; the
+whole [contract](specs/steam-generation-request-selection-and-worker-drain-20261109.md)
+is published without source excerpts.
+
+The bounded integration decouples viewed absent-source batches from presentation
+while retaining native selection and normal batch-drain boundaries. Protected
+demand copies, a fixed source-owner lifetime, deferred errors, finite admission
+and duplicate-safe publication are explicit safe engine policies. Native raw
+aliases, unsafe duplicate races, imported PPL fairness, arbitrary global-mode
+producers and universal numerical/random/provider closure are not claimed.
+Chunk, host and map worker lifecycles are separate future integration work.
+Alpha terrain/lighting, biome palettes and Omega water stay distinct extensions.
+Owner assets, saves, Mods and private evidence remain excluded from publication.
+
+Actual-World before/after and gated callback/readiness checks pass, with all five
+builds, full required-owner CPU without skips, every Vulkan group, SDK independence,
+inspected Native/Alpha/purple-land scenes and disposable save/profile checks. No
+readiness gate or deadline was lowered. Complete native worker/provider, broader
+parity, performance and final provenance acceptance remain open.

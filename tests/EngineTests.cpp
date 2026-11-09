@@ -128,6 +128,7 @@ int generatorCacheTests();
 int nativeSourceStreamingTests();
 int hostSourceTests();
 int sourceReadinessTests();
+int clientSourceLoaderTests();
 int sourceControlTests();
 int retainedSourceTests();
 int nativeSourceCreationTests();
@@ -9593,6 +9594,8 @@ int main(int argc, char **argv) {
         return sourceControlTests();
     if (argc == 2 && std::string(argv[1]) == "retainedsource")
         return retainedSourceTests();
+    if (argc == 2 && std::string(argv[1]) == "clientsource")
+        return clientSourceLoaderTests();
     if (argc == 2 && std::string(argv[1]) == "sourcereadiness")
         return sourceReadinessTests();
     if (argc == 2 && std::string(argv[1]) == "hostsource")
@@ -10896,6 +10899,7 @@ int main(int argc, char **argv) {
     failures += nativeSourceStreamingTests();
     failures += hostSourceTests();
     failures += sourceReadinessTests();
+    failures += clientSourceLoaderTests();
     failures += sourceControlTests();
     failures += physicalSourceStateTests();
     failures += nativePersistenceTests();

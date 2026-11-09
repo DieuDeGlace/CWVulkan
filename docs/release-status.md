@@ -1,5 +1,41 @@
 # Source review checkpoint — 2026-11-08
 
+## Viewed source loading independent of presentation - 2026-11-09
+
+The viewed source worker now completes successive source batches independently
+of render updates. It retains the native inclusive footprint, signed priority
+selection and four-coordinate prefix. A single request runs directly; parallel
+requests finish as a batch before the next demand sample or stop boundary. The
+viewed entry priority/concurrency policy is separate from the chunk worker's
+unproved initial scheduler policy.
+
+An actual-World before/after probe supplies one application update and then only
+observes residency: the prior build loads four of nine requested sources; this
+build loads all nine. Controlled callbacks also exercise selected-batch shutdown,
+copied destination changes, stale-readiness prevention and deferred failure
+delivery. Real source/mesh checks retain all 36 required inputs at the negative
+fractional boundary, independently reload the nine fringe inputs, and retain
+range, movement and destination invalidation.
+
+Protected value snapshots, a fixed borrowed source owner, duplicate-safe source
+publication and failure handoff are engine safety policies. They do not reproduce
+native raw-pointer races or establish imported scheduler fairness. Shutdown
+drains source work before releasing its inputs or taking the final save snapshot.
+Host, chunk and map worker lifecycles remain distinct; the native ordinary-mode
+byte's live producer and complete numerical/provider closure remain unproved.
+The complete held [original-only worker contract](specs/steam-generation-request-selection-and-worker-drain-20261109.md)
+is included unchanged. No implementation or test feedback was sent to its author.
+
+All five builds, full required-owner CPU without skips, every Vulkan group and
+SDK independence pass. Fresh Native and Alpha/Omega scenes complete and are
+inspected, as is the purple-land mound transition. Native writable/read-only and
+Alpha read-only/writable/reopen checks retain complete payloads, creation order
+and unchanged canonical/previous-profile bytes. Readiness and deadlines are
+unchanged. Prior cold-start variability and broader native acceptance stay open.
+This is a bounded cadence correction, with no gameplay-FPS or complete-parity claim.
+Alpha terrain/lighting, biome palettes and Omega water remain implemented.
+
+
 ## Steam land biomes and terrain palettes - 2026-11-09
 
 The Alpha hybrid now keeps Steam land floors instead of letting its independent

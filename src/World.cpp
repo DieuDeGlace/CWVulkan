@@ -1,5 +1,6 @@
 #include "World.h"
 #include "TaskPool.h"
+#include "ClientSourceLoader.h"
 #include "CharacterPersistence.h"
 #include "WaterLilies.h"
 #include "AlphaLight.h"
@@ -154,10 +155,10 @@ void World::finishCharacterSaves() {
     if (characterSavesStopped) return;
     characterSavesStopped = true;
     characterPersistence->requestStop();
+    if (sourceLoader) sourceLoader->stop(); // drain borrowed source inputs, even without saves
     if (!characterPersistence->configured()) return;
     // Drain admitted generation even when no periodic interval was reserved.
     // Final capture must not overtake a still-running lane in a multi-worker pool.
-    for (auto &job : sourceJobs) job.wait();
     for (auto &[key, job] : jobs) job.result.wait();
     // Reuse generation lanes; no dedicated save timer/thread. Pending captures
     // can finish because this caller does not hold the source World guard.
@@ -179,8 +180,7 @@ World::~World() {
     for (auto &[key, job] : jobs)
         job.result.wait();
     nativePool.reset(); // join worker lanes before releasing their World inputs
-    for (auto &job : sourceJobs) job.wait();
-    sourcePool.reset();
+    sourceLoader.reset();
     if (clientSources) extracted->setClientStreaming(false);
     for (const auto &[key, zone] : zones)
         releaseTerrain(zone);
@@ -666,49 +666,31 @@ void World::buildScenery(Zone &z, const std::vector<Scenery> &scenery) {
 
 size_t World::loadedSourceCount() const { return extracted ? extracted->loadedSourceCount() : 0; }
 
+size_t World::pendingSourceCount() const { return sourceLoader ? sourceLoader->pending() : 0; }
+bool World::preparingTerrain() const {
+    return sourcePending || (sourceLoader && sourceLoader->preparing()) || !stale.empty() ||
+           std::any_of(jobs.begin(), jobs.end(), [](const auto &job) { return job.second.required; });
+}
+
 void World::updateSources(const scenerange::Player &player) {
-    if (!clientSources) return;
+    if (!clientSources || characterSavesStopped) return;
     const auto anchor = zonedemand::eagleAnchor(player.ability, player.eagleDestination);
-    const auto point = zonedemand::sourcePoint(player.physical, anchor);
-    const auto physicalCentre = zonedemand::preparationCenter(player.physical);
-    const auto context = std::pair{Key{point[0], point[1]}, Key{physicalCentre[0], physicalCentre[1]}};
-    if (!sourceJobs.empty()) {
-        if (!sourcePool->idle()) {
-            // Diagnostic readiness cannot reuse an old view's background-only
-            // classification after movement, a destination or a range change.
-            sourcePending = sourcePending || anchor.has_value() || !sourceReadinessContext || *sourceReadinessContext != context;
-            return;
-        }
-        for (auto &job : sourceJobs) job.get();
-        sourceJobs.clear();
+    const ClientSourceLoader::View view{
+        zonedemand::clientWindow(player.physical, sourceRenderDistance, anchor),
+        zonedemand::sourcePoint(player.physical, anchor),
+        zonedemand::preparationCenter(player.physical), viewZones, anchor.has_value(), cpuPerformance};
+    if (!sourceLoader) {
+        // The loader borrows only the thread-safe source owner. Player/settings
+        // changes cross as values; background work never reads the live provider.
+        using Point = ClientSourceLoader::Key;
+        sourceLoader = std::make_unique<ClientSourceLoader>(ClientSourceLoader::Access{
+            [source = extracted](Point key) { return source->gameZoneLoaded(key[0], key[1]); },
+            [](Point key) { return worldgen::terrainZoneAvailable(key[0], key[1]); },
+            [source = extracted](Point key) { return source->loadSourceZone(key[0], key[1]); }}, view);
+    } else {
+        sourceLoader->setView(view);
     }
-    sourceReadinessContext = context;
-    const auto window = zonedemand::clientWindow(player.physical, sourceRenderDistance, anchor);
-    struct Candidate { Key key; int32_t priority; };
-    std::vector<Candidate> missing;
-    for (int64_t x = window.minimum[0]; x <= window.maximum[0]; ++x)
-        for (int64_t y = window.minimum[1]; y <= window.maximum[1]; ++y)
-            if (window.contains(x, y) && !extracted->gameZoneLoaded(int32_t(x), int32_t(y)) &&
-                worldgen::terrainZoneAvailable(int32_t(x), int32_t(y))) {
-                missing.push_back({{int(x), int(y)}, zonedemand::generationPriority({int32_t(x), int32_t(y)}, point)});
-            }
-    // Owned capture/readiness policy: loading and retirement can disagree at a
-    // negative fractional boundary. Keep every native request, but missing inputs
-    // beyond the physical retention circle must not prevent a prepared view from
-    // being captured forever. Destination work remains conservatively required.
-    sourcePending = std::any_of(missing.begin(), missing.end(), [&](const Candidate &candidate) {
-        return anchor.has_value() || zonedemand::withinRetention(int64_t(candidate.key.first) - physicalCentre[0],
-                                                                 int64_t(candidate.key.second) - physicalCentre[1], viewZones);
-    });
-    if (missing.empty()) return;
-    // The shared native sorter compares signed priorities only. Parallel delivery
-    // does not promise source construction/publication in this selected order.
-    keyorder::sort(missing, [](const Candidate &candidate) { return candidate.priority; });
-    if (!sourcePool) sourcePool = std::make_unique<TaskPool>(std::min(4u, std::max(2u, std::thread::hardware_concurrency()) - 1));
-    for (size_t i = 0; i < std::min(size_t(4), missing.size()); ++i) {
-        const Key key = missing[i].key;
-        sourceJobs.push_back(sourcePool->submit([source = extracted, key] { return source->loadSourceZone(key.first, key.second); }));
-    }
+    sourcePending = false;
 }
 
 void World::orderNativePreparation(std::vector<Key> &wanted, int cx, int cy, const scenerange::Player &player) const {

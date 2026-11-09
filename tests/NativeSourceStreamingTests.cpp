@@ -180,7 +180,7 @@ int nativeSourceStreamingTests() {
               "controlled background generation reaches the source gate");
         check(world.pendingCount() == 0,
               "mesh selection waits for loaded source neighbors instead of generating them itself");
-        check(world.pendingSourceCount() == 4, "source generation has a four-coordinate batch independent of mesh jobs");
+        check(world.preparingTerrain() && world.pendingSourceCount() == 4, "cold required terrain blocks readiness during the independent four-coordinate source batch");
         for (int i = 0; i < 8; ++i) world.update({0, 0, 166});
         check(world.pendingSourceCount() == 4 && world.pendingCount() == 0,
               "a held source batch admits neither another source batch nor a partial neighborhood mesh");
@@ -188,11 +188,24 @@ int nativeSourceStreamingTests() {
         check(blocks.gameBlock(64000, 0, 1000, &loaded) == ExtractedWorld::GameBlock{200, 200, 200, 0, 1, 0} &&
                   !loaded && !blocks.gameZoneLoaded(1000, 0), "a missing block lookup returns the solid fallback without loading source");
         release.set_value();
+        bool backgroundComplete = false;
+        const auto sourceDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        do {
+            int count = 0;
+            for (int x = -1; x <= 1; ++x)
+                for (int y = -1; y <= 1; ++y) count += blocks.gameZoneLoaded(x,y);
+            if ((backgroundComplete = count == 9)) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (std::chrono::steady_clock::now() < sourceDeadline);
+        check(backgroundComplete, "all nine sources finish after a single World update, with no frame-driven dispatch");
         check(finish(world), "separate source generation completes before settled terrain is reported");
         int demanded = 0;
         for (int x = -1; x <= 1; ++x)
             for (int y = -1; y <= 1; ++y) demanded += blocks.gameZoneLoaded(x, y);
         check(demanded == 9 && !blocks.gameZoneLoaded(2, 0), "source demand fills its own region without padding neighbors");
+        // Drain the independent source lifecycle before the exact retirement
+        // vectors below; concurrent replenishment is exercised separately above.
+        world.finishCharacterSaves();
         blocks.propsAbsolute(4, 0); // Retained boundary, outside the generation region.
         boundaryLease = blocks.gameZoneToken(4, 0);
         for (int x = 20; x < 29; ++x) {
