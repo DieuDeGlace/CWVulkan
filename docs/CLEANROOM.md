@@ -2868,3 +2868,21 @@ pass; remaining current-binary runtime/scene checks await Steam sign-in, with th
 blocked attempt retained. Complete caller/UI initialization, worker baseline/global
 mode/interleavings, alternate writers, durability and broad native acceptance
 remain open. No owner data, private evidence, memory or original code is published.
+
+## Explicit generation-cadence entry, 2026-11-08
+
+The original-only author independently held the complete thread-entry, three-clock,
+process-byte and lifetime contract without implementation/results access. The
+implementer read the whole artifact and froze its hash. Storage construction,
+source binding and explicit cadence entry now have separate ownership boundaries.
+The selected actor is loaded before the main session's post-initialization entry.
+This boundary and treatment of aborted/unentered storage are explicit engine
+adapters; native scheduler, thread-handoff/message-loop interleavings and precise
+timer-domain identity remain outside the claim.
+
+Two before-fix clock-read failures and delayed/second-sample/rebinding/stop/explicit
+write checks pass with all5, full required-owner CPU without skips, all Vulkan
+checks and SDK independence. Live checks await Steam sign-in. No nonzero process-byte
+producer or user-facing toggle was invented. No original code, owner data, private
+evidence or memory is published; full initialization and broader provenance/parity
+acceptance remain open.

@@ -10,7 +10,19 @@ uint32_t milliseconds() {
         std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 }
-Session::Session(Clock clock) : now(clock ? std::move(clock) : Clock(milliseconds)), baseline(now()) {}
+Session::Session(Clock clock) : now(clock ? std::move(clock) : Clock(milliseconds)) {}
+void Session::start() {
+    std::lock_guard lock(execution);
+    if (finished || started.load(std::memory_order_relaxed)) return;
+    // Distinct native entry readings, even if stop was requested before entry.
+    // The first belongs to separate one-second bookkeeping; only the second
+    // supplies this character-save cadence. The third has no retained value.
+    now();
+    const uint32_t sample = now();
+    now();
+    baseline.store(sample, std::memory_order_relaxed);
+    started.store(true, std::memory_order_release);
+}
 void Session::bind(Access next) {
     std::lock_guard lock(execution);
     access = std::move(next);
@@ -27,7 +39,8 @@ void Session::Cycle::complete() {
     }
 }
 std::shared_ptr<Session::Cycle> Session::beginCycle() {
-    if (!bound.load(std::memory_order_acquire) || !running.load(std::memory_order_acquire)) return {};
+    if (!started.load(std::memory_order_acquire) || !bound.load(std::memory_order_acquire) ||
+        !running.load(std::memory_order_acquire)) return {};
     const uint32_t sample = now();
     if (uint32_t(sample - baseline.load(std::memory_order_acquire)) <= 60000 ||
         busy.exchange(true, std::memory_order_acq_rel)) return {};
@@ -91,7 +104,7 @@ void Session::finish() {
     std::lock_guard lock(execution);
     if (finished) return;
     finished = true;
-    try { if (bound.load(std::memory_order_acquire) && menusAllow()) save(); }
+    try { if (started.load(std::memory_order_acquire) && bound.load(std::memory_order_acquire) && menusAllow()) save(); }
     catch (const std::exception &error) { report(std::string("Character save: ") + error.what()); }
     catch (...) { report("Character save: unexpected final capture/write failure"); }
 }

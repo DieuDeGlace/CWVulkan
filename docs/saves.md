@@ -158,9 +158,11 @@ with only those three root gates; the explicit close/Start Menu call stays separ
 Creation retains its explicit write. Recording/captured compatibility paths retain
 their separate save adapter.
 
-The worker-start instant, native global process-mode branch and exact native
-thread/attribute-bank interleavings remain unverified. This is not a backend
-durability or complete character-loading parity claim.
+The periodic baseline starts at an explicit post-initialization entry after UI,
+selected-actor loading and derived setup. It uses the second of three separate
+clock readings; source binding, repeated entry and menu changes do not reset it.
+Native OS-thread/timer-domain/attribute-bank interleavings, the global process-mode
+producer, backend durability and complete initialization remain unverified.
 
 **The world.** `world.db`'s day and time drive the world's clock and the generator's world day. Its dead
 creatures stay dead.

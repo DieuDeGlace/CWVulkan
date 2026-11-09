@@ -3491,8 +3491,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             (*characterSaveGates)[i].store(values[i], std::memory_order_release);
     };
     publishCharacterSaveGates();
-    if (loadedNativeCharacter)
+    if (loadedNativeCharacter) {
         spawned.seedPlayerSave(loadedNativeCharacter); // read-only and writable native loads share the same state path
+        // Complete the selected load before entering the generation cadence.
+        spawned.setPlayer(extractedWorld, player.position, heading, {}, playerHp, playerLevel,
+                          player.verticalSpeed == 0 && !player.fly);
+    }
     if (saving && loadedNativeCharacter && nativeInventory && spawned.physicalSourceState()) {
         auto base = loadedNativeCharacter;
         auto states = extractedWorld.sourceStateStore();
@@ -3769,6 +3773,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             glm::vec4(0.25f, 1, 0.25f, 1), 16});
         preview.infoIcon = it.sprite;
     };
+    // Explicit engine startup boundary after UI, selected load and derived setup.
+    // This does not claim native OS-thread/message-loop interleaving.
+    if (workerCharacterSaving)
+        world.characterSaveSession()->start();
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();

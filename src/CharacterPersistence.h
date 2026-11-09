@@ -28,6 +28,7 @@ class Session : public std::enable_shared_from_this<Session> {
         std::function<bool(Snapshot &&)> write;
     };
     explicit Session(Clock clock = {});
+    void start(); // explicit post-initialization entry; second of three clock readings is the baseline
     void bind(Access); // quiescent owner setup, before generation cycles can capture
     bool configured() const { return bound.load(std::memory_order_acquire); }
     class Cycle {
@@ -53,8 +54,8 @@ class Session : public std::enable_shared_from_this<Session> {
     void releaseCycle();
     void report(std::string);
     Clock now;
-    std::atomic<uint32_t> baseline;
-    std::atomic<bool> bound{false}, running{true}, busy{false};
+    std::atomic<uint32_t> baseline{0};
+    std::atomic<bool> started{false}, bound{false}, running{true}, busy{false};
     Access access;
     std::mutex execution, waiting, errorsMutex;
     std::condition_variable wake;

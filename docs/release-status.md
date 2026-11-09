@@ -1,5 +1,43 @@
 # Source review checkpoint — 2026-11-08
 
+## Generation cadence entry after initialization - 2026-11-08
+
+Character-save storage construction and source binding no longer sample the
+generation cadence clock. An explicit entry point takes the three separate clock
+readings described by the original contract; the second supplies the periodic
+baseline. Repeated entry and quiescent source rebinding do not reset it. The strict
+unsigned interval and the early iteration sample carried across generation remain
+unchanged, including timer wrap and menu-gated overdue attempts.
+
+The main session finishes selected-character loading into the actual actor after
+UI creation, then enters cadence after the remaining derived setup and before its
+first frame. The call is outside the World guard. This is the engine's explicit
+startup boundary; native OS-thread handoff/message-loop interleavings, timer-domain
+identity and precise scheduler behavior are not claimed. No additional timer
+thread, per-frame snapshot or mode control is introduced.
+
+Entry still takes all three readings when stop was already requested; no ordinary
+cycle is then admitted and normal exit retains its once-only three-root-gated
+writer. Storage that never entered has no worker-exit write. Explicit writes
+remain independent of entry. Treating an aborted, unentered engine session this
+way is a safe ownership policy, separate from native worker exit.
+
+Two before-fix clock-boundary failures were reproduced. Delayed initialization,
+distinct second-sample boundaries, repeated entry/rebinding, pre-entry stop,
+never-entered storage and explicit writes now pass with the existing real-worker,
+owned-database, unsigned-wrap and selective-load tests. All five targets and the
+full required-owner CPU suite without skips, every Vulkan group and extractor
+SDK independence pass. Fresh live runtime and scene checks await manual Steam sign-in.
+
+The isolated original-only author held the complete
+[worker-entry contract](specs/steam-generation-worker-entry-and-process-mode-20261108.md).
+It was read entirely and its hash frozen privately. The original worker's ordinary
+process byte starts at zero; a supported producer of a nonzero value remains
+unproved. This checkpoint adds no guessed producer. Other writers/guards, complete
+initialization, exact thread/bank interleavings, backend durability and broader
+native acceptance remain open. Alpha terrain/lighting and Omega water remain
+implemented.
+
 ## Selected-character loading and live inventory - 2026-11-08
 
 Native selected characters now load their saved fixed position, health, level,

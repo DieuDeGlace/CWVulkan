@@ -36,9 +36,74 @@ Session::Access access(const std::shared_ptr<State> &s) {
         [s](Snapshot &&) { s->trace.push_back("write"); ++s->writes; return !s->failed; }
     };
 }
+void constructionDoesNotStartClock(const auto &check) {
+    auto state = std::make_shared<State>();
+    unsigned reads = 0;
+    auto session = std::make_shared<Session>([&] { ++reads; return state->clock; });
+    check(reads == 0, "constructing storage does not sample the generation worker clock");
+    state->clock = 90000;
+    session->bind(access(state));
+    check(reads == 0, "binding initialized sources does not implicitly enter or rebase the worker");
+    state->visible[0] = 1;
+    session->finish();
+}
+void workerEntry(const auto &check) {
+    auto state = std::make_shared<State>();
+    const std::array<uint32_t,3> entry{100001,100007,100019};
+    unsigned reads = 0;
+    auto session = std::make_shared<Session>([&] {
+        const unsigned at = reads++;
+        return at < entry.size() ? entry[at] : state->clock;
+    });
+    check(reads == 0 && !session->beginCycle(), "unentered storage takes no clock readings or generation reservation");
+    session->bind(access(state));
+    state->visible = {1,1,1};
+    session->start();
+    check(reads == 3 && state->trace.empty(), "entry samples three distinct times without polling name or visibility");
+    session->start();
+    check(reads == 3, "repeated entry cannot sample or rebase the worker");
+    state->visible = {};
+    state->clock = 160007;
+    check(!session->beginCycle(), "the second entry reading supplies the strict60000 boundary after delayed initialization");
+    state->clock = 160008;
+    auto cycle = session->beginCycle();
+    check(bool(cycle), "the first overdue cycle is measured from the second entry reading");
+    if (cycle) {
+        state->clock = 400000; // completion latency must not replace the carried sample
+        cycle->complete();
+    }
+    check(state->writes == 1, "the post-entry overdue attempt performs one write");
+    const unsigned previousReads = reads;
+    session->bind(access(state));
+    session->start();
+    check(reads == previousReads, "quiescent source rebinding does not restart an entered clock");
+    state->clock = 220008;
+    check(!session->beginCycle(), "completion and source rebinding preserve the earlier iteration baseline");
+    state->visible[0] = 1;
+    session->finish();
+
+    auto stoppedState = std::make_shared<State>();
+    unsigned stoppedReads = 0;
+    auto stopped = std::make_shared<Session>([&] { ++stoppedReads; return uint32_t(71); });
+    stopped->bind(access(stoppedState));
+    stopped->requestStop();
+    stopped->start();
+    check(stoppedReads == 3 && !stopped->beginCycle(), "stop before entry still permits the three samples but no ordinary cycle");
+    stopped->finish(); stopped->finish(); stopped->start();
+    check(stoppedState->writes == 1 && stoppedReads == 3,
+          "a stopped entered worker performs its gated final call once without restarting");
+
+    auto absentState = std::make_shared<State>();
+    auto absent = std::make_shared<Session>();
+    absent->bind(access(absentState));
+    check(absent->force() && absentState->writes == 1, "an explicit writer remains independent of worker entry");
+    absent->finish(); absent->start();
+    check(absentState->writes == 1 && !absent->beginCycle(), "a worker that never entered has no worker-exit call or later restart");
+}
 void timing(const auto &check) {
     auto s = std::make_shared<State>();
     auto session = std::make_shared<Session>([s] { return s->clock; });
+    session->start();
     s->clock = 60001;
     check(!session->beginCycle(), "unbound/no-save state starts no save work");
     session->bind(access(s));
@@ -92,6 +157,7 @@ void timing(const auto &check) {
           "explicit writer calls ignore cadence/name/menu/running gates");
     auto wrapState = std::make_shared<State>(); wrapState->clock = UINT32_MAX - 1000;
     auto wrapped = std::make_shared<Session>([wrapState] { return wrapState->clock; });
+    wrapped->start();
     wrapped->bind(access(wrapState)); wrapState->clock = 59000;
     auto wrapCycle = wrapped->beginCycle();
     check(bool(wrapCycle), "ordinary uint32 timer wrap preserves the60001 difference");
@@ -103,6 +169,7 @@ void completedGeneration(const auto &check) {
     using namespace std::chrono_literals;
     auto s = std::make_shared<State>();
     auto session = std::make_shared<Session>([s] { return s->clock; });
+    session->start();
     std::mutex world;
     std::atomic<int> generated{0};
     std::atomic<unsigned> writes{0};
@@ -151,6 +218,7 @@ void finalSaveWaitsForGeneration(const auto &check) {
     using namespace std::chrono_literals;
     auto state = std::make_shared<State>();
     auto session = std::make_shared<Session>([state] { return state->clock; });
+    session->start();
     auto hooks = access(state);
     std::atomic<bool> generated{false};
     hooks.capture = [&]() -> std::optional<Snapshot> {
@@ -202,6 +270,7 @@ void ownedDatabase(const auto &check) {
     auto weak = std::weak_ptr(input);
     auto state = std::make_shared<State>();
     auto session = std::make_shared<Session>([state] { return state->clock; });
+    session->start();
     auto hooks = access(state);
     hooks.capture = [input]() -> std::optional<Snapshot> {
         std::lock_guard lock(input->world);
@@ -394,7 +463,7 @@ int characterPersistenceTests() {
     const auto check = [&](bool okay, const char *message) {
         if (!okay) { std::printf("FAIL character persistence: %s\n", message); ++failures; }
     };
-    timing(check); completedGeneration(check); finalSaveWaitsForGeneration(check); ownedDatabase(check);
+    constructionDoesNotStartClock(check); workerEntry(check); timing(check); completedGeneration(check); finalSaveWaitsForGeneration(check); ownedDatabase(check);
     liveOwnedCapture(check); nativeRosterWithoutRecording(check); databaseFacadeLifetime(check); flightPointOrder(check);
     std::printf("Character persistence: cadence, gates, generation, snapshot ownership and database checks: %d failure(s)\n", failures);
     return failures;

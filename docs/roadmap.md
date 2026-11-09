@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Character cadence begins explicitly after UI, actual selected-actor loading
+  and derived startup, rather than early World storage construction. The second
+  of three entry samples supplies the baseline; entry/rebinding never restarts it.
+  Stop-before-entry, unentered ownership, strict/wrapping thresholds and explicit
+  writers have focused checks; all5/full required-owner CPU without skips, Vulkan
+  and SDK checks pass. Live checks await Steam sign-in. Exact native
+  thread/timer/scheduler interleavings and process-byte producers remain open.
+  See [the checkpoint](release-status.md#generation-cadence-entry-after-initialization---2026-11-08).
+
 - [x] Selected native characters retain raw fixed position and health, including
   zero coordinates/nonpositive health, with zeroed orientation and a selective
   default-core/transient reset. Missing records preserve the destination; separate
