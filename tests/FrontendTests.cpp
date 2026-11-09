@@ -576,31 +576,37 @@ void optionsApplied() {
 // kind 5 in biome 2 on flat ground at 10, the area landmark at the area's corner cell, object 0x35
 // only in areas whose x is a multiple of 3.
 void startSpot() {
-    StartSpotWorld w;
+    StartSpotWorld w = homesearch::nativeWorld();
+    w.region = [](int32_t, int32_t) { return nativesaves::Cell{0,0}; };
+    w.neighbours = [](int32_t, int32_t) { return worldgen::Neighbourhood{}; };
+    w.weight = [](homesearch::Weight, const worldgen::Neighbourhood &, const worldgen::Place &) { return 0.f; };
+    w.roads = [](int32_t, int32_t, const worldgen::Place &) { return 0.f; };
+    w.channel = [](homesearch::Channel, int32_t, int32_t, const homesearch::Terrain &) { return 0.f; };
+    w.excludedPlace = [](int32_t, int32_t) { return nativesaves::Cell{INT32_MAX,INT32_MAX}; };
     w.areaCell = [](int32_t qx, int32_t qy) { return nativesaves::Cell{qx * 64, qy * 64}; };
     w.cellObject = [](int32_t cx, int32_t) { return (cx / 64) % 3 == 0 ? START_CELL_OBJECT : 60; };
-    w.placeKind = [](int32_t, int32_t) { return START_PLACE_KIND; };
-    w.biome = [](int32_t, int32_t) { return 2; };
+    w.place = [](int32_t, int32_t) { worldgen::Place p; p.kind = START_PLACE_KIND; return p; };
+    w.regionType = [](int32_t, int32_t) { return 2; };
     w.ground = [](int32_t, int32_t) { return 10.0f; };
     FRONT_CHECK(startCellFits(w, {0, 0}) && !startCellFits(w, {64, 0}));
     auto withGround = w;
     withGround.ground = [](int32_t x, int32_t) { return x < 0 ? -1.0f : 10.0f; };
     FRONT_CHECK(!startCellFits(withGround, {-64 * 3, 0})); // below 0 at block (16 x + 8, 16 y + 40)
     auto steep = w;
-    steep.ground = [](int32_t x, int32_t) { return x >= 20 ? 15.0f : 10.0f; };
+    steep.ground = [](int32_t x, int32_t) { return x >= 16 ? 15.0f : 10.0f; };
     FRONT_CHECK(!startCellFits(steep, {0, 0})); // 5 blocks over 16 in x
     auto desert = w;
-    desert.biome = [](int32_t, int32_t) { return 9; };
+    desert.regionType = [](int32_t, int32_t) { return 9; };
     FRONT_CHECK(!startCellFits(desert, {0, 0}));
     auto wild = w;
-    wild.placeKind = [](int32_t, int32_t) { return 0; };
+    wild.place = [](int32_t, int32_t) { return worldgen::Place{}; };
     FRONT_CHECK(!startCellFits(wild, {0, 0}));
-    // Angle 0 (rand 0) and the radius 64 + 0: starting in area 1, the walk reaches area 3.
+    // Angle0/radius64: preincremented coarse65 rejects; coarse66 passes the same every-third predicate.
     int draws = 0;
     auto rand = [&] { return draws++, 0; };
     nativesaves::Cell found{};
-    FRONT_CHECK(findStartCell(w, rand, {0, 0}, 64, 1000, 64 * 4, found) && found == nativesaves::Cell{192, 0} && draws == 2);
-    FRONT_CHECK(!findStartCell(w, rand, {0, 0}, 64, 1000, 64, found)); // (only area 1 in reach)
+    FRONT_CHECK(findStartCell(w, rand, {0, 0}, 64, 1000, 2, found) && found == nativesaves::Cell{4224, 0} && draws == 2);
+    FRONT_CHECK(!findStartCell(w, rand, {0, 0}, 64, 1000, 1, found)); // only rejected coarse65 is reached
     FRONT_CHECK(startBlock({2, -1}) == (std::array<int32_t, 2>{40, 16}));
 }
 

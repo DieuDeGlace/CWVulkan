@@ -10,6 +10,7 @@
 #include "DayNight.h"
 #include "CameraPosition.h"
 #include "GameOptions.h"
+#include "HomeSearch.h"
 #include "GamepadUi.h"
 #include "MouseMotion.h"
 #include "Hud.h"
@@ -257,29 +258,16 @@ glm::vec3 enteredFeet(const nativesaves::Character &c, const nativeprogress::Fra
 
 // --- The start spot (frontend-characters.md §4.2, 0x2d1100) ----------------------------------
 
-// What the start spot's tests ask of the world, by 16-block cell and by block.
-struct StartSpotWorld {
-    std::function<nativesaves::Cell(int32_t qx, int32_t qy)> areaCell; // the area's landmark cell (0x2d3b60)
-    std::function<int(int32_t cx, int32_t cy)> cellObject;             // 0x69c60
-    std::function<int(int32_t cx, int32_t cy)> placeKind;              // the kind of the cell's place (its zone's)
-    std::function<int(int32_t x, int32_t y)> biome;                    // the region's biome at a block (0x2b9080)
-    std::function<float(int32_t x, int32_t y)> ground;                 // the terrain height at a block (0x35ea0)
-    std::function<bool(nativesaves::Cell cell)> playable;              // CubeVulkan has the cell's ground (true by default)
-};
+// Lazy native queries keep home, block, regional and exclusion coordinates distinct.
+using StartSpotWorld = homesearch::World;
 constexpr int START_CELL_OBJECT = 0x35, START_PLACE_KIND = 5;
-constexpr int START_RADIUS_FROM = 100000, START_RADIUS_SPREAD = 100000; // cells
-// Whether a cell passes the start spot's tests: its object is 0x35, the ground at block
-// (16 x + 8, 16 y + 40) is not below 0, the region's biome there is 0, 2 or 7, its place is a
-// town (kind 5) and the ground is flat (at most 4 blocks of height over 16 blocks in x and in y).
-// The danger measures of the spec's open question 3 are not tested.
-bool startCellFits(const StartSpotWorld &world, nativesaves::Cell cell);
-// The start cell: an angle and a radius drawn with `rand` (0..32767), starting at
-// `origin` + (r cos a, r sin a) cells and walking x forward a cell at a time, each time asking for
-// the area's landmark cell, until one fits. False when none fits within `maxSteps` steps.
-bool findStartCell(const StartSpotWorld &world, const std::function<int()> &rand, nativesaves::Cell origin, int radiusFrom,
-                   int radiusSpread, int maxSteps, nativesaves::Cell &out);
-// The block a new character stands on in its start cell (§4.1 step 5): (16 cx + 8, 16 cy + 32).
-std::array<int32_t, 2> startBlock(nativesaves::Cell cell);
+constexpr int START_RADIUS_FROM = 100000, START_RADIUS_SPREAD = 100000; // coarse cells
+bool startCellFits(const StartSpotWorld &world, nativesaves::Cell home);
+// Two signed draws, preincremented coarse X and ordered native admission. The finite
+// maxSteps/fallback and optional captured/Alpha coverage gate are engine policies.
+bool findStartCell(const StartSpotWorld &, const std::function<int()> &random, nativesaves::Cell coarseOrigin,
+                   int radiusFrom, int radiusSpread, int maxSteps, nativesaves::Cell &out);
+std::array<int32_t, 2> startBlock(nativesaves::Cell home);
 
 // --- Options and controls (frontend-options.md §2, §4.2) -------------------------------------
 

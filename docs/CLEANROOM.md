@@ -2953,3 +2953,21 @@ Native uninitialized values and unsafe race behavior are not reproduced. Complet
 home/appearance/crafting routes, provider/shared random state, input/update/draw/
 Help interleavings and broad gameplay/native-pixel/provenance acceptance remain
 open. The separate home-search contract and scheduling audit are future work.
+
+## Native home-search admission, 2026-11-08
+
+The independent original-only author held the complete home-search/terrain-admission
+prose without implementation, tests, SDK or owner-output access. The implementer
+read that prose and owned engine code only. A shared lazy driver now preserves
+coarse progression, signed draws, ordered admission, separate coordinate units,
+unsigned candidate hashing and native fixed placement. Existing owned terrain
+providers remain reusable boundaries, without a claim that this handoff exhausts
+their classifier, registry, noise or random-state closure. Finite aborts, missing
+bindings and captured/Alpha coverage/surface behavior are explicit engine policies.
+Focused before/after checks, all five builds, full required-owner CPU without skips,
+all Vulkan groups, SDK independence, actual disposable writable/read-only creation
+and four raw-load cases pass. Native, Alpha/Omega and large-home streaming scenes
+are inspected with unchanged readiness/deadlines; Alpha identity is unchanged.
+These bounded checks do not establish native pixels, performance or cold-start
+reliability. Owner assets, saves, Mods and display settings are untouched and
+excluded from source/runtime packages.

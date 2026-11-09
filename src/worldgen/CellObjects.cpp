@@ -181,7 +181,9 @@ bool innerBlock(int32_t bx, int32_t by, int kind, Int2 anchor) {
 }
 
 Int2 areaLandmark(int32_t qx, int32_t qy) {
-    return {cellRandom(qx, qy, 0x24341) % 62 + 64 * qx + 1, cellRandom(qx, qy, 0x165709) % 62 + 64 * qy + 1};
+    const int32_t x = int32_t(cellRandomUnsigned(qx, qy, 0x24341) % 62u) + 1;
+    const int32_t y = int32_t(cellRandomUnsigned(qx, qy, 0x165709) % 62u) + 1;
+    return {wrapAdd(wrapMul(qx, 64), x), wrapAdd(wrapMul(qy, 64), y)};
 }
 
 FortressSquare fortressSquare(Int2 c1, Int2 landmark) {

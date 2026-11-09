@@ -1,5 +1,50 @@
 # Source review checkpoint — 2026-11-08
 
+## Native home-search progression and admission - 2026-11-08
+
+Home search now takes the two signed provider samples in order, converts the
+polar point directly to the coarse grid and increments coarse X before every
+candidate. It no longer divides that point by 64 or caches the same candidate
+for 64 retries. Candidate hashes use unsigned remainder and defined low-32-bit
+coordinate arithmetic, including the rare wrapped hash word. Each attempted
+home pair is published before its admission queries.
+
+The lazy query interface preserves the native object/height/regional/descriptor
+order, four separate nonpositive weights, three separate inclusive 0.4 thresholds,
+opposite eight-block height samples and the final descriptor exclusion. Regional,
+block, coarse and home pairs remain distinct. The regional descriptor receives
+the original earlier regional pair. Its exclusion compares the correctly floored,
+conditionally even block cell; a sentinel does not exclude a candidate.
+
+Native placement preserves the wrapped integer block XY values and separately
+queries mode-zero height at the placement point. Z uses the rounded single-precision
+height times 65,536 followed by signed truncation, without a voxel ceiling or feet
+offset. Existing owned terrain providers are reused; each height call builds its
+own query inputs. Captured and Alpha modes retain explicit coverage/surface policies,
+Alpha terrain/lighting and Omega water. The native loop is unbounded; the engine's
+finite attempt limit, incomplete-binding handling and fallback remain adapters.
+
+Seven original progression/flatness failures and one later independent unsigned-hash
+failure were reproduced before their respective fixes. Expanded focused checks pass
+for exact call order, early exits, thresholds, negative floors, wrap, output publication,
+finite abort policy and large fixed positions. Actual native writable/read-only and
+Alpha/Omega read-only creation pass; both read-only database pairs are unchanged.
+The first writable blob is fully parsed and retains exact large-world home XY,
+starter inventory/templates and the home key. All five targets, full required-owner
+CPU without skips, all Vulkan groups and SDK independence pass. Four raw-load cases
+also pass. Matched native and Alpha/Omega scenes complete in 51.953 and 86.031 seconds;
+both images are inspected and the Alpha profile is unchanged. A read-only copy of
+the newly created large-world character also loads, streams and captures a scene
+in 122.875 seconds, with its image inspected and databases unchanged. These are
+bounded smoke checks, without native-pixel, performance or reliable cold-start claims.
+
+The implementer read the complete held [original-only home contract](specs/steam-new-character-home-search-and-terrain-admission-20261108.md),
+which supersedes the older start-spot summary in frontend-characters section 4.2.
+The source author remains unexposed to implementation, tests and owner outputs.
+The full classifier/registry comparator, numerical terrain/provider/global-random
+closure, native scheduling and broad gameplay/native-pixel/performance acceptance
+remain open. A successful engine search is not universal world/seed certification.
+
 ## Native creation state and commit ownership - 2026-11-08
 
 New selection now resets the retained live Entity without applying the separate

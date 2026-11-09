@@ -148,7 +148,7 @@ constexpr float PREVIEW_WALK_SPEED = 8.0f; // blocks a second: the movement inte
 constexpr float PREVIEW_UNITS_PER_BLOCK = 80.0f, PREVIEW_EASE_RATE = 0.1f;
 constexpr float PREVIEW_STANDING_PACE = 0.05f; // below this the creature stands
 constexpr float PREVIEW_FEET_BELOW = 1.0f;     // the drawn point is the record's place, a block above the feet
-constexpr int START_SEARCH_STEPS = 64 * 4000;  // cells walked before giving up (4000 areas)
+constexpr int START_SEARCH_STEPS = 64 * 4000; // engine abort bound; native candidate loop is unbounded
 
 std::wstring wide(const std::string &s) {
     std::wstring w;
@@ -864,7 +864,7 @@ nativesaves::Cell Session::startCell(std::array<int64_t, 3> &position) const {
     const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
     const glm::vec3 home = s.extracted ? s.extracted->home() : glm::vec3(0);
     nativesaves::Cell cell;
-    const bool canSearch = s.startSpot.areaCell && s.startSpot.cellObject && s.startSpot.placeKind && s.startSpot.biome && s.startSpot.ground;
+    const bool canSearch = s.startSpot.ready();
     const auto rand = [] { return std::rand(); };
     if (!canSearch || !findStartCell(s.startSpot, rand, s.startOrigin, s.farStart ? START_RADIUS_FROM : 0,
                                      s.farStart ? START_RADIUS_SPREAD : 0, START_SEARCH_STEPS, cell)) {
@@ -874,11 +874,17 @@ nativesaves::Cell Session::startCell(std::array<int64_t, 3> &position) const {
     } else
         log("Characters: start spot at cell " + std::to_string(cell[0]) + " " + std::to_string(cell[1]));
     const std::array<int32_t, 2> block = startBlock(cell);
-    glm::vec3 feet((float)((int64_t)block[0] - (frame.originX >> 16)), (float)((int64_t)block[1] - (frame.originY >> 16)), home.z);
-    float ground;
-    if (s.extracted && s.extracted->surface(feet.x, feet.y, ground))
-        feet.z = ground;
-    position = nativeprogress::gamePosition(feet, frame);
+    if (s.extracted && s.extracted->generated() && !worldgen::usingAlphaTerrain() && s.startSpot.ground) {
+        position = homesearch::position(cell, s.startSpot.ground(block[0], block[1]));
+        return cell;
+    }
+    // Alpha/captured geometry keeps its explicit voxel-surface placement policy.
+    float height = home.z;
+    if (s.extracted) s.extracted->surface(double(block[0]) - double(frame.originX) / 65536.0,
+                                         double(block[1]) - double(frame.originY) / 65536.0, height);
+    position = nativeprogress::gamePosition({0, 0, height}, frame);
+    position[0] = int64_t(block[0]) * 65536;
+    position[1] = int64_t(block[1]) * 65536;
     return cell;
 }
 

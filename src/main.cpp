@@ -941,24 +941,19 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // search starts at the home itself instead of a far-away radius, and takes only extracted cells.
     if (useExtracted) {
         frontend::StartSpotWorld &w = front.startSpot;
-        w.areaCell = [](int32_t qx, int32_t qy) {
-            const worldgen::Int2 c = worldgen::areaLandmark(qx, qy);
-            return nativesaves::Cell{c.x, c.y};
-        };
-        w.cellObject = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy); };
-        w.placeKind = [](int32_t cx, int32_t cy) { return worldgen::cellPlace(cx, cy).kind; };
-        w.biome = [](int32_t x, int32_t y) { return worldgen::biomeAt(x, y); };
-        w.ground = [](int32_t x, int32_t y) { return (float)worldgen::groundHeight(x, y); };
-        if (!extractedWorld.generated()) {
+        w = homesearch::nativeWorld();
+        if (!extractedWorld.generated() || worldgen::usingAlphaTerrain()) {
             w.playable = [&extractedWorld](nativesaves::Cell cell) {
                 const std::array<int32_t, 2> b = frontend::startBlock(cell);
                 return extractedWorld.has((int)std::floor(b[0] / 64.0) - extractedWorld.originZoneX(),
                                           (int)std::floor(b[1] / 64.0) - extractedWorld.originZoneY());
             };
             const glm::vec3 home = extractedWorld.home();
-            front.startOrigin = {(int32_t)std::floor(((double)home.x + (double)(extractedWorld.originDotsX() >> 16)) / 16.0),
-                                 (int32_t)std::floor(((double)home.y + (double)(extractedWorld.originDotsY() >> 16)) / 16.0)};
-            front.farStart = false;
+            if (!extractedWorld.generated()) {
+                front.startOrigin = {(int32_t)std::floor(((double)home.x + (double)(extractedWorld.originDotsX() >> 16)) / 1024.0),
+                                     (int32_t)std::floor(((double)home.y + (double)(extractedWorld.originDotsY() >> 16)) / 1024.0)};
+                front.farStart = false;
+            }
         }
     }
     front.newHairStyle = hair::fromConfig(config, "_NewCharacter");

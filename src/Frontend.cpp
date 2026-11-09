@@ -460,59 +460,12 @@ nativesaves::Character newCharacter(nativesaves::Cell homeCell, const std::array
 
 // --- The start spot ----------------------------------------------------------------------------
 
-namespace {
-constexpr int32_t CELL_BLOCKS = 16, AREA_CELLS = 64;
-constexpr int32_t TEST_X = 8, TEST_Y = 40;       // the block of a cell the ground tests read
-constexpr int32_t STAND_X = 8, STAND_Y = 32;      // the block a new character stands on
-constexpr float FLAT_RISE = 4.0f;                 // most height difference over 16 blocks
-constexpr int STARTING_BIOMES[] = {0, 2, 7};
-
-int32_t floorDivide(int32_t a, int32_t b) { return a / b - ((a % b != 0) && ((a < 0) != (b < 0))); }
-} // namespace
-
-bool startCellFits(const StartSpotWorld &w, nativesaves::Cell cell) {
-    if (w.cellObject(cell[0], cell[1]) != START_CELL_OBJECT)
-        return false;
-    const int32_t x = CELL_BLOCKS * cell[0] + TEST_X, y = CELL_BLOCKS * cell[1] + TEST_Y;
-    const float here = w.ground(x, y);
-    if (here < 0.0f)
-        return false;
-    const int biome = w.biome(x, y);
-    if (std::find(std::begin(STARTING_BIOMES), std::end(STARTING_BIOMES), biome) == std::end(STARTING_BIOMES))
-        return false;
-    if (w.placeKind(cell[0], cell[1]) != START_PLACE_KIND)
-        return false;
-    if (std::abs(w.ground(x + CELL_BLOCKS, y) - here) > FLAT_RISE || std::abs(w.ground(x, y + CELL_BLOCKS) - here) > FLAT_RISE)
-        return false;
-    return !w.playable || w.playable(cell);
+bool startCellFits(const StartSpotWorld &world, nativesaves::Cell home) { return homesearch::fits(world, home); }
+bool findStartCell(const StartSpotWorld &world, const std::function<int()> &random, nativesaves::Cell origin,
+                   int radiusFrom, int radiusSpread, int maxSteps, nativesaves::Cell &out) {
+    return homesearch::find(world, random, origin, radiusFrom, radiusSpread, maxSteps, out);
 }
-
-bool findStartCell(const StartSpotWorld &w, const std::function<int()> &rand, nativesaves::Cell origin, int radiusFrom, int radiusSpread,
-                   int maxSteps, nativesaves::Cell &out) {
-    constexpr double RAND_MAX_VALUE = 32767.0;
-    const double angle = (double)rand() * 6.283185307179586 / RAND_MAX_VALUE;
-    const int radius = radiusSpread > 0 ? rand() % radiusSpread + radiusFrom : radiusFrom;
-    int32_t x = origin[0] + (int32_t)(radius * std::cos(angle));
-    const int32_t y = origin[1] + (int32_t)(radius * std::sin(angle));
-    // Walking a cell at a time asks each area 64 times; the answer is the same, so an area
-    // already turned down is not tested again.
-    bool tested = false;
-    nativesaves::Cell lastArea{};
-    for (int step = 0; step < maxSteps; step++, x++) {
-        const nativesaves::Cell area{floorDivide(x, AREA_CELLS), floorDivide(y, AREA_CELLS)};
-        if (tested && area == lastArea)
-            continue;
-        tested = true, lastArea = area;
-        const nativesaves::Cell cell = w.areaCell(area[0], area[1]);
-        if (startCellFits(w, cell)) {
-            out = cell;
-            return true;
-        }
-    }
-    return false;
-}
-
-std::array<int32_t, 2> startBlock(nativesaves::Cell cell) { return {CELL_BLOCKS * cell[0] + STAND_X, CELL_BLOCKS * cell[1] + STAND_Y}; }
+std::array<int32_t, 2> startBlock(nativesaves::Cell home) { return homesearch::block(home); }
 
 // --- Options and controls --------------------------------------------------------------------
 

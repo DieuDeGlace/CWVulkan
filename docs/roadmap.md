@@ -8,6 +8,17 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Home search now uses the native coarse-grid scale and preincremented X,
+  ordered lazy terrain admission, descriptor exclusion and exact fixed placement.
+  Seven original failures plus one later unsigned-hash failure are fixed. Expanded
+  focused checks and actual native writable/read-only and Alpha/Omega creation
+  pass, including full first-blob checks and unchanged read-only databases. All5/
+  full required-owner CPU without skips/Vulkan/SDK and four raw-load cases pass.
+  Native/Alpha scenes and a read-only large-home streaming scene are inspected;
+  Alpha profile unchanged. Provider, complete classifier/registry closure and
+  broader acceptance remain open. See
+  [the checkpoint](release-status.md#native-home-search-progression-and-admission---2026-11-08).
+
 - [x] Creation retains its live actor through reset, style, Create, Help and Main
   entry, with separate disk/list ownership and current raw commit values. Shared
   finite copy/reset paths retain all specified gaps and separate lifetimes. Twelve
