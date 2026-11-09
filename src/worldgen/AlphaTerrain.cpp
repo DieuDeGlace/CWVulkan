@@ -346,6 +346,11 @@ bool AlphaTerrain::compose(ZoneContents &zone, const WorldValues &world, std::st
             const auto index = setterColumn(zx, zy, plant.x, plant.y);
             if (!index || constructionWeight(boxes, plant.x, plant.y) == 1)
                 continue;
+            const bool floating = plant.kind == 31 || plant.kind == 32;
+            if (floating && (plant.z <= 0 ||
+                             result.terrain.read(plant.x, plant.y, plant.z - 1).type != blocktype::WATER ||
+                             result.terrain.read(plant.x, plant.y, plant.z).type != blocktype::AIR))
+                continue; // The composed floor or scenery can cover the former water surface.
             const int32_t shift = result.terrain.columns[*index].base - tile->columns()[*index].base;
             const auto model = alphagen::steamPlant(plant, *plantModels, shift);
             if (!model) {

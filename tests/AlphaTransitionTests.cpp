@@ -76,6 +76,19 @@ int alphaTransitionTests() {
               reader.read(0, 0, 4) == waterA && reader.read(0, 0, 5) == waterB &&
               reader.read(0, 0, 6).type == blocktype::AIR,
           "lowering a pool floor fills open space while retaining the original surface and stored water colors");
+    alphagen::PlantModels models;
+    models.environment[31] = 1031;
+    const alphagen::Plant lily{0, 0, 6, .09f, 0, 31, 0};
+    for (const int shift : {1, -2}) {
+        const auto movedPool = alphagen::shiftedTerrainColumn(pool, shift);
+        const auto floating = alphagen::steamPlant(lily, models, shift);
+        if (movedPool)
+            reader.columns[0] = *movedPool;
+        const int z = floating ? int(floating->z >> 16) : 0;
+        check(movedPool && floating && reader.read(0, 0, z).type == blocktype::WATER &&
+                  reader.read(0, 0, z + 1).type == blocktype::AIR,
+              "floating plant base remains on the composed pool surface after solid translation");
+    }
     TerrainColumn dry{1, {rockA, Block{255, 255, 255, 0, blocktype::AIR, 2}, waterA, waterB}, true, 0};
     const auto dryMoved = alphagen::shiftedTerrainColumn(dry, -1);
     if (dryMoved)

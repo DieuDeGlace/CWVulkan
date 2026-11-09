@@ -137,8 +137,9 @@ std::optional<worldgen::Model> steamPlant(const Plant &plant, const PlantModels 
     result.type = models.type(plant.kind);
     result.x = int64_t(plant.x) * 65536 + 32768;
     result.y = int64_t(plant.y) * 65536 + 32768;
-    result.z = (int64_t(plant.z) + shift) * 65536;
-    if (plant.kind == 31 || plant.kind == 32)
+    const bool floating = plant.kind == 31 || plant.kind == 32;
+    result.z = (int64_t(plant.z) + (floating ? 0 : shift)) * 65536;
+    if (floating)
         result.z -= 6553;
     result.size = plant.scale;
     result.yaw = plant.rotation;

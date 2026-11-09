@@ -1,5 +1,43 @@
 # Source review checkpoint — 2026-11-08
 
+## Exact height rounding and fixed-water plants - 2026-11-09
+
+The Steam final-height path now rounds the peak mask-times-height-gate product
+before multiplying by the noise sum. The existing two multiplications remain;
+no amplitude, mode switch or random draw is added. A fresh complete original-only
+[ordered-arithmetic contract](specs/steam-final-height-ordered-arithmetic-and-conditional-vectors-20261108.md)
+qualifies this association with independently selected literal binary32 cases.
+It supersedes only the left-associated peak-scalar expression in section8.3 of
+the earlier height contract; both original prose artifacts remain unchanged.
+
+Six actual production-function regressions fail before and pass afterward.
+Their inputs use the owned fixed Noise provider and synthetic HeightInputs;
+these are conditional mathematical references, not new original-runtime
+observations. An independent replay of the source author's literal family B
+also matches its intermediate/final words. A larger read-only conditional probe
+isolates38 changed results in10,240 cases with zero baseline-reference errors.
+Private owned baseline/candidate builds both retain all7,646 recorded mode0/4
+height outputs at3,823 points. The full current suite retains zero differences
+across95,575 recorded pipeline values and60,000 recorded cells. No original
+oracle or expected game value was relaxed.
+
+Alpha water lilies now keep the fixed liquid level while solid terrain moves.
+Records whose former surface is covered are omitted; grounded plants still
+follow the solid shift. Four reproduced placement failures pass. Raw Alpha
+generation, vegetation draws and the compose-v2 geometry/profile identity remain
+unchanged. Alpha lighting, Omega water and the wider rounded landmark approach
+stay implemented.
+
+All five targets, full required-owner CPU without skips, every Vulkan group and
+SDK independence pass. The implementer used complete code-free prose and owned
+code only; the isolated author received no project results or owner outputs.
+Source/runtime payloads are audited separately, with only source public.
+Current-binary live Help/creation/control and Alpha landmark/material/water/
+new-profile acceptance remain pending because Steam reports offline. Imported
+providers, preparation/callback ordering, floating environment, concurrency,
+whole-world/native pixels, broader gameplay, multiplayer, hardware/fresh-install
+and final provenance acceptance remain open. This is a development checkpoint.
+
 ## Help visibility and ordinary control admission - 2026-11-08
 
 Help now keeps its selected value in the retained HUD, under the gameplay branch.

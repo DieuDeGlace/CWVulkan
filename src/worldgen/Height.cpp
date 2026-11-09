@@ -610,7 +610,7 @@ float finalHeight(int32_t x, int32_t y, const HeightInputs &in, const Place &p, 
         const float k = (1.0f - e) * hk * rolling;
         h = h + (n + 1.0f) * 0.5f * k;
     }
-    // 8.3 Terraces.
+    // 8.3 Small peaks.
     {
         float q = h * 0.1f;
         if (!(1.0f > q))
@@ -621,7 +621,9 @@ float finalHeight(int32_t x, int32_t y, const HeightInputs &in, const Place &p, 
         const float v2 = 1.0f - (1.0f - v);
         if (!(0.0f < q))
             q = 0.0f;
-        d = d * v2 * q;
+        // The native mask/gate product rounds before multiplying the noise sum.
+        // steam-final-height-ordered-arithmetic-and-conditional-vectors-20261108.md.
+        d = d * (v2 * q);
         if (d > 0.0f && 0.5f > in.highlands) {
             const float cmod = p.kind == 28 ? minOf(1.0f, w + w) : 0.0f;
             const float hm = maxOf(1.0f - (in.highlands + in.highlands), 0.0f);

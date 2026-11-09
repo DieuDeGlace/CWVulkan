@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -63,6 +64,38 @@ template <class F> void eachLine(std::ifstream &in, F f) {
         std::istringstream s(line);
         f(s);
     }
+}
+
+// Conditional final-height words from the held ordered-arithmetic contract,
+// with this engine's fixed Noise as the provider. These are synthetic inputs,
+// not original-world captures or a closure of native provider state.
+void conditionalHeightArithmetic() {
+    struct Reference {
+        int32_t x, y;
+        uint32_t base, height;
+    };
+    constexpr Reference references[] = {
+        {445, 1035, 0x3e4ccccd, 0x402b2d19},
+        {462, 1066, 0x3e4ccccd, 0x4068bc5e},
+        {479, 1097, 0x3e4ccccd, 0x40643394},
+        {20, 260, 0x3e99999a, 0x40742247},
+        {785, 1655, 0x3e99999a, 0x3edb6d8d},
+        {156, 508, 0x3ecccccd, 0x3f42335c},
+    };
+    int wrong = 0;
+    for (const auto &reference : references) {
+        const wg::HeightInputs input{std::bit_cast<float>(reference.base), .25f, .03f, .07f, .11f, .13f, 0.f};
+        const float height = wg::finalHeight(reference.x, reference.y, input, {},
+                                            wg::heightmode::LOW | wg::heightmode::NO_BEDS);
+        const auto word = std::bit_cast<uint32_t>(height);
+        if (word != reference.height) {
+            ++wrong;
+            std::printf("Conditional height %d %d: got %08x expected %08x\n",
+                        reference.x, reference.y, word, reference.height);
+        }
+        WG_CHECK(word == reference.height);
+    }
+    std::printf("Conditional final-height arithmetic: 6 references, %d word differences\n", wrong);
 }
 
 // --- gen-oracle.txt (§4.1) ------------------------------------------------------------------
@@ -513,9 +546,10 @@ fs::path generatedZonesDir(const fs::path &game) {
 // The fast subset in the default test run.
 int worldgenTerrainTests() {
     failures = 0;
+    conditionalHeightArithmetic();
     const fs::path game = gameDir();
     if (game.empty())
-        return 0;
+        return failures;
     heightOracle(game, false);
     blocksOracle(game, false);
     zonesOracle(generatedZonesDir(game), 25, false, false);

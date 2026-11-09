@@ -21,7 +21,8 @@ std::optional<worldgen::Block> steamBlock(Block);
 // Source storage is immutable; invalid height ranges return no column.
 std::optional<worldgen::TerrainColumn> shiftedTerrainColumn(const worldgen::TerrainColumn &, int32_t shift);
 // Plant XY is already in Steam block coordinates; shift is the composed column's
-// vertical translation. Native constructor flags and fixed placement are explicit.
+// solid translation; water lilies keep their fixed world-Z surface. Native
+// constructor flags and fixed placement are explicit.
 std::optional<worldgen::Model> steamPlant(const Plant &, const PlantModels &, int32_t shift = 0);
 
 class SteamTile {

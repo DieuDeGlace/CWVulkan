@@ -1,5 +1,24 @@
 # Clean-room process
 
+## Scalar-order and floating-plant follow-up, 2026-11-09
+
+An isolated original-only author independently reread the complete preparation
+and final-height owners and their normal-return guard, byte-verified the selected
+ranges and produced a new complete held ordered-arithmetic contract. It includes
+conditional literal-word calculations, not native runtime observations. The
+implementer read the entire artifact, checked its hash and copied it unchanged;
+no implementation, tests, prior handoff, owner outputs or feedback reached the
+author. Only the qualified small-peak multiplication association changes in the
+native height path. The earlier full landform review remains private and unmodified.
+
+The Alpha lily follow-up is owned hybrid policy: floating plants retain the fixed
+water surface while grounded plants follow translated solids. It introduces no
+new native source interpretation. Actual before/after conditional-height and
+plant regressions, unchanged recorded oracles, all targets, required-owner CPU
+without skips, all Vulkan groups and SDK independence pass. Provider/order/cache/
+thread and broad runtime/provenance limits remain explicit. Steam-disconnected
+live checks are pending; owner data and private evidence stay out of publication.
+
 ## Help visibility/control continuation, 2026-11-08
 
 The independent native-only author finalized the complete Help state/control

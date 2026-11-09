@@ -1,5 +1,23 @@
 # Alpha terrain generation
 
+## Fixed-water plant follow-up, 2026-11-09
+
+Water lilies now retain their original water-surface Z when the hybrid moves
+solid ground. Composition omits a lily if the resulting floor or scenery covers
+its former water surface; grounded plants still follow the solid translation.
+The exact lily fixed-point placement and both species are retained. No
+vegetation draws, raw Alpha terrain or compose-v2 geometry/profile identity
+change. Four reproduced bridge/pool failures now pass, including raised and
+lowered floors and the separate grounded-reed behavior.
+
+A separately source-qualified Steam height correction preserves the order of
+two binary32 multiplications in the small-peak admission scalar. It changes no
+global relief amplitude or mode policy. All recorded height pipeline values
+remain exact, but wider native/provider closure is still open. All five targets,
+full required-owner CPU without skips, all Vulkan groups and SDK independence
+pass. Current live Alpha/Help scenes, landmark/material/water review and new
+profile/save acceptance still await Steam reconnection.
+
 ## Landmark transition checkpoint, 2026-11-08
 
 The user's flat-platform report was reproduced in the default Alpha landscape

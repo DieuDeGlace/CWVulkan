@@ -281,6 +281,12 @@ int alphaTerrainTests() {
         check(record && record->type == 1031 && record->x == 229376 && record->y == -229376 && record->z == 648807 &&
                   record->size == .09f && record->yaw == 90 && record->flags == 2 && record->groundCover,
               "Alpha lily uses half-block XY, exact minus6553 fixed Z and one uniform voxel scale");
+        const auto raisedLily = alphagen::steamPlant(lily, models, 5);
+        check(record && raisedLily && raisedLily->z == record->z, "water lilies retain the fixed water plane when terrain rises");
+        lily.kind = 32;
+        const auto loweredLily = alphagen::steamPlant(lily, models, -3);
+        check(record && loweredLily && loweredLily->type == 1032 && loweredLily->z == record->z,
+              "both lily species retain the fixed water plane when terrain falls");
         lily.kind = 22;
         lily.flags = 4;
         const auto reed = alphagen::steamPlant(lily, models, 5);
