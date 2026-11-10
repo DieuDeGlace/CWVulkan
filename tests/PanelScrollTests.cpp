@@ -36,6 +36,10 @@ int panelScrollTests() {
     const auto fullTrack = friendsThumb(5, 420, 600, 8, 14);
     check(fullTrack && fullTrack->y == 60 && fullTrack->height == 390,
           "Multiplayer's thumb-fit branch is separate from row-offset normalization");
+    const auto continuous=controlsDrag(0,600,234,35,45);
+    const auto discrete=controlsThumb(2,500,600,7);
+    check(continuous && continuous->first==2 && continuous->y==80 && discrete && discrete->y==75,
+          "independent H600 drag reference keeps continuous Y80 separately from discrete Y75");
     const auto stationary = controlsDrag(1, 600, 234, 55, 0);
     check(stationary && stationary->first == 0 && stationary->y == 55,
           "stationary held drag keeps continuous Y but recomputes the row by truncation");

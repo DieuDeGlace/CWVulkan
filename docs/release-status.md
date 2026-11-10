@@ -1,5 +1,47 @@
 # Source review checkpoint — 2026-11-08
 
+## Controls thumb and layout - 2026-11-10
+
+The retained Controls thumb now receives GUI event 12 after the target's virtual
+motion work. The ordinary Button press/capture path also runs for a motion-only
+binding, so held dragging continues through a hidden ancestor. The callback tests
+the manager's held level before geometry, retains candidate/capture rows and keeps
+continuous thumb position separate from the truncated selected row. Callback
+teardown clears the binding before its Session ends.
+
+Up/down callbacks now publish the actual retained thumb geometry synchronously,
+position before size, using the current frame and thumb width. Arrow insets and
+button positions use the independently specified formulas and queried dimensions;
+Cancel uses OK's height. Existing pending edits, Defaults/OK/Cancel behavior and
+draw-produced binding capture retain their separate paths.
+
+The complete [Controls and Help contract](specs/steam-controls-scroll-thumb-and-help-action-rows-20261110.md)
+was whole-read and hash-verified before use, then copied unchanged. The original-only
+author received no implementation, tests, owner outputs or verification feedback.
+This checkpoint applies selected Controls behavior only. Full Help rows and their
+dynamic description dictionaries/resources remain unfinished.
+
+Five actual baseline layout/motion failures become passing checks. Twenty actual
+Controls cases pass in Native and Alpha at GUI scale one and Native at scale 1.5,
+with unchanged private saves. The larger-scale fixture now queries its actual
+owning scene rather than a detached scene that omitted the live root scale;
+earlier failed runs remain recorded. All five targets, full required-owner CPU
+without skips, all Vulkan groups and SDK independence pass. Current Native and
+Alpha Controls images were captured at the unchanged readiness limits and both
+inspected. Their fixed layout shows the retained title beneath the panel.
+
+The current frontend still uses sibling templates and projects their geometry
+into the Controls frame. This is an owned adapter, not proof of the native Q parent
+graph, exact name/propagation registrations, arbitrary matrices/properties/providers,
+reentrant layout query order, draw point timing or exception/lifetime/thread closure.
+These checks do not certify full Controls, original pixels, OS hardware, gameplay,
+multiplayer or final human/provenance acceptance. The earlier asynchronous source
+deadline miss remains unexplained; no production streaming code changed. Alpha
+relief/lighting, purple dry Undead Lands, distinct biome palettes and Omega water
+retain their existing paths. Owner files, screenshots, saves and binaries remain
+excluded from public source.
+
+
 ## Sampled control admission and process history - 2026-11-10
 
 Native directional input now tests Chat after the actor's earlier preparation,

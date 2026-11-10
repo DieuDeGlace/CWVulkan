@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Controls thumb event 12, motion-only Button capture, synchronous current-size
+  publication and queried button/arrow layout formulas. Five baseline failures,
+  twenty actual cases in Native/Alpha and scale 1.5, all targets/full CPU/no skips/
+  Vulkan/SDK and two inspected Controls scenes pass. Native parent/registration/
+  general geometry/reentrant draw closure and full Help remain open.
+  See [the checkpoint](release-status.md#controls-thumb-and-layout---2026-11-10).
+
+
 - [x] Selected sampled-input admission and independent process history: Chat after
   actor preparation, exact rise operands, current keyboard/composite inputs,
   six late menus with fresh stores, early zoom and Ring repeats. Four baseline

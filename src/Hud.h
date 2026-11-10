@@ -506,6 +506,8 @@ class Hud {
         bool retainText = false; // use the initial caption once, then keep the live scene value
         std::function<void()> press; // bound event2
         std::function<void()> release; // bound event3; owner clears before its lifetime ends
+        using Motion = std::function<void(plasma::Input &, plasma::Scene &, plasma::SceneNode &)>;
+        Motion motion; // event12, after the current target's virtual motion hook
         bool replaceWidget = false; // explicit custom-widget construction; never a native resize/rectangle flag
         struct ModelContext {
             glm::mat4 matrix{1};
@@ -538,6 +540,10 @@ class Hud {
     std::optional<std::u16string> frontendCaption(const std::string &owner) const;
     void setFrontendCaption(const std::string &owner,std::u16string_view);
     void clearFrontendBindings();
+    const plasma::SceneNode *frontendNode(const std::string &owner) const;
+    struct FrontendFrame { glm::vec2 position, size; }; // Current frame queries, not hit bounds.
+    std::optional<FrontendFrame> frontendFrame(const std::string &owner) const;
+    void publishFrontendGeometry(const std::string &owner, glm::vec2 position, glm::vec2 size) const;
     const plasma::SceneNode *interfaceBranchRoot(uiroot::Branch branch) const;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
                              std::vector<OverlayVertex> &, std::vector<glm::vec2> *navigation = nullptr) const;
@@ -658,6 +664,7 @@ class Hud {
         bool pointerInside = false;
         bool frontendManaged = false;
         std::function<void()> press,release;
+        ScreenItem::Motion motion;
     };
     mutable std::map<std::string, std::vector<TemplateInstance>> frontNodes;
     TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0,

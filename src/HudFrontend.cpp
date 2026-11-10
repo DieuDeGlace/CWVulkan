@@ -108,7 +108,8 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
     }
     instance.press=item.press;
     instance.release=item.release;
-    if (node.widget) node.widget->frontendEventButton=bool(item.press || item.release);
+    instance.motion=item.motion;
+    if (node.widget) node.widget->frontendEventButton=bool(item.press || item.release || item.motion);
     if (item.press) {
         interfaceInput->registerEvent(node,plasma::Input::Event::LeftDown,
             [this,owner,index](plasma::Input &,plasma::SceneNode &) {
@@ -129,8 +130,41 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
                 }
             });
     }
+    if (item.motion) {
+        interfaceInput->registerEvent(node,plasma::Input::Event::Move,
+            [this,owner,index](plasma::Input &input,plasma::SceneNode &) {
+                const auto found=frontNodes.find(owner);
+                if (found!=frontNodes.end() && index<found->second.size()) {
+                    const auto callback=found->second[index].motion;
+                    if (callback) callback(input,*scene,*found->second[index].node);
+                }
+            });
+    }
     scene->setScale(guiScale);
     return &instance;
+}
+
+const plasma::SceneNode *Hud::frontendNode(const std::string &owner) const {
+    const auto found=frontNodes.find(owner);
+    return found!=frontNodes.end() && !found->second.empty() ? found->second.front().node : nullptr;
+}
+
+std::optional<Hud::FrontendFrame> Hud::frontendFrame(const std::string &owner) const {
+    const auto *node=frontendNode(owner);
+    if (!scene || !node || !node->widget) return std::nullopt;
+    return FrontendFrame{scene->contentPosition(*node),scene->screenSize(*node)};
+}
+
+void Hud::publishFrontendGeometry(const std::string &owner, glm::vec2 position, glm::vec2 size) const {
+    const auto found=frontNodes.find(owner);
+    if (!scene || found==frontNodes.end() || found->second.empty()) return;
+    auto &instance=found->second.front();
+    if (!instance.node->widget) return;
+    scene->moveTo(*instance.node,position*guiScale); // Position publication precedes size.
+    scene->setScale(1);
+    scene->resizeTo(*instance.node,size);
+    instance.requested=size;
+    scene->setScale(guiScale);
 }
 
 glm::vec2 Hud::templateViewSize(const ScreenItem &item) const {

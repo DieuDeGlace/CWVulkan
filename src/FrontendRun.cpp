@@ -560,9 +560,11 @@ class Session {
     int32_t firstFriend = 0;
     std::optional<panelscroll::Thumb> controlsThumb, friendsThumb;
     glm::vec2 controlsThumbFrame{-1}, friendsThumbFrame{-1};
+    Hud::ScreenItem controlsPanel() const;
     void refreshControlsThumb();
     void refreshFriendsThumb();
     void scrollControls(int nativeDelta);
+    void dragControls(plasma::Input &, plasma::Scene &, plasma::SceneNode &);
     void scrollFriends(int nativeDelta);
     void refreshFriendStates();
     int hoveredFriend(glm::vec2 m) const; // the row under the pointer (panel units), -1 if none
@@ -1779,12 +1781,61 @@ void Session::optionsItems(Hud::Screen &out) {
     }
 }
 
-void Session::refreshControlsThumb() {
-    controlsThumbFrame = hud.templateSize("blackwidget", CONTROLS_SIZE);
-    const float width = hud.templateSize("scrollbutton").x;
-    if (width > 0)
-        controlsThumb = panelscroll::controlsThumb(controls.first, controlsThumbFrame.x, controlsThumbFrame.y, width);
+Hud::ScreenItem Session::controlsPanel() const {
+    auto panel=widget("blackwidget",centred(CONTROLS_SIZE),CONTROLS_SIZE);
+    panel.instance="controls-frame";
+    panel.branch=uiroot::Branch::Controls;
+    return panel;
 }
+void Session::refreshControlsThumb() {
+    controlsThumbFrame = hud.templateContentSize(controlsPanel());
+    auto *thumb = hud.frontendNode("controls-thumb");
+    if (!thumb) {
+        auto item=widget("scrollbutton",{},{});
+        item.instance="controls-thumb";
+        item.branch=uiroot::Branch::Controls;
+        (void)hud.templateContentSize(item); // Only the initial optional clone.
+        thumb=hud.frontendNode(item.instance);
+    }
+    if (!thumb || !thumb->widget) {
+        controlsThumb.reset();
+        return;
+    }
+    const float width=thumb->widget->effectiveSize().x;
+    controlsThumb=panelscroll::controlsThumb(controls.first,controlsThumbFrame.x,controlsThumbFrame.y,width);
+    if (controlsThumb) {
+        const auto &bar=*controlsThumb;
+        hud.publishFrontendGeometry("controls-thumb",centred(CONTROLS_SIZE)+glm::vec2(bar.x,bar.y),{bar.width,bar.height});
+    }
+}
+void Session::dragControls(plasma::Input &input, plasma::Scene &scene, plasma::SceneNode &thumb) {
+    if (!(input.heldButtons() & 1))
+        return; // No geometry queries before the manager's held-level admission.
+    const auto *frame = hud.frontendNode("controls-frame");
+    if (!frame || !controlsThumb)
+        return; // Owned scene adapter: absent templates have no invented geometry.
+    const float height = scene.contentSize(*frame).y;
+    // Frontend templates currently share a branch rather than a native Q parent.
+    // Project their actual geometry into that frame; general native matrix/provider
+    // equivalence remains a separate boundary, not an axis-aligned hit substitute.
+    const auto origin = scene.contentPosition(thumb);
+    const auto position = scene.widgetPointer(*frame,origin);
+    const float thumbHeight = (scene.widgetPointer(*frame,origin+scene.screenSize(thumb))-position).y;
+    const auto delta = scene.widgetPointer(*frame,input.pointer())-scene.widgetPointer(*frame,input.previousPointer());
+    const auto changed = panelscroll::controlsDrag(controls.first,height,thumbHeight,position.y,delta.y);
+    if (!changed)
+        return; // Defined finite-domain policy; native exceptional geometry is not emulated.
+    if (req.page == "controls-input-test")
+        log("Controls motion operands: height="+std::to_string(height)+" thumbHeight="+std::to_string(thumbHeight)+
+            " position="+std::to_string(position.y)+" delta="+std::to_string(delta.y)+
+            " row="+std::to_string(changed->first)+" y="+std::to_string(changed->y));
+    controls.first = changed->first;
+    controlsThumb->y = changed->y;
+    const auto current = scene.viewPosition(thumb); // Fresh query after the row publication.
+    const auto displacement = glm::mat2(scene.placementMatrix(*frame))*glm::vec2(0,changed->y-position.y);
+    scene.moveTo(thumb,{current.x,current.y+displacement.y});
+}
+
 void Session::refreshFriendsThumb() {
     friendsThumbFrame = hud.templateSize("blackwidget", FRIENDS_SIZE);
     const float width = hud.templateSize("scrollbutton").x;
@@ -1792,7 +1843,7 @@ void Session::refreshFriendsThumb() {
         friendsThumb = panelscroll::friendsThumb(firstFriend, friendsThumbFrame.x, friendsThumbFrame.y, width, friendRows.size());
 }
 void Session::scrollControls(int nativeDelta) {
-    const auto frame = hud.templateSize("blackwidget", CONTROLS_SIZE);
+    const auto frame = hud.templateContentSize(controlsPanel());
     const auto changed = panelscroll::controls(controls.first, nativeDelta, frame.y);
     controls.first = changed.first;
     if (changed.refreshThumb)
@@ -1820,9 +1871,7 @@ bool Session::wheel(int nativeDelta, glm::vec2 cachedPointer) {
 
 void Session::controlsItems(Hud::Screen &out) {
     const glm::vec2 at = centred(CONTROLS_SIZE);
-    auto panel = widget("blackwidget", at, CONTROLS_SIZE);
-    panel.instance = "controls-frame";
-    panel.branch = uiroot::Branch::Controls;
+    auto panel = controlsPanel();
     const glm::vec2 frame = hud.templateContentSize(panel);
     const auto rows = controls.rows(frame.y);
     const glm::vec2 local = hud.templateLocalPoint(panel, hud.interfacePointerPosition());
@@ -1835,6 +1884,7 @@ void Session::controlsItems(Hud::Screen &out) {
         const auto &thumb = *controlsThumb;
         out.push_back(widget("scrollbutton", at + glm::vec2(thumb.x, thumb.y), {thumb.width, thumb.height}));
         out.back().instance = "controls-thumb";
+        out.back().motion = [this](auto &input,auto &scene,auto &node) { dragControls(input,scene,node); };
     }
     float baseline = 27.f;
     for (int i = rows[0]; i < rows[1]; ++i, baseline += 30.f) {
@@ -1851,16 +1901,26 @@ void Session::controlsItems(Hud::Screen &out) {
         const float valueX = (hud.templateContentSize(panel).x - 250.f) * .5f + 240.f;
         out.push_back(text(formatted, at + glm::vec2(valueX, baseline), 12, 3, colour, ALIGN_CENTRE));
     }
-    out.push_back(widget("upbutton", at + glm::vec2(frame.x - 35, 10), glm::vec2(0)));
+    out.push_back(widget("upbutton", at + glm::vec2(frame.x - 30, 10), glm::vec2(0)));
     out.back().instance = "controls-up";
     out.back().press = [this] { nativeControlsHandled = true; scrollControls(1); };
-    out.push_back(widget("downbutton", at + glm::vec2(frame.x - 35, frame.y - 105), glm::vec2(0)));
+    out.push_back(widget("downbutton", at + glm::vec2(frame.x - 30, frame.y - 140), glm::vec2(0)));
     out.back().instance = "controls-down";
     out.back().press = [this] { nativeControlsHandled = true; scrollControls(-1); };
+    const glm::vec2 view = hud.templateViewSize(panel) / guiScale;
+    const auto buttonSize = [&](const char *label) {
+        auto item = widget("button",{},CONTROLS_BUTTON_SIZE,label);
+        item.instance = std::string("controls-")+label;
+        item.branch = uiroot::Branch::Controls;
+        return hud.templateViewSize(item) / guiScale;
+    };
+    const auto defaultsSize = buttonSize("Defaults"), okSize = buttonSize("OK"), cancelSize = buttonSize("Cancel");
+    const glm::vec2 positions[3] = {{20.f,view.y-defaultsSize.y-20.f},
+        {(view.x-40.f-okSize.x)*.5f+20.f,view.y-okSize.y-20.f},
+        {view.x-20.f-cancelSize.x,view.y-okSize.y-20.f}};
     const char *const labels[3] = {"Defaults", "OK", "Cancel"};
     for (int button = 0; button < 3; ++button) {
-        out.push_back(widget("button", at + glm::vec2(20.f + 160.f * float(button), frame.y - 35.f),
-                             CONTROLS_BUTTON_SIZE, labels[button]));
+        out.push_back(widget("button",at+positions[button],CONTROLS_BUTTON_SIZE,labels[button]));
         out.back().instance = std::string("controls-") + labels[button];
         out.back().navigation = Hud::ScreenItem::ShapeCentre;
         out.back().release = [this, button] {
@@ -2135,6 +2195,66 @@ bool Session::frame() {
             (void)buildScreen(false);
             verify(controls.waiting == -1 && controls.candidate == -1, "admitted pad-mode draw clears capture and candidate");
         } else verify(false,"retained Controls frame exists");
+        // Independent H600 contract references through the retained owner scene.
+        s.input->lastUsedPad = false;
+        controls.first = 0;
+        controls.waiting = -1;
+        controls.candidate = 7;
+        refreshControlsThumb();
+        screen = buildScreen(false,false);
+        const auto control = [&](const char *owner) -> const Hud::ScreenItem * {
+            const auto found = std::find_if(screen.begin(),screen.end(),[&](const auto &item) { return item.instance == owner; });
+            return found == screen.end() ? nullptr : &*found;
+        };
+        const auto *frameItem = control("controls-frame"), *upItem = control("controls-up"), *downItem = control("controls-down");
+        const auto *defaultsItem = control("controls-Defaults"), *okItem = control("controls-OK"), *cancelItem = control("controls-Cancel");
+        if (frameItem && upItem && downItem && defaultsItem && okItem && cancelItem) {
+            const auto content = hud.templateContentSize(*frameItem);
+            const auto view = hud.templateViewSize(*frameItem) / guiScale;
+            const auto defaultsSize = hud.templateViewSize(*defaultsItem) / guiScale;
+            const auto okSize = hud.templateViewSize(*okItem) / guiScale;
+            const auto cancelSize = hud.templateViewSize(*cancelItem) / guiScale;
+            verify(upItem->at == frameItem->at + glm::vec2(content.x - 30.f,10.f) &&
+                   downItem->at == frameItem->at + glm::vec2(content.x - 30.f,content.y - 140.f),
+                   "scroll arrows use their distinct native layout insets");
+            verify(defaultsItem->at == frameItem->at + glm::vec2(20.f,view.y-defaultsSize.y-20.f) &&
+                   okItem->at == frameItem->at + glm::vec2((view.x-40.f-okSize.x)*.5f+20.f,view.y-okSize.y-20.f) &&
+                   cancelItem->at == frameItem->at + glm::vec2(view.x-20.f-cancelSize.x,view.y-okSize.y-20.f),
+                   "buttons use current transformed sizes and the OK height for Cancel");
+        } else verify(false,"all retained Controls layout nodes exist");
+        const auto *thumbNode = hud.frontendNode("controls-thumb");
+        const auto thumbFrame = hud.frontendFrame("controls-thumb");
+        if (thumbNode && thumbNode->widget && thumbFrame && frameItem) {
+            const auto frameAt = frameItem->at;
+            const auto start = thumbFrame->position, size = thumbFrame->size;
+            const auto centre = start + size * .5f;
+            hud.moveInterfacePointer(centre);
+            hud.interfaceLeftDown();
+            verify(hud.interfacePointerTarget() == thumbNode && (hud.interfaceHeldButtons() & 1) && thumbNode->widget->buttonHeld,
+                   "ordinary thumb press retains the real owner target");
+            hud.moveInterfacePointer(centre + glm::vec2(0,45.f*guiScale));
+            const auto dragged = hud.frontendFrame("controls-thumb")->position;
+            verify(controls.first == 2 && std::abs(dragged.y-start.y-45.f*guiScale) < .01f,
+                   "motion publishes continuous thumb Y and truncated row before the next draw");
+            verify(controls.candidate == 7 && controls.waiting == -1,
+                   "scroll motion preserves the retained candidate and capture row");
+            hud.setInterfaceShown(false);
+            hud.moveInterfacePointer(centre + glm::vec2(0,1000.f*guiScale));
+            verify(controls.first == 9 && hud.interfacePointerTarget() == thumbNode,
+                   "captured thumb still moves through a hidden ancestor");
+            hud.interfaceLeftUp();
+            const auto released = hud.frontendFrame("controls-thumb")->position;
+            hud.moveInterfacePointer(centre);
+            verify(hud.frontendFrame("controls-thumb")->position == released && !(hud.interfaceHeldButtons() & 1),
+                   "release clears the held bit before its reentrant motion callback");
+            hud.setInterfaceShown(true);
+            scrollControls(1);
+            const auto snapped = hud.frontendFrame("controls-thumb")->position; // Before another screen/draw.
+            screen = buildScreen(false,false);
+            verify(controls.first == 8 && std::abs(snapped.y-(frameAt.y+195.f)*guiScale) < .01f,
+                   "later up publication snaps the continuous thumb to the discrete quotient");
+        } else verify(false,"retained Controls thumb exists");
+        controls.first = 0;
         hud.setInterfaceShown(oldInterface);
         s.input->lastUsedPad = oldPad;
         controls.values = retained;

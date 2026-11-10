@@ -125,6 +125,53 @@ void equipmentCallbacks() {
         hud.publishFrontendScreen({});
         hud.setInterfaceState({});
     }
+    // A motion-only retained Button still receives its native virtual press/capture.
+    // The port owns the template's current control, independently of the picked child.
+    {
+        Hud::ScreenItem thumb;
+        thumb.kind=Hud::ScreenItem::Template;
+        thumb.name="scrollbutton";
+        thumb.instance="frontend-motion-owner-test";
+        thumb.branch=uiroot::Branch::Controls;
+        thumb.at={20,20};
+        thumb.size={12,100};
+        int motion=0;
+        bool receiver=true;
+        thumb.motion=[&](plasma::Input &input,plasma::Scene &,plasma::SceneNode &node) {
+            receiver=receiver && &node==hud.frontendNode(thumb.instance);
+            if (input.heldButtons() & 1) ++motion;
+        };
+        uiroot::State state;
+        state.controls=true;
+        hud.setInterfaceState(state);
+        hud.publishFrontendScreen({thumb});
+        const auto *node=hud.frontendNode(thumb.instance);
+        GUI_CHECK(node && node->widget && node->widget->kind=="Button");
+        if (node && node->widget) {
+            const auto frame=hud.frontendFrame(thumb.instance);
+            GUI_CHECK(frame.has_value());
+            const auto centre=frame->position+frame->size*.5f;
+            hud.moveInterfacePointer(centre);
+            GUI_CHECK(motion==0);
+            hud.interfaceLeftDown();
+            GUI_CHECK(node->widget->buttonHeld && hud.interfacePointerTarget()==node);
+            hud.setInterfaceShown(false);
+            hud.moveInterfacePointer(centre+glm::vec2(500,500));
+            GUI_CHECK(motion==1 && receiver && hud.interfacePointerTarget()==node);
+            hud.interfaceLeftUp();
+            GUI_CHECK(!node->widget->buttonHeld && !(hud.interfaceHeldButtons() & 1));
+            hud.clearFrontendBindings();
+            hud.setInterfaceShown(true);
+            hud.moveInterfacePointer(centre);
+            hud.interfaceLeftDown();
+            hud.moveInterfacePointer(centre+glm::vec2(0,1));
+            GUI_CHECK(motion==1); // No callback into a finished Session.
+            hud.interfaceLeftUp();
+        }
+        hud.clearFrontendBindings();
+        hud.publishFrontendScreen({});
+        hud.setInterfaceState({});
+    }
     // Help keeps its own selected value under the HUD across frontend/global hiding.
     {
         Hud::ScreenItem sheet;
