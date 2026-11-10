@@ -4,10 +4,11 @@
 // button), and the gamepad's fixed mappings are added on top.
 //
 //   GameInput controls;
-//   controls.update(window, gameControls, pressedKeys, pressedButtons, !menuOpen);
+//   controls.update(poll, levels, pad);
 //   if (controls.held(gameoptions::UP)) ...
 //   if (controls.pressed(gameoptions::INVENTORY)) ...
 #include "GameOptions.h"
+#include "PhysicalInput.h"
 
 #include <array>
 #include <cstdint>
@@ -45,16 +46,11 @@ class GamepadFrame {
 
 class GameInput {
   public:
-    // Reads every binding. `pressedKeys` and `pressedButtons` are the GLFW key and mouse button
-    // presses since the last frame, so a tap shorter than a frame still counts as a press.
-    // `enabled` gates keyboard/mouse bindings; fixed pad mappings follow their UI rules.
-    void update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
-                const std::vector<int> &pressedButtons, bool enabled, bool ui = false,
-                bool mapMode = false, bool capturingBinding = false, bool panelEligible = false,
-                const GamepadButtons *sample = nullptr);
-    static GamepadButtons pollGamepad(GLFWwindow *window, bool capturingBinding);
-    static bool physicalBindingDown(GLFWwindow *window, const gameoptions::Controls &controls);
-    static bool physicalBindingHeld(GLFWwindow *window, const gameoptions::Binding &binding);
+    // The application already sampled devices before motion/XInput. Consumers see
+    // final levels, never fabricated pulses from short window-message taps.
+    void update(const physicalinput::Poll &, const physicalinput::Levels &, const GamepadButtons &,
+                bool ui = false, bool mapMode = false, bool panelEligible = false);
+    static GamepadButtons pollGamepad();
     const GamepadFrame &gamepad() const { return padFrame; }
     // Whether the control is down now, and whether it went down this frame.
     bool held(int action) const { return action >= 0 && action < gameoptions::BINDINGS && down[(size_t)action]; }

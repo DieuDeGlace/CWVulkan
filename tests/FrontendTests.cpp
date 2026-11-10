@@ -369,8 +369,8 @@ void optionsFiles() {
     gameoptions::Controls changed = gameoptions::readControls("ButtonJump 57 0\nButtonDodge 3 1\nNope 1 1\n");
     FRONT_CHECK(changed[gameoptions::DODGE].code == 3 && changed[gameoptions::DODGE].kind == 1 && changed[gameoptions::USE] == def[gameoptions::USE]);
     FRONT_CHECK(gameoptions::readControls(gameoptions::writeControls(changed)) == changed);
-    FRONT_CHECK(gameoptions::bindingName({0, 0}) == "Unassigned" && gameoptions::bindingName({2, 1}) == "Mouse 2" &&
-                gameoptions::bindingName({0x11, 0}) == "W");
+    FRONT_CHECK(gameoptions::bindingName({0, 0}) == L"Unassigned" && gameoptions::bindingName({2, 1}) == L"Mouse 3" &&
+                gameoptions::bindingName({0x11, 0}) == L"W");
     // Native compact menu text is independent of the detailed controls screen.
     const auto compact=gameoptions::compactBindingName;
     FRONT_CHECK(compact({0,0})==L"?" && compact({0,2})==L"?" && compact({1,2})==L"ESC");

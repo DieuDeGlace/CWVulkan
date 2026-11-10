@@ -264,6 +264,16 @@ can be requested with `--play --character slot-0 --no-save --ring-menu --capture
   - Colours: unassigned (0.2, 1, 0.2), hovered (0.2, 1, 1), waiting for a key (1, 0.35, 0.35) with
     "Press a key".
   - Defaults, OK (writes `controls.cfg`) and Cancel.
+  - Pending records start from defaults independently of active configuration and
+    survive Cancel/reopening. OK copies them to the active array before attempting
+    persistence and hiding; Cancel only hides.
+  - Capture is selected by its signed row even while hidden. An admitted draw
+    caches its candidate; a later left release can arm it without a fresh hit.
+    Device rising edges, not queued window taps, choose bindings. Mouse capture
+    keeps the specified repeated scans and ends through separate release/draw rules.
+  - Detailed names preserve the complete native dictionary, Unknown misses and
+    one-based signed mouse labels. See the [physical contract](specs/steam-physical-binding-and-controls-capture-producers-20261109.md)
+    and [detailed names](specs/steam-detailed-binding-name-dictionary-and-controls-text-20261110.md).
 - **The keys.**
   - F1 toggles Help on every dispatched key-down, including repeats. Help does
     not block ordinary controls or consume gameplay input by itself.

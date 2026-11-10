@@ -138,6 +138,18 @@ glm::vec2 Hud::templateViewSize(const ScreenItem &item) const {
     return instance && instance->node->widget ? scene->viewSize(*instance->node) : glm::vec2(0);
 }
 
+glm::vec2 Hud::templateContentSize(const ScreenItem &item) const {
+    const auto *instance = prepareTemplate(item);
+    return instance ? scene->contentSize(*instance->node) : glm::vec2(0);
+}
+
+glm::vec2 Hud::templateLocalPoint(const ScreenItem &item, glm::vec2 point) const {
+    auto *instance = prepareTemplate(item);
+    if (!instance) return {};
+    placeTemplate(*instance, item);
+    return scene->widgetPointer(*instance->node, point);
+}
+
 glm::vec2 Hud::templateSize(const std::string &name, glm::vec2 requested, bool replaceWidget) const {
     if (!guiLoaded || !scene)
         return glm::vec2(0);

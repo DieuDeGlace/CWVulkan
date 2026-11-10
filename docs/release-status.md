@@ -1,5 +1,64 @@
 # Source review checkpoint — 2026-11-08
 
+## Physical input, retained Controls and detailed binding text - 2026-11-10
+
+Device bytes now produce the 23 current binding levels before motion and the
+controller pass. Ordinary interface visibility does not suppress those physical
+levels. Capture and inactive passes retain existing levels. Controls capture uses
+device-buffer rising edges, including the original repeated mouse scans inside
+the keyboard scan; window key messages remain a separate channel.
+
+The Controls editor retains pending defaults/edits independently of active
+bindings across screen sessions. Its admitted draw publishes the candidate row;
+release resets capture and can arm that cached row without a new pick or matching
+press. Ancestor hiding and its own visibility remain separate. Defaults, OK and
+Cancel use retained GUI release callbacks; OK copies active bindings before the
+persistence attempt and hide, while Cancel retains pending edits. The config
+writer supplies tokens in the independently specified order.
+
+Detailed names use the complete first dictionary and its exact 144 literals,
+separate from compact menu labels and OS naming. Empty pairs, unsupported codes,
+all category words and signed wrapped one-based mouse labels follow the held
+formatter contract. UTF-16 output reaches the existing font path. Full native
+Help action-specific rows/descriptions and general font/geometry providers remain
+open.
+
+The independent [physical producer contract](specs/steam-physical-binding-and-controls-capture-producers-20261109.md),
+[detailed text contract](specs/steam-detailed-binding-name-dictionary-and-controls-text-20261110.md)
+and [descriptor inventory](specs/steam-physical-device-format-tables-20261110.md)
+were whole-read and hash-verified before use, then retained unchanged. No
+implementation, tests, owner outputs or feedback reached the author. A separate public Windows ABI/data check matches both format
+headers, all263 records and seven referenced identifiers. It caught and corrected
+the initial ANSI/Unicode interface mismatch before publication. Native uses the
+Unicode interface. Provider implementations and current device availability are
+separate evidence boundaries.
+
+A missing DirectInput mouse has an explicitly logged GLFW compatibility backend;
+this is owned host policy outside the native valid ordinary graph. Failed reads
+from a supplied device still consume actual retained/partial output without fresh
+clears or retries. Defined initial storage, null-provider diagnostics and neutral
+device input in explicit hidden-pointer fixtures are also engine policies.
+Ordinary foreground device sampling retains its distinct admission. The owned
+menu-query API also keeps an isolated editor when no input service is supplied;
+live menu sessions share only the application's retained editor.
+
+One current Native scene and one Alpha/Omega scene pass the unchanged readiness
+deadlines with identical private saves; both images were inspected. The Alpha actor
+reached death/Revive during loading, so this is not full gameplay acceptance.
+These single runs do not establish loading reliability, FPS or a performance cause.
+
+Five actual Controls baseline cases failed before. Twelve current retained-scene
+cases and both actual Main chat orders pass in Native and Alpha/Omega with
+unchanged private saves. All five targets, full required-owner CPU without skips,
+all Vulkan groups and SDK independence pass. These queue/scene adapters are not
+OS injection or original-runtime/hardware parity proof. Full synchronous Game
+mouse business, title/release prefix, other widget/global lifetime, Controls thumb
+drag, complete controller/provider behavior and final native/human/provenance
+acceptance remain open. Owner files, captures, private evidence and binaries stay
+local; purple dry Undead Lands, distinct biome palettes, Alpha relief/lighting and
+Omega water retain their existing paths.
+
+
 ## Game keyboard, menu controls and map press admission - 2026-11-09
 
 The ordered interface queue now runs the GUI's 16-bit keyboard phase before the

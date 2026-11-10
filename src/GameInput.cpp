@@ -16,38 +16,11 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
-#include <map>
 
 namespace {
 
 constexpr int KEYBOARD = 0, MOUSE = 1;
-constexpr int HIGHEST_SCAN_CODE = 255; // a keyboard binding's code is 1..255
 constexpr int MOUSE_BUTTONS = 4;       // 0 left, 1 right, 2 middle, 3 the fourth
-
-// The GLFW key of each scan code the game can bind, made once GLFW knows the keyboard.
-const std::map<int, int> &keysByCode() {
-    static std::map<int, int> keys;
-    static bool made = false;
-    if (!made) {
-        for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; key++) {
-            const gameoptions::Binding b = GameInput::keyBinding(key);
-            if (b.code > 0)
-                keys.emplace(b.code, key);
-        }
-        made = !keys.empty();
-    }
-    return keys;
-}
-
-bool bindingDown(GLFWwindow *window, const gameoptions::Binding &b) {
-    if (b.kind == MOUSE)
-        return b.code >= 0 && b.code < MOUSE_BUTTONS && glfwGetMouseButton(window, b.code) == GLFW_PRESS;
-    if (b.kind != KEYBOARD || b.code < 1 || b.code > HIGHEST_SCAN_CODE)
-        return false; // (code 0 on the keyboard is unassigned)
-    const auto &keys = keysByCode();
-    const auto key = keys.find(b.code);
-    return key != keys.end() && glfwGetKey(window, key->second) == GLFW_PRESS;
-}
 
 GamepadButtons readGamepad() {
     GamepadButtons pad;
@@ -107,42 +80,20 @@ bool GameInput::keyIsBound(const gameoptions::Controls &controls, int glfwKey) {
     return std::any_of(controls.begin(), controls.end(), [&](const gameoptions::Binding &b) { return keyMatches(b, glfwKey); });
 }
 
-GamepadButtons GameInput::pollGamepad(GLFWwindow *window, bool capturingBinding) {
-    return !capturingBinding && glfwGetWindowAttrib(window, GLFW_FOCUSED) ? readGamepad() : GamepadButtons{};
-}
+GamepadButtons GameInput::pollGamepad() { return readGamepad(); }
 
-bool GameInput::physicalBindingDown(GLFWwindow *window, const gameoptions::Controls &controls) {
-    return glfwGetWindowAttrib(window, GLFW_FOCUSED) &&
-           std::any_of(controls.begin(), controls.end(), [&](const auto &binding) { return bindingDown(window, binding); });
-}
-
-bool GameInput::physicalBindingHeld(GLFWwindow *window, const gameoptions::Binding &binding) {
-    return glfwGetWindowAttrib(window, GLFW_FOCUSED) && bindingDown(window, binding);
-}
-
-void GameInput::update(GLFWwindow *window, const gameoptions::Controls &controls, const std::vector<int> &pressedKeys,
-                       const std::vector<int> &pressedButtons, bool enabled, bool ui, bool mapMode, bool capturingBinding,
-                       bool panelEligible, const GamepadButtons *sample) {
-    const bool focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
-    if (!focused || capturingBinding) {
+void GameInput::update(const physicalinput::Poll &poll, const physicalinput::Levels &levels, const GamepadButtons &pad,
+                       bool ui, bool mapMode, bool panelEligible) {
+    if (poll.phase != physicalinput::Poll::Normal) {
         padFrame.skipPoll();
-        edge = {}; // Retained held state does not produce another press edge.
+        edge = {};
         return;
     }
-    padFrame.update(sample ? *sample : pollGamepad(window, false), ui, mapMode, panelEligible);
-    for (int i = 0; i < gameoptions::BINDINGS; i++) {
-        const gameoptions::Binding &b = controls[(size_t)i];
-        const bool zoom = i == gameoptions::ZOOM_IN || i == gameoptions::ZOOM_OUT;
-        bool now = (focused && enabled && !zoom && bindingDown(window, b)) || padFrame.held[(size_t)i];
-        bool tapped = false;
-        if (focused && enabled && !zoom) {
-            for (int key : pressedKeys)
-                tapped = tapped || keyMatches(b, key);
-            for (int button : pressedButtons)
-                tapped = tapped || buttonMatches(b, button);
-        }
-        edge[(size_t)i] = (now && !down[(size_t)i]) || (tapped && !down[(size_t)i]);
-        down[(size_t)i] = now;
+    padFrame.update(pad, ui, mapMode, panelEligible);
+    for (int i = 0; i < gameoptions::BINDINGS; ++i) {
+        const bool now = levels[size_t(i)] != 0 || padFrame.held[size_t(i)];
+        edge[size_t(i)] = now && !down[size_t(i)];
+        down[size_t(i)] = now;
     }
 }
 

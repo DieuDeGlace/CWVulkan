@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Sampled physical binding levels, retained Controls capture/default/apply/cancel
+  and exact detailed key names use three whole-read independent contracts. All263
+  public Windows descriptor records match Native facts; Unicode interface verified.
+  Five actual baseline failures become12 passing retained-scene cases in both
+  styles, alongside actual Main chat orders, all5/fullCPU(no skips)/Vulkan/SDK.
+  Hardware fallback, broader Game/Help/provider and native acceptance stay explicit.
+  See [the checkpoint](release-status.md#physical-input-retained-controls-and-detailed-binding-text---2026-11-10).
+
+
 - [x] Ordered GUI16/current-Game8 keyboard dispatch, raw Game keys, repeated
   Escape's separately published six owner controls and per-message F-key scales.
   Distinct menu callbacks, current chat gates/send ordering and post-GUI right/

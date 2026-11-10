@@ -60,7 +60,7 @@ MenuInput::MouseEdges MenuInput::windowMouseEdges() const {
 
 void MenuInput::keyMessage(int key, bool repeat) {
     if (!repeat || key == GLFW_KEY_F1 || key == GLFW_KEY_F4)
-        pressed.push_back(key); // Retain raw edges for an active controls-binding capture.
+        pressed.push_back(key); // Window events are distinct from physical capture edges.
     if (!rawKeyboardSeen && key==GLFW_KEY_F1)
         interfaceMessages.emplace_back(InterfaceMessage::ToggleHelp);
     if (!rawKeyboardSeen && key==GLFW_KEY_F4)
@@ -74,6 +74,27 @@ void MenuInput::rawKeyMessage(InterfaceMessage kind,uint16_t unit) {
 
 void MenuInput::wheelMessage(int16_t delta) {
     interfaceMessages.emplace_back(InterfaceMessage::Wheel, delta < 0 ? -1 : delta > 0 ? 1 : 0);
+}
+
+bool MenuInput::samplePhysical(const gameoptions::Controls &controls, bool fixtureForeground) {
+    const bool admitted = physicalEnabled && (fixtureForeground || devices.foreground());
+    // The explicit CLI pointer adapter supplies neutral device bytes. It must
+    // not turn a hidden capture into background keyboard/controller input.
+    physical.sample(admitted, [&](auto &output) { if (fixtureForeground) output = {}; else devices.readKeyboard(output); },
+                    [&](auto &output) { if (fixtureForeground) output = {}; else devices.readMouse(output); },
+                    [&] { return physicalTarget(controls); });
+    if (!admitted)
+        physicalinput::Devices::inactiveWait();
+    lastUsedPadAtMousePoll = lastUsedPad;
+    return physical.phase == physicalinput::Poll::Normal;
+}
+
+void MenuInput::routeInterfaceRelease(Hud &hud, int button) {
+    if (button == 0) hud.interfaceLeftUp();
+    else if (button == 1 || button == 2) hud.interfaceSecondaryButton(button, false);
+    const auto continuation = gameRelease;
+    if (continuation) continuation(button);
+    controlEditor.release(button);
 }
 
 void MenuInput::routeInterfacePress(Hud &hud,int button) {
@@ -119,12 +140,12 @@ void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const
             routeInterfacePress(hud,0);
             break;
         case InterfaceMessage::LeftUp:
-            hud.interfaceLeftUp();
+            routeInterfaceRelease(hud,0);
             break;
         case InterfaceMessage::RightDown: routeInterfacePress(hud,1); break;
-        case InterfaceMessage::RightUp: hud.interfaceSecondaryButton(1, false); break;
+        case InterfaceMessage::RightUp: routeInterfaceRelease(hud,1); break;
         case InterfaceMessage::MiddleDown: routeInterfacePress(hud,2); break;
-        case InterfaceMessage::MiddleUp: hud.interfaceSecondaryButton(2, false); break;
+        case InterfaceMessage::MiddleUp: routeInterfaceRelease(hud,2); break;
         case InterfaceMessage::ToggleVisibility:
             hud.setInterfaceShown(!hud.interfaceShown());
             break;
@@ -143,12 +164,7 @@ void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const
 void MenuInput::routeGamepadButtons(Hud &hud) {
     for (int button = 0; button < 3; ++button) {
         if (gamepadPointer.pressed[(size_t)button]) routeInterfacePress(hud,button);
-        if (gamepadPointer.released[(size_t)button]) {
-            if (button == 0)
-                hud.interfaceLeftUp();
-            else
-                hud.interfaceSecondaryButton(button, false);
-        }
+        if (gamepadPointer.released[(size_t)button]) routeInterfaceRelease(hud,button);
     }
 }
 
@@ -218,6 +234,11 @@ Hud::ScreenItem text(const std::string &s, glm::vec2 at, float size, float outli
     t.kind = Hud::ScreenItem::Text;
     t.text = wide(s), t.at = at, t.fontSize = size, t.outline = outline, t.color = colour, t.align = align;
     return t;
+}
+Hud::ScreenItem text(const std::wstring &value, glm::vec2 at, float size, float outline, glm::vec4 colour, int align) {
+    auto item = text(std::string{}, at, size, outline, colour, align);
+    item.text = value;
+    return item;
 }
 Hud::ScreenItem square(glm::vec2 at, glm::vec2 size, glm::vec4 colour) {
     Hud::ScreenItem q;
@@ -303,7 +324,11 @@ uint32_t screenModel(Renderer &renderer, const CubModel &cub, int facing = -1) {
 
 class Session {
   public:
-    Session(Services &services, const Request &request) : s(services), req(request), hud(services.hud ? *services.hud : ownHud) {}
+    Session(Services &services, const Request &request)
+        : s(services), req(request), hud(services.hud ? *services.hud : ownHud),
+          detachedControls(services.input ? nullptr : std::make_unique<ControlsScreen>()),
+          controlsOpen((services.input ? services.input->controlEditor : *detachedControls).visible),
+          controls(services.input ? services.input->controlEditor : *detachedControls) {}
     bool start(std::string &error);
     void finish();
     Result runTitle();
@@ -313,7 +338,7 @@ class Session {
     void gameDraw(std::vector<OverlayVertex> &out);
     bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || hud.helpShown() || friendsOpen; }
     bool ordinaryUi() const { return systemShown || optionsOpen || controlsOpen || friendsOpen; }
-    bool capturingControl() const { return controlsOpen && controls.waiting >= 0; }
+    bool capturingControl() const { return controls.waiting >= 0; }
     int bindingCaptureIndex() const { return controls.waiting; }
     bool systemMenuShown() const { return systemShown; }
     bool wheel(int nativeDelta, glm::vec2 cachedPointer);
@@ -342,9 +367,8 @@ class Session {
     glm::vec2 window{0}, mouse{0}; // GUI units
     glm::vec2 cardFrame{0}, selectFrame{0}, deleteToggleFrame{0}, deleteFrame{0};
     bool clicked = false;
-    bool nativeBackPressed = false;
+    bool nativeBackPressed = false, nativeControlsHandled = false, producingControlDraw = false;
     bool pointerDown = false, pointerUp = false, leftHeld = false;
-    bool capturingAtPoll = false;
     std::vector<gamepadui::Point> navigationPoints;
     void navigationPoint(glm::vec2 at) {
         int width, height;
@@ -362,7 +386,9 @@ class Session {
     // The front layers (frontend-title.md §2) and the screens over them.
     std::array<bool,5> frontendPages{true,false,false,false,false};
     bool &titleShown=frontendPages[0], &charactersShown=frontendPages[1], &creationShown=frontendPages[2];
-    bool optionsOpen = false, controlsOpen = false;
+    bool optionsOpen = false;
+    std::unique_ptr<ControlsScreen> detachedControls; // Owned API permits menu queries without an input service.
+    bool &controlsOpen;
     bool riding() const { return titleShown || charactersShown; }
     bool front() const { return std::any_of(frontendPages.begin(),frontendPages.end(),[](bool shown){return shown;}); }
     void syncInterfaceState() {
@@ -422,7 +448,7 @@ class Session {
     std::u16string initialName; // initial/test caption; live input belongs to the retained scene editor
 
     OptionsScreen options;
-    ControlsScreen controls;
+    ControlsScreen &controls;
 
     // The logo, as a screen-space model.
     uint32_t logoMesh = 0;
@@ -454,7 +480,7 @@ class Session {
     void handleKeys(bool inGame);
     void handleClick(bool inGame);
     void stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vector<DrawItem> &opaque, std::vector<DrawItem> &water);
-    Hud::Screen buildScreen(bool inGame);
+    Hud::Screen buildScreen(bool inGame, bool drawing = true);
     void titleItems(Hud::Screen &out);
     void characterItems(Hud::Screen &out);
     void creationItems(Hud::Screen &out);
@@ -1051,6 +1077,7 @@ void Session::compatibilityBack(bool inGame) {
 // it and gives the frame's time.
 void Session::readInput(bool poll, double frameMs) {
     nativeBackPressed=false;
+    nativeControlsHandled=false;
     if (poll)
         glfwPollEvents();
     // Window messages use the UI owner's retained coordinates. Polling
@@ -1106,12 +1133,10 @@ void Session::readInput(bool poll, double frameMs) {
     if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; }))
         characterScroll.press();
     layoutCharacterFrames();
-    capturingAtPoll = capturingControl();
     const bool ui = front() || ordinaryUi() || (s.ordinaryUi ? s.ordinaryUi() : s.input->gamepadModal);
-    const bool focused = req.pointer.x >= 0 || glfwGetWindowAttrib(s.window, GLFW_FOCUSED);
-    const bool mouseAdmitted = focused && !capturingAtPoll;
-    if (mouseAdmitted)
-        s.input->retainMouseDevice(s.controls && GameInput::physicalBindingDown(s.window, *s.controls));
+    static const auto defaultBindings = gameoptions::defaultControls();
+    const auto &bindings = s.controls ? *s.controls : defaultBindings;
+    const bool mouseAdmitted = s.input->samplePhysical(bindings, req.pointer.x >= 0);
     if (mouseAdmitted && ui)
         hud.moveInterfacePointer({float(worldgen::trunc32(framebufferPointer.x)), float(worldgen::trunc32(framebufferPointer.y))},
                                  s.inventory);
@@ -1125,7 +1150,7 @@ void Session::readInput(bool poll, double frameMs) {
     }
     if (mouseAdmitted) {
         if (s.mouseMotion)
-            s.mouseMotion({{mx, my}, framebufferPointer, ui});
+            s.mouseMotion({{mx, my}, framebufferPointer, ui, s.input->physical.relativeMotion()});
         else if (ui && !s.input->lastUsedPadAtMousePoll && (hud.interfaceHeldButtons() & 1) && !hud.interfacePointerTarget()) {
             const auto delta = hud.interfacePointerDelta();
             const auto &activeOptions = s.options ? *s.options : options.values;
@@ -1133,13 +1158,16 @@ void Session::readInput(bool poll, double frameMs) {
                                        activeOptions.cameraSpeed, activeOptions.invertY != 0);
         }
     }
-    s.input->sampleGamepad(s.window, capturingAtPoll);
-    std::vector<gamepadui::Point> points;
-    if (!front())
-        points = s.input->gamepadNavigationPoints;
-    points.insert(points.end(), navigationPoints.begin(), navigationPoints.end());
-    s.input->gamepadPointer = s.input->gamepadInput.update(s.input->gamepad, ui, s.input->gamepadMapMode,
-                                                        {(float)mx, (float)my}, points, s.input->gamepadPanels);
+    s.input->sampleGamepad(bindings, req.pointer.x >= 0);
+    s.input->gamepadPointer = {};
+    if (mouseAdmitted) {
+        std::vector<gamepadui::Point> points;
+        if (!front())
+            points = s.input->gamepadNavigationPoints;
+        points.insert(points.end(), navigationPoints.begin(), navigationPoints.end());
+        s.input->gamepadPointer = s.input->gamepadInput.update(s.input->gamepad, ui, s.input->gamepadMapMode,
+                                                            {(float)mx, (float)my}, points, s.input->gamepadPanels);
+    }
     const auto &pad = s.input->gamepadPointer;
     if (pad.padBeforeCallbacks)
         s.input->lastUsedPad = true;
@@ -1162,6 +1190,7 @@ void Session::readInput(bool poll, double frameMs) {
     }
     if (pad.navigationSound)
         playSound(SOUND_MENU_SELECT);
+    s.input->finishPhysical();
     clicked = pointerDown || pointerUp;
 }
 
@@ -1211,30 +1240,9 @@ void Session::handleInterfaceKeys(std::vector<int> &keys,bool native) {
 
 void Session::handleKeys(bool inGame) {
     MenuInput &in = *s.input;
-    // A controls row waiting for a key takes the next key or mouse button (open question 6).
-    if (controlsOpen && controls.waiting >= 0) {
-        gameoptions::Binding first{0, 0};
-        for (int key : in.pressed) {
-            if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
-                controls.waiting = -1;
-                in.pressed.clear();
-                return;
-            }
-            const auto binding = keyBinding(key);
-            if (binding.code && (!first.code || binding.code < first.code))
-                first = binding;
-        }
-        if (first.code) {
-            controls.bind(first);
-            controls.waiting = -1;
-            in.pressed.clear();
-            return;
-        }
-        for (int button = 0; button < 4; ++button)
-            if (std::find(in.buttons.begin(), in.buttons.end(), button) != in.buttons.end())
-                controls.bind({button, 1});
-        return; // Mouse capture finishes on release; XInput is not sampled while waiting.
-    }
+    // Capture already consumed device-buffer edges before the ordinary frame.
+    if (in.physical.phase == physicalinput::Poll::Capturing)
+        return;
     handleInterfaceKeys(in.pressed);
     for (int key : in.pressed) {
         switch (key) {
@@ -1260,47 +1268,9 @@ void Session::handleKeys(bool inGame) {
 // --- Clicks ------------------------------------------------------------------------------------
 
 void Session::handleClick(bool inGame) {
-    if (nativeBackPressed) return; // the queued event2 already handled this frontend press
-    const bool finishingCapture = controlsOpen && capturingAtPoll && !s.input->released.empty();
-    if (finishingCapture)
-        controls.waiting = -1;
-    if (!clicked)
-        return;
-    if (controlsOpen) {
-        const glm::vec2 at = centred(CONTROLS_SIZE), m = mouse - at;
-        const int rows = ControlsScreen::visibleRows();
-        for (int v = 0; v < rows && controls.first + v < gameoptions::BINDINGS; v++) {
-            if (controls.first + v < 0)
-                continue;
-            const float y = ControlsScreen::rowY(v);
-            if (pointerUp && !finishingCapture && m.y >= y - 20 && m.y < y + 10 && m.x >= 0 && m.x < CONTROLS_SIZE.x - 40) {
-                controls.waiting = controls.first + v;
-                return;
-            }
-        }
-        const glm::vec2 up = at + glm::vec2(CONTROLS_SIZE.x - 35, 10), down = at + glm::vec2(CONTROLS_SIZE.x - 35, CONTROLS_SIZE.y - 105);
-        if (pointerDown && inside(mouse, up, {25, 25}))
-            scrollControls(1);
-        if (pointerDown && inside(mouse, down, {25, 25}))
-            scrollControls(-1);
-        const float by = CONTROLS_SIZE.y - 35;
-        const char *const labels[3] = {"Defaults", "OK", "Cancel"};
-        for (int b = 0; b < 3; b++)
-            if (pointerUp && inside(m, {20.0f + 160.0f * (float)b, by}, CONTROLS_BUTTON_SIZE)) {
-                if (b == 0)
-                    controls.values = gameoptions::defaultControls();
-                if (b == 1) {
-                    if (s.controls)
-                        *s.controls = controls.values;
-                    if (!req.readOnly)
-                        gameoptions::saveControls(s.root / "controls.cfg", controls.values);
-                }
-                if (b >= 1)
-                    controlsOpen = false;
-                (void)labels;
-            }
-        return;
-    }
+    if (nativeBackPressed || nativeControlsHandled) return; // the retained callback already handled this UI action
+    if (!clicked || controlsOpen)
+        return; // Retained Controls callbacks and the cached-row release suffix already ran.
     if (optionsOpen) {
         const glm::vec2 m = mouse - centred(OPTIONS_SIZE);
         const float valueX = (OPTIONS_SIZE.x - 250) * 0.5f + 240;
@@ -1822,41 +1792,64 @@ bool Session::wheel(int nativeDelta, glm::vec2 cachedPointer) {
 }
 
 void Session::controlsItems(Hud::Screen &out) {
-    if (s.input->lastUsedPad)
-        controls.waiting = -1;
-    const glm::vec2 at = centred(CONTROLS_SIZE), m = mouse - at;
-    if (controlsThumbFrame != hud.templateSize("blackwidget", CONTROLS_SIZE))
+    const glm::vec2 at = centred(CONTROLS_SIZE);
+    auto panel = widget("blackwidget", at, CONTROLS_SIZE);
+    panel.instance = "controls-frame";
+    panel.branch = uiroot::Branch::Controls;
+    const glm::vec2 frame = hud.templateContentSize(panel);
+    const auto rows = controls.rows(frame.y);
+    const glm::vec2 local = hud.templateLocalPoint(panel, hud.interfacePointerPosition());
+    if (producingControlDraw)
+        controls.beginDraw(s.input->lastUsedPad);
+    if (controlsThumbFrame != frame)
         refreshControlsThumb();
-    out.push_back(widget("blackwidget", at, CONTROLS_SIZE));
+    out.push_back(panel);
     if (controlsThumb) {
         const auto &thumb = *controlsThumb;
         out.push_back(widget("scrollbutton", at + glm::vec2(thumb.x, thumb.y), {thumb.width, thumb.height}));
+        out.back().instance = "controls-thumb";
     }
-    const float valueX = (CONTROLS_SIZE.x - 250) * 0.5f + 240;
-    const int rows = ControlsScreen::visibleRows();
-    for (int v = 0; v < rows && controls.first + v < gameoptions::BINDINGS; v++) {
-        const int i = controls.first + v;
-        if (i < 0)
-            continue;
-        const float y = ControlsScreen::rowY(v);
-        const gameoptions::Binding &b = controls.values[(size_t)i];
-        glm::vec4 colour = WHITE;
-        if (b.code == 0 && b.kind == 0)
-            colour = UNASSIGNED_COLOUR;
-        if (m.y >= y - 20 && m.y < y + 10 && m.x >= 0 && m.x < CONTROLS_SIZE.x - 40)
-            colour = HOVERED;
-        if (i == controls.waiting)
+    float baseline = 27.f;
+    for (int i = rows[0]; i < rows[1]; ++i, baseline += 30.f) {
+        const auto &binding = controls.values[size_t(i)];
+        glm::vec4 colour = binding == gameoptions::Binding{0,0} ? UNASSIGNED_COLOUR : WHITE;
+        const bool waiting = i == controls.waiting;
+        if (waiting)
             colour = WAITING_COLOUR;
-        out.push_back(text(gameoptions::bindingLabel(i), at + glm::vec2(20, y), 12, 3, colour, ALIGN_LEFT));
-        out.push_back(text(i == controls.waiting ? "Press a key" : gameoptions::bindingName(b), at + glm::vec2(valueX, y), 12, 3, colour,
-                           ALIGN_CENTRE));
+        else if (producingControlDraw && controls.offerRow(i, baseline, local, hud.templateContentSize(panel).x,
+                                                          s.input->lastUsedPad))
+            colour = HOVERED;
+        out.push_back(text(gameoptions::bindingLabel(i), at + glm::vec2(20, baseline), 12, 3, colour, ALIGN_LEFT));
+        const std::wstring formatted = waiting ? L"Press a key" : gameoptions::bindingName(binding);
+        const float valueX = (hud.templateContentSize(panel).x - 250.f) * .5f + 240.f;
+        out.push_back(text(formatted, at + glm::vec2(valueX, baseline), 12, 3, colour, ALIGN_CENTRE));
     }
-    out.push_back(widget("upbutton", at + glm::vec2(CONTROLS_SIZE.x - 35, 10), glm::vec2(0)));
-    out.push_back(widget("downbutton", at + glm::vec2(CONTROLS_SIZE.x - 35, CONTROLS_SIZE.y - 105), glm::vec2(0)));
+    out.push_back(widget("upbutton", at + glm::vec2(frame.x - 35, 10), glm::vec2(0)));
+    out.back().instance = "controls-up";
+    out.back().press = [this] { nativeControlsHandled = true; scrollControls(1); };
+    out.push_back(widget("downbutton", at + glm::vec2(frame.x - 35, frame.y - 105), glm::vec2(0)));
+    out.back().instance = "controls-down";
+    out.back().press = [this] { nativeControlsHandled = true; scrollControls(-1); };
     const char *const labels[3] = {"Defaults", "OK", "Cancel"};
-    for (int b = 0; b < 3; b++) {
-        out.push_back(widget("button", at + glm::vec2(20.0f + 160.0f * (float)b, CONTROLS_SIZE.y - 35), CONTROLS_BUTTON_SIZE, labels[b]));
+    for (int button = 0; button < 3; ++button) {
+        out.push_back(widget("button", at + glm::vec2(20.f + 160.f * float(button), frame.y - 35.f),
+                             CONTROLS_BUTTON_SIZE, labels[button]));
+        out.back().instance = std::string("controls-") + labels[button];
         out.back().navigation = Hud::ScreenItem::ShapeCentre;
+        out.back().release = [this, button] {
+            nativeControlsHandled = true;
+            if (button == 0)
+                controls.values = gameoptions::defaultControls();
+            else {
+                if (button == 1) {
+                    if (s.controls) *s.controls = controls.values;
+                    if (!req.readOnly)
+                        gameoptions::saveControls(s.root / "controls.cfg", s.controls ? *s.controls : controls.values);
+                }
+                controlsOpen = false;
+                syncInterfaceState();
+            }
+        };
     }
 }
 
@@ -1978,7 +1971,8 @@ bool Session::friendsClick() {
     return true;
 }
 
-Hud::Screen Session::buildScreen(bool inGame) {
+Hud::Screen Session::buildScreen(bool inGame, bool drawing) {
+    producingControlDraw = drawing && hud.interfaceShown();
     Hud::Screen out;
     navigationPoints.clear();
     syncInterfaceState();
@@ -2039,7 +2033,94 @@ bool Session::frame() {
         clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;
     }
-    (void)buildScreen(false); // Publish the controller's active objects before its pointer decisions.
+    (void)buildScreen(false,false); // Bind controls without producing another draw-time candidate.
+    if (req.page == "controls-input-test") {
+        // Explicit owned queue/scene adapter: no OS injection or native-runtime claim.
+        bool passed = true;
+        const auto verify = [&](bool value, const char *what) {
+            log(std::string("Controls input: ") + (value ? "PASS " : "FAIL ") + what);
+            passed = passed && value;
+        };
+        const auto retained = controls.values;
+        const auto active = s.controls ? *s.controls : gameoptions::defaultControls();
+        controls.waiting = 0;
+        controlsOpen = false;
+        verify(capturingControl(), "hidden capture remains sign-admitted");
+        s.input->interfaceMessages.emplace_back(MenuInput::InterfaceMessage::RightUp);
+        s.input->routeInterfaceMessages(hud);
+        verify(controls.waiting == -1, "hidden right release resets capture");
+        controlsOpen = true;
+        controls.waiting = -1;
+        controls.values[gameoptions::UP] = {123, 2};
+        auto screen = buildScreen(false);
+        const auto oldGameKey = s.input->gameKeyDown;
+        bool defaultsBeforeKey = false;
+        s.input->gameKeyDown = [&](uint8_t) { defaultsBeforeKey = controls.values == gameoptions::defaultControls(); };
+        const auto clickControl = [&](const char *label) {
+            const auto found = std::find_if(screen.begin(), screen.end(), [&](const auto &item) {
+                return item.kind == Hud::ScreenItem::Template && item.branch == uiroot::Branch::Controls && item.text == wide(label);
+            });
+            if (found == screen.end()) { verify(false, "retained button exists"); return; }
+            const glm::vec2 point = found->at * guiScale + hud.templateViewSize(*found) * .5f;
+            hud.moveInterfacePointer(point);
+            s.input->interfaceMessages.emplace_back(MenuInput::InterfaceMessage::LeftDown);
+            s.input->interfaceMessages.emplace_back(MenuInput::InterfaceMessage::LeftUp);
+            s.input->rawKeyMessage(MenuInput::InterfaceMessage::KeyDown,0x41);
+            s.input->rawKeyMessage(MenuInput::InterfaceMessage::KeyUp,0x41);
+            s.input->routeInterfaceMessages(hud);
+        };
+        clickControl("Defaults");
+        verify(controls.values == gameoptions::defaultControls(), "Defaults runs in the GUI release");
+        verify(defaultsBeforeKey, "queued key observes the completed Defaults callback");
+        controls.values[gameoptions::UP] = {123, 2};
+        clickControl("Cancel");
+        verify(!controlsOpen && controls.values[gameoptions::UP] == gameoptions::Binding{123, 2},
+               "Cancel hides while retaining pending edits");
+        verify(!s.controls || *s.controls == active, "Cancel leaves active bindings unchanged");
+        controlsOpen = true;
+        screen = buildScreen(false);
+        clickControl("OK");
+        verify(!controlsOpen && (!s.controls || (*s.controls)[gameoptions::UP] == gameoptions::Binding{123, 2}),
+               "OK copies active bindings before hiding");
+        s.input->gameKeyDown = oldGameKey;
+        controlsOpen = true;
+        const bool oldPad = s.input->lastUsedPad, oldInterface = hud.interfaceShown();
+        s.input->lastUsedPad = false;
+        hud.setInterfaceShown(true);
+        screen = buildScreen(false,false);
+        const auto panel = std::find_if(screen.begin(),screen.end(),[](const auto &item) { return item.instance == "controls-frame"; });
+        if (panel != screen.end()) {
+            controls.waiting = -1;
+            hud.moveInterfacePointer((panel->at + glm::vec2(100,87)) * guiScale);
+            (void)buildScreen(false); // Real cached-point draw produces row2.
+            verify(controls.candidate == 2, "owner draw produces the cached row");
+            hud.moveInterfacePointer({-10000,-10000});
+            hud.setInterfaceShown(false);
+            s.input->routeInterfaceRelease(hud,0);
+            verify(controls.waiting == 2, "left release arms stale row through hidden ancestor without fresh hit");
+            (void)buildScreen(false);
+            verify(controls.waiting == 2 && controls.candidate == 2, "hidden ancestor does not execute the draw producer");
+            s.input->routeInterfaceRelease(hud,-7);
+            verify(controls.waiting == -1, "unknown signed release still resets capture");
+            hud.setInterfaceShown(true);
+            s.input->lastUsedPad = true;
+            controls.waiting = 4;
+            (void)buildScreen(false);
+            verify(controls.waiting == -1 && controls.candidate == -1, "admitted pad-mode draw clears capture and candidate");
+        } else verify(false,"retained Controls frame exists");
+        hud.setInterfaceShown(oldInterface);
+        s.input->lastUsedPad = oldPad;
+        controls.values = retained;
+        controls.waiting = -1;
+        controls.candidate = -1;
+        controlsOpen = false;
+        if (s.controls) *s.controls = active;
+        s.input->interfaceMessages.clear();
+        s.input->interfacePresses.clear();
+        if (!passed) outcome.error = "Controls input fixture failed";
+        decide(Result::Quit);
+        return false;
+    }
     if (syntheticClick) { // explicit CLI test adapter, not an OS input observation
         const auto beforeCamera=camera;
         const auto *beforeActor=s.spawned ? s.spawned->localPlayer() : nullptr;
@@ -2149,7 +2230,7 @@ Result Session::runTitle() {
     }
     else if (req.page == "options")
         openOptions();
-    else if (req.page == "controls")
+    else if (req.page == "controls" || req.page == "controls-input-test")
         controlsOpen = true;
     if (req.page == "characters" || req.page == "create") {
         // (a capture of these screens points at the first entry)
@@ -2218,7 +2299,7 @@ Result::Action Session::gameFrame(double frameMs) {
         return Result::Stay;
     }
     handleKeys(true);
-    (void)buildScreen(true);
+    (void)buildScreen(true,false);
     handleClick(true);
     s.input->finishPointerCallbacks();
     s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear();

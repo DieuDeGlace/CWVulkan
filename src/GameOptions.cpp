@@ -203,29 +203,175 @@ bool loadControls(const fs::path &file, Controls &out) {
 
 std::string writeControls(const Controls &c) {
     std::ostringstream out;
-    for (int i = 0; i < BINDINGS; i++)
+    static constexpr int order[] = {0,1,4,5,6,7,8,9,10,11,12,3,2,13,14,15,16,17,20,18,19,21,22};
+    for (int i : order)
         out << BINDING_NAMES[i] << ' ' << c[(size_t)i].code << ' ' << c[(size_t)i].kind << '\n';
     return out.str();
 }
 
 bool saveControls(const fs::path &file, const Controls &c) { return writeText(file, writeControls(c)); }
 
-std::string bindingName(const Binding &b) {
-    if (b.kind == MOUSE)
-        return "Mouse " + std::to_string(b.code);
-    if (b.code == 0)
-        return "Unassigned";
-    // The keys of a US layout, by scan code (set 1).
-    static const char *const KEYS[0x59] = {
-        nullptr, "Escape", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "Backspace", "Tab",
-        "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "Enter", "Ctrl", "A", "S",
-        "D", "F", "G", "H", "J", "K", "L", ";", "'", "`", "Shift", "\\", "Z", "X", "C", "V",
-        "B", "N", "M", ",", ".", "/", "Right Shift", "Num *", "Alt", "Space", "Caps Lock", "F1", "F2", "F3", "F4", "F5",
-        "F6", "F7", "F8", "F9", "F10", "Num Lock", "Scroll Lock", "Num 7", "Num 8", "Num 9", "Num -", "Num 4", "Num 5",
-        "Num 6", "Num +", "Num 1", "Num 2", "Num 3", "Num 0", "Num Del", nullptr, nullptr, nullptr, "F11", "F12"};
-    if (b.code > 0 && b.code < 0x59 && KEYS[b.code])
-        return KEYS[b.code];
-    return "Key " + std::to_string(b.code);
+std::wstring bindingName(const Binding &binding) {
+    const int32_t initialCode = binding.code;
+    if (initialCode == 0 && binding.kind == 0)
+        return L"Unassigned";
+    if (binding.kind == 1) {
+        std::wostringstream out;
+        const int32_t number = std::bit_cast<int32_t>(uint32_t(binding.code) + 1u);
+        out << L"Mouse " << number;
+        return out.str();
+    }
+    // Complete first/detailed constructor dictionary. Missing keys stay unknown;
+    // this table is independent of compact menu names and the OS keyboard layout.
+    static constexpr std::pair<int32_t, std::wstring_view> names[] = {
+        {1, L"Escape"},
+        {2, L"1"},
+        {3, L"2"},
+        {4, L"3"},
+        {5, L"4"},
+        {6, L"5"},
+        {7, L"6"},
+        {8, L"7"},
+        {9, L"8"},
+        {10, L"9"},
+        {11, L"0"},
+        {12, L"-"},
+        {13, L"="},
+        {14, L"Backspace"},
+        {15, L"Tab"},
+        {16, L"Q"},
+        {17, L"W"},
+        {18, L"E"},
+        {19, L"R"},
+        {20, L"T"},
+        {21, L"Y"},
+        {22, L"U"},
+        {23, L"I"},
+        {24, L"O"},
+        {25, L"P"},
+        {26, L"["},
+        {27, L"]"},
+        {28, L"Return"},
+        {29, L"Left Control"},
+        {30, L"A"},
+        {31, L"S"},
+        {32, L"D"},
+        {33, L"F"},
+        {34, L"G"},
+        {35, L"H"},
+        {36, L"J"},
+        {37, L"K"},
+        {38, L"L"},
+        {39, L";"},
+        {40, L"'"},
+        {41, L"`"},
+        {42, L"Left Shift"},
+        {43, L"\\"},
+        {44, L"Z"},
+        {45, L"X"},
+        {46, L"C"},
+        {47, L"V"},
+        {48, L"B"},
+        {49, L"N"},
+        {50, L"M"},
+        {51, L","},
+        {52, L"."},
+        {53, L"/"},
+        {54, L"Right Shift"},
+        {55, L"Numpad *"},
+        {56, L"Left Alt"},
+        {57, L"Space"},
+        {58, L"Caps Lock"},
+        {59, L"F1"},
+        {60, L"F2"},
+        {61, L"F3"},
+        {62, L"F4"},
+        {63, L"F5"},
+        {64, L"F6"},
+        {65, L"F7"},
+        {66, L"F8"},
+        {67, L"F9"},
+        {68, L"F10"},
+        {69, L"Num Lock"},
+        {70, L"Scroll Lock"},
+        {71, L"Numpad 7"},
+        {72, L"Numpad 8"},
+        {73, L"Numpad 9"},
+        {74, L"Numpad -"},
+        {75, L"Numpad 4"},
+        {76, L"Numpad 5"},
+        {77, L"Numpad 6"},
+        {78, L"Numpad +"},
+        {79, L"Numpad 1"},
+        {80, L"Numpad 2"},
+        {81, L"Numpad 3"},
+        {82, L"Numpad 0"},
+        {83, L"Numpad ."},
+        {86, L"<"},
+        {87, L"F11"},
+        {88, L"F12"},
+        {100, L"F13"},
+        {101, L"F14"},
+        {102, L"F15"},
+        {112, L"Kana"},
+        {115, L"C1"},
+        {121, L"Convert"},
+        {123, L"No Convert"},
+        {125, L"Yen"},
+        {126, L"C2"},
+        {141, L"Numpad ="},
+        {144, L"Previous Track"},
+        {145, L"@"},
+        {146, L":"},
+        {147, L"_"},
+        {148, L"Kanji"},
+        {149, L"Stop"},
+        {150, L"AX"},
+        {151, L"Unlabeled"},
+        {153, L"Next Track"},
+        {156, L"Numpad Enter"},
+        {157, L"Right Control"},
+        {160, L"Mute"},
+        {161, L"Calculator"},
+        {162, L"Play/Pause"},
+        {164, L"Media Stop"},
+        {174, L"Volume -"},
+        {176, L"Volume +"},
+        {178, L"Web Home"},
+        {179, L"Numpad ,"},
+        {181, L"Numpad /"},
+        {183, L"SYSRQ"},
+        {184, L"Right Alt"},
+        {197, L"Pause"},
+        {199, L"Home"},
+        {200, L"Up Arrow"},
+        {201, L"Page Up"},
+        {203, L"Left Arrow"},
+        {205, L"Right Arrow"},
+        {207, L"End"},
+        {208, L"Down Arrow"},
+        {209, L"Page Down"},
+        {210, L"Insert"},
+        {211, L"Delete"},
+        {219, L"Windows Left"},
+        {220, L"Windows Right"},
+        {221, L"App Menu"},
+        {222, L"System Power"},
+        {223, L"System Sleep"},
+        {227, L"System Wake"},
+        {229, L"Web Search"},
+        {230, L"Web Favorites"},
+        {231, L"Web Refresh"},
+        {232, L"Web Stop"},
+        {233, L"Web Forward"},
+        {234, L"Web Back"},
+        {235, L"My Computer"},
+        {236, L"Mail"},
+        {237, L"Media Select"},
+    };
+    const auto found = std::lower_bound(std::begin(names), std::end(names), initialCode,
+        [](const auto &entry, int32_t code) { return entry.first < code; });
+    return found != std::end(names) && found->first == initialCode ? std::wstring(found->second) : L"Unknown";
 }
 
 std::wstring compactBindingName(const Binding &b) {

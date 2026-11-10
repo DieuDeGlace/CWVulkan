@@ -641,6 +641,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         fatal("Could not initialize the game window's input");
         return 1;
     }
+    std::string physicalInputError;
+    if (!input.devices.open(window, physicalInputError)) {
+        input.devices.close();
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        fatal(physicalInputError);
+        return 1;
+    }
+    logLine("Input devices: " + input.devices.description());
     // Native relative input is device counts, unaffected by desktop pointer acceleration.
     // GLFW applies raw motion only while its cursor is disabled; GUI coordinates stay absolute.
     if (glfwRawMouseMotionSupported())
@@ -819,6 +828,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             fatal("No usable extracted Cube World data was found. Run the extractor from CubeVulkanSetup first. "
                   "The experimental generated terrain requires an explicit [World] Source=Generated setting.");
             renderer.shutdown();
+            input.devices.close();
             glfwDestroyWindow(window);
             glfwTerminate();
             return 1;
@@ -991,6 +1001,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             logLine("Menu: " + result.error);
         if (result.action != frontend::Result::Play || !result.error.empty()) {
             renderer.shutdown();
+            input.devices.close();
             glfwDestroyWindow(window);
             glfwTerminate();
             return result.error.empty() ? 0 : 1;
@@ -3747,8 +3758,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         state.mapOpen = mapOpen;
         state.customizationOpen = nativeCustomization.edit.open;
         state.pointerDelta = hud.interfacePointerDelta();
-        state.arguments = sample.interfaceOwned ? sample.absolutePosition
-            : glm::vec2(float(sample.windowPosition.x - lastX), float(sample.windowPosition.y - lastY));
+        state.arguments = sample.interfaceOwned ? sample.absolutePosition : sample.relativeMotion;
         if (!(state.interfaceAtEntry && state.padSelected) && state.interfaceOwned && (state.buttons & 1))
             state.pointerTarget = hud.interfacePointerTarget() != nullptr;
         const auto routes = mousemotion::route(state);
@@ -4016,7 +4026,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (!inGameServices.inventoryWheel(delta, point))
                     inGameServices.zoomWheel(delta, point);
             });
-            if (glfwGetWindowAttrib(window, GLFW_FOCUSED) && !capturingBeforeInput) {
+            if (input.samplePhysical(gameControls)) {
                 double x, y;
                 int width, height;
                 glfwGetCursorPos(window, &x, &y);
@@ -4024,13 +4034,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 const auto extent = renderer.screenSize();
                 const glm::vec2 point(float(x * extent.width / std::max(1, width)), float(y * extent.height / std::max(1, height)));
                 const bool ui = nativeOrdinaryUi();
-                input.retainMouseDevice(GameInput::physicalBindingDown(window, gameControls));
                 if (ui)
                     hud.moveInterfacePointer({float(worldgen::trunc32(point.x)), float(worldgen::trunc32(point.y))},
                                              nativeInventory ? &inventoryView : nullptr);
-                inGameServices.mouseMotion({{x, y}, point, ui});
+                inGameServices.mouseMotion({{x, y}, point, ui, input.physical.relativeMotion()});
             }
-            input.sampleGamepad(window, capturingBeforeInput);
+            input.sampleGamepad(gameControls);
+            input.finishPhysical();
         }
         auto gameDowns = input.gamePress ? input.gamePresses : physicalDowns;
         if (nativeInventory) {
@@ -4096,10 +4106,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         chatInput.clear();
         nativeChatConsumed.clear();
-        gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing(),
-                         panelsBeforeInput || menusOpen || chat.typing(), mapOpen,
-                         capturingBeforeInput || (menusReady && menus.capturingControl()),
-                         input.gamepadPanels.any(), &input.gamepad);
+        gameInput.update(input.physical, input.bindingLevels, input.gamepad,
+                         panelsBeforeInput || menusOpen || chat.typing(), mapOpen, input.gamepadPanels.any());
         if (!input.buttons.empty())
             identify.visibleAtDown = identify.open;
         if (std::any_of(input.buttons.begin(), input.buttons.end(), [](int button) { return button == 0 || button == 1; }))
@@ -8933,6 +8941,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     if (returnToTitle)
         hud.discardRendererBindings();
     renderer.shutdown();
+    input.devices.close();
     glfwDestroyWindow(window);
     glfwTerminate();
     if (const auto ranges = renderer.nativeRanges())

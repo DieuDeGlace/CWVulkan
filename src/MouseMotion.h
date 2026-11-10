@@ -9,6 +9,7 @@ struct Sample {
     glm::dvec2 windowPosition{};
     glm::vec2 absolutePosition{};
     bool interfaceOwned = false;
+    glm::vec2 relativeMotion{}; // Sampled device counts, not cursor-position differences.
 };
 struct State {
     bool admitted = false;

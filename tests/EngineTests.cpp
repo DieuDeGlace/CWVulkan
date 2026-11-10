@@ -165,6 +165,7 @@ int panelScrollTests();
 int hairStyleTests();
 int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
+int physicalInputTests();  // tests/PhysicalInputTests.cpp
 int windContinueTests();   // tests/WindContinueTests.cpp
 int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
 int captureTickContextTests(); // tests/CaptureTickContextTests.cpp
@@ -9376,6 +9377,7 @@ static void useKeyPrompts() {
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "physicalinput") return physicalInputTests();
     if (argc == 2 && std::string(argv[1]) == "guirender")
         return guiRenderTests();
     if (argc == 2 && std::string(argv[1]) == "nodeanimation")
@@ -9570,6 +9572,7 @@ int main(int argc, char **argv) {
         if (a.locate(""))
             worldgen::loadCreatureTables(spawnsDir(a.gameDir()));
     }
+    if (argc == 2 && std::string(argv[1]) == "frontend") return frontendTests();
     if (argc == 2 && std::string(argv[1]) == "cellobjects")
         return cellObjectTests();
     if (argc == 2 && std::string(argv[1]) == "homesearch")
@@ -10950,6 +10953,7 @@ int main(int argc, char **argv) {
     failures += linkedPlacementTests();
     failures += itemSelectorTests();
     failures += frontendTests();       // tests/FrontendTests.cpp
+    failures += physicalInputTests();
     failures += windContinueTests();   // tests/WindContinueTests.cpp
     failures += netTests();            // tests/NetTests.cpp
     failures += ownerSetupTests();     // tests/OwnerSetupTests.cpp

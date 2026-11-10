@@ -172,6 +172,7 @@ add_library(engine STATIC
     src/NativeProgress.cpp
     src/GameOptions.cpp
     src/GameInput.cpp
+    src/PhysicalInput.cpp
     src/ZoneStates.cpp
     src/SourceStates.cpp
     src/GameWorld.cpp
@@ -336,7 +337,7 @@ add_library(engine STATIC
 add_dependencies(engine shaders)
 target_include_directories(engine PUBLIC src include ${SHADER_OUT})
 # glu32: Windows' GLU, whose polygon tessellator fills the interface's outline shapes as Plasma's does.
-target_link_libraries(engine PUBLIC deps glfw ws2_32 glu32 freetype winmm)
+target_link_libraries(engine PUBLIC deps glfw ws2_32 glu32 freetype winmm dinput8 dxguid)
 target_sources(engine PRIVATE src/GamepadUi.cpp)
 target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)
@@ -469,7 +470,7 @@ target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
-target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/GameWindowInputTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
+target_sources(EngineTests PRIVATE tests/PhysicalInputTests.cpp tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/GameWindowInputTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
 target_sources(EngineTests PRIVATE tests/ResidentPassTests.cpp tests/ResidentEffectsTests.cpp)
 target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp tests/CameraPositionTests.cpp tests/DrawnStateTests.cpp tests/LinkedPlacementTests.cpp)

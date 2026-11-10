@@ -547,6 +547,8 @@ class Hud {
     // Pick the copied owner shapes, inverse deformation and clipping at the same GUI-unit placement.
     bool templateHit(const ScreenItem &item, glm::vec2 point, bool passiveDescendants = false) const;
     glm::vec2 templateViewSize(const ScreenItem &) const; // live frame in screen pixels
+    glm::vec2 templateContentSize(const ScreenItem &) const;
+    glm::vec2 templateLocalPoint(const ScreenItem &, glm::vec2 screenPoint) const;
     identifywindow::Layout identificationLayout() const;
     void drawIdentification(const identifywindow::Shown &, std::vector<OverlayVertex> &) const;
     void drawCustomization(const customization::Shown &, std::vector<OverlayVertex> &) const;

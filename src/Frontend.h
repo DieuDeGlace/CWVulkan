@@ -10,6 +10,7 @@
 #include "DayNight.h"
 #include "CameraPosition.h"
 #include "GameOptions.h"
+#include "PhysicalInput.h"
 #include "GameWindowInput.h"
 #include "HomeSearch.h"
 #include "GamepadUi.h"
@@ -47,6 +48,16 @@ struct MenuInput {
     bool controlDown = false;
     std::vector<int> pressed, buttons, released;
     gamewindow::Keyboard gameKeyboard;
+    physicalinput::Editor controlEditor; // Retained with the application, across frontend sessions.
+    physicalinput::Poll physical;
+    physicalinput::Devices devices;
+    physicalinput::Levels bindingLevels{};
+    bool physicalEnabled = true; // Bounded application admission byte, distinct from GUI focus.
+    physicalinput::Target physicalTarget(const gameoptions::Controls &controls) {
+        return {&controls, &bindingLevels, &controlEditor, &lastUsedPad};
+    }
+    bool samplePhysical(const gameoptions::Controls &controls, bool fixtureForeground = false);
+    void finishPhysical() { physical.finish(); }
     bool rawKeyboardSeen = false; // actual WM ingress, independent of synthetic GLFW releases
     std::function<bool(int)> gamePress; // Post-GUI normal continuation; false is the map-arrow early return.
     std::vector<int> gamePresses; // Admitted business work, retained for the current frame adapter.
@@ -72,6 +83,8 @@ struct MenuInput {
     void routeInterfaceMessages(Hud &,const WheelCallback & = {},const std::function<void(uint8_t)> &special = {});
     void routeGamepadButtons(Hud &);
     void routeInterfacePress(Hud &,int button);
+    void routeInterfaceRelease(Hud &,int button);
+    std::function<void(int)> gameRelease; // Remaining post-GUI release phases, before the Controls suffix.
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
     GamepadButtons gamepad;
     gamepadui::Input gamepadInput;
@@ -90,9 +103,10 @@ struct MenuInput {
         lastUsedPadAtMousePoll = lastUsedPad;
     }
     double pointerX = 0, pointerY = 0; // GUI hit tests retain the pre-navigation cursor this frame.
-    void sampleGamepad(GLFWwindow *window, bool capturing) {
-        if (!gamepadSampled) {
-            gamepad = GameInput::pollGamepad(window, capturing);
+    void sampleGamepad(const gameoptions::Controls &controls, bool pointerFixture = false) {
+        if (!gamepadSampled && physical.phase == physicalinput::Poll::Normal) {
+            physical.clearZoom([&] { return physicalTarget(controls); });
+            gamepad = pointerFixture ? GamepadButtons{} : GameInput::pollGamepad();
             gamepadSampled = true;
         }
     }
@@ -305,20 +319,7 @@ struct OptionsScreen {
     static float rowY(int row) { return 26.0f + 30.0f * (float)row; }
     std::string value(int row) const;
 };
-struct ControlsScreen {
-    gameoptions::Controls values = gameoptions::defaultControls();
-    int waiting = -1, first = 0;
-    void bind(gameoptions::Binding binding) {
-        if (waiting < 0 || waiting >= (int)values.size())
-            return;
-        for (auto &old : values)
-            if (old == binding)
-                old = {0, 0};
-        values[(size_t)waiting] = binding;
-    }
-    static float rowY(int visibleRow) { return 27.0f + 30.0f * (float)visibleRow; }
-    static int visibleRows() { return (int)((CONTROLS_SIZE.y - 120.0f) / 30.0f); }
-};
+using ControlsScreen = physicalinput::Editor;
 // A GLFW key's binding (the scan code as the game reads it), and whether a key is a binding's.
 gameoptions::Binding keyBinding(int glfwKey);
 bool keyMatches(const gameoptions::Binding &b, int glfwKey);
