@@ -1,5 +1,43 @@
 # Clean-room process
 
+## Retained Game input, Chat and Interface cache - 2026-11-10
+
+Sampled control state, Chat editor/history/pending messages and the Interface's
+cached mouse Y now have one coordinator owner across render/world session teardown.
+The session borrows these values. Returning through the engine's Start Menu adapter
+therefore does not recreate them as empty values. Existing raw keys, physical
+buffers, staged Controls and independent process consumers retain their own paths.
+
+The complete [Game/Interface lifetime contract](specs/steam-game-interface-and-input-lifetime-through-session-transitions-20261110.md)
+was whole-read and hash-verified before use, then copied unchanged. It establishes
+retained native owners across the selected ordinary transitions, with subordinate
+character-data and UI-row replacements and separate release/draw/input writers.
+The original-only author received no implementation, tests, owner outputs or feedback.
+Native construction does not prove first values for all 23 sampled bytes; defined
+first zeros remain an explicit engine policy.
+
+Three baseline failures reproduced lost sampled bytes, Chat state and exact cached-Y
+bits across two real runSession startups/shutdowns. Both Native and Alpha now pass
+the retained-state checks with actual World/renderer/device teardown and unchanged
+private saves. This explicit CLI fixture bypasses frontend selection on both visits;
+its Chat messages remain local. Mouse boundaries, both queued Chat orders, sampled
+menu admissions and all twenty Controls cases also pass on the current executable,
+including GUI scale 1.5. All five targets, full required-owner CPU without skips,
+all Vulkan groups and SDK independence pass. Previous Controls/title images retain
+their earlier exact-binary scope; no new settled-scene claim is made here.
+
+This change retains the selected values. The engine still reconstructs its World,
+character and network backend objects; complete native G/W/E identity, subordinate
+reset mapping, frontend physical/Chat routing, other widget state and independent
+Use/quick-item observers remain unfinished. Native startup/reentrant callback,
+provider/thread, visual/hardware/gameplay/multiplayer and final human/provenance
+acceptance remain separate gates. The earlier asynchronous source deadline miss
+is still unexplained, with no production streaming change or reliability claim.
+Alpha relief/lighting, purple dry Undead Lands, distinct biome palettes and Omega
+water retain their existing paths. Owner data, captures, saves and binaries remain
+excluded from public source.
+
+
 ## Controls thumb and layout - 2026-11-10
 
 The retained Controls thumb now receives GUI event 12 after the target's virtual

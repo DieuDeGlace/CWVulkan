@@ -8,6 +8,13 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Coordinator retention of sampled controls, Chat and Interface cached Y across
+  render/world session teardown. Three real before-failures now pass in Native and
+  Alpha, with all affected input checks/all targets/full CPU/no skips/Vulkan/SDK.
+  Full native Game/World/entity identity, frontend routing and remaining state
+  owners stay open. See [the checkpoint](release-status.md#retained-game-input-chat-and-interface-cache---2026-11-10).
+
+
 - [x] Controls thumb event 12, motion-only Button capture, synchronous current-size
   publication and queried button/arrow layout formulas. Five baseline failures,
   twenty actual cases in Native/Alpha and scale 1.5, all targets/full CPU/no skips/

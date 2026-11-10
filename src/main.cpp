@@ -35,6 +35,7 @@
 #include "Hud.h"
 #include "Frontend.h"
 #include "GameInput.h"
+#include "GameState.h"
 #include "SampledActions.h"
 #include "GameOptions.h"
 #include "NativeProgress.h"
@@ -132,6 +133,7 @@ MenuInput input;
 nativecontrol::State gameplayControls; // Process lifetime, not reconstructed with a Session/player.
 sampledactions::Process sampledControls;
 itemselector::Repeat selectorRepeat;
+unsigned sessionLifetimeTestStage = 0; // Explicit two-session CLI fixture only.
 
 // Keep actual window edges separate from GLFW's synthetic focus-loss releases.
 // Configured action polling still uses the GLFW state; GUI callbacks share one mask.
@@ -214,7 +216,7 @@ RegionLook regionLook(const ColumnInfo &c) {
 }
 } // namespace
 
-static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, usecollection::Collection &creatureCollection) {
+static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, usecollection::Collection &creatureCollection, GameState &gameState) {
     const fs::path root = exeDir();
     logFile.close();
     fs::path logName = "CubeVulkan.log"; // --log FILE: another log (two instances side by side)
@@ -276,6 +278,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool mouseChatOrderTest = false; // --mouse-chat-order-test: actual full-frame queued-order probe.
     bool mouseBoundaryTest = false; // --mouse-boundary-test: synchronous actual-Game scalar/widget boundary.
     bool sampledMenuTest = false; // --sampled-menu-test: actual retained-level/consumer admission.
+    bool sessionLifetimeTest = false; // --session-lifetime-test: two actual runSession teardowns.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -424,6 +427,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             mouseBoundaryTest = true;
         else if (a == "--sampled-menu-test")
             sampledMenuTest = true;
+        else if (a == "--session-lifetime-test") {
+            sessionLifetimeTest = true;
+            directPlay = true;
+            forceMenu = false; // Explicit fixture bypasses title selection on both visits.
+        }
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -1662,7 +1670,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     upgradewidget::View upgradeView;
     CubModel upgradeModel; // the hand's weapon model
     std::string upgradeModelSprite, upgradePictureKey;
-    ChatLine chat;
+    ChatLine &chat = gameState.chat;
     feattext::Store featTexts;
     size_t pendingFeatDisplays = 0;
     chatInput.clear(); // discard frontend events before gameplay starts
@@ -3582,7 +3590,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         workerCharacterSaving = true;
     }
     // The game's controls (controls.cfg), read each frame.
-    GameInput gameInput;
+    GameInput &gameInput = gameState.input;
     // The camera as drawn follows the angles and distance the mouse sets, smoothed by the
     // cameraSmoothness option (frontend-title.md §3.3).
     if (!enteredCamera)
@@ -3964,7 +3972,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             syncInventoryVisibility();
         }
     };
-    gamemouse::State gameMouseState;
+    gamemouse::State &gameMouseState = gameState.mouse;
     if (nativeInventory) {
         hud.bindInventoryActions(changeNativeTab, [&](int which, int direction) {
             auto &panel = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
@@ -4385,6 +4393,52 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (!passed) exitCode=1;
         glfwSetWindowShouldClose(window,1);
     }
+    if (sessionLifetimeTest) {
+        // Real coordinator reconstruction and renderer/world/device teardown; no
+        // OS injection, external chat or writes to the owner's installation.
+        if (sessionLifetimeTestStage++ == 0) {
+            physicalinput::Poll poll;
+            poll.phase = physicalinput::Poll::Normal;
+            physicalinput::Levels levels{};
+            levels[gameoptions::UP] = 254;
+            levels[gameoptions::INVENTORY] = 173;
+            gameInput.update(poll,levels,{});
+            poll.phase = physicalinput::Poll::Capturing;
+            gameInput.update(poll,levels,{});
+            chat.keyDown(13,false,{});
+            chat.type("kept");
+            chat.receive(std::optional<std::u16string>(u"TEST"),u"local pending");
+            gameMouseState.cachedY = 0x80000000u;
+            input.gameKeyboard.raw[0x42] = 1;
+            input.controlEditor.values[gameoptions::ULTIMATE_SKILL] = {123,2};
+            input.controlEditor.first = 9;
+            input.controlEditor.waiting = 5;
+            input.controlEditor.candidate = 7;
+            input.gameKeyboard.menu = 0; // The selected return-to-title clear is independent.
+            logLine("Session lifetime: PASS seeded retained input/chat/cache before real teardown");
+            returnToTitle = true;
+        } else {
+            const auto check = [&](bool value,const char *what) {
+                logLine(std::string("Session lifetime: ")+(value ? "PASS " : "FAIL ")+what);
+                if (!value) exitCode = 1;
+            };
+            physicalinput::Poll capture;
+            capture.phase = physicalinput::Poll::Capturing;
+            gameInput.update(capture,{},{});
+            check(gameInput.level(gameoptions::UP)==254 && gameInput.level(gameoptions::INVENTORY)==173 &&
+                  !gameInput.pressed(gameoptions::INVENTORY),"sampled bytes survive reconstruction and skipped capture poll");
+            check(chat.typing() && chat.text()==u"kept" && chat.caretIndex()==4 && chat.pending()==1,
+                  "Chat editor and pending history survive reconstruction");
+            check(gameMouseState.cachedY==0x80000000u,"Interface cached Y preserves its exact word");
+            check(input.gameKeyboard.raw[0x42]==1 && input.gameKeyboard.menu==0,
+                  "raw key survives independently of explicit Escape clear");
+            check(input.controlEditor.values[gameoptions::ULTIMATE_SKILL]==gameoptions::Binding{123,2} &&
+                  input.controlEditor.first==9 && input.controlEditor.waiting==5 && input.controlEditor.candidate==7,
+                  "staged Controls scroll/candidate/capture survive reconstruction");
+        }
+        glfwSetWindowShouldClose(window,1);
+    }
+
     int mouseChatOrderStage = 0;
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
@@ -9220,8 +9274,9 @@ int main(int argc, char **argv) {
     // transition clear is inferred from the bounded native collection contract.
     usecollection::Collection creatureCollection;
     Hud hud; // Retain the CPU interface through both Play and Start Menu transitions.
-    int result = runSession(argc, argv, false, hud, creatureCollection);
+    GameState gameState; // Destroy retained values before their owning HUD graph.
+    int result = runSession(argc, argv, false, hud, creatureCollection, gameState);
     while (result == 2)
-        result = runSession(argc, argv, true, hud, creatureCollection);
+        result = runSession(argc, argv, true, hud, creatureCollection, gameState);
     return result;
 }
