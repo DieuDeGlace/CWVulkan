@@ -55,6 +55,7 @@ class GameInput {
     // Whether the control is down now, and whether it went down this frame.
     bool held(int action) const { return action >= 0 && action < gameoptions::BINDINGS && down[(size_t)action]; }
     bool pressed(int action) const { return action >= 0 && action < gameoptions::BINDINGS && edge[(size_t)action]; }
+    uint8_t level(int action) const { return action >= 0 && action < gameoptions::BINDINGS ? down[(size_t)action] : 0; }
     // A GLFW key as a keyboard binding: its scan code as the game reads it ({0, 0} for a key
     // without one).
     static gameoptions::Binding keyBinding(int glfwKey);
@@ -65,6 +66,7 @@ class GameInput {
     static bool buttonMatches(const gameoptions::Binding &b, int button);
 
   private:
-    std::array<bool, gameoptions::BINDINGS> down{}, edge{};
+    std::array<uint8_t, gameoptions::BINDINGS> down{};
+    std::array<bool, gameoptions::BINDINGS> edge{}; // Compatibility consumers; Native owners retain their own latches.
     GamepadFrame padFrame;
 };

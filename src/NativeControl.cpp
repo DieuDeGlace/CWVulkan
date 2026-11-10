@@ -82,7 +82,8 @@ constexpr float DODGE_STAMINA = 0.25f, DODGE_SPEED = 15.0f, DODGE_HOP = 5.0f, DO
 constexpr float WALL_JUMP_SPEED = 15.0f, WALL_JUMP_TURN = 180.0f, WALL_JUMP_STAMINA = 25.0f;
 constexpr int LIFT_MS = 100, FLYING_MOUNT_LIFT_MS = 500, TAKE_OFF_WINDOW_MS = 200;
 constexpr float LOW_JUMP = 5.0f, JUMP = 10.0f, HIGH_JUMP = 20.0f;
-constexpr double WATER_RISE_PER_MS = 0.001, HOLD_RISE_PER_MS = 0.08;
+// Original eight-byte operands retain the exact widened binary32 values.
+constexpr double WATER_RISE_PER_MS = 0.0010000000474974513, HOLD_RISE_PER_MS = 0.07999999821186066;
 constexpr float RISE_CAP = 10.0f;
 constexpr float INPUT_LOCK_MS = 2000.0f, LONG_FINISHED_MS = 10000.0f;
 constexpr float DEFAULT_AIM_DISTANCE = 100.0f, DOTS_PER_BLOCK = 65536.0f, BLOCKS_PER_DOT = 1.0f / 65536.0f;
@@ -473,7 +474,9 @@ void control(const Input &in, State &st, uint8_t *player, double dt, const World
     if (gliding(c))
         liftOrDive(in, c, dt);
 
-    if (in.blocked || in.panelShown) // spec 3.4: the keys are not the player's now
+    // Complete9C050 returns only after the actor preparation above. Controls
+    // capture/root alone is not a movement gate; Chat is a separate current byte.
+    if (in.blocked || in.typing || in.panelShown)
         return;
 
     if (gliding(c))

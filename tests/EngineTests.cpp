@@ -167,6 +167,7 @@ int guiRenderTests();
 int frontendTests();       // tests/FrontendTests.cpp
 int physicalInputTests();  // tests/PhysicalInputTests.cpp
 int gameMouseTests();      // tests/GameMouseTests.cpp
+int sampledActionTests(); // tests/SampledActionTests.cpp
 int windContinueTests();   // tests/WindContinueTests.cpp
 int enemyRespawnTests();   // tests/EnemyRespawnTests.cpp
 int captureTickContextTests(); // tests/CaptureTickContextTests.cpp
@@ -9379,6 +9380,7 @@ static void useKeyPrompts() {
 
 int main(int argc, char **argv) {
     if (argc == 2 && std::string(argv[1]) == "gamemouse") return gameMouseTests();
+    if (argc == 2 && std::string(argv[1]) == "sampledactions") return sampledActionTests();
     if (argc == 2 && std::string(argv[1]) == "physicalinput") return physicalInputTests();
     if (argc == 2 && std::string(argv[1]) == "guirender")
         return guiRenderTests();
@@ -10957,6 +10959,7 @@ int main(int argc, char **argv) {
     failures += frontendTests();       // tests/FrontendTests.cpp
     failures += physicalInputTests();
     failures += gameMouseTests();
+    failures += sampledActionTests();
     failures += windContinueTests();   // tests/WindContinueTests.cpp
     failures += netTests();            // tests/NetTests.cpp
     failures += ownerSetupTests();     // tests/OwnerSetupTests.cpp

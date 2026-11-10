@@ -30,6 +30,12 @@ glm::vec4 candidateColour(const nativesaves::Item &item) {
 }
 
 Update Selector::frame(const Input &input, size_t count, double elapsed, float scale) {
+    return frame(input,count,elapsed,scale,localRepeat);
+}
+Update Selector::frame(const Input &input, size_t count, double elapsed, float scale, Repeat &repeat) {
+    auto &neutralSeen=repeat.armed;
+    auto &leftRepeat=repeat.left;
+    auto &rightRepeat=repeat.right;
     elapsed = std::min(elapsed, 1000.0);
     if (input.allowToggle) {
         if (input.toggle && !previousToggle)

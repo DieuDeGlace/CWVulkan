@@ -322,6 +322,8 @@ class Hud {
     void moveInterfacePointer(glm::vec2, Inventory * = nullptr);
     void setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const;
     void clearInventoryPanelNodes(); // Only the three direct widget nodes, in native order.
+    void mirrorInventoryEquipment() const; // Selected late Game two-widget mirror.
+    void mirrorCraftingDetails() const;
     int inventoryWheelTarget(glm::vec2) const; // Fresh stored-panel subtree picks, independent of capture/ancestors.
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }

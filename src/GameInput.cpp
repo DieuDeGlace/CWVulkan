@@ -91,8 +91,8 @@ void GameInput::update(const physicalinput::Poll &poll, const physicalinput::Lev
     }
     padFrame.update(pad, ui, mapMode, panelEligible);
     for (int i = 0; i < gameoptions::BINDINGS; ++i) {
-        const bool now = levels[size_t(i)] != 0 || padFrame.held[size_t(i)];
-        edge[size_t(i)] = now && !down[size_t(i)];
+        const uint8_t now = padFrame.held[size_t(i)] ? uint8_t(1) : levels[size_t(i)];
+        edge[size_t(i)] = now != 0 && down[size_t(i)] == 0;
         down[size_t(i)] = now;
     }
 }

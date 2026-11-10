@@ -115,6 +115,21 @@ int itemSelectorTests() {
     input.right = true;
     selector.frame(input, 3, 16, 1);
     check(selector.index == INT_MIN && std::isfinite(selector.angle), "selection increment wraps32 and keeps finite displayed angle");
+    {
+        Repeat process;
+        Selector first,second;first.shown=second.shown=true;
+        Input held;held.allowToggle=false;
+        first.frame(held,3,0,1,process); // neutral visit arms the process.
+        held.left=true;
+        first.frame(held,3,250,1,process); // repeat reaches zero while still armed.
+        const auto next=second.frame(held,3,0,1,process);
+        check(first.index==-1 && second.index==-1 && next.selectionSounds==1,
+              "new selector uses existing process arm/counter instead of reconstructing them");
+        first.hide();first.frame(held,3,0,1,process);
+        const auto waiting=second.frame(held,3,0,1,process);
+        check(waiting.selectionSounds==0 && process.armed==0,
+              "hidden visit disarms shared repeat without a manufactured neutral input");
+    }
     SoundEdges sound;
     check(sound.sample(false, true) == 0x56 && sound.sample(true, true) == 0 && sound.sample(true, false) == 0 &&
               sound.sample(false, false) == 0x57 && sound.sample(false, false) == 0,

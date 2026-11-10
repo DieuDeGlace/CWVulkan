@@ -1,5 +1,56 @@
 # Clean-room process
 
+## Sampled control admission and process history - 2026-11-10
+
+Native directional input now tests Chat after the actor's earlier preparation,
+alongside the retained keyboard target and selector/map admissions. Ordinary
+unfocused UI or Controls capture alone does not add a movement return. Main
+supplies the current GUI keyboard target and current interface composite instead
+of a stale panel snapshot. The two eight-byte water/jump rise operands now retain
+their exact widened binary32 values. Four focused regressions failed before these
+changes and pass afterward, including actor preparation that still precedes Chat.
+
+The application retains controller history across Game/world and actor changes.
+The six late menu consumers have separate process bytes, one outer Chat/three-page
+admission, the verified 15/17/18/16/20/19 order and fresh level stores after each
+synchronous callback. Their two selected mirror joins retain their order. Skipped
+blocks retain their old bytes. The menu pass now follows packet/chat/feat work;
+movement clears and selector hiding follow it, before Escape-menu publication.
+
+Early zoom has its own two retained bytes and native-width arithmetic before the
+ordered lower/upper corrections, including the zero-count -1 result. The current
+engine supplies its existing seven-layer collection; complete native resource
+metadata remains a separate boundary. Sampled levels preserve their byte values,
+and producer edges remain available to compatibility callers. Native consumers
+use their own reached history. Ring repeat arm/counters likewise survive selector
+reconstruction independently of that selector's index and animation.
+
+The complete [sampled consumer contract](specs/steam-sampled-control-consumers-and-gameplay-admission-20261110.md)
+was whole-read and hash-verified before use. The original-only author received no
+implementation, tests, owner outputs or feedback. Actual Native and Alpha probes
+verify a Chat-skipped menu latch, retained capture levels under an ancestor hidden
+by F4, and a skipped release that must not become a new consumer rise. Existing
+mouse/scalar/two-drop and both chat-order probes also pass, with private saves
+unchanged. All five targets, required-owner CPU without skips, all Vulkan groups
+and SDK independence pass on the final binaries.
+
+One first full-suite run missed the existing 20-second asynchronous source test
+deadline. No production streaming code was changed. Added observation records
+loaded masks and pending counts without driving another World update or widening
+the deadline. The standalone and whole-suite diagnostic runs reached all nine
+sources in 128.316 ms and 115.547 ms respectively. The original miss is retained;
+its cause and general loading reliability are not established by those passes.
+
+Other independent action/Use/rising/falling observers, current-actor and general
+numeric/provider closure, actual Game/Interface construction/reset lifetime,
+Controls thumb and complete Help, frontend release/motion/marker/flight geometry,
+and final native/human/clean-room acceptance remain open. Detached simulation
+state is an owned API policy. Prior scene captures retain their earlier binary
+scope; no new native runtime, pixel or hardware claim is made. Alpha relief and
+lighting, purple dry Undead Lands, distinct palettes and Omega water retain their
+existing paths.
+
+
 ## Synchronous gameplay mouse transactions - 2026-11-10
 
 Each queued Native mouse message now finishes its selected gameplay work before

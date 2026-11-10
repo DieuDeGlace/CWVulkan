@@ -230,6 +230,9 @@ class SpawnedCreatures {
     // (0x9c050, NativeControl) and the world's update like any other (its physics, abilities
     // and upkeep); setPlayer then places it only the first time.
     void setNativePlayer(bool on) { nativePlayer = on; }
+    // Borrow application/process control operands across Game/actor changes.
+    // Caller storage must outlive this world. Unbound simulations keep local state.
+    void setControlState(nativecontrol::State &state) { sharedControlState = &state; }
     // Loading a character (frontend-title.md §6.1, native-saves.md §3.2): the player's record
     // and the lists beside it start again from a freshly made creature, so nothing of what it
     // was doing survives (velocity, ability and its time, the eagle's flight fields, buffs,
@@ -634,7 +637,9 @@ class SpawnedCreatures {
     void noteControlMove();
     std::function<bool(int)> controlOwnsSpecialItem;
     std::function<void(int)> controlPlaySound;
-    nativecontrol::State controlState;                    // the controller's statics
+    nativecontrol::State controlState; // Detached simulation policy when no application is bound.
+    nativecontrol::State *sharedControlState = nullptr;
+    nativecontrol::State &currentControlState() { return sharedControlState ? *sharedControlState : controlState; }
     double aiCarried = 0;                                 // ms since the AI's last tick
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
     uint32_t aiRand = 1;                                  // separate engine AI state; native worker-entry state is unverified

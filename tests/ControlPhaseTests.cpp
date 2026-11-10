@@ -40,6 +40,79 @@ int controlPhaseTests() {
             ++failures;
         }
     };
+    // Complete held sampled-consumer contract: actor preparation precedes Chat,
+    // and only reached controller postludes update its independent retained state.
+    {
+        Record record; nativeai::Creature actor;setup(record,actor);
+        record[0x68]=0x36;put<float>(record,0x40,9);
+        nativecontrol::Input input;input.typing=input.forward=input.jump=true;
+        nativecontrol::State state;state.lastJump=1;state.jumpHeld=13;state.lift=23;
+        nativecontrol::World world;
+        nativecontrol::control(input,state,record.data(),10,world);
+        check(get<float>(record,0x40)==0 && get<float>(record,0x44)==0 && get<float>(record,0x48)==0 &&
+              record[0x68]==0x36 && state.lastJump==1 && state.jumpHeld==13 && state.lift==23,
+              "Chat returns after actor preparation, before direction/state clearing/jump timers");
+    }
+    {
+        Record record; nativeai::Creature actor;setup(record,actor);
+        record[0x68]=0x79;put<float>(record,0x40,50);
+        nativecontrol::Input input;input.typing=input.forward=true;
+        nativecontrol::State state;state.lastJump=1;state.lift=29;
+        nativecontrol::World world;
+        nativecontrol::control(input,state,record.data(),10,world);
+        check(get<float>(record,0x40)==40 && get<float>(record,0x44)==0 && get<float>(record,0x48)==0 &&
+              state.lastJump==1 && state.lift==29,
+              "Chat preserves earlier sailing cap without admitting later digital movement");
+    }
+    {
+        Record record; nativeai::Creature actor;setup(record,actor);
+        nativecontrol::Input input;input.ordinaryUi=input.forward=true;
+        nativecontrol::State state;nativecontrol::World world;
+        nativecontrol::control(input,state,record.data(),0,world);
+        check(get<float>(record,0x44)!=0,"unfocused ordinary UI alone does not block directional levels");
+    }
+    // The two eight-byte rise operands are exact widened binary32 values, not
+    // ideal decimal doubles. Chosen fractional time distinguishes the final bit.
+    {
+        Record record; nativeai::Creature actor;setup(record,actor);
+        nativecontrol::Input input;input.jump=true;
+        nativecontrol::State state;state.jumpHeld=201;state.lift=100;
+        nativecontrol::World world;
+        nativecontrol::control(input,state,record.data(),1.23456789,world);
+        check(get<uint32_t>(record,0x3c)==0x3dca4587u,"held rise retains exact widened native 0.08 operand");
+    }
+    {
+        Record record; nativeai::Creature actor;setup(record,actor);
+        record[0x68]=0x53;put<uint32_t>(record,0x5c,2);
+        nativecontrol::Input input;input.jump=true;
+        nativecontrol::State state;state.jumpHeld=1;
+        nativecontrol::World world;
+        nativecontrol::control(input,state,record.data(),1.23456789,world);
+        check(get<uint32_t>(record,0x3c)==0x3aa1d13au,"water rise retains exact widened native 0.001 operand");
+    }
+    { // Production facade binds one process state through separate Game/world owners.
+        nativecontrol::State process;
+        ExtractedWorld blocks;
+        SpawnedCreatures first,second;
+        const auto start=[&](SpawnedCreatures &owner) {
+            owner.setNativePlayer(true);owner.setControlState(process);
+            owner.setPlayer(blocks,{0,0,130},0,{0,0,0},100,1,true);
+            uint16_t flags;std::memcpy(&flags,owner.playerRecord()+0x128,2);
+            flags &= uint16_t(~1u);std::memcpy(owner.localPlayer()->record+0x128,&flags,2);
+        };
+        start(first);start(second);
+        nativecontrol::Input input;input.lamp=true;
+        check(first.prepareControl(input,0) && process.lastLamp==1,
+              "first Game visits and retains its process lamp level");
+        uint16_t flags;std::memcpy(&flags,first.playerRecord()+0x128,2);
+        check((flags&1)!=0,"first reached rise toggles the actor word");
+        check(second.prepareControl(input,0),"second normally live Game reaches its own controller");
+        std::memcpy(&flags,second.playerRecord()+0x128,2);
+        check((flags&1)==0 && process.lastLamp==1,"new Game does not manufacture a second edge for a retained held level");
+        input.lamp=false;second.prepareControl(input,0);input.lamp=true;second.prepareControl(input,0);
+        std::memcpy(&flags,second.playerRecord()+0x128,2);
+        check((flags&1)!=0,"a reached release permits a later rise in the new Game");
+    }
     // Frontend roots publish two distinct fields before World, independently of Help.
     for (int mask = 0; mask < 8; ++mask) {
         for (const uint8_t action : {uint8_t(0x9d), uint8_t(0x76)}) {

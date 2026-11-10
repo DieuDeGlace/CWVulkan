@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Selected sampled-input admission and independent process history: Chat after
+  actor preparation, exact rise operands, current keyboard/composite inputs,
+  six late menus with fresh stores, early zoom and Ring repeats. Four baseline
+  regressions and all Native/Alpha input cases pass; full CPU/no skips/Vulkan/SDK
+  pass. An initial source-test deadline miss remains recorded and unexplained.
+  See [the checkpoint](release-status.md#sampled-control-admission-and-process-history---2026-11-10).
+
+
 - [x] Selected Native mouse work now finishes per queued message: entry Game,
   process clock/snapshot, canonical item/secondary work, current-actor health and
   retained Chat/selector tail. Native/Alpha actual inventory drops and release/chat

@@ -67,7 +67,9 @@ struct Input {
     int64_t chargeTarget = 0;
 };
 
-// The values the game keeps between frames (spec 1.4).
+// Native process operands retained only by their reached consumers (spec1.4
+// and the complete sampled-consumer contract). The application shares this
+// storage across Game/actor reconstruction; independent simulations may own it.
 struct State {
     uint8_t lastJump = 0; // the jump key at the end of the last movement call
     int jumpHeld = 0;     // ms the jump key has been held

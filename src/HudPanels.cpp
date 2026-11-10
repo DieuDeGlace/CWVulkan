@@ -526,6 +526,14 @@ bool Hud::identificationShown() const { return panels.identification && panels.i
 void Hud::setRingShown(bool shown) const { if (panels.ring) panels.ring->visible=shown; }
 bool Hud::ringShown() const { return panels.ring && panels.ring->visible; }
 
+void Hud::mirrorInventoryEquipment() const {
+    if (!panels.bag.node) return;
+    for (size_t index=0;index<2 && index<panels.slots.size();++index)
+        panels.slots[index]->visible=panels.bag.node->visible;
+}
+void Hud::mirrorCraftingDetails() const {
+    if (panels.details && panels.crafting.node) panels.details->visible=panels.crafting.node->visible;
+}
 void Hud::clearInventoryPanelNodes() {
     for (auto *node:{panels.bag.node,panels.crafting.node,panels.vendor.node})
         if (node) node->visible=false;

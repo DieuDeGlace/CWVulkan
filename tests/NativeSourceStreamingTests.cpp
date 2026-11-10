@@ -189,14 +189,31 @@ int nativeSourceStreamingTests() {
                   !loaded && !blocks.gameZoneLoaded(1000, 0), "a missing block lookup returns the solid fallback without loading source");
         release.set_value();
         bool backgroundComplete = false;
-        const auto sourceDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        struct Progress {double milliseconds;uint16_t loaded;size_t pending;};
+        std::vector<Progress> progress;progress.reserve(10);
+        const auto sourceStarted = std::chrono::steady_clock::now();
+        const auto sourceDeadline = sourceStarted + std::chrono::seconds(20);
+        uint16_t previousMask=0xffff;
         do {
-            int count = 0;
+            int count = 0;uint16_t mask=0;
             for (int x = -1; x <= 1; ++x)
-                for (int y = -1; y <= 1; ++y) count += blocks.gameZoneLoaded(x,y);
+                for (int y = -1; y <= 1; ++y) {
+                    const bool loaded=blocks.gameZoneLoaded(x,y);count+=loaded;
+                    if (loaded) mask |= uint16_t(1u<<((x+1)*3+y+1));
+                }
+            if (mask!=previousMask) {
+                progress.push_back({std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-sourceStarted).count(),
+                                    mask,world.pendingSourceCount()});
+                previousMask=mask;
+            }
             if ((backgroundComplete = count == 9)) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         } while (std::chrono::steady_clock::now() < sourceDeadline);
+        // Emit only after observing the unchanged deadline/completion. Collection
+        // performs no World update, source request or source scheduling operation.
+        for (const auto &point:progress)
+            std::printf("Source background observation: %.3fms loaded-mask=%03x pending=%zu\n",
+                        point.milliseconds,unsigned(point.loaded),point.pending);
         check(backgroundComplete, "all nine sources finish after a single World update, with no frame-driven dispatch");
         check(finish(world), "separate source generation completes before settled terrain is reported");
         int demanded = 0;

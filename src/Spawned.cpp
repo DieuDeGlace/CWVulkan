@@ -1920,7 +1920,7 @@ bool SpawnedCreatures::prepareControl(const nativecontrol::Input &in, double dtM
         return false;
     player.side.record = player.record.data();
     auto world = controlWorld();
-    const bool admitted = nativecontrol::beginFrame(in, controlState, player.side, dtMs, world);
+    const bool admitted = nativecontrol::beginFrame(in, currentControlState(), player.side, dtMs, world);
     worldEvents.buffs.insert(worldEvents.buffs.end(), world.buffNotes.begin(), world.buffNotes.end());
     noteControlMove();
     return admitted;
@@ -1938,14 +1938,14 @@ void SpawnedCreatures::controlPet(const nativecontrol::Input &in) {
     if (!nativePlayer || !hasPlayer)
         return;
     auto world = controlWorld();
-    nativecontrol::pet(in, controlState, player.side, world);
+    nativecontrol::pet(in, currentControlState(), player.side, world);
     noteControlMove();
 }
 
 void SpawnedCreatures::finishControl(const nativecontrol::Input &in) {
     if (!nativePlayer || !hasPlayer)
         return;
-    nativecontrol::attack(in, controlState, player.side);
+    nativecontrol::attack(in, currentControlState(), player.side);
     noteControlMove();
 }
 

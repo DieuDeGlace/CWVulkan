@@ -35,6 +35,7 @@
 #include "Hud.h"
 #include "Frontend.h"
 #include "GameInput.h"
+#include "SampledActions.h"
 #include "GameOptions.h"
 #include "NativeProgress.h"
 #include "CharacterPersistence.h"
@@ -128,6 +129,9 @@ fs::path exeDir() {
 }
 
 MenuInput input;
+nativecontrol::State gameplayControls; // Process lifetime, not reconstructed with a Session/player.
+sampledactions::Process sampledControls;
+itemselector::Repeat selectorRepeat;
 
 // Keep actual window edges separate from GLFW's synthetic focus-loss releases.
 // Configured action polling still uses the GLFW state; GUI callbacks share one mask.
@@ -271,6 +275,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool menuActionsTest = false; // --menu-actions-test: bounded actual-callback regression fixture.
     bool mouseChatOrderTest = false; // --mouse-chat-order-test: actual full-frame queued-order probe.
     bool mouseBoundaryTest = false; // --mouse-boundary-test: synchronous actual-Game scalar/widget boundary.
+    bool sampledMenuTest = false; // --sampled-menu-test: actual retained-level/consumer admission.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -417,6 +422,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             mouseChatOrderTest = true;
         else if (a == "--mouse-boundary-test")
             mouseBoundaryTest = true;
+        else if (a == "--sampled-menu-test")
+            sampledMenuTest = true;
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -731,6 +738,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // hears, a mirror of whichever host it is joined to, and this machine's host world, which
     // decides every creature that is not a player and keeps Save/world.db.
     SpawnedCreatures spawned;   // the client world (with the native player)
+    spawned.setControlState(gameplayControls);
     SpawnedCreatures hostWorld; // the host world
     // Multiplayer (Multiplayer.h), set up below once the character is known.
     Multiplayer session;
@@ -4022,6 +4030,37 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (!hud.interfaceHasFocus()) chat.type(std::string(1,char(unit)));
     };
 
+    sampledactions::Menus sampledMenus;
+    sampledMenus.chatEditing=[&] {return chat.typing();};
+    sampledMenus.pageShown=[&](int page) {
+        static constexpr std::array<uiroot::Branch,3> roots{uiroot::Branch::Title,uiroot::Branch::Characters,uiroot::Branch::Creation};
+        const auto *node=hud.interfaceBranchRoot(roots[size_t(page)]);
+        return node && node->visible;
+    };
+    sampledMenus.level=[&](int action) {return gameInput.level(action);};
+    sampledMenus.invoke=[&](int action) {
+        switch (action) {
+        case gameoptions::WORLD_MAP: invokeMenu(Hud::Menu::WorldMap); break;
+        case gameoptions::INVENTORY: invokeMenu(Hud::Menu::Inventory); break;
+        case gameoptions::CRAFTING_MENU: invokeMenu(Hud::Menu::Crafting); break;
+        case gameoptions::RING_MENU:
+            itemSelector.shown=!hud.ringShown();hud.setRingShown(itemSelector.shown);break;
+        case gameoptions::MULTIPLAYER_MENU: invokeMenu(Hud::Menu::Multiplayer); break;
+        case gameoptions::SYSTEM_MENU: invokeMenu(Hud::Menu::System); break;
+        }
+    };
+    sampledMenus.mirrorEquipment=[&] {hud.mirrorInventoryEquipment();};
+    sampledMenus.mirrorDetails=[&] {hud.mirrorCraftingDetails();};
+    const auto clearMovementInterface=[&] {
+        mapOpen=false;inventoryOpen=false;vendorTrade.open=false;
+        input.gameKeyboard.menu=0;craftingOpen=false;
+        if (menusReady) menus.hideSystemForMovement();
+        nativeCustomization.edit.open=false;identify.open=false;upgrade.open=false;
+        if (menusReady) menus.hideMultiplayerForMovement();
+        answers.dismissForMovement();
+        syncInventoryVisibility();hud.setIdentificationShown(false);
+    };
+
     auto nativeOrdinaryUi = [&] {
         return input.gameKeyboard.menu!=0 || inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
                nativeCustomization.edit.open || chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
@@ -4305,6 +4344,47 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (!passed) exitCode=1;
         glfwSetWindowShouldClose(window,1);
     }
+    if (sampledMenuTest) {
+        // Explicit neutral provider/queue adapter, not OS input injection. The
+        // real application GameInput, capture editor, GUI roots and menu callbacks
+        // demonstrate why one shared per-frame pressed flag is insufficient.
+        bool passed=nativeInventory && hudReady;
+        if (passed) {
+            const auto savedEditor=input.controlEditor;
+            physicalinput::Poll poll;physicalinput::Levels levels{};
+            const auto sample=[&] {
+                poll.sample(true,[](auto &bytes) {bytes={};},[](auto &bytes) {bytes={};},[&] {
+                    return physicalinput::Target{&gameControls,&levels,&input.controlEditor,&input.lastUsedPad};
+                });
+            };
+            input.controlEditor.waiting=-1;sample();levels[gameoptions::INVENTORY]=1;
+            gameInput.update(poll,levels,{});
+            inventoryOpen=bagShown=craftingOpen=vendorTrade.open=false;syncInventoryVisibility();
+            sampledControls.menus={};hud.setInterfaceShown(false);
+            chat.stopEditing();chat.keyDown(13,false,{});
+            const bool skipped=!sampledactions::lateMenus(sampledControls,sampledMenus) &&
+                !inventoryOpen && sampledControls.menus[1]==0;
+            logLine(std::string("Sampled menu: ")+(skipped ? "PASS" : "FAIL")+" Chat skips the consumer latch");
+            chat.stopEditing();input.controlEditor.waiting=99;sample();
+            gameInput.update(poll,levels,{});
+            const bool captured=sampledactions::lateMenus(sampledControls,sampledMenus) && inventoryOpen && bagShown &&
+                gameInput.level(gameoptions::INVENTORY)==1 && !gameInput.pressed(gameoptions::INVENTORY) &&
+                sampledControls.menus[1]==1 && input.controlEditor.waiting==99;
+            logLine(std::string("Sampled menu: ")+(captured ? "PASS" : "FAIL")+" retained capture level admits menu under hidden ancestor");
+            // Produce a real zero while this consumer is skipped, then a new
+            // producer edge. Its own unchanged nonzero latch must still win.
+            input.controlEditor.waiting=-1;sample();gameInput.update(poll,levels,{});
+            chat.keyDown(13,false,{});sampledactions::lateMenus(sampledControls,sampledMenus);
+            levels[gameoptions::INVENTORY]=1;gameInput.update(poll,levels,{});chat.stopEditing();
+            const bool held=sampledactions::lateMenus(sampledControls,sampledMenus) &&
+                inventoryOpen && gameInput.pressed(gameoptions::INVENTORY) && sampledControls.menus[1]==1;
+            logLine(std::string("Sampled menu: ")+(held ? "PASS" : "FAIL")+" skipped release does not manufacture a consumer rise");
+            passed=skipped && captured && held;
+            input.controlEditor=savedEditor;hud.setInterfaceShown(true);
+        } else logLine("Sampled menu: FAIL missing native receiver/resources");
+        if (!passed) exitCode=1;
+        glfwSetWindowShouldClose(window,1);
+    }
     int mouseChatOrderStage = 0;
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
@@ -4496,15 +4576,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // Physical bindings share the retained buttons' business actions. Raw Escape
         // has its separate byte toggle; its later publication never invokes Back.
         const auto escape=[&] {invokeMenu(Hud::Menu::System);};
-        if (gameInput.pressed(gameoptions::SYSTEM_MENU)) invokeMenu(Hud::Menu::System);
-        if (gameInput.pressed(gameoptions::MULTIPLAYER_MENU)) invokeMenu(Hud::Menu::Multiplayer);
+        if (!nativeInventory && gameInput.pressed(gameoptions::SYSTEM_MENU)) invokeMenu(Hud::Menu::System);
+        if (!nativeInventory && gameInput.pressed(gameoptions::MULTIPLAYER_MENU)) invokeMenu(Hud::Menu::Multiplayer);
         if (openFriendsAt>=0 && time>=openFriendsAt && menusReady) {
             invokeMenu(Hud::Menu::Multiplayer);
             openFriendsAt=-1;
         }
-        if (gameInput.pressed(gameoptions::INVENTORY)) invokeMenu(Hud::Menu::Inventory);
-        if (gameInput.pressed(gameoptions::WORLD_MAP)) invokeMenu(Hud::Menu::WorldMap);
-        if (gameInput.pressed(gameoptions::CRAFTING_MENU)) invokeMenu(Hud::Menu::Crafting);
+        if (!nativeInventory && gameInput.pressed(gameoptions::INVENTORY)) invokeMenu(Hud::Menu::Inventory);
+        if (!nativeInventory && gameInput.pressed(gameoptions::WORLD_MAP)) invokeMenu(Hud::Menu::WorldMap);
+        if (!nativeInventory && gameInput.pressed(gameoptions::CRAFTING_MENU)) invokeMenu(Hud::Menu::Crafting);
         for (int key : pressed) {
             if (mods.key(key))
                 continue;
@@ -4618,7 +4698,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
             }
         }
-        mapZoom = mapcontrol::mappedZoom(mapZoom, gameInput.pressed(gameoptions::ZOOM_IN), gameInput.pressed(gameoptions::ZOOM_OUT));
+        if (nativeInventory)
+            sampledactions::earlyZoom(sampledControls,[&](int action) {return gameInput.level(action);},mapZoom,
+                                      [] {return int32_t(worldmap::MAX_ZOOM+1);}); // Current engine layer collection.
+        else
+            mapZoom = mapcontrol::mappedZoom(mapZoom, gameInput.pressed(gameoptions::ZOOM_IN), gameInput.pressed(gameoptions::ZOOM_OUT));
         player.orbit.targetYaw += double(spin) * dt * Player::DEGREES_PER_RADIAN;
 
         // The native player: the game's controller reads the keys (its game-object fields)
@@ -4719,10 +4803,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             controlInput.jump = gameInput.held(JUMP);
             controlInput.dodge = gameInput.held(DODGE);
             controlInput.classSkill = gameInput.held(CLASS_SKILL);
-            // Retained Widget focus still needs the shared dispatcher binding. A shown
-            // inventory/System/Options panel is not itself a focused Widget.
+            // The retained GUI keyboard target is independent of panel visibility
+            // and Controls capture. Its current pointer blocks after actor setup.
+            controlInput.blocked = hud.interfaceHasFocus();
             controlInput.panelShown = itemSelector.shown || (mapOpen && input.lastUsedPad);
-            controlInput.ordinaryUi = panelsBeforeInput || menusOpen;
+            controlInput.ordinaryUi = nativeOrdinaryUi();
             controlInput.typing = chat.typing();
             controlInput.walk = gameInput.held(WALK);
             controlInput.lamp = gameInput.held(LAMP);
@@ -6018,7 +6103,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             if (result.action == inventoryslots::Action::Map)
                 mapSelection.useItem(nativeInventory->inventory.slot(index));
-            itemSelector.hide(); // a nonempty selection closes even if the helper rejects it
+            itemSelector.hide();hud.setRingShown(false); // A nonempty selection closes even if the helper rejects it.
             rebuildInventoryViews();
         };
         auto itemInputHeld = [&](int action) { return gameInput.held(action); };
@@ -6723,7 +6808,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             texts.push_back({player.position + glm::vec3(0, 0, 3), n.text,
                              n.invitation ? glm::u8vec4(255, 128, 51, 255) : glm::u8vec4(120, 220, 255, 255)});
         for (const cwnet::ChatLine &line : session.takeChat()) chat.receive(line.speaker, line.text);
-        hud.publishMenuControls(input.gameKeyboard.menu); // Late UI publication also runs with F4 hidden.
+        if (!nativeInventory) hud.publishMenuControls(input.gameKeyboard.menu);
         hud.updateChat(chat, [&](int64_t id) -> std::optional<std::u16string> {
             if (const uint8_t *record = spawned.record(id)) {
                 std::u16string name;
@@ -6746,6 +6831,22 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hud.appendChat(chat, u"FEAT!\n", {200, 100, 255});
                 audio.playInterface(feattext::SOUND);
             }
+        if (nativeInventory && hudReady) {
+            // One late Chat/three-page admission; skipped physical refresh does
+            // not replace these independent consumer visits with shared edges.
+            sampledactions::lateMenus(sampledControls,sampledMenus);
+            const auto stick=gameInput.gamepad().movement;
+            if (mapcontrol::movementCloses(mapOpen,input.lastUsedPad,
+                    gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::LEFT) ||
+                    gameInput.held(gameoptions::RIGHT) || gameInput.held(gameoptions::DOWN),chat.typing(),{stick.x,stick.y}))
+                clearMovementInterface();
+            if (gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||
+                stick.y>.25f || stick.y<-.25f || mapOpen) {
+                itemSelector.hide();hud.setRingShown(false);
+            }
+            hud.publishMenuControls(input.gameKeyboard.menu); // After late clears, including under F4.
+            menusOpen=menusReady && menus.open();
+        }
         bool chatFontChanged = hud.requireText(chat.text());
         for (const auto &row : chat.rows())
             for (const auto &word : row)
@@ -7696,7 +7797,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     mapcontrol::blocks(mapcontrol::padPan(mapcontrol::fromBlocks(targetMapPosition), {movementStick.x, movementStick.y},
                                                           mapZoom, float(player.orbit.yaw), frameMs));
                 mapMoved = true;
-            } else if (mapcontrol::movementCloses(mapOpen, input.lastUsedPad,
+            } else if (!nativeInventory && mapcontrol::movementCloses(mapOpen, input.lastUsedPad,
                                                   gameInput.held(gameoptions::UP) || gameInput.held(gameoptions::DOWN) ||
                                                       gameInput.held(gameoptions::LEFT) || gameInput.held(gameoptions::RIGHT),
                                                   chat.typing(), {movementStick.x, movementStick.y})) {
@@ -8177,7 +8278,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     const size_t selected = itemselector::wrappedIndex(itemSelector.index, choices.size());
                     const auto analog = gamepadStick(input.gamepad.leftX, input.gamepad.leftY);
                     itemselector::Input selectorInput;
-                    selectorInput.allowToggle = !chat.typing();
+                    selectorInput.allowToggle = false; // Native toggle/latch already visited in its late owner.
                     selectorInput.toggle = itemInputHeld(gameoptions::RING_MENU);
                     selectorInput.forward = itemInputHeld(gameoptions::UP);
                     selectorInput.back = itemInputHeld(gameoptions::DOWN);
@@ -8186,7 +8287,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     selectorInput.stickX = analog.x;
                     selectorInput.stickY = analog.y;
                     selectorInput.fullMap = mapOpen;
-                    const auto update = itemSelector.frame(selectorInput, choices.size(), frameMs, hud.interfaceScale());
+                    const auto update = itemSelector.frame(selectorInput, choices.size(), frameMs, hud.interfaceScale(),selectorRepeat);
+                    hud.setRingShown(itemSelector.shown);
                     for (int i = 0; i < update.selectionSounds; ++i)
                         audio.playInterface(0x58);
                     hs.ring.shown = itemSelector.shown;

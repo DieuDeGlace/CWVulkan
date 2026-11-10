@@ -19,17 +19,21 @@ struct Update {
     std::optional<size_t> captionIndex; // resolved before this update's left/right changes
     int selectionSounds = 0;
 };
+// The repeat arm/counters are process operands, independent of one selector's
+// index and animation. Standalone callers can keep the local compatibility state.
+struct Repeat { uint8_t armed=0; int32_t left=0,right=0; };
 class Selector {
   public:
     bool shown = false;
     int32_t index = 0;
     float angle = 0, radius = 0;
     Update frame(const Input &, size_t candidateCount, double elapsedMilliseconds, float guiScale);
+    Update frame(const Input &, size_t candidateCount, double elapsedMilliseconds, float guiScale, Repeat &);
     void hide() { shown = false; } // hidden-state animation reset belongs to the frame update
 
   private:
-    bool previousToggle = false, neutralSeen = false;
-    int32_t leftRepeat = 0, rightRepeat = 0;
+    bool previousToggle = false;
+    Repeat localRepeat;
 };
 class SoundEdges {
   public:
