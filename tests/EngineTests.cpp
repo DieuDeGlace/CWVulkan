@@ -219,6 +219,7 @@ int steamTransientLightsTests();
 int steamCreatureLightsTests();
 int dialogueChoicesTests();
 int npcSpeechTests();
+int helpActionTests();
 int steamLightOracleTests(const fs::path &, const fs::path &);
 int objectClockTests(); // tests/ObjectClockTests.cpp
 int physicalSourceStateTests(); // tests/PhysicalSourceStateTests.cpp
@@ -9456,6 +9457,8 @@ int main(int argc, char **argv) {
         return guiItemTests();
     if (argc == 2 && std::string(argv[1]) == "npcspeech")
         return npcSpeechTests();
+    if (argc == 2 && std::string(argv[1]) == "helpactions")
+        return helpActionTests();
     if (argc == 2 && std::string(argv[1]) == "steamcreatures")
         return steamCreatureLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamtransients")
@@ -11018,6 +11021,7 @@ int main(int argc, char **argv) {
     failures += steamCreatureLightsTests();
     failures += dialogueChoicesTests();
     failures += npcSpeechTests();
+    failures += helpActionTests();
     failures += objectClockTests(); // tests/ObjectClockTests.cpp
     failures += worldObjectTests();
     failures += deadCreatureTests();

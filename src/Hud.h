@@ -490,9 +490,12 @@ class Hud {
     // icons, and gui.plx templates ("button", "leftbutton", ...) placed and sized. Positions and
     // sizes are in interface units (window pixels / guiScale), drawn in the list's order.
     struct ScreenItem {
-        enum Kind { Text, Square, Icon, Template } kind = Text;
+        enum Kind { Text, Square, Icon, Template, TextGroup } kind = Text;
         glm::vec2 at{0}, size{0}; // the text's reference point; a square's, icon's or template's top left and size
         std::wstring text;        // the text, or a template's label (empty: as the template has it)
+        // A draw-time body can continue from actual text flow without a second measurement.
+        using TextDraw=std::function<glm::vec2(const std::wstring &,glm::vec2,glm::vec4)>;
+        std::function<void(const TextDraw &)> drawTexts;
         float fontSize = 12, outline = 3;
         glm::vec4 color{1}, outlineColor{0, 0, 0, 1}; // a template's tint is `color`
         int align = 0;            // 0 left, 1 centred, 2 right, 5 centred both ways
@@ -530,6 +533,7 @@ class Hud {
     // Retained owner-template controls; actions do not change the separate Escape byte.
     void bindMenuActions(std::function<void(Menu)>);
     void layoutMenuControls(glm::ivec2 windowPixels) const;
+    void layoutHelpNode(glm::ivec2 windowPixels) const;
     // Early Game prefix; format each current pair before fetching its current node.
     void updateMenuCaptions(const gameoptions::Controls &controls);
     void publishMenuControls(const uint8_t &menuByte);
@@ -641,7 +645,8 @@ class Hud {
         bool ancestorVisible = true;
     } historyPanel;
     // Returns where the text's last line sits (its pen's y, in the matrix's units).
-    float plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &m, glm::vec2 *pen = nullptr) const;
+    float plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &m,
+                     glm::vec2 *pen = nullptr, glm::vec2 rasterOrigin = {}, glm::vec2 *rasterPen = nullptr) const;
     // The game's panels as the interface's loading builds them (HudPanels.cpp), from gui.plx with the
     // tab icons from icons.plx.
     plx::Document iconsDoc;
@@ -673,7 +678,8 @@ class Hud {
 
     void bindEdits(plasma::SceneNode &) const;
     void drawEdit(std::vector<OverlayVertex> &,const plasma::SceneNode &) const;
-    void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
+    glm::vec2 frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
+    glm::vec2 helpText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     plasma::Scene::TextHit frontTextHit() const;
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;

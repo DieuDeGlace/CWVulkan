@@ -5,8 +5,13 @@
 #include "ChatLine.h"
 #include "GameInput.h"
 #include "GameMouse.h"
+#include "NativeTerms.h"
+#include "Spawned.h"
 
 struct GameState {
+    std::shared_ptr<SpawnedCreatures::PlayerStorage> player;
+    nativeterms::Dictionary terms;
+    bool termsAttempted=false; // One fixed-file resource attempt per retained owner.
     // Defined initial action zeros are owned engine policy; the native constructor
     // does not prove initial values for its otherwise unwritten sampled23 bytes.
     GameInput input;

@@ -8,6 +8,16 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Selected Help action rows, retained plain terms, height-relative hierarchy
+  and actual font-flow annotation continuation; retained CPU player across owned
+  render/World adapter teardown and defined-field appearance copying. Before-failure
+  regressions, seventeen actual Native/Alpha probes, full CPU/no skips/Vulkan/SDK
+  and inspected Alpha50/Native10 Help layouts pass. Native50 scene readiness,
+  complete Game/World/frontend entry, provider/thread/hardware and final acceptance
+  gates remain open.
+  See [the checkpoint](release-status.md#help-rendering-and-retained-player-state---2026-11-10).
+
+
 - [x] Shared frontend sampled-input publication before pointer work, one final
   controller merge per caller and compatibility edges across physical zeros.
   Three before-failures/five actual frontend cases and all affected lifecycle/

@@ -15,6 +15,7 @@
 #include "GroundItems.h"
 #include "NativePlayer.h"
 #include "CharacterLoad.h"
+#include "CharacterState.h"
 #include "NativePlayerHit.h"
 #include "NativePet.h"
 #include "World.h"
@@ -37,6 +38,26 @@
 #include <unordered_map>
 #include <type_traits>
 #include <glm/gtc/matrix_transform.hpp>
+
+// Selected native entity fields retain an owner through ordinary transitions.
+// This CPU storage contains no renderer handles. The engine still reconstructs
+// its World/backend adapter; that broader native lifetime mapping remains open.
+struct SpawnedCreatures::PlayerStorage {
+    Creature creature;
+    bool ready = false;
+    maphistory::History history;
+};
+
+SpawnedCreatures::SpawnedCreatures(std::shared_ptr<PlayerStorage> retained)
+    : playerStorage(retained ? std::move(retained) : std::make_shared<PlayerStorage>()),
+      player(playerStorage->creature), hasPlayer(playerStorage->ready), regionHistory(playerStorage->history) {
+    if (hasPlayer) {
+        // Registration ordinals belong to this owned World adapter. Reattach the
+        // retained actor once, before any new residents, without changing its data.
+        player.registration = 0;
+        registerCreature(player);
+    }
+}
 
 namespace {
 constexpr int NEAR_ZONES = 4; // the game makes creatures within 256 blocks of a player (0x2e17d0)
@@ -2448,7 +2469,11 @@ void SpawnedCreatures::setPlayerGear(const worldgen::CreatureRecord &from, bool 
     r[0x14c] = from[0x14c], r[0x14d] = from[0x14d];
     std::memcpy(&r[0x150], &from[0x150], 8);         // the region it stands in
     std::memcpy(&r[0x278], &from[0x278], 11 * 0xa0); // what it wears
-    std::memcpy(&r[worldgen::creature::APPEARANCE], &from[worldgen::creature::APPEARANCE], 0xb0); // and looks like
+    const auto appearance=worldgen::creature::APPEARANCE;
+    if (nativePlayer)
+        characterstate::copyAppearance(r.data()+appearance,from.data()+appearance);
+    else
+        std::memcpy(r.data()+appearance,from.data()+appearance,0xb0); // recorded compatibility model
     if (clampHealth) {
         const float maximum = playerMaxHealth();
         if (nativePlayer && maximum > 0 && playerHealth() > maximum)

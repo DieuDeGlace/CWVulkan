@@ -2335,6 +2335,8 @@ int nextHit(Creature *c, bool force) {
     return within(c, 2) ? 3 : 2;
 }
 
+int nextCharge(Creature *c, bool force) { return chargeMove(c,force); }
+
 // 0x60460: start the next hit, when the last one is far enough along and it can pay for it.
 bool startHit(Creature *c, bool force) {
     if (dodgeOf(c) != 0.0f || abilityOf(c) == STRONG_CHARGE)

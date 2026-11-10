@@ -260,6 +260,64 @@ void rawProgressOwnership(const auto &check) {
         if (file.is_regular_file()) std::filesystem::remove(file.path());
     std::filesystem::remove(dir);
 }
+void retainedPlayerAttachment(const auto &check) {
+    ExtractedWorld blocks;
+    blocks.openGenerated(0,0);
+    std::shared_ptr<SpawnedCreatures::PlayerStorage> retained;
+    std::function<bool(nativesaves::Character &)> observer;
+    const uint8_t *original=nullptr;
+    {
+        SpawnedCreatures first;
+        first.setStoredZones(blocks,nullptr,false); first.setNativePlayer(true);
+        first.setPlayer(blocks,{1,2,130},0,{},100,1,true);
+        auto *actor=first.localPlayer();
+        original=actor->record;
+        actor->counted={31}; actor->struck={32}; actor->group={35};
+        actor->skills={33}; actor->summonRaces={34};
+        actor->aggro[7]=3; actor->damage[8]=4; actor->cooldowns[9]=5;
+        actor->record[0x61]=0xa7;
+        actor->record[0x7d]=0xb8;
+        const auto gear=worldgen::newCreature(1);
+        first.setPlayerGear(gear);
+        check(actor->record[0x7d]==0xb8,
+              "native startup gear bridge preserves appearance padding omitted by defined-field assignment");
+        retained=first.retainedPlayer();
+        observer=first.playerSaveSource();
+    }
+    {
+        SpawnedCreatures next(retained);
+        next.setStoredZones(blocks,nullptr,false); next.setNativePlayer(true);
+        auto *actor=next.localPlayer();
+        check(actor && actor->record==original && actor->counted==std::set<int64_t>{31},
+              "reattachment preserves the actual CPU record and its separately owned collections");
+        nativesaves::Character saved;
+        saved.name="ATTACHED"; saved.position={17,-29,41}; saved.health=-2.5f;
+        next.seedPlayerSave(std::make_shared<const nativesaves::Character>(saved));
+        next.setPlayer(blocks,{1,2,3},0,{},100,1,true);
+        check(actor->record==original && actor->record[0x61]==0xa7 && actor->struck==std::set<int64_t>{32} &&
+              actor->group==std::set<int64_t>{35} && actor->skills==std::vector<int32_t>{33} &&
+              actor->summonRaces==std::vector<int32_t>{34},
+              "reached load preserves exactly the separately retained sets, ranges and omitted bytes");
+        check(actor->aggro.empty() && actor->damage.empty() && actor->cooldowns.empty(),
+              "reached load still clears the three reset-owned maps after reattachment");
+        nativesaves::Character current;
+        check(observer(current) && current.name==saved.name && current.position==saved.position && current.health==-2.5f,
+              "an existing save observer follows the same live owner after adapter teardown and later loading");
+        bool made=false;
+        next.networkCreature(72,made);
+        std::vector<int64_t> order;
+        next.forEachWorldCreature([&](const uint8_t *record) {
+            int64_t id; std::memcpy(&id,record+8,8); order.push_back(id);
+        });
+        check(made && order==std::vector<int64_t>{1,72},
+              "fresh owned World registration admits retained player once before later residents");
+        SpawnedCreatures detached;
+        detached.setNativePlayer(true);
+        detached.setPlayer(blocks,{1,2,130},0,{},100,1,true);
+        check(detached.localPlayer()->record!=original && detached.localPlayer()->group.empty(),
+              "unbound simulations have independent player ownership");
+    }
+}
 void absentRecord(const auto &check) {
     const auto dir = std::filesystem::temp_directory_path() /
         ("CubeVulkan-character-load-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -282,7 +340,7 @@ int characterLoadTests() {
     const auto check = [&](bool okay, const char *message) {
         if (!okay) { std::printf("FAIL character load: %s\n", message); ++failures; }
     };
-    rawNativeLoad(check); resetRetainsSeparateContainers(check); controlledInventoryUsesCurrentState(check); potionCountWidths(check); rawProgressOwnership(check); absentRecord(check);
+    rawNativeLoad(check); resetRetainsSeparateContainers(check); controlledInventoryUsesCurrentState(check); potionCountWidths(check); rawProgressOwnership(check); retainedPlayerAttachment(check); absentRecord(check);
     std::printf("Character load: raw fields, placement, reset/load ownership: %d failure(s)\n", failures);
     return failures;
 }

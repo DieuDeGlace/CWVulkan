@@ -391,7 +391,7 @@ std::wstring wrapText(const Font &font, std::wstring text, const Raster &r) {
     return text;
 }
 
-Layout layout(const Font &font, const std::wstring &source, const Raster &r, int flags) {
+Layout layout(const Font &font, const std::wstring &source, const Raster &r, int flags, glm::vec2 origin) {
     const std::wstring text = flags & TEXT_WRAP ? wrapText(font, source, r) : source;
     Layout out;
     // The block's shift: how far the alignment moves the pens' box.
@@ -406,13 +406,17 @@ Layout layout(const Font &font, const std::wstring &source, const Raster &r, int
             out.pen.x = -width * 0.5f;
         if (flags & TEXT_RIGHT)
             out.pen.x = -width;
+        if ((flags & (TEXT_CENTER | TEXT_RIGHT)) && origin.x!=0.0f)
+            out.pen.x += origin.x;
     };
     out.pen = shift;
+    if (origin!=glm::vec2(0)) out.pen += origin;
     alignLine(lineWidth(0));
     for (size_t i = 0; i < text.size(); i++) {
         const wchar_t c = text[i];
         if (c == NEWLINE) {
             out.pen.x = shift.x;
+            if (origin.x!=0.0f) out.pen.x += origin.x;
             alignLine(lineWidth(i + 1));
             out.pen.y += r.size.y + r.leading;
             continue;

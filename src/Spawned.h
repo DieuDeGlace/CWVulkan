@@ -45,7 +45,11 @@ class Collection;
 
 class SpawnedCreatures {
   public:
-    SpawnedCreatures() = default;
+    // Opaque CPU player owner. It may outlive a render/World adapter; callers
+    // attach it to one active simulation at a time. GPU resources stay per adapter.
+    struct PlayerStorage;
+    explicit SpawnedCreatures(std::shared_ptr<PlayerStorage> retained = {});
+    std::shared_ptr<PlayerStorage> retainedPlayer() const { return playerStorage; }
     SpawnedCreatures(const SpawnedCreatures &) = delete;
     SpawnedCreatures &operator=(const SpawnedCreatures &) = delete;
     // Reads the game's model list (id -> sprite, size). False without it.
@@ -613,18 +617,13 @@ class SpawnedCreatures {
     std::map<int64_t, RoadTrip> trips; // by the first id of the pack's group
     void startTrips(std::vector<Creature> &list);
     void advanceTrips(ExtractedWorld &ew, double dtMs);
-    struct PlayerStorage {
-        Creature creature;
-        bool ready = false;
-        maphistory::History history;
-    };
-    std::shared_ptr<PlayerStorage> playerStorage = std::make_shared<PlayerStorage>();
-    Creature &player = playerStorage->creature; // shared owned local state, not a borrowed Actor
-    bool &hasPlayer = playerStorage->ready;
+    std::shared_ptr<PlayerStorage> playerStorage;
+    Creature &player; // References bind to the retained CPU owner in the constructor.
+    bool &hasPlayer;
     std::shared_ptr<const nativesaves::Character> playerSaveSeed;
     bool savedPlacementPending = false;
     void applyPlayerSaveSeed();
-    maphistory::History &regionHistory = playerStorage->history;
+    maphistory::History &regionHistory;
     bool nativePlayer = false;
     size_t movesStarted = 0, strikesLanded = 0, playerPartsDrawn = 0, shouts = 0, summoned = 0;
     // Moves the creatures the interactions made during a frame (shadow clones, water

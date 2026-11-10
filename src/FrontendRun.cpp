@@ -13,6 +13,8 @@
 #include "CubModel.h"
 #include "Extracted.h"
 #include "GameInput.h"
+#include "HelpActions.h"
+#include "NativeTerms.h"
 #include "GameMath.h"
 #include "MapLook.h"
 #include "PanelScroll.h"
@@ -519,6 +521,7 @@ class Session {
     void optionsItems(Hud::Screen &out);
     void controlsItems(Hud::Screen &out);
     void helpItems(Hud::Screen &out);
+    void drawHelp(const helpactions::Draw &publish);
     void systemItems(Hud::Screen &out);
     void openOptions();
     void applyOptions();
@@ -1981,19 +1984,29 @@ void Session::controlsItems(Hud::Screen &out) {
     }
 }
 
-// The help sheet (the HelpWidget listing the controls). Its layout is not specified; the
-// bindings are listed in two columns.
+// The retained Help branch supplies action text, not a cloned panel template.
 void Session::helpItems(Hud::Screen &out) {
-    const glm::vec2 sheet{560, 60.0f + 20.0f * (float)gameoptions::BINDINGS};
-    const glm::vec2 at = centred(sheet);
-    out.push_back(widget("blackwidget", at, sheet));
-    out.push_back(text("Controls", at + glm::vec2(sheet.x * 0.5f, 30), 15, 3, WHITE, ALIGN_CENTRE));
-    const gameoptions::Controls &c = s.controls ? *s.controls : controls.values;
-    for (int i = 0; i < gameoptions::BINDINGS; i++) {
-        const float y = 60.0f + 20.0f * (float)i;
-        out.push_back(text(gameoptions::bindingLabel(i), at + glm::vec2(30, y), 12, 3, WHITE, ALIGN_LEFT));
-        out.push_back(text(gameoptions::bindingName(c[(size_t)i]), at + glm::vec2(sheet.x - 30, y), 12, 3, NAME_COLOUR, ALIGN_RIGHT));
-    }
+    Hud::ScreenItem group;
+    group.kind=Hud::ScreenItem::TextGroup;
+    group.drawTexts=[this](const auto &publish) {drawHelp(publish);};
+    out.push_back(std::move(group));
+}
+
+void Session::drawHelp(const helpactions::Draw &publish) {
+    helpactions::Sources source;
+    source.modifier=[&] {return s.sampledControls ? s.sampledControls->level(gameoptions::CLASS_SKILL) : uint8_t(0);};
+    source.actor=s.helpActor;
+    source.binding=[&](int index) {
+        const auto &bindings=s.controls ? *s.controls : controls.values;
+        return gameoptions::bindingName(bindings[size_t(index)]);
+    };
+    source.description=[&](int32_t action) {
+        const auto result=s.helpTerms ? s.helpTerms->describe(action) : nativeterms::Text{};
+        return std::wstring(result.begin(),result.end());
+    };
+    source.primary=[](auto *actor,uint8_t modifier) {return nativeai::nextHit(actor,modifier!=0);};
+    source.secondary=[](auto *actor,uint8_t modifier) {return nativeai::nextCharge(actor,modifier!=0);};
+    helpactions::draw(source,publish);
 }
 
 void Session::systemItems(Hud::Screen &out) {
@@ -2125,7 +2138,7 @@ Hud::Screen Session::buildScreen(bool inGame, bool drawing) {
         append(&Session::optionsItems, uiroot::Branch::Options);
     if (controlsOpen)
         append(&Session::controlsItems, uiroot::Branch::Controls);
-    if (hud.helpShown() && !front())
+    if (drawing && hud.interfaceShown() && hud.helpShown() && !front())
         append(&Session::helpItems, uiroot::Branch::Help);
     hud.publishFrontendScreen(out);
     if (!hud.interfaceShown()) {
@@ -2177,6 +2190,134 @@ bool Session::frame() {
             decide(Result::Quit);
             return false;
         }
+    }
+    if (req.page=="help-action-test") {
+        // Explicit owned Help invocation; no OS injection or original-runtime claim.
+        Hud::Screen sheet;
+        drawHelp([&](const auto &value,auto at,auto colour) {
+            sheet.push_back(text(value,at,12,3,colour,ALIGN_LEFT));
+            return glm::vec2(339.875f,999.f); // Semantic fixture; actual font flow checked below.
+        });
+        bool passed=true;
+        const auto verify=[&](bool value,const char *label) {
+            log(std::string("Help actions: ")+(value ? "PASS " : "FAIL ")+label);
+            passed=passed && value;
+        };
+        const auto at=[&](std::wstring_view value,glm::vec2 point) {
+            return std::any_of(sheet.begin(),sheet.end(),[&](const auto &item) {
+                return item.kind==Hud::ScreenItem::Text && item.text==value && item.at==point &&
+                    item.fontSize==12 && item.outline==3;
+            });
+        };
+        verify(!sheet.empty() && std::all_of(sheet.begin(),sheet.end(),[](const auto &item) {
+            return item.kind==Hud::ScreenItem::Text;
+        }),"empty-root action text without a panel template");
+        verify(!sheet.empty() && sheet.front().at==glm::vec2(0),"primary binding at the native origin");
+        const auto description=[&](float y) {
+            return std::any_of(sheet.begin(),sheet.end(),[&](const auto &item) {
+                return item.kind==Hud::ScreenItem::Text && item.at==glm::vec2(180,y) && !item.text.empty();
+            });
+        };
+        verify(description(0),"primary action uses the installed term dictionary");
+        verify(description(20),"secondary action uses the installed term dictionary");
+        verify(std::any_of(sheet.begin(),sheet.end(),[](const auto &item) {
+            return item.kind==Hud::ScreenItem::Text && item.at==glm::vec2(0,40) && item.text.starts_with(L"Hold ");
+        }),"held class action precedes its description");
+        verify(at(L"Dodge",{180,60}) && at(L"[25 STAMINA]",{320,60}),"fixed Dodge description and cost");
+        verify(at(L"Call/Ride Pet",{180,100}) || at(L"Call/Ride Pet",{180,80}),"pet row follows the optional class action");
+        const auto savedPages=frontendPages;
+        const bool savedHelp=hud.helpShown(),savedInterface=hud.interfaceShown();
+        const auto savedActor=s.helpActor;
+        int queries=0;
+        s.helpActor=[&] {++queries; return savedActor ? savedActor() : nullptr;};
+        frontendPages.fill(false);
+        hud.setHelpShown(true);
+        (void)buildScreen(false,false);
+        verify(queries==0,"layout publication does not invoke the Help draw body");
+        const auto admitted=buildScreen(false,true);
+        const bool deferred=queries==0 && std::any_of(admitted.begin(),admitted.end(),[](const auto &item) {
+            return item.branch==uiroot::Branch::Help && item.kind==Hud::ScreenItem::TextGroup;
+        });
+        std::vector<OverlayVertex> helpVertices;
+        hud.drawScreen(admitted,helpVertices);
+        verify(deferred && queries>0 && !helpVertices.empty(),
+               "retained HUD Help body queries only inside its admitted text draw");
+        const float savedScale=hud.interfaceScale();
+        const auto *helpNode=hud.interfaceBranchRoot(uiroot::Branch::Help);
+        hud.layout(*s.renderer,size);
+        verify(helpNode && helpNode->transform.translation==glm::vec2(20,float(size.height)/savedScale-250),
+               "ordinary Help layout retains its height-relative local translation");
+        hud.setGuiScale(2);
+        hud.layout(*s.renderer,{640,800});
+        verify(helpNode && helpNode->transform.translation==glm::vec2(20,150),
+               "scale-two height-800 Help placement matches the original conditional reference");
+        hud.layout(*s.renderer,{640,1000});
+        verify(helpNode && helpNode->transform.translation==glm::vec2(20,250),
+               "height-1000 layout changes Help position without a width term");
+        auto localText=text(L"F1",{0,0},12,3,WHITE,ALIGN_LEFT);
+        localText.branch=uiroot::Branch::Help;
+        auto expectedText=localText;
+        expectedText.branch=uiroot::Branch::Unspecified;
+        expectedText.at={20,250};
+        std::vector<OverlayVertex> actualVertices,expectedVertices;
+        hud.drawScreen({localText},actualVertices);
+        hud.drawScreen({expectedText},expectedVertices);
+        bool sameVertices=!actualVertices.empty() && actualVertices.size()==expectedVertices.size();
+        for (size_t index=0;sameVertices && index<actualVertices.size();++index)
+            sameVertices=actualVertices[index].x==expectedVertices[index].x &&
+                         actualVertices[index].y==expectedVertices[index].y;
+        verify(sameVertices,"local Help text uses the actual retained parent hierarchy");
+        hud.setGuiScale(1.5625f);
+        hud.layout(*s.renderer,{640,1000});
+        localText.at={0,20};
+        expectedText.at={31.f/1.5625f,640.f/1.5625f};
+        actualVertices.clear(); expectedVertices.clear();
+        hud.drawScreen({localText},actualVertices);
+        hud.drawScreen({expectedText},expectedVertices);
+        sameVertices=!actualVertices.empty() && actualVertices.size()==expectedVertices.size();
+        for (size_t index=0;sameVertices && index<actualVertices.size();++index)
+            sameVertices=actualVertices[index].x==expectedVertices[index].x &&
+                         actualVertices[index].y==expectedVertices[index].y;
+        verify(sameVertices,"fractional Help scale rounds the root before the separate raster-space row point");
+        hud.setGuiScale(savedScale);
+        hud.layout(*s.renderer,size);
+        Hud::ScreenItem flowGroup;
+        flowGroup.kind=Hud::ScreenItem::TextGroup;
+        flowGroup.branch=uiroot::Branch::Help;
+        glm::vec2 annotationFlow{0},continuation{0};
+        bool sawFirst=false,sawSecond=false;
+        flowGroup.drawTexts=[&](const auto &paint) {
+            std::array<uint8_t,0x970> record{}; record[0x14c]=4; record[0x14d]=1;
+            nativeai::Creature actor; actor.record=record.data();
+            helpactions::Sources source;
+            source.actor=[&] {return &actor;};
+            source.secondary=[](auto *,uint8_t) {return 50;};
+            helpactions::draw(source,[&](const auto &value,auto at,auto colour) {
+                if (value==L"[25 STAMINA]" && at.y==20) {continuation=at; sawSecond=true;}
+                const auto flow=paint(value,at,colour);
+                if (value==L"[ALL MP]") {annotationFlow=flow; sawFirst=true;}
+                return flow;
+            });
+        };
+        helpVertices.clear();
+        hud.drawScreen({flowGroup},helpVertices);
+        verify(sawFirst && sawSecond && annotationFlow.x>320 &&
+               continuation==glm::vec2(float(int64_t(std::trunc(annotationFlow.x))+20),20) && !helpVertices.empty(),
+               "second annotation follows actual installed-font flow from the first annotation");
+        queries=0;
+        hud.setInterfaceShown(false);
+        (void)buildScreen(false,true);
+        verify(queries==0 && hud.helpShown(),"hidden interface skips Help work and retains its selection");
+        helpVertices.clear();
+        hud.drawScreen(admitted,helpVertices);
+        verify(queries==0 && helpVertices.empty(),"hidden ancestor also suppresses a previously prepared Help draw body");
+        s.helpActor=savedActor;
+        frontendPages=savedPages;
+        hud.setHelpShown(savedHelp);
+        hud.setInterfaceShown(savedInterface);
+        if (!passed) outcome.error="Help action row contract failed";
+        decide(Result::Quit);
+        return false;
     }
     handleKeys(false);
     characterScroll.frame((float)dtMs, charactersShown, leftHeld, {(int)size.width, (int)size.height}, cards);

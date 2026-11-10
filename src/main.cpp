@@ -134,6 +134,8 @@ nativecontrol::State gameplayControls; // Process lifetime, not reconstructed wi
 sampledactions::Process sampledControls;
 itemselector::Repeat selectorRepeat;
 unsigned sessionLifetimeTestStage = 0; // Explicit two-session CLI fixture only.
+unsigned entityLifetimeTestStage = 0;
+uintptr_t entityLifetimeRecord = 0; // Address-only comparison, never dereferenced after teardown.
 
 // Keep actual window edges separate from GLFW's synthetic focus-loss releases.
 // Configured action polling still uses the GLFW state; GUI callbacks share one mask.
@@ -279,12 +281,14 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool mouseBoundaryTest = false; // --mouse-boundary-test: synchronous actual-Game scalar/widget boundary.
     bool sampledMenuTest = false; // --sampled-menu-test: actual retained-level/consumer admission.
     bool sessionLifetimeTest = false; // --session-lifetime-test: two actual runSession teardowns.
+    bool entityLifetimeTest = false; // --entity-lifetime-test: retained selected entity fields.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
     bool testDrop = false;       // --test-drop: drops a copy of the right-hand weapon beside the player (testing only).
     bool autoUse = false;        // --auto-use: presses the use key once, 3 s in (testing only).
     bool nextWeapon = false;     // --next-weapon: start with the next measured right-hand weapon (screenshots).
+    bool openHelp = false; // --open-help: select the retained Help root (diagnostic captures).
     bool openInventory = false;  // --inventory: start with the inventory screen open (screenshots).
     bool openSelector = false;   // --ring-menu: read-only selector comparisons
     bool noTaa = false, noSmaa = false;  // --no-taa, --no-smaa (comparisons)
@@ -359,6 +363,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             noTaa = true;
         else if (a == "--no-smaa")
             noSmaa = true;
+        else if (a == "--open-help")
+            openHelp = true;
         else if (a == "--inventory")
             openInventory = true;
         else if (a == "--ring-menu")
@@ -427,6 +433,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             mouseBoundaryTest = true;
         else if (a == "--sampled-menu-test")
             sampledMenuTest = true;
+        else if (a == "--entity-lifetime-test") {
+            entityLifetimeTest = true;
+            directPlay = true;
+            forceMenu = false; // Explicit fixture bypasses frontend on both actual visits.
+        }
         else if (a == "--session-lifetime-test") {
             sessionLifetimeTest = true;
             directPlay = true;
@@ -538,6 +549,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     logLine("Steam: online account and Cube World license verified");
     if (checkSteamOnly)
         return 0;
+    if (!gameState.termsAttempted) {
+        gameState.termsAttempted=true;
+        std::string error;
+        logLine(gameState.terms.load(assets.gameDir()/"dict_en.xml",error) ?
+            "Help terms: "+std::to_string(gameState.terms.size())+" retained dictionary entries" : "Help terms: "+error);
+    }
 
     if (bootstrap.flag("Game", "ImportSteamModSettings", true))
         for (auto name : {"SteamShadows", "MoonLight", "TerrainVariance", "WaterLilies", "WorldMotion", "DualHair", "TemporalAA"})
@@ -745,7 +762,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // The game's two worlds (docs/multiplayer.md): the client world the player sees, plays and
     // hears, a mirror of whichever host it is joined to, and this machine's host world, which
     // decides every creature that is not a player and keeps Save/world.db.
-    SpawnedCreatures spawned;   // the client world (with the native player)
+    SpawnedCreatures spawned(gameState.player); // CPU player survives the render/World adapter.
+    gameState.player = spawned.retainedPlayer();
     spawned.setControlState(gameplayControls);
     SpawnedCreatures hostWorld; // the host world
     // Multiplayer (Multiplayer.h), set up below once the character is known.
@@ -969,6 +987,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     frontend::Services front;
     front.hud = &hud;
     front.sampledControls = &gameState.input;
+    front.helpTerms = &gameState.terms;
+    front.helpActor = [&] {return spawnedReady && nativePlayer ? spawned.localPlayer() : nullptr;};
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
     front.extracted = useExtracted ? &extractedWorld : nullptr;
     front.spawned = spawnedReady && nativePlayer ? &spawned : nullptr;
@@ -3538,6 +3558,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     if (!serverMode) {
         std::string why;
         menusReady = menus.start(why);
+        if (menusReady && openHelp) hud.setHelpShown(true);
         if (!menusReady)
             logLine("Menu: " + why);
         else if (openSystemMenu)
@@ -4392,6 +4413,45 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.controlEditor=savedEditor;hud.setInterfaceShown(true);
         } else logLine("Sampled menu: FAIL missing native receiver/resources");
         if (!passed) exitCode=1;
+        glfwSetWindowShouldClose(window,1);
+    }
+    if (entityLifetimeTest) {
+        auto *actor=spawned.localPlayer();
+        if (!actor || !actor->record || !loadedNativeCharacter) {
+            logLine("Entity lifetime: FAIL missing native character/receiver");
+            exitCode=1;
+        } else if (entityLifetimeTestStage++==0) {
+            entityLifetimeRecord=reinterpret_cast<uintptr_t>(actor->record);
+            actor->counted={3101}; actor->struck={3202};
+            actor->skills={3303,3304}; actor->summonRaces={3405}; actor->group={3506};
+            actor->record[0x61]=0xa7; actor->record[0x7d]=0xb8;
+            const uint32_t retainedWord=0x7f123456u;
+            std::memcpy(actor->record+0xbbc,&retainedWord,4);
+            logLine("Entity lifetime: PASS seeded retained fields before real teardown");
+            returnToTitle=true;
+        } else {
+            const auto check=[&](bool value,const char *what) {
+                logLine(std::string("Entity lifetime: ")+(value ? "PASS " : "FAIL ")+what);
+                if (!value) exitCode=1;
+            };
+            check(reinterpret_cast<uintptr_t>(actor->record)==entityLifetimeRecord,
+                  "live record allocation survives renderer and World adapter teardown");
+            check(actor->counted==std::set<int64_t>{3101} && actor->struck==std::set<int64_t>{3202},
+                  "separate identifier sets survive the reached selected decoder");
+            check(actor->skills==std::vector<int32_t>{3303,3304} && actor->summonRaces==std::vector<int32_t>{3405},
+                  "independent retained ranges survive the reached selected decoder");
+            check(actor->group==std::set<int64_t>{3506},"group ownership survives the reached selected decoder");
+            uint32_t retainedWord; std::memcpy(&retainedWord,actor->record+0xbbc,4);
+            if (actor->record[0x61]!=0xa7 || actor->record[0x7d]!=0xb8 || retainedWord!=0x7f123456u)
+                logLine("Entity retained bytes: core="+std::to_string(actor->record[0x61])+
+                        " appearance="+std::to_string(actor->record[0x7d])+" outer="+std::to_string(retainedWord));
+            check(actor->record[0x61]==0xa7 && actor->record[0x7d]==0xb8 && retainedWord==0x7f123456u,
+                  "omitted core padding and the exact outer partial-store boundary survive");
+            float hp; std::memcpy(&hp,actor->record+0x180,4);
+            check(std::memcmp(actor->record+0x10,loadedNativeCharacter->position.data(),24)==0 &&
+                  std::bit_cast<uint32_t>(hp)==std::bit_cast<uint32_t>(loadedNativeCharacter->health),
+                  "selected decoder still replaces saved position and health exactly");
+        }
         glfwSetWindowShouldClose(window,1);
     }
     if (sessionLifetimeTest) {

@@ -120,6 +120,7 @@ void shotPoint(const uint8_t *record, int64_t out[3]);
 bool startHit(Creature *c, bool force);
 bool startCharge(Creature *c, bool force);
 int nextHit(Creature *c, bool force);
+int nextCharge(Creature *c, bool force); // Read-only selected 0x60120 query, also used by Help.
 // 0x507b0 (nativerules::canStartAbility) with the creature's buffs and cooldowns.
 bool canUse(Creature *c, int ability);
 

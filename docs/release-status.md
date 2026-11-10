@@ -1,5 +1,66 @@
 # Source review checkpoint — 2026-11-08
 
+## Help rendering and retained player state - 2026-11-10
+
+Help now draws action-specific rows through its retained HUD node, with descriptions
+from the owner's dictionary. Numeric action IDs retain all 32 bits; the modifier is
+read once, while bindings, characters and selected buff/specialization queries are
+read at their reached phases. The optional class action controls the pet row.
+Terms, variants and macros compile once, retaining the selected UTF-16 keys,
+conditional/seed decisions, reference contexts, word joins and first-block output.
+Missing descriptions remain empty. Existing NPC/Speech paths stay separate.
+
+The Help node is placed relative to window height through its actual parent
+hierarchy. Text keeps the separate raster-space row point and fractional-scale
+rounding order. The whole Help body runs inside its admitted draw; the second
+annotation for action 50 uses the first annotation's returned flow, truncated to
+a signed DWORD and advanced by twenty. It needs no duplicate measurement. Hidden
+ancestors suppress even a previously prepared draw body without clearing Help.
+
+The CPU player record and its separately owned collections survive render/World
+adapter teardown. A fresh adapter registers the retained player once before later
+residents; the selected decoder still replaces saved position/health and clears
+its established maps. Native startup gear copies defined appearance fields,
+preserving omitted padding. Complete native Game/World/backend identity and
+ordinary frontend Continue/saved-world entry remain separate unfinished work.
+
+The complete independent [dictionary](specs/steam-help-action-description-dictionaries-and-term-resolution-20261110.md),
+[entity](specs/steam-live-entity-reset-default-and-character-load-fields-20261110.md),
+[placement](specs/steam-help-root-placement-and-text-space-20261110.md) and
+[annotation](specs/steam-help-annotation-flow-arguments-20261110.md) handoffs were
+whole-read and hash-verified before use, alongside the previously held row/lifetime
+contracts. The annotation audit independently corrects earlier fixed double-cost
+placement and selected binding/query-order clauses. Earlier prose and receipts
+remain unchanged; the newer contract governs those corrected clauses. The
+original-only author received no implementation, tests, owner outputs or results.
+
+Source-derived before-failure checks cover row semantics, retained allocation and
+fields, buff padding, height-relative placement, fractional text space and flow/
+query ordering. All five targets and focused checks pass. Seventeen actual Native/
+Alpha probes pass, including two-session entity/input lifetimes, seventeen Help
+assertions per profile, frontend publication, mouse/Chat/menu admissions and
+Controls at ordinary and 1.5 scale. Full required-owner CPU has no skips; every
+Vulkan group and SDK independence pass. Alpha's render-distance-50 scene and a
+separately declared Native render-distance-10 UI scene were visually inspected for
+Help layout. The Native render-distance-50 scene exceeded its unchanged world-settle
+deadline with 599 prepared zones, one mesh job, 723 loaded source zones and four
+source jobs. That failed run remains private and unchanged; the smaller UI fixture
+does not resolve full-distance readiness. No production streaming or observation
+deadline changed. Private save bytes are unchanged. These are owned fixtures and
+scene checks, without original pixel, hardware, FPS or complete gameplay acceptance.
+
+UTF-8 XML/locale handling, safe ownership/cycle/length guards, explicit transactional
+reload, fresh World registration and invalid floating conversion behavior are
+engine adapter policies. Native XML/font/matrix/cache/provider/reentry/thread and
+first-frame behavior, broader localization, full Game/World persistence, frontend
+Chat/mouse, other input consumers and final native/human/provenance acceptance
+remain open. Native full-distance readiness and the earlier source deadline miss
+remain unexplained, without a production streaming change. Alpha relief/lighting,
+dry purple Undead Lands,
+distinct palettes, gentler Savannah and Omega water retain their existing paths.
+Owner files, captures, saves and binaries stay outside public source.
+
+
 ## Frontend sampled input publication - 2026-11-10
 
 Title and character pages now publish into the same retained control owner used

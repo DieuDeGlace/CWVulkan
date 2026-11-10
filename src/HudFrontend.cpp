@@ -9,9 +9,10 @@
 
 // The two-pass text object (0x269210): at the widget's point times the interface's scale, the
 // outline alone first (a transparent text colour), then the text over it.
-void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const {
+glm::vec2 Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const {
+    if (item.branch==uiroot::Branch::Help) return helpText(out,item);
     if (item.text.empty())
-        return;
+        return {};
     glm::mat4 m(1);
     m[0][0] = m[1][1] = guiScale;
     m[3] = glm::vec4(item.at * guiScale, 0, 1);
@@ -31,6 +32,46 @@ void Hud::frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) con
     style.strokeRadius = 0;
     style.color = item.color;
     plasmaText(out, style, m);
+    return {};
+}
+
+void Hud::layoutHelpNode(glm::ivec2 windowPixels) const {
+    if (!scene || !interfaceBranches) return;
+    scene->setScale(guiScale);
+    // Selected 0x101BD0 placement: a window point and a separate local offset.
+    scene->setPosition(*interfaceBranches->node(uiroot::Branch::Help),{0,float(windowPixels.y)},{20,-250});
+}
+
+glm::vec2 Hud::helpText(std::vector<OverlayVertex> &out,const ScreenItem &item) const {
+    if (!scene || !interfaceBranches) return {};
+    const auto *node=interfaceBranches->node(uiroot::Branch::Help);
+    const int font=fontIndex("resource1.dat");
+    if (!node || !plasmaFonts[font].loaded()) return {};
+    const glm::mat4 matrix=scene->matrix(*node);
+    const float factor=matrix[0][0];
+    const glm::vec2 pivot=node->transform.pivot;
+    const glm::vec2 point{(item.at.x+pivot.x)*factor,(item.at.y+pivot.y)*factor};
+    plasma::TextStyle style;
+    style.string=item.text;
+    style.font="resource1.dat";
+    style.pixelSize=item.fontSize;
+    style.flags=item.align;
+    style.scalable=true;
+    style.strokeColor=item.outlineColor;
+    glm::vec2 flow;
+    if (item.outline>0.0f) {
+        style.strokeRadius=item.outline;
+        style.color=glm::vec4(0);
+        plasmaText(out,style,matrix,nullptr,point,&flow); // Native return uses the first/outline pass.
+        style.strokeRadius=0;
+        style.color=item.color;
+        plasmaText(out,style,matrix,nullptr,point);
+    } else {
+        style.color=item.color;
+        plasmaText(out,style,matrix,nullptr,point,&flow);
+    }
+    const glm::vec2 currentPivot=node->transform.pivot;
+    return {flow.x/factor-currentPivot.x,flow.y/factor-currentPivot.y};
 }
 
 void Hud::setInterfaceState(const uiroot::State &state) {
@@ -285,8 +326,27 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
     for (const ScreenItem &item : screen) {
         switch (item.kind) {
         case ScreenItem::Text:
-            frontText(out, item);
+        case ScreenItem::TextGroup: {
+            bool admitted=true;
+            if (item.branch==uiroot::Branch::Help && interfaceBranches)
+                for (const auto *node=interfaceBranches->node(uiroot::Branch::Help);node;node=node->parent)
+                    admitted=admitted && node->visible;
+            if (!admitted) break;
+            if (item.kind==ScreenItem::Text) frontText(out,item);
+            else if (item.drawTexts) {
+                ScreenItem part;
+                part.branch=item.branch;
+                part.fontSize=item.fontSize;
+                part.outline=item.outline;
+                part.outlineColor=item.outlineColor;
+                part.align=item.align;
+                item.drawTexts([&](const auto &value,auto at,auto colour) {
+                    part.text=value; part.at=at; part.color=colour;
+                    return frontText(out,part);
+                });
+            }
             break;
+        }
         case ScreenItem::Square: {
             const glm::vec4 c = glm::clamp(item.color, glm::vec4(0), glm::vec4(1)) * 255.0f;
             rect(out, item.at.x * guiScale, item.at.y * guiScale, item.size.x * guiScale, item.size.y * guiScale,

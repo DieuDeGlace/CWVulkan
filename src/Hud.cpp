@@ -424,6 +424,7 @@ void Hud::layout(Renderer &renderer, VkExtent2D screen) {
     scale = std::min(screen.height / 1080.f, screen.width / 1280.f);
     this->screen = glm::vec2((float)screen.width, (float)screen.height);
     layoutMenuControls({int32_t(screen.width),int32_t(screen.height)});
+    layoutHelpNode({int32_t(screen.width),int32_t(screen.height)});
     offsetX = (screen.width - 1920 * scale) / 2; // The game centres its HUD.
     const int W = std::max(scale >= 1.f ? 4096 : 2048, atlasSize);
     std::vector<uint8_t> atlas(W * W * 4, 0);
@@ -532,10 +533,12 @@ void Hud::layout(Renderer &renderer, VkExtent2D screen) {
 // pen through the draw matrix, the plain glyph in the text colour and, with an outline, the
 // outline glyph over it in the outline colour. (The glyphs come from the atlas, baked by
 // bakeText(); one that was not baked is left out.) Returns the final pen's y in text units.
-float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &previous, glm::vec2 *pen) const {
+float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &style, const glm::mat4 &previous,
+                      glm::vec2 *pen, glm::vec2 rasterOrigin, glm::vec2 *rasterPen) const {
     if (pen)
         *pen = {};
-    if (style.string.empty() || style.pixelSize <= 0.0f)
+    if (rasterPen) *rasterPen = {};
+    if ((style.string.empty() && !rasterPen) || style.pixelSize <= 0.0f)
         return 0.0f;
     const int f = fontIndex(style.font, style.templateFont);
     const plasma::Font &font = plasmaFonts[f];
@@ -568,7 +571,7 @@ float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &
         }
         out.insert(out.end(), {v[0], v[1], v[2], v[1], v[3], v[2]});
     };
-    const plasma::Layout text = plasma::layout(font, style.string, r, style.flags);
+    const plasma::Layout text = plasma::layout(font, style.string, r, style.flags, rasterOrigin);
     for (const plasma::Placed &p : text.glyphs) {
         quad(p, false, style.color);
         if (r.stroke > 0.0f)
@@ -576,6 +579,7 @@ float Hud::plasmaText(std::vector<OverlayVertex> &out, const plasma::TextStyle &
     }
     if (pen)
         *pen = text.pen * style.pixelSize / r.size;
+    if (rasterPen) *rasterPen = text.pen;
     return text.pen.y * style.pixelSize / r.size.y;
 }
 

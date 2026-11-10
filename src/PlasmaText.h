@@ -126,7 +126,8 @@ struct Layout {
     std::vector<Placed> glyphs;
     glm::vec2 pen{0};
 };
-Layout layout(const Font &font, const std::wstring &text, const Raster &raster, int flags);
+// The separate raster-space origin participates in pen advancement and line starts.
+Layout layout(const Font &font, const std::wstring &text, const Raster &raster, int flags, glm::vec2 origin = {});
 // Where a glyph's quad starts (whole pixels of the draw matrix): its pen through the layout
 // matrix (the pixel mode's 2x2 part; none in the scalable mode) plus the glyph's offset.
 glm::vec2 glyphPosition(const Raster &raster, glm::vec2 pen, glm::vec2 glyphOffset);

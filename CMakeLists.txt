@@ -531,3 +531,6 @@ target_sources(EngineTests PRIVATE tests/WorldModelControlsTests.cpp)
 target_sources(engine PRIVATE src/OwnedGroundCubes.cpp)
 target_sources(EngineTests PRIVATE tests/OwnedGroundCubesTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectRewardCaptureTests.cpp)
+
+target_sources(engine PRIVATE src/NativeTerms.cpp src/HelpActions.cpp)
+target_sources(EngineTests PRIVATE tests/HelpActionTests.cpp)
