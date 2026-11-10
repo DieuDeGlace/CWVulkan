@@ -114,6 +114,7 @@ enum : int {
 struct SceneNode;
 class Scene;
 class Input;
+class EditScene;
 enum class ButtonPose { Press, Release, Enter, Leave, PressChecked, ReleaseChecked, EnterChecked, LeaveChecked };
 using ButtonNames = std::array<std::string, 8>;
 const ButtonNames &defaultButtonNames();
@@ -127,6 +128,8 @@ struct Widget {
     int horizontalAlignment = ALIGN_LEFT, verticalAlignment = ALIGN_TOP, flags = 0;
     int buttonType = 0, direction = 0;
     std::wstring caption;
+    bool frontendEventButton = false;
+    std::shared_ptr<EditScene> edit; // runtime only; clones reset the controller/cache/selection
     bool dirty = false;
     bool enabled = true;
     bool buttonHeld = false, checked = false;       // fresh Button copies clear these runtime bytes

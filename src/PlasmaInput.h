@@ -1,9 +1,11 @@
 #pragma once
-// Pointer routing from steam-gui-pointer-capture-routing. Dynamic Widget hooks
+// Pointer routing and keyboard/focus delivery from the independent GUI contracts.
+// steam-gui-keyboard-edit-and-creation-dispatch-20261109.md. Dynamic Widget hooks
 // and actual scene picking remain supplied by the owner scene/controller.
 #include "PlasmaScene.h"
 #include <functional>
 #include <map>
+#include <set>
 #include <utility>
 
 namespace plasma {
@@ -11,12 +13,14 @@ class Input : private Scene::DeletionObserver {
   public:
     enum class Event {
         LeftDown = 2, LeftUp = 3, RightDown = 5, RightUp = 6, MiddleDown = 8, MiddleUp = 9,
-        Move = 12, Enter = 13, Leave = 14, FocusLost = 19
+        Move = 12, Enter = 13, Leave = 14, FocusGained = 18, FocusLost = 19, TextChanged = 20
     };
     enum class Hook {
         LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, Move, Enter, Leave,
         GlobalQualifyingDown, GlobalDown, GlobalUp, GlobalRightDown, GlobalRightUp, GlobalMiddleDown, GlobalMiddleUp, GlobalMove
     };
+    enum class Key { Down, Up, Character };
+    using Keyboard = std::function<void(Input &, SceneNode &, Key, uint16_t)>;
     using Pick = std::function<SceneNode *(glm::vec2)>;
     using Callback = std::function<void(Input &, SceneNode &)>;
     using Virtual = std::function<void(Input &, SceneNode &, Hook)>;
@@ -27,8 +31,18 @@ class Input : private Scene::DeletionObserver {
     Input(const Input &) = delete;
     Input &operator=(const Input &) = delete;
     Virtual virtualHook;
+    Keyboard keyboardHook;
+    // Each delivered message reaches the enabled selected widget once. Ancestor
+    // visibility, pointer capture and duplicate held membership do not consume it.
+    void keyDown(uint16_t);
+    void keyUp(uint16_t);
+    void character(uint16_t);
+    bool keyHeld(uint16_t key) const { return keys.contains(key); }
+    size_t heldKeyCount() const { return keys.size(); }
+    uint32_t lastKey() const { return lastKeyboardKey; }
     void registerEvent(SceneNode &owner, Event, Callback, bool enabledRequired = true);
     void dispatchRegistered(SceneNode *, Event);
+    void dispatchWidgetEvent(SceneNode &, Event); // direct Widget event; no frame/enabled gate
     void move(glm::vec2);
     void setButtonHeld(int button, bool down); // Mask publication only; widget callbacks are separate.
     void leftDown();
@@ -40,7 +54,7 @@ class Input : private Scene::DeletionObserver {
     SceneNode *target() const; // Capture or fresh root pick, never the retained movement hit.
     void capture(SceneNode *node) { captured = node; }
     void clearCapture(); // Includes a full unchanged-pointer move, even when capture was null.
-    void focus(SceneNode *owner) { focused = owner; }
+    void focus(SceneNode *owner); // ordered synchronous lost/store/gained; no page gate
     void auxiliary(SceneNode *owner) { shownAuxiliary = owner; }
 
     glm::vec2 pointer() const { return current; }
@@ -67,6 +81,9 @@ class Input : private Scene::DeletionObserver {
     SceneNode *hovered = nullptr, *captured = nullptr, *focused = nullptr;
     SceneNode *shownAuxiliary = nullptr, *qualifyingDown = nullptr;
     uint32_t held = 0;
+    uint32_t lastKeyboardKey = 0;
+    std::set<uint16_t> keys;
+    void dispatchKey(Key, uint16_t);
     static SceneNode *owner(SceneNode *);
     static bool contains(const SceneNode *, const SceneNode *);
     void invoke(SceneNode *owner, Hook);

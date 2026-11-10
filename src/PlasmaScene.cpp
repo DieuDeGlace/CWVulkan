@@ -499,6 +499,7 @@ SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
     n->visible = from.visible, n->clips = from.clips, n->fill = from.fill, n->displayFlags = from.displayFlags;
     n->blurRadius = from.blurRadius;
     n->widget = from.widget;
+    if (n->widget) {n->widget->edit.reset();n->widget->frontendEventButton=false;}
     if (n->widget)
         n->widget->dirty = false;
     if (n->widget && n->widget->hasButtonState()) {
@@ -878,7 +879,7 @@ const SceneNode *Scene::hitTest(const SceneNode &node, glm::vec2 point, const Te
                                 uint32_t options, bool clipWidgets) const {
     if (!node.visible || (node.flags & (plx::NODE_DISABLED | plx::NODE_NO_PICK)))
         return nullptr;
-    const bool wholeHit = node.widget && (node.widget->flags & WIDGET_WHOLE_HIT);
+    const bool wholeHit = node.widget && ((node.widget->flags & WIDGET_WHOLE_HIT) || node.widget->kind=="Edit");
     if (clipWidgets && !wholeHit && node.widget && (node.widget->flags & WIDGET_OWN_SURFACE)) {
         const glm::vec2 origin = contentPosition(node), size = screenSize(node);
         if (point.x < origin.x || point.y < origin.y || point.x > origin.x + size.x || point.y > origin.y + size.y)

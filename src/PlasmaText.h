@@ -6,6 +6,7 @@
 // rasterised by FreeType from the owner's font files, outlines by FreeType's stroker; and the
 // layout: pen arithmetic, word wrap, measuring and alignment.
 #include "Plx.h"
+#include "PlasmaTextMetric.h"
 
 #include <glm/glm.hpp>
 
@@ -75,6 +76,9 @@ class Font {
     const Glyph &glyph(wchar_t c, const Raster &raster, bool outline = false) const;
     // FreeType's kerning of a pair (0 for fonts without a kern table, such as the game's).
     float kerning(wchar_t a, wchar_t b, const Raster &raster) const;
+    // The Edit's indexed measurement has different traversal/spacing from draw layout.
+    // Uses the same loaded owner font; the imported font implementation is a boundary.
+    textmetric::Result indexMetric(std::u16string_view, int32_t index, const TextStyle &, const glm::mat4 &) const;
 
   private:
     struct Face;

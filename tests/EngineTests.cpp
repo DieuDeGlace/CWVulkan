@@ -123,6 +123,11 @@ int worldMapLookTests();   // tests/WorldMapTests.cpp
 int saveFormatTests();     // tests/SaveTests.cpp
 int plasmaNodeAnimationTests();
 int plasmaInputTests();
+int plasmaKeyboardTests();
+int plasmaEditTests();
+int plasmaEditPointerTests();
+int plasmaTextMetricTests();
+int liveEditTests();
 int alphaTerrainTests();
 int generatorCacheTests();
 int nativeSourceStreamingTests();
@@ -9374,6 +9379,15 @@ int main(int argc, char **argv) {
         return guiRenderTests();
     if (argc == 2 && std::string(argv[1]) == "nodeanimation")
         return plasmaNodeAnimationTests();
+    if (argc == 2 && std::string(argv[1]) == "textindexmetric")
+        return plasmaTextMetricTests();
+    if (argc>=2 && std::string(argv[1])=="liveedit") return liveEditTests();
+    if (argc == 2 && std::string(argv[1]) == "editpointer")
+        return plasmaEditPointerTests();
+    if (argc == 2 && std::string(argv[1]) == "plasmaedit")
+        return plasmaEditTests();
+    if (argc == 2 && std::string(argv[1]) == "plasmakeyboard")
+        return plasmaKeyboardTests();
     if (argc == 2 && std::string(argv[1]) == "guiinput")
         return plasmaInputTests();
     if (argc == 2 && std::string(argv[1]) == "alphaterrain")
@@ -10894,6 +10908,11 @@ int main(int argc, char **argv) {
     failures += hairStyleTests();
     failures += plasmaNodeAnimationTests();
     failures += plasmaInputTests();
+    failures += plasmaKeyboardTests();
+    failures += plasmaEditTests();
+    failures += plasmaEditPointerTests();
+    failures += plasmaTextMetricTests();
+    failures += liveEditTests();
     failures += alphaTerrainTests();
     failures += generatorCacheTests();
     failures += nativeSourceStreamingTests();

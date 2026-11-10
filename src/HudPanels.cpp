@@ -5,6 +5,7 @@
 // around the character, the character panel, the item details and the formula details. Positions follow
 // the interface's layout for the window size; the drawing the inventory panel's drawing and its neighbours.
 #include "Hud.h"
+#include "PlasmaEditScene.h"
 #include "ItemValue.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -106,8 +107,14 @@ void Hud::buildPanels() {
         return const_cast<plasma::SceneNode *>(scene->hitTest(scene->root(), point, frontTextHit()));
     });
     interfaceInput->virtualHook = [this](plasma::Input &input, plasma::SceneNode &node, plasma::Input::Hook hook) {
-        if (isInventoryThumb(&node))
-            plasma::buttonInput(input, node, hook);
+        const auto edit=node.widget ? node.widget->edit : nullptr;
+        if (edit) edit->pointer(hook);
+        else if (isInventoryThumb(&node) || (node.widget && node.widget->frontendEventButton))
+            plasma::buttonInput(input,node,hook);
+    };
+    interfaceInput->keyboardHook=[](plasma::Input &,plasma::SceneNode &node,plasma::Input::Key key,uint16_t unit) {
+        const auto edit=node.widget ? node.widget->edit : nullptr;
+        if (edit) edit->keyboard(key,unit);
     };
     plasma::Scene &s = *scene;
     s.setScale(1.0f); // (the game builds its interface before the scale option applies)
@@ -296,6 +303,7 @@ void Hud::sceneNode(std::vector<OverlayVertex> &out, const plasma::SceneNode &n,
         }
     };
     const auto callback = [&] {
+        if (&in==scene.get()) drawEdit(out,n);
         if (n.onDraw)
             n.onDraw(const_cast<plasma::SceneNode &>(n));
         if (drawWidget && n.widget)

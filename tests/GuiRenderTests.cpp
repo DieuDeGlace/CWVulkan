@@ -613,6 +613,74 @@ int guiRenderTests() {
         }
     } else
         std::cout << "SKIP owner-atlas HUD blur integration: no local installation\n";
+    if (assets.locate("")) {
+        settings.taa=settings.smaa=settings.shadows=false;
+        renderer.settings=settings;
+        Hud editHud;
+        if (!editHud.load(assets.gameDir(),error)) ++failures;
+        else for (const float scale : {1.f,1.5f}) {
+            editHud.setGuiScale(scale);
+            editHud.layout(renderer,{128,128});
+            editHud.setInterfaceState({{false,false,true,false,false},false,false});
+            Hud::ScreenItem backdrop;
+            backdrop.kind=Hud::ScreenItem::Square;backdrop.size={128/scale,128/scale};backdrop.color={0,0,1,1};
+            Hud::ScreenItem field;
+            field.kind=Hud::ScreenItem::Template;field.name="edit";field.instance="render-name";
+            field.at={20,40};field.size={80,30};field.text=L"AB";field.retainText=true;
+            field.branch=uiroot::Branch::Creation;
+            const Hud::Screen screen{backdrop,field};
+            editHud.publishFrontendScreen(screen);
+            // The normal clip target is linearly resampled during composition.
+            // Isolate the submitted caret material for this exact RGB probe;
+            // the ordinary clipped images remain retained separately.
+            auto *page=const_cast<plasma::SceneNode *>(editHud.interfaceBranchRoot(uiroot::Branch::Creation));
+            auto *clip=page ? page->find("clip") : nullptr;
+            if (!clip) {std::cerr<<"FAIL ordinary Edit clip fixture\n";++failures;continue;}
+            clip->clips=false;
+            const auto emit=[&] {
+                editHud.clearItemDraws();std::vector<OverlayVertex> vertices;
+                editHud.drawScreen(screen,vertices);return vertices;
+            };
+            const auto unfocused=emit();
+            editHud.moveInterfacePointer({60*scale,55*scale});
+            editHud.interfaceLeftDown();editHud.interfaceLeftUp();
+            const auto off=emit();
+            const auto same=[](const std::vector<OverlayVertex> &a,const std::vector<OverlayVertex> &b) {
+                if (a.size()!=b.size()) return false;
+                for (size_t i=0;i<a.size();++i) {
+                    const auto &x=a[i],&y=b[i];
+                    if (x.x!=y.x || x.y!=y.y || x.r!=y.r || x.g!=y.g || x.b!=y.b || x.a!=y.a ||
+                        x.u!=y.u || x.v!=y.v || x.w!=y.w || x.z!=y.z) return false;
+                }
+                return true;
+            };
+            if (!editHud.interfaceHasFocus() || !same(unfocused,off)) {
+                std::cerr<<"FAIL ordinary Edit phase0/selection return-only draw\n";++failures;
+            }
+            for (int phase=1;phase<=3;++phase) {
+                editHud.advanceGui(500);
+                const auto vertices=emit();
+                if (!(phase&1)) {
+                    if (!same(off,vertices)) {std::cerr<<"FAIL ordinary Edit phase1000\n";++failures;}
+                    continue;
+                }
+                std::vector<OverlayVertex> red;
+                for (const auto &v : vertices) if (v.r==255 && v.g==0 && v.b==0 && v.a==255) red.push_back(v);
+                if (red.size()!=6 || vertices.size()!=off.size()+6) {
+                    std::cerr<<"FAIL ordinary Edit red caret geometry\n";++failures;continue;
+                }
+                const glm::ivec2 pixel(int(std::floor((red[0].x+red[2].x)*.5f)),int(std::floor((red[0].y+red[2].y)*.5f)));
+                const std::string name="owner-edit-unclipped-caret-"+std::to_string(int(scale*10))+"-"+std::to_string(phase*500);
+                check(name.c_str(),vertices,editHud.itemDraws(),{},pixel,{255,0,0},2,{},editHud.clipDraws());
+            }
+            editHud.interfaceKeyboard(plasma::Input::Key::Down,0x0D);
+            if (editHud.interfaceHasFocus() || !same(off,emit())) {
+                std::cerr<<"FAIL ordinary Edit cleared-focus draw\n";++failures;
+            }
+            // The next scale starts at an even 500ms quotient.
+            editHud.advanceGui(500);
+        }
+    }
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

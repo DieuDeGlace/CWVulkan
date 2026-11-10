@@ -244,6 +244,10 @@ add_library(engine STATIC
     src/GameNames.cpp
     src/PlasmaScene.cpp
     src/PlasmaInput.cpp
+    src/PlasmaEdit.cpp
+    src/PlasmaTextMetric.cpp
+    src/PlasmaEditScene.cpp
+    src/HudEdit.cpp
     src/PlasmaNodeAnimation.cpp
     src/ItemSelector.cpp
     src/HudPanels.cpp
@@ -463,7 +467,7 @@ target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
-target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
+target_sources(EngineTests PRIVATE tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
 target_sources(EngineTests PRIVATE tests/ResidentPassTests.cpp tests/ResidentEffectsTests.cpp)
 target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp tests/CameraPositionTests.cpp tests/DrawnStateTests.cpp tests/LinkedPlacementTests.cpp)

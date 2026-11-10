@@ -485,6 +485,9 @@ class Hud {
         std::optional<bool> buttonHover;
         int animationStepMs = 0;
         bool initializeHidden = false;
+        bool visible = true;
+        bool retainText = false; // use the initial caption once, then keep the live scene value
+        std::function<void()> release; // bound event3; owner clears before its lifetime ends
         bool replaceWidget = false; // explicit custom-widget construction; never a native resize/rectangle flag
         struct ModelContext {
             glm::mat4 matrix{1};
@@ -503,6 +506,11 @@ class Hud {
     void setHelpShown(bool);
     bool helpShown() const { return helpRootShown; }
     void publishFrontendScreen(const Screen &) const;
+    void interfaceKeyboard(plasma::Input::Key,uint16_t);
+    bool interfaceHasFocus() const;
+    std::optional<std::u16string> frontendCaption(const std::string &owner) const;
+    void setFrontendCaption(const std::string &owner,std::u16string_view);
+    void clearFrontendBindings();
     const plasma::SceneNode *interfaceBranchRoot(uiroot::Branch branch) const;
     void drawDialogueChoices(dialoguechoice::Panel &, glm::vec2 screen, glm::vec2 mouse,
                              std::vector<OverlayVertex> &, std::vector<glm::vec2> *navigation = nullptr) const;
@@ -618,12 +626,15 @@ class Hud {
         glm::vec2 requested{-1};
         bool pointerInside = false;
         bool frontendManaged = false;
+        std::function<void()> release;
     };
     mutable std::map<std::string, std::vector<TemplateInstance>> frontNodes;
     TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0,
                                       uiroot::Branch fallback = uiroot::Branch::Unspecified) const;
     void placeTemplate(TemplateInstance &, const ScreenItem &) const;
 
+    void bindEdits(plasma::SceneNode &) const;
+    void drawEdit(std::vector<OverlayVertex> &,const plasma::SceneNode &) const;
     void frontText(std::vector<OverlayVertex> &out, const ScreenItem &item) const;
     plasma::Scene::TextHit frontTextHit() const;
     struct Panels {

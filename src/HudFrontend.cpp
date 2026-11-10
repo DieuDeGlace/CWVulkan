@@ -92,6 +92,8 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
         if (item.initializeHidden)
             node.visible = false;
         node.initializeWidgets();
+        if (item.retainText) node.setAllText(item.text);
+        bindEdits(node);
         node.visible = visible;
         if (item.name == "button" || item.name == "button2" || item.name == "smallbutton") {
             auto passive = [](auto &&self, plasma::SceneNode &parent) -> void {
@@ -103,6 +105,18 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
             passive(passive, node);
         }
         // Keep authored child visibility; clip/blur traversal owns composition.
+    }
+    instance.release=item.release;
+    if (node.widget) node.widget->frontendEventButton=bool(item.release);
+    if (item.release) {
+        interfaceInput->registerEvent(node,plasma::Input::Event::LeftUp,
+            [this,owner,index](plasma::Input &,plasma::SceneNode &) {
+                const auto found=frontNodes.find(owner);
+                if (found!=frontNodes.end() && index<found->second.size()) {
+                    const auto callback=found->second[index].release;
+                    if (callback) callback();
+                }
+            });
     }
     scene->setScale(guiScale);
     return &instance;
@@ -187,7 +201,7 @@ void Hud::placeTemplate(TemplateInstance &instance, const ScreenItem &item) cons
         scene->moveTo(node, item.at * guiScale);
     else
         scene->setPosition(node, item.at * guiScale, glm::vec2(0));
-    if (!item.text.empty())
+    if (!item.retainText && !item.text.empty())
         node.setAllText(item.text);
 }
 
@@ -203,7 +217,7 @@ void Hud::publishFrontendScreen(const Screen &screen) const {
         const auto &owner = item.instance.empty() ? item.name : item.instance;
         if (auto *instance = prepareTemplate(item, used[owner]++, uiroot::Branch::Root)) {
             instance->frontendManaged = true;
-            instance->node->visible = true;
+            instance->node->visible = item.visible;
             placeTemplate(*instance, item);
         }
     }
@@ -236,8 +250,9 @@ void Hud::drawScreen(const Screen &screen, std::vector<OverlayVertex> &out, std:
             if (!instance)
                 break;
             auto &node = *instance->node;
-            node.visible = true;
+            node.visible = item.visible;
             placeTemplate(*instance, item);
+            if (!node.visible) break;
             bool active = true;
             for (const auto *parent = node.parent; parent; parent = parent->parent)
                 active = active && parent->visible;

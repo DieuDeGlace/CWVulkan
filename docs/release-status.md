@@ -1,5 +1,47 @@
 # Source review checkpoint — 2026-11-08
 
+## Retained UTF-16 creation editor - 2026-11-09
+
+The creation name now belongs to its persistent owner-GUI Edit caption. Raw
+Windows keydown, keyup and character units enter the shared ordered GUI message
+queue with pointer edges; repeats and individual UTF-16 units survive. The
+frame-based ASCII name accumulator and its length cap are removed. The later
+creation visibility poll admits exactly 2..15 units without limiting editing.
+Create is a separate captured event-3 connection: it hides the actual page, reads
+the current caption and uses the retained live actor's established low-byte save
+bridge. Enter clears focus. Teardown removes the session's retained callback.
+
+Independent complete held contracts cover keyboard/focus, Edit pointer/layout,
+indexed metrics/font configuration and ordinary Game/window input. Source author
+and implementer remained isolated, with no implementation/test feedback. The
+indexed measurement path shares the real loaded font but preserves its distinct
+source traversal, spacing, wrap and configuration arithmetic. Scene attachment,
+clone reset, native select-all/Shift/drag operations and caption events are bound.
+The ordinary manager's selection rectangle virtual is return-only; it still
+receives two measurements. Its selected caret uses red, width one, the current
+draw matrix and the signed shared-clock quotient phase. Font/provider, borrowed
+caption replacement, generalized geometry and imported/backend limits remain
+explicit. Engine ownership and finite-domain guards do not reproduce unsafe
+native aliases or overflow.
+
+Meaningful owner-scene checks cover 17-unit editing, literal surrogate and
+low-byte-zero units, hidden-ancestor focus, selection replacement, Enter, retained
+text, captured outside release and callback teardown. Four added Vulkan checks
+exercise opaque red and blink phases at GUI scales 1 and 1.5, with the test clone's
+clip disabled to isolate material RGB. Normal clipped images are retained and
+visually inspected; layer interpolation can filter a one-pixel caret. These are
+local regressions, not an original-runtime pixel-parity certificate.
+
+This checkpoint does not close the newly audited full Game input phase. The GUI
+queue drains before physical pointer polling, but broader synchronous WinProc
+GUI-to-Game rereads, Game low-byte/sign-extended chat delivery, raw Game keys,
+repeated Escape's six-button publication, binding capture and remaining business
+callbacks still need integration. Legacy Escape/back handling is explicitly open.
+Native runtime comparison and final provenance/visual/gameplay acceptance remain
+release gates. Alpha terrain/lighting, distinct biome palettes and Omega water
+retain their separate paths and profile identity.
+
+
 ## Viewed source loading independent of presentation - 2026-11-09
 
 The viewed source worker now completes successive source batches independently
@@ -3635,3 +3677,11 @@ and ReShade DLL file hashes. Captures remain private and excluded from the sourc
 Do not upload the whole development checkout. Review the fresh
 `build/CubeVulkan-upload-<timestamp>/` tree produced by `tools/package_source.ps1`,
 then upload its contents after the publication decisions above.
+
+The independent [attachment display-field audit](specs/steam-edit-attachment-display-field-20261109.md)
+additionally traces the concrete registered clipping property separately from
+visibility. Attachment enables the shaped parent's clipping, including when its
+own caption is absent; it preserves hidden-parent visibility. Both independent
+conditional examples fail before that store correction and pass afterward. The
+failed run is retained. This closes the selected concrete field identity rather
+than inferring meaning from an adjacent member or UI convention.

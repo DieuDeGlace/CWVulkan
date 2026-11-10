@@ -12,6 +12,7 @@
 #include <fstream>
 #include <cctype>
 #include <iterator>
+#include <mutex>
 
 namespace plasma {
 
@@ -39,6 +40,7 @@ struct Font::Face {
     FT_Library library = nullptr;
     FT_Face face = nullptr;
     FT_Stroker stroker = nullptr;
+    mutable std::recursive_mutex critical;
     mutable std::map<std::tuple<std::array<int, 8>, bool, wchar_t>, Glyph> glyphs;
 
     ~Face() {
@@ -190,6 +192,7 @@ const Glyph &Font::glyph(wchar_t c, const Raster &raster, bool outline) const {
     static const Glyph none;
     if (!face)
         return none;
+    const std::lock_guard lock(face->critical);
     const auto key = std::make_tuple(raster.key(), outline, c);
     auto it = face->glyphs.find(key);
     if (it == face->glyphs.end())
@@ -200,6 +203,7 @@ const Glyph &Font::glyph(wchar_t c, const Raster &raster, bool outline) const {
 float Font::kerning(wchar_t a, wchar_t b, const Raster &raster) const {
     if (!face || !FT_HAS_KERNING(face->face))
         return 0;
+    const std::lock_guard lock(face->critical);
     const FT_UInt left = FT_Get_Char_Index(face->face, (FT_ULong)a), right = FT_Get_Char_Index(face->face, (FT_ULong)b);
     FT_Vector v{};
     if (raster.scalable) {
@@ -209,6 +213,44 @@ float Font::kerning(wchar_t a, wchar_t b, const Raster &raster) const {
     }
     FT_Get_Kerning(face->face, left, right, FT_KERNING_UNSCALED, &v);
     return (float)v.x * raster.size.x / (float)face->face->units_per_EM;
+}
+
+textmetric::Result Font::indexMetric(std::u16string_view text, int32_t index,
+                                          const TextStyle &style, const glm::mat4 &matrix) const {
+    std::unique_lock<std::recursive_mutex> lock;
+    if (face)
+        lock = std::unique_lock(face->critical);
+    textmetric::State state;
+    textmetric::Matrix words;
+    for (int column=0; column<4; ++column)
+        for (int row=0; row<4; ++row)
+            words[column*4+row]=matrix[column][row];
+    textmetric::configure(state,words,style.pixelSize,style.strokeRadius,
+                          style.spacing,style.lineSpacing,style.scalable);
+    Raster raster;
+    raster.scalable=state.integer;
+    raster.size={state.width,state.height};
+    raster.transform=glm::mat2(state.matrix[0],state.matrix[1],state.matrix[4],state.matrix[5]);
+    raster.stroke=state.expansion;
+    raster.spacing=state.gap;
+    raster.leading=state.extraLine;
+    if (face)
+        face->select(raster,1); // configuration also applies when every glyph is cached
+    textmetric::Providers providers;
+    providers.glyph=[&](uint16_t unit,bool secondary)->std::optional<textmetric::Glyph> {
+        const auto &g=glyph(wchar_t(unit),raster,secondary);
+        if (!g.exists) return std::nullopt;
+        return textmetric::Glyph{{g.offset.x,g.offset.y},{g.extent.x,g.extent.y},g.advance};
+    };
+    providers.pair=[&](uint16_t current,uint16_t next) {
+        if (!face) return 0.f;
+        const auto right=FT_Get_Char_Index(face->face,next);
+        const auto left=FT_Get_Char_Index(face->face,current);
+        FT_Vector pair{};
+        FT_Get_Kerning(face->face,left,right,state.integer ? FT_KERNING_DEFAULT : FT_KERNING_UNSCALED,&pair);
+        return textmetric::pairValue(int32_t(pair.x),state.integer,state.width,face->face->units_per_EM);
+    };
+    return textmetric::measure(state,providers,text,index,style.flags,style.pixelSize,style.wrapWidth,style.scalable);
 }
 
 std::array<int, 8> Raster::key() const {

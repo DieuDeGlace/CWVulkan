@@ -275,6 +275,13 @@ void retainedCreation(const auto &check) {
               restored.nativeInventory && sameInventory(restored.nativeInventory->inventory.tabs, data->inventory) &&
               restored.world == "creation-profile",
           "Main can restore owned creation data without opening/reading a database or resetting its actor");
+    check(actor.confirmCharacterCreation(*data, std::u16string_view(u"\u0100A")) && data->name.empty() &&
+              data->position == latest && std::bit_cast<uint32_t>(data->health) == 0x80000000u,
+          "literal wide-length-two caption confirms its first low-byte zero without revalidating or resetting the actor");
+    const std::u16string rawCaption{char16_t(0xd801),u'B'};
+    check(actor.confirmCharacterCreation(*data, rawCaption) && data->name == std::string({char(1),'B'}) &&
+              actor.localPlayer() == entity && data->level == 1,
+          "raw UTF16 surrogate units reach the live actor through the same bounded low-byte commit");
 }
 void lazyAccountPublication(const auto &check) {
     auto record = worldgen::newCreature(7);
@@ -363,6 +370,10 @@ int characterCreationTests() {
                   .empty() &&
               charactercreation::nameBytes(std::string(40, 'x')).size() == 15,
           "embedded low-byte zero is preserved and oversized inputs use the explicit safe bound");
+    check(charactercreation::nameBytes(std::u16string_view(u"\u00e9\u20acZ")) == std::string("\xe9\xacZ") &&
+              charactercreation::nameBytes(std::u16string_view(u"\u0100A")).empty() &&
+              charactercreation::nameBytes(std::u16string(40,u'X')).size() == 15,
+          "caption-unit bridge retains per-unit low bytes, C-string termination and the established safe bound");
     std::printf("Character creation: live reset, style and commit: %d failure(s)\n", failures);
     return failures;
 }

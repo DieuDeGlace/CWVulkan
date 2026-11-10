@@ -41,6 +41,35 @@ bool Input::contains(const SceneNode *parent, const SceneNode *node) {
 SceneNode *Input::target() const {
     return captured ? captured : pick ? pick(current) : nullptr;
 }
+void Input::focus(SceneNode *next) {
+    if (next && next == focused)
+        return;
+    if (focused) {
+        if (focused->widget)
+            focused->widget->dirty = true;
+        dispatchRegistered(focused, Event::FocusLost);
+    }
+    focused = next;
+    if (next)
+        dispatchRegistered(next, Event::FocusGained);
+}
+void Input::dispatchKey(Key kind, uint16_t value) {
+    auto *selected = focused;
+    if (selected && selected->widget && selected->widget->enabled && keyboardHook)
+        keyboardHook(*this, *selected, kind, value);
+}
+void Input::keyDown(uint16_t key) {
+    lastKeyboardKey = key;
+    keys.insert(key);
+    dispatchKey(Key::Down, key);
+}
+void Input::keyUp(uint16_t key) {
+    lastKeyboardKey = key;
+    keys.erase(key);
+    dispatchKey(Key::Up, key);
+}
+void Input::character(uint16_t unit) { dispatchKey(Key::Character, unit); }
+
 void Input::registerEvent(SceneNode &node, Event event, Callback callback, bool enabledRequired) {
     events[&node][event] = {std::move(callback), enabledRequired};
 }
@@ -56,6 +85,16 @@ void Input::dispatchRegistered(SceneNode *node, Event event) {
     const auto entry = at->second.find(event);
     if (entry != at->second.end() && entry->second.callback && (widgetNode->widget->enabled || !entry->second.enabledRequired))
         entry->second.callback(*this, *node);
+}
+void Input::dispatchWidgetEvent(SceneNode &node, Event event) {
+    const auto at = events.find(&node);
+    if (at == events.end()) return;
+    const auto entry = at->second.find(event);
+    if (entry == at->second.end()) return;
+    // Safe engine callback ownership: replacement during this invocation cannot
+    // invalidate the callable. No native allocator/lifetime behavior is claimed.
+    const auto callback = entry->second.callback;
+    if (callback) callback(*this, node);
 }
 void Input::invoke(SceneNode *node, Hook hook) {
     if (node && node->widget && node->widget->enabled && virtualHook)

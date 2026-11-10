@@ -45,11 +45,13 @@ struct MenuInput {
     bool shiftDown = false; // Physical message state survives per-frame clear.
     bool controlDown = false;
     std::vector<int> pressed, buttons, released;
-    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, ToggleHelp, Wheel };
+    enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, ToggleHelp, Wheel, KeyDown, KeyUp, Character };
     struct WindowMessage {
         InterfaceMessage kind;
         int wheelDelta = 0;
-        WindowMessage(InterfaceMessage kind, int wheelDelta = 0) : kind(kind), wheelDelta(wheelDelta) {}
+        uint16_t unit = 0;
+        WindowMessage(InterfaceMessage kind, int wheelDelta = 0, uint16_t unit = 0)
+            : kind(kind), wheelDelta(wheelDelta), unit(unit) {}
     };
     std::vector<WindowMessage> interfaceMessages;
     std::vector<Hud::InterfacePress> interfacePresses;
@@ -61,7 +63,6 @@ struct MenuInput {
     void wheelMessage(int16_t delta); // Normalize each actual message, including zero.
     void routeInterfaceMessages(Hud &, const WheelCallback & = {});
     void routeGamepadButtons(Hud &);
-    std::string typed; // text typed this frame (character creation's name)
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
     GamepadButtons gamepad;
     gamepadui::Input gamepadInput;
@@ -96,7 +97,6 @@ struct MenuInput {
         released.clear();
         interfaceMessages.clear();
         interfacePresses.clear();
-        typed.clear();
         gamepadSampled = false;
         pointerSampled = false;
     }

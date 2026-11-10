@@ -153,6 +153,7 @@ class SpawnedCreatures {
     bool beginCharacterCreation(std::shared_ptr<nativesaves::Character>, const charactercreation::FindHome &);
     bool rebuildCharacterCreation(nativesaves::Character &, nativesaves::Looks, uint8_t characterClass);
     bool confirmCharacterCreation(nativesaves::Character &, std::string_view name);
+    bool confirmCharacterCreation(nativesaves::Character &, std::u16string_view caption);
     std::optional<charactercreation::SelectionSnapshot> creationSelectionSnapshot(const nativesaves::Character &) const;
     void publishPlayerAccount(const charactercreation::AccountProvider &);
     void setPlayerInventorySource(nativeai::InventorySource source) {

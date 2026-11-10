@@ -81,11 +81,15 @@ int plasmaInputTests() {
         picked = child; // The retained movement hit is B, but button selection must pick afresh.
         const uint32_t expectedMask = test.down ? 7u : 7u & ~(1u << test.button);
         std::vector<std::string> trace;
+        bool assigningNestedFocus = false;
         input.registerEvent(*b, static_cast<Input::Event>(19), [&](Input &state, Node &) {
+            if (assigningNestedFocus) return; // focus now synchronously emits its own lost event
             trace.push_back("focus");
             check(state.heldButtons() == expectedMask && state.focusWidget() == b && b->widget->dirty,
                   "secondary down marks old focus and dispatches key19 after held publication, before focus clear");
-            state.focus(a); // The outer direct null store follows the callback even if it assigned new focus.
+            assigningNestedFocus = true;
+            state.focus(a); // The outer direct null store still follows this reentrant setter.
+            assigningNestedFocus = false;
         });
         input.virtualHook = [&](Input &state, Node &node, Input::Hook hook) {
             if (hook == test.target) {

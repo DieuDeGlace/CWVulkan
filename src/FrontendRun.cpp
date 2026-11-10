@@ -49,7 +49,10 @@ MenuInput::MouseEdges MenuInput::windowMouseEdges() const {
         case InterfaceMessage::MiddleUp: out.released.push_back(2); break;
         case InterfaceMessage::ToggleVisibility:
         case InterfaceMessage::ToggleHelp:
-        case InterfaceMessage::Wheel: break;
+        case InterfaceMessage::Wheel:
+        case InterfaceMessage::KeyDown:
+        case InterfaceMessage::KeyUp:
+        case InterfaceMessage::Character: break;
         }
     }
     return out;
@@ -72,6 +75,9 @@ void MenuInput::routeInterfaceMessages(Hud &hud, const WheelCallback &wheel) {
     interfacePresses.clear();
     for (const auto message : interfaceMessages) {
         switch (message.kind) {
+        case InterfaceMessage::KeyDown: hud.interfaceKeyboard(plasma::Input::Key::Down,message.unit); break;
+        case InterfaceMessage::KeyUp: hud.interfaceKeyboard(plasma::Input::Key::Up,message.unit); break;
+        case InterfaceMessage::Character: hud.interfaceKeyboard(plasma::Input::Key::Character,message.unit); break;
         case InterfaceMessage::LeftDown:
             interfacePresses.push_back(hud.interfaceLeftDown());
             break;
@@ -377,7 +383,7 @@ class Session {
     Look look;
     HairEditor hairEditor;
     hair::Style appliedHairStyle;
-    std::string name;
+    std::u16string initialName; // initial/test caption; live input belongs to the retained scene editor
 
     OptionsScreen options;
     ControlsScreen controls;
@@ -403,6 +409,7 @@ class Session {
     void applyHairStyle();
     void secondHairItems(Hud::Screen &out);
     void startCreation();
+    void confirmCreation();
     nativesaves::Cell startCell(std::array<int64_t, 3> &position) const;
     uint32_t account() const;
     bool frame();
@@ -530,6 +537,7 @@ bool Session::start(std::string &error) {
 }
 
 void Session::finish() {
+    hud.clearFrontendBindings();
     hud.publishFrontendScreen({});
     if (logoMesh)
         s.renderer->release(logoMesh);
@@ -934,7 +942,8 @@ void Session::startCreation() {
     selectedSlot = (int)listed.size();
     camera.set(90, 0, 0, 8);
     creationShown = true;
-    name.clear();
+    initialName.clear();
+    hud.setFrontendCaption("creation-name",u"");
     look.reset();
     hairEditor.reset(s.newHairStyle);
     const auto home = [&] {
@@ -1191,14 +1200,6 @@ void Session::handleKeys(bool inGame) {
         case GLFW_KEY_ESCAPE: // (Esc's own flag, G+0x420, is open question 4; here it goes back)
             back(inGame);
             break;
-        case GLFW_KEY_BACKSPACE:
-            if (creationShown && !name.empty() && !optionsOpen) {
-                while (!name.empty() && ((unsigned char)name.back() & 0xc0) == 0x80)
-                    name.pop_back();
-                if (!name.empty())
-                    name.pop_back();
-            }
-            break;
         default:
             if (inGame && s.controls && keyMatches((*s.controls)[gameoptions::SYSTEM_MENU], key) && !optionsOpen && !controlsOpen)
                 systemShown = false; // (the binding toggles the menu)
@@ -1213,10 +1214,6 @@ void Session::handleKeys(bool inGame) {
             if (GameInput::buttonMatches((*s.controls)[gameoptions::SYSTEM_MENU], button) && !optionsOpen && !controlsOpen &&
                 controls.waiting < 0)
                 systemShown = false;
-    if (creationShown && !optionsOpen)
-        for (char c : in.typed)
-            if (nameAccepted(name + c) || name.size() < 2) // (the field takes any characters)
-                name += c;
 }
 
 // --- Clicks ------------------------------------------------------------------------------------
@@ -1397,50 +1394,54 @@ void Session::handleClick(bool inGame) {
             applyLook();
             return;
         }
-        const glm::vec2 createAt{window.x - CREATE_SIZE.x, window.y - CREATE_FROM_BOTTOM - CREATE_SIZE.y};
-        if (pointerUp && nameAccepted(name) && inside(mouse, createAt, CREATE_SIZE)) {
-            // Create Character (frontend-characters.md §5.8).
-            creationShown = false;
-            if (!(s.spawned && s.spawned->confirmCharacterCreation(stage, name))) {
-                stage.name = charactercreation::nameBytes(name);
-                nativesaves::prepareNewCharacter(stage);
-            }
-            hud.setHelpShown(true);
-            int index = (int)listed.size();
-            if (!req.readOnly && s.store)
-                index = s.store->create(stage);
-            if (!req.readOnly && s.store && index < 0) {
-                creationShown = true;
-                hud.setHelpShown(false);
-                log("Characters: could not save the new character");
-                return;
-            }
-            if (!req.readOnly && s.store) {
-                SaveGame metadata;
-                metadata.hairStyle = hairEditor.committed;
-                if (!s.store->writeNotes(index, metadata.text()))
-                    log("Characters: could not save the dual-tone appearance settings");
-            }
-            log("Characters: created \"" + name + "\" as character " + std::to_string(index));
-            Listed entry;
-            entry.character = stage;
-            if (s.spawned)
-                if (auto snapshot = s.spawned->creationSelectionSnapshot(stage)) {
-                    entry.character = std::move(snapshot->character);
-                    entry.preview.creature = std::move(snapshot->record);
-                }
-            entry.hairStyle = hairEditor.committed;
-            if (s.recorded && s.sprites)
-                entry.playable = nativeprogress::entryFor(entry.character, index, *s.recorded, *s.sprites, entry.entry);
-            listed.push_back(std::move(entry));
-            cards.clear(); cardScale = 0;
-            makePreviews();
-            selectedSlot = outcome.slot = index;
-            outcome.created = true;
-            outcome.createdHairStyle = hairEditor.committed;
-            decide(Result::Play); // Help remains selected in the shared HUD; no dismissal is required.
-        }
     }
+}
+
+// Bound separately from admission; a native event3 connection invokes this synchronously.
+void Session::confirmCreation() {
+    // Create Character (frontend-characters.md §5.8).
+    creationShown = false;
+    syncInterfaceState(); // native callback hides the actual page before reading/committing its name
+    const auto name=hud.frontendCaption("creation-name").value_or(initialName);
+    if (!(s.spawned && s.spawned->confirmCharacterCreation(stage, name))) {
+        stage.name = charactercreation::nameBytes(name);
+        nativesaves::prepareNewCharacter(stage);
+    }
+    hud.setHelpShown(true);
+    int index = (int)listed.size();
+    if (!req.readOnly && s.store)
+        index = s.store->create(stage);
+    if (!req.readOnly && s.store && index < 0) {
+        creationShown = true;
+        syncInterfaceState();
+        hud.setHelpShown(false);
+        log("Characters: could not save the new character");
+        return;
+    }
+    if (!req.readOnly && s.store) {
+        SaveGame metadata;
+        metadata.hairStyle = hairEditor.committed;
+        if (!s.store->writeNotes(index, metadata.text()))
+            log("Characters: could not save the dual-tone appearance settings");
+    }
+    log("Characters: created \"" + stage.name + "\" as character " + std::to_string(index));
+    Listed entry;
+    entry.character = stage;
+    if (s.spawned)
+        if (auto snapshot = s.spawned->creationSelectionSnapshot(stage)) {
+            entry.character = std::move(snapshot->character);
+            entry.preview.creature = std::move(snapshot->record);
+        }
+    entry.hairStyle = hairEditor.committed;
+    if (s.recorded && s.sprites)
+        entry.playable = nativeprogress::entryFor(entry.character, index, *s.recorded, *s.sprites, entry.entry);
+    listed.push_back(std::move(entry));
+    cards.clear(); cardScale = 0;
+    makePreviews();
+    selectedSlot = outcome.slot = index;
+    outcome.created = true;
+    outcome.createdHairStyle = hairEditor.committed;
+    decide(Result::Play); // Help remains selected in the shared HUD; no dismissal is required.
 }
 
 // --- The world under the screens ---------------------------------------------------------------
@@ -1698,13 +1699,19 @@ void Session::creationItems(Hud::Screen &out) {
         }
     // The name field and Create Character (where negative y counts from the bottom: open
     // question 4).
+    const auto currentName=hud.frontendCaption("creation-name").value_or(initialName);
     const glm::vec2 edit = templateSize("edit", {300, 30});
     const glm::vec2 editAt{window.x * 0.5f - edit.x * 0.5f, window.y - NAME_FIELD_FROM_BOTTOM - edit.y};
-    out.push_back(widget("edit", editAt, glm::vec2(0), name.empty() ? " " : name));
+    out.push_back(widget("edit",editAt,{300,30}));
+    out.back().instance="creation-name";
+    out.back().retainText=true;
+    out.back().text={initialName.begin(),initialName.end()};
     out.push_back(text("Name", editAt + glm::vec2(0, -8), 12, 3, WHITE, ALIGN_LEFT));
-    if (nameAccepted(name))
-        out.push_back(widget("button", {window.x - CREATE_SIZE.x, window.y - CREATE_FROM_BOTTOM - CREATE_SIZE.y}, CREATE_SIZE,
-                             "Create Character"));
+    out.push_back(widget("button",{window.x-CREATE_SIZE.x,window.y-CREATE_FROM_BOTTOM-CREATE_SIZE.y},CREATE_SIZE,
+                         "Create Character"));
+    out.back().instance="creation-confirm";
+    out.back().visible=currentName.size()>=2 && currentName.size()<=15;
+    out.back().release=[this]{confirmCreation();};
     out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
 }
 
@@ -1986,11 +1993,17 @@ bool Session::frame() {
     }
     handleKeys(false);
     characterScroll.frame((float)dtMs, charactersShown, leftHeld, {(int)size.width, (int)size.height}, cards);
+    bool syntheticClick=false;
     if (req.clickAfter >= 0 && !testClicked && seconds >= req.clickAfter && s.world->pendingCount() == 0) {
+        syntheticClick=true;
         clicked = pointerDown = pointerUp = true; // (testing: a complete synthetic click)
         testClicked = true;
     }
     (void)buildScreen(false); // Publish the controller's active objects before its pointer decisions.
+    if (syntheticClick) { // explicit CLI test adapter, not an OS input observation
+        hud.interfaceLeftDown();
+        hud.interfaceLeftUp();
+    }
     handleClick(false);
     s.input->finishPointerCallbacks();
     s.input->clear();
@@ -2049,7 +2062,11 @@ Result Session::runTitle() {
     else if (req.page == "create" || req.page.starts_with("create-test:")) {
         titleShown = false;
         startCreation();
-        if (req.page.starts_with("create-test:")) name = req.page.substr(12);
+        if (req.page.starts_with("create-test:")) {
+            const auto initial=wide(req.page.substr(12));
+            initialName={initial.begin(),initial.end()};
+            hud.setFrontendCaption("creation-name",initialName);
+        }
     }
     else if (req.page == "options")
         openOptions();
@@ -2125,7 +2142,7 @@ Result::Action Session::gameFrame(double frameMs) {
     (void)buildScreen(true);
     handleClick(true);
     s.input->finishPointerCallbacks();
-    s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear(), s.input->typed.clear();
+    s.input->pressed.clear(), s.input->buttons.clear(), s.input->released.clear();
     if (!ordinaryUi())
         playSound(SOUND_MENU_CLOSE);
     if (done) {

@@ -14,6 +14,13 @@ template <class T> T read(const worldgen::CreatureRecord &record, size_t at) {
 template <class T> void put(worldgen::CreatureRecord &record, size_t at, const T &value) {
     std::memcpy(record.data() + at, &value, sizeof value);
 }
+bool appendNameByte(std::string &out, uint16_t unit) {
+    const char byte = char(unit & 0xff);
+    if (!byte || out.size() == 15)
+        return false;
+    out.push_back(byte);
+    return true;
+}
 float maximum(const worldgen::CreatureRecord &record, const nativeai::Creature &side) {
     std::vector<nativerules::Buff> buffs;
     buffs.reserve(side.buffs.size());
@@ -93,33 +100,41 @@ void publishAccount(worldgen::CreatureRecord &record, const AccountProvider &pro
 }
 std::string nameBytes(std::string_view utf8) {
     std::string out;
-    const auto append = [&](uint16_t unit) {
-        const char byte = char(unit & 0xff);
-        if (!byte || out.size() == 15)
-            return false;
-        out.push_back(byte);
-        return true;
-    };
     for (wchar_t unit : dialoguewords::wide(std::string(utf8))) {
         const uint32_t value = uint32_t(unit);
         if (value > 0xffff) {
             const uint32_t scalar = value - 0x10000;
-            if (!append(uint16_t(0xd800 + (scalar >> 10))) || !append(uint16_t(0xdc00 + (scalar & 0x3ff))))
+            if (!appendNameByte(out, uint16_t(0xd800 + (scalar >> 10))) || !appendNameByte(out, uint16_t(0xdc00 + (scalar & 0x3ff))))
                 break;
-        } else if (!append(uint16_t(value)))
+        } else if (!appendNameByte(out, uint16_t(value)))
             break;
     }
     return out;
 }
-void confirm(worldgen::CreatureRecord &record, nativeai::Creature &side, nativesaves::Character &data,
-             std::string_view name) {
-    const std::string bytes = nameBytes(name);
+std::string nameBytes(std::u16string_view caption) {
+    std::string out;
+    for (char16_t unit : caption)
+        if (!appendNameByte(out, uint16_t(unit))) break;
+    return out;
+}
+namespace {
+void confirmBytes(worldgen::CreatureRecord &record, nativeai::Creature &side, nativesaves::Character &data,
+                  const std::string &bytes) {
     std::memcpy(record.data() + 0x958, bytes.c_str(), bytes.size() + 1);
     put(record, 0x144, int32_t(1));
     nativesaves::Cell home;
     std::memcpy(home.data(), record.data() + 0x1d0, 8);
     data.usedCells.insert(home);
     characterstate::capture(record.data(), side, data);
+}
+}
+void confirm(worldgen::CreatureRecord &record, nativeai::Creature &side, nativesaves::Character &data,
+             std::string_view name) {
+    confirmBytes(record, side, data, nameBytes(name));
+}
+void confirm(worldgen::CreatureRecord &record, nativeai::Creature &side, nativesaves::Character &data,
+             std::u16string_view caption) {
+    confirmBytes(record, side, data, nameBytes(caption));
 }
 SelectionSnapshot selectionSnapshot(const worldgen::CreatureRecord &record, const nativeai::Creature &side,
                                     const nativesaves::Character &data) {

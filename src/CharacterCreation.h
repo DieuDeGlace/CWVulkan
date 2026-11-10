@@ -16,8 +16,10 @@ void rebuild(worldgen::CreatureRecord &, nativeai::Creature &, nativesaves::Char
 using AccountProvider = std::function<uint64_t()>;
 void publishAccount(worldgen::CreatureRecord &, const AccountProvider &);
 std::string nameBytes(std::string_view utf8);
+std::string nameBytes(std::u16string_view caption);
 // No UI name gate or HP/position reset here. Malformed/oversized names are bounded safely.
 void confirm(worldgen::CreatureRecord &, nativeai::Creature &, nativesaves::Character &, std::string_view name);
+void confirm(worldgen::CreatureRecord &, nativeai::Creature &, nativesaves::Character &, std::u16string_view caption);
 struct SelectionSnapshot {
     nativesaves::Character character;
     worldgen::CreatureRecord record;

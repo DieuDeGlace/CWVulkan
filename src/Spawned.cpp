@@ -1803,6 +1803,13 @@ bool SpawnedCreatures::confirmCharacterCreation(nativesaves::Character &data, st
     data.regionHistory = regionHistory.snapshot();
     return true;
 }
+bool SpawnedCreatures::confirmCharacterCreation(nativesaves::Character &data, std::u16string_view caption) {
+    auto guard = sourceGuard();
+    if (!nativePlayer || !hasPlayer) return false;
+    charactercreation::confirm(player.record, player.side, data, caption);
+    data.regionHistory = regionHistory.snapshot();
+    return true;
+}
 std::optional<charactercreation::SelectionSnapshot> SpawnedCreatures::creationSelectionSnapshot(const nativesaves::Character &data) const {
     auto guard = sourceGuard();
     if (!nativePlayer || !hasPlayer) return {};

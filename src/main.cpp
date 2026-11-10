@@ -132,6 +132,9 @@ MenuInput input;
 LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR) {
     using Message = MenuInput::InterfaceMessage;
     switch (message) {
+    case WM_KEYDOWN: input.interfaceMessages.emplace_back(Message::KeyDown,0,uint16_t(wParam)); break;
+    case WM_KEYUP: input.interfaceMessages.emplace_back(Message::KeyUp,0,uint16_t(wParam)); break;
+    case WM_CHAR: input.interfaceMessages.emplace_back(Message::Character,0,uint16_t(wParam)); break;
     case WM_LBUTTONDOWN: input.interfaceMessages.push_back(Message::LeftDown); break;
     case WM_LBUTTONUP: input.interfaceMessages.push_back(Message::LeftUp); break;
     case WM_RBUTTONDOWN: input.interfaceMessages.push_back(Message::RightDown); break;
@@ -639,8 +642,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     glfwSetCharCallback(window, [](GLFWwindow *, unsigned int c) {
         if (captureChatInput)
             chatInput.push_back({ChatInputEvent::Character, (int)(c & 255)});
-        if (c >= 32 && c < 127)
-            input.typed += (char)c; // names are plain text, as the game's
     });
     input.shiftDown = input.controlDown = false;
     glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int modifiers) {
@@ -3940,7 +3941,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (const auto found = std::find(pressed.begin(), pressed.end(), key); found != pressed.end()) pressed.erase(found);
         }
         chatInput.clear();
-        input.typed.clear();
         gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing(),
                          panelsBeforeInput || menusOpen || chat.typing(), mapOpen,
                          capturingBeforeInput || (menusReady && menus.capturingControl()),
