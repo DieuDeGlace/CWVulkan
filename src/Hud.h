@@ -292,6 +292,14 @@ class Hud {
     // The same on the game's own panels (gui.plx), when they are built; the tab under it.
     int inventoryItemAt(glm::vec2 mouse, const Inventory &inv) const;
     inventoryslots::Index inventorySourceAt(glm::vec2 mouse, const Inventory &inv) const;
+    inventoryslots::Index shopSourceAt(glm::vec2 mouse, const Inventory &inv) const { return nativeInventoryCellAt(mouse, inv, 1); }
+    void bindInventoryActions(std::function<void(int panel,int tab)>, std::function<void(int panel,int direction)>,
+                              std::function<void(int direction)>);
+    void setIdentificationShown(bool shown) const;
+    bool identificationShown() const;
+    void setRingShown(bool shown) const;
+    bool ringShown() const;
+    const plasma::SceneNode *ringRoot() const { return panels.ring; }
     inventoryslots::Index cachedInventoryCell(int which) const { return invPanel(which).hoveredCell; }
     void clearInventoryCellHover(int which) const { invPanel(which).hoveredCell = {}; }
     int inventorySlotAt(glm::vec2 mouse, const Inventory &inv) const;
@@ -637,6 +645,8 @@ class Hud {
     std::unique_ptr<uiroot::Branches> interfaceBranches;
     std::unique_ptr<plasma::Input> interfaceInput; // Detaches before its scene is destroyed.
     mutable std::optional<InventoryTabPress> pressedInventoryTab;
+    std::function<void(int,int)> inventoryTabAction, inventoryScrollAction;
+    std::function<void(int)> inventoryRegionAction;
     Inventory *pointerMoveInventory = nullptr; // Borrowed for one synchronous pointer poll.
     Hud &operator=(Hud &&) = default; // Only the explicit reload uses assignment, after detaching input.
     // One frontend instance per template owner/use, retained between frames.
@@ -659,6 +669,7 @@ class Hud {
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
         plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr, *customization = nullptr;
+        plasma::SceneNode *ring = nullptr; // Direct retained selector, distinct from crafting's itemselector.
         std::array<plasma::SceneNode *,size_t(Menu::Count)> menus{};
         InvPanel bag, vendor, crafting;
         std::vector<plasma::SceneNode *> slots;

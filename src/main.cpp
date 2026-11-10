@@ -90,6 +90,8 @@
 #include "World.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <windows.h> // before GLFW, which defines APIENTRY only when Windows has not
+#include <mmsystem.h>
+#include <bit>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -268,6 +270,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool undying = false;        // --undying: the player's health is kept full (testing only).
     bool menuActionsTest = false; // --menu-actions-test: bounded actual-callback regression fixture.
     bool mouseChatOrderTest = false; // --mouse-chat-order-test: actual full-frame queued-order probe.
+    bool mouseBoundaryTest = false; // --mouse-boundary-test: synchronous actual-Game scalar/widget boundary.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -412,6 +415,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             menuActionsTest = true;
         else if (a == "--mouse-chat-order-test")
             mouseChatOrderTest = true;
+        else if (a == "--mouse-boundary-test")
+            mouseBoundaryTest = true;
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -3718,6 +3723,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         Hud &hud;
         ~GameInterfaceBinding() {
             input.gameKeyDown={};input.gameCharacter={};input.gameDismissPanels={};input.gamePress={};
+            input.gameMouseTarget={};input.gameRelease={};
+            hud.bindInventoryActions({},{},{});
             hud.bindMenuActions({});hud.bindMapHistoryActions({});
         }
     } gameInterfaceBinding{input,hud};
@@ -3725,6 +3732,278 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     input.gameDismissPanels=[&] {
         inventoryOpen=false;craftingOpen=false;bagShown=false;vendorTrade.open=false;
     };
+    const auto releaseDialogueChoice = [&](int button) {
+        if (button != 0) return;
+        const bool speakerExists = spawnedReady && spawned.record(answers.speaker()) != nullptr;
+        const auto action = answers.release(speakerExists, playerGold, hour * 3600000.f, (uint8_t)playerSpec);
+        if (action.kind == dialoguechoice::Action::Rest) {
+            playerGold -= action.coins;
+            auto request = nativeinteract::fresh(5);
+            std::memcpy(request.data() + nativeinteract::TARGET, &action.speaker, sizeof action.speaker);
+            spawned.queueInteraction(spawned.playerId(), request);
+        } else if (action.kind == dialoguechoice::Action::ChangeSpecialization) {
+            playerSpec = action.specialization;
+            setSpecializationMetadata(playerSpec);
+            moves = classMoves(playerCls, playerSpec);
+            ATTACK_A = moves.attack[0]; ATTACK_B = moves.attack[1];
+            if (haveGear) applyGear();
+            else if (nativePlayer) spawned.setPlayerGear(nativeRecord(-1, nullptr));
+            TalkScript confirmation;
+            confirmation.tokens = {"define_specialization", std::to_string(playerCls), std::to_string(playerSpec),
+                                   "your_specialization_is_now"};
+            std::mt19937 feedbackRandom((uint32_t)action.speaker);
+            auto feedback = playScript(confirmation, speech, feedbackRandom, &talkNames, generalDialogue.pages());
+            generalDialogue.applyCompilation(std::move(feedback.pages));
+        }
+    };
+    // These providers run inside each mouse message, after its GUI callbacks.
+    // Presentation rows are rebuilt by the ordinary frame; selection uses the
+    // retained native indices and current canonical collections instead.
+    const auto changeNativeTab = [&](int which, int next) {
+        if (!hud.inventoryTabPressEligible({which, next}, inventoryView)) return;
+        auto &panel = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
+                      : which == 1 ? static_cast<inventoryui::PanelState &>(inventoryView.vendor)
+                                   : static_cast<inventoryui::PanelState &>(inventoryView.crafting);
+        if (which == 0) inventoryView.selectTab(next,true);
+        else if (which == 1) inventoryView.vendor.selectTab(next,true);
+        else inventoryView.crafting.selectTab(next,true);
+        refreshInventory(false, static_cast<inventoryui::Panel>(which));
+        panel.selected = hud.inventoryFirstItem(inventoryView, which);
+        if (which == 2) {
+            craftingSelection = {-1, -1};
+            if (panel.selected >= 0 && (size_t)panel.selected < inventoryView.crafting.items.size()) {
+                const auto &entry = inventoryView.crafting.items[(size_t)panel.selected];
+                craftingSelection = {entry.tab, entry.slotIndex};
+            }
+        }
+        hud.updateInventoryThumb(inventoryView, which, hud.inventoryRowCount(inventoryView, which));
+        audio.playInterface(soundrules::soundid::MENU_TAB);
+        if (which == 1) rebuildShop();
+    };
+    const auto changeNativeRegion = [&](int direction) {
+        inventoryui::requestRegion(
+            inventoryView.activeRegion, inventoryView.regionChoices, direction,
+            [&] { audio.playInterface(soundrules::soundid::MENU_TAB); }, [&] { sortInventory(); },
+            [&] { refreshInventory(); },
+            [&] { hud.updateInventoryThumb(inventoryView, 0, hud.inventoryRowCount(inventoryView)); });
+    };
+    gameshop::TradeHooks mouseTrade;
+    mouseTrade.inventory = [&] { refreshBagAndThumb(); };
+    mouseTrade.shop = [&] { rebuildShop(); };
+    mouseTrade.crafting = [&] { rebuildCrafting(); };
+    mouseTrade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
+    mouseTrade.announce = [&](const auto &item) {
+        const auto view = Gear::fromRecord(item);
+        if (view.category == 24) audio.startSuccess();
+        texts.push_back({player.position + glm::vec3(0, 0, 3.1f), bagName(view, itemName(view)), {255, 255, 255, 255}});
+    };
+    mouseTrade.sound = [&](int sound) {
+        int64_t at[3]; playerUnits(at);
+        audio.playAt(sound, at, sound == gameshop::SOUND_SOLD ? gameshop::SOLD_VOLUME : 1, 1);
+    };
+    mouseTrade.refused = [&](gameshop::Refusal reason) {
+        if (reason != gameshop::Refusal::ProtectedTab)
+            texts.push_back({player.position + glm::vec3(0, 0, 3.1f),
+                reason == gameshop::Refusal::Money ? "Not enough money." : "You can't carry more of these items.",
+                {255, 51, 51, 255}});
+        audio.playInterface(gameshop::SOUND_REFUSED);
+    };
+    const auto mouseInventoryPress = [&](int button) {
+        const auto point = hud.interfacePointerPosition();
+        const auto source = hud.inventorySourceAt(point, inventoryView);
+        if (button == 2) {
+            if (auto *actor = spawned.localPlayer())
+                if (auto item = nativeInventory->inventory.dropOne(source, actor->record)) {
+                    auto request = nativeinteract::fresh(nativeinteract::DROP);
+                    std::memcpy(request.data() + nativeinteract::ITEM, item->data(), item->size());
+                    actor->interactions.push_back(request);
+                    rebuildInventoryViews();
+                }
+            return;
+        }
+        const auto *stack = nativeInventory->inventory.slot(source);
+        if (stack && stack->count != 0) {
+            if (hud.identificationShown()) { identify.bind(source); return; }
+            if (vendorTrade.open) {
+                gameshop::sellSlot(nativeInventory->inventory, source, soldItems, mouseTrade);
+                rebuildInventoryViews();
+                return;
+            }
+            // The separate G+370 price-widget provider remains unimplemented;
+            // never treat its release as a purchase or a voxel customization.
+            if (auto *actor = spawned.localPlayer()) {
+                const auto outcome = inventoryslots::use(*nativeInventory, source, actor->record, button,
+                                                         input.gameKeyboard.raw[0x10] != 0, spawned.playerAbilityDuration());
+                using Action = inventoryslots::Action;
+                if (outcome.interaction) {
+                    auto request = nativeinteract::fresh(nativeinteract::USE_ITEM);
+                    std::memcpy(request.data() + nativeinteract::ITEM, outcome.interaction->data(), nativesaves::ITEM_SIZE);
+                    actor->interactions.push_back(request);
+                }
+                if (outcome.action == Action::Refused || outcome.action == Action::WrongRegion)
+                    audio.playInterface(outcome.action == Action::Refused ? 0x35 : 0x34);
+                else if (outcome.action == Action::Equipped || outcome.action == Action::WeaponEquipped) {
+                    rebuildInventoryViews(); applyGear(true); refreshBagAndThumb();
+                    audio.playInterface(0x5b);
+                    if (outcome.action == Action::WeaponEquipped) rebuildCrafting();
+                } else if (outcome.action == Action::PetFood) {
+                    bagShown = false;
+                    inventoryOpen = craftingOpen || vendorTrade.open;
+                    syncInventoryVisibility();
+                } else if (outcome.action == Action::Map)
+                    mapSelection.useItem(nativeInventory->inventory.slot(source));
+                rebuildInventoryViews();
+            }
+            return;
+        }
+        const int slot = hud.inventorySlotAt(point, inventoryView);
+        if (slot >= 0 && nativeInventory->equipment[(size_t)equipSlotOf(slot)][0] != 0) {
+            if (vendorTrade.open) {
+                gameshop::sellEquipment(*nativeInventory, (int)equipSlotOf(slot), soldItems, mouseTrade);
+                rebuildInventoryViews(); applyGear(true);
+            } else if (nativeInventory->unequip((int)equipSlotOf(slot))) {
+                rebuildInventoryViews(); applyGear(true); refreshBagAndThumb();
+                audio.playInterface(0x5b); rebuildCrafting();
+            }
+            return;
+        }
+        const auto offerCell = hud.shopSourceAt(point, inventoryView);
+        if (offerCell.tab >= 0 && offerCell.slot >= 0 && (size_t)offerCell.tab < shopCollection.rows.size() &&
+            (size_t)offerCell.slot < shopCollection.rows[(size_t)offerCell.tab].size()) {
+            // Copy before callbacks can rebuild the shop collection.
+            const auto offer = shopCollection.rows[(size_t)offerCell.tab][(size_t)offerCell.slot].item;
+            if (inventoryView.vendor.tab == 1)
+                gameshop::repurchase(nativeInventory->inventory, soldItems, (size_t)offerCell.slot, mouseTrade);
+            else
+                gameshop::purchase(nativeInventory->inventory, offer, mouseTrade);
+            rebuildInventoryViews();
+        }
+    };
+    const auto mouseSecondaryPress = [&](int) {
+        if (inventoryOpen && craftingOpen) {
+            auto &view = inventoryView.crafting;
+            const auto hover = hud.cachedInventoryCell(2);
+            if (view.canonicalTabs && hover.slot >= 0) {
+                craftingSelection = hover;
+                const auto entry = std::find_if(view.items.begin(), view.items.end(), [&](const Hud::Inventory::Entry &item) {
+                    return item.tab == hover.tab && item.slotIndex == hover.slot;
+                });
+                view.selected = entry == view.items.end() ? -1 : (int)(entry - view.items.begin());
+                audio.playInterface(0x58);
+            }
+            craftingCollection.publish(craftingSelection, [](const auto &item, bool) {
+                return gamecraft::recipeOf(gamecraft::fromRecord(item));
+            });
+        }
+        if (nativeCustomization.edit.open) {
+            hud.customizationLayout(true);
+            const auto hand = nativeCustomization.edit.hand == 1 ? Gear::WeaponLeft : Gear::WeaponRight;
+            auto &weapon = nativeInventory->equipment[(size_t)hand];
+            // The widget calls the current GUI query itself, independently of
+            // the earlier inventory hit. F4 is part of that query's geometry.
+            const bool guiNode = hud.interfacePointerTarget() != nullptr;
+            bool sound = false;
+            const auto result = nativeCustomization.press(&weapon, guiNode, sound);
+            if (sound) audio.playInterface(0x58);
+            if (result.takeOne) customization::consumePalette(nativeInventory->inventory, result.taken);
+            if (result.weaponChanged || result.takeOne) { rebuildInventoryViews(); applyGear(true); }
+        }
+    };
+    const auto mouseCoordinatePress = [&](int button) {
+        if (button == 2) {
+            if (mapOpen && mapCursorKnown && mapCursor.z >= 0) {
+                const float height = float(groundOf(mapCursor.x, mapCursor.y));
+                const std::array<int32_t, 3> spot{int32_t(mapCursor.x), int32_t(mapCursor.y),
+                                                worldgen::trunc32(height > 0 ? height : 0)};
+                auto same = std::find_if(saveGame.treasures.begin(), saveGame.treasures.end(),
+                    [&](const auto &value) { return value[0] == spot[0] && value[1] == spot[1]; });
+                if (same == saveGame.treasures.end()) saveGame.treasures.push_back(spot);
+                else saveGame.treasures.erase(same);
+            }
+        } else if (button == 0 && !mapSelection.dragged && mapOpen && flightSelected) {
+            if (boughtFlights.count(selectedFlightPoint)) {
+                if (spawned.startFlight(selectedFlightPoint[0], selectedFlightPoint[1])) mapOpen = false;
+            } else if (const int price = flightPrice(selectedFlightPoint); playerGold < price) {
+                hud.appendChat(chat, u"Not enough money.\n", {255, 127, 127});
+                audio.playInterface(0x34);
+            } else {
+                playerGold = std::bit_cast<int32_t>(uint32_t(playerGold) - uint32_t(price));
+                boughtFlights.insert(selectedFlightPoint);
+                saveGame.flightPoints.assign(boughtFlights.begin(), boughtFlights.end());
+                audio.playInterface(0x3d);
+            }
+        }
+    };
+    const auto mouseWidgetRelease = [&](int) {
+        const auto point = hud.interfacePointerPosition();
+        if (hud.identificationLayout().onButton(point, identify.resolve(nativeInventory->inventory)) &&
+            identifywindow::canIdentify(identify, nativeInventory->inventory.slot(identify.selection)->count, playerGold)) {
+            // Debit and source decrement precede generation, insertion and the
+            // ordered widget refresh; generation never borrows a cleared slot.
+            const auto original = identify.item;
+            playerGold = std::bit_cast<int32_t>(uint32_t(playerGold) - uint32_t(identifywindow::price(identify)));
+            nativeInventory->inventory.consumeOne(identify.selection);
+            const auto made = gameshop::identify(original, [&] { return int(lootDice() % 32768); });
+            receive(made);
+            refreshBagAndThumb();
+            audio.playInterface(gameshop::SOUND_IDENTIFIED);
+            rebuildInventoryViews();
+        }
+        // This separate predicate is sampled even after a successful action.
+        if (hud.identificationLayout().onGoodbye(hud.interfacePointerPosition())) {
+            identify.close(); hud.setIdentificationShown(false);
+            bagShown = false; inventoryOpen = craftingOpen || vendorTrade.open;
+            syncInventoryVisibility();
+        }
+    };
+    gamemouse::State gameMouseState;
+    if (nativeInventory) {
+        hud.bindInventoryActions(changeNativeTab, [&](int which, int direction) {
+            auto &panel = which == 0 ? static_cast<inventoryui::PanelState &>(inventoryView)
+                          : which == 1 ? static_cast<inventoryui::PanelState &>(inventoryView.vendor)
+                                       : static_cast<inventoryui::PanelState &>(inventoryView.crafting);
+            scrollPanel(which, panel.scroll, direction);
+        }, changeNativeRegion);
+        input.gameMouseTarget = [&] {
+            gamemouse::Target target;
+            target.state = &gameMouseState;
+            target.widgetSelected = [&] { return hud.identificationShown(); };
+            target.mapShown = [&] { return mapOpen; };
+            target.mapArrow = [&](bool first) { return hud.mapHistoryArrowHit(first, hud.interfacePointerPosition()); };
+            target.coordinatePress = std::cref(mouseCoordinatePress);
+            target.clock = [] { return uint32_t(timeGetTime()); };
+            target.cursorHeight = [&] { return mapCursorKnown ? int64_t(mapCursor.z * 65536) : int64_t(-65536); };
+            target.selectTarget = [&] {
+                targetMapPosition = mapCursor;
+                targetMapPosition.z = groundOf(targetMapPosition.x, targetMapPosition.y);
+                mapZoom = std::max(gamemath::add32(mapZoom, -1), 0);
+                mapMoved = true;
+            };
+            target.resetMovement = [&] { mapSelection.down(); };
+            target.maximumHealth = [&] { return spawned.playerMaxHealth(); };
+            target.inventoryPress = std::cref(mouseInventoryPress);
+            target.secondaryPress = std::cref(mouseSecondaryPress);
+            target.adjustHealth = [&](float before) {
+                if (spawned.localPlayer())
+                    playerHp = inventoryslots::adjustHealth(before, [&]() -> uint8_t * {
+                        const auto *actor = spawned.localPlayer(); return actor ? actor->record : nullptr;
+                    }, [&] { return spawned.playerMaxHealth(); });
+            };
+            target.closeChat = [&] { chat.stopEditing(); };
+            target.hideSelector = [&] { itemSelector.hide(); hud.setRingShown(false); };
+            // The gameplay session has no selected title/character owner. The
+            // frontend menu-prefix/load providers remain a separate release gate.
+            target.releasePrefix = [](int) {};
+            target.selectedTextRelease = std::cref(releaseDialogueChoice);
+            target.widgetRelease = std::cref(mouseWidgetRelease);
+            target.coordinateRelease = [&](int button) {
+                if (const auto destination = mapSelection.destination(button, [&](auto cell) { return usedCells.count(cell) != 0; });
+                    destination && spawned.startShrineReturn((*destination)[0], (*destination)[1])) mapOpen = false;
+            };
+            target.itemRelease = [](int) {}; // G+370 provider is not manufactured.
+            return target;
+        };
+    }
     input.gamePress=[&](int) {
         if (!hud.mapPressContinues(mapOpen)) return false;
         chat.stopEditing();
@@ -3936,6 +4215,96 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         glfwSetWindowShouldClose(window,1);
     }
 
+    if (mouseBoundaryTest) {
+        // Explicit owned CLI adapter, never OS input injection. Read-only private
+        // profiles exercise the actual retained ports and current actor storage.
+        bool passed = nativeInventory && input.gameMouseTarget && spawned.playerRecord() && hud.ringRoot();
+        if (passed) {
+            auto *record = spawned.localPlayer()->record;
+            const auto savedHp = playerHp;
+            const auto maximum = spawned.playerMaxHealth();
+            const float high = maximum * 2;
+            std::memcpy(record + 0x180,&high,4);
+            chat.stopEditing(); chat.keyDown(13,false,{}); chat.type("x");
+            itemSelector.shown = true; hud.setRingShown(true);
+            const auto *selector = hud.ringRoot();
+            mapOpen = false; mapSelection.dragged = true;
+            hud.setIdentificationShown(true);
+            hud.moveInterfacePointer({-10000,-10000});
+            input.routeInterfacePress(hud,3); // Unknown button still has the common tail.
+            float hp; std::memcpy(&hp,record+0x180,4);
+            passed = passed && hp == maximum && !chat.typing() && chat.text()==u"x" &&
+                !itemSelector.shown && !hud.ringShown() && hud.ringRoot()==selector &&
+                !mapSelection.dragged && input.gameMouse.widgetAtPress==1 &&
+                gameMouseState.cachedY==std::bit_cast<uint32_t>(hud.interfacePointerPosition().y);
+            logLine(std::string("Mouse boundary: ")+(passed ? "PASS" : "FAIL")+" unknown-press current-health/chat/selector/snapshot");
+            const auto tick=input.gameMouse.pressedAt;
+            chat.keyDown(13,false,{}); itemSelector.shown=true; hud.setRingShown(true);
+            input.controlEditor.waiting=7;
+            input.routeInterfaceRelease(hud,-7);
+            bool release = input.controlEditor.waiting==-1 && chat.typing() && itemSelector.shown && hud.ringShown() &&
+                input.gameMouse.pressedAt==tick && input.gameMouse.widgetAtPress==1;
+            logLine(std::string("Mouse boundary: ")+(release ? "PASS" : "FAIL")+" unknown-release controls-only tail");
+            const float negative=-7;
+            std::memcpy(record+0x180,&negative,4);
+            hud.setIdentificationShown(false);
+            input.routeInterfacePress(hud,-1);
+            std::memcpy(&hp,record+0x180,4);
+            const bool lower = hp==-7 && !chat.typing() && !hud.ringShown() && input.gameMouse.widgetAtPress==0;
+            logLine(std::string("Mouse boundary: ")+(lower ? "PASS" : "FAIL")+" negative-health and current snapshot");
+            passed = passed && release && lower;
+            // Actual canonical inventory, retained draw selection and live actor
+            // queue: both middle presses complete before another frame. A shown
+            // map does not add a gate to the later valid-slot drop branch.
+            auto savedInventory=*nativeInventory;
+            const auto interactions=spawned.localPlayer()->interactions.size();
+            nativeInventory->inventory.clearTabs();
+            nativesaves::Item food=nativeplayer::item(1,0,0,0,0,0,0);
+            nativeInventory->inventory.add(food,2,2);
+            inventoryView.canonicalTabs=&nativeInventory->inventory.tabs;
+            inventoryView.selectTab(2,true);inventoryView.scroll=0;
+            inventoryView.bagShown=true;inventoryView.crafting.open=false;inventoryView.vendor.open=false;
+            inventoryView.items.clear();
+            inventoryOpen=bagShown=true;craftingOpen=vendorTrade.open=false;
+            hud.setIdentificationShown(false);identify.close();
+            std::vector<OverlayVertex> geometryVertices;
+            Hud::State fixtureState;fixtureState.inventory=&inventoryView;
+            hud.draw(fixtureState,geometryVertices);
+            const plasma::SceneNode *bagRoot=nullptr;
+            for (const auto &node:hud.interfaceBranchRoot(uiroot::Branch::Gameplay)->children)
+                if (node->widget && node->widget->kind=="InventoryWidget") {bagRoot=node.get();break;}
+            bool inventory=false;
+            if (bagRoot) {
+                plasma::Scene geometry(*bagRoot->doc);geometry.setScale(hud.interfaceScale());
+                const auto cell=hud.templateSize("wideitembox");
+                const auto point=geometry.contentPosition(*bagRoot)+
+                    (glm::vec2(10,40)+cell*.5f)*hud.interfaceScale();
+                inventoryView.pointer=point;geometryVertices.clear();
+                hud.draw(fixtureState,geometryVertices);
+                hud.moveInterfacePointer(point);
+                const auto source=hud.inventorySourceAt(point,inventoryView);
+                mapOpen=true;mapCursorKnown=false;
+                input.routeInterfacePress(hud,2);
+                const auto *first=nativeInventory->inventory.slot({2,0});
+                const bool firstDone=source==inventoryslots::Index{2,0} && first && first->count==1 &&
+                    spawned.localPlayer()->interactions.size()==interactions+1;
+                input.routeInterfaceRelease(hud,2);
+                input.routeInterfacePress(hud,2);
+                const auto *second=nativeInventory->inventory.slot({2,0});
+                inventory=firstDone && second && second->count==0 && second->item[0]==0 &&
+                    spawned.localPlayer()->interactions.size()==interactions+2;
+                input.routeInterfaceRelease(hud,2);
+            }
+            logLine(std::string("Mouse boundary: ")+(inventory ? "PASS" : "FAIL")+" two synchronous inventory drops with map shown");
+            passed=passed && inventory;
+            *nativeInventory=std::move(savedInventory);
+            spawned.localPlayer()->interactions.resize(interactions);
+            mapOpen=false;
+            std::memcpy(record+0x180,&savedHp,4); playerHp=savedHp;
+        } else logLine("Mouse boundary: FAIL missing native receiver/resources");
+        if (!passed) exitCode=1;
+        glfwSetWindowShouldClose(window,1);
+    }
     int mouseChatOrderStage = 0;
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
@@ -3996,10 +4365,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                    hud.inventoryPanelEligible(point, inventoryView, 1)};
         }
         hud.setInventoryPanelVisibility(inventoryOpen && bagShown, inventoryOpen && craftingOpen, inventoryOpen && vendorTrade.open);
+        hud.setIdentificationShown(identify.open);
+        hud.setRingShown(itemSelector.shown);
         const auto physicalEdges = input.windowMouseEdges();
         const auto &physicalDowns = physicalEdges.pressed;
         const auto &physicalUps = physicalEdges.released;
-        const glm::vec2 previousGuiPointer{(float)input.pointerX, (float)input.pointerY};
         if (menusReady)
             switch (menus.frame(std::min(frameMs, 1000.0))) {
             case frontend::Result::Title:
@@ -4042,7 +4412,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.sampleGamepad(gameControls);
             input.finishPhysical();
         }
-        auto gameDowns = input.gamePress ? input.gamePresses : physicalDowns;
+        auto gameDowns = input.gameMouseTarget || input.gamePress ? input.gamePresses : physicalDowns;
         if (nativeInventory) {
             auto gameUps = physicalUps;
             for (int button = 0; button < 3; ++button) {
@@ -4051,7 +4421,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (input.gamepadPointer.released[(size_t)button])
                     gameUps.push_back(button);
             }
-            input.buttons = gameDowns;
+            input.buttons.clear(); // Native business already completed synchronously for every message.
             input.released = std::move(gameUps);
         } else if (input.gamePress)
             input.buttons=gameDowns;
@@ -4079,7 +4449,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 continue;
             }
-            if (event.kind == ChatInputEvent::MouseDown) { chat.stopEditing(); continue; }
+            if (event.kind == ChatInputEvent::MouseDown) {
+                if (!input.gameMouseTarget) chat.stopEditing(); // Native message already completed its full tail.
+                continue;
+            }
             // Character insertion has no root-visibility/binding-wait gate.
             // This runtime has no focused gameplay text editor besides chat.
             if (event.kind == ChatInputEvent::Character) {
@@ -4108,9 +4481,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         nativeChatConsumed.clear();
         gameInput.update(input.physical, input.bindingLevels, input.gamepad,
                          panelsBeforeInput || menusOpen || chat.typing(), mapOpen, input.gamepadPanels.any());
-        if (!input.buttons.empty())
+        if (!nativeInventory && !input.buttons.empty())
             identify.visibleAtDown = identify.open;
-        if (std::any_of(input.buttons.begin(), input.buttons.end(), [](int button) { return button == 0 || button == 1; }))
+        if (!nativeInventory && std::any_of(input.buttons.begin(), input.buttons.end(), [](int button) { return button == 0 || button == 1; }))
             itemSelector.hide();
         if (gameInput.gamepad().dismiss) {
             inventoryOpen = craftingOpen = mapOpen = false;
@@ -4204,7 +4577,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // with a star (or takes the star there away); two presses within 200 ms zoom in on it.
         {
             static double lastButtonDown = -1;
-            for (int button : input.buttons) {
+            for (int button : input.buttons) { // Recording-only compatibility path.
                 mapSelection.down();
                 if (button == GLFW_MOUSE_BUTTON_MIDDLE && mapOpen && mapCursorKnown && mapCursor.z >= 0) {
                     const std::array<int32_t, 3> spot = {(int32_t)mapCursor.x, (int32_t)mapCursor.y,
@@ -4663,110 +5036,25 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             inventoryOpen = false;
             closeInventoryAt = -1;
         }
-        if (!inventoryOpen) // (the shop, the identify window and the upgrade widget close with the inventory)
-            vendorTrade.open = upgrade.open = false, inventoryRegionActive = false, identify.close();
+        if (!inventoryOpen) {
+            vendorTrade.open = upgrade.open = false;
+            inventoryRegionActive = false;
+            if (!nativeInventory) identify.close(); // Native identification has its own retained root.
+        }
         lootWindowItems.clear();
         identificationView = {};
-        struct NativeDown {
-            glm::vec2 point;
-            const Hud::InterfacePress *interfaceLeft = nullptr;
-            bool completed = false;
-        };
-        std::vector<NativeDown> nativeDowns;
-        if (nativeInventory) {
-            const glm::vec2 previousPoint(previousGuiPointer.x * renderExtent.width / std::max(1, pointerWindowWidth),
-                                          previousGuiPointer.y * renderExtent.height / std::max(1, pointerWindowHeight));
-            size_t left = 0;
-            nativeDowns.reserve(gameDowns.size());
-            for (size_t index = 0; index < gameDowns.size(); ++index) {
-                const bool physical = index < physicalDowns.size();
-                const bool interfaceLeft = gameDowns[index] == GLFW_MOUSE_BUTTON_LEFT;
-                const auto *press = interfaceLeft && left < input.interfacePresses.size() ? &input.interfacePresses[left] : nullptr;
-                nativeDowns.push_back({press ? press->point : physical ? previousPoint : customizationPointer, press});
-                if (interfaceLeft)
-                    ++left;
-            }
-        }
-        auto finishNativeDown = [&](int button, float oldMaximum, glm::vec2 point) {
-            if (!nativeInventory || button < 0 || button >= 3)
-                return;
-            if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryOpen && craftingOpen) {
-                auto &view = inventoryView.crafting;
-                const auto hover = hud.cachedInventoryCell(2);
-                if (view.canonicalTabs && hover.slot >= 0) {
-                    craftingSelection = hover;
-                    const auto entry = std::find_if(view.items.begin(), view.items.end(), [&](const Hud::Inventory::Entry &item) {
-                        return item.tab == hover.tab && item.slotIndex == hover.slot;
-                    });
-                    view.selected = entry == view.items.end() ? -1 : (int)(entry - view.items.begin());
-                }
-                craftingCollection.publish(craftingSelection, [](const auto &item, bool) {
-                    return gamecraft::recipeOf(gamecraft::fromRecord(item));
-                });
-            }
-            if (button == GLFW_MOUSE_BUTTON_LEFT && nativeCustomization.edit.open) {
-                hud.customizationLayout(true);
-                const auto hand = nativeCustomization.edit.hand == 1 ? Gear::WeaponLeft : Gear::WeaponRight;
-                auto &weapon = nativeInventory->equipment[(size_t)hand];
-                bool guiNode = false;
-                if (!menusReady || menus.interfaceShown()) {
-                    guiNode = hud.customizationGuiHit(point, identify.open);
-                    if (inventoryOpen)
-                        for (int which : {0, 1, 2})
-                            guiNode = guiNode || hud.inventoryPanelEligible(point, inventoryView, which);
-                    guiNode = guiNode || hud.dialogueChoicesHit(point) || hud.generalDialogueHit(point);
-                }
-                bool sound = false;
-                const auto result = nativeCustomization.press(&weapon, guiNode, sound);
-                if (sound)
-                    audio.playInterface(0x58);
-                if (result.takeOne)
-                    customization::consumePalette(nativeInventory->inventory, result.taken);
-                if (result.weaponChanged || result.takeOne) {
-                    rebuildInventoryViews();
-                    applyGear(true);
-                }
-            }
-            if (spawned.localPlayer())
-                playerHp = inventoryslots::adjustHealth(oldMaximum, [&]() -> uint8_t * {
-                    const auto *actor = spawned.localPlayer();
-                    return actor ? actor->record : nullptr;
-                }, [&] { return spawned.playerMaxHealth(); });
-            // Chat typing was cleared in the admitted message, before later keys.
-            itemSelector.hide();
-        };
         // Ordinary interface binding is independent of panel visibility. It only
         // assigns the collection; it does not catch up a skipped early refresh.
         inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
         inventoryView.crafting.canonicalTabs = nativeInventory ? &craftingCollection.rows : nullptr;
         inventoryView.vendor.canonicalTabs = nativeInventory ? &shopCollection.rows : nullptr;
-        // Inventory screen: the list holds every measured item not being worn.
-        if (inventoryOpen) {
-            std::vector<size_t> inventoryDownIndices;
-            inventoryDownIndices.reserve(input.buttons.size());
-            for (size_t index = 0; index < input.buttons.size(); ++index)
-                inventoryDownIndices.push_back(index);
-            // Keep the original press identity when a floating window claims
-            // a press before the inventory receives the remaining ones.
+        // Native identification retains its independent root after the bag hides.
+        // Recording-only inventory business remains in this presentation adapter.
+        if (inventoryOpen || (nativeInventory && identify.open)) {
             auto filterInventoryDowns = [&](auto claim) {
-                size_t next = 0;
-                for (size_t index = 0; index < input.buttons.size(); ++index) {
-                    const int button = input.buttons[index];
-                    if (!claim(button, inventoryDownIndices[index])) {
-                        input.buttons[next] = button;
-                        inventoryDownIndices[next] = inventoryDownIndices[index];
-                        ++next;
-                    }
-                }
-                input.buttons.resize(next);
-                inventoryDownIndices.resize(next);
+                input.buttons.erase(std::remove_if(input.buttons.begin(),input.buttons.end(),
+                    [&](int button) {return claim(button);}),input.buttons.end());
             };
-            filterInventoryDowns([&](int, size_t original) {
-                if (original >= nativeDowns.size())
-                    return false;
-                const auto *press = nativeDowns[original].interfaceLeft;
-                return press && press->thumbCaptured;
-            });
             // the inventory tab of an item, the stackable categories and the rarity colour's rarity colours.
             auto tabOf = [](int category) {
                 switch (category) {
@@ -4917,11 +5205,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 inventoryView.hoverItem = (int)hoverTest;
                 inventoryView.pointer = glm::vec2(fw * 0.45f, fh * 0.25f);
             }
-            inventoryslots::Index hoveredNative;
-            if (nativeInventory)
-                hoveredNative = hud.inventorySourceAt(mouse, inventoryView);
-            if (nativeInventory && hoverTest >= 0 && inventoryView.hoverItem >= 0 && (size_t)inventoryView.hoverItem < nativeRows.size())
-                hoveredNative = nativeRows[(size_t)inventoryView.hoverItem];
             // --open-crafting: the crafting widget alone on that tab.
             if (craftTabTest >= 0) {
                 craftingOpen = true, bagShown = false;
@@ -5160,24 +5443,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     identify.takeOut();
                 const auto idLayout = hud.identificationLayout();
                 const glm::vec2 idMouse = pointerTestX >= 0 ? glm::vec2((float)pointerTestX, (float)pointerTestY) : mouse;
-                filterInventoryDowns([&](int button, size_t) {
+                filterInventoryDowns([&](int button) {
                     if (!identify.open || (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT))
                         return false;
-                    if (nativeInventory) {
-                        const auto *stack = nativeInventory->inventory.slot(hoveredNative);
-                        if (stack && stack->count != 0) {
-                            identify.bind(hoveredNative);
-                            slotted = selectedForIdentification();
-                            return true;
-                        }
-                    } else if (inventoryView.hoverItem >= (int)gearRows && (size_t)inventoryView.hoverItem - gearRows < bag.size()) {
+                    if (inventoryView.hoverItem >= (int)gearRows && (size_t)inventoryView.hoverItem - gearRows < bag.size()) {
                         identify.put(rawOf(bag[(size_t)inventoryView.hoverItem - gearRows].item));
                         slotted = selectedForIdentification();
                         return true;
                     }
                     return idLayout.inWindow(idMouse);
                 });
-                for (int button : input.released) {
+                if (!nativeInventory) for (int button : input.released) {
                     if (!identify.acceptsRelease(button))
                         continue;
                     slotted = selectedForIdentification();
@@ -5289,7 +5565,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                         std::to_string(me[WORN + (size_t)hand * ITEM_SIZE + Gear::CUBE_COUNT_AT]) + " cubes");
                         }
                     };
-                    filterInventoryDowns([&](int button, size_t) {
+                    filterInventoryDowns([&](int button) {
                         if (button != GLFW_MOUSE_BUTTON_LEFT)
                             return false;
                         if (const int box = upLayout.paletteBoxAt(guiMouse); box >= 0) { // a palette entry chosen
@@ -5377,6 +5653,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
             }
             auto changePanelTab = [&](int which, int next) {
+                if (nativeInventory) { changeNativeTab(which,next); return; }
                 auto change = [&](auto &panel) {
                     if (panel.tab == next)
                         return;
@@ -5420,6 +5697,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     change(inventoryView.crafting);
             };
             auto changeRegion = [&](int direction) {
+                if (nativeInventory) { changeNativeRegion(direction); return; }
                 inventoryui::requestRegion(
                     inventoryView.activeRegion, inventoryView.regionChoices, direction,
                     [&] { audio.playInterface(soundrules::soundid::MENU_TAB); }, [&] { sortInventory(); },
@@ -5457,62 +5735,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.vendor.hoverButton)
                         scrollPanel(1, inventoryView.vendor.scroll, inventoryView.vendor.hoverButton == 1 ? -1 : 1);
             }
-            gameshop::TradeHooks trade;
-            trade.inventory = [&] { refreshBagAndThumb(); };
-            trade.shop = [&] {
-                rebuildShop();
-                updateVendorView();
-            };
-            trade.crafting = [&] { rebuildCrafting(); };
-            trade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
-            trade.announce = [&](const auto &item) {
-                const auto view = Gear::fromRecord(item);
-                if (view.category == 24)
-                    audio.startSuccess();
-                texts.push_back({player.position + glm::vec3(0, 0, 3.1f), bagName(view, itemName(view)), {255, 255, 255, 255}});
-            };
-            trade.sound = [&](int sound) {
-                int64_t at[3];
-                playerUnits(at);
-                audio.playAt(sound, at, sound == gameshop::SOUND_SOLD ? gameshop::SOLD_VOLUME : 1, 1);
-            };
-            trade.refused = [&](gameshop::Refusal reason) {
-                if (reason != gameshop::Refusal::ProtectedTab)
-                    texts.push_back({player.position + glm::vec3(0, 0, 3.1f),
-                                     reason == gameshop::Refusal::Money ? "Not enough money." : "You can't carry more of these items.",
-                                     {255, 51, 51, 255}});
-                audio.playInterface(gameshop::SOUND_REFUSED);
-            };
-            auto handleInventoryDown = [&](int button, glm::vec2 point, const Hud::InterfacePress *interfaceLeft) {
-                if (nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT) {
-                    const auto press = interfaceLeft ? interfaceLeft->tab : hud.nativeInventoryTabForPress(point, inventoryView);
-                    if (press && hud.inventoryTabPressEligible(*press, inventoryView)) {
-                        changePanelTab(press->panel, press->tab);
-                        return;
-                    }
-                }
-                const auto pressedItem = nativeInventory && hoverTest < 0 ? hud.inventorySourceAt(point, inventoryView) : hoveredNative;
-                const int pressedOffer = nativeInventory && vendorTrade.open ? hud.vendorItemAt(point, inventoryView)
-                                                                            : inventoryView.vendor.hoverItem;
-                if (nativeInventory && button == GLFW_MOUSE_BUTTON_MIDDLE && !mapOpen) {
-                    if (auto *actor = spawned.localPlayer())
-                        if (auto item = nativeInventory->inventory.dropOne(pressedItem, actor->record)) {
-                            auto request = nativeinteract::fresh(nativeinteract::DROP);
-                            std::memcpy(request.data() + nativeinteract::ITEM, item->data(), item->size());
-                            actor->interactions.push_back(request);
-                            rebuildInventoryViews();
-                        }
-                    return;
-                }
-                if ((button != GLFW_MOUSE_BUTTON_LEFT && !(nativeInventory && button == GLFW_MOUSE_BUTTON_RIGHT)) ||
-                    inventoryView.hoverButton)
+            auto handleInventoryDown = [&](int button) {
+                const int pressedOffer = inventoryView.vendor.hoverItem;
+                if (button != GLFW_MOUSE_BUTTON_LEFT || inventoryView.hoverButton)
                     return;
                 if (const int region =
                         button == GLFW_MOUSE_BUTTON_LEFT ? hud.inventoryRegionButtonAt(mouse, inventoryView) : 0) {
                     changeRegion(region);
                     return;
                 }
-                if (!nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen && inventoryView.crafting.hoverTab >= 0) {
+                if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen && inventoryView.crafting.hoverTab >= 0) {
                     changePanelTab(2, inventoryView.crafting.hoverTab);
                     return;
                 }
@@ -5524,29 +5756,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 if (button == GLFW_MOUSE_BUTTON_LEFT && craftingOpen && inventoryView.crafting.hoverButton)
                     return;
-                if (!nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT && vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
+                if (button == GLFW_MOUSE_BUTTON_LEFT && vendorTrade.open && inventoryView.vendor.hoverTab >= 0) {
                     changePanelTab(1, inventoryView.vendor.hoverTab);
-                    return;
-                }
-                if (nativeInventory && vendorTrade.open) {
-                    if (auto *actor = spawned.localPlayer()) {
-                        const auto *source = nativeInventory->inventory.slot(pressedItem);
-                        if (source && source->count != 0)
-                            gameshop::sellSlot(nativeInventory->inventory, pressedItem, soldItems, trade);
-                        else if (inventoryView.hoverSlot >= 0 &&
-                                 nativeInventory->equipment[(size_t)equipSlotOf(inventoryView.hoverSlot)][0] != 0) {
-                            gameshop::sellEquipment(*nativeInventory, (int)equipSlotOf(inventoryView.hoverSlot), soldItems, trade);
-                            rebuildInventoryViews();
-                            applyGear(true);
-                        } else if (pressedOffer >= 0 && (size_t)pressedOffer < vendorRaws.size()) {
-                            const auto offer = vendorRaws[(size_t)pressedOffer];
-                            if (inventoryView.vendor.tab == 1)
-                                gameshop::repurchase(nativeInventory->inventory, soldItems, (size_t)pressedOffer, trade);
-                            else
-                                gameshop::purchase(nativeInventory->inventory, offer, trade);
-                        }
-                        rebuildInventoryViews();
-                    }
                     return;
                 }
                 if (vendorTrade.open && pressedOffer >= 0 &&
@@ -5592,14 +5803,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         logLine("Vendor: that is not for sale");
                         return;
                     }
-                    Gear::Item it;
-                    if (nativeInventory) {
-                        const auto *stack = nativeInventory->inventory.slot(pressedItem);
-                        if (!stack || stack->count == 0)
-                            return;
-                        it = Gear::fromRecord(stack->item);
-                    } else
-                        it = k < (int)listed.size() ? gear.item(listed[(size_t)k]) : bag[(size_t)k - listed.size()].item;
+                    const Gear::Item it = k < (int)listed.size() ? gear.item(listed[(size_t)k])
+                                                                               : bag[(size_t)k - listed.size()].item;
                     const gameshop::Item raw = rawOf(it);
                     playerGold += gameshop::sellPrice(raw);
                     int64_t salePosition[3];
@@ -5609,55 +5814,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (k < (int)listed.size()) {
                         gear.remove(listed[(size_t)k]);
                         applyGear();
-                    } else if (nativeInventory) {
-                        nativeInventory->inventory.consumeOne(pressedItem);
-                        refreshInventory();
                     } else
                         consumeCarried((size_t)k - listed.size());
                     logLine("Vendor: sold " + itemName(it) + " for " + std::to_string(gameshop::sellPrice(raw)) + " gold");
                     return;
                 }
-                if (!nativeInventory && button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverTab >= 0) {
+                if (button == GLFW_MOUSE_BUTTON_LEFT && inventoryView.hoverTab >= 0) {
                     changePanelTab(0, inventoryView.hoverTab);
-                    return;
-                }
-                if (nativeInventory) {
-                    if (auto *actor = spawned.localPlayer()) {
-                        auto outcome = upgrade.open ? inventoryslots::UseResult{}
-                                                    : inventoryslots::use(*nativeInventory, pressedItem, actor->record, button,
-                                                                          glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
-                                                                              glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS,
-                                                                          spawned.playerAbilityDuration());
-                        using Action = inventoryslots::Action;
-                        if (outcome.interaction) {
-                            auto request = nativeinteract::fresh(nativeinteract::USE_ITEM);
-                            std::memcpy(request.data() + nativeinteract::ITEM, outcome.interaction->data(), nativesaves::ITEM_SIZE);
-                            actor->interactions.push_back(request);
-                        }
-                        if (outcome.action == Action::Refused || outcome.action == Action::WrongRegion)
-                            audio.playInterface(outcome.action == Action::Refused ? 0x35 : 0x34);
-                        else if (outcome.action == Action::Equipped || outcome.action == Action::WeaponEquipped) {
-                            rebuildInventoryViews();
-                            applyGear(true);
-                            refreshBagAndThumb();
-                            audio.playInterface(0x5b);
-                            if (outcome.action == Action::WeaponEquipped)
-                                rebuildCrafting();
-                        } else if (outcome.action == Action::PetFood)
-                            inventoryOpen = false;
-                        else if (outcome.action == Action::Map) {
-                            mapSelection.useItem(nativeInventory->inventory.slot(pressedItem));
-                        } else if (!upgrade.open && !vendorTrade.open && inventoryView.hoverSlot >= 0 && pressedItem.tab < 0) {
-                            if (nativeInventory->unequip((int)equipSlotOf(inventoryView.hoverSlot))) {
-                                rebuildInventoryViews();
-                                applyGear(true);
-                                refreshBagAndThumb();
-                                audio.playInterface(0x5b);
-                                rebuildCrafting();
-                            }
-                        }
-                        rebuildInventoryViews();
-                    }
                     return;
                 }
                 if (inventoryView.hoverItem >= (int)gearRows) {
@@ -5703,18 +5866,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     }
                 }
             };
-            for (size_t index = 0; index < input.buttons.size(); ++index) {
-                const int button = input.buttons[index];
-                const float oldMaximum = spawned.playerMaxHealth();
-                const size_t original = inventoryDownIndices[index];
-                auto *down = original < nativeDowns.size() ? &nativeDowns[original] : nullptr;
-                const auto point = down ? down->point : nativeInventory ? customizationPointer : mouse;
-                handleInventoryDown(button, point, down ? down->interfaceLeft : nullptr);
-                if (nativeInventory)
-                    finishNativeDown(button, oldMaximum, point);
-                if (down)
-                    down->completed = true;
-            }
+            if (!nativeInventory)
+                for (int button : input.buttons) handleInventoryDown(button);
             if (input.gamepadPointer.regionDirection)
                 changeRegion(input.gamepadPointer.regionDirection);
             for (const auto &tab : input.gamepadPointer.tabs) {
@@ -5795,9 +5948,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             craftButton.update((float)(dt * 1000.0), false, false);
             craftingFormula = {}; // Hiding clears the action snapshot, not the details recipe.
         }
-        for (size_t index = 0; index < nativeDowns.size(); ++index)
-            if (!nativeDowns[index].completed)
-                finishNativeDown(gameDowns[index], spawned.playerMaxHealth(), nativeDowns[index].point);
         if (mouseChatOrderTest) {
             const bool expectedTyping = mouseChatOrderStage == 0;
             const bool passed = nativeInventory && gameDowns.size() == 1 &&
@@ -5829,7 +5979,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         for (int button : input.released) {
             // Identification outcomes fall through to this cached-target acceptance. There is
             // no additional inventory, mode, source-item, stun or matching-down requirement.
-            if (const auto destination = mapSelection.destination(button, [&](auto cell) { return usedCells.count(cell) != 0; });
+            if (const auto destination = !nativeInventory ? mapSelection.destination(button, [&](auto cell) { return usedCells.count(cell) != 0; }) : std::nullopt;
                 destination && spawned.startShrineReturn((*destination)[0], (*destination)[1]))
                 mapOpen = false;
             const bool special = GameInput::buttonMatches(gameControls[gameoptions::SPECIAL_ATTACK], button);
@@ -6240,31 +6390,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (key == GLFW_KEY_P && !GameInput::keyIsBound(gameControls, key)) // (CubeVulkan's tap skill key)
                     startMove(moves.tap);
         }
-        // Native choice activation runs after normal GUI release dispatch and
-        // uses the last draw's hovered row, including releases outside the panel.
-        if (std::find(input.released.begin(), input.released.end(), GLFW_MOUSE_BUTTON_LEFT) != input.released.end()) {
-            const bool speakerExists = spawnedReady && spawned.record(answers.speaker()) != nullptr;
-            const auto action = answers.release(speakerExists, playerGold, hour * 3600000.f, (uint8_t)playerSpec);
-            if (action.kind == dialoguechoice::Action::Rest) {
-                playerGold -= action.coins;
-                auto request = nativeinteract::fresh(5);
-                std::memcpy(request.data() + nativeinteract::TARGET, &action.speaker, sizeof action.speaker);
-                spawned.queueInteraction(spawned.playerId(), request);
-            } else if (action.kind == dialoguechoice::Action::ChangeSpecialization) {
-                playerSpec = action.specialization;
-                setSpecializationMetadata(playerSpec);
-                moves = classMoves(playerCls, playerSpec);
-                ATTACK_A = moves.attack[0]; ATTACK_B = moves.attack[1];
-                if (haveGear) applyGear();
-                else if (nativePlayer) spawned.setPlayerGear(nativeRecord(-1, nullptr));
-                TalkScript confirmation;
-                confirmation.tokens = {"define_specialization", std::to_string(playerCls), std::to_string(playerSpec),
-                                       "your_specialization_is_now"};
-                std::mt19937 feedbackRandom((uint32_t)action.speaker);
-                auto feedback = playScript(confirmation, speech, feedbackRandom, &talkNames, generalDialogue.pages());
-                generalDialogue.applyCompilation(std::move(feedback.pages));
-            }
-        }
+        if (!nativeInventory && std::find(input.released.begin(),input.released.end(),0)!=input.released.end())
+            releaseDialogueChoice(0);
         movesPressed.clear();
         bool holdingAttack = !inventoryOpen && !answers.visible() && gameInput.held(gameoptions::ATTACK);
         if (!ability && ATTACK_A && (attackQueued || holdingAttack)) {

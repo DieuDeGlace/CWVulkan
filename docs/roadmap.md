@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Selected Native mouse work now finishes per queued message: entry Game,
+  process clock/snapshot, canonical item/secondary work, current-actor health and
+  retained Chat/selector tail. Native/Alpha actual inventory drops and release/chat
+  cases pass; full CPU without skips, all Vulkan groups and SDK independence pass.
+  Frontend prefix, motion/provider/geometry/lifetime and final native acceptance
+  stay open. See [the checkpoint](release-status.md#synchronous-gameplay-mouse-transactions---2026-11-10).
+
+
 - [x] Sampled physical binding levels, retained Controls capture/default/apply/cancel
   and exact detailed key names use three whole-read independent contracts. All263
   public Windows descriptor records match Native facts; Unicode interface verified.

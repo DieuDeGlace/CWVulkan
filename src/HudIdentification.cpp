@@ -34,7 +34,6 @@ void Hud::drawIdentification(const identifywindow::Shown &shown, std::vector<Ove
     auto &root = *panels.identification;
     root.visible = true;
     sceneNode(out, root, glm::vec4(1)); // copied owner fills/outlines/inner geometry, including the child itemframe
-    root.visible = false;
     auto draw = [&](const std::wstring &text, glm::vec2 at, float size, float outline, glm::vec4 colour, int flags = 0, float wrap = 0) {
         return widgetText(out, root, text, at, size, outline, colour, {0, 0, 0, 1}, flags, wrap);
     };

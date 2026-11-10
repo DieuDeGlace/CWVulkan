@@ -12,6 +12,7 @@
 #include "GameOptions.h"
 #include "PhysicalInput.h"
 #include "GameWindowInput.h"
+#include "GameMouse.h"
 #include "HomeSearch.h"
 #include "GamepadUi.h"
 #include "MouseMotion.h"
@@ -59,8 +60,10 @@ struct MenuInput {
     bool samplePhysical(const gameoptions::Controls &controls, bool fixtureForeground = false);
     void finishPhysical() { physical.finish(); }
     bool rawKeyboardSeen = false; // actual WM ingress, independent of synthetic GLFW releases
-    std::function<bool(int)> gamePress; // Post-GUI normal continuation; false is the map-arrow early return.
-    std::vector<int> gamePresses; // Admitted business work, retained for the current frame adapter.
+    gamemouse::Process gameMouse; // Application/process lifetime, independent of Session construction.
+    gamemouse::Current gameMouseTarget; // Normally live entry Game, copied before GUI mouse dispatch.
+    std::function<bool(int)> gamePress; // Compatibility post-GUI continuation; false is the arrow return.
+    std::vector<int> gamePresses; // Admitted press receipts; Native business completes inside dispatch.
     std::function<void()> gameDismissPanels; // Interface right press, after GUI and a fresh null target.
     std::function<void(uint8_t)> gameKeyDown,gameCharacter; // current Game chat ports, bound by its owner
     enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, ToggleHelp, Wheel, KeyDown, KeyUp, Character };

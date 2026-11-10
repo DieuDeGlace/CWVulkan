@@ -172,6 +172,7 @@ add_library(engine STATIC
     src/NativeProgress.cpp
     src/GameOptions.cpp
     src/GameInput.cpp
+    src/GameMouse.cpp
     src/PhysicalInput.cpp
     src/ZoneStates.cpp
     src/SourceStates.cpp
@@ -356,6 +357,10 @@ endif()
 
 add_executable(CubeVulkan src/main.cpp)
 target_link_libraries(CubeVulkan PRIVATE engine dbghelp comctl32)
+if(MSVC)
+    # The retained Session callback graph exceeds the ordinary COFF section limit.
+    target_compile_options(CubeVulkan PRIVATE /bigobj)
+endif()
 # Mods link against nothing: the API is a table of function pointers.
 set_target_properties(CubeVulkan PROPERTIES ENABLE_EXPORTS OFF)
 
@@ -470,7 +475,7 @@ target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
-target_sources(EngineTests PRIVATE tests/PhysicalInputTests.cpp tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/GameWindowInputTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
+target_sources(EngineTests PRIVATE tests/GameMouseTests.cpp tests/PhysicalInputTests.cpp tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/GameWindowInputTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
 target_sources(EngineTests PRIVATE tests/ResidentPassTests.cpp tests/ResidentEffectsTests.cpp)
 target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp tests/CameraPositionTests.cpp tests/DrawnStateTests.cpp tests/LinkedPlacementTests.cpp)

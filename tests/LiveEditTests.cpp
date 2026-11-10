@@ -316,6 +316,50 @@ int liveEditTests() {
         hud.clearFrontendBindings();
     }
 
+    // Real owner GUI callbacks replace the current Game port during a press.
+    // Mouse retains its entry Game, whereas the keyboard test fetches after GUI.
+    {
+        hud.setInterfaceState({});hud.setInterfaceShown(true);hud.clearFrontendBindings();
+        struct Owner { gamemouse::State mouse; bool widget=false,chat=true; int items=0; } first,second;
+        MenuInput messages;
+        const auto ports=[&](Owner &owner) {
+            auto *g=&owner; gamemouse::Target t;
+            t.state=&g->mouse;
+            t.widgetSelected=[g] {return g->widget;};t.mapShown=[] {return false;};
+            t.mapArrow=[](bool) {return false;};t.coordinatePress=[](int) {};
+            t.clock=[] {return uint32_t(99);};t.cursorHeight=[] {return int64_t(0);};
+            t.selectTarget=[] {};t.resetMovement=[] {};t.maximumHealth=[] {return 100.f;};
+            t.inventoryPress=[g](int) {++g->items;};t.secondaryPress=[](int) {};t.adjustHealth=[](float) {};
+            t.closeChat=[g] {g->chat=false;};t.hideSelector=[&] {hud.setRingShown(false);};
+            t.releasePrefix=[](int) {};t.selectedTextRelease=[](int) {};t.widgetRelease=[](int) {};
+            t.coordinateRelease=[](int) {};t.itemRelease=[](int) {};
+            return t;
+        };
+        messages.gameMouseTarget=[&] {return ports(first);};
+        hud.bindMenuActions([&](Hud::Menu) {
+            first.widget=true;
+            messages.gameMouseTarget=[&] {return ports(second);};
+        });
+        uint8_t shown=1;hud.publishMenuControls(shown);hud.layoutMenuControls({1280,720});
+        const auto *node=hud.menuControl(Hud::Menu::Help);
+        const auto *selector=hud.ringRoot();
+        check(selector && selector->parent==hud.interfaceBranchRoot(uiroot::Branch::Gameplay),
+              "direct selector is retained under Gameplay independently of crafting's frame");
+        if (node) {
+            plasma::Scene geometry(*node->doc);
+            const auto point=geometry.contentPosition(*node)+geometry.screenSize(*node)*.5f;
+            hud.setRingShown(true);hud.moveInterfacePointer(point);
+            messages.routeInterfacePress(hud,0);
+            check(first.items==1 && second.items==0 && !first.chat && second.chat && messages.gameMouse.widgetAtPress==1,
+                  "post-GUI Game mouse keeps entry owner and snapshots that owner's current widget");
+            check(!hud.ringShown() && hud.ringRoot()==selector,"press hides direct selector without reconstructing it");
+            messages.routeInterfaceRelease(hud,0);
+            messages.routeInterfacePress(hud,3);
+            check(!second.chat && second.items==0 && messages.gameMouse.widgetAtPress==0,
+                  "next press fetches replacement owner; unknown button keeps tail without item callback");
+        }
+        hud.bindMenuActions({});hud.publishMenuControls(uint8_t(0));
+    }
     std::cout<<"Live owner scene edit: "<<(failures ? "FAIL" : "PASS")<<'\n';
     return failures;
 }

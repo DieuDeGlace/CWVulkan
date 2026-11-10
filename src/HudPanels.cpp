@@ -58,6 +58,24 @@ void Hud::buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons
     }
     s.resizeTo(*node, size);
     layoutInvPanel(p);
+    const int panel = &p == &panels.bag ? 0 : &p == &panels.vendor ? 1 : 2;
+    for (auto [name,direction] : {std::pair{"upbutton",-1}, std::pair{"downbutton",1}})
+        if (auto *node=p.buttons[name]) {
+            node->initializeWidgets();
+            bindMenuPress(*node,[this,panel,direction] {
+                const auto callback=inventoryScrollAction;
+                if (callback) callback(panel,direction);
+            });
+        }
+    if (panel == 0)
+        for (auto [name,direction] : {std::pair{"leftbutton",-1}, std::pair{"rightbutton",1}})
+            if (auto *node=p.buttons[name]) {
+                node->initializeWidgets();
+                bindMenuPress(*node,[this,direction] {
+                    const auto callback=inventoryRegionAction;
+                    if (callback) callback(direction);
+                });
+            }
     std::vector<std::string> icons((size_t)tabs);
     for (int t = 0; t < tabs; ++t)
         if (tabIcons && tabIcons[t])
@@ -85,6 +103,8 @@ void Hud::replaceInvTabs(InvPanel &p, const std::vector<std::string> &icons) {
         interfaceInput->registerEvent(*tab, plasma::Input::Event::LeftDown,
                                       [this, receiver = &p, panel](plasma::Input &, plasma::SceneNode &) {
                                           pressedInventoryTab = InventoryTabPress{panel, receiver->hoveredTab};
+                                          const auto callback=inventoryTabAction;
+                                          if (callback) callback(panel,receiver->hoveredTab);
                                       });
         x = s.viewSize(*tab).x + 2.0f + x;
         p.tabs.push_back(tab);
@@ -122,6 +142,10 @@ void Hud::buildPanels() {
     panels.templates = s.create(nullptr, "templates"); // Source prototypes are outside the live tree.
     panels.templates->visible = false;
     buildMenuControls();
+    if ((panels.ring=s.instance("selector",panels.inGame))) {
+        panels.ring->initializeWidgets();
+        panels.ring->visible=false;
+    }
 
     // InventoryWidget's constructor: its cell size from the cell template's view.
     plasma::SceneNode *cell = s.instance("wideitembox", panels.templates);
@@ -491,6 +515,17 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
             it->second->visible = list.regionArrows;
 }
 
+void Hud::bindInventoryActions(std::function<void(int,int)> tab,std::function<void(int,int)> scroll,
+                               std::function<void(int)> region) {
+    inventoryTabAction=std::move(tab);
+    inventoryScrollAction=std::move(scroll);
+    inventoryRegionAction=std::move(region);
+}
+void Hud::setIdentificationShown(bool shown) const { if (panels.identification) panels.identification->visible=shown; }
+bool Hud::identificationShown() const { return panels.identification && panels.identification->visible; }
+void Hud::setRingShown(bool shown) const { if (panels.ring) panels.ring->visible=shown; }
+bool Hud::ringShown() const { return panels.ring && panels.ring->visible; }
+
 void Hud::clearInventoryPanelNodes() {
     for (auto *node:{panels.bag.node,panels.crafting.node,panels.vendor.node})
         if (node) node->visible=false;
@@ -679,12 +714,15 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
         const auto at = guiitem::spritePlacement(scene->contentPosition(node), scene->screenSize(node), guiClockMs);
         itemIcon(inv.slots[index], *inv.slotItems[index], at, out.size());
     };
+    const bool ringWasShown=ringShown(), identificationWasShown=identificationShown();
+    setRingShown(false); setIdentificationShown(false);
     const bool customizationShown = panels.customization && panels.customization->visible;
     if (panels.customization)
         panels.customization->visible = false; // its independent root callback follows the ordinary inventory tree
     sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, drawWidget);
     if (panels.customization)
         panels.customization->visible = customizationShown;
+    setRingShown(ringWasShown); setIdentificationShown(identificationWasShown);
     drawCharacter(inv, out);
 
     // The equipment slots' items (SpriteWidget: in each box's content).

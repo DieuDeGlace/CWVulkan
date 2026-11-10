@@ -3,6 +3,7 @@
 // menu over the running game. Written from docs/specs/frontend-title.md,
 // frontend-characters.md and frontend-options.md.
 #include "Frontend.h"
+#include <bit>
 #include "CharacterCard.h"
 #include "CameraMotion.h"
 
@@ -90,24 +91,50 @@ bool MenuInput::samplePhysical(const gameoptions::Controls &controls, bool fixtu
 }
 
 void MenuInput::routeInterfaceRelease(Hud &hud, int button) {
-    if (button == 0) hud.interfaceLeftUp();
-    else if (button == 1 || button == 2) hud.interfaceSecondaryButton(button, false);
-    const auto continuation = gameRelease;
+    const auto current = gameMouseTarget;
+    const auto gui = [&](int value) {
+        if (value == 0) hud.interfaceLeftUp();
+        else hud.interfaceSecondaryButton(value, false);
+    };
+    if (current) {
+        gamemouse::release(gameMouse, [&] {
+            auto target = current();
+            target.guiRelease = gui;
+            target.controlsRelease = [&](int value) { controlEditor.release(value); };
+            return target;
+        }, button);
+        return;
+    }
+    const auto continuation = gameRelease; // Retain the entry Game before GUI callbacks.
+    if (uint32_t(button) <= 2) gui(button);
     if (continuation) continuation(button);
     controlEditor.release(button);
 }
 
 void MenuInput::routeInterfacePress(Hud &hud,int button) {
-    if (button==0) interfacePresses.push_back(hud.interfaceLeftDown());
-    else hud.interfaceSecondaryButton(button,true);
-    if (button==1 && !hud.interfacePointerTarget()) {
-        gameKeyboard.menu=0;
-        hud.clearInventoryPanelNodes();
-        const auto callback=gameDismissPanels;
-        if (callback) callback();
+    const auto current = gameMouseTarget;
+    const auto continuation = gamePress;
+    const auto gui = [&](int value) {
+        if (value == 0) interfacePresses.push_back(hud.interfaceLeftDown());
+        else hud.interfaceSecondaryButton(value, true);
+        if (value == 1 && !hud.interfacePointerTarget()) {
+            gameKeyboard.menu = 0;
+            hud.clearInventoryPanelNodes();
+            const auto callback = gameDismissPanels;
+            if (callback) callback();
+        }
+    };
+    if (current) {
+        if (gamemouse::press(gameMouse, [&] {
+            auto target = current();
+            target.guiY = [&] { return std::bit_cast<uint32_t>(hud.interfacePointerPosition().y); };
+            target.guiPress = gui;
+            return target;
+        }, button)) gamePresses.push_back(button);
+    } else {
+        if (uint32_t(button) <= 2) gui(button);
+        if (!continuation || continuation(button)) gamePresses.push_back(button);
     }
-    const auto continuation=gamePress;
-    if (!continuation || continuation(button)) gamePresses.push_back(button);
 }
 
 void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const std::function<void(uint8_t)> &special) {

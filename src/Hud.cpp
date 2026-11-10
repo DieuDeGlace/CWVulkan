@@ -1160,15 +1160,20 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
                 f.items = {{"sprite", *q.original}};
             plasmaPlaced(out, "quickbutton", at, offset, f);
         };
-        if (state.ring.shown) {
-            PlasmaFrame ring;
-            ring.texts = {{"name", wide(state.ring.name)}, {"count", wide(state.ring.count)}};
-            ring.colors = {{"name", state.ring.colour}};
-            ring.displayFills = {{"left", state.ring.left ? glm::vec4(1, 0, .2f, 1) : glm::vec4(1)},
-                                 {"right", state.ring.right ? glm::vec4(1, 0, .2f, 1) : glm::vec4(1)}};
-            if (state.ring.items.empty())
-                ring.hidden.insert("brackets");
-            plasmaPlaced(out, "selector", middle, {0, -200}, ring);
+        setRingShown(state.ring.shown);
+        if (auto *node=panels.ring; node && node->visible) {
+            scene->setPosition(*node,middle,{0,-200});
+            node->setText("name",wide(state.ring.name));
+            node->setText("count",wide(state.ring.count));
+            node->setTextColour("name",state.ring.colour);
+            const auto update=[&](auto &&self,plasma::SceneNode &at)->void {
+                if (at.name=="left") at.fill=state.ring.left ? glm::vec4(1,0,.2f,1) : glm::vec4(1);
+                else if (at.name=="right") at.fill=state.ring.right ? glm::vec4(1,0,.2f,1) : glm::vec4(1);
+                else if (at.name=="brackets") at.visible=!state.ring.items.empty();
+                for (auto &child:at.children) self(self,*child);
+            };
+            update(update,*node);
+            sceneNode(out,*node,glm::vec4(1));
         }
         quick(state.quickItem, {0, screen.y}, {30, -80});
         quick(state.quickUse, bottomMiddle, {-23, -150});

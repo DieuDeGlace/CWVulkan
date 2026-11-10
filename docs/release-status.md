@@ -1,5 +1,56 @@
 # Source review checkpoint — 2026-11-08
 
+## Synchronous gameplay mouse transactions - 2026-11-10
+
+Each queued Native mouse message now finishes its selected gameplay work before
+the next message. The dispatcher retains the entry Game across GUI callbacks,
+copies cached GUI Y as raw binary32 bits, then snapshots the current identification
+root before the two map-arrow returns. The wrapping process clock is published
+before its strict 200 ms test. These two process values survive Session changes;
+the Interface Y cache has its separate Game lifetime.
+
+Coordinate actions precede the clock, the existing movement-dirty flag resets
+after it, and the initial maximum-health query precedes item changes. Canonical
+inventory, shop, equipment, crafting and customization actions run before the
+existing current-actor health adjustment. Chat stops editing and the direct
+retained selector hides afterward. The movement byte and Chat's editing byte are
+distinct. Unknown button values skip GUI bits and item actions while retaining
+the admitted common tail. Valid-slot middle-button drops have no extra map gate.
+
+Native tab, row and region GUI callbacks execute during GUI dispatch. The old
+Native item mutations have been removed from the later presentation adapter.
+Release orders GUI, selected-answer work, current identification/snapshot work,
+shrine work and the final Controls reset/rearm. Identification retains its own
+root when the bag hides. The direct selector is instantiated once under Gameplay,
+keeps its identity when hidden/reopened and is distinct from crafting's selection
+frame. Large Session callables are borrowed rather than copied per mouse event.
+
+The new [clock, snapshot and widget contract](specs/steam-mouse-clock-snapshot-and-retained-widget-state-20261110.md)
+was hash-verified and whole-read before use. Its original-only author received no
+implementation, tests, owner outputs or verification feedback. Earlier complete
+mouse-owner prose remains unchanged. The owner GUI receiver-replacement test,
+ordered core checks, actual Native/Alpha scalar and release tests, two immediate
+canonical inventory drops with a shown map, and both full-frame chat orders pass.
+Private save hashes are unchanged. All five targets, full required-owner CPU with
+no skips, all Vulkan groups and SDK independence pass.
+
+This closes selected queue/transaction work, with explicit remaining boundaries:
+the frontend menu-selection prefix, the separate G+370 price-widget provider,
+motion-cache writer/timer, complete marker-tree/toggle and flight-provider closure,
+general direct-query geometry, callback/object lifetime and threading, sampled
+gameplay admission, full Help and Controls thumb behavior. No purchase/debit is
+invented for the discarded price return. The queue fixtures do not establish OS
+delivery, native runtime/hardware, broad gameplay/multiplayer or final human and
+clean-room provenance acceptance. Alpha relief/lighting, purple dry Undead Lands,
+distinct biome palettes and Omega water retain their existing paths.
+
+
+
+Both current widget scenes were captured and inspected at the existing readiness
+limits with identical private saves. The fixed layout extends beyond the 640x480
+viewport. The Alpha actor reached Revive during ordinary loading. These single
+captures do not establish native UI pixels, gameplay acceptance, FPS or reliability.
+
 ## Physical input, retained Controls and detailed binding text - 2026-11-10
 
 Device bytes now produce the 23 current binding levels before motion and the
