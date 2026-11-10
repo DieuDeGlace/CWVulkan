@@ -362,6 +362,7 @@ std::string friendRowText(const FriendRow &row);
 struct Services {
     GLFWwindow *window = nullptr;
     MenuInput *input = nullptr;
+    GameInput *sampledControls = nullptr; // Borrowed Game owner, also while title/character pages run.
     const Assets *assets = nullptr;
     Renderer *renderer = nullptr;
     Hud *hud = nullptr; // the interface to draw with (the game's own in play); null: one of the screens' own

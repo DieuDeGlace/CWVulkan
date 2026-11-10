@@ -968,6 +968,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                       std::isnan(startX) && runSeconds <= 0 && poseAbility <= 0 && !autoAttack && !openInventory && showcase.empty());
     frontend::Services front;
     front.hud = &hud;
+    front.sampledControls = &gameState.input;
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
     front.extracted = useExtracted ? &extractedWorld : nullptr;
     front.spawned = spawnedReady && nativePlayer ? &spawned : nullptr;

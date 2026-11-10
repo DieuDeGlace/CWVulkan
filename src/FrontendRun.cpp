@@ -395,6 +395,11 @@ class Session {
     glm::vec2 cardFrame{0}, selectFrame{0}, deleteToggleFrame{0}, deleteFrame{0};
     bool clicked = false;
     bool nativeBackPressed = false, nativeControlsHandled = false, producingControlDraw = false;
+    bool gameplaySession = false; // Runner mode survives callbacks that clear all frontend pages.
+    bool sampledPointerVisited = false;
+    uint8_t sampledAtPointer = 0;
+    unsigned sampledFixtureStage = 0;
+    bool sampledFixturePassed = true;
     bool pointerDown = false, pointerUp = false, leftHeld = false;
     std::vector<gamepadui::Point> navigationPoints;
     void navigationPoint(glm::vec2 at) {
@@ -642,6 +647,7 @@ void Session::finish() {
 // The interface keys work in play whatever is open (frontend-options.md §3); the screens are
 // the system menu's.
 bool Session::startInGame(std::string &error) {
+    gameplaySession = true;
     if (!s.hud && !hud.ensureLoaded(s.assets->gameDir(), error))
         return false;
     titleShown = charactersShown = creationShown = false;
@@ -1162,10 +1168,36 @@ void Session::readInput(bool poll, double frameMs) {
     if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; }))
         characterScroll.press();
     layoutCharacterFrames();
+    if (req.page=="frontend-sampled-state-test" && sampledFixtureStage==4) {
+        frontendPages.fill(false); // Last frontend visit after a synchronous page transition.
+        syncInterfaceState();
+    }
     const bool ui = front() || ordinaryUi() || (s.ordinaryUi ? s.ordinaryUi() : s.input->gamepadModal);
     static const auto defaultBindings = gameoptions::defaultControls();
     const auto &bindings = s.controls ? *s.controls : defaultBindings;
-    const bool mouseAdmitted = s.input->samplePhysical(bindings, req.pointer.x >= 0);
+    const auto samplePhysical = [&] {
+        if (req.page != "frontend-sampled-state-test")
+            return s.input->samplePhysical(bindings,req.pointer.x>=0);
+        // Explicit CLI device-buffer adapter, at the real producer boundary;
+        // no window-key injection or access to the user's physical keyboard.
+        const auto binding=bindings[gameoptions::INVENTORY];
+        s.input->controlEditor.waiting=sampledFixtureStage==1 ? 0 : -1;
+        const bool held=sampledFixtureStage!=3;
+        s.input->physical.sample(sampledFixtureStage!=2,
+            [&](auto &bytes) {
+                bytes={};
+                if (held && binding.kind==0 && uint32_t(binding.code)<bytes.size()) bytes[size_t(binding.code)]=0x80;
+            },[&](auto &bytes) {
+                bytes={};
+                if (held && binding.kind==1 && uint32_t(binding.code)<4) bytes[size_t(12+binding.code)]=0x80;
+            },[&] {return s.input->physicalTarget(bindings);});
+        s.input->lastUsedPadAtMousePoll=s.input->lastUsedPad;
+        return s.input->physical.phase==physicalinput::Poll::Normal;
+    };
+    const bool mouseAdmitted=samplePhysical();
+    if (s.sampledControls)
+        s.sampledControls->publishPhysical(s.input->physical,s.input->bindingLevels);
+    sampledPointerVisited=false;
     if (mouseAdmitted && ui)
         hud.moveInterfacePointer({float(worldgen::trunc32(framebufferPointer.x)), float(worldgen::trunc32(framebufferPointer.y))},
                                  s.inventory);
@@ -1187,7 +1219,16 @@ void Session::readInput(bool poll, double frameMs) {
                                        activeOptions.cameraSpeed, activeOptions.invertY != 0);
         }
     }
+    if (req.page=="frontend-sampled-state-test" && mouseAdmitted) {
+        sampledPointerVisited=true;
+        sampledAtPointer=s.sampledControls ? s.sampledControls->level(gameoptions::INVENTORY) : 0;
+    }
     s.input->sampleGamepad(bindings, req.pointer.x >= 0);
+    // Gameplay's caller completes this same sample once, after its menu pass.
+    // Frontend owns its completion even when a callback just cleared every page.
+    if (!gameplaySession && s.sampledControls)
+        s.sampledControls->update(s.input->physical,s.input->bindingLevels,s.input->gamepad,
+                                 ui,s.input->gamepadMapMode,s.input->gamepadPanels.any());
     s.input->gamepadPointer = {};
     if (mouseAdmitted) {
         std::vector<gamepadui::Point> points;
@@ -2110,6 +2151,31 @@ bool Session::frame() {
                 return false;
             }
             nextSteamCheck = seconds + 5;
+        }
+    }
+    if (req.page=="frontend-sampled-state-test") {
+        static constexpr std::array<physicalinput::Poll::Phase,5> phases{
+            physicalinput::Poll::Normal,physicalinput::Poll::Capturing,physicalinput::Poll::Skipped,
+            physicalinput::Poll::Normal,physicalinput::Poll::Normal};
+        static constexpr const char *labels[]{"normal frontend publication","capture retains current Game sample",
+            "inactive retains current Game sample","normal frontend release","transition frame still publishes"};
+        const uint8_t expected=sampledFixtureStage==3 ? 0 : 1;
+        const bool pass=s.sampledControls && s.input->physical.phase==phases[sampledFixtureStage] &&
+            s.input->bindingLevels[gameoptions::INVENTORY]==expected &&
+            s.sampledControls->level(gameoptions::INVENTORY)==expected &&
+            s.sampledControls->pressed(gameoptions::INVENTORY)==(sampledFixtureStage==0 || sampledFixtureStage==4) &&
+            (phases[sampledFixtureStage]==physicalinput::Poll::Normal ?
+                sampledPointerVisited && sampledAtPointer==expected : !sampledPointerVisited);
+        log(std::string("Frontend sampled: ")+(pass ? "PASS " : "FAIL ")+labels[sampledFixtureStage]+
+            " raw="+std::to_string(s.input->bindingLevels[gameoptions::INVENTORY])+
+            " sampled="+std::to_string(s.sampledControls ? s.sampledControls->level(gameoptions::INVENTORY) : 0)+
+            " pointer="+(sampledPointerVisited ? std::to_string(sampledAtPointer) : "skip"));
+        sampledFixturePassed=sampledFixturePassed && pass;
+        if (++sampledFixtureStage==5) {
+            s.input->controlEditor.waiting=-1;
+            if (!sampledFixturePassed) outcome.error="Frontend sampled owner publication failed";
+            decide(Result::Quit);
+            return false;
         }
     }
     handleKeys(false);

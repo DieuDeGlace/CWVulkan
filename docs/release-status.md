@@ -1,5 +1,46 @@
 # Source review checkpoint — 2026-11-08
 
+## Frontend sampled input publication - 2026-11-10
+
+Title and character pages now publish into the same retained control owner used
+by gameplay. Admitted physical bytes become visible before synchronous pointer
+work. The later controller merge keeps compatibility edges relative to the previous
+completed sample, so a held controller button does not become a new press after
+an intermediate physical zero. Capture and inactive visits retain current levels.
+
+The frontend runner completes its controller merge even when a callback has just
+cleared every frontend page. Gameplay menu runners begin the physical phase and
+leave completion to their existing gameplay caller, once. Caller mode supplies
+this distinction; current page visibility cannot replace it. Detached callers
+retain the existing combined GameInput update API.
+
+This consumes the already whole-read, unchanged [lifetime contract](specs/steam-game-interface-and-input-lifetime-through-session-transitions-20261110.md)
+and the existing independent physical/sampled contracts through their owned input
+paths. A new private receipt retains their provenance; no source artifact was
+rewritten and no implementation, tests, owner outputs or verification feedback
+reached the original-only author.
+
+Three baseline failures showed a real physical level of one while the borrowed
+Game consumer remained zero. Five actual frontend cases now pass in Native and
+Alpha: ordinary publication, capture, inactive polling, release and a final visit
+with all frontend pages cleared. They also check the value at the pointer stage.
+The held-controller/intermediate-zero regression, actual two-session lifetimes,
+mouse boundaries, both Chat orders, sampled menu admissions and all twenty Controls
+cases pass on the current executable, including GUI scale 1.5. Private save bytes
+are unchanged. All five targets, full required-owner CPU without skips, all Vulkan
+groups and SDK independence pass. No new settled-scene or original-runtime claim
+is made by these explicit device-buffer and queue fixtures.
+
+Complete native Game/World/entity identity, frontend Chat and full mouse business,
+early zoom application placement/native resource metadata, the full main-loop
+scheduler and imported providers remain unfinished. Other state owners, Controls
+parent/registration/general geometry, full Help and final native/human/provenance
+acceptance remain open. The earlier source deadline miss remains unexplained with
+no production streaming change. Alpha relief/lighting, purple dry Undead Lands,
+distinct biome palettes and Omega water retain their existing paths. Owner data,
+captures, saves and binaries stay outside public source.
+
+
 ## Retained Game input, Chat and Interface cache - 2026-11-10
 
 Sampled control state, Chat editor/history/pending messages and the Interface's

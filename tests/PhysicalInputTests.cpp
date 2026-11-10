@@ -194,6 +194,34 @@ int physicalInputTests() {
     normal.phase = Poll::Normal; gameplay.update(normal,held,pad);
     check(!gameplay.held(gameoptions::UP) && !gameplay.pressed(gameoptions::UP), "next admitted zero sample clears level");
 
+    {
+        GameInput staged;
+        Poll phase;
+        phase.phase=Poll::Normal;
+        Levels physical{};
+        physical[gameoptions::UP]=128;
+        staged.publishPhysical(phase,physical);
+        check(staged.level(gameoptions::UP)==128 && staged.pressed(gameoptions::UP),
+              "physical byte is visible before pointer work and final controller merge");
+        staged.update(phase,physical,{});
+        check(staged.level(gameoptions::UP)==128 && staged.pressed(gameoptions::UP),
+              "final merge retains the rise from the previous completed sample");
+        GamepadButtons controller;
+        controller.connected=true; controller.b=true;
+        physical={};
+        staged.update(phase,physical,controller);
+        check(staged.held(gameoptions::JUMP) && staged.pressed(gameoptions::JUMP),"first controller jump rise");
+        staged.publishPhysical(phase,physical);
+        check(!staged.held(gameoptions::JUMP),"new physical pass precedes the controller overlay");
+        staged.update(phase,physical,controller);
+        check(staged.held(gameoptions::JUMP) && !staged.pressed(gameoptions::JUMP),
+              "held controller does not manufacture a rise after intermediate physical zero");
+        phase.phase=Poll::Capturing;
+        staged.publishPhysical(phase,physical);
+        staged.update(phase,physical,{});
+        check(staged.held(gameoptions::JUMP) && !staged.pressed(gameoptions::JUMP),"capture skips both publication phases");
+    }
+
     const auto name = gameoptions::bindingName;
     check(name({1,-7}) == L"Escape" && name({28,0}) == L"Return" && name({29,0}) == L"Left Control" &&
           name({86,0}) == L"<" && name({203,2}) == L"Left Arrow" && name({237,0}) == L"Media Select",

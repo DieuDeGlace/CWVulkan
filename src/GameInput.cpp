@@ -82,19 +82,33 @@ bool GameInput::keyIsBound(const gameoptions::Controls &controls, int glfwKey) {
 
 GamepadButtons GameInput::pollGamepad() { return readGamepad(); }
 
+void GameInput::publishPhysical(const physicalinput::Poll &poll, const physicalinput::Levels &levels) {
+    if (poll.phase != physicalinput::Poll::Normal)
+        return;
+    beforePhysical = down;
+    for (int i = 0; i < gameoptions::BINDINGS; ++i) {
+        edge[size_t(i)] = levels[size_t(i)] != 0 && down[size_t(i)] == 0;
+        down[size_t(i)] = levels[size_t(i)];
+    }
+    physicalPublished = true;
+}
+
 void GameInput::update(const physicalinput::Poll &poll, const physicalinput::Levels &levels, const GamepadButtons &pad,
                        bool ui, bool mapMode, bool panelEligible) {
     if (poll.phase != physicalinput::Poll::Normal) {
         padFrame.skipPoll();
         edge = {};
+        physicalPublished = false;
         return;
     }
+    const auto &previous = physicalPublished ? beforePhysical : down;
     padFrame.update(pad, ui, mapMode, panelEligible);
     for (int i = 0; i < gameoptions::BINDINGS; ++i) {
         const uint8_t now = padFrame.held[size_t(i)] ? uint8_t(1) : levels[size_t(i)];
-        edge[size_t(i)] = now != 0 && down[size_t(i)] == 0;
+        edge[size_t(i)] = now != 0 && previous[size_t(i)] == 0;
         down[size_t(i)] = now;
     }
+    physicalPublished = false;
 }
 
 std::array<bool, gameoptions::BINDINGS> gamepadControls(const GamepadButtons &pad, bool ui, bool mapMode, bool suppressJump) {

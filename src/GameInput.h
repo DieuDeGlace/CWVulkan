@@ -50,6 +50,10 @@ class GameInput {
     // final levels, never fabricated pulses from short window-message taps.
     void update(const physicalinput::Poll &, const physicalinput::Levels &, const GamepadButtons &,
                 bool ui = false, bool mapMode = false, bool panelEligible = false);
+    // Publish admitted physical bytes before synchronous pointer callbacks.
+    // update() later merges the pad while preserving the previous completed
+    // sample for compatibility edges. Standalone update() remains supported.
+    void publishPhysical(const physicalinput::Poll &, const physicalinput::Levels &);
     static GamepadButtons pollGamepad();
     const GamepadFrame &gamepad() const { return padFrame; }
     // Whether the control is down now, and whether it went down this frame.
@@ -68,5 +72,7 @@ class GameInput {
   private:
     std::array<uint8_t, gameoptions::BINDINGS> down{};
     std::array<bool, gameoptions::BINDINGS> edge{}; // Compatibility consumers; Native owners retain their own latches.
+    std::array<uint8_t, gameoptions::BINDINGS> beforePhysical{};
+    bool physicalPublished = false;
     GamepadFrame padFrame;
 };

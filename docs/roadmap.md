@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Shared frontend sampled-input publication before pointer work, one final
+  controller merge per caller and compatibility edges across physical zeros.
+  Three before-failures/five actual frontend cases and all affected lifecycle/
+  input/Controls/full CPU/no skips/Vulkan/SDK checks pass. Full scheduler/providers,
+  frontend Chat and other native graph/acceptance gates remain open.
+  See [the checkpoint](release-status.md#frontend-sampled-input-publication---2026-11-10).
+
+
 - [x] Coordinator retention of sampled controls, Chat and Interface cached Y across
   render/world session teardown. Three real before-failures now pass in Native and
   Alpha, with all affected input checks/all targets/full CPU/no skips/Vulkan/SDK.
