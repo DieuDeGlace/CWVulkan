@@ -25,6 +25,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <locale>
 #include <string>
 
 namespace {
@@ -369,6 +371,37 @@ void optionsFiles() {
     FRONT_CHECK(gameoptions::readControls(gameoptions::writeControls(changed)) == changed);
     FRONT_CHECK(gameoptions::bindingName({0, 0}) == "Unassigned" && gameoptions::bindingName({2, 1}) == "Mouse 2" &&
                 gameoptions::bindingName({0x11, 0}) == "W");
+    // Native compact menu text is independent of the detailed controls screen.
+    const auto compact=gameoptions::compactBindingName;
+    FRONT_CHECK(compact({0,0})==L"?" && compact({0,2})==L"?" && compact({1,2})==L"ESC");
+    FRONT_CHECK(compact({14,0})==L"BS" && compact({28,0})==L"RET" && compact({29,0})==L"LC");
+    FRONT_CHECK(compact({56,0})==L"LA" && compact({203,-7})==L"LA" && compact({123,0})==L"NCON");
+    FRONT_CHECK(compact({145,0})==L"@" && compact({86,0})==L"<" && compact({237,0})==L"SEL");
+    for (const int missing : {-1,0,84,85,89,99,238,std::numeric_limits<int>::max()})
+        FRONT_CHECK(compact({missing,0})==L"?");
+    const auto priorLocale=std::locale::global(std::locale::classic());
+    FRONT_CHECK(compact({0,1})==L"M1" && compact({2,1})==L"M3" && compact({-2,1})==L"M-1");
+    FRONT_CHECK(compact({std::numeric_limits<int>::max(),1})==L"M-2147483648");
+    std::locale::global(priorLocale);
+    FRONT_CHECK(gameoptions::readControls("ButtonInventory 46 0 ButtonInventory 123 2 ButtonInventory 99")[gameoptions::INVENTORY] ==
+                gameoptions::Binding{123,2}); // The incomplete final pair never publishes.
+    namespace fs=std::filesystem;
+    const auto settings=fs::temp_directory_path()/
+        ("cubevulkan-controls-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const bool created=fs::create_directory(settings);
+    FRONT_CHECK(created);
+    if (created) {
+        {std::ofstream file(settings/"controls.cfg");file<<"ButtonInventory 123 2 ButtonInventory 99";}
+        gameoptions::Options persistedOptions;
+        gameoptions::Controls persistedControls;
+        gameoptions::loadAndComplete(settings,persistedOptions,persistedControls);
+        FRONT_CHECK(persistedControls[gameoptions::INVENTORY]==gameoptions::Binding{123,2});
+        std::ifstream file(settings/"controls.cfg");
+        const std::string saved(std::istreambuf_iterator<char>(file),{});
+        FRONT_CHECK(saved==gameoptions::writeControls(persistedControls));
+        file.close();
+        fs::remove_all(settings); // Only the uniquely created test directory.
+    }
     // The options screen's arrows.
     OptionsScreen s;
     s.open(gameoptions::Options{}, {{1280, 720, {60}}, {1920, 1080, {60, 144}}});

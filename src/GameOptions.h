@@ -87,6 +87,9 @@ bool saveControls(const std::filesystem::path &file, const Controls &c);
 // The name the controls screen shows for a binding: "Mouse " + number, "Unassigned" for (0, 0),
 // otherwise the key's name (open question 8: CubeVulkan names scan codes with its own table).
 std::string bindingName(const Binding &b);
+// Separate compact labels used by the ordinary six menu controls. Constructor
+// dictionary facts and formatter branches: independent 2026-11-09 contracts.
+std::wstring compactBindingName(const Binding &b);
 
 // Opens the pair at start-up the way the game does: read, then written straight back, so a
 // missing or partial file is completed with defaults.

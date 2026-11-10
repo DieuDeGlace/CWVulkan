@@ -1,5 +1,26 @@
 # Clean-room process
 
+## Six menu caption continuation, 2026-11-09
+
+The original-only author independently finalized the complete six-caption and
+compact key-name contracts without implementation, tests, SDK, owner data or
+feedback. The implementer read both entire held artifacts, verified their hashes
+and copied unchanged prose to docs/specs before implementing. The early caption
+phase, per-binding formatting/publication, counted subtree text comparison and
+selected constructor controls persistence use only those contracts and owned code.
+The detailed controls-screen formatter is a separate bounded path.
+
+The compact dictionary is the complete constructor population; later independent
+writers, imported numeric/font/cache providers, shared native component aliases,
+arbitrary scheduling and broad native runtime/parity acceptance remain open.
+Actual-owner caption/provider-order, compact key/pair and counted-subtree
+regressions, all five builds, full required-owner CPU without skips, all Vulkan
+groups and SDK independence pass. Short private Native/Alpha frontend and actual
+menu callback checks pass with unchanged private saves. These are owned-engine
+checks, not original OS-input or visual-parity evidence. Full startup ordering
+relative to resource/provider failures also remains open. The separate Native
+settled-scene readiness failure is retained. Owner assets and evidence stay local.
+
 ## Owned biome land and palette correction, 2026-11-09
 
 The implementer used project-owned composition, region, map and stored-color

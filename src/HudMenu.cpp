@@ -47,6 +47,18 @@ void Hud::layoutMenuControls(glm::ivec2 windowPixels) const {
         if (auto *node=panels.menus[size_t(index)])
             scene->setPosition(*node,anchor,{float((2*index-count+1)*30),-200.0f});
 }
+void Hud::updateMenuCaptions(const gameoptions::Controls &controls) {
+    static constexpr gameoptions::Action bindings[]{gameoptions::CRAFTING_MENU, gameoptions::INVENTORY,
+        gameoptions::WORLD_MAP, gameoptions::SYSTEM_MENU, gameoptions::MULTIPLAYER_MENU};
+    for (size_t index=0;index<5;++index) {
+        const auto caption=gameoptions::compactBindingName(controls[bindings[index]]);
+        if (auto *node=panels.menus[index]) {
+            requireText(std::u16string(caption.begin(),caption.end()));
+            node->setAllText(caption);
+        }
+    }
+    if (auto *node=panels.menus[5]) node->setAllText(L"F1");
+}
 void Hud::publishMenuControls(const uint8_t &menuByte) {
     for (auto *node:panels.menus)
         if (node) node->visible=menuByte!=0; // Separate late update, including while F4 hides root.

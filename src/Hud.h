@@ -8,6 +8,7 @@
 #include "MapMarks.h"
 #include "MapPreview.h"
 #include "MapHistory.h"
+#include "GameOptions.h"
 #include "SteamVoxel.h"
 #include "InventoryUi.h"
 #include "ItemPreview.h"
@@ -517,6 +518,8 @@ class Hud {
     // Retained owner-template controls; actions do not change the separate Escape byte.
     void bindMenuActions(std::function<void(Menu)>);
     void layoutMenuControls(glm::ivec2 windowPixels) const;
+    // Early Game prefix; format each current pair before fetching its current node.
+    void updateMenuCaptions(const gameoptions::Controls &controls);
     void publishMenuControls(const uint8_t &menuByte);
     const plasma::SceneNode *menuControl(Menu) const;
     void interfaceKeyboard(plasma::Input::Key,uint16_t);

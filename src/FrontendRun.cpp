@@ -1073,6 +1073,10 @@ void Session::readInput(bool poll, double frameMs) {
         std::vector<int> keys{GLFW_KEY_F1+int(key-0x70)};
         handleInterfaceKeys(keys,true);
     });
+    if (poll) {
+        static const auto defaults=gameoptions::defaultControls();
+        hud.updateMenuCaptions(s.controls ? *s.controls : defaults);
+    }
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
                       gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()))

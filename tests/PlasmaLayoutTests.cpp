@@ -2,6 +2,7 @@
 #include "PlasmaScene.h"
 #include "PlasmaDraw.h"
 #include <cstdio>
+#include <cstring>
 
 int plasmaLayoutTests() {
     int failures = 0;
@@ -138,6 +139,37 @@ int plasmaLayoutTests() {
     check(drawn.positions.size() == 3 && close(drawn.positions[0].x, 4.5f + plasma::DRAW_OFFSET) &&
               close(drawn.positions[0].y, 4 + plasma::DRAW_OFFSET) && close(drawn.positions[0].w, .1875f),
           "descendant drawing uses both grouped owner mappings before its separate WORLD");
+    // Recursive caption publication compares counted UTF-16 without a visibility
+    // or Widget gate; a local equal string must not suppress child traversal.
+    plx::Document textDoc;
+    std::vector<uint8_t> counted(10);
+    const int32_t count=3;
+    std::memcpy(counted.data(),&count,4);
+    counted[4]='A';counted[8]='B';
+    textDoc.shapes.push_back({"TextShape",{{"TextShape.string",{},{{"Attribute.frame",counted,{}}}}}});
+    plasma::Scene textScene(textDoc);
+    auto textNode=[&](plasma::SceneNode &parent) {
+        auto child=std::make_unique<plasma::SceneNode>();
+        child->doc=&textDoc;child->shape=0;child->parent=&parent;
+        auto *result=child.get();parent.children.push_back(std::move(child));return result;
+    };
+    auto *equal=textNode(textScene.root());
+    equal->visible=false;equal->clips=true;equal->flags=plx::NODE_PASSIVE|plx::NODE_NO_PICK;
+    equal->widget.emplace();equal->widget->enabled=false;equal->widget->caption=L"unrelated Widget caption";
+    auto *descended=textNode(*equal);descended->text=L"old";
+    auto *disabled=textNode(*equal);disabled->flags=plx::NODE_DISABLED;disabled->text=L"keep";
+    auto *disabledChild=textNode(*disabled);disabledChild->text=L"keep child";
+    const std::wstring embedded{L'A',0,L'B'};
+    textScene.root().setAllText(embedded);
+    check(!equal->text && descended->text==embedded,"equal counted owner text avoids a local copy but still visits children");
+    check(disabled->text==L"keep" && disabledChild->text==L"keep child","disabled bit skips the complete text subtree");
+    check(equal->widget->caption==L"unrelated Widget caption" && !equal->visible && equal->clips,
+          "text publication leaves Widget caption, visibility and clipping untouched");
+    equal->setAllText(L"A");
+    check(equal->text==L"A" && descended->text==L"A","embedded zero is not a string terminator for equality or replacement");
+    descended->text=L"different";
+    equal->setAllText(L"A");
+    check(descended->text==L"A","equal live override still updates a changed child");
     std::printf("Plasma layout: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

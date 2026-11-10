@@ -36,6 +36,24 @@ bool isTextShape(const SceneNode &n) {
     return n.doc && n.shape >= 0 && n.shape < (int)n.doc->shapes.size() && n.doc->shapes[(size_t)n.shape].kind == "TextShape";
 }
 
+// Compare the selected owner string by count, including embedded zero units.
+// Live overrides avoid reparsing the immutable property on repeated updates.
+bool sameText(const SceneNode &node, const std::wstring &value) {
+    if (node.text) return *node.text == value;
+    const auto *shape = node.shapeObject();
+    const auto *property = shape ? shape->property("TextShape.string") : nullptr;
+    if (!property) return value.empty();
+    const auto frames = property->frames();
+    if (frames.empty() || frames.front()->size() < 4) return value.empty();
+    const auto &bytes = *frames.front();
+    int32_t count;
+    std::memcpy(&count, bytes.data(), sizeof count);
+    if (count < 0 || size_t(count) > (bytes.size()-4)/2 || size_t(count) != value.size()) return false;
+    for (size_t index=0;index<value.size();++index)
+        if (uint16_t(bytes[4+index*2] | uint16_t(bytes[5+index*2])<<8) != uint16_t(value[index])) return false;
+    return true;
+}
+
 bool disabled(const SceneNode &n) { return (n.flags & plx::NODE_DISABLED) != 0; }
 
 } // namespace
@@ -337,7 +355,7 @@ void SceneNode::setTextColour(const std::string &n, glm::vec4 colour) {
 void SceneNode::setAllText(const std::wstring &t) {
     if (disabled(*this))
         return;
-    if (isTextShape(*this))
+    if (isTextShape(*this) && !sameText(*this, t))
         text = t;
     for (auto &c : children)
         c->setAllText(t);

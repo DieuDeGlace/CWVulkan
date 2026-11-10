@@ -6,6 +6,9 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <string_view>
+#include <cstdint>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -225,16 +228,179 @@ std::string bindingName(const Binding &b) {
     return "Key " + std::to_string(b.code);
 }
 
+std::wstring compactBindingName(const Binding &b) {
+    const int32_t key = b.code;
+    if (key == 0 && b.kind == 0)
+        return L"?";
+    if (b.kind == 1) {
+        // Construct the provider before rereading the key. Native addition wraps
+        // before signed integer insertion; the host stream supplies its locale.
+        std::wostringstream out;
+        const int32_t number = std::bit_cast<int32_t>(uint32_t(b.code) + 1u);
+        out << L"M" << number;
+        return out.str();
+    }
+    // Complete compact constructor population, not the detailed controls-screen
+    // names or an inferred OS layout. Sorted immutable storage avoids tree setup.
+    static constexpr std::pair<int32_t, std::wstring_view> names[] = {
+        {1, L"ESC"},
+        {2, L"1"},
+        {3, L"2"},
+        {4, L"3"},
+        {5, L"4"},
+        {6, L"5"},
+        {7, L"6"},
+        {8, L"7"},
+        {9, L"8"},
+        {10, L"9"},
+        {11, L"0"},
+        {12, L"-"},
+        {13, L"="},
+        {14, L"BS"},
+        {15, L"TAB"},
+        {16, L"Q"},
+        {17, L"W"},
+        {18, L"E"},
+        {19, L"R"},
+        {20, L"T"},
+        {21, L"Y"},
+        {22, L"U"},
+        {23, L"I"},
+        {24, L"O"},
+        {25, L"P"},
+        {26, L"["},
+        {27, L"]"},
+        {28, L"RET"},
+        {29, L"LC"},
+        {30, L"A"},
+        {31, L"S"},
+        {32, L"D"},
+        {33, L"F"},
+        {34, L"G"},
+        {35, L"H"},
+        {36, L"J"},
+        {37, L"K"},
+        {38, L"L"},
+        {39, L";"},
+        {40, L"'"},
+        {41, L"`"},
+        {42, L"LS"},
+        {43, L"\\"},
+        {44, L"Z"},
+        {45, L"X"},
+        {46, L"C"},
+        {47, L"V"},
+        {48, L"B"},
+        {49, L"N"},
+        {50, L"M"},
+        {51, L","},
+        {52, L"."},
+        {53, L"/"},
+        {54, L"RS"},
+        {55, L"N*"},
+        {56, L"LA"},
+        {57, L"SP"},
+        {58, L"CL"},
+        {59, L"F1"},
+        {60, L"F2"},
+        {61, L"F3"},
+        {62, L"F4"},
+        {63, L"F5"},
+        {64, L"F6"},
+        {65, L"F7"},
+        {66, L"F8"},
+        {67, L"F9"},
+        {68, L"F10"},
+        {69, L"NL"},
+        {70, L"SL"},
+        {71, L"N7"},
+        {72, L"N8"},
+        {73, L"N9"},
+        {74, L"N-"},
+        {75, L"N4"},
+        {76, L"N5"},
+        {77, L"N6"},
+        {78, L"N+"},
+        {79, L"N1"},
+        {80, L"N2"},
+        {81, L"N3"},
+        {82, L"N0"},
+        {83, L"N."},
+        {86, L"<"},
+        {87, L"F11"},
+        {88, L"F12"},
+        {100, L"F13"},
+        {101, L"F14"},
+        {102, L"F15"},
+        {112, L"KN"},
+        {115, L"C1"},
+        {121, L"CON"},
+        {123, L"NCON"},
+        {125, L"YEN"},
+        {126, L"C2"},
+        {141, L"N="},
+        {144, L"PT"},
+        {145, L"@"},
+        {146, L":"},
+        {147, L"_"},
+        {148, L"KJ"},
+        {149, L"ST"},
+        {150, L"AX"},
+        {151, L"UL"},
+        {153, L"NT"},
+        {156, L"NE"},
+        {157, L"RC"},
+        {160, L"MUT"},
+        {161, L"CAL"},
+        {162, L"PP"},
+        {164, L"MS"},
+        {174, L"V-"},
+        {176, L"V+"},
+        {178, L"WH"},
+        {179, L"N,"},
+        {181, L"N/"},
+        {183, L"SRQ"},
+        {184, L"RA"},
+        {197, L"PAU"},
+        {199, L"HOM"},
+        {200, L"UA"},
+        {201, L"PGU"},
+        {203, L"LA"},
+        {205, L"RA"},
+        {207, L"END"},
+        {208, L"DA"},
+        {209, L"PGD"},
+        {210, L"INS"},
+        {211, L"DEL"},
+        {219, L"WL"},
+        {220, L"WR"},
+        {221, L"AM"},
+        {222, L"SP"},
+        {223, L"SS"},
+        {227, L"SW"},
+        {229, L"WS"},
+        {230, L"WF"},
+        {231, L"WR"},
+        {232, L"WST"},
+        {233, L"WF"},
+        {234, L"WB"},
+        {235, L"MC"},
+        {236, L"MA"},
+        {237, L"SEL"},
+    };
+    const auto found = std::lower_bound(std::begin(names), std::end(names), key,
+        [](const auto &entry, int32_t code) { return entry.first < code; });
+    return found != std::end(names) && found->first == key ? std::wstring(found->second) : L"?";
+}
+
 void loadAndComplete(const fs::path &folder, Options &options, Controls &controls) {
     options = Options{};
     controls = defaultControls();
     loadOptions(folder / "options.cfg", options);
     loadControls(folder / "controls.cfg", controls);
     saveOptions(folder / "options.cfg", options);
-    // (the game writes controls.cfg only when the controls screen's OK applies it; CubeVulkan
-    // writes a missing one so it can be edited)
-    if (!fs::exists(folder / "controls.cfg"))
-        saveControls(folder / "controls.cfg", controls);
+    // The constructor persists the current aggregate even for an existing file.
+    saveControls(folder / "controls.cfg", controls);
 }
 
 } // namespace gameoptions

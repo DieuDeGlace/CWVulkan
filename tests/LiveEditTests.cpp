@@ -4,6 +4,21 @@
 #include "PlasmaEditScene.h"
 #include <fstream>
 #include <iostream>
+#include <locale>
+
+namespace {
+// Exercise the real stream boundary, without injecting a replacement formatter.
+class CaptionNumber final : public std::num_put<wchar_t> {
+  public:
+    std::function<void()> beforeNumber;
+  private:
+    iter_type do_put(iter_type out,std::ios_base &stream,char_type fill,long value) const override {
+        if (beforeNumber) beforeNumber();
+        return std::num_put<wchar_t>::do_put(out,stream,fill,value);
+    }
+};
+}
+
 
 int liveEditTests() {
     int failures=0;
@@ -164,6 +179,41 @@ int liveEditTests() {
         fit.fitMenuIcon(*button,"background",*icon->doc,"no-such-menu-resource");
         check(frame->find("icon")==retained,"missing resource returns before old-icon removal");
     }
+    auto captionControls=gameoptions::defaultControls();
+    hud.setInterfaceShown(false); // Neither hidden ancestor nor hidden own nodes gate text.
+    hud.updateMenuCaptions(captionControls);
+    auto menuText=[&](int index) {
+        const auto *node=hud.menuControl(Hud::Menu(index));
+        return node ? plasma::captionText(*node) : std::u16string{};
+    };
+    const std::u16string initial[]{u"C",u"B",u"M",u"O",u"J",u"F1"};
+    for (int i=0;i<6;++i) check(menuText(i)==initial[i],"actual owner menu TextShapes get default binding captions while hidden");
+    captionControls[gameoptions::CRAFTING_MENU]={1,2};
+    captionControls[gameoptions::INVENTORY]={123,0};
+    captionControls[gameoptions::WORLD_MAP]={0,0};
+    captionControls[gameoptions::SYSTEM_MENU]={84,0};
+    captionControls[gameoptions::MULTIPLAYER_MENU]={237,0};
+    hud.updateMenuCaptions(captionControls);
+    const std::u16string rebound[]{u"ESC",u"NCON",u"?",u"?",u"SEL",u"F1"};
+    for (int i=0;i<6;++i) check(menuText(i)==rebound[i],"rebound compact names, misses and fixed Help use their separate paths");
+    auto *numberProvider=new CaptionNumber;
+    int formats=0;
+    bool priorTextObserved=false;
+    numberProvider->beforeNumber=[&] {
+        ++formats;
+        if (formats==1) priorTextObserved=menuText(0)==u"ESC";
+        captionControls[gameoptions::INVENTORY]={14,0};
+    };
+    captionControls[gameoptions::CRAFTING_MENU]={0,1};
+    const auto previousLocale=std::locale::global(std::locale(std::locale::classic(),numberProvider));
+    hud.updateMenuCaptions(captionControls);
+    hud.updateMenuCaptions(captionControls);
+    std::locale::global(previousLocale);
+    check(priorTextObserved && formats==2 && menuText(0)==u"M1" && menuText(1)==u"BS",
+          "formatter runs before its node publication, later bindings are read fresh, and equal updates still format");
+    if (const auto *control=hud.menuControl(Hud::Menu::Inventory))
+        check(!control->visible,"early caption work does not publish later menu visibility");
+    hud.setInterfaceShown(true);
     hud.setGuiScale(2);
     hud.layoutMenuControls({1280,720});
     for (int i=0;i<6;++i) if (const auto *control=hud.menuControl(Hud::Menu(i)))

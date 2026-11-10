@@ -3929,6 +3929,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         input.gamepadSampled = false;
         input.pointerSampled = false;
         glfwPollEvents();
+        if (hudReady) hud.updateMenuCaptions(gameControls); // Before the Game time sample and World work.
         if (!workerCharacterSaving && std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
             saveProgress();
             lastSave = std::chrono::steady_clock::now();
