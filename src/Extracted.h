@@ -35,6 +35,8 @@ template <class Value> class NativeSourceMap;
 
 class HostSourceLoader;
 
+namespace meshprofile { class Sample; }
+
 class ExtractedWorld {
     struct Zone;
 
@@ -149,7 +151,9 @@ class ExtractedWorld {
 
       private:
         friend class ExtractedWorld;
-        explicit BlockEdits(ExtractedWorld &world);
+        enum class Protection { WorldState, TerrainOnly };
+        explicit BlockEdits(ExtractedWorld &world, Protection protection = Protection::WorldState,
+                            meshprofile::Sample *profile = nullptr);
         ExtractedWorld &world;
         BlockEdits *previous, *root;
         sourcestates::Store::Guard sourceLock;
@@ -281,7 +285,8 @@ class ExtractedWorld {
                                       bool includeModels);
     CapturedLists readCapturedLists(int32_t x, int32_t y, bool includeMarks = false) const;
     static std::optional<worldgen::MeshLightVolume> lightsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
-    void publishMeshLight(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3], const worldgen::MeshLightVolume &light);
+    void publishMeshLight(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3],
+                          const worldgen::MeshLightVolume &light, meshprofile::Sample &profile);
     static std::optional<scenevisibility::Bounds> boundsFor(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3]);
     using Key = std::pair<int, int>;
     std::filesystem::path folder;

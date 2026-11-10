@@ -643,11 +643,20 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::cachedUnlocked(int ax, int
 
 thread_local ExtractedWorld::BlockEdits *ExtractedWorld::activeEdits = nullptr;
 
-ExtractedWorld::BlockEdits::BlockEdits(ExtractedWorld &owner) : world(owner), previous(activeEdits), root(owner.blockEdits()) {
+ExtractedWorld::BlockEdits::BlockEdits(ExtractedWorld &owner, Protection protection, meshprofile::Sample *profile)
+    : world(owner), previous(activeEdits), root(owner.blockEdits()) {
+    // Taking the World guard after an existing terrain-only writer would invert
+    // the normal lock order. That private transaction must remain terrain-only.
+    if (root && protection == Protection::WorldState && !root->sourceLock.owns_lock())
+        throw std::logic_error("World-state edit inside a terrain-only transaction");
     if (!root) {
         root = this;
-        sourceLock = world.lockSourceState();
+        if (protection == Protection::WorldState) {
+            sourceLock = world.lockSourceState();
+            if (profile) profile->mark(meshprofile::SourceLock);
+        }
         writerLock = std::unique_lock(world.terrainWriterMutex);
+        if (profile) profile->mark(meshprofile::WriterLock);
     }
     activeEdits = this;
 }
@@ -1269,8 +1278,11 @@ std::optional<worldgen::MeshLightVolume> ExtractedWorld::lightsFor(int ax, int a
 }
 
 void ExtractedWorld::publishMeshLight(int ax, int ay, const std::shared_ptr<Zone> (&around)[3][3],
-                                      const worldgen::MeshLightVolume &light) {
-    auto edits = editBlocks();
+                                      const worldgen::MeshLightVolume &light, meshprofile::Sample &profile) {
+    // Derived blocks, ordinary models and auxiliary light values use immutable
+    // snapshots, not the mutable source-state lists. Keep writer serialization
+    // and identity-checked COW publication without the unrelated frame guard.
+    BlockEdits edits(*this, BlockEdits::Protection::TerrainOnly, &profile);
     auto current = editedZone(ax, ay);
     if (!current)
         current = cached(ax, ay);
@@ -1827,7 +1839,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     if (auto solved = lightsFor(ax, ay, around)) {
         solvedLight = std::move(*solved);
         profile.mark(meshprofile::Light);
-        publishMeshLight(ax, ay, around, solvedLight);
+        publishMeshLight(ax, ay, around, solvedLight, profile);
         profile.mark(meshprofile::PublishLight);
     }
     const bool nativeEncoding = !alphaLook && !solvedLight.columns.empty();

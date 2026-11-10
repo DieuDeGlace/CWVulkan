@@ -11,7 +11,7 @@
 #include <thread>
 
 namespace meshprofile {
-enum Stage { Load, Bounds, Light, PublishLight, Setup, AlphaLight, Solid, Water, SourceGenerate, AlphaCompose, Refresh, Store, Finish, COUNT };
+enum Stage { Load, Bounds, Light, SourceLock, WriterLock, PublishLight, Setup, AlphaLight, Solid, Water, SourceGenerate, AlphaCompose, Refresh, Store, Finish, COUNT };
 struct Sink {
     std::ofstream output;
     bool enabled = false;
@@ -23,7 +23,7 @@ struct Sink {
         if (output) {
             enabled = true;
             output << "scope,thread,zone_x,zone_y,alpha_context,success,lo,hi,cache_version,option_version,original,solid_triangles,lava_triangles,water_triangles,"
-                      "load_ms,bounds_ms,light_ms,publish_light_ms,setup_ms,alpha_light_ms,solid_ms,water_ms,source_generate_ms,alpha_compose_ms,refresh_ms,store_ms,finish_ms,total_ms\n"
+                      "load_ms,bounds_ms,light_ms,source_lock_ms,writer_lock_ms,publish_light_ms,setup_ms,alpha_light_ms,solid_ms,water_ms,source_generate_ms,alpha_compose_ms,refresh_ms,store_ms,finish_ms,total_ms\n"
                    << std::fixed << std::setprecision(3);
         }
     }

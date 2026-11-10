@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <future>
 #include <limits>
 
 namespace {
@@ -146,6 +147,40 @@ int modelLightTests() {
         water = {};
         check(world.mesh(0, 0, opaque, water) && world.gameModels(0, 0) == refreshed,
               "unchanged prepared samples reuse their immutable model vector");
+        if (style == RenderStyle::Steam) {
+            // Engine concurrency contract: a frame's source-list guard must not
+            // prevent independent derived terrain publication from progressing.
+            world.setGameBlock(32, 32, 1, {255, 23, 45, 17, 0, 2});
+            world.takeChangedZones();
+            const auto heldModels = world.gameModels(0, 0);
+            const auto heldValues = *heldModels;
+            std::future<bool> pending;
+            {
+                auto frameGuard = world.lockSourceState();
+                {
+                    auto physicalTransaction = world.editBlocks();
+                    pending = std::async(std::launch::async, [&] {
+                        Mesh workerOpaque, workerWater;
+                        return world.mesh(0, 0, workerOpaque, workerWater);
+                    });
+                    check(pending.wait_for(std::chrono::milliseconds(50)) != std::future_status::ready,
+                          "an active terrain transaction still prevents early light publication");
+                    world.setGameBlock(40, 40, 1, {111, 222, 123, 0, 1, 0});
+                    world.invalidateGameBlock(40, 40); // Raw writes and mesh requests are separate APIs.
+                } // Physical COW commit precedes the worker's serialized publication.
+                const bool progressed = pending.wait_for(std::chrono::seconds(10)) == std::future_status::ready;
+                check(progressed, "derived mesh completes while the frame retains unrelated source-list protection");
+            } // Release the frame guard before joining even on regression failure.
+            check(pending.get(), "bounded worker completes after the frame guard is released");
+            check(world.gameBlock(32, 32, 1) == ExtractedWorld::GameBlock{21, 23, 45, 17, 0, 2} &&
+                      world.gameBlock(40, 40, 1) == ExtractedWorld::GameBlock{111, 222, 123, 0, 1, 0},
+                  "derived publication retains solved bytes and the physical writer's complete block");
+            const auto currentIdentity = world.gameZoneToken(0, 0);
+            check(identity && currentIdentity && identity->order == currentIdentity->order && *heldModels == heldValues,
+                  "parallel publication retains loaded identity and held immutable model snapshots");
+            check(!world.takeChangedZones().empty(), "derived publication preserves the physical writer's dirty request");
+        }
+
     }
     setRenderStyle(oldStyle);
     const auto owned = fs::weakly_canonical(root);

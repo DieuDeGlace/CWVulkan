@@ -1,5 +1,35 @@
 # Clean-room process
 
+## Owned derived-light publication concurrency, 2026-11-09
+
+This change uses only the engine's own immutable terrain/model storage, lock
+lifetimes, diagnostic measurements and actual concurrency regressions. It consumes
+no new original/reconstruction/SDK facts. Source research continues independently
+without implementation, verification or owner-output feedback. Earlier complete
+held caption contracts are retained unchanged provenance payloads, not authority
+for this engine-specific synchronization policy.
+
+Only private mesh-light publication uses a terrain-only transaction. It keeps
+the terrain writer mutex, cache-guarded COW commit and current loaded-identity
+check. Public world-state edits retain source-then-terrain protection; nesting a
+world-state edit into a terrain-only root is rejected before an inverted lock.
+Stored-light arithmetic, channel/record bytes, notification rules, owner data,
+terrain palettes, Alpha composition/lighting, Omega water and readiness gates
+are unchanged. Optional timing separates source/writer acquisition from remaining
+publication work, without clock sampling when disabled.
+
+The actual mesh regression failed on retained frame-source protection before
+the change and passes afterward while still enforcing terrain-writer exclusion,
+physical edits/dirty requests, held snapshots, stored light and loaded identity.
+All five targets, full required-owner CPU without skips, all Vulkan groups and
+SDK independence pass. One current Native scene and one Alpha/Omega scene pass
+the unchanged readiness deadlines with byte-identical private saves; images were
+inspected. The Alpha actor reached death/Revive during loading, so this is not
+full gameplay acceptance. The interrupted Steam-offline probe and earlier Native
+readiness failures remain retained evidence. Concurrent timings and these single
+runs do not establish FPS, loading reliability or complete original native
+concurrency/provider/OS/visual/gameplay parity. Owner assets and evidence stay local.
+
 ## Six menu caption continuation, 2026-11-09
 
 The original-only author independently finalized the complete six-caption and
