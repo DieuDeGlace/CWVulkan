@@ -287,7 +287,7 @@ class Session {
     void hideMultiplayerForMovement() { friendsOpen = false; }
     void dismissMenus() {
         while (ordinaryUi())
-            back(true);
+            compatibilityBack(true);
     }
     void toggleSystemMenu() { systemShown = !systemShown; }
     void toggleMultiplayerMenu();
@@ -308,6 +308,7 @@ class Session {
     glm::vec2 window{0}, mouse{0}; // GUI units
     glm::vec2 cardFrame{0}, selectFrame{0}, deleteToggleFrame{0}, deleteFrame{0};
     bool clicked = false;
+    bool nativeBackPressed = false;
     bool pointerDown = false, pointerUp = false, leftHeld = false;
     bool capturingAtPoll = false;
     std::vector<gamepadui::Point> navigationPoints;
@@ -325,12 +326,13 @@ class Session {
     float previewPanelScale = 0;
 
     // The front layers (frontend-title.md §2) and the screens over them.
-    bool titleShown = true, charactersShown = false, creationShown = false;
+    std::array<bool,5> frontendPages{true,false,false,false,false};
+    bool &titleShown=frontendPages[0], &charactersShown=frontendPages[1], &creationShown=frontendPages[2];
     bool optionsOpen = false, controlsOpen = false;
     bool riding() const { return titleShown || charactersShown; }
-    bool front() const { return titleShown || charactersShown || creationShown; }
+    bool front() const { return std::any_of(frontendPages.begin(),frontendPages.end(),[](bool shown){return shown;}); }
     void syncInterfaceState() {
-        hud.setInterfaceState({{titleShown, charactersShown, creationShown, false, false}, optionsOpen, controlsOpen});
+        hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
     }
 
     // The characters of characters.db and the list's state.
@@ -428,7 +430,8 @@ class Session {
     void systemItems(Hud::Screen &out);
     void openOptions();
     void applyOptions();
-    void back(bool inGame);
+    void back();
+    void compatibilityBack(bool inGame);
     void playSound(int number) {
         if (s.externalMenuSounds && (number == SOUND_MENU_OPEN || number == SOUND_MENU_CLOSE))
             return;
@@ -991,34 +994,29 @@ void Session::applyOptions() {
         s.applyOptions(options.values);
 }
 
-// Back (0x9ddb0): creation to character select, character select to the title.
-void Session::back(bool inGame) {
-    if (controlsOpen) {
-        controlsOpen = false;
-        return;
+// Original Back is a pure prioritized page transition. The live actor/camera remain.
+void Session::back() {
+    uiroot::State state;
+    state.frontend=frontendPages;
+    if (uiroot::back(state)) {
+        frontendPages=state.frontend;
+        syncInterfaceState();
     }
-    if (optionsOpen) {
-        optionsOpen = false;
-        return;
-    }
-    if (inGame) {
-        systemShown = friendsOpen = false;
-        return;
-    }
-    if (creationShown) {
-        creationShown = false, charactersShown = true;
-        if (selectedSlot >= 0 && selectedSlot < (int)listed.size())
-            putOnStage(listed[(size_t)selectedSlot].character, true);
-        else
-            stageDefaultPlayer();
-        camera.set(90, 0, 180, 8);
-    } else if (charactersShown)
-        charactersShown = false, titleShown = true;
+}
+
+// Existing application dismissal adapter, pending the full Game-key phase.
+// Its overlay handling is separate from the native Back event2 connection.
+void Session::compatibilityBack(bool inGame) {
+    if (controlsOpen) {controlsOpen=false;return;}
+    if (optionsOpen) {optionsOpen=false;return;}
+    if (inGame) {systemShown=friendsOpen=false;return;}
+    back();
 }
 
 // The frame's time and pointer. The title polls the window itself; in play the game has polled
 // it and gives the frame's time.
 void Session::readInput(bool poll, double frameMs) {
+    nativeBackPressed=false;
     if (poll)
         glfwPollEvents();
     // Window messages use the UI owner's retained coordinates. Polling
@@ -1198,7 +1196,7 @@ void Session::handleKeys(bool inGame) {
     for (int key : in.pressed) {
         switch (key) {
         case GLFW_KEY_ESCAPE: // (Esc's own flag, G+0x420, is open question 4; here it goes back)
-            back(inGame);
+            compatibilityBack(inGame);
             break;
         default:
             if (inGame && s.controls && keyMatches((*s.controls)[gameoptions::SYSTEM_MENU], key) && !optionsOpen && !controlsOpen)
@@ -1219,6 +1217,7 @@ void Session::handleKeys(bool inGame) {
 // --- Clicks ------------------------------------------------------------------------------------
 
 void Session::handleClick(bool inGame) {
+    if (nativeBackPressed) return; // the queued event2 already handled this frontend press
     const bool finishingCapture = controlsOpen && capturingAtPoll && !s.input->released.empty();
     if (finishingCapture)
         controls.waiting = -1;
@@ -1302,10 +1301,6 @@ void Session::handleClick(bool inGame) {
     }
     if (inGame)
         return;
-    if (pointerDown && (charactersShown || creationShown) && inside(mouse, BACK_AT, BACK_SIZE)) {
-        back(false);
-        return;
-    }
     if (titleShown) {
         if (!pointerUp)
             return;
@@ -1629,7 +1624,10 @@ void Session::characterItems(Hud::Screen &out) {
                 out.push_back(characterControl("button", buttons.deleteCharacter, DELETE_SIZE, "Delete Character"));
         }
     }
-    out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
+    out.push_back(widget("button",BACK_AT,BACK_SIZE,"Back"));
+    out.back().instance="frontend-back";
+    out.back().branch=uiroot::Branch::Root;
+    out.back().press=[this]{nativeBackPressed=true;back();};
 }
 
 void Session::secondHairItems(Hud::Screen &out) {
@@ -1712,7 +1710,10 @@ void Session::creationItems(Hud::Screen &out) {
     out.back().instance="creation-confirm";
     out.back().visible=currentName.size()>=2 && currentName.size()<=15;
     out.back().release=[this]{confirmCreation();};
-    out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
+    out.push_back(widget("button",BACK_AT,BACK_SIZE,"Back"));
+    out.back().instance="frontend-back";
+    out.back().branch=uiroot::Branch::Root;
+    out.back().press=[this]{nativeBackPressed=true;back();};
 }
 
 void Session::optionsItems(Hud::Screen &out) {
@@ -2001,8 +2002,24 @@ bool Session::frame() {
     }
     (void)buildScreen(false); // Publish the controller's active objects before its pointer decisions.
     if (syntheticClick) { // explicit CLI test adapter, not an OS input observation
+        const auto beforeCamera=camera;
+        const auto *beforeActor=s.spawned ? s.spawned->localPlayer() : nullptr;
         hud.interfaceLeftDown();
         hud.interfaceLeftUp();
+        if (req.page=="back-test") {
+            const bool cameraRetained=camera.pitch==beforeCamera.pitch && camera.roll==beforeCamera.roll &&
+                camera.yaw==beforeCamera.yaw && camera.targetPitch==beforeCamera.targetPitch &&
+                camera.targetRoll==beforeCamera.targetRoll && camera.targetYaw==beforeCamera.targetYaw &&
+                camera.distance==beforeCamera.distance && camera.targetDistance==beforeCamera.targetDistance;
+            const bool actorRetained=(s.spawned ? s.spawned->localPlayer() : nullptr)==beforeActor;
+            const bool pageChanged=nativeBackPressed && charactersShown && !creationShown && !titleShown;
+            const bool passed=cameraRetained && actorRetained && pageChanged && !outcome.created;
+            log(std::string("Back event2: ")+(passed ? "PASS" : "FAIL")+
+                " page="+std::to_string(pageChanged)+" camera="+std::to_string(cameraRetained)+
+                " actor="+std::to_string(actorRetained));
+            if (!passed) outcome.error="Back callback changed non-page state or did not dispatch";
+            decide(Result::Quit);
+        }
     }
     handleClick(false);
     s.input->finishPointerCallbacks();
@@ -2059,7 +2076,7 @@ bool Session::frame() {
 Result Session::runTitle() {
     if (req.page == "characters")
         titleShown = false, charactersShown = true;
-    else if (req.page == "create" || req.page.starts_with("create-test:")) {
+    else if (req.page == "create" || req.page == "back-test" || req.page.starts_with("create-test:")) {
         titleShown = false;
         startCreation();
         if (req.page.starts_with("create-test:")) {

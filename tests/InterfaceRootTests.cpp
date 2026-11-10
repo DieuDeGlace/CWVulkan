@@ -10,6 +10,24 @@ int interfaceRootTests() {
             ++failures;
         }
     };
+    struct BackCase {std::array<bool,5> before,after;bool moved;};
+    const BackCase cases[]={
+        {{0,0,0,0,0},{0,0,0,0,0},false},
+        {{1,0,0,0,0},{1,0,0,0,0},false},
+        {{0,1,0,0,0},{1,0,0,0,0},true},
+        {{0,0,1,0,0},{0,1,0,0,0},true},
+        {{0,0,0,1,0},{0,1,0,0,0},true},
+        {{0,0,0,0,1},{0,0,0,1,0},true},
+        {{0,0,1,0,1},{0,0,1,1,0},true},
+        {{0,1,1,1,1},{0,1,1,1,0},true},
+        {{1,1,1,1,0},{1,1,1,0,0},true},
+    };
+    for (const auto &example : cases) {
+        uiroot::State state{example.before,true,true,true};
+        check(uiroot::back(state)==example.moved && state.frontend==example.after,
+              "original Back priority and independent page stores match the literal examples");
+        check(state.options && state.controls && state.help,"native Back does not dismiss independent overlay roots");
+    }
     plx::Document document;
     plasma::Scene scene(document);
     uiroot::Branches branches(scene);

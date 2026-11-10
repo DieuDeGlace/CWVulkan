@@ -11,6 +11,17 @@ struct State {
     std::array<bool, 5> frontend{};
     bool options = false, controls = false, help = false;
 };
+// Complete native Back leaf: prioritized page stores, independent of overlays.
+inline bool back(State &state) {
+    constexpr std::array<std::array<size_t,2>,4> transitions{{{4,3},{3,1},{2,1},{1,0}}};
+    for (const auto transition : transitions)
+        if (state.frontend[transition[0]]) {
+            state.frontend[transition[0]]=false;
+            state.frontend[transition[1]]=true;
+            return true;
+        }
+    return false;
+}
 class Branches {
   public:
     explicit Branches(plasma::Scene &scene) : scene(scene) {

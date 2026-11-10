@@ -487,6 +487,7 @@ class Hud {
         bool initializeHidden = false;
         bool visible = true;
         bool retainText = false; // use the initial caption once, then keep the live scene value
+        std::function<void()> press; // bound event2
         std::function<void()> release; // bound event3; owner clears before its lifetime ends
         bool replaceWidget = false; // explicit custom-widget construction; never a native resize/rectangle flag
         struct ModelContext {
@@ -626,7 +627,7 @@ class Hud {
         glm::vec2 requested{-1};
         bool pointerInside = false;
         bool frontendManaged = false;
-        std::function<void()> release;
+        std::function<void()> press,release;
     };
     mutable std::map<std::string, std::vector<TemplateInstance>> frontNodes;
     TemplateInstance *prepareTemplate(const ScreenItem &, size_t index = 0,

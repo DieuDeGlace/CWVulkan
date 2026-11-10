@@ -91,6 +91,24 @@ int liveEditTests() {
     textNode->shape=savedShape;editor->attach();
     clip->visible=savedVisible;clip->clips=savedClipping;
 
+    uiroot::State pages{{false,false,true,false,false},false,false,true};
+    Hud::ScreenItem back=create;
+    back.instance="frontend-back";back.at={20,20};back.size={100,30};back.text=L"Back";
+    back.branch=uiroot::Branch::Root;back.release={};
+    int backPresses=0;
+    back.press=[&]{++backPresses;uiroot::back(pages);hud.setInterfaceState(pages);};
+    hud.setInterfaceState(pages);
+    hud.publishFrontendScreen({name,create,back});
+    hud.moveInterfacePointer({40,35});
+    hud.interfaceLeftDown();
+    check(backPresses==1 && pages.frontend==std::array<bool,5>{false,true,false,false,false} && pages.help,
+          "actual retained Back press dispatches event2 and only the selected page changes");
+    hud.interfaceLeftUp();
+    check(backPresses==1,"Back is not dispatched again on release");
+    hud.clearFrontendBindings();
+    hud.interfaceLeftDown();hud.interfaceLeftUp();
+    check(backPresses==1,"session teardown also removes its retained press callback");
+
     // Real imported-face adapter: cache hits after a different size must still configure
     // the correct metrics. These are local font consistency checks, not native pixels.
     std::ifstream stream(assets.gameDir()/"resource1.dat",std::ios::binary);

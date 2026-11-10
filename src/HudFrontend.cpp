@@ -106,8 +106,19 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
         }
         // Keep authored child visibility; clip/blur traversal owns composition.
     }
+    instance.press=item.press;
     instance.release=item.release;
-    if (node.widget) node.widget->frontendEventButton=bool(item.release);
+    if (node.widget) node.widget->frontendEventButton=bool(item.press || item.release);
+    if (item.press) {
+        interfaceInput->registerEvent(node,plasma::Input::Event::LeftDown,
+            [this,owner,index](plasma::Input &,plasma::SceneNode &) {
+                const auto found=frontNodes.find(owner);
+                if (found!=frontNodes.end() && index<found->second.size()) {
+                    const auto callback=found->second[index].press;
+                    if (callback) callback();
+                }
+            });
+    }
     if (item.release) {
         interfaceInput->registerEvent(node,plasma::Input::Event::LeftUp,
             [this,owner,index](plasma::Input &,plasma::SceneNode &) {

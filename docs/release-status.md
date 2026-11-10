@@ -36,7 +36,7 @@ This checkpoint does not close the newly audited full Game input phase. The GUI
 queue drains before physical pointer polling, but broader synchronous WinProc
 GUI-to-Game rereads, Game low-byte/sign-extended chat delivery, raw Game keys,
 repeated Escape's six-button publication, binding capture and remaining business
-callbacks still need integration. Legacy Escape/back handling is explicitly open.
+callbacks still need integration. The Game Escape-key phase remains open; Back's page transition is closed below.
 Native runtime comparison and final provenance/visual/gameplay acceptance remain
 release gates. Alpha terrain/lighting, distinct biome palettes and Omega water
 retain their separate paths and profile identity.
@@ -3685,3 +3685,35 @@ own caption is absent; it preserves hidden-parent visibility. Both independent
 conditional examples fail before that store correction and pass afterward. The
 failed run is retained. This closes the selected concrete field identity rather
 than inferring meaning from an adjacent member or UI convention.
+
+## Native Back page transition and press binding - 2026-11-09
+
+The independent [menu and Back callback contract](specs/steam-interface-menu-button-and-back-callbacks-20261109.md)
+closes Back's complete original native leaf despite the missing decoded owner
+attribution. Back tests new-world, worlds, creation and characters in that order,
+clearing only the first selected page and selecting its defined destination.
+Other simultaneous page flags and independent options, controls and Help remain.
+The callback performs no actor rebuild, camera reset or menu-byte clear.
+
+The persistent Back button now binds event2 under the shared root. Its press
+immediately publishes the page change; release does not repeat Back. Session
+teardown clears both retained press and release callbacks. The old manual Back
+rectangle action and its actor/camera resets are removed. Existing application
+overlay dismissal remains a separate compatibility adapter while the full Game
+keydown/Escape phase is implemented. The frame adapter suppresses duplicate
+legacy frontend handling after a queued Back press; whole-burst Game semantics
+remain an explicit broader input task.
+
+Nine source-literal priority/multiple-page examples and actual owner-template
+press/release/teardown checks pass. An explicit bounded back-test CLI adapter
+compares page state, actor identity and all displayed/target orbit fields around
+the live callback. Such replacement-engine test adapters do not establish actual
+OS input delivery or original-runtime pixel/behavior parity. The other six menu
+callbacks' reached rebuild/refresh/RNG/provider effects remain in the complete
+contract for subsequent implementation; their outer toggles are not substituted
+with a generic exclusive-menu policy.
+
+All five targets, required-owner CPU without skips, 92 shader/2 camera/106 GUI/
+17 map/14 native-water plus shared-water/Alpha-scenery checks and SDK independence
+pass. Native and Alpha Back probes retain actor/camera and private save bytes;
+creation, complete payload/order, old-profile isolation and reopen checks pass.

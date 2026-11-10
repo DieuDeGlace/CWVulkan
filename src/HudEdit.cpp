@@ -58,7 +58,9 @@ void Hud::clearFrontendBindings() {
     if (!interfaceInput) return;
     for (auto &[owner,instances] : frontNodes)
         for (auto &instance : instances) {
+            interfaceInput->registerEvent(*instance.node,plasma::Input::Event::LeftDown,{});
             interfaceInput->registerEvent(*instance.node,plasma::Input::Event::LeftUp,{});
+            instance.press={};
             instance.release={};
         }
 }
