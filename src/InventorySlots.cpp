@@ -400,19 +400,29 @@ UseResult useItem(PlayerState &state, Index source, uint8_t *actor) {
     return {};
 }
 
-float adjustHealth(uint8_t *actor, float oldMaximum, const std::function<float()> &maximum) {
-    const float ratio = maximum() / oldMaximum;
+float adjustHealth(float oldMaximum, const std::function<uint8_t *()> &currentActor,
+                   const std::function<float()> &maximum) {
+    const float currentMaximum = maximum();
+    auto *actor = currentActor();
+    if (!actor) return 0; // Defined engine policy outside the valid native receiver graph.
+    const float ratio = currentMaximum / oldMaximum;
     float health;
     std::memcpy(&health, actor + 0x180, 4);
     health = ratio * health;
     std::memcpy(actor + 0x180, &health, 4);
     const float cap = maximum();
+    actor = currentActor();
+    if (!actor) return 0;
     std::memcpy(&health, actor + 0x180, 4);
-    if (cap < health) {
+    if (!(cap >= health)) { // COMISS carry includes unordered, not just strict less-than.
         health = cap;
         std::memcpy(actor + 0x180, &health, 4);
     }
     return health;
+}
+
+float adjustHealth(uint8_t *actor, float oldMaximum, const std::function<float()> &maximum) {
+    return adjustHealth(oldMaximum, [actor] { return actor; }, maximum);
 }
 
 bool Inventory::refresh(const SortContext &context) {

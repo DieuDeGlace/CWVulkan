@@ -1,5 +1,36 @@
 # Clean-room process
 
+## Mouse chat order and health-tail continuation, 2026-11-10
+
+The original-only author finalized the complete mouse-owner contract without
+implementation, SDK, tests, owner outputs or feedback. The implementer read all
+493 lines, verified its hash and copied unchanged code-free prose before using
+it. This checkpoint applies only the admitted-press chat order and selected common
+health tail; it does not claim the full mouse owner or its transitive effects.
+
+The actual Main frame had a second delayed chat-typing clear after the ordered
+message clear. Removing it preserves MouseDown then Enter/character and the
+opposite order. Health rescaling now reloads the current actor after each maximum
+provider, keeps binary32 division before multiplication, and selects the sampled
+cap on unordered comparison while preserving current equal-value bits. The
+previous zero-maximum test was corrected: invalid division is still stored before
+the second sample, whose zero cap then wins. Defined engine handling of an absent
+actor is outside the native ordinary valid graph and is not a recovery claim.
+
+Two scalar regressions and the actual full-frame chat probe failed before; the
+current-actor, signed-zero/NaN and both message-order cases pass afterward in
+Native and Alpha/Omega private runs with unchanged save bytes. All five targets,
+full required-owner CPU without skips, all Vulkan groups and SDK independence
+pass. These deterministic queue adapters are not OS injection or original-runtime
+proof. Prior settled-scene captures retain their own earlier exact-binary scope.
+
+Inventory business and other mouse work still use the remaining frame adapter.
+Complete synchronous item/secondary work, process-global snapshot/clock lifetime,
+the other chat-widget byte, retained selector, release-before-GUI prefix, final
+widget resets, generic providers/lifetimes and broad native acceptance remain
+open. No implementation or verification feedback reached the source author;
+owner data, captures and private evidence stay local.
+
 ## Owned derived-light publication concurrency, 2026-11-09
 
 This change uses only the engine's own immutable terrain/model storage, lock

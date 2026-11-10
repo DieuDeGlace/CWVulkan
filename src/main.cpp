@@ -267,6 +267,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     float closeInventoryAt = -1; // --close-inventory T: the inventory closed T s in (testing only: the weapon's cubes seen in the world).
     bool undying = false;        // --undying: the player's health is kept full (testing only).
     bool menuActionsTest = false; // --menu-actions-test: bounded actual-callback regression fixture.
+    bool mouseChatOrderTest = false; // --mouse-chat-order-test: actual full-frame queued-order probe.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -409,6 +410,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             undying = true;
         else if (a == "--menu-actions-test")
             menuActionsTest = true;
+        else if (a == "--mouse-chat-order-test")
+            mouseChatOrderTest = true;
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -3923,12 +3926,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         glfwSetWindowShouldClose(window,1);
     }
 
+    int mouseChatOrderStage = 0;
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();
         input.gamepadSampled = false;
         input.pointerSampled = false;
         glfwPollEvents();
+        if (mouseChatOrderTest && mouseChatOrderStage < 2) {
+            // Deterministic CLI queue adapter; no OS injection or network chat.
+            chat.stopEditing();
+            hud.moveInterfacePointer({-10000,-10000});
+            using M = MenuInput::InterfaceMessage;
+            const auto click = [&] { input.interfaceMessages.emplace_back(M::LeftDown); input.interfaceMessages.emplace_back(M::LeftUp); };
+            const auto enter = [&] { input.rawKeyMessage(M::KeyDown,0x0D); input.rawKeyMessage(M::KeyUp,0x0D); };
+            if (mouseChatOrderStage == 0) { click(); enter(); input.rawKeyMessage(M::Character,'x'); }
+            else { enter(); click(); }
+        }
         if (hudReady) hud.updateMenuCaptions(gameControls); // Before the Game time sample and World work.
         if (!workerCharacterSaving && std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
             saveProgress();
@@ -4705,9 +4719,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     applyGear(true);
                 }
             }
-            if (auto *actor = spawned.localPlayer())
-                playerHp = inventoryslots::adjustHealth(actor->record, oldMaximum, [&] { return spawned.playerMaxHealth(); });
-            chat.stopEditing();
+            if (spawned.localPlayer())
+                playerHp = inventoryslots::adjustHealth(oldMaximum, [&]() -> uint8_t * {
+                    const auto *actor = spawned.localPlayer();
+                    return actor ? actor->record : nullptr;
+                }, [&] { return spawned.playerMaxHealth(); });
+            // Chat typing was cleared in the admitted message, before later keys.
             itemSelector.hide();
         };
         // Ordinary interface binding is independent of panel visibility. It only
@@ -5773,6 +5790,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         for (size_t index = 0; index < nativeDowns.size(); ++index)
             if (!nativeDowns[index].completed)
                 finishNativeDown(gameDowns[index], spawned.playerMaxHealth(), nativeDowns[index].point);
+        if (mouseChatOrderTest) {
+            const bool expectedTyping = mouseChatOrderStage == 0;
+            const bool passed = nativeInventory && gameDowns.size() == 1 &&
+                chat.typing() == expectedTyping && chat.text() == u"x";
+            logLine(std::string("Mouse/chat order: ")+(passed ? "PASS" : "FAIL")+
+                " stage="+std::to_string(mouseChatOrderStage)+" typing="+std::to_string(chat.typing())+
+                " text="+std::to_string(chat.text()==u"x")+" native="+std::to_string(nativeInventory!=nullptr)+
+                " presses="+std::to_string(gameDowns.size()));
+            if (!passed) exitCode=1;
+            ++mouseChatOrderStage;
+            if (!passed || mouseChatOrderStage>=2) glfwSetWindowShouldClose(window,1);
+        }
         // The game's default controls: attack (left mouse), special (right mouse; a
         // tap, since holding it turns the camera), dodge (middle mouse), class skill
         // (Shift), P and the ultimate (R).

@@ -259,7 +259,39 @@ int inventorySlotTests() {
     setFloat(0x180, -5);
     check(adjustHealth(actor.data(), 10, [] { return 20.0f; }) == -10, "health tail has no lower-zero clamp");
     setFloat(0x180, 10);
-    check(std::isnan(adjustHealth(actor.data(), 0, [] { return 0.0f; })), "health tail has no old-maximum-zero fallback");
+    int zeroQueries = 0;
+    const float zeroCap = adjustHealth(actor.data(), 0, [&] {
+        if (++zeroQueries == 2)
+            check(std::isnan(floatAt(0x180)), "zero division is stored before the separate cap sample");
+        return 0.0f;
+    });
+    check(zeroCap == 0 && zeroQueries == 2, "unordered scaled health selects the separately sampled zero cap");
+    setFloat(0x180, 50);
+    int nanQueries = 0;
+    constexpr uint32_t capWord = 0x7FC12345u;
+    const float nanCap = adjustHealth(actor.data(), 100, [&] {
+        return ++nanQueries == 1 ? 100.0f : std::bit_cast<float>(capWord);
+    });
+    check(std::bit_cast<uint32_t>(nanCap) == capWord && std::bit_cast<uint32_t>(floatAt(0x180)) == capWord,
+          "unordered cap is selected with its current payload bits");
+    setFloat(0x180, 0);
+    int signQueries = 0;
+    const float equalCap = adjustHealth(actor.data(), 100, [&] { return ++signQueries == 1 ? 100.0f : -0.0f; });
+    check(std::bit_cast<uint32_t>(equalCap) == 0, "equal cap preserves the existing positive-zero bits");
+    auto originalActor = actor, scaledActor = actor, cappedActor = actor;
+    const auto putHealth = [](auto &record, float health) { std::memcpy(record.data()+0x180,&health,4); };
+    const auto getHealth = [](const auto &record) { float health; std::memcpy(&health,record.data()+0x180,4); return health; };
+    putHealth(originalActor,64); putHealth(scaledActor,20); putHealth(cappedActor,30);
+    auto *currentActor = originalActor.data();
+    int actorReads = 0, freshQueries = 0;
+    const float currentHealth = adjustHealth(100, [&] { ++actorReads; return currentActor; }, [&] {
+        if (++freshQueries == 1) { currentActor=scaledActor.data(); return 200.0f; }
+        check(getHealth(scaledActor)==40, "second maximum callback sees the newly current actor's rescaled health");
+        currentActor=cappedActor.data(); return 7.0f;
+    });
+    check(currentHealth==7 && actorReads==2 && freshQueries==2 && getHealth(originalActor)==64 &&
+              getHealth(scaledActor)==40 && getHealth(cappedActor)==7,
+          "each provider return is followed by a current actor reload, retaining only that store's receiver");
     inventory = {};
     auto daily = nativesaves::makeItem(22, 9);
     daily[1] = 81;

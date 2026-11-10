@@ -68,6 +68,11 @@ struct UseResult {
 UseResult use(PlayerState &, Index, uint8_t *actor, int button, bool shift, float abilityDuration);
 // Shared item helper reached by selected Quick Item/Ring use, without the inventory-down equip gate.
 UseResult useItem(PlayerState &, Index, uint8_t *actor);
-// Two ordered maximum queries: store the rescaled HP before the second callback/cap.
+// Two ordered maximum queries, with current actor reread after each provider.
+// Store binary32 division-then-multiplication before the second sample; an unordered
+// cap selects that cap, while equality retains the existing health bits.
+float adjustHealth(float oldMaximum, const std::function<uint8_t *()> &currentActor,
+                   const std::function<float()> &maximum);
+// Stable-receiver convenience for callers that own a fixed record.
 float adjustHealth(uint8_t *actor, float oldMaximum, const std::function<float()> &maximum);
 } // namespace inventoryslots
