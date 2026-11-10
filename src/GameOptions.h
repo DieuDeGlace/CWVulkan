@@ -1,4 +1,5 @@
 #pragma once
+#include <bit>
 // The game's settings files in its own format (docs/specs/frontend-options.md §1, §4.1):
 // options.cfg (21 settings, "name value" per line) and controls.cfg (23 bindings, "Name code
 // kind" per line). CubeVulkan keeps both in its own folder beside the engine.
@@ -52,8 +53,8 @@ struct Options {
 };
 constexpr int DEFAULT_ZONES_DRAWN = 15;  // renderDistance 50
 constexpr float DEFAULT_VIEW_DISTANCE = 400.0f;
-constexpr float GUI_SCALE_MIN = 0.4096f, GUI_SCALE_MAX = 3.0517578f;
-constexpr float MAP_SCALE_MIN = 0.7513148f, MAP_SCALE_MAX = 1.331f;
+constexpr float GUI_SCALE_MIN=std::bit_cast<float>(0x3ED1B716u), GUI_SCALE_MAX=std::bit_cast<float>(0x40435000u);
+constexpr float MAP_SCALE_MIN=std::bit_cast<float>(0x3F40562Au), MAP_SCALE_MAX=std::bit_cast<float>(0x3FAA5E36u);
 
 // Reads options.cfg word by word (0x13aa50): a known name is followed by its value, anything
 // else is skipped; reading stops at the end or at the first value that does not read. A missing

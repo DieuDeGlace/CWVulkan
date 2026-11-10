@@ -1,6 +1,8 @@
 #include "MapHistory.h"
 #include "Assets.h"
 #include "Hud.h"
+#include "Frontend.h"
+#include "ChatLine.h"
 #include "worldgen/Regions.h"
 #include "worldgen/Places.h"
 #include <cstdio>
@@ -126,6 +128,58 @@ int mapHistoryTests() {
             hud.bindMapHistory(owner.view(), "Other Land", false);
             check(found && hud.mapHistoryArrowHit(true, olderPoint) && !hud.mapHistoryAction(olderPoint) && owner.selected() == b,
                   "hidden ancestors suppress dispatch while standalone arrow hits and selection remain live");
+
+            // Complete native press admission: event2 changes the actual arrow
+            // visibility before the Game queries A then B at their retained point.
+            hud.bindMapHistory(owner.view(),"Other Land",true);
+            ChatLine chat;
+            MenuInput messages;
+            bool fullMap=true,captionSawRefresh=false;
+            hud.bindMapHistoryActions([&](bool older) {
+                if (older) owner.older();else owner.newer();
+                hud.refreshMapHistory(owner.view(),[&] {
+                    captionSawRefresh=left && right && !left->visible && right->visible;
+                    return std::string("Refreshed");
+                });
+            });
+            messages.gamePress=[&](int) {
+                if (!hud.mapPressContinues(fullMap)) return false;
+                chat.stopEditing();return true;
+            };
+            chat.keyDown(0x0D,false);chat.type("A");
+            hud.moveInterfacePointer(olderPoint);
+            messages.interfaceMessages.emplace_back(MenuInput::InterfaceMessage::LeftDown);
+            messages.routeInterfaceMessages(hud);
+            check(found && owner.selected()==c && captionSawRefresh && left && !left->visible && right && right->visible,
+                  "live event2 reaches last history cell and publishes B/A before its caption provider");
+            check(!chat.typing() && messages.gamePresses==std::vector<int>{0},
+                  "post-callback hidden A and missed B reach the ordinary chat-clear continuation");
+            hud.interfaceLeftUp();
+            owner=History({a,b,c});owner.show(true);
+            hud.bindMapHistory(owner.view(),"First Land",true);
+            chat.keyDown(0x0D,false);
+            hud.moveInterfacePointer(olderPoint);
+            messages.interfaceMessages.emplace_back(MenuInput::InterfaceMessage::MiddleDown);
+            messages.routeInterfaceMessages(hud);
+            check(chat.typing() && messages.gamePresses.empty() && owner.selected()==a,
+                  "middle press also takes A's early return without an event2 history step or chat clear");
+            hud.interfaceSecondaryButton(2,false);
+            if (root) const_cast<plasma::SceneNode *>(root)->visible=false;
+            if (left && left->widget) const_cast<plasma::SceneNode *>(left)->widget->enabled=false;
+            messages.interfaceMessages.emplace_back(MenuInput::InterfaceMessage::RightDown);
+            messages.routeInterfaceMessages(hud);
+            check(chat.typing() && messages.gamePresses.empty(),
+                  "direct A query ignores hidden parent and disabled control after independent GUI work");
+            hud.interfaceSecondaryButton(1,false);
+            fullMap=false;
+            messages.interfaceMessages.emplace_back(MenuInput::InterfaceMessage::MiddleDown);
+            messages.routeInterfaceMessages(hud);
+            check(!chat.typing() && messages.gamePresses==std::vector<int>{2},
+                  "zero map byte bypasses both direct-node queries and reaches normal tail");
+            hud.interfaceSecondaryButton(2,false);
+            if (left && left->widget) const_cast<plasma::SceneNode *>(left)->widget->enabled=true;
+            hud.bindMapHistoryActions({});
+
             // Exercise actual HUD emission, not a duplicate color-multiplication helper.
             hud.bindMapHistory(owner.view(), "Other Land", true);
             if (!root || !left || !left->doc)

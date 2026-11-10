@@ -123,6 +123,149 @@ int liveEditTests() {
     const auto glyph=font.glyph(L'A',plasma::rasterFor(glm::mat4(1),style));
     const auto atStart=font.indexMetric(u"A",0,style,glm::mat4(1));
     check(atStart.position==plasma::textmetric::Point{0,-12} && atStart.size==plasma::textmetric::Point{glyph.advance,12},"real face supplies indexed first-unit width and baseline");
+
+    // Six real owner controls, not inferred fixed rectangles or synthetic icons.
+    hud.setInterfaceState({{false,false,false,false,false},false,false});
+    hud.setInventoryPanelVisibility(false,false,false);
+    hud.setGuiScale(1);
+    hud.layoutMenuControls({1280,720});
+    uint8_t menuByte=0;
+    hud.publishMenuControls(menuByte);
+    const char *resources[]{"crafting-menu","inventory-menu","worldmap-menu",
+                            "system-menu","multiplayer-menu","help-menu"};
+    bool completeMenus=true;
+    for (int i=0;i<6;++i) {
+        const auto *control=hud.menuControl(Hud::Menu(i));
+        check(control && control->widget,"owner menubutton is cloned with its own control");
+        if (!control || !control->widget) {completeMenus=false;continue;}
+        check(control->parent==hud.interfaceBranchRoot(uiroot::Branch::Gameplay),"six nodes belong to the actual Gameplay branch");
+        check(!control->visible,"initial menu byte publishes hidden own values");
+        check(control->transform.translation+control->transform.pivot==glm::vec2(490+60*i,520),
+              "source-literal scale1 layout uses integer screen centre and -200 local Y");
+        auto *background=const_cast<plasma::SceneNode *>(control)->find("background");
+        const auto *icon=background ? background->find("icon") : nullptr;
+        check(icon && icon->doc && icon->source==icon->doc->find(resources[i]),"menu index selects its original owner resource");
+        if (!icon || !icon->doc || !control->doc) continue;
+        // Exercise the fit entry independently on an unplaced owner template.
+        plasma::Scene fit(*control->doc);
+        auto *button=fit.instance("menubutton",&fit.root());
+        auto *frame=button ? button->find("background") : nullptr;
+        if (!frame) {check(false,"fit fixture has its original background");continue;}
+        if (auto *previous=frame->find("icon")) fit.destroy(*previous);
+        glm::vec2 oldMin,oldMax,newMin,newMax;
+        const bool oldBounds=fit.screenBounds(*frame,oldMin,oldMax);
+        fit.fitMenuIcon(*button,"background",*icon->doc,resources[i]);
+        auto *fitted=frame->find("icon");
+        const bool newBounds=fitted && fit.screenBounds(*fitted,newMin,newMax);
+        check(oldBounds && newBounds && glm::all(glm::lessThan(glm::abs(oldMin-newMin),glm::vec2(.002f))) &&
+              glm::all(glm::lessThan(glm::abs(oldMax-newMax),glm::vec2(.002f))),
+              "actual icon fit fills each background extent independently");
+        const auto *retained=fitted;
+        fit.fitMenuIcon(*button,"background",*icon->doc,"no-such-menu-resource");
+        check(frame->find("icon")==retained,"missing resource returns before old-icon removal");
+    }
+    hud.setGuiScale(2);
+    hud.layoutMenuControls({1280,720});
+    for (int i=0;i<6;++i) if (const auto *control=hud.menuControl(Hud::Menu(i)))
+        check(control->transform.translation+control->transform.pivot==glm::vec2(170+60*i,160),
+              "scale2 inverse-projects the screen anchor before adding local offsets");
+    hud.setGuiScale(1);
+    hud.layoutMenuControls({1281,720});
+    if (const auto *control=hud.menuControl(Hud::Menu::Crafting))
+        check(control->transform.translation+control->transform.pivot==glm::vec2(490,520),"odd screen width truncates before float conversion");
+    hud.layoutMenuControls({-3,-5});
+    if (const auto *control=hud.menuControl(Hud::Menu::Crafting))
+        check(control->transform.translation+control->transform.pivot==glm::vec2(-151,-205),"signed odd width halves toward zero");
+    hud.layoutMenuControls({1280,720});
+    MenuInput nativeMenus;
+    nativeMenus.rawKeyMessage(M::KeyDown,0x1B);
+    nativeMenus.routeInterfaceMessages(hud);
+    check(nativeMenus.gameKeyboard.menu==1,"raw Escape toggles independent byte before late publication");
+    for (int i=0;i<6;++i) if (const auto *control=hud.menuControl(Hud::Menu(i)))
+        check(!control->visible,"raw Escape does not synchronously publish menu nodes");
+    hud.setInterfaceShown(false);
+    hud.publishMenuControls(nativeMenus.gameKeyboard.menu);
+    for (int i=0;i<6;++i) if (const auto *control=hud.menuControl(Hud::Menu(i)))
+        check(control->visible,"late publication updates own values even when F4 hides their ancestor");
+    hud.setInterfaceState({{false,false,true,false,false},false,false});
+    hud.publishMenuControls(nativeMenus.gameKeyboard.menu);
+    check(!hud.interfaceBranchRoot(uiroot::Branch::Gameplay)->visible,"frontend page independently hides gameplay ancestor");
+    hud.setInterfaceState({{false,false,false,false,false},false,false});
+    hud.setInterfaceShown(true);
+    std::vector<int> menuPresses;
+    hud.bindMenuActions([&](Hud::Menu which){menuPresses.push_back(int(which));});
+    if (completeMenus) for (int i=0;i<6;++i) {
+        const auto *control=hud.menuControl(Hud::Menu(i));
+        plasma::Scene geometry(*control->doc);
+        const auto point=geometry.contentPosition(*control)+geometry.screenSize(*control)*.5f;
+        hud.moveInterfacePointer(point);
+        hud.interfaceLeftDown();
+        check(menuPresses.size()==size_t(i+1) && menuPresses.back()==i,"each actual owner shape dispatches its own event2 callback in native index order");
+        hud.interfaceLeftUp();
+        check(menuPresses.size()==size_t(i+1),"menu button release does not repeat its press callback");
+        check(nativeMenus.gameKeyboard.menu==1,"menu callback does not clear Escape byte");
+    }
+    hud.bindMenuActions({});
+    if (completeMenus) {
+        const auto *control=hud.menuControl(Hud::Menu::Help);
+        plasma::Scene geometry(*control->doc);
+        const auto point=geometry.contentPosition(*control)+geometry.screenSize(*control)*.5f;
+        hud.moveInterfacePointer(point);hud.interfaceLeftDown();hud.interfaceLeftUp();
+        check(menuPresses.size()==6,"owner teardown removes the borrowed gameplay action callback");
+    }
+    nativeMenus.rawKeyMessage(M::KeyDown,0x1B);
+    nativeMenus.routeInterfaceMessages(hud);
+    hud.publishMenuControls(nativeMenus.gameKeyboard.menu);
+    check(nativeMenus.gameKeyboard.menu==0,"repeated Escape toggles off without navigation or dismissal");
+    for (int i=0;i<6;++i) if (const auto *control=hud.menuControl(Hud::Menu(i)))
+        check(!control->visible,"later zero byte hides all six own values");
+
+
+    if (completeMenus) {
+        uint8_t visible=1;
+        hud.publishMenuControls(visible);
+        const auto *control=hud.menuControl(Hud::Menu::Help);
+        plasma::Scene geometry(*control->doc);
+        const auto point=geometry.contentPosition(*control)+geometry.screenSize(*control)*.5f;
+        MenuInput right;
+        int dismisses=0;
+        right.gameKeyboard.menu=1;
+        right.gameDismissPanels=[&]{++dismisses;};
+        hud.moveInterfacePointer(point);
+        right.routeInterfacePress(hud,1);
+        check(right.gameKeyboard.menu==1 && dismisses==0,"ordinary post-GUI owner hit prevents right-press dismissal");
+        hud.interfaceSecondaryButton(1,false);
+        Hud::ScreenItem captured;
+        captured.kind=Hud::ScreenItem::Template;captured.name="button";captured.instance="capture-fixture";
+        captured.branch=uiroot::Branch::Root;captured.at={600,100};captured.size={100,30};captured.text=L"Capture";
+        captured.press=[]{};
+        hud.publishFrontendScreen({captured});
+        hud.moveInterfacePointer({650,115});
+        hud.interfaceLeftDown();
+        hud.setInterfaceShown(false);
+        hud.moveInterfacePointer({1200,20});
+        right.routeInterfacePress(hud,1);
+        check(right.gameKeyboard.menu==1 && dismisses==0,"captured receiver prevents dismissal even outside and under hidden root");
+        hud.interfaceSecondaryButton(1,false);
+        hud.interfaceLeftUp();
+        auto *gameplay=const_cast<plasma::SceneNode *>(hud.interfaceBranchRoot(uiroot::Branch::Gameplay));
+        std::vector<plasma::SceneNode *> panels;
+        for (auto &child:gameplay->children)
+            if (child->widget && child->widget->kind=="InventoryWidget") {
+                child->visible=true;panels.push_back(child.get());
+            }
+        auto *character=gameplay->find("character");
+        if (character) character->visible=true;
+        right.routeInterfacePress(hud,1);
+        check(right.gameKeyboard.menu==0 && dismisses==1,"after override release the fresh hidden-root miss clears menu byte");
+        check(panels.size()==3 && !panels[0]->visible && !panels[1]->visible && !panels[2]->visible,
+              "null-target branch clears the three current widget nodes");
+        check(character && character->visible,"interface press does not broaden three node stores into unrelated siblings");
+        hud.interfaceSecondaryButton(1,false);
+        hud.setInterfaceShown(true);
+        hud.clearFrontendBindings();
+    }
+
     std::cout<<"Live owner scene edit: "<<(failures ? "FAIL" : "PASS")<<'\n';
     return failures;
 }

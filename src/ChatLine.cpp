@@ -4,88 +4,94 @@
 #include <utility>
 
 std::optional<std::u16string> ChatLine::enter() {
-    if (!open) {
-        open = true;
-        return std::nullopt;
-    }
-    ++redrawRevision;
-    open = false;
-    auto sent = std::exchange(line, {});
-    caret = selection = 0;
-    return sent.empty() ? std::nullopt : std::optional<std::u16string>(std::move(sent));
+    std::optional<std::u16string> sent;
+    keyDown(0x0D,false,[&](const std::u16string &text){sent=text;});
+    return sent;
 }
 
 void ChatLine::clampSelection() {
-    const int length = (int)line.size();
-    caret = std::clamp(caret, 0, length);
-    const int before = caret;
-    if (before + selection < 0)
-        selection = -before;
-    if (before + selection > length)
-        caret = length - selection;
+    const int length=(int)line.size();
+    if (caret<0) caret=0;
+    if (caret>length) caret=length;
+    if (int64_t(caret)+selection<0) selection=-caret;
+    if (int64_t(caret)+selection>length) caret=length-selection;
 }
 
 void ChatLine::eraseSelection() {
     clampSelection();
-    const int first = std::min(caret, caret + selection);
-    line.erase((size_t)first, (size_t)std::abs(selection));
-    caret = first;
-    selection = 0;
+    if (caret>(int)line.size()) return;
+    const int first=selection<0 ? caret+selection : caret;
+    const int count=selection==0 ? 1 : std::abs(selection);
+    line.erase((size_t)first,(size_t)count);
+    if (selection<0) caret+=selection;
+    selection=0;
 }
 
 void ChatLine::type(const std::string &lowBytes) {
-    if (!open)
-        return;
+    if (!open) return;
     for (unsigned char byte : lowBytes) {
-        // Game sign-extends its low byte before inserting a UTF-16 code unit.
-        // Received network strings bypass this input-only narrowing.
-        const auto unit = (char16_t)(byte < 128 ? (int)byte : (int)byte - 256);
-        if (unit < 32)
-            continue;
-        if (selection)
-            eraseSelection();
+        clampSelection(); // precedes even a rejected control unit
+        const auto unit=(char16_t)(byte<128 ? int(byte) : int(byte)-256);
+        if (unit<32) continue;
+        if (selection) eraseSelection();
         clampSelection();
-        line.insert((size_t)caret++, 1, unit);
+        line.insert((size_t)caret++,1,unit);
     }
 }
 
-void ChatLine::key(Key key, bool shift) {
+void ChatLine::editKey(uint8_t key,bool shift) {
+    switch (key) {
+    case 0x25: // Left: an edge preserves the prior selection.
+        if (caret>0) {--caret;if (shift) ++selection;else selection=0;}
+        break;
+    case 0x27:
+        if (caret<(int)line.size()) {++caret;if (shift) --selection;else selection=0;}
+        break;
+    case 0x24:
+        if (shift) selection+=caret;else selection=0;
+        caret=0;
+        break;
+    case 0x23:
+        if (shift) selection+=caret-(int)line.size();else selection=0;
+        caret=(int)line.size();
+        break;
+    case 0x2E:
+        eraseSelection();
+        break;
+    case 0x08:
+        if (selection) eraseSelection();
+        else if (caret>0) {line.erase((size_t)(caret-1),1);--caret;}
+        break;
+    default: break;
+    }
+}
+
+void ChatLine::keyDown(uint8_t key,bool shift,const std::function<void(const std::u16string &)> &submit) {
+    if (!open) {
+        if (key==0x0D) open=true;
+        return;
+    }
+    if (key==0x0D) {
+        ++redrawRevision;
+        open=false;
+        if (!line.empty() && submit) {
+            const auto text=line; // safe engine-owned argument across a synchronous callback
+            submit(text);
+        }
+        line.clear(); // after the callback, including a reentrant text edit
+    }
     clampSelection();
     ++redrawRevision;
-    if (!open)
-        return;
-    if (key == Key::Delete || key == Key::Backspace) {
-        if (selection)
-            eraseSelection();
-        else if (key == Key::Delete)
-            line.erase((size_t)caret, 1);
-        else if (caret > 0)
-            line.erase((size_t)--caret, 1);
-        return;
-    }
-    int next = caret;
-    switch (key) {
-    case Key::Left:
-        --next;
-        break;
-    case Key::Right:
-        ++next;
-        break;
-    case Key::Home:
-        next = 0;
-        break;
-    case Key::End:
-        next = (int)line.size();
-        break;
-    default:
-        break;
-    }
-    if (shift)
-        selection += caret - next;
-    else
-        selection = 0;
-    caret = next;
+    editKey(key,shift);
+}
+
+void ChatLine::key(Key key,bool shift) {
     clampSelection();
+    ++redrawRevision;
+    if (!open) return;
+    const uint8_t code=key==Key::Left ? 0x25 : key==Key::Right ? 0x27 : key==Key::Home ? 0x24 :
+                       key==Key::End ? 0x23 : key==Key::Delete ? 0x2E : 0x08;
+    editKey(code,shift);
 }
 
 void ChatLine::append(const std::u16string &text, Colour colour, float frameWidth, const Measure &measure) {

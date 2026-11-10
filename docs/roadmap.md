@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Ordered GUI16/current-Game8 keyboard dispatch, raw Game keys, repeated
+  Escape's separately published six owner controls and per-message F-key scales.
+  Distinct menu callbacks, current chat gates/send ordering and post-GUI right/
+  map-arrow press admission use complete held independent prose. Source-literal
+  and actual-owner controls cover the selected scope; whole mouse business,
+  physical/binding producers, captions/providers and native acceptance stay open.
+  See [the checkpoint](release-status.md#game-keyboard-menu-controls-and-map-press-admission---2026-11-09).
+
+
 - [x] Viewed source loading advances independently of rendering, retaining native
   four-coordinate selection and completed-batch drain. An actual World progresses
   from four to all nine sources without additional updates. Callback gates and

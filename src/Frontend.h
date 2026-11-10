@@ -10,6 +10,7 @@
 #include "DayNight.h"
 #include "CameraPosition.h"
 #include "GameOptions.h"
+#include "GameWindowInput.h"
 #include "HomeSearch.h"
 #include "GamepadUi.h"
 #include "MouseMotion.h"
@@ -45,6 +46,12 @@ struct MenuInput {
     bool shiftDown = false; // Physical message state survives per-frame clear.
     bool controlDown = false;
     std::vector<int> pressed, buttons, released;
+    gamewindow::Keyboard gameKeyboard;
+    bool rawKeyboardSeen = false; // actual WM ingress, independent of synthetic GLFW releases
+    std::function<bool(int)> gamePress; // Post-GUI normal continuation; false is the map-arrow early return.
+    std::vector<int> gamePresses; // Admitted business work, retained for the current frame adapter.
+    std::function<void()> gameDismissPanels; // Interface right press, after GUI and a fresh null target.
+    std::function<void(uint8_t)> gameKeyDown,gameCharacter; // current Game chat ports, bound by its owner
     enum class InterfaceMessage { LeftDown, LeftUp, RightDown, RightUp, MiddleDown, MiddleUp, ToggleVisibility, ToggleHelp, Wheel, KeyDown, KeyUp, Character };
     struct WindowMessage {
         InterfaceMessage kind;
@@ -60,9 +67,11 @@ struct MenuInput {
     using WheelCallback = std::function<void(int, glm::vec2)>;
     // Actual key-down dispatch; F1 and F4 repeat independently of control polling.
     void keyMessage(int glfwKey, bool repeat);
+    void rawKeyMessage(InterfaceMessage kind,uint16_t unit);
     void wheelMessage(int16_t delta); // Normalize each actual message, including zero.
-    void routeInterfaceMessages(Hud &, const WheelCallback & = {});
+    void routeInterfaceMessages(Hud &,const WheelCallback & = {},const std::function<void(uint8_t)> &special = {});
     void routeGamepadButtons(Hud &);
+    void routeInterfacePress(Hud &,int button);
     // One XInput sample feeds both the GUI and gameplay; edge state survives screen changes.
     GamepadButtons gamepad;
     gamepadui::Input gamepadInput;
@@ -97,6 +106,7 @@ struct MenuInput {
         released.clear();
         interfaceMessages.clear();
         interfacePresses.clear();
+        gamePresses.clear();
         gamepadSampled = false;
         pointerSampled = false;
     }
@@ -436,6 +446,8 @@ class InGameMenus {
     bool open() const;
     bool ordinaryUi() const;
     bool capturingControl() const;
+    int bindingCaptureIndex() const; // Raw native chat gate, independent of the panel's own visibility.
+    bool systemMenuShown() const;
     bool wheel(int nativeDelta, glm::vec2 cachedPointer);
     void hideSystemForMovement();
     void hideMultiplayerForMovement(); // Options/Controls retain their own state.

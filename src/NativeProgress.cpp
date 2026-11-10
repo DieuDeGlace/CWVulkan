@@ -677,10 +677,11 @@ bool initializeProfileCharacters(const fs::path &base, const fs::path &importFro
         source = importFrom.empty() ? fs::path{} : importFrom / "characters.db";
     if (source.empty() || !fs::exists(source, ec))
         return true; // Normal first install; the character store will start empty.
+    // SQLite appends a journal suffix; keep the unpublished filename short.
     auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
-    auto temporary = target / ("characters-import-" + std::to_string(nonce) + ".db");
+    auto temporary = target / ("import-" + std::to_string(nonce) + ".db");
     while (fs::exists(temporary, ec))
-        temporary = target / ("characters-import-" + std::to_string(++nonce) + ".db");
+        temporary = target / ("import-" + std::to_string(++nonce) + ".db");
     {
         nativesaves::CharacterStore original, copied;
         if (!original.openReadOnly(source, &error) || !copied.open(temporary, &error))

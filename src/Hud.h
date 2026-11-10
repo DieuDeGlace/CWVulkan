@@ -312,6 +312,7 @@ class Hud {
     const plasma::SceneNode *interfacePointerTarget() const;
     void moveInterfacePointer(glm::vec2, Inventory * = nullptr);
     void setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const;
+    void clearInventoryPanelNodes(); // Only the three direct widget nodes, in native order.
     int inventoryWheelTarget(glm::vec2) const; // Fresh stored-panel subtree picks, independent of capture/ancestors.
     // The vendor's widget: its item, tab and scroll button under the mouse, and its rows.
     int vendorItemAt(glm::vec2 mouse, const Inventory &inv) const { return panelItemAt(mouse, inv, 1); }
@@ -337,7 +338,12 @@ class Hud {
     int inventoryRegionButtonAt(glm::vec2 mouse, const Inventory &inv) const;
     bool hasPanels() const { return scene && panels.bag.node; }
     bool hasPointer() const { return cursorNode != nullptr; } // (cursor.plx was read)
+    using HistoryCaption = std::function<std::string()>;
     void bindMapHistory(const maphistory::History::View &, const std::string &caption, bool interfaceVisible);
+    void bindMapHistory(const maphistory::History::View &,const HistoryCaption &,bool interfaceVisible);
+    void refreshMapHistory(const maphistory::History::View &,const HistoryCaption &);
+    void bindMapHistoryActions(std::function<void(bool older)>);
+    bool mapPressContinues(bool fullMap) const;
     void mapHistoryPointer(glm::vec2 pointer, bool highlighted);
     bool mapHistoryArrowHit(bool older, glm::vec2 pointer) const;
     int mapHistoryAction(glm::vec2 pointer) const; // -1 older, +1 newer, 0 no enabled owner arrow.
@@ -507,7 +513,14 @@ class Hud {
     void setHelpShown(bool);
     bool helpShown() const { return helpRootShown; }
     void publishFrontendScreen(const Screen &) const;
+    enum class Menu : uint8_t { Crafting, Inventory, WorldMap, System, Multiplayer, Help, Count };
+    // Retained owner-template controls; actions do not change the separate Escape byte.
+    void bindMenuActions(std::function<void(Menu)>);
+    void layoutMenuControls(glm::ivec2 windowPixels) const;
+    void publishMenuControls(const uint8_t &menuByte);
+    const plasma::SceneNode *menuControl(Menu) const;
     void interfaceKeyboard(plasma::Input::Key,uint16_t);
+    bool interfaceKeyHeld(uint16_t) const;
     bool interfaceHasFocus() const;
     std::optional<std::u16string> frontendCaption(const std::string &owner) const;
     void setFrontendCaption(const std::string &owner,std::u16string_view);
@@ -641,6 +654,7 @@ class Hud {
     struct Panels {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
         plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr, *customization = nullptr;
+        std::array<plasma::SceneNode *,size_t(Menu::Count)> menus{};
         InvPanel bag, vendor, crafting;
         std::vector<plasma::SceneNode *> slots;
         int cellWidth = 40, cellHeight = 40;
@@ -654,6 +668,11 @@ class Hud {
     InvList craftingList(const Inventory &inv) const;
     plasma::SceneNode *placeChat() const;
     float chatWordWidth(const std::wstring &) const;
+    std::function<void(bool)> historyAction;
+    std::function<void(Menu)> menuAction;
+    void bindMenuPress(plasma::SceneNode &,const std::function<void()> &);
+    void buildMenuControls();
+    void drawMenuControls(std::vector<OverlayVertex> &) const;
     void buildPanels();
     void buildInvPanel(InvPanel &p, glm::vec2 size, const char *const *tabIcons, int tabs, const char *selection = nullptr);
     InvList listOf(const Inventory &inv, int which) const;

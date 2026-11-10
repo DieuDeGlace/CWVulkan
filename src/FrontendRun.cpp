@@ -61,32 +61,69 @@ MenuInput::MouseEdges MenuInput::windowMouseEdges() const {
 void MenuInput::keyMessage(int key, bool repeat) {
     if (!repeat || key == GLFW_KEY_F1 || key == GLFW_KEY_F4)
         pressed.push_back(key); // Retain raw edges for an active controls-binding capture.
-    if (key == GLFW_KEY_F1)
+    if (!rawKeyboardSeen && key==GLFW_KEY_F1)
         interfaceMessages.emplace_back(InterfaceMessage::ToggleHelp);
-    if (key == GLFW_KEY_F4)
+    if (!rawKeyboardSeen && key==GLFW_KEY_F4)
         interfaceMessages.emplace_back(InterfaceMessage::ToggleVisibility);
+}
+
+void MenuInput::rawKeyMessage(InterfaceMessage kind,uint16_t unit) {
+    rawKeyboardSeen=true;
+    interfaceMessages.emplace_back(kind,0,unit);
 }
 
 void MenuInput::wheelMessage(int16_t delta) {
     interfaceMessages.emplace_back(InterfaceMessage::Wheel, delta < 0 ? -1 : delta > 0 ? 1 : 0);
 }
 
-void MenuInput::routeInterfaceMessages(Hud &hud, const WheelCallback &wheel) {
+void MenuInput::routeInterfacePress(Hud &hud,int button) {
+    if (button==0) interfacePresses.push_back(hud.interfaceLeftDown());
+    else hud.interfaceSecondaryButton(button,true);
+    if (button==1 && !hud.interfacePointerTarget()) {
+        gameKeyboard.menu=0;
+        hud.clearInventoryPanelNodes();
+        const auto callback=gameDismissPanels;
+        if (callback) callback();
+    }
+    const auto continuation=gamePress;
+    if (!continuation || continuation(button)) gamePresses.push_back(button);
+}
+
+void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const std::function<void(uint8_t)> &special) {
     interfacePresses.clear();
+    gamePresses.clear();
+    const auto keyboard=[&](gamewindow::Key kind,uint16_t unit) {
+        gamewindow::dispatch(kind,unit,[&](gamewindow::Key event,uint16_t key) {
+            hud.interfaceKeyboard(event==gamewindow::Key::Down ? plasma::Input::Key::Down :
+                                  event==gamewindow::Key::Up ? plasma::Input::Key::Up : plasma::Input::Key::Character,key);
+        },[&] {
+            gamewindow::Target target;
+            target.keyboard=&gameKeyboard;
+            target.special=[&](uint8_t key) {
+                if (key==0x70) hud.setHelpShown(!hud.helpShown());
+                else if (key==0x73) hud.setInterfaceShown(!hud.interfaceShown());
+                else if (special) special(key);
+            };
+            // Fetch the current ports after the GUI receiver has returned.
+            target.down=gameKeyDown;
+            target.character=gameCharacter;
+            return target;
+        });
+    };
     for (const auto message : interfaceMessages) {
         switch (message.kind) {
-        case InterfaceMessage::KeyDown: hud.interfaceKeyboard(plasma::Input::Key::Down,message.unit); break;
-        case InterfaceMessage::KeyUp: hud.interfaceKeyboard(plasma::Input::Key::Up,message.unit); break;
-        case InterfaceMessage::Character: hud.interfaceKeyboard(plasma::Input::Key::Character,message.unit); break;
+        case InterfaceMessage::KeyDown: keyboard(gamewindow::Key::Down,message.unit); break;
+        case InterfaceMessage::KeyUp: keyboard(gamewindow::Key::Up,message.unit); break;
+        case InterfaceMessage::Character: keyboard(gamewindow::Key::Character,message.unit); break;
         case InterfaceMessage::LeftDown:
-            interfacePresses.push_back(hud.interfaceLeftDown());
+            routeInterfacePress(hud,0);
             break;
         case InterfaceMessage::LeftUp:
             hud.interfaceLeftUp();
             break;
-        case InterfaceMessage::RightDown: hud.interfaceSecondaryButton(1, true); break;
+        case InterfaceMessage::RightDown: routeInterfacePress(hud,1); break;
         case InterfaceMessage::RightUp: hud.interfaceSecondaryButton(1, false); break;
-        case InterfaceMessage::MiddleDown: hud.interfaceSecondaryButton(2, true); break;
+        case InterfaceMessage::MiddleDown: routeInterfacePress(hud,2); break;
         case InterfaceMessage::MiddleUp: hud.interfaceSecondaryButton(2, false); break;
         case InterfaceMessage::ToggleVisibility:
             hud.setInterfaceShown(!hud.interfaceShown());
@@ -105,12 +142,7 @@ void MenuInput::routeInterfaceMessages(Hud &hud, const WheelCallback &wheel) {
 
 void MenuInput::routeGamepadButtons(Hud &hud) {
     for (int button = 0; button < 3; ++button) {
-        if (gamepadPointer.pressed[(size_t)button]) {
-            if (button == 0)
-                interfacePresses.push_back(hud.interfaceLeftDown());
-            else
-                hud.interfaceSecondaryButton(button, true);
-        }
+        if (gamepadPointer.pressed[(size_t)button]) routeInterfacePress(hud,button);
         if (gamepadPointer.released[(size_t)button]) {
             if (button == 0)
                 hud.interfaceLeftUp();
@@ -282,6 +314,8 @@ class Session {
     bool anyOpen() const { return systemShown || optionsOpen || controlsOpen || hud.helpShown() || friendsOpen; }
     bool ordinaryUi() const { return systemShown || optionsOpen || controlsOpen || friendsOpen; }
     bool capturingControl() const { return controlsOpen && controls.waiting >= 0; }
+    int bindingCaptureIndex() const { return controls.waiting; }
+    bool systemMenuShown() const { return systemShown; }
     bool wheel(int nativeDelta, glm::vec2 cachedPointer);
     void hideSystemForMovement() { systemShown = false; }
     void hideMultiplayerForMovement() { friendsOpen = false; }
@@ -416,7 +450,7 @@ class Session {
     uint32_t account() const;
     bool frame();
     void readInput(bool poll, double frameMs = 0);
-    void handleInterfaceKeys(std::vector<int> &keys);
+    void handleInterfaceKeys(std::vector<int> &keys,bool native = false);
     void handleKeys(bool inGame);
     void handleClick(bool inGame);
     void stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vector<DrawItem> &opaque, std::vector<DrawItem> &water);
@@ -1035,6 +1069,9 @@ void Session::readInput(bool poll, double frameMs) {
             return;
         if (s.zoomWheel)
             s.zoomWheel(delta, point);
+    },[this](uint8_t key) {
+        std::vector<int> keys{GLFW_KEY_F1+int(key-0x70)};
+        handleInterfaceKeys(keys,true);
     });
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
@@ -1129,18 +1166,21 @@ void Session::readInput(bool poll, double frameMs) {
 // The interface keys (frontend-options.md §3): F1 the help sheet, F2 and F3 the interface's
 // scale and F5 and F6 the map's (both saved at once), F4 the whole interface. They are taken
 // out of `keys`.
-void Session::handleInterfaceKeys(std::vector<int> &keys) {
+void Session::handleInterfaceKeys(std::vector<int> &keys,bool native) {
     for (auto it = keys.begin(); it != keys.end();) {
         const int key = *it;
+        if (!native && s.input->rawKeyboardSeen && key>=GLFW_KEY_F1 && key<=GLFW_KEY_F6) {
+            it=keys.erase(it); // the actual message already ran its synchronous Game effect
+            continue;
+        }
         switch (key) {
         case GLFW_KEY_F2:
         case GLFW_KEY_F3: { // the interface's scale, saved at once
-            float g = hud.interfaceScale() * (key == GLFW_KEY_F3 ? 1.25f : 1.0f / 1.25f);
-            g = std::clamp(g, gameoptions::GUI_SCALE_MIN, gameoptions::GUI_SCALE_MAX);
+            const float g=gamewindow::guiScale(hud.interfaceScale(),key==GLFW_KEY_F3);
             hud.setGuiScale(g);
             hud.layout(*s.renderer, size);
             if (s.options) {
-                s.options->guiScale = g;
+                s.options->guiScale = hud.interfaceScale(); // reread after synchronous layout
                 if (!req.readOnly)
                     gameoptions::saveOptions(s.root / "options.cfg", *s.options);
             }
@@ -1152,8 +1192,7 @@ void Session::handleInterfaceKeys(std::vector<int> &keys) {
         case GLFW_KEY_F5:
         case GLFW_KEY_F6:
             if (s.options) {
-                float m = s.options->mapScale * (key == GLFW_KEY_F6 ? 1.1f : 1.0f / 1.1f);
-                s.options->mapScale = std::clamp(m, gameoptions::MAP_SCALE_MIN, gameoptions::MAP_SCALE_MAX);
+                s.options->mapScale=gamewindow::mapScale(s.options->mapScale,key==GLFW_KEY_F6);
                 if (!req.readOnly)
                     gameoptions::saveOptions(s.root / "options.cfg", *s.options);
             }
@@ -1195,8 +1234,8 @@ void Session::handleKeys(bool inGame) {
     handleInterfaceKeys(in.pressed);
     for (int key : in.pressed) {
         switch (key) {
-        case GLFW_KEY_ESCAPE: // (Esc's own flag, G+0x420, is open question 4; here it goes back)
-            compatibilityBack(inGame);
+        case GLFW_KEY_ESCAPE:
+            if (!in.rawKeyboardSeen) compatibilityBack(inGame); // compatibility input has no WM Game phase
             break;
         default:
             if (inGame && s.controls && keyMatches((*s.controls)[gameoptions::SYSTEM_MENU], key) && !optionsOpen && !controlsOpen)
@@ -1846,14 +1885,10 @@ void Session::systemItems(Hud::Screen &out) {
 // --- The multiplayer menu (netcode-transport.md §3) ---------------------------------------------
 
 void Session::toggleMultiplayerMenu() {
-    if (friendsOpen || !s.friends) {
-        friendsOpen = false;
-        return;
-    }
-    // Opening rebuilds the list (§3.1); it is not rebuilt while the menu stays open.
-    friendRows = s.friends->list ? s.friends->list() : std::vector<FriendRow>{};
+    // The provider/list/scroll refresh precedes the toggle in both directions.
+    friendRows = s.friends && s.friends->list ? s.friends->list() : std::vector<FriendRow>{};
     refreshFriendsThumb();
-    friendsOpen = true;
+    friendsOpen = !friendsOpen;
 }
 
 // The rows' states (host, joined, invited, a live invitation) change while the menu is open.
@@ -2035,7 +2070,29 @@ bool Session::frame() {
     Lighting light;
     glm::vec3 focus;
     std::vector<DrawItem> opaque, water;
+    bool menuDeferred=true;
+    if (req.page=="escape-test")
+        for (int index=0;index<6;++index) {
+            const auto *node=hud.menuControl(Hud::Menu(index));
+            menuDeferred=menuDeferred && node && !node->visible;
+        }
     stepWorld(cam, light, focus, opaque, water);
+    hud.publishMenuControls(s.input->gameKeyboard.menu); // Same late UI phase with frontend ancestor hidden.
+    if (req.page=="escape-test") {
+        bool menuPublished=true;
+        for (int index=0;index<6;++index) {
+            const auto *node=hud.menuControl(Hud::Menu(index));
+            menuPublished=menuPublished && node && node->visible;
+        }
+        const bool pageRetained=frontendPages==std::array<bool,5>{true,false,false,false,false} &&
+            !hud.interfaceBranchRoot(uiroot::Branch::Gameplay)->visible;
+        const bool passed=menuDeferred && menuPublished && pageRetained && s.input->gameKeyboard.menu==1 &&
+            s.input->gameKeyboard.raw[0x1B]==1;
+        log(std::string("Frontend Escape: ")+(passed ? "PASS deferred six-node publication and retained title" : "FAIL"));
+        if (!passed) outcome.error="Frontend Escape publication changed its dispatch/page boundary";
+        decide(Result::Quit);
+        return false;
+    }
     const Hud::Screen screen = buildScreen(false);
     if (charactersShown) {
         previewPanels(opaque);
@@ -2074,6 +2131,7 @@ bool Session::frame() {
 }
 
 Result Session::runTitle() {
+    if (req.page=="escape-test") s.input->rawKeyMessage(MenuInput::InterfaceMessage::KeyDown,0x1B);
     if (req.page == "characters")
         titleShown = false, charactersShown = true;
     else if (req.page == "create" || req.page == "back-test" || req.page.starts_with("create-test:")) {
@@ -2216,6 +2274,8 @@ bool InGameMenus::ordinaryUi() const {
 bool InGameMenus::capturingControl() const {
     return session->capturingControl();
 }
+int InGameMenus::bindingCaptureIndex() const {return session->bindingCaptureIndex();}
+bool InGameMenus::systemMenuShown() const {return session->systemMenuShown();}
 bool InGameMenus::wheel(int nativeDelta, glm::vec2 cachedPointer) {
     return session->wheel(nativeDelta, cachedPointer);
 }

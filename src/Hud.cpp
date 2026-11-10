@@ -423,6 +423,7 @@ void Hud::layout(Renderer &renderer, VkExtent2D screen) {
         return;
     scale = std::min(screen.height / 1080.f, screen.width / 1280.f);
     this->screen = glm::vec2((float)screen.width, (float)screen.height);
+    layoutMenuControls({int32_t(screen.width),int32_t(screen.height)});
     offsetX = (screen.width - 1920 * scale) / 2; // The game centres its HUD.
     const int W = std::max(scale >= 1.f ? 4096 : 2048, atlasSize);
     std::vector<uint8_t> atlas(W * W * 4, 0);
@@ -1216,6 +1217,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     }
     if (state.inventory)
         drawInventory(*state.inventory, out);
+    else
+        drawMenuControls(out);
     if (state.identification)
         drawIdentification(*state.identification, out);
     if (state.customization)

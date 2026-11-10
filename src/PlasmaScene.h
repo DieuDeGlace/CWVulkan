@@ -251,6 +251,9 @@ class Scene {
     // in `node`, fitted to that node's shape (centred, scaled to its bounds); a previous icon there
     // is replaced.
     void setIcon(SceneNode &node, const std::string &targetName, const plx::Document &icons, const std::string &iconName);
+    // Native menu-resource fit, using the scene's current geometry/bounds provider.
+    // Unlike the older aspect-preserving adapter, each extent has its own scale.
+    void fitMenuIcon(SceneNode &,const std::string &targetName,const plx::Document &,const std::string &iconName);
     // The bounds of a node's shape (with its children's, `deep`) in the node's own space.
     bool shapeBounds(const SceneNode &n, glm::vec2 &minimum, glm::vec2 &maximum, bool deep) const;
     using LocalBounds = std::function<bool(const SceneNode &, glm::vec2 &, glm::vec2 &)>;

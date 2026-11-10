@@ -132,9 +132,9 @@ MenuInput input;
 LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR) {
     using Message = MenuInput::InterfaceMessage;
     switch (message) {
-    case WM_KEYDOWN: input.interfaceMessages.emplace_back(Message::KeyDown,0,uint16_t(wParam)); break;
-    case WM_KEYUP: input.interfaceMessages.emplace_back(Message::KeyUp,0,uint16_t(wParam)); break;
-    case WM_CHAR: input.interfaceMessages.emplace_back(Message::Character,0,uint16_t(wParam)); break;
+    case WM_KEYDOWN: input.rawKeyMessage(Message::KeyDown,uint16_t(wParam)); break;
+    case WM_KEYUP: input.rawKeyMessage(Message::KeyUp,uint16_t(wParam)); break;
+    case WM_CHAR: input.rawKeyMessage(Message::Character,uint16_t(wParam)); break;
     case WM_LBUTTONDOWN: input.interfaceMessages.push_back(Message::LeftDown); break;
     case WM_LBUTTONUP: input.interfaceMessages.push_back(Message::LeftUp); break;
     case WM_RBUTTONDOWN: input.interfaceMessages.push_back(Message::RightDown); break;
@@ -266,6 +266,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool upgradeDemo = false;  // --upgrade-demo: with --open-upgrade, one cube of each of the first three palette entries set through the widget's click (testing only).
     float closeInventoryAt = -1; // --close-inventory T: the inventory closed T s in (testing only: the weapon's cubes seen in the world).
     bool undying = false;        // --undying: the player's health is kept full (testing only).
+    bool menuActionsTest = false; // --menu-actions-test: bounded actual-callback regression fixture.
+    bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
     bool testDrop = false;       // --test-drop: drops a copy of the right-hand weapon beside the player (testing only).
@@ -405,6 +407,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             next(closeInventoryAt);
         else if (a == "--undying")
             undying = true;
+        else if (a == "--menu-actions-test")
+            menuActionsTest = true;
+        else if (a == "--open-native-menu")
+            openNativeMenu = true;
         else if (a == "--open-system-menu")
             openSystemMenu = true;
         else if (a == "--open-multiplayer-menu")
@@ -3469,17 +3475,21 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool menusReady = false;
     std::optional<maphistory::Region> historyCaptionRegion;
     std::string historyCaption = "land";
-    auto bindMapHistory = [&] {
+    const auto historyCaptionText = [&] {
         const auto &view = spawned.mapHistory().view();
         if (view.caption && historyCaptionRegion != view.caption) {
             historyCaptionRegion = view.caption;
             historyCaption = landNameOf({(*view.caption)[0], (*view.caption)[1]});
         }
-        hud.bindMapHistory(view, historyCaption, !menusReady || menus.interfaceShown());
+        return historyCaption;
+    };
+    auto bindMapHistory = [&] {
+        hud.bindMapHistory(spawned.mapHistory().view(),historyCaptionText,!menusReady || menus.interfaceShown());
     };
     auto stepMapHistory = [&](bool older) {
         auto &history = spawned.mapHistory();
         const auto region = older ? history.older() : history.newer();
+        hud.refreshMapHistory(history.view(),historyCaptionText);
         if (region) {
             const auto point = worldgen::regionCentre((*region)[0], (*region)[1]);
             const int64_t fixedZ = (int64_t)(worldgen::groundHeight(point.x, point.y, 0) * 65536.f);
@@ -3487,7 +3497,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             mapMoved = true;
             mapZoom = std::max(mapZoom, 4);
         }
-        bindMapHistory();
     };
 
     if (!serverMode) {
@@ -3637,8 +3646,91 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
     };
 
+    const auto syncInventoryVisibility=[&] {
+        hud.setInventoryPanelVisibility(inventoryOpen && bagShown,inventoryOpen && craftingOpen,
+                                        inventoryOpen && vendorTrade.open);
+    };
+    const auto invokeMenu=[&](Hud::Menu menu) {
+        switch (menu) {
+        case Hud::Menu::Crafting: {
+            const bool bagWasShown=inventoryOpen && bagShown;
+            craftingOpen=!(inventoryOpen && craftingOpen);
+            bagShown=bagWasShown;
+            inventoryOpen=bagShown || craftingOpen || vendorTrade.open;
+            syncInventoryVisibility();
+            rebuildCrafting(); // Both opening and closing reach the rebuild.
+            if (inventoryOpen && craftingOpen) {
+                refreshInventory(false,inventoryui::Panel::Crafting);
+                if (inventoryView.crafting.canonicalTabs)
+                    hud.updateInventoryThumb(inventoryView,2,hud.inventoryRowCount(inventoryView,2));
+            }
+            break;
+        }
+        case Hud::Menu::Inventory: {
+            const bool craftWasShown=inventoryOpen && craftingOpen;
+            bagShown=!(inventoryOpen && bagShown);
+            craftingOpen=craftWasShown;
+            inventoryOpen=bagShown || craftingOpen || vendorTrade.open;
+            syncInventoryVisibility();
+            if (inventoryOpen && bagShown) {
+                refreshBagOpening(); // Current player region, then both widget refreshes.
+                if (menusReady) menus.hideSystemForMovement();
+            }
+            break;
+        }
+        case Hud::Menu::WorldMap: mapOpen=!mapOpen; break;
+        case Hud::Menu::System:
+            if (menusReady) {
+                menus.toggleSystemMenu();
+                if (menus.systemMenuShown()) {
+                    const bool craftWasShown=inventoryOpen && craftingOpen;
+                    bagShown=false;
+                    craftingOpen=craftWasShown;
+                    inventoryOpen=craftWasShown || vendorTrade.open;
+                    syncInventoryVisibility();
+                }
+            }
+            break;
+        case Hud::Menu::Multiplayer: if (menusReady) menus.toggleMultiplayerMenu(); break;
+        case Hud::Menu::Help: hud.setHelpShown(!hud.helpShown()); break;
+        case Hud::Menu::Count: break;
+        }
+    };
+    hud.bindMenuActions(invokeMenu);
+    if (openNativeMenu) input.gameKeyboard.menu=1;
+    // These callbacks borrow the current gameplay stack, never a prior session.
+    struct GameInterfaceBinding {
+        MenuInput &input;
+        Hud &hud;
+        ~GameInterfaceBinding() {
+            input.gameKeyDown={};input.gameCharacter={};input.gameDismissPanels={};input.gamePress={};
+            hud.bindMenuActions({});hud.bindMapHistoryActions({});
+        }
+    } gameInterfaceBinding{input,hud};
+    hud.bindMapHistoryActions(stepMapHistory);
+    input.gameDismissPanels=[&] {
+        inventoryOpen=false;craftingOpen=false;bagShown=false;vendorTrade.open=false;
+    };
+    input.gamePress=[&](int) {
+        if (!hud.mapPressContinues(mapOpen)) return false;
+        chat.stopEditing();
+        return true; // The remaining Game business still uses the frame adapter below.
+    };
+    std::vector<uint8_t> nativeChatConsumed;
+    input.gameKeyDown=[&](uint8_t key) {
+        const auto *gameplay=hud.interfaceBranchRoot(uiroot::Branch::Gameplay);
+        if (session.dedicated() || !gameplay || !gameplay->visible || hud.interfaceHasFocus() ||
+            (menusReady && menus.bindingCaptureIndex()>=0)) return;
+        const bool consumed=key==0x0D || (chat.typing() && key!=0x1B);
+        chat.keyDown(key,hud.interfaceKeyHeld(0x10),submitChat);
+        if (consumed) nativeChatConsumed.push_back(key);
+    };
+    input.gameCharacter=[&](uint8_t unit) {
+        if (!hud.interfaceHasFocus()) chat.type(std::string(1,char(unit)));
+    };
+
     auto nativeOrdinaryUi = [&] {
-        return inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
+        return input.gameKeyboard.menu!=0 || inventoryOpen || craftingOpen || mapOpen || vendorTrade.open || identify.open || upgrade.open ||
                nativeCustomization.edit.open || chat.typing() || answers.visible() || (menusReady && menus.ordinaryUi());
     };
     inGameServices.ordinaryUi = nativeOrdinaryUi;
@@ -3797,6 +3889,40 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     if (workerCharacterSaving)
         world.characterSaveSession()->start();
     const charactercreation::AccountProvider accountProvider = [&steam] { return steam.steamId(); };
+    if (menuActionsTest) {
+        const bool oldOpen=inventoryOpen,oldBag=bagShown,oldCraft=craftingOpen,oldVendor=vendorTrade.open;
+        const bool oldSystem=menus.systemMenuShown();
+        const auto oldMenu=input.gameKeyboard.menu;
+        struct Case { Hud::Menu menu; bool bag,craft,vendor,system,afterBag,afterCraft,afterSystem,afterOpen; };
+        const Case cases[]{
+            {Hud::Menu::System,true,false,true,false,false,false,true,true},
+            {Hud::Menu::System,true,true,true,false,false,true,true,true},
+            {Hud::Menu::Inventory,true,false,true,true,false,false,true,true},
+            {Hud::Menu::Crafting,false,true,true,false,false,false,false,true},
+            {Hud::Menu::Inventory,false,false,true,true,true,false,false,true},
+            {Hud::Menu::Crafting,false,false,true,true,false,true,true,true},
+            {Hud::Menu::System,true,false,false,false,false,false,true,false},
+            {Hud::Menu::System,true,true,false,false,false,true,true,true}
+        };
+        bool passed=menusReady;
+        for (const auto &test:cases) {
+            if (menus.systemMenuShown()!=test.system) menus.toggleSystemMenu();
+            bagShown=test.bag;craftingOpen=test.craft;vendorTrade.open=test.vendor;
+            inventoryOpen=test.bag || test.craft || test.vendor;
+            input.gameKeyboard.menu=173;
+            invokeMenu(test.menu);
+            passed=passed && bagShown==test.afterBag && craftingOpen==test.afterCraft &&
+                vendorTrade.open==test.vendor && menus.systemMenuShown()==test.afterSystem &&
+                inventoryOpen==test.afterOpen && input.gameKeyboard.menu==173;
+        }
+        inventoryOpen=oldOpen;bagShown=oldBag;craftingOpen=oldCraft;vendorTrade.open=oldVendor;
+        if (menus.systemMenuShown()!=oldSystem) menus.toggleSystemMenu();
+        input.gameKeyboard.menu=oldMenu;syncInventoryVisibility();
+        logLine(passed ? "Menu actions: PASS 8 independent panel cases" : "Menu actions: FAIL independent panel state");
+        if (!passed) exitCode=1;
+        glfwSetWindowShouldClose(window,1);
+    }
+
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();
@@ -3828,7 +3954,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // The screens over the game take their keys first (the interface keys F1 to F6 always,
         // everything while one is open). Start Menu and Exit Game end the session.
         const bool panelsBeforeInput =
-            inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible() || (menusReady && menus.open());
+            input.gameKeyboard.menu!=0 || inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible() ||
+            (menusReady && menus.open());
         const bool capturingBeforeInput = menusReady && menus.capturingControl();
         input.gamepadModal = panelsBeforeInput || chat.typing();
         input.gamepadMapMode = mapOpen;
@@ -3851,6 +3978,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (menusReady)
             switch (menus.frame(std::min(frameMs, 1000.0))) {
             case frontend::Result::Title:
+                input.gameKeyboard.menu=0; // selected native return-to-title writer
                 returnToTitle = true;
                 glfwSetWindowShouldClose(window, 1);
                 break;
@@ -3889,18 +4017,19 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             input.sampleGamepad(window, capturingBeforeInput);
         }
-        auto gameDowns = physicalDowns;
+        auto gameDowns = input.gamePress ? input.gamePresses : physicalDowns;
         if (nativeInventory) {
             auto gameUps = physicalUps;
             for (int button = 0; button < 3; ++button) {
-                if (input.gamepadPointer.pressed[(size_t)button])
+                if (!input.gamePress && input.gamepadPointer.pressed[(size_t)button])
                     gameDowns.push_back(button);
                 if (input.gamepadPointer.released[(size_t)button])
                     gameUps.push_back(button);
             }
             input.buttons = gameDowns;
             input.released = std::move(gameUps);
-        }
+        } else if (input.gamePress)
+            input.buttons=gameDowns;
         bool menusOpen = menusReady && menus.open();
         if (input.gamepadPointer.olderRegion)
             stepMapHistory(true);
@@ -3915,6 +4044,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         const bool chatEligible = !session.dedicated() && !capturingBeforeInput &&
             (!menusReady || (menus.interfaceShown() && !menus.capturingControl()));
         for (const auto &event : chatInput) {
+            if (input.rawKeyboardSeen) {
+                if (event.kind==ChatInputEvent::Key && !event.repeat) {
+                    const auto scan=glfwGetKeyScancode(event.value);
+                    const uint8_t key=uint8_t(MapVirtualKeyW(UINT(scan),MAPVK_VSC_TO_VK));
+                    if (std::find(nativeChatConsumed.begin(),nativeChatConsumed.end(),key)!=nativeChatConsumed.end())
+                        if (const auto found=std::find(pressed.begin(),pressed.end(),event.value);found!=pressed.end())
+                            pressed.erase(found);
+                }
+                continue;
+            }
             if (event.kind == ChatInputEvent::MouseDown) { chat.stopEditing(); continue; }
             // Character insertion has no root-visibility/binding-wait gate.
             // This runtime has no focused gameplay text editor besides chat.
@@ -3941,6 +4080,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (const auto found = std::find(pressed.begin(), pressed.end(), key); found != pressed.end()) pressed.erase(found);
         }
         chatInput.clear();
+        nativeChatConsumed.clear();
         gameInput.update(window, gameControls, pressed, input.buttons, !menusOpen && !chat.typing(),
                          panelsBeforeInput || menusOpen || chat.typing(), mapOpen,
                          capturingBeforeInput || (menusReady && menus.capturingControl()),
@@ -3957,49 +4097,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 menus.dismiss();
             menusOpen = false;
         }
-        // Escape and the System Menu binding (default O; Start on a gamepad) close the inventory
-        // first, then the map, then show the system menu.
-        auto escape = [&] {
-            if (mapOpen && !inventoryOpen)
-                mapOpen = false;
-            else if (inventoryOpen)
-                inventoryOpen = craftingOpen = false, bagShown = true;
-            else if (menusReady)
-                menus.toggleSystemMenu();
-        };
-        if (gameInput.pressed(gameoptions::SYSTEM_MENU))
-            escape();
-        if (gameInput.pressed(gameoptions::MULTIPLAYER_MENU) && menusReady) // (J: the friends list)
-            menus.toggleMultiplayerMenu();
-        if (openFriendsAt >= 0 && time >= openFriendsAt && menusReady) { // (testing)
-            menus.toggleMultiplayerMenu();
-            openFriendsAt = -1;
+        // Physical bindings share the retained buttons' business actions. Raw Escape
+        // has its separate byte toggle; its later publication never invokes Back.
+        const auto escape=[&] {invokeMenu(Hud::Menu::System);};
+        if (gameInput.pressed(gameoptions::SYSTEM_MENU)) invokeMenu(Hud::Menu::System);
+        if (gameInput.pressed(gameoptions::MULTIPLAYER_MENU)) invokeMenu(Hud::Menu::Multiplayer);
+        if (openFriendsAt>=0 && time>=openFriendsAt && menusReady) {
+            invokeMenu(Hud::Menu::Multiplayer);
+            openFriendsAt=-1;
         }
-        if (gameInput.pressed(gameoptions::INVENTORY)) {
-            bagShown = !(inventoryOpen && bagShown);
-            inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
-            if (inventoryOpen && bagShown)
-                refreshBagOpening();
-            if (!inventoryOpen)
-                craftingOpen = false, bagShown = true;
-        }
-        if (gameInput.pressed(gameoptions::WORLD_MAP)) // the map toggle
-            mapOpen = !mapOpen;
-        if (gameInput.pressed(gameoptions::CRAFTING_MENU)) { // the crafting toggle
-            const bool wasOpen = inventoryOpen;
-            craftingOpen = !(inventoryOpen && craftingOpen);
-            if (!wasOpen)
-                bagShown = false;
-            inventoryOpen = (bagShown || craftingOpen) && hud.hasInventoryArt() && haveGear;
-            rebuildCrafting(); // The ordinary toggle rebuilds in both directions.
-            if (craftingOpen) {
-                refreshInventory(false, inventoryui::Panel::Crafting);
-                if (inventoryView.crafting.canonicalTabs)
-                    hud.updateInventoryThumb(inventoryView, 2, hud.inventoryRowCount(inventoryView, 2));
-            }
-            if (!inventoryOpen)
-                craftingOpen = false, bagShown = true;
-        }
+        if (gameInput.pressed(gameoptions::INVENTORY)) invokeMenu(Hud::Menu::Inventory);
+        if (gameInput.pressed(gameoptions::WORLD_MAP)) invokeMenu(Hud::Menu::WorldMap);
+        if (gameInput.pressed(gameoptions::CRAFTING_MENU)) invokeMenu(Hud::Menu::Crafting);
         for (int key : pressed) {
             if (mods.key(key))
                 continue;
@@ -4008,7 +4117,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 continue;
             switch (key) {
             case GLFW_KEY_ESCAPE:
-                escape();
+                if (!input.rawKeyboardSeen) escape();
                 break;
             case GLFW_KEY_F7: // Same key as the SteamShadows mod.
                 shadowsEnabled = !shadowsEnabled;
@@ -4049,8 +4158,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // (in the game's menus the game draws its own pointer, cursor.plx)
         int cursorMode =
             menusOpen                                                                                              ? GLFW_CURSOR_NORMAL
-            : mouseLook && !inventoryOpen && !nativeCustomization.edit.open && !mapOpen && !answers.visible()      ? GLFW_CURSOR_DISABLED
-            : hud.hasPointer() && (inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible()) ? GLFW_CURSOR_HIDDEN
+            : mouseLook && input.gameKeyboard.menu==0 && !inventoryOpen && !nativeCustomization.edit.open && !mapOpen && !answers.visible()      ? GLFW_CURSOR_DISABLED
+            : hud.hasPointer() && (input.gameKeyboard.menu!=0 || inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible()) ? GLFW_CURSOR_HIDDEN
                                                                                                                    : GLFW_CURSOR_NORMAL;
         if (glfwGetInputMode(window, GLFW_CURSOR) != cursorMode) {
             glfwSetInputMode(window, GLFW_CURSOR, cursorMode);
@@ -4073,14 +4182,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         {
             static double lastButtonDown = -1;
             for (int button : input.buttons) {
-                if (button == GLFW_MOUSE_BUTTON_LEFT && !menusOpen) {
-                    const int action = hud.mapHistoryAction(previousGuiPointer);
-                    if (action)
-                        stepMapHistory(action < 0);
-                }
-                // Native post-GUI hits see visibility changed by the just-run callback.
-                if (mapOpen && (hud.mapHistoryArrowHit(true, previousGuiPointer) || hud.mapHistoryArrowHit(false, previousGuiPointer)))
-                    continue;
                 mapSelection.down();
                 if (button == GLFW_MOUSE_BUTTON_MIDDLE && mapOpen && mapCursorKnown && mapCursor.z >= 0) {
                     const std::array<int32_t, 3> spot = {(int32_t)mapCursor.x, (int32_t)mapCursor.y,
@@ -6457,6 +6558,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             texts.push_back({player.position + glm::vec3(0, 0, 3), n.text,
                              n.invitation ? glm::u8vec4(255, 128, 51, 255) : glm::u8vec4(120, 220, 255, 255)});
         for (const cwnet::ChatLine &line : session.takeChat()) chat.receive(line.speaker, line.text);
+        hud.publishMenuControls(input.gameKeyboard.menu); // Late UI publication also runs with F4 hidden.
         hud.updateChat(chat, [&](int64_t id) -> std::optional<std::u16string> {
             if (const uint8_t *record = spawned.record(id)) {
                 std::u16string name;
@@ -7436,6 +7538,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 mapOpen = false;
                 inventoryOpen = false;
                 vendorTrade.open = false;
+                input.gameKeyboard.menu=0;
                 craftingOpen = false; // The formula details follow this grid's visibility.
                 if (menusReady)
                     menus.hideSystemForMovement();
@@ -8359,7 +8462,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             // Interface's its pointer node: the game's pointer in its menus; on the open map, the flat
             // distance from the player to the map's cursor (the distance text, a metre
             // being two blocks).
-            hs.pointer = hud.hasPointer() && (inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible());
+            hs.pointer = hud.hasPointer() && (input.gameKeyboard.menu!=0 || inventoryOpen || nativeCustomization.edit.open || mapOpen || answers.visible());
             // the flight point preview for the selected flight point: its name, the
             // distance, and the flight time (once known) or what it costs.
             if (!nativeInventory && mapOpen && flightSelected) {

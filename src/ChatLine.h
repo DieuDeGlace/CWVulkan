@@ -23,6 +23,9 @@ class ChatLine {
     bool typing() const { return open; }
     uint64_t drawingRevision() const { return redrawRevision; }
     std::optional<std::u16string> enter();
+    // Game key entry after the GUI phase and the caller's current chat gates.
+    // Active Return submits before clearing the live text, then reaches key invalidation.
+    void keyDown(uint8_t virtualKey,bool guiShift,const std::function<void(const std::u16string &)> &submit = {});
     // Mouse-down retains text and selection; Escape belongs to the outer menu.
     void stopEditing() { open = false; }
     void type(const std::string &lowBytes);
@@ -44,6 +47,7 @@ class ChatLine {
   private:
     void clampSelection();
     void eraseSelection();
+    void editKey(uint8_t virtualKey,bool guiShift);
     bool open = false;
     uint64_t redrawRevision = 0; // explicit native append/key/Enter-close notifications, not content snapshots
     std::u16string line;

@@ -15,19 +15,38 @@ void Hud::buildMapHistory() {
     if (historyPanel.right)
         historyPanel.right->transform.translation = glm::vec2(100, 2) - historyPanel.right->transform.pivot;
     historyPanel.root->initializeWidgets();
+    const auto bind=[&](plasma::SceneNode *node,const std::wstring &name,bool older) {
+        if (!node) return;
+        const auto visit=[&](auto &&self,plasma::SceneNode &at)->void {
+            if (at.widget && at.widget->name==name)
+                bindMenuPress(at,[this,older] {const auto callback=historyAction;if (callback) callback(older);});
+            for (auto &child:at.children) self(self,*child);
+        };
+        visit(visit,*node);
+    };
+    bind(historyPanel.left,L"leftbutton",true);
+    bind(historyPanel.right,L"rightbutton",false);
+}
+
+void Hud::bindMapHistoryActions(std::function<void(bool)> action) {historyAction=std::move(action);}
+
+void Hud::refreshMapHistory(const maphistory::History::View &view,const HistoryCaption &caption) {
+    if (!historyPanel.root) return;
+    // Native refresh stores B, then A, before calling the caption providers.
+    if (historyPanel.right) historyPanel.right->visible=view.newer;
+    if (historyPanel.left) historyPanel.left->visible=view.older;
+    if (view.caption && caption) historyPanel.caption=dialoguewords::wide(caption());
 }
 
 void Hud::bindMapHistory(const maphistory::History::View &view, const std::string &caption, bool interfaceVisible) {
-    if (!historyPanel.root)
-        return;
-    historyPanel.ancestorVisible = interfaceVisible;
-    historyPanel.root->visible = view.shown;
-    if (view.caption)
-        historyPanel.caption = dialoguewords::wide(caption);
-    if (historyPanel.left)
-        historyPanel.left->visible = view.older;
-    if (historyPanel.right)
-        historyPanel.right->visible = view.newer;
+    bindMapHistory(view,[&]{return caption;},interfaceVisible);
+}
+
+void Hud::bindMapHistory(const maphistory::History::View &view,const HistoryCaption &caption,bool interfaceVisible) {
+    if (!historyPanel.root) return;
+    refreshMapHistory(view,caption);
+    historyPanel.ancestorVisible=interfaceVisible;
+    historyPanel.root->visible=view.shown;
     scene->setScale(guiScale);
     scene->setPosition(*historyPanel.root, {0, screen.y}, {150, -50});
 }
@@ -36,6 +55,14 @@ bool Hud::mapHistoryArrowHit(bool older, glm::vec2 pointer) const {
     const auto *arrow = older ? historyPanel.left : historyPanel.right;
     // Native standalone subtree queries use ancestor matrices, not ancestor visibility.
     return arrow && scene->hitTest(*arrow, pointer) != nullptr;
+}
+
+bool Hud::mapPressContinues(bool fullMap) const {
+    if (!fullMap) return true;
+    // Direct A then B queries, with a fresh retained point at each call. Neither
+    // capture, ancestor visibility nor the current control enabled byte gates these.
+    return !mapHistoryArrowHit(true,interfacePointerPosition()) &&
+           !mapHistoryArrowHit(false,interfacePointerPosition());
 }
 
 int Hud::mapHistoryAction(glm::vec2 pointer) const {

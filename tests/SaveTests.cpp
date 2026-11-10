@@ -551,6 +551,41 @@ void terrainProfiles() {
     }
 }
 
+// An actual Windows regression: the final database fits under MAX_PATH,
+// but a verbose temporary filename plus SQLite's journal suffix did not.
+void longProfileImportPath() {
+    const auto root=scratchFolder("profile-import-path");
+    const std::string identity="alpha-v2-compose-v3-seed-1570745101-steam-seed-0-scale-bits-4607182418800017408";
+    const size_t suffix=(fs::path(identity)/"characters.db").native().size()+1;
+    const size_t baseLength=230-suffix;
+    SAVE_CHECK(root.native().size()+1<baseLength);
+    if (root.native().size()+1>=baseLength) return;
+    const auto base=root/std::string(baseLength-root.native().size()-1,'x');
+    fs::create_directories(base);
+    SAVE_CHECK((base/identity/"characters.db").native().size()==230);
+    const auto character=testCharacter();
+    {
+        CharacterStore store;
+        SAVE_CHECK(store.open(base/"characters.db"));
+        SAVE_CHECK(store.create(character)==0);
+    }
+    {
+        nativeprogress::ProgressFile profile;
+        const bool opened=profile.open(base,root/"game",{},true,[](const auto &){},identity);
+        SAVE_CHECK(opened);
+        if (opened) {
+            Character imported;
+            SAVE_CHECK(profile.store().load(0,imported));
+            SAVE_CHECK(imported.name==character.name && imported.equipment==character.equipment &&
+                       imported.recipes==character.recipes && imported.discoveredZones.empty());
+        }
+    }
+    CharacterStore original;
+    Character unchanged;
+    SAVE_CHECK(original.openReadOnly(base/"characters.db") && original.load(0,unchanged));
+    SAVE_CHECK(writeCharacter(unchanged)==writeCharacter(character));
+}
+
 void generatedObjectMetadata() {
     worldgen::ZoneObject object;
     object.type = 0x54;
@@ -677,6 +712,7 @@ int saveFormatTests() {
     retainedSourceLifetimes();
     generatedObjectMetadata();
     terrainProfiles();
+    longProfileImportPath();
     return failures;
 }
 

@@ -121,6 +121,7 @@ void Hud::buildPanels() {
     panels.inGame = interfaceBranches->node(uiroot::Branch::Gameplay);
     panels.templates = s.create(nullptr, "templates"); // Source prototypes are outside the live tree.
     panels.templates->visible = false;
+    buildMenuControls();
 
     // InventoryWidget's constructor: its cell size from the cell template's view.
     plasma::SceneNode *cell = s.instance("wideitembox", panels.templates);
@@ -488,6 +489,11 @@ void Hud::placeInvPanel(const InvPanel &p, const InvList &list) const {
     for (const char *b : {"leftbutton", "rightbutton"})
         if (auto it = p.buttons.find(b); it != p.buttons.end() && it->second)
             it->second->visible = list.regionArrows;
+}
+
+void Hud::clearInventoryPanelNodes() {
+    for (auto *node:{panels.bag.node,panels.crafting.node,panels.vendor.node})
+        if (node) node->visible=false;
 }
 
 void Hud::setInventoryPanelVisibility(bool bag, bool crafting, bool vendor) const {

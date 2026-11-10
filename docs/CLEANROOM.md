@@ -3209,3 +3209,34 @@ All five targets, required-owner CPU without skips, 92 shader/2 camera/106 GUI/
 17 map/14 native-water plus shared-water/Alpha-scenery checks and SDK independence
 pass. Native and Alpha Back probes retain actor/camera and private save bytes;
 creation, complete payload/order, old-profile isolation and reopen checks pass.
+
+## Game keyboard/menu and map-press integration - 2026-11-09
+
+The independent original-only author held the complete six-menu layout and
+map-press admission prose without implementation, SDK, tests, owner files or
+verification feedback. The implementer read each whole saved artifact, checked
+its hash and copied it unchanged. Earlier held Game/window and menu callback
+contracts retain their exact bytes. Only those prose contracts, owned code and
+permitted owner data were used for this integration.
+
+The selected keyboard, six controls, distinct callback effects, right-press
+null-target branch and post-GUI arrow admission follow the stated scope.
+Template dimensions, flags and dynamic control classes are retained from actual
+owner data; a resource label does not establish that its control is a Button.
+Normal and captured hit tests are separate from direct A/B subtree queries.
+Owned callback lifetime and the retained queue are safe engine policies, without
+claiming native raw-pointer or arbitrary message-pump reentrancy guarantees.
+
+Focused source-conditional and actual-owner checks cover the selected paths.
+Whole Game mouse/release business, physical/controller admission, binding
+capture, menu binding captions and generic geometry/font/providers remain
+bounded; final native runtime, provenance and broader parity acceptance remain
+release gates. Owner assets, saves, captures, packages and private evidence stay
+out of the source payload. Existing Alpha and Omega extensions remain distinct.
+
+The Windows import follow-up uses only the owned ProgressFile and database paths.
+It shortens an unpublished temporary filename to leave space for SQLite's journal;
+it adds no native source interpretation. A genuine 230-character-path failure and
+the unchanged succeeding regression are retained, with the same-length live Alpha
+creation/canonical/old-profile checks. Generic long-path and broader native/runtime
+acceptance are separate from this bounded fix.

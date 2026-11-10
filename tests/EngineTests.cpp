@@ -128,6 +128,7 @@ int plasmaEditTests();
 int plasmaEditPointerTests();
 int plasmaTextMetricTests();
 int liveEditTests();
+int gameWindowInputTests();
 int alphaTerrainTests();
 int generatorCacheTests();
 int nativeSourceStreamingTests();
@@ -9382,6 +9383,7 @@ int main(int argc, char **argv) {
     if (argc == 2 && std::string(argv[1]) == "textindexmetric")
         return plasmaTextMetricTests();
     if (argc>=2 && std::string(argv[1])=="liveedit") return liveEditTests();
+    if (argc>=2 && std::string(argv[1])=="gamekeyboard") return gameWindowInputTests();
     if (argc == 2 && std::string(argv[1]) == "editpointer")
         return plasmaEditPointerTests();
     if (argc == 2 && std::string(argv[1]) == "plasmaedit")
@@ -10913,6 +10915,7 @@ int main(int argc, char **argv) {
     failures += plasmaEditPointerTests();
     failures += plasmaTextMetricTests();
     failures += liveEditTests();
+    failures += gameWindowInputTests();
     failures += alphaTerrainTests();
     failures += generatorCacheTests();
     failures += nativeSourceStreamingTests();

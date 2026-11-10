@@ -1,5 +1,75 @@
 # Source review checkpoint — 2026-11-08
 
+## Game keyboard, menu controls and map press admission - 2026-11-09
+
+The ordered interface queue now runs the GUI's 16-bit keyboard phase before the
+current Game low-byte phase. Raw down/up state, repeated Escape's separate menu
+byte, ungated F1/F4 effects and per-message F2/3/5/6 scaling are distinct from
+physical action polling. The four scale-bound words and the directional-only
+clamps follow the independent Game contract. Chat reads current GUI focus,
+Gameplay's own visibility and the raw binding-capture index; character delivery
+has its separate focus gate and sign-extends the Game byte. Active Return submits
+before clearing current text, and Left/Right edges preserve selection.
+
+Six retained owner menubutton templates use the original resource/index order
+under Gameplay. Their dimensions and control classes come from owner data.
+Placement inverse-projects the integer screen-centre anchor before adding the
+60-unit spacing and -200 local Y offset. Resource fitting aligns current bounds
+and scales the two extents independently. A later UI update publishes the menu
+byte even while F4 hides the root; frontend page visibility remains independent.
+The six callbacks retain their distinct rebuild, refresh, toggle and exclusion
+rules. Physical menu bindings share those actions. Right press uses a fresh
+post-GUI capture-or-hit result before clearing the byte and three panel nodes.
+Callback teardown removes borrowed gameplay owners.
+
+Recent-land arrows now bind retained event2 callbacks. Their refresh publishes
+B then A before the caption provider. Game press admission checks the current
+map byte once, then queries A and B directly in order after GUI callbacks, using
+each call's retained point. Direct queries have their own visibility/shape gates;
+ancestor hiding, capture and control-enabled state are separate. A callback can
+hide its own arrow and thereby admit the normal chat-clear continuation. Chat
+press/key interleaving now stays in one queue; admitted business work is retained
+for the remaining frame adapter instead of repeating the admission later.
+
+The original-only author supplied the complete unchanged
+[layout/publication contract](specs/steam-interface-six-menu-layout-and-publication-20261109.md)
+and [map-press admission contract](specs/steam-game-map-press-early-return-admission-20261109.md),
+alongside the earlier Game and menu callback contracts. Each was read in full and
+hashed before use. No implementation, tests, owner outputs or feedback reached
+the author. Owner data, captures, private evidence and memory remain excluded
+from the public source payload.
+
+Source-literal traces and actual owner controls cover repeated keys, GUI-to-Game
+rereads, UTF-16/low-byte separation, chat send/selection ordering, six resource
+fits, signed/odd-width placement, delayed publication, event2-only actions,
+callback teardown, right-press hits/overrides and map-arrow early returns.
+All five targets, the full required-owner CPU suite without skips, all Vulkan
+groups and SDK independence pass. Fresh Native/Alpha creation, Back actor/camera,
+complete save payload/order/profile and reopen checks pass. Eight actual menu
+callback state cases and both frontend Escape publication probes also pass.
+The Alpha/Omega menu scene passes at the unchanged readiness gate. The Native
+scene still exceeds that gate: the current failed capture and preceding controlled
+failure/retry are retained. No deadline or readiness condition was relaxed, and no
+startup reliability or performance cause is established. Native scene acceptance
+remains open alongside the broader gates below.
+
+A longer Windows test directory exposed an owned terrain-profile import issue:
+the temporary database filename plus SQLite's journal suffix exhausted the path
+budget before character copying. Shorter unpublished names preserve the existing
+atomic publication. An actual 230-character destination fails before this fix
+and passes afterward; the same-length live Alpha creation also passes, preserving
+canonical database bytes and the old compose-v2 profile. This is a local profile
+robustness change, separate from native save-format or terrain-generation claims.
+
+This closes the selected dispatch, menu and press-admission paths, with explicit
+engine ownership and finite-resource boundaries. The remaining Game mouse/release
+business and scalar/node postlude, physical action and binding-capture producers,
+menu binding captions, generalized shape/font/provider behavior, arbitrary
+reentrancy and native OS/runtime acceptance remain open. This is not complete
+Steam input or pixel parity. Alpha terrain/lighting, purple dry Undead Lands,
+distinct biome palettes and Omega water retain their separate existing paths.
+
+
 ## Retained UTF-16 creation editor - 2026-11-09
 
 The creation name now belongs to its persistent owner-GUI Edit caption. Raw
@@ -36,7 +106,7 @@ This checkpoint does not close the newly audited full Game input phase. The GUI
 queue drains before physical pointer polling, but broader synchronous WinProc
 GUI-to-Game rereads, Game low-byte/sign-extended chat delivery, raw Game keys,
 repeated Escape's six-button publication, binding capture and remaining business
-callbacks still need integration. The Game Escape-key phase remains open; Back's page transition is closed below.
+callbacks still need integration. At this earlier checkpoint the Game Escape-key phase was still open; the later Game keyboard checkpoint above covers its selected byte/publication paths.
 Native runtime comparison and final provenance/visual/gameplay acceptance remain
 release gates. Alpha terrain/lighting, distinct biome palettes and Omega water
 retain their separate paths and profile identity.

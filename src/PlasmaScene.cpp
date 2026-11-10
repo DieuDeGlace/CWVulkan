@@ -669,6 +669,37 @@ void Scene::setIcon(SceneNode &node, const std::string &targetName, const plx::D
     icon->local = glm::translate(m, glm::vec3(-(placedLo + placedHi) * 0.5f, 0)) * own;
 }
 
+void Scene::fitMenuIcon(SceneNode &node,const std::string &targetName,
+                        const plx::Document &icons,const std::string &iconName) {
+    auto *background=node.find(targetName);
+    const int resource=icons.find(iconName);
+    if (!background || resource<0) return;
+    if (auto *previous=background->find("icon")) destroy(*previous);
+    glm::vec2 oldMin,oldMax,newMin,newMax;
+    if (!screenBounds(*background,oldMin,oldMax)) return;
+    auto *icon=instance(icons,resource,background);
+    if (!icon) return;
+    icon->name="icon";
+    // These queries share the owned bounds provider. General dynamic shape/control
+    // providers and arbitrary projective geometry remain separately qualified.
+    if (!screenBounds(*icon,newMin,newMax)) return;
+    const auto midpoint=(newMax+newMin)*0.5f;
+    icon->transform.pivot=apply(inverseMatrix(*icon),midpoint);
+    icon->local.reset();
+    if (!screenBounds(*icon,newMin,newMax)) return;
+    const auto inverse=inverseMatrix(*icon);
+    const auto delta=(((oldMax+oldMin)-newMin)-newMax)*0.5f;
+    const auto localDelta=linear(inverse,delta);
+    auto &matrix=icon->transform.deformation;
+    for (int word=0;word<4;++word)
+        matrix[3][word]=(matrix[1][word]*localDelta.y+matrix[0][word]*localDelta.x)+matrix[3][word];
+    const auto ratio=(oldMax-oldMin)/(newMax-newMin);
+    if (ratio.x!=1.0f) matrix[0]*=ratio.x;
+    if (ratio.y!=1.0f) matrix[1]*=ratio.y;
+    icon->placementChanged=true;
+    screenBounds(*icon,newMin,newMax);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Widget geometry.
 

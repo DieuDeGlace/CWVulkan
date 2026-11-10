@@ -44,6 +44,7 @@ void Hud::interfaceKeyboard(plasma::Input::Key key,uint16_t unit) {
     if (const auto *focus=interfaceInput->focusWidget()) requireText(plasma::captionText(*focus));
 }
 bool Hud::interfaceHasFocus() const {return interfaceInput && interfaceInput->focusWidget();}
+bool Hud::interfaceKeyHeld(uint16_t key) const {return interfaceInput && interfaceInput->keyHeld(key);}
 
 std::optional<std::u16string> Hud::frontendCaption(const std::string &owner) const {
     const auto found=frontNodes.find(owner);
