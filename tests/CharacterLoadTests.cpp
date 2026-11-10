@@ -318,6 +318,24 @@ void retainedPlayerAttachment(const auto &check) {
               "unbound simulations have independent player ownership");
     }
 }
+void frontendLoadOwnership(const auto &check) {
+    ExtractedWorld blocks; blocks.openGenerated(0,0);
+    SpawnedCreatures player;
+    player.setNativePlayer(true); player.setPlayer(blocks,{1,2,130},0,{},100,1,true);
+    auto data=std::make_shared<nativesaves::Character>();
+    data->health=-3.25f; data->inventory.resize(6); data->inventory[0].push_back({3,{}});
+    std::weak_ptr<nativesaves::Character> retained=data;
+    const auto *record=player.localPlayer()->record;
+    check(player.loadPlayerSave(data) && player.localPlayer()->record==record && player.playerHealth()==-3.25f,
+          "frontend load applies raw data into its retained actor rather than the placement bridge");
+    data.reset();
+    auto *actor=player.localPlayer();
+    actor->inventorySource([](nativeai::InventorySlot slot) {slot.setCount(4); return false;});
+    nativesaves::Character snapshot;
+    check(!retained.expired() && player.playerCharacterSource()(snapshot) && !snapshot.inventory.empty() &&
+          !snapshot.inventory[0].empty() && snapshot.inventory[0][0].count==4,
+          "replaced CharacterData owns the canonical mutable inventory and survives the caller's temporary owner");
+}
 void absentRecord(const auto &check) {
     const auto dir = std::filesystem::temp_directory_path() /
         ("CubeVulkan-character-load-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -340,7 +358,7 @@ int characterLoadTests() {
     const auto check = [&](bool okay, const char *message) {
         if (!okay) { std::printf("FAIL character load: %s\n", message); ++failures; }
     };
-    rawNativeLoad(check); resetRetainsSeparateContainers(check); controlledInventoryUsesCurrentState(check); potionCountWidths(check); rawProgressOwnership(check); retainedPlayerAttachment(check); absentRecord(check);
+    rawNativeLoad(check); resetRetainsSeparateContainers(check); controlledInventoryUsesCurrentState(check); potionCountWidths(check); rawProgressOwnership(check); retainedPlayerAttachment(check); frontendLoadOwnership(check); absentRecord(check);
     std::printf("Character load: raw fields, placement, reset/load ownership: %d failure(s)\n", failures);
     return failures;
 }

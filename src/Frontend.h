@@ -419,6 +419,8 @@ struct Result {
     enum Action { Quit, Play, Resume, Title, Stay } action = Quit;
     int slot = -1;        // the character to play
     bool created = false; // confirmation selected Help and retained the live character
+    bool continued = false; // Title Continue and stored-character Select have distinct publications.
+    std::shared_ptr<const nativesaves::Character> enteredCharacter; // Already-live selected entry data for the gameplay adapter.
     std::optional<hair::Style> createdHairStyle;
     std::shared_ptr<const nativesaves::Character> createdCharacter; // current retained actor/data at confirmation
     std::optional<OrbitCamera> camera;                   // Play keeps both displayed and target values.

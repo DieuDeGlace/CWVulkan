@@ -499,7 +499,7 @@ class Session {
     void previewPanels(std::vector<DrawItem> &opaque);
     std::vector<guiitem::Request> characterPreview(Listed &, const Hud::ScreenItem::ModelContext &);
     void putOnStage(const nativesaves::Character &c, bool riding);
-    void enterWorld(); // Continue, Select, Create Character: the player rebuilt from the save
+    void enterWorld(); // Separate retained-actor load and Continue/Select/creation publications.
     void stageDefaultPlayer();
     void applyLook();
     void applyHairStyle();
@@ -1404,7 +1404,7 @@ void Session::handleClick(bool inGame) {
             break;
         case CONTINUE:
             if (listed[(size_t)selectedSlot].playable) {
-                camera.continueFromTitle();
+                outcome.continued=true;
                 decide(Result::Play, selectedSlot);
             }
             break;
@@ -1441,10 +1441,8 @@ void Session::handleClick(bool inGame) {
                 startCreation();
             else if (listed[(size_t)cursor].playable) { // Select (frontend-characters.md §3)
                 charactersShown = false;
-                camera.set(90, 0, 180, 8);
                 selectedSlot = cursor;
-                if (!req.readOnly)
-                    s.store->setSlot(cursor);
+                outcome.continued=false;
                 decide(Result::Play, cursor);
             }
         }
@@ -2191,6 +2189,106 @@ bool Session::frame() {
             return false;
         }
     }
+    if (req.page=="continue-play-test") {
+        auto *actor=s.spawned ? s.spawned->localPlayer() : nullptr;
+        if (!actor || !actor->record || !s.extracted || selectedSlot<0) {
+            outcome.error="Frontend entry fixture requires a selected live character";
+            decide(Result::Quit); return false;
+        }
+        actor->counted={3101}; actor->struck={3202}; actor->skills={3303,3304};
+        actor->summonRaces={3405}; actor->group={3506};
+        actor->record[0x61]=0xa7; actor->record[0x7d]=0xb8;
+        const uint32_t omitted=0x7f123456; std::memcpy(actor->record+0xbbc,&omitted,4);
+        camera.set(22,33,44,3); camera.targetPitch=55; camera.targetRoll=66; camera.targetYaw=77;
+        outcome.continued=true; decide(Result::Play,selectedSlot); return false;
+    }
+    if (req.page=="continue-entry-test") {
+        // In-memory backend and explicit actual Session entry: no OS injection or owner writes.
+        bool passed=true;
+        const auto verify=[&](bool value,const char *label) {
+            log(std::string("Continue entry: ")+(value ? "PASS " : "FAIL ")+label);
+            passed=passed && value;
+        };
+        nativesaves::CharacterStore database;
+        auto *actor=s.spawned ? s.spawned->localPlayer() : nullptr;
+        const bool ready=actor && actor->record && database.open(":memory:");
+        verify(ready,"owned memory backend and retained live actor are available");
+        if (!ready) {outcome.error="Continue fixture missing owned actor/backend"; decide(Result::Quit); return false;}
+        nativesaves::Character saved;
+        saved.name="ENTRY_TEST"; saved.classType=2; saved.specialization=1;
+        saved.position={1000LL*65536+32768,-2000LL*65536-16384,70LL*65536};
+        saved.health=-2.5f; saved.level=0;
+        saved.inventory.resize(6); saved.inventory[0].push_back({3,{}});
+        saved.buffs.resize(1); saved.buffs[0].bytes[0]=0x0d;
+        saved.buffs[0].bytes[1]=0xa7; saved.buffs[0].bytes[2]=0xb8; saved.buffs[0].bytes[3]=0xc9;
+        if (database.create(saved)!=0) {outcome.error="Continue fixture memory write failed"; decide(Result::Quit); return false;}
+        database.setSlot(7); // Independent backend slot must not be published by Continue.
+        const auto originalStore=s.store; const bool originalReadOnly=req.readOnly;
+        auto originalListed=std::move(listed);
+        const auto originalPages=frontendPages;
+        const auto originalCamera=camera;
+        const int originalSelected=selectedSlot,originalCursor=cursor;
+        s.store=&database; req.readOnly=false;
+        listed.emplace_back(); listed.back().playable=true;
+        listed.back().character=saved;
+        listed.back().character.position={11*65536,22*65536,33*65536};
+        listed.back().character.health=42; listed.back().character.level=4;
+        listed.back().character.buffs.clear(); // Deliberately stale preview data.
+        selectedSlot=cursor=0;
+        auto *record=actor->record;
+        actor->counted={3101}; actor->struck={3202}; actor->group={3506};
+        actor->skills={3303,3304}; actor->summonRaces={3405};
+        record[0x61]=0xa7; record[0x7d]=0xb8;
+        const uint32_t omitted=0x7f123456; std::memcpy(record+0xbbc,&omitted,4);
+        camera.set(22,33,44,3); camera.targetPitch=55; camera.targetRoll=66; camera.targetYaw=77; camera.targetDistance=4;
+        frontendPages.fill(false); titleShown=true;
+        outcome={}; outcome.action=Result::Play; outcome.slot=0; outcome.continued=true;
+        enterWorld();
+        actor=s.spawned->localPlayer();
+        float hp; std::memcpy(&hp,actor->record+0x180,4);
+        int32_t level; std::memcpy(&level,actor->record+0x144,4);
+        verify(std::memcmp(actor->record+0x10,saved.position.data(),24)==0 && hp==-2.5f && level==0 && actor->record[0x14c]==2,
+               "Continue decodes fresh backend position, raw negative health, level and class");
+        verify(actor->record==record && actor->counted==std::set<int64_t>{3101} && actor->struck==std::set<int64_t>{3202} &&
+               actor->group==std::set<int64_t>{3506} && actor->skills==std::vector<int32_t>{3303,3304} && actor->summonRaces==std::vector<int32_t>{3405},
+               "Continue keeps the live allocation and separately retained collections");
+        uint32_t afterOmitted; std::memcpy(&afterOmitted,actor->record+0xbbc,4);
+        verify(actor->record[0x61]==0xa7 && actor->record[0x7d]==0xb8 && afterOmitted==omitted,
+               "entry preserves omitted core and appearance bytes and the outer partial-store boundary");
+        verify(actor->buffs.size()==1 && actor->buffs[0]==saved.buffs[0].bytes,
+               "loaded buff bytes survive the entry decoder without a later blanket reset");
+        verify(camera.pitch==22 && camera.roll==33 && camera.yaw==44 && camera.targetPitch==55 && camera.targetRoll==66 && camera.targetYaw==77 &&
+               camera.distance==8 && camera.targetDistance==8,"Continue keeps all six angles and publishes both distances after loading");
+        verify(database.slot()==7,"Continue does not rewrite the independent backend slot key");
+        std::array<uint8_t,nativepose::CREATURE_SIZE> beforeMiss;
+        std::memcpy(beforeMiss.data(),actor->record,beforeMiss.size());
+        const auto beforeCounted=actor->counted;
+        frontendPages.fill(false); titleShown=true;
+        camera.distance=3; camera.targetDistance=4;
+        outcome={}; outcome.action=Result::Play; outcome.slot=99; outcome.continued=true;
+        enterWorld(); actor=s.spawned->localPlayer();
+        verify(std::memcmp(beforeMiss.data(),actor->record,beforeMiss.size())==0 && actor->counted==beforeCounted &&
+               !front() && camera.distance==8 && camera.targetDistance==8 && outcome.enteredCharacter &&
+               !outcome.enteredCharacter->inventory.empty() && !outcome.enteredCharacter->inventory[0].empty() &&
+               outcome.enteredCharacter->inventory[0][0].count==3,
+               "backend miss keeps full entity/data state but still publishes frontend exit and camera distances");
+        saved.health=0; saved.classType=3; database.save(0,saved);
+        frontendPages.fill(false); charactersShown=true;
+        camera.set(22,33,44,3); camera.targetPitch=55; camera.targetRoll=66; camera.targetYaw=77;
+        outcome={}; outcome.action=Result::Play; outcome.slot=0; outcome.continued=false;
+        enterWorld(); actor=s.spawned->localPlayer(); std::memcpy(&hp,actor->record+0x180,4);
+        verify(hp==0 && actor->record[0x14c]==3 && database.slot()==0 && camera.pitch==90 && camera.roll==0 && camera.yaw==180 &&
+               camera.targetPitch==90 && camera.targetRoll==0 && camera.targetYaw==180 && camera.distance==8 && camera.targetDistance==8,
+               "stored Select loads zero health before slot publication and its distinct camera reset");
+        int inventoryCount=0;
+        if (actor->inventorySource) actor->inventorySource([&](nativeai::InventorySlot slot) {inventoryCount+=slot.count(); return true;});
+        verify(outcome.enteredCharacter && outcome.enteredCharacter->health==0 && outcome.enteredCharacter->position==saved.position && inventoryCount==3,
+               "gameplay receives the already-live entry data and current canonical inventory");
+        s.store=originalStore; req.readOnly=originalReadOnly; listed=std::move(originalListed);
+        frontendPages=originalPages; camera=originalCamera; selectedSlot=originalSelected; cursor=originalCursor;
+        outcome={}; if (!passed) outcome.error="Selected saved-character entry contract failed";
+        decide(Result::Quit); return false;
+    }
     if (req.page=="help-action-test") {
         // Explicit owned Help invocation; no OS injection or original-runtime claim.
         Hud::Screen sheet;
@@ -2595,6 +2693,12 @@ Result Session::runTitle() {
     if (outcome.action == Result::Play) {
         playSound(SOUND_MENU_CLOSE);
         enterWorld();
+        if (req.page=="continue-play-test" && s.extracted && s.spawned && s.spawned->localPlayer()) {
+            // Model a reached synchronous post-load mutation. A second startup
+            // decoder would wrongly clear this reset-owned map before gameplay.
+            auto guard=s.extracted->lockSourceState();
+            s.spawned->localPlayer()->aggro[0x6677]=3.5f;
+        }
         outcome.camera = camera;
         if (cameraPositionValid) {
             outcome.cameraPosition = cameraPosition;
@@ -2621,22 +2725,40 @@ void Session::enterWorld() {
         s.renderer->cutHistory();
         return;
     }
-    const nativesaves::Character *saved = nullptr;
-    if (outcome.slot >= 0 && outcome.slot < (int)listed.size())
-        saved = &listed[(size_t)outcome.slot].character;
-    if (!saved)
-        return;
+    // Stored Select has an outer World scope. Continue only holds the selected
+    // load scope; its later UI/camera publications also occur after a backend miss.
+    auto selectionScope=!outcome.continued && s.extracted ? s.extracted->lockSourceState() : sourcestates::Store::Guard{};
     const nativeprogress::Frame frame{s.extracted ? s.extracted->originDotsX() : 0, s.extracted ? s.extracted->originDotsY() : 0};
-    const glm::vec3 feet = enteredFeet(*saved, frame, s.extracted ? s.extracted->home() : glm::vec3(0));
     if (s.spawned && s.extracted) {
-        s.spawned->resetPlayer();
-        const bool hasLooks = nativeprogress::appearanceOf(saved->looks, stageLooks);
-        s.spawned->setPlayerGear(recordOf(*saved, hasLooks ? &stageLooks : nullptr));
-        s.spawned->setPlayer(*s.extracted, feet, 0, glm::vec3(0), std::max(1.0f, saved->health), std::max(1, saved->level), false);
+        auto loadScope=s.extracted->lockSourceState();
+        auto saved=std::make_shared<nativesaves::Character>();
+        const bool found=s.store && s.store->isOpen() && s.store->load(outcome.slot,*saved);
+        if (found && s.spawned->loadPlayerSave(saved))
+            outcome.enteredCharacter=std::move(saved);
+        else {
+            // A normally returning lookup miss leaves the actor/data alone. The
+            // gameplay compatibility adapter still needs an owned view of that data.
+            auto current=std::make_shared<nativesaves::Character>();
+            if (s.spawned->playerCharacterSource()(*current)) outcome.enteredCharacter=std::move(current);
+        }
+        if (const auto *actor=s.spawned->playerRecord()) {
+            std::array<int64_t,3> position;
+            std::memcpy(position.data(),actor+worldgen::creature::POSITION,sizeof position);
+            outcome.feet=nativeprogress::localFeet(position,frame);
+            outcome.placed=true;
+        }
+    } else if (outcome.slot>=0 && outcome.slot<int(listed.size())) {
+        // Recorded-model fallback retains its established home-placement policy.
+        outcome.feet=enteredFeet(listed[size_t(outcome.slot)].character,frame,s.extracted ? s.extracted->home() : glm::vec3(0));
+        outcome.placed=true;
     }
+    if (!outcome.continued) {
+        // The native callback rereads its choice for this publication after load.
+        if (!req.readOnly && s.store && s.store->isOpen()) s.store->setSlot(cursor);
+        if (s.spawned && s.spawned->playerRecord()) hud.configureCraftingTabs(s.spawned->playerRecord()[0x14c]);
+        camera.set(90,0,180,8);
+    } else camera.continueFromTitle();
     titleShown = charactersShown = creationShown = false;
-    outcome.placed = true;
-    outcome.feet = feet;
     // The view cuts from the flyover to the player: the anti-aliasing's history is stale.
     s.renderer->cutHistory();
 }

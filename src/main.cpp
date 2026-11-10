@@ -1025,6 +1025,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     front.recorded = &recordedOnly;
     std::optional<hair::Style> createdHairStyle;
     std::shared_ptr<const nativesaves::Character> createdNativeCharacter;
+    std::shared_ptr<const nativesaves::Character> enteredNativeCharacter;
     std::optional<glm::vec3> enteredAt; // where the front screens put the player (frontend-title.md §6.1)
     std::optional<frontend::OrbitCamera> enteredCamera;
     std::optional<cameraposition::State> enteredCameraPosition;
@@ -1051,7 +1052,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (result.placed)
             enteredAt = result.feet;
         createdHairStyle = result.createdHairStyle;
-        if (nativePlayer && spawnedReady) createdNativeCharacter = result.createdCharacter;
+        if (nativePlayer && spawnedReady) {
+            createdNativeCharacter = result.createdCharacter;
+            enteredNativeCharacter = result.enteredCharacter;
+        }
         enteredCamera = result.camera;
         enteredCameraPosition = result.cameraPosition;
         characters = everyCharacter(); // (creation may have made one)
@@ -1077,9 +1081,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // A capture with --save-folder loads that folder's character too (read only: it writes
     // nothing back), so a test save's progress shows in the screenshot.
     const bool loading = saving || (chosen && saves.isOpen() && !saveFolder.empty() && std::isnan(startX) && !serverMode);
-    bool retainingCreationStartup = createdNativeCharacter && spawned.playerRecord();
-    if (loading || createdNativeCharacter) {
-        saves.play(*chosen);
+    bool retainingFrontendStartup = (createdNativeCharacter || enteredNativeCharacter) && spawned.playerRecord();
+    if (loading || createdNativeCharacter || enteredNativeCharacter) {
+        if (chosen) saves.play(*chosen);
         const auto itemSprite = [&](const nativesaves::Item &it) {
             return spawnedReady ? spawned.itemSprite(it.data()) : std::string();
         };
@@ -1090,6 +1094,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             saves.restore(saveGame, *createdNativeCharacter, metadata.text(), saveFrame, savedWorldName, itemSprite);
             loadedNativeCharacter = createdNativeCharacter;
             had = true;
+        } else if (enteredNativeCharacter) {
+            std::string notes;
+            if (front.store && chosen) front.store->readNotes(chosen->slot,notes);
+            saves.restore(saveGame,*enteredNativeCharacter,notes,saveFrame,savedWorldName,itemSprite);
+            loadedNativeCharacter=enteredNativeCharacter;
+            had=true; // The frontend already completed its load/miss publication.
         } else {
             auto raw = std::make_shared<nativesaves::Character>();
             had = saves.load(saveGame, saveFrame, savedWorldName, itemSprite, raw.get());
@@ -1102,7 +1112,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     std::array<uint8_t, 0xb0> loadedAppearance{};
     const bool hasLoadedAppearance = loadedNativeCharacter &&
         nativeprogress::appearanceOf(loadedNativeCharacter->looks, loadedAppearance);
-    if (!retainingCreationStartup)
+    if (!retainingFrontendStartup)
         spawned.restoreMapHistory(saveGame.regionHistory.value_or(std::vector<maphistory::Region>{}));
     Player player;
     const bool nativeCameraStartup = useExtracted && nativePlayer;
@@ -1582,7 +1592,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     std::to_string(n.armor) + ", resistance " + std::to_string(n.resistance) + ", critical " +
                     std::to_string(n.critical));
         }
-        if (nativePlayer && !retainingCreationStartup) // creation already owns its current live equipment
+        if (nativePlayer && !retainingFrontendStartup) // frontend entry already owns its current live equipment
             spawned.setPlayerGear(nativeRecord(-1, nullptr), !inventoryAction);
         float fraction = playerMaxHp > 0 ? playerHp / playerMaxHp : 1;
         playerMaxHp = s.maxHp;
@@ -3571,16 +3581,26 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             (*characterSaveGates)[i].store(values[i], std::memory_order_release);
     };
     publishCharacterSaveGates();
-    if (loadedNativeCharacter && !retainingCreationStartup) {
+    if (loadedNativeCharacter && !retainingFrontendStartup) {
         spawned.seedPlayerSave(loadedNativeCharacter); // read-only and writable native loads share the same state path
         // Complete the selected load before entering the generation cadence.
         spawned.setPlayer(extractedWorld, player.position, heading, {}, playerHp, playerLevel,
                           player.verticalSpeed == 0 && !player.fly);
     }
-    if (retainingCreationStartup) {
+    if (retainingFrontendStartup) {
         playerHp = spawned.playerHealth();
-        retainingCreationStartup = false;
-        logLine("Characters: retained created actor through Help and gameplay entry");
+        retainingFrontendStartup = false;
+        logLine(createdNativeCharacter ? "Characters: retained created actor through Help and gameplay entry" :
+                "Characters: retained frontend-loaded actor through gameplay entry");
+    }
+    if (loadedNativeCharacter) {
+        // Retain only owned data. A later frontend miss can capture current
+        // CharacterData without borrowing this gameplay stack or its World.
+        spawned.setPlayerDataSource([base=loadedNativeCharacter,owner=progressOwner](nativesaves::Character &out) {
+            out=*base;
+            std::string notes;
+            nativeprogress::capturePlayerData(*owner,out,notes);
+        });
     }
     if (saving && loadedNativeCharacter && nativeInventory && spawned.physicalSourceState()) {
         auto base = loadedNativeCharacter;
@@ -4413,6 +4433,32 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             input.controlEditor=savedEditor;hud.setInterfaceShown(true);
         } else logLine("Sampled menu: FAIL missing native receiver/resources");
         if (!passed) exitCode=1;
+        glfwSetWindowShouldClose(window,1);
+    }
+    if (menuPage=="continue-play-test") {
+        auto *actor=spawned.localPlayer();
+        const auto check=[&](bool value,const char *label) {
+            logLine(std::string("Frontend entry: ")+(value ? "PASS " : "FAIL ")+label);
+            if (!value) exitCode=1;
+        };
+        const bool ready=actor && actor->record && enteredNativeCharacter && loadedNativeCharacter;
+        check(ready,"actual frontend selected entry reaches the gameplay adapter with owned data");
+        if (ready) {
+            uint32_t omitted; std::memcpy(&omitted,actor->record+0xbbc,4);
+            check(actor->counted==std::set<int64_t>{3101} && actor->struck==std::set<int64_t>{3202} &&
+                  actor->skills==std::vector<int32_t>{3303,3304} && actor->summonRaces==std::vector<int32_t>{3405} &&
+                  actor->group==std::set<int64_t>{3506} && actor->record[0x61]==0xa7 && actor->record[0x7d]==0xb8 && omitted==0x7f123456,
+                  "retained collections and omitted bytes cross the actual frontend-to-gameplay transition");
+            check(actor->aggro.contains(0x6677) && actor->aggro.at(0x6677)==3.5f,
+                  "post-load callback state survives startup without a second decoder reset");
+            float hp; std::memcpy(&hp,actor->record+0x180,4);
+            check(std::memcmp(actor->record+0x10,enteredNativeCharacter->position.data(),24)==0 &&
+                  std::bit_cast<uint32_t>(hp)==std::bit_cast<uint32_t>(enteredNativeCharacter->health) &&
+                  player.orbit.pitch==22 && player.orbit.roll==33 && player.orbit.yaw==44 &&
+                  player.orbit.targetPitch==55 && player.orbit.targetRoll==66 && player.orbit.targetYaw==77 &&
+                  player.orbit.distance==8 && player.orbit.targetDistance==8,
+                  "saved core and Continue camera survive the actual startup bridge exactly");
+        }
         glfwSetWindowShouldClose(window,1);
     }
     if (entityLifetimeTest) {

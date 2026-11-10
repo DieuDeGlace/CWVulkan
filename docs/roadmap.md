@@ -8,6 +8,15 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Selected Continue/character-Select entry into the retained actor, current
+  backend data, raw health/position/buffs, distinct camera/slot publications and
+  one frontend-to-gameplay handoff. Eight before-failures, ten entry/four actual
+  handoff checks per profile, seventeen regressions and full CPU/no skips/Vulkan/
+  SDK pass. Full native release/derived providers/Start Menu/saved-world graph and
+  final acceptance remain open.
+  See [the checkpoint](release-status.md#retained-character-entry-and-single-startup-handoff---2026-11-10).
+
+
 - [x] Selected Help action rows, retained plain terms, height-relative hierarchy
   and actual font-flow annotation continuation; retained CPU player across owned
   render/World adapter teardown and defined-field appearance copying. Before-failure

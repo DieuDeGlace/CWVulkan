@@ -9459,6 +9459,8 @@ int main(int argc, char **argv) {
         return npcSpeechTests();
     if (argc == 2 && std::string(argv[1]) == "helpactions")
         return helpActionTests();
+    if (argc == 2 && std::string(argv[1]) == "windcontinue")
+        return windContinueTests();
     if (argc == 2 && std::string(argv[1]) == "steamcreatures")
         return steamCreatureLightsTests();
     if (argc == 2 && std::string(argv[1]) == "steamtransients")

@@ -242,7 +242,7 @@ class CharacterStore {
     std::optional<int> slot() const; // "slot"
     bool setSlot(int index);
     // Loads character `index` (0x9bb20): inflated, read and given the load recipe. False when
-    // there is no such row (`out` is then a default character).
+    // there is no such row (`out` is then left unchanged).
     bool load(int index, Character &out) const;
     // Saves character `index` (§4.5): written, compressed and stored under its key.
     bool save(int index, const Character &c);

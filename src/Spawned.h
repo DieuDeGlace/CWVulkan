@@ -152,7 +152,14 @@ class SpawnedCreatures {
     float elapsedWorldTime() const { return elapsedWorldMs; }
     // Caller holds the shared source World guard while invoking this owned source.
     std::function<bool(nativesaves::Character &)> playerSaveSource() const;
+    // Full current CharacterData plus live core, for entry without a decoded row.
+    // The data callback must own its inputs and must not capture this player owner.
+    void setPlayerDataSource(std::function<void(nativesaves::Character &)>);
+    std::function<bool(nativesaves::Character &)> playerCharacterSource() const;
     void seedPlayerSave(std::shared_ptr<const nativesaves::Character>);
+    // Selected frontend load: replace CharacterData/inventory ownership, decode
+    // into the same live entity, and keep the decoder's omitted fields intact.
+    bool loadPlayerSave(std::shared_ptr<nativesaves::Character>);
     // Creation retains the live actor/registration, with owned canonical preview data.
     bool beginCharacterCreation(std::shared_ptr<nativesaves::Character>, const charactercreation::FindHome &);
     bool rebuildCharacterCreation(nativesaves::Character &, nativesaves::Looks, uint8_t characterClass);
@@ -237,10 +244,9 @@ class SpawnedCreatures {
     // Borrow application/process control operands across Game/actor changes.
     // Caller storage must outlive this world. Unbound simulations keep local state.
     void setControlState(nativecontrol::State &state) { sharedControlState = &state; }
-    // Loading a character (frontend-title.md §6.1, native-saves.md §3.2): the player's record
-    // and the lists beside it start again from a freshly made creature, so nothing of what it
-    // was doing survives (velocity, ability and its time, the eagle's flight fields, buffs,
-    // physics flags). The next setPlayer makes it and places it.
+    // Explicit replacement for recorded/custom adapters. Selected Steam character
+    // loads use loadPlayerSave and preserve the existing entity and omitted fields.
+    // The next legacy setPlayer constructs and places this replacement.
     void resetPlayer() {
         player.side = nativeai::Creature{};
         player.registration = 0;
@@ -623,6 +629,7 @@ class SpawnedCreatures {
     std::shared_ptr<const nativesaves::Character> playerSaveSeed;
     bool savedPlacementPending = false;
     void applyPlayerSaveSeed();
+    void bindPlayerCharacterData(std::shared_ptr<nativesaves::Character>);
     maphistory::History &regionHistory;
     bool nativePlayer = false;
     size_t movesStarted = 0, strikesLanded = 0, playerPartsDrawn = 0, shouts = 0, summoned = 0;

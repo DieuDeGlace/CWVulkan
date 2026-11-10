@@ -46,6 +46,7 @@ struct SpawnedCreatures::PlayerStorage {
     Creature creature;
     bool ready = false;
     maphistory::History history;
+    std::function<void(nativesaves::Character &)> dataSource;
 };
 
 SpawnedCreatures::SpawnedCreatures(std::shared_ptr<PlayerStorage> retained)
@@ -1793,18 +1794,33 @@ void SpawnedCreatures::applyPlayerSaveSeed() {
 void SpawnedCreatures::seedPlayerSave(std::shared_ptr<const nativesaves::Character> seed) {
     auto guard = sourceGuard();
     playerSaveSeed = std::move(seed);
+    if (playerSaveSeed) playerStorage->dataSource = [owner=playerSaveSeed](nativesaves::Character &out) {out=*owner;};
+    else playerStorage->dataSource = {};
     applyPlayerSaveSeed();
+}
+void SpawnedCreatures::bindPlayerCharacterData(std::shared_ptr<nativesaves::Character> owner) {
+    playerStorage->dataSource = [owner](nativesaves::Character &out) {out=*owner;};
+    player.side.inventorySource = [owner = std::move(owner)](const nativeai::InventoryVisitor &visit) {
+        for (auto &tab : owner->inventory)
+            for (auto &stack : tab)
+                if (!visit({&stack.count, stack.item.data()})) return;
+    };
+}
+bool SpawnedCreatures::loadPlayerSave(std::shared_ptr<nativesaves::Character> data) {
+    auto guard = sourceGuard();
+    if (!nativePlayer || !hasPlayer || !data) return false; // Owned invalid-graph policy.
+    bindPlayerCharacterData(data);
+    playerSaveSeed = std::move(data);
+    applyPlayerSaveSeed();
+    contextState = {}; vehicleSelection = {}; // Derived caches follow the replaced CharacterData.
+    return true;
 }
 bool SpawnedCreatures::beginCharacterCreation(std::shared_ptr<nativesaves::Character> data,
                                                const charactercreation::FindHome &home) {
     auto guard = sourceGuard();
     if (!nativePlayer || !hasPlayer || !data || !home) return false;
     playerSaveSeed.reset(); savedPlacementPending = false;
-    player.side.inventorySource = [owner = data](const nativeai::InventoryVisitor &visit) {
-        for (auto &tab : owner->inventory)
-            for (auto &stack : tab)
-                if (!visit({&stack.count, stack.item.data()})) return;
-    };
+    bindPlayerCharacterData(data);
     charactercreation::begin(player.record, player.side, *data, home);
     regionHistory = maphistory::History({});
     contextState = {}; vehicleSelection = {}; // fresh CharacterData-derived caches
@@ -1846,6 +1862,19 @@ void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
         put<int32_t>(player.record, 0x144, level);
         put<int32_t>(player.record, 0x148, experience);
     }
+}
+void SpawnedCreatures::setPlayerDataSource(std::function<void(nativesaves::Character &)> source) {
+    auto guard=sourceGuard();
+    playerStorage->dataSource=std::move(source);
+}
+std::function<bool(nativesaves::Character &)> SpawnedCreatures::playerCharacterSource() const {
+    // Keep the routine core-only save observer unchanged: ordinary persistence
+    // already captures current progress once before invoking that observer.
+    return [owner=playerStorage,core=playerSaveSource()](nativesaves::Character &out) {
+        if (!owner->ready) return false;
+        if (owner->dataSource) owner->dataSource(out);
+        return core(out);
+    };
 }
 std::function<bool(nativesaves::Character &)> SpawnedCreatures::playerSaveSource() const {
     return [owner = playerStorage](nativesaves::Character &out) {

@@ -1,5 +1,56 @@
 # Source review checkpoint — 2026-11-08
 
+## Retained character entry and single startup handoff - 2026-11-10
+
+Continue and character Select previously entered through a cached preview and a
+replacement-style player reset. The selected frontend entry now reads the current
+backend row into the existing live actor. Saved position, zero or negative health
+and level keep their raw values; loaded buffs, separate retained collections and
+omitted core/appearance/outer bytes follow the selected decoder rules.
+
+Continue retains its six camera angles, publishes both distances as eight and
+leaves the backend slot key alone. Stored Select publishes its current choice
+after loading, updates the selected class tabs and applies its separate camera
+reset. A normally returning lookup miss retains the actor and CharacterData while
+still publishing the frontend exit and Continue distances. A separate owned full
+CharacterData source supplies that miss path's inventory/data snapshot. Routine
+persistence keeps its existing core-only callback and single progress capture.
+
+Gameplay receives the already-live entry data and avoids a second decoder or
+startup equipment reset. An actual frontend-to-gameplay fixture stages a mutation
+after the frontend decoder; its reset-owned map survives the startup bridge. The
+shared data callbacks own their inputs without borrowing a completed gameplay
+stack, renderer or World. Recorded-model placement retains its compatibility path.
+
+The complete [Continue/entry contract](specs/steam-continue-and-saved-world-entry-publication-20261110.md)
+was whole-read and hash-verified before use, alongside unchanged entity/lifetime
+handoffs. It distinguishes title Continue from system Start Menu and stored-world
+Select. No implementation, tests, owner output or results reached the isolated
+original-only author, and all prior held prose and receipts remain unchanged.
+
+Eight actual entry assertions failed before the change. Ten selected-entry checks
+and four actual frontend-to-gameplay checks now pass in each Native/Alpha profile,
+with seventeen affected runtime regressions. All five targets, focused ownership/
+Continue/frontend checks, full required-owner CPU without skips, every Vulkan
+group and SDK independence pass on this checkpoint. A new ownership check initially
+used the core-only observer as a full-data snapshot and indexed an empty inventory;
+that failed run is preserved. The separate full-data API and bounds-checked test
+close the corresponding entry-miss gap. An Alpha handoff setup initially used a
+Native-profile save with no selected Alpha character; that failed setup is retained,
+and the corrected Alpha-profile fixture passes. Private save bytes are unchanged.
+
+This closes selected entry decoding and adapter publication, not the complete
+native frontend release prefix/GUI admission, derived D+0x128 refresh, candidate
+rebuild, Start Menu, stored-world publication or full Game/World/backend graph.
+Generic providers, reentry/concurrency, frontend Chat/mouse, other input consumers
+and final native/human/provenance acceptance remain open. No new settled gameplay
+capture or original pixel/hardware/FPS claim is made. The earlier Native full-distance
+readiness failure and source deadline miss remain unexplained; no repeated case,
+observation deadline or production terrain/shader/streaming change masks them.
+Alpha relief/lighting, dry purple Undead Lands, biome palettes, gentler Savannah and
+Omega water retain their existing paths. Owner files, captures and binaries stay private.
+
+
 ## Help rendering and retained player state - 2026-11-10
 
 Help now draws action-specific rows through its retained HUD node, with descriptions

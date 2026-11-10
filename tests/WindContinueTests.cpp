@@ -1,5 +1,5 @@
 // Checks of the game's plant sway (src/VegetationWind.*, docs/specs/vegetation-wind.md) and of
-// where Continue and Select put the player (frontend-title.md §6.1: the record rebuilt from the
+// where Continue and Select put the player (selected entry contract: fields decoded from the
 // save, at the saved position, with no velocity, ability or eagle flight left over).
 #include "Extracted.h"
 #include "Frontend.h"
@@ -95,7 +95,7 @@ void modelMatrixRule() {
     WIND_CHECK(near(alphaFoot.x, 100) && near(alphaFoot.z, 50));
 }
 
-// §6.1: Continue rebuilds the player from the save. The flyover left it high in the air,
+// Selected Continue decodes into the existing entity. The flyover left it high in the air,
 // moving, on the eagle; after Continue it stands where it was saved, still, with no ability and
 // no eagle flight, facing yaw 0.
 void continuePlacement() {
@@ -126,8 +126,10 @@ void continuePlacement() {
     const nativesaves::Character fresh = frontend::newCharacter({0, 0}, {0, 0, 0});
     WIND_CHECK(frontend::enteredFeet(fresh, frame, glm::vec3(5, 6, 7)) == glm::vec3(5, 6, 7));
 
-    world.resetPlayer();
-    world.setPlayer(ew, feet, 0, glm::vec3(0), 100, 5, false);
+    const auto *retained=r;
+    WIND_CHECK(world.loadPlayerSave(std::make_shared<nativesaves::Character>(saved)));
+    world.setPlayer(ew, feet, 0, glm::vec3(0), 100, 5, false); // Legacy bridge consumes the selected-load placement.
+    WIND_CHECK(world.localPlayer()->record==retained);
     r = world.localPlayer()->record;
     int64_t at[3];
     std::memcpy(at, r + POSITION, sizeof at);
@@ -138,10 +140,11 @@ void continuePlacement() {
     std::memcpy(&time, r + ABILITY_TIME, 4);
     WIND_CHECK(velocity[0] == 0 && velocity[1] == 0 && velocity[2] == 0 && velocity[3] == 0 && velocity[4] == 0 && velocity[5] == 0);
     WIND_CHECK(r[ABILITY] == 0 && time == 0 && yaw == 0);
-    // The eagle's flight fields are a new creature's again.
+    // The eagle's flight fields match the selected decoder defaults, without replacing the entity.
     SpawnedCreatures made;
     made.setNativePlayer(true);
     made.setPlayer(ew, feet, 0, glm::vec3(0), 100, 5, false);
+    WIND_CHECK(made.loadPlayerSave(std::make_shared<nativesaves::Character>(saved)));
     WIND_CHECK(std::memcmp(r + FLIGHT_FIELDS, made.localPlayer()->record + FLIGHT_FIELDS, FLIGHT_FIELDS_END - FLIGHT_FIELDS) == 0);
     // The game's own frame then leaves it there: the frame's setPlayer at the same feet does
     // not move it.
