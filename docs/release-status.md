@@ -1,5 +1,23 @@
 # Source review checkpoint — 2026-11-08
 
+## Host threading contract recorded - 2026-11-11
+
+An independent original-only contract now describes how the Steam release runs its
+in-process host. A dedicated thread calls the host tick every 32 ms, capped at
+1000 ms and stepping the host World in 16 ms slices. Creature AI runs on its own
+40 ms thread, for the host World only; the live World never runs AI and only
+mirrors host messages, applied once per frame on the main thread. The contract
+lists every thread, lock and lock order.
+
+The engine already matches the host tick's cadence, cap and slicing, and gives the
+host World its own terrain source and streaming worker. It differs in three ways:
+the host tick and its AI run on the main thread inside the frame instead of on
+their own threads, AI is stepped inside the host's substeps instead of on a
+separate 40 ms clock, and a client-mirror live World still runs AI for the local
+player. No scheduling change is made in this checkpoint; the binaries are those of
+the last full validation.
+
+
 ## World pages built as an optional extension - 2026-11-11
 
 At the user's request the Steam world selection and world creation pages are now

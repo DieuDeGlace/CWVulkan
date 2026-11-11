@@ -8,6 +8,13 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam host threading recorded: a 32 ms host thread, a 40 ms AI thread for the
+  host World only, and a live World that only mirrors host messages. The engine
+  matches the tick cadence and slicing; moving the host and AI off the main thread
+  and stopping AI on a mirror World remain open.
+  See [the checkpoint](release-status.md#host-threading-contract-recorded---2026-11-11).
+
+
 - [x] World selection and creation pages per the held contract, reachable only through
   the opt-in [Menus] WorldPages=1 extension (Steam never shows them). Twelve rule
   before-failures and a nine-case page fixture pass; full CPU/no skips/Vulkan/SDK and
