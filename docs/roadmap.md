@@ -8,6 +8,13 @@ individual feature documents.
 
 ## Implemented
 
+- [x] World selection and creation pages per the held contract, reachable only through
+  the opt-in [Menus] WorldPages=1 extension (Steam never shows them). Twelve rule
+  before-failures and a nine-case page fixture pass; full CPU/no skips/Vulkan/SDK and
+  twenty-three probes pass. The selected world does not yet change world generation.
+  See [the checkpoint](release-status.md#world-pages-built-as-an-optional-extension---2026-11-11).
+
+
 - [x] World list pages checked against an independent contract: both Steam world
   pages are unreachable from the title and character flow and the world store is
   never opened. The engine's Back order and absent page entry already match;

@@ -273,6 +273,7 @@ add_library(engine STATIC
     src/HairStyle.cpp
     src/ChatLine.cpp
     src/ChatCommands.cpp
+    src/WorldList.cpp
     src/FeatText.cpp
     src/HudChat.cpp
     src/WorldMap.cpp
@@ -409,6 +410,7 @@ target_sources(EngineTests PRIVATE
     tests/CraftingCountTests.cpp
     tests/ShopCollectionTests.cpp
     tests/InterfaceRootTests.cpp
+    tests/WorldListTests.cpp
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)

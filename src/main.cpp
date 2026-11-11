@@ -1039,6 +1039,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
     };
     front.submitChat=[&](const std::u16string &line) {chatcommand::submit(line,frontendChat);};
+    front.worldPages = config.flag("Menus", "WorldPages", false); // CubeVulkan's own, off by default
+    front.requestedWorld = &gameState.requestedWorld;
     std::vector<CharacterEntry> recordedOnly = listCharacters(assets.gameDir());
     front.recorded = &recordedOnly;
     std::optional<hair::Style> createdHairStyle;

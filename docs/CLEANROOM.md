@@ -1,5 +1,29 @@
 # Clean-room process
 
+## World pages built as an optional extension - 2026-11-11
+
+At the user's request the Steam world selection and world creation pages are now
+built, following the held world-list contract: cards for the entries of the current
+mode and a trailing New world card, the sticky current card with its Select or
+Create, small and Delete World buttons, drag scrolling shared with the character
+list, the multiplayer toggle and its captions, the Name and Seed fields with the
+digits-only Create World rule, the select, create and delete handlers, and Back.
+
+Steam never shows these pages, so the default flow is unchanged. CubeVulkan's own
+[Menus] WorldPages=1 makes a valid character's Select open world selection;
+selecting or creating a world then enters gameplay with that character and records
+the world after the character entry, as Steam orders it. The list lives for one
+session because Steam never opens its world store. No files are deleted, the card
+preview model is not drawn, and the recorded world does not yet change the
+generated world: the applied seed and name stay at their start-up values.
+
+Twelve world-list assertions failed against empty rule bodies and now pass. A nine-
+case page fixture passes in Native and Alpha, and both pages were captured and
+inspected. All five targets, six focused groups, full required-owner CPU without
+skips, every Vulkan group, SDK independence and twenty-three Native/Alpha probes
+pass. Private save bytes are unchanged.
+
+
 ## World list pages - 2026-11-11
 
 An independent original-only contract describes the Steam world selection and

@@ -21,6 +21,8 @@
 #include "NativeSaves.h"
 #include "Renderer.h"
 #include "Saves.h"
+#include "WorldList.h"
+#include "WorldSelection.h"
 
 #include <array>
 #include <cstdint>
@@ -407,6 +409,10 @@ struct Services {
     StartSpotWorld startSpot;
     nativesaves::Cell startOrigin{0, 0};
     bool farStart = true; // the spec's far-away radius; false: the search starts at the origin itself
+    // [Menus] WorldPages, CubeVulkan's own and off by default: a valid character's Select opens
+    // world selection, which Steam builds but never shows (world-list contract H1).
+    bool worldPages = false;
+    worldselection::Pair *requestedWorld = nullptr; // the Game's requested World pair
 };
 
 struct Request {
@@ -425,6 +431,7 @@ struct Result {
     bool created = false; // confirmation selected Help and retained the live character
     bool continued = false; // Title Continue and stored-character Select have distinct publications.
     std::shared_ptr<const nativesaves::Character> enteredCharacter; // Already-live selected entry data for the gameplay adapter.
+    std::optional<worldlist::Entry> world; // world page Select/Create: recorded after the character entry
     std::optional<hair::Style> createdHairStyle;
     std::shared_ptr<const nativesaves::Character> createdCharacter; // current retained actor/data at confirmation
     std::optional<OrbitCamera> camera;                   // Play keeps both displayed and target values.

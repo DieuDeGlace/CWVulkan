@@ -235,6 +235,10 @@ const glm::vec4 FRIEND_INVITATION_COLOUR(1, 0.5f, 0.2f, 1); // the colour of "Yo
 constexpr glm::vec2 BACK_AT{20, 20};
 constexpr float LOOK_VALUE_X = 190, LOOK_LEFT_ARROW_X = 105, LOOK_RIGHT_ARROW_X = 255;
 constexpr float NAME_FIELD_FROM_BOTTOM = 50, CREATE_FROM_BOTTOM = 20;
+// World creation (world-list contract 2.3-2.4): the seed label sits 50 units above the name
+// label, and the multiplayer toggle is 300 x 40 at the top right.
+constexpr float SEED_FIELD_FROM_BOTTOM = 100;
+constexpr glm::vec2 WORLD_TOGGLE_SIZE{300, 40};
 
 // The character list's creatures (frontend-characters.md §2.2): drawn at (100, 110) in their
 // entry, turned (-95, 0, 45) degrees; while hovered the yaw goes down 0.05 degrees a ms and the
@@ -423,6 +427,7 @@ class Session {
     // The front layers (frontend-title.md §2) and the screens over them.
     std::array<bool,5> frontendPages{true,false,false,false,false};
     bool &titleShown=frontendPages[0], &charactersShown=frontendPages[1], &creationShown=frontendPages[2];
+    bool &worldsShown=frontendPages[3], &newWorldShown=frontendPages[4];
     bool optionsOpen = false;
     std::unique_ptr<ControlsScreen> detachedControls; // Owned API permits menu queries without an input service.
     bool &controlsOpen;
@@ -484,6 +489,29 @@ class Session {
     HairEditor hairEditor;
     hair::Style appliedHairStyle;
     std::u16string initialName; // initial/test caption; live input belongs to the retained scene editor
+
+    // The world pages (steam-world-list-pages-and-world-entry-persistence-20261111.md). The
+    // list lives for this session only: Steam never opens or reads its world store (H2).
+    std::vector<worldlist::Entry> worlds;
+    int32_t worldCurrent = 0; // G+0x1770: sticky, set by the card under the pointer
+    bool worldMultiplayer = false, worldDeleteShown = false;
+    const char *worldToggleCaption = worldlist::INITIAL_TOGGLE_CAPTION;
+    std::vector<int> worldCardIndex; // card -> list index; the last card is New world
+    std::vector<CharacterFrame> worldCards;
+    float worldCardScale = 0;
+    CharacterScroll worldScroll;
+    int worldCharacter = -1; // engine extension: the character chosen before the world
+    void rebuildWorldCards();
+    void layoutWorldFrames();
+    void worldItems(Hud::Screen &out);
+    void newWorldItems(Hud::Screen &out);
+    void selectWorld();
+    bool createWorld(std::u16string_view name, std::u16string_view seed);
+    void toggleWorldMode();
+    void deleteWorld();
+    void enterWithWorld(const worldlist::Entry &world);
+    void recordWorld(const worldlist::Entry &world);
+    glm::vec2 worldCardAt(size_t k) const { return worldCards[k].at / guiScale; }
 
     OptionsScreen options;
     ControlsScreen &controls;
@@ -561,6 +589,28 @@ class Session {
         buttons.deleteCharacter /= guiScale;
         return buttons;
     }
+    Hud::ScreenItem worldControl(const std::string &name, glm::vec2 at, glm::vec2 size, const std::string &caption = "") const {
+        auto item = characterControl(name, at, size, caption);
+        item.instance = "worlds/" + name;
+        return item;
+    }
+    // The current card's Select, small and Delete World buttons use the character rule (3.4).
+    CharacterButtons worldButtonsAt(size_t k) const {
+        const auto select = worldControl("button2", {}, SELECT_SIZE);
+        const auto toggle = worldControl("smallbutton", {}, DELETE_TOGGLE_SIZE);
+        auto buttons = characterButtons(worldCards[k].at, worldCards[k].size, hud.templateViewSize(select),
+                                        hud.templateViewSize(toggle));
+        buttons.select /= guiScale;
+        buttons.deleteToggle /= guiScale;
+        buttons.deleteCharacter /= guiScale;
+        return buttons;
+    }
+    Hud::ScreenItem worldToggle() const {
+        auto item = widget("button", {window.x - WORLD_TOGGLE_SIZE.x - 20, 20}, WORLD_TOGGLE_SIZE, worldToggleCaption);
+        item.instance = "worlds/multiplayer";
+        item.branch = uiroot::Branch::Root;
+        return item;
+    }
     glm::vec2 lookPanelAt() const { return {0, window.y - LOOK_PANEL_SIZE.y}; }
     glm::vec2 centred(glm::vec2 widgetSize) const { return (window - widgetSize) * 0.5f; }
     glm::vec2 templateSize(const std::string &n, glm::vec2 fallback) {
@@ -630,6 +680,7 @@ bool Session::start(std::string &error) {
         }
     }
     loadList();
+    rebuildWorldCards(); // construction ends with the world card rebuild (3.2)
     // The last character is put on stage (frontend-title.md §1 step 6).
     const std::optional<int> slot = s.store && s.store->isOpen() ? s.store->slot() : std::nullopt;
     if (slot && *slot >= 0 && *slot < (int)listed.size()) {
@@ -1194,9 +1245,12 @@ void Session::readInput(bool poll, double frameMs) {
     const glm::vec2 framebufferPointer((float)(mx * size.width / std::max(1, ww)), (float)(my * size.height / std::max(1, wh)));
     mouse = framebufferPointer / guiScale;
     leftHeld = (hud.interfaceHeldButtons() & 1) != 0;
-    if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; }))
+    if (std::any_of(s.input->buttons.begin(), s.input->buttons.end(), [](int button) { return button >= 0 && button < 4; })) {
         characterScroll.press();
+        worldScroll.press();
+    }
     layoutCharacterFrames();
+    layoutWorldFrames();
     if (req.page=="frontend-sampled-state-test" && sampledFixtureStage==4) {
         frontendPages.fill(false); // Last frontend visit after a synchronous page transition.
         syncInterfaceState();
@@ -1232,11 +1286,15 @@ void Session::readInput(bool poll, double frameMs) {
                                  s.inventory);
     if (ui && mouseAdmitted) {
         if (!pointerClockStarted) {
-            characterScroll.sampledAt = wallClockMs();
+            characterScroll.sampledAt = worldScroll.sampledAt = wallClockMs();
             pointerClockStarted = true;
         }
         // Stationary ordinary-UI polls still advance the filter, before the controller route.
-        characterScroll.poll((int32_t)(mouse.y * guiScale), wallClockMs(), charactersShown, leftHeld, (int)size.width, cards);
+        const uint32_t polledAt = wallClockMs();
+        characterScroll.poll((int32_t)(mouse.y * guiScale), polledAt, charactersShown, leftHeld, (int)size.width, cards);
+        // World cards drag only while the character page is hidden (contract 3.3).
+        worldScroll.poll((int32_t)(mouse.y * guiScale), polledAt, worldsShown && !charactersShown, leftHeld, (int)size.width,
+                         worldCards);
     }
     if (mouseAdmitted) {
         if (s.mouseMotion)
@@ -1276,8 +1334,10 @@ void Session::readInput(bool poll, double frameMs) {
             s.input->buttons.push_back(button);
         if (pad.released[(size_t)button])
             s.input->released.push_back(button);
-        if (pad.pressed[(size_t)button])
+        if (pad.pressed[(size_t)button]) {
             characterScroll.press();
+            worldScroll.press();
+        }
     }
     leftHeld = (hud.interfaceHeldButtons() & 1) != 0;
     if (pad.pressed[0])
@@ -1468,10 +1528,41 @@ void Session::handleClick(bool inGame) {
             else if (listed[(size_t)cursor].playable) { // Select (frontend-characters.md §3)
                 charactersShown = false;
                 selectedSlot = cursor;
+                if (s.worldPages) { // engine extension: choose the world before gameplay
+                    worldCharacter = cursor;
+                    worldsShown = true;
+                    syncInterfaceState();
+                    return;
+                }
                 outcome.continued=false;
                 decide(Result::Play, cursor);
             }
         }
+        return;
+    }
+    if (worldsShown) {
+        if (!pointerUp)
+            return;
+        auto controlHit = [&](const Hud::ScreenItem &item) { return hud.templateHit(item, mouse, /*passiveDescendants=*/true); };
+        if (controlHit(worldToggle())) {
+            toggleWorldMode();
+            return;
+        }
+        const auto card = std::find(worldCardIndex.begin(), worldCardIndex.end(), worldCurrent);
+        if (card == worldCardIndex.end())
+            return;
+        const auto buttons = worldButtonsAt(size_t(card - worldCardIndex.begin()));
+        const bool entry = int64_t(worldCurrent) < int64_t(worlds.size());
+        if (entry && worldDeleteShown && controlHit(worldControl("button", buttons.deleteCharacter, DELETE_SIZE, "Delete World"))) {
+            deleteWorld();
+            return;
+        }
+        if (entry && controlHit(worldControl("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE))) {
+            worldDeleteShown = true; // 0x9f630: the small button only reveals Delete World
+            return;
+        }
+        if (controlHit(worldControl("button2", buttons.select, SELECT_SIZE, worldlist::selectCaption(worldCurrent, worlds.size()))))
+            selectWorld();
         return;
     }
     if (creationShown) {
@@ -1826,6 +1917,161 @@ void Session::creationItems(Hud::Screen &out) {
     out.back().press=[this]{nativeBackPressed=true;back();};
 }
 
+// --- The world pages (steam-world-list-pages-and-world-entry-persistence-20261111.md) ---------
+
+// 0x108450: one card per entry of the current mode, then New world, laid out from the top.
+void Session::rebuildWorldCards() {
+    worldCardIndex = worldlist::cards(worlds, worldMultiplayer);
+    worldCards.assign(worldCardIndex.size(), {});
+    for (size_t k = 0; k < worldCards.size(); ++k)
+        worldCards[k] = {entryPosition(int(k)) * guiScale, cardFrame * guiScale};
+    worldCardScale = guiScale;
+}
+
+void Session::layoutWorldFrames() {
+    if (worldCardScale == guiScale || worldCardScale == 0)
+        return;
+    for (auto &card : worldCards) {
+        card.at = (card.at / worldCardScale) * guiScale;
+        card.size = cardFrame * guiScale;
+    }
+    worldCardScale = guiScale;
+}
+
+void Session::worldItems(Hud::Screen &out) {
+    const size_t entries = worlds.size();
+    // The card under the pointer becomes current; it stays current off the cards (3.3 step 4).
+    for (size_t k = 0; !leftHeld && k < worldCards.size(); ++k)
+        if (hud.templateHit(characterCard(worldCardAt(k)), mouse) && worldCurrent != worldCardIndex[k]) {
+            worldDeleteShown = false;
+            worldCurrent = worldCardIndex[k];
+        }
+    for (size_t k = 0; k < worldCards.size(); ++k) {
+        const glm::vec2 at = worldCardAt(k);
+        out.push_back(characterCard(at));
+        const int index = worldCardIndex[k];
+        if (size_t(index) == entries) {
+            out.push_back(text("New world", at + glm::vec2(ENTRY_SIZE.x * 0.5f, 30), 15, 3, WHITE, ALIGN_BOTH));
+            continue;
+        }
+        // 0x294eb0: the name at the card's starting size 15, then two lines at size 12. The
+        // 3-D preview needs a source model the contract leaves open (L6) and is not drawn.
+        const worldlist::Entry &world = worlds[size_t(index)];
+        out.push_back(text(world.name, at + glm::vec2(200, 30), 15, 3, NAME_COLOUR, ALIGN_LEFT));
+        out.push_back(text(worldlist::exploredText(world.explored), at + glm::vec2(200, 55), 12, 3, WHITE, ALIGN_LEFT));
+        out.push_back(text(worldlist::seedText(world.seed), at + glm::vec2(200, 80), 12, 3, SPECIALIZATION_COLOUR, ALIGN_LEFT));
+    }
+    const auto card = std::find(worldCardIndex.begin(), worldCardIndex.end(), worldCurrent);
+    if (!leftHeld && card != worldCardIndex.end()) {
+        const auto buttons = worldButtonsAt(size_t(card - worldCardIndex.begin()));
+        out.push_back(worldControl("button2", buttons.select, SELECT_SIZE, worldlist::selectCaption(worldCurrent, entries)));
+        if (int64_t(worldCurrent) < int64_t(entries)) {
+            out.push_back(worldControl("smallbutton", buttons.deleteToggle, DELETE_TOGGLE_SIZE));
+            if (worldDeleteShown)
+                out.push_back(worldControl("button", buttons.deleteCharacter, DELETE_SIZE, "Delete World"));
+        } else
+            worldDeleteShown = false;
+    }
+    out.push_back(worldToggle());
+    out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
+    out.back().instance = "frontend-back";
+    out.back().branch = uiroot::Branch::Root;
+    out.back().press = [this] { nativeBackPressed = true; back(); };
+}
+
+// The name and seed fields follow the character name field's geometry: the contract leaves
+// the label value that places them open (U5). Both start empty and keep their text.
+void Session::newWorldItems(Hud::Screen &out) {
+    const glm::vec2 edit = templateSize("edit", {300, 30});
+    const auto field = [&](const char *instance, const char *label, float fromBottom) {
+        const glm::vec2 at{window.x * 0.5f - edit.x * 0.5f, window.y - fromBottom - edit.y};
+        out.push_back(widget("edit", at, {300, 30}));
+        out.back().instance = instance;
+        out.back().retainText = true;
+        out.push_back(text(label, at + glm::vec2(0, -8), 12, 3, WHITE, ALIGN_LEFT));
+    };
+    field("worlds/name", "Name", NAME_FIELD_FROM_BOTTOM);
+    field("worlds/seed", "Seed (must be a number)", SEED_FIELD_FROM_BOTTOM);
+    const auto name = hud.frontendCaption("worlds/name").value_or(u"");
+    const auto seed = hud.frontendCaption("worlds/seed").value_or(u"");
+    out.push_back(widget("button", {window.x - CREATE_SIZE.x - 20, window.y - CREATE_SIZE.y - 20}, CREATE_SIZE, "Create World"));
+    out.back().instance = "worlds/create";
+    out.back().visible = worldlist::createAdmitted(name, seed);
+    out.back().release = [this] {
+        createWorld(hud.frontendCaption("worlds/name").value_or(u""), hud.frontendCaption("worlds/seed").value_or(u""));
+    };
+    out.push_back(widget("button", BACK_AT, BACK_SIZE, "Back"));
+    out.back().instance = "frontend-back";
+    out.back().branch = uiroot::Branch::Root;
+    out.back().press = [this] { nativeBackPressed = true; back(); };
+}
+
+// 0x9fd10: hide the page and set the camera; an entry is entered, New world opens creation.
+void Session::selectWorld() {
+    if (worldCurrent < 0)
+        return; // engine guard: the handler itself would read before the list (6.2)
+    worldsShown = false;
+    syncInterfaceState();
+    camera.set(90, 0, 180, 8);
+    if (size_t(worldCurrent) < worlds.size()) {
+        enterWithWorld(worlds[size_t(worldCurrent)]);
+        return;
+    }
+    newWorldShown = true;
+    syncInterfaceState();
+}
+
+// 0x9f060. The "num" and entry writes go to a store Steam never opens (H2), so nothing is
+// persisted. An unadmitted name or seed is refused: the button is hidden then (4.2).
+bool Session::createWorld(std::u16string_view name, std::u16string_view seed) {
+    if (!worldlist::createAdmitted(name, seed))
+        return false;
+    newWorldShown = false;
+    syncInterfaceState();
+    camera.set(90, 0, 180, 8);
+    worldlist::Entry world{charactercreation::nameBytes(name), worldlist::parseSeed(seed), 0};
+    worlds.push_back(world);
+    worldCurrent = int32_t(worlds.size()) - 1;
+    rebuildWorldCards();
+    log("Worlds: created \"" + world.name + "\" with seed " + std::to_string(world.seed));
+    enterWithWorld(world);
+    return true;
+}
+
+// 0x9ffa0: flip the list mode and its caption, then rebuild the cards.
+void Session::toggleWorldMode() {
+    worldMultiplayer = !worldMultiplayer;
+    worldToggleCaption = worldlist::toggleCaption(worldMultiplayer);
+    rebuildWorldCards();
+}
+
+// 0x9e5e0. Steam also deletes Save\world_<name>.db and Save\map_<name>.db; whether those
+// files ever exist is open (U4), and names are free text, so no file is deleted here.
+void Session::deleteWorld() {
+    const std::string name = worldCurrent >= 0 && size_t(worldCurrent) < worlds.size() ? worlds[size_t(worldCurrent)].name : "";
+    if (!worldlist::remove(worlds, worldCurrent))
+        return;
+    log("Worlds: deleted \"" + name + "\"");
+    rebuildWorldCards();
+}
+
+void Session::enterWithWorld(const worldlist::Entry &world) {
+    outcome.world = world;
+    outcome.continued = false;
+    decide(Result::Play, worldCharacter);
+}
+
+// 0x8a500 after the character entry, as in Steam where the character loads before the page.
+void Session::recordWorld(const worldlist::Entry &world) {
+    if (!s.requestedWorld)
+        return;
+    if (s.spawned)
+        s.spawned->recordWorldSelection(*s.requestedWorld, world.seed, world.name);
+    else
+        *s.requestedWorld = {world.seed, world.name};
+    log("Worlds: recorded \"" + world.name + "\" with seed " + std::to_string(world.seed));
+}
+
 void Session::optionsItems(Hud::Screen &out) {
     const glm::vec2 at = centred(OPTIONS_SIZE), m = mouse - at;
     out.push_back(widget("blackwidget", at, OPTIONS_SIZE));
@@ -2158,6 +2404,10 @@ Hud::Screen Session::buildScreen(bool inGame, bool drawing) {
         append(&Session::characterItems, uiroot::Branch::Characters);
     else if (creationShown)
         append(&Session::creationItems, uiroot::Branch::Creation);
+    else if (worldsShown)
+        append(&Session::worldItems, uiroot::Branch::Worlds);
+    else if (newWorldShown)
+        append(&Session::newWorldItems, uiroot::Branch::NewWorld);
     if (optionsOpen)
         append(&Session::optionsItems, uiroot::Branch::Options);
     if (controlsOpen)
@@ -2269,6 +2519,57 @@ bool Session::frame() {
         controls.waiting=originalCapture; s.submitChat=originalSubmit; s.input->gameKeyboard=originalKeyboard;
         hud.setInterfaceShown(originalShown); hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
         if (!passed) outcome.error="Frontend Chat ingress contract failed";
+        decide(Result::Quit); return false;
+    }
+    if (req.page=="world-pages-test") {
+        // Explicit owned page fixture: the handlers are called directly, no OS input injection.
+        bool passed=true;
+        const auto verify=[&](bool value,const char *label) {
+            log(std::string("World pages: ")+(value ? "PASS " : "FAIL ")+label); passed=passed && value;
+        };
+        const auto savedPages=frontendPages;
+        verify(!s.worldPages && !worldsShown && !newWorldShown && worlds.empty() && worldCurrent==0 &&
+               worldCardIndex==std::vector<int>{0} && std::string(worldToggleCaption)=="Multiplayer Worlds...",
+               "Steam flow by default: hidden pages, an empty session list and one New world card");
+        frontendPages.fill(false); newWorldShown=true; back();
+        const bool toWorlds=worldsShown && !newWorldShown;
+        back();
+        verify(toWorlds && charactersShown && !worldsShown, "Back goes world creation, world selection, character selection");
+        frontendPages.fill(false); worldsShown=true; syncInterfaceState();
+        selectWorld();
+        verify(!worldsShown && newWorldShown && !done, "Create on the New world card opens world creation");
+        worldCharacter=3;
+        verify(!createWorld(u"A",u"5") && !createWorld(u"Alpha",u"5x") && newWorldShown && worlds.empty(),
+               "a short name or a non-digit seed creates nothing");
+        verify(createWorld(u"Alpha",u"42") && !newWorldShown && worlds.size()==1 && worlds[0].name=="Alpha" &&
+               worlds[0].seed==42 && worldCurrent==0 && worldCardIndex==std::vector<int>({0,1}) && done &&
+               outcome.action==Result::Play && outcome.slot==3 && outcome.world && outcome.world->seed==42,
+               "Create World appends, selects and enters gameplay with the chosen character");
+        done=false; outcome={};
+        frontendPages.fill(false); worldsShown=true;
+        toggleWorldMode();
+        const bool multiplayerCards=worldCardIndex==std::vector<int>{1} && std::string(worldToggleCaption)=="Singleplayer worlds...";
+        toggleWorldMode();
+        worlds.push_back({"online_Shared",7,0}); rebuildWorldCards();
+        verify(multiplayerCards && worldCardIndex==std::vector<int>({0,2}) && std::string(worldToggleCaption)=="Multiplayer worlds...",
+               "the toggle switches list modes and online_ entries keep their list index");
+        worldCurrent=0; selectWorld();
+        verify(done && outcome.world && outcome.world->name=="Alpha" && !worldsShown && !newWorldShown,
+               "Select on an entry enters gameplay with that world");
+        done=false; outcome={}; worldsShown=true;
+        worldCurrent=0; deleteWorld();
+        verify(worlds.size()==1 && worlds[0].name=="online_Shared" && worldCurrent==-1 && worldCardIndex==std::vector<int>({1}),
+               "Delete World closes the gap and leaves no current entry");
+        if (s.requestedWorld) {
+            const auto previous=*s.requestedWorld;
+            recordWorld({"Beta",-9,0});
+            verify(s.requestedWorld->seed==-9 && s.requestedWorld->name=="Beta", "the selection is recorded into the requested World pair");
+            *s.requestedWorld=previous;
+        } else
+            verify(false, "the selection is recorded into the requested World pair");
+        worlds.clear(); worldCurrent=0; rebuildWorldCards();
+        frontendPages=savedPages; syncInterfaceState();
+        outcome={}; if (!passed) outcome.error="World pages contract failed";
         decide(Result::Quit); return false;
     }
     if (req.page=="continue-play-test") {
@@ -2503,6 +2804,7 @@ bool Session::frame() {
     }
     handleKeys(false);
     characterScroll.frame((float)dtMs, charactersShown, leftHeld, {(int)size.width, (int)size.height}, cards);
+    worldScroll.frame((float)dtMs, worldsShown, leftHeld, {(int)size.width, (int)size.height}, worldCards);
     bool syntheticClick=false;
     if (req.clickAfter >= 0 && !testClicked && seconds >= req.clickAfter && s.world->pendingCount() == 0) {
         syntheticClick=true;
@@ -2756,6 +3058,8 @@ Result Session::runTitle() {
     if (req.page=="escape-test") s.input->rawKeyMessage(MenuInput::InterfaceMessage::KeyDown,0x1B);
     if (req.page == "characters")
         titleShown = false, charactersShown = true;
+    else if (req.page == "worlds" || req.page == "new-world") // explicit captures of unreachable pages
+        titleShown = false, (req.page == "worlds" ? worldsShown : newWorldShown) = true;
     else if (req.page == "create" || req.page == "back-test" || req.page.starts_with("create-test:")) {
         titleShown = false;
         startCreation();
@@ -2778,6 +3082,8 @@ Result Session::runTitle() {
     if (outcome.action == Result::Play) {
         playSound(SOUND_MENU_CLOSE);
         enterWorld();
+        if (outcome.world)
+            recordWorld(*outcome.world);
         if (req.page=="continue-play-test" && s.extracted && s.spawned && s.spawned->localPlayer()) {
             // Model a reached synchronous post-load mutation. A second startup
             // decoder would wrongly clear this reset-owned map before gameplay.
