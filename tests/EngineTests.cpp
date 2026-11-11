@@ -195,6 +195,7 @@ int craftingCountTests(); // tests/CraftingCountTests.cpp
 int shopCollectionTests(); // tests/ShopCollectionTests.cpp
 int interfaceRootTests(); // tests/InterfaceRootTests.cpp
 int worldListTests(); // tests/WorldListTests.cpp
+int hostThreadTests(); // tests/HostThreadTests.cpp
 int storedWorldDiagnosticsTests(); // tests/StoredWorldDiagnosticsTests.cpp
 int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int nativeInventoryTests(); // tests/NativeInventoryTests.cpp
@@ -9541,6 +9542,8 @@ int main(int argc, char **argv) {
         return lootWindowTests();
     if (argc == 2 && std::string(argv[1]) == "storedworldcapture")
         return storedWorldDiagnosticsTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "hostthread")
+        return hostThreadTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "worldlist")
         return worldListTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "interfaceroot")
@@ -11047,6 +11050,7 @@ int main(int argc, char **argv) {
     failures += shopCollectionTests();
     failures += interfaceRootTests();
     failures += worldListTests();
+    failures += hostThreadTests();
     failures += storedWorldDiagnosticsTests();
     failures += nativeCreaturePoseTests();
     failures += nativeInventoryTests();

@@ -411,6 +411,7 @@ target_sources(EngineTests PRIVATE
     tests/ShopCollectionTests.cpp
     tests/InterfaceRootTests.cpp
     tests/WorldListTests.cpp
+    tests/HostThreadTests.cpp
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)

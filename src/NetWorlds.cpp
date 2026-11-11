@@ -55,13 +55,15 @@ void HostSide::advance(uint32_t dtMs) {
     // The native world advances in 16-ms slices, including its spawn and reset passes.
     // Reset notices remain queued until HostGame distributes the whole batch.
     const uint32_t frameMs = std::min(dtMs, uint32_t(1000));
+    const glm::vec3 at = standInPosition();
     uint32_t left = frameMs;
     do {
         const uint32_t step = std::min(left, uint32_t(16));
         left -= step;
         // The existing AI timer remains separate from the World-step phases.
-        world.think(blocks, (double)step, world.timeOfDay() / 3600000.0f);
-        world.simulate(blocks, (double)step, reset, [&] { world.update(blocks, standIn); });
+        if (!separateAi)
+            world.think(blocks, (double)step, world.timeOfDay() / 3600000.0f);
+        world.simulate(blocks, (double)step, reset, [&] { world.update(blocks, at); });
         std::vector<SpawnedCreatures::Death> died = world.takeDeaths(blocks);
         if (deaths && !died.empty())
             deaths(died);
@@ -74,6 +76,12 @@ void HostSide::advance(uint32_t dtMs) {
     world.takeDrops();
     world.takeTames();
     world.takeInnNights();
+}
+
+// The AI thread's pass (host-threading contract 3.1): the elapsed real time since the last.
+void HostSide::think(uint32_t elapsedMs) {
+    auto sourceGuard = blocks.lockSourceState();
+    world.think(blocks, (double)elapsedMs, world.timeOfDay() / 3600000.0f);
 }
 
 // --- The client world --------------------------------------------------------------------------

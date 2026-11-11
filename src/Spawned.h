@@ -232,6 +232,7 @@ class SpawnedCreatures {
     // does, each creature picks what it does and the way it wants to go (+0x40), which the
     // update then follows. `hour` is the time of day (townsfolk sleep 20:00 to 7:00).
     void think(ExtractedWorld &ew, double dtMs, float hour);
+    uint64_t aiTicksRun() const { return aiTicks; } // completed AI ticks, for tests and the log
     // [Creatures] RoadTravel, CubeVulkan's own and off by default: groups of wild creatures
     // and travellers walk the roads from place to place. The game's AI does the walking:
     // each pack keeps behind its leader (its group, as the game's travellers do), and the
@@ -655,6 +656,7 @@ class SpawnedCreatures {
     nativecontrol::State &currentControlState() { return sharedControlState ? *sharedControlState : controlState; }
     double aiCarried = 0;                                 // ms since the AI's last tick
     uint32_t aiClock = 0;                                 // the AI thread's timeGetTime()
+    uint64_t aiTicks = 0;
     uint32_t aiRand = 1;                                  // separate engine AI state; native worker-entry state is unverified
     float &dayMs = saveMetadata->timeMs; // world+0x0c, raw float milliseconds
     hudcontext::State contextState;

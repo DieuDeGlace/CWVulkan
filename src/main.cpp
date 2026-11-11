@@ -113,6 +113,8 @@
 namespace {
 std::ofstream logFile;
 void logLine(const std::string &line) {
+    static std::mutex logLock; // the host and AI threads log too
+    std::lock_guard hold(logLock);
     if (logFile) {
         logFile << line << "\n";
         logFile.flush();
@@ -2558,6 +2560,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             logLine("Gained " + std::to_string(gain) + " XP (enemy level " + std::to_string(enemy) + ", " + std::to_string(stars) + " stars)");
             bool levelled = false;
             // The creatures' levels follow the player's: they keep their share of their health.
+            auto healthHold = spawnedReady ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
             (spawnedReady ? hostWorld : spawned).keepHealthShares([&] {
                 while (playerXp >= progression::xpToNext(playerLevel)) {
                     playerXp -= progression::xpToNext(playerLevel);
@@ -3284,7 +3287,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             };
         }
         if (HostSide *host = session.hostSide()) {
-            host->standIn = player.position;
+            host->setStandIn(player.position);
             host->deaths = [&](const std::vector<SpawnedCreatures::Death> &died) { // the world remembers who died
                 for (const SpawnedCreatures::Death &d : died) {
                     events.death(d.id);
@@ -3296,6 +3299,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 resetDailyProgress();
                 logLine("World: daily reset");
             };
+            // Steam runs its in-process host on a 32 ms thread and the host World's AI on a
+            // 40 ms thread (host-threading contract 1-3); everything above is set up first.
+            session.startHostThread();
         }
     } else
         logLine("Multiplayer: none (it needs the game's own creatures)");
@@ -3310,6 +3316,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     auto saveProgress = [&]() -> std::string {
         if (!saving)
             return "";
+        auto hostHold = session.lockHost(); // the host World's dead and zones, between host ticks
         if (workerCharacterSaving) {
             spawned.setPlayerProgress(playerLevel, playerXp);
             return world.characterSaveSession()->force()
@@ -4884,8 +4891,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             // until the late dispatch, after this World and local-input work.
             if (session.started()) {
                 if (HostSide *host = session.hostSide())
-                    host->standIn = player.position;
+                    host->setStandIn(player.position);
                 session.beginFrame(nowMs);
+                auto clockHold = serverMode ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
                 SpawnedCreatures &clock = serverMode ? hostWorld : spawned; // (the host's, by packet 8)
                 hour = clock.timeOfDay() / 3600000.0f;
                 day = clock.day();
@@ -4907,9 +4915,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             spawned.think(extractedWorld, ms, hour);
             spawned.simulate(extractedWorld, ms, {}, [&] { spawned.update(extractedWorld, player.position); });
-            const SpawnedCreatures &steppedClock = serverMode ? hostWorld : spawned;
-            hour = steppedClock.timeOfDay() / 3600000.0f;
-            day = steppedClock.day();
+            {
+                auto clockHold = serverMode ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
+                const SpawnedCreatures &steppedClock = serverMode ? hostWorld : spawned;
+                hour = steppedClock.timeOfDay() / 3600000.0f;
+                day = steppedClock.day();
+            }
             spawned.smooth((float)ms); // (0x2b68e0: the drawn places of creatures the host moved)
             if (session.started())
                 session.consume();
@@ -6460,6 +6471,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 bool answered = false;
                 if (creature && events.enabled() && (p.action == Action::Converse || p.action == Action::Activate)) {
                     OverworldEvents::Said said;
+                    auto eventsHold = session.lockHost();
                     auto w = eventWorld();
                     if (events.interact(w, p.creature, said)) {
                         answered = true;
@@ -7193,6 +7205,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             if (testCoins >= 0 && time >= testCoins && session.hostSide() && !session.guestElsewhere()) {
                 testCoins = -1; // (testing: five coins at the player's feet, laid by the host world)
+                auto coinsHold = session.lockHost();
                 const nativesaves::Item coin = nativesaves::makeItem(grounditems::type::COIN, 0, grounditems::COIN_MATERIAL);
                 int64_t at[3];
                 playerUnits(at);
@@ -7593,6 +7606,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 logLine("TAMED!");
             }
             if (events.enabled()) {
+                auto eventsHold = session.lockHost();
                 OverworldEvents::World w = eventWorld();
                 if (!eventsTest.empty()) { // --events-test: the mod's chat command
                     std::string reply;
@@ -7630,9 +7644,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             // Native late dispatch: current3/4/6/8 effects precede the camera;
             // newly received7 lists wait for a later frame's earlier consume pass.
             session.dispatch(nowMs);
-            SpawnedCreatures &clock = serverMode ? hostWorld : spawned;
-            hour = clock.timeOfDay() / 3600000.0f;
-            day = clock.day();
+            {
+                auto clockHold = serverMode ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
+                SpawnedCreatures &clock = serverMode ? hostWorld : spawned;
+                hour = clock.timeOfDay() / 3600000.0f;
+                day = clock.day();
+            }
             static double netLogged = 0; // for the log: who this player is and whom it sees
             if (session.started() && !serverMode && time - netLogged > 5) {
                 netLogged = time;
@@ -8544,7 +8561,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         // A villager's quest (OverworldEvents' nameplate sprite): an offer's orange "!", a
                         // reward's orange "?", a quest under way's grey "?", above its name.
                         if (events.enabled() && l.hostility == 3 && l.distance2 < 1600.0f)
-                            if (const int quest = [&] { auto w = eventWorld(); return events.questMarker(w, l.id); }()) {
+                            if (const int quest = [&] { auto eventsHold = session.lockHost(); auto w = eventWorld(); return events.questMarker(w, l.id); }()) {
                                 Hud::State::MapMarker q;
                                 if (project(l.at + glm::vec3(0, 0, l.height * 0.5f - 0.25f), q.at)) {
                                     q.at.y -= 54.0f;
@@ -9148,6 +9165,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             static double worldSaved = 0;
             if (spawnedReady && !hostWorld.physicalSourceState() && savesWritable && saves.isOpen() && time - worldSaved > 60) {
                 worldSaved = time;
+                auto saveHold = session.lockHost();
                 const auto persistentDead = hostWorld.persistentDeadSet();
                 hostWorld.copyRetainedZones(saves.world());
                 saves.world().dead = persistentDead;
@@ -9321,6 +9339,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 " clock " + std::to_string(bubble.elapsedMs) + " visible " + std::to_string(bubble.visible) +
                 " at " + std::to_string(bubble.screenPoint.x) + "," + std::to_string(bubble.screenPoint.y));
     }
+    session.stopHostThread(); // join the host and AI threads; their last results run here
     if (spawnedReady && !hostWorld.physicalSourceState()) // captured adapter explicit archive path
         hostWorld.recordAllZones();
     if (serverMode && spawnedReady && !hostWorld.physicalSourceState() && savesWritable && saves.isOpen()) {

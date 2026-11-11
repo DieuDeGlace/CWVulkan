@@ -8,6 +8,13 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's host and AI threads: a 32 ms host thread, a 40 ms AI thread for the host
+  World only, no AI on a mirror World, and host results posted to the game thread.
+  Ten before-failures pass; full CPU/no skips/Vulkan/SDK and twenty-three probes pass;
+  Native full-distance captures settle in about 45 s. Remote multiplayer is unrun.
+  See [the checkpoint](release-status.md#host-and-ai-threads---2026-11-11).
+
+
 - [x] Steam host threading recorded: a 32 ms host thread, a 40 ms AI thread for the
   host World only, and a live World that only mirrors host messages. The engine
   matches the tick cadence and slicing; moving the host and AI off the main thread

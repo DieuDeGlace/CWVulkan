@@ -22,6 +22,13 @@ uint32_t Multiplayer::clockNow() {
 Multiplayer::Multiplayer() = default;
 
 Multiplayer::~Multiplayer() {
+    joinHostThreads(); // the threads use everything below
+    {
+        // Posted results refer to game-thread state that may already be gone; the game
+        // runs them through stopHostThread() at its own teardown.
+        std::lock_guard hold(postedMutex);
+        posted.clear();
+    }
     regionLevelsChanged = {}; // caller-owned gameplay objects may already be destroyed
     // Leaving: the host tells its guests (packet 2), the client tells its host.
     if (hostGame)
@@ -46,14 +53,15 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
             error = "Steam networking is not available";
             return false;
         }
-        transport = std::make_unique<cwnet::SteamTransport>(*steam);
+        // A host thread may share it with the game thread: one lock around the backend.
+        transport = std::make_unique<cwnet::SerializedTransport>(std::make_unique<cwnet::SteamTransport>(*steam));
         break;
     case Way::Address: {
         auto udp = std::make_unique<cwnet::UdpTransport>();
         if (!udp->open(setup.port, error))
             return false;
         udp->loss = setup.loss;
-        transport = std::move(udp);
+        transport = std::make_unique<cwnet::SerializedTransport>(std::move(udp));
         break;
     }
     case Way::Local:
@@ -77,21 +85,37 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
             std::memcpy(position, record + worldgen::creature::POSITION, sizeof position);
             std::memcpy(&level, record + worldgen::creature::LEVEL, sizeof level);
             const auto region = worldgen::regionAt((int32_t)(position[0] >> 16), (int32_t)(position[1] >> 16));
-            const auto previous = regionOccupancy.regionOf(id);
-            if (previous && *previous == regionlevels::Region{region.x, region.y})
-                return;
-            const auto before = regionOccupancy.snapshot();
-            state->keepHealthShares([&] { regionOccupancy.update(id, region, level); });
-            if (before != regionOccupancy.snapshot() && regionLevelsChanged)
-                regionLevelsChanged();
+            regionlevels::Levels before, after;
+            {
+                std::lock_guard hold(occupancyMutex);
+                const auto previous = regionOccupancy.regionOf(id);
+                if (previous && *previous == regionlevels::Region{region.x, region.y})
+                    return;
+                before = regionOccupancy.snapshot();
+            }
+            state->keepHealthShares([&] {
+                std::lock_guard hold(occupancyMutex);
+                regionOccupancy.update(id, region, level);
+                after = regionOccupancy.snapshot();
+            });
+            if (before != after)
+                hostNotify([this] { if (regionLevelsChanged) regionLevelsChanged(); });
         };
         hostWorld->playerLeft = [this, state = setup.hostWorld](int64_t id) {
-            if (!regionOccupancy.regionOf(id))
-                return;
-            const auto before = regionOccupancy.snapshot();
-            state->keepHealthShares([&] { regionOccupancy.leave(id); });
-            if (before != regionOccupancy.snapshot() && regionLevelsChanged)
-                regionLevelsChanged();
+            regionlevels::Levels before, after;
+            {
+                std::lock_guard hold(occupancyMutex);
+                if (!regionOccupancy.regionOf(id))
+                    return;
+                before = regionOccupancy.snapshot();
+            }
+            state->keepHealthShares([&] {
+                std::lock_guard hold(occupancyMutex);
+                regionOccupancy.leave(id);
+                after = regionOccupancy.snapshot();
+            });
+            if (before != after)
+                hostNotify([this] { if (regionLevelsChanged) regionLevelsChanged(); });
         };
         hostGame = std::make_unique<cwnet::HostGame>(*transport, *hostWorld);
         hostGame->link().setWorldHandshake(
@@ -114,6 +138,7 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
         // Native send/request clocks belong to the process, across client lifetimes.
         static const auto processClocks = std::make_shared<cwnet::GuestLink::Clocks>();
         client = std::make_unique<cwnet::ClientGame>(*transport, *mirrorWorld, [this] {
+            auto hold = lockHost();
             if (hostGame)
                 hostGame->link().dropAll();
         }, setup.clientTiming.value_or(cwnet::GuestLink::Timing{clockNow, processClocks, {}}));
@@ -155,8 +180,12 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
 
 void Multiplayer::setRegionScaling(bool enabled) {
     if (sharedRegions.exchange(enabled) != enabled) {
-        regionOccupancy.clear();
-        sentRegionLevels.clear();
+        {
+            auto host = lockHost();
+            std::lock_guard hold(occupancyMutex);
+            regionOccupancy.clear();
+            sentRegionLevels.clear();
+        }
         if (regionLevelsChanged)
             regionLevelsChanged();
     }
@@ -167,15 +196,23 @@ int Multiplayer::regionLevel(worldgen::Int2 region, int relativeFallback) const 
         std::lock_guard hold(regionViewMutex);
         return regionView && regionView->enabled ? regionView->basis(region) : relativeFallback;
     }
-    return sharedRegions ? regionOccupancy.basis(region) : relativeFallback;
+    if (!sharedRegions)
+        return relativeFallback;
+    std::lock_guard hold(occupancyMutex);
+    return regionOccupancy.basis(region);
 }
 
 void Multiplayer::visitLocalRegion(worldgen::Int2 region, int level) {
     if (transport || !sharedRegions)
         return;
-    const auto before = regionOccupancy.snapshot();
-    regionOccupancy.update(1, region, level);
-    if (before != regionOccupancy.snapshot() && regionLevelsChanged)
+    bool changed;
+    {
+        std::lock_guard hold(occupancyMutex);
+        const auto before = regionOccupancy.snapshot();
+        regionOccupancy.update(1, region, level);
+        changed = before != regionOccupancy.snapshot();
+    }
+    if (changed && regionLevelsChanged)
         regionLevelsChanged();
 }
 
@@ -189,8 +226,12 @@ void Multiplayer::sendRegionLevels() {
     if (!hostGame)
         return;
     const bool enabled = sharedRegions;
-    const cwnet::CubeVulkanMessage message{regionlevels::CHANNEL,
-                                           regionlevels::encode({enabled, enabled ? regionOccupancy.snapshot() : regionlevels::Levels{}})};
+    regionlevels::Levels levels;
+    if (enabled) {
+        std::lock_guard hold(occupancyMutex);
+        levels = regionOccupancy.snapshot();
+    }
+    const cwnet::CubeVulkanMessage message{regionlevels::CHANNEL, regionlevels::encode({enabled, levels})};
     const auto &connections = hostGame->link().connections();
     for (auto it = sentRegionLevels.begin(); it != sentRegionLevels.end();)
         if (!connections.count(it->first))
@@ -210,7 +251,13 @@ void Multiplayer::sendRegionLevels() {
 }
 
 void Multiplayer::exchangeWorldIdentity(uint32_t nowMs) {
-    if (hostGame) {
+    if (hostGame && !hostThreadRunning())
+        exchangeHostWorldIdentity(nowMs);
+    exchangeClientWorldIdentity(nowMs);
+}
+
+void Multiplayer::exchangeHostWorldIdentity(uint32_t nowMs) {
+    {
         const auto &connections = hostGame->link().connections();
         for (auto it = sentWorldIdentities.begin(); it != sentWorldIdentities.end();)
             it = connections.count(*it) ? std::next(it) : sentWorldIdentities.erase(it);
@@ -229,12 +276,15 @@ void Multiplayer::exchangeWorldIdentity(uint32_t nowMs) {
                 expired.push_back(peer);
         }
         for (auto peer : expired) {
-            notice("A guest could not confirm this world's Alpha generation settings.");
+            hostNotify([this] { notice("A guest could not confirm this world's Alpha generation settings."); });
             hostGame->link().kick(peer);
             pendingWorldIdentities.erase(peer);
             sentWorldIdentities.erase(peer);
         }
     }
+}
+
+void Multiplayer::exchangeClientWorldIdentity(uint32_t nowMs) {
     if (client && client->link().hostIsCubeVulkan() && requestedWorldEpoch != client->link().connectionEpoch())
         if (client->link().sendExtra({"cwv.world-generation.request.v1", {}}))
             requestedWorldEpoch = client->link().connectionEpoch();
@@ -251,11 +301,15 @@ void Multiplayer::exchangeWorldIdentity(uint32_t nowMs) {
 }
 
 void Multiplayer::beginFrame(uint32_t nowMs) {
+    runPosted();
     if (!transport)
         return;
     transport->pump(nowMs);
     // The host idles while its player is a guest elsewhere (netcode-transport.md §2).
     remoteRegionView = guestElsewhere();
+    hostIdle = guestElsewhere();
+    if (hostThreadRunning())
+        return; // the host thread ticks on its own
     if (hostGame && !guestElsewhere()) {
         hostGame->frame(nowMs);
         sendRegionLevels();
@@ -269,6 +323,7 @@ void Multiplayer::dispatch(uint32_t nowMs) {
         client->receive(nowMs);
         client->send(nowMs);
         remoteRegionView = guestElsewhere();
+        hostIdle = guestElsewhere();
         if (client->link().hostIsCubeVulkan() && requestedRegionHost != client->link().host()) {
             if (client->link().sendExtra({"cwv.region-levels.request.v1", {}}))
                 requestedRegionHost = client->link().host();
@@ -282,6 +337,8 @@ void Multiplayer::dispatch(uint32_t nowMs) {
         }
     }
     exchangeWorldIdentity(nowMs);
+    if (hostThreadRunning())
+        return; // the host thread reports joins and leaves
     // Joins and leaves, as the host sees them.
     const size_t now = guests();
     if (hostGame && now != guestsBefore) {
@@ -314,6 +371,7 @@ bool Multiplayer::joinAddress(const std::string &address, uint16_t port, std::st
     clearRegionView();
     client->link().connectTo(host, clockNow());
     remoteRegionView = guestElsewhere();
+    hostIdle = guestElsewhere();
     return true;
 }
 
@@ -322,6 +380,7 @@ void Multiplayer::join(uint64_t host) {
         clearRegionView();
         client->link().connectTo(host, clockNow());
         remoteRegionView = guestElsewhere();
+        hostIdle = guestElsewhere();
     }
 }
 
@@ -330,6 +389,7 @@ void Multiplayer::leave() {
         clearRegionView();
         client->link().goHome(clockNow());
         remoteRegionView = false;
+        hostIdle = false;
     }
 }
 
@@ -342,6 +402,7 @@ int64_t Multiplayer::playerId() const {
 }
 
 size_t Multiplayer::guests() const {
+    auto hold = lockHost();
     return hostGame ? const_cast<cwnet::HostGame &>(*hostGame).link().connections().size() : 0;
 }
 
@@ -349,6 +410,7 @@ std::vector<Multiplayer::FriendRow> Multiplayer::friends() const {
     std::vector<FriendRow> rows;
     if (!transport)
         return rows;
+    auto hold = lockHost();
     auto rowOf = [&](uint64_t id) {
         FriendRow row;
         row.id = id;
@@ -383,6 +445,7 @@ std::vector<Multiplayer::FriendRow> Multiplayer::friends() const {
 }
 
 void Multiplayer::hostButton(uint64_t friendId) {
+    auto hold = lockHost();
     if (!hostGame)
         return;
     cwnet::HostLink &link = hostGame->link();
@@ -418,7 +481,10 @@ bool Multiplayer::invite(const std::string &friendName) {
         !friendName.empty() && std::all_of(friendName.begin(), friendName.end(), [](char c) { return std::isdigit((unsigned char)c); });
     for (uint64_t id : steam->friendIds())
         if ((number && std::to_string(id) == friendName) || lower(steam->friendName(id)) == lower(friendName)) {
-            hostGame->link().invite(id, clockNow());
+            {
+                auto hold = lockHost();
+                hostGame->link().invite(id, clockNow());
+            }
             notice("Invited " + steam->friendName(id));
             return true;
         }
@@ -448,5 +514,111 @@ std::string Multiplayer::nameOf(uint64_t peer) const {
         return cwnet::UdpTransport::describe(peer);
     default:
         return std::to_string(peer);
+    }
+}
+
+// --- The host and AI threads (steam-in-process-host-thread-and-world-step-scheduling-20261111.md) ---
+
+void Multiplayer::post(std::function<void()> action) {
+    std::lock_guard hold(postedMutex);
+    posted.push_back(std::move(action));
+}
+
+void Multiplayer::runPosted() {
+    std::vector<std::function<void()>> actions;
+    {
+        std::lock_guard hold(postedMutex);
+        actions.swap(posted);
+    }
+    for (auto &action : actions)
+        action();
+}
+
+void Multiplayer::hostNotify(std::function<void()> action) {
+    if (hostThreadRunning())
+        post(std::move(action));
+    else
+        action();
+}
+
+void Multiplayer::startHostThread() {
+    if (!hostGame || !hostWorld || hostThreadRunning())
+        return;
+    {
+        auto hold = lockHost();
+        // The host World's results for game-thread state cross as posted actions, as the
+        // host's results reach the live World only as queued messages (contract 4.3).
+        if (auto deaths = hostWorld->deaths)
+            hostWorld->deaths = [this, deaths](const std::vector<SpawnedCreatures::Death> &died) { post([deaths, died] { deaths(died); }); };
+        if (auto reset = hostWorld->reset)
+            hostWorld->reset = [this, reset] { post(reset); };
+        hostWorld->separateAi = true;
+        hostIdle = guestElsewhere();
+    }
+    hostThread = std::jthread([this](std::stop_token stop) { hostLoop(stop); });
+    aiThread = std::jthread([this](std::stop_token stop) { aiLoop(stop); });
+}
+
+void Multiplayer::joinHostThreads() {
+    if (!hostThreadRunning())
+        return;
+    aiThread.request_stop();
+    hostThread.request_stop();
+    if (aiThread.joinable())
+        aiThread.join();
+    hostThread.join();
+    hostThread = {};
+    aiThread = {};
+    if (hostWorld)
+        hostWorld->separateAi = false;
+}
+
+void Multiplayer::stopHostThread() {
+    joinHostThreads();
+    runPosted(); // results of the last ticks still reach the game thread
+}
+
+// T5 (2.1): a tick every 32 ms measured start to start, no catch-up; while this player is a
+// guest elsewhere the host sleeps 33 ms without ticking and keeps its last start.
+void Multiplayer::hostLoop(std::stop_token stop) {
+    uint32_t previous = clockNow();
+    while (!stop.stop_requested()) {
+        if (hostIdle) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(HOST_IDLE_SLEEP_MS));
+            continue;
+        }
+        const uint32_t start = clockNow();
+        hostTick(start, start - previous);
+        if (const uint32_t rest = hostSleepAfterTick(clockNow() - start))
+            std::this_thread::sleep_for(std::chrono::milliseconds(rest));
+        previous = start;
+    }
+}
+
+void Multiplayer::hostTick(uint32_t nowMs, uint32_t elapsedMs) {
+    auto hold = lockHost();
+    hostGame->tick(nowMs, elapsedMs); // its world step keeps the 1000 ms cap and 16 ms slices
+    sendRegionLevels();
+    exchangeHostWorldIdentity(nowMs);
+    const size_t now = hostGame->link().connections().size();
+    if (now != guestsBefore) {
+        guestsBefore = now;
+        if (log)
+            log("Multiplayer: " + std::to_string(now) + " player(s) on this host");
+    }
+}
+
+// T7 (3.1): the host World's AI every 40 ms with the real elapsed time, with no pause. It
+// shares the host lock so the host tick never reads a creature list the AI is changing.
+void Multiplayer::aiLoop(std::stop_token stop) {
+    uint32_t previous = clockNow();
+    while (!stop.stop_requested()) {
+        const uint32_t start = clockNow();
+        {
+            auto hold = lockHost();
+            hostWorld->think(start - previous);
+        }
+        previous = start;
+        std::this_thread::sleep_for(std::chrono::milliseconds(aiSleepAfterTick(clockNow() - start)));
     }
 }

@@ -63,6 +63,30 @@ class Transport {
     virtual bool cubeVulkanOnly() const { return false; }
 };
 
+// One lock around another transport, so a host thread and the game thread can share a
+// backend that is not thread-safe itself (the loopback below already is).
+class SerializedTransport : public Transport {
+  public:
+    explicit SerializedTransport(std::unique_ptr<Transport> backend) : inner(std::move(backend)) {}
+    PeerId self() const override { std::lock_guard hold(lock); return inner->self(); }
+    bool valid(PeerId peer) const override { std::lock_guard hold(lock); return inner->valid(peer); }
+    bool send(PeerId to, Channel channel, const Bytes &packet) override {
+        std::lock_guard hold(lock);
+        return inner->send(to, channel, packet);
+    }
+    bool receive(Channel channel, Received &out) override { std::lock_guard hold(lock); return inner->receive(channel, out); }
+    std::vector<Received> receiveBatch(Channel channel) override {
+        std::lock_guard hold(lock);
+        return inner->receiveBatch(channel);
+    }
+    void pump(uint32_t nowMs) override { std::lock_guard hold(lock); inner->pump(nowMs); }
+    bool cubeVulkanOnly() const override { std::lock_guard hold(lock); return inner->cubeVulkanOnly(); }
+
+  private:
+    std::unique_ptr<Transport> inner;
+    mutable std::recursive_mutex lock;
+};
+
 // An in-process network. Each endpoint() is a transport with its own id; packets go into the
 // receiving endpoint's queue for that channel. Thread-safe, so a host thread and a game thread
 // can share it, as the game's host and client do.

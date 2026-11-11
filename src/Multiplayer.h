@@ -31,6 +31,8 @@
 
 #include <functional>
 #include <atomic>
+#include <mutex>
+#include <thread>
 #include <memory>
 #include <optional>
 #include <string>
@@ -76,6 +78,21 @@ class Multiplayer {
     // and the command line's joins use).
     static uint32_t clockNow();
 
+    // Steam's host and AI threads (steam-in-process-host-thread-and-world-step-scheduling-20261111.md).
+    // Once started, the host ticks every 32 ms on its own thread (idling in 33 ms sleeps while
+    // this player is a guest elsewhere) and the host World's AI runs on a 40 ms thread; beginFrame
+    // then only pumps the transport and runs posted results. Start them after the host World is
+    // set up. Every other access to the host World, its terrain or the host link must hold
+    // lockHost(), the analogue of the host's connection lock H+0x5F8.
+    static constexpr uint32_t HOST_PERIOD_MS = 32, HOST_IDLE_SLEEP_MS = 33, AI_PERIOD_MS = 40;
+    static uint32_t hostSleepAfterTick(uint32_t usedMs) { return usedMs < HOST_PERIOD_MS ? HOST_PERIOD_MS - usedMs : 0; }
+    static uint32_t aiSleepAfterTick(uint32_t usedMs) { return usedMs < AI_PERIOD_MS ? AI_PERIOD_MS - usedMs : 1; }
+    void startHostThread();
+    void stopHostThread();
+    bool hostThreadRunning() const { return hostThread.joinable(); }
+    std::unique_lock<std::recursive_mutex> lockHost() const { return std::unique_lock(hostMutex); }
+    // Host results for game-thread state, run by the next beginFrame in posting order.
+    void post(std::function<void()> action);
     void beginFrame(uint32_t nowMs);
     void consume();
     void dispatch(uint32_t nowMs);
@@ -138,6 +155,20 @@ class Multiplayer {
     void say(const std::u16string &line);
 
   private:
+    mutable std::recursive_mutex hostMutex;
+    std::mutex postedMutex;
+    std::vector<std::function<void()>> posted;
+    std::atomic<bool> hostIdle{false};
+    std::jthread hostThread, aiThread;
+    mutable std::recursive_mutex occupancyMutex; // region occupancy, shared by both threads
+    void hostLoop(std::stop_token stop);
+    void aiLoop(std::stop_token stop);
+    void hostTick(uint32_t nowMs, uint32_t elapsedMs);
+    void runPosted();
+    void joinHostThreads();
+    void hostNotify(std::function<void()> action); // posted while threaded, else run now
+    void exchangeHostWorldIdentity(uint32_t nowMs);
+    void exchangeClientWorldIdentity(uint32_t nowMs);
     bool checkGame = true; // native MultiplayerWidget constructor; /check toggles it
     Way how = Way::Local;
     SteamSession *steam = nullptr;

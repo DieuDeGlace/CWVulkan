@@ -17,7 +17,9 @@
 #include "Spawned.h"
 #include "net/Worlds.h"
 
+#include <atomic>
 #include <map>
+#include <mutex>
 #include <functional>
 #include <vector>
 
@@ -27,8 +29,16 @@ class HostSide : public cwnet::HostWorld {
     ~HostSide() override;
     void stopSources(); // owner is quiescent; never call while holding its World guard
 
-    // Where the zones are kept before any player has joined (local blocks).
-    glm::vec3 standIn{0};
+    // Where the zones are kept before any player has joined (local blocks). The game thread
+    // sets it every frame while the host thread reads it, so it has its own small lock.
+    void setStandIn(glm::vec3 at) {
+        std::lock_guard hold(standInLock);
+        standIn = at;
+    }
+    glm::vec3 standInPosition() const {
+        std::lock_guard hold(standInLock);
+        return standIn;
+    }
     // Death-policy notifications after a World step, and each authority notice reset
     // after body visits but before active effects. A queued notice can reset several
     // substeps of one host batch.
@@ -38,6 +48,10 @@ class HostSide : public cwnet::HostWorld {
     // hostility and level fields. Arrival order is the host's packet order.
     std::function<void(const uint8_t *)> playerObserved;
     std::function<void(int64_t)> playerLeft;
+    // True while Steam's separate AI thread runs think() (host-threading contract 3.1);
+    // otherwise each host substep thinks, as before.
+    std::atomic<bool> separateAi{false};
+    void think(uint32_t elapsedMs);
 
     void creatures(std::vector<cwnet::CreatureView> &out) override;
     bool hasCreature(int64_t id) override { return world.hasCreature(id); }
@@ -58,6 +72,8 @@ class HostSide : public cwnet::HostWorld {
     ExtractedWorld &blocks;
     std::map<int64_t, uint64_t> playerFields;
     bool ownsSourceWorker = false;
+    glm::vec3 standIn{0};
+    mutable std::mutex standInLock;
 };
 
 class MirrorSide : public cwnet::MirrorWorld {

@@ -1,5 +1,29 @@
 # Source review checkpoint — 2026-11-08
 
+## Host and AI threads - 2026-11-11
+
+Following the held host-threading contract, the in-process host now runs as Steam
+runs it. A host thread ticks it every 32 ms measured start to start, without catching
+up, and idles in 33 ms sleeps while this player is a guest elsewhere. The host
+World's creature AI runs on its own 40 ms thread with the real elapsed time, so the
+host's 16 ms substeps no longer think. A viewed mirror World runs no AI at all, as
+Steam never ticks AI for the live World; its player's doors and seats come from the
+host's AI. The main thread keeps the frame, the mirror World and the incoming
+messages.
+
+Host results for game-thread state (deaths, the daily reset, region levels and
+notices) are posted and run at the start of the next frame. Every other game-thread
+use of the host World or host link takes the host lock; the AI thread takes it too,
+so AI and the host tick never overlap. Steam and UDP transports are serialized for
+the two threads.
+
+Nine thread checks and one mirror-AI check failed before the change and now pass.
+All five targets, focused groups, full required-owner CPU without skips, every Vulkan
+group, SDK independence and twenty-three Native/Alpha probes pass. Two Native
+full-distance Help captures settle in 45 s and 43 s (63-73 s before) and the Alpha
+capture in 89 s. Remote multiplayer was not run, and no FPS or hardware claim is made.
+
+
 ## Host threading contract recorded - 2026-11-11
 
 An independent original-only contract now describes how the Steam release runs its

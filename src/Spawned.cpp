@@ -2529,6 +2529,11 @@ bool SpawnedCreatures::playerState(const ExtractedWorld &ew, glm::vec3 &local, f
 }
 
 void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
+    // Steam never runs AI on the live World: the AI routine has one caller, for the host
+    // World (host-threading contract 3.2). A viewed mirror's creatures and its player follow
+    // the host's messages, and the host's AI hands the player its doors and seats.
+    if (client)
+        return;
     auto sourceStateScope = ew.lockSourceState();
     aiCarried += dtMs;
     if (aiCarried < 40.0)
@@ -2586,6 +2591,7 @@ void SpawnedCreatures::think(ExtractedWorld &ew, double dtMs, float hour) {
     if (roadTravel)
         advanceTrips(ew, dt);
     nativeai::tick(w, ai, dt);
+    ++aiTicks;
     // What the AI hands each creature (seats, doors) waits for its next step (0x2c3710).
     for (nativeai::Creature *c : w.creatures)
         handed += c->interactions.size();
