@@ -11,6 +11,8 @@
 #include "NativeRules.h"
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -176,7 +178,23 @@ float blocks(int64_t dots) { return (float)dots * BLOCKS_PER_DOT; }
 // The block a coordinate is in (rounded toward minus infinity).
 int32_t floorBlock(int64_t p) { return (int32_t)(p >> 16); }
 
-float smooth(float dt, float rate) { return gamemath::blendFactor((double)dt, rate); }
+// blendFactor loops ms*100 times, and its value depends only on that step count and the
+// rate. One substep asks for the same few pairs for every creature, so they are kept: each
+// value is the one this translation unit's loop computed for the same inputs.
+float smooth(float dt, float rate) {
+    struct Slot {
+        int steps = -1;
+        uint32_t rate = 0;
+        float value = 0;
+    };
+    thread_local std::array<Slot, 64> slots;
+    const int steps = (int)((double)dt * 100.0); // blendFactor's own step count
+    const uint32_t bits = std::bit_cast<uint32_t>(rate);
+    Slot &slot = slots[(uint32_t(steps) * 31u + bits * 2654435761u) >> 26];
+    if (slot.steps != steps || slot.rate != bits)
+        slot = {steps, bits, gamemath::blendFactor((double)dt, rate)};
+    return slot.value;
+}
 // Moves x toward a target by a smoothing factor.
 void ease(float &x, float target, float factor) { x = factor * (target - x) + x; }
 // The same for a 3-vector: the differences first, then each moved (0x16f20).

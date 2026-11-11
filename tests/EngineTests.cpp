@@ -4369,6 +4369,45 @@ static void readCreature(Reader &r, CreatureState &s) {
             r.take(item.data(), item.size());
     }
 }
+// The search pick's merge walk against the plain per-block lookup it replaced:
+// lowest f, first in block order on ties, open blocks without a step skipped.
+static void searchPickOrder() {
+    uint32_t state = 12345;
+    const auto next = [&](uint32_t bound) { state = state * 1103515245u + 12345u; return (state >> 8) % bound; };
+    const auto block = [&] {
+        return nativeai::IntVec{int32_t(next(5)) - 2, int32_t(next(5)) - 2, int32_t(next(3)) - 1};
+    };
+    int mismatches = 0, ties = 0, stepless = 0, orderMismatches = 0;
+    for (int trial = 0; trial < 4000; ++trial) {
+        nativeai::Entry e;
+        const uint32_t steps = next(40), extra = next(6);
+        for (uint32_t i = 0; i < steps; ++i) {
+            nativeai::Step s;
+            s.f = int32_t(next(6)) - 1; // small range: frequent equal costs
+            const auto key = block();
+            e.steps[key] = s;
+            if (next(3)) e.open.insert(key);
+        }
+        for (uint32_t i = 0; i < extra; ++i) e.open.insert(block()); // may have no step
+        // BlockOrder iterates exactly as std::less<IntVec> would.
+        const std::set<nativeai::IntVec> plain(e.open.begin(), e.open.end());
+        orderMismatches += !std::equal(plain.begin(), plain.end(), e.open.begin(), e.open.end());
+        const nativeai::IntVec *reference = nullptr;
+        int32_t lowest = 0, atLowest = 0;
+        for (const auto &b : plain) {
+            const auto it = e.steps.find(b);
+            if (it == e.steps.end()) { ++stepless; continue; }
+            if (!reference || it->second.f < lowest) reference = &b, lowest = it->second.f, atLowest = 1;
+            else if (it->second.f == lowest) ++atLowest;
+        }
+        ties += atLowest > 1;
+        const auto picked = nativeai::lowestOpenStep(e);
+        if (reference ? picked == e.steps.end() || picked->first != *reference : picked != e.steps.end())
+            ++mismatches;
+    }
+    CHECK(mismatches == 0 && orderMismatches == 0);
+    CHECK(ties > 100 && stepless > 100); // Both edge cases were exercised.
+}
 static nativeai::IntVec readVec(Reader &r) {
     nativeai::IntVec v;
     r.take(v.data(), 12);
@@ -10847,6 +10886,7 @@ int main(int argc, char **argv) {
     if (argc == 4 && std::string(argv[1]) == "props")
         return listProps(std::strtof(argv[2], nullptr), std::strtof(argv[3], nullptr));
     cubFormat();
+    aioracle::searchPickOrder();
     facesPointOutward();
     zoneBordersAgree();
     varianceMatchesMod();

@@ -53,6 +53,16 @@ struct Creature {
     std::vector<int32_t> summonRaces;             // +0xbf0: the races a summoner may call up
 };
 
+// Block order for the search's containers: x, then y, then z, as signed integers. This is
+// exactly std::less<IntVec>'s order, without its generic array comparison call.
+struct BlockOrder {
+    bool operator()(const IntVec &a, const IntVec &b) const noexcept {
+        if (a[0] != b[0]) return a[0] < b[0];
+        if (a[1] != b[1]) return a[1] < b[1];
+        return a[2] < b[2];
+    }
+};
+
 // One block of a search (the step map): its costs and the block it came from.
 struct Step {
     int32_t g = 0, h = 0, f = 0;
@@ -63,9 +73,9 @@ struct Step {
 struct Entry {
     std::array<uint8_t, 0x178> raw{};
     std::list<Interaction> waiting;    // +0x78: interactions to hand to the creature
-    std::map<IntVec, Step> steps;      // +0xc0: the search's blocks
-    std::set<IntVec> open;             // +0xd0: those still to look from
-    std::map<IntVec, Step>::iterator best; // +0xb8: the one nearest the goal, or steps.end()
+    std::map<IntVec, Step, BlockOrder> steps; // +0xc0: the search's blocks
+    std::set<IntVec, BlockOrder> open;        // +0xd0: those still to look from
+    std::map<IntVec, Step, BlockOrder>::iterator best; // +0xb8: the one nearest the goal, or steps.end()
     std::list<IntVec> path;            // +0x138: from the start toward the goal
     std::set<uint64_t> taken;          // +0x148: objects it has taken (a seat)
     std::list<std::array<uint8_t, 0x10>> other; // +0x158 (never touched by the tick)
@@ -105,6 +115,10 @@ struct World {
 
 // One tick of 0x13830 over the world's creatures (dt in ms).
 void tick(World &world, std::map<int64_t, Entry> &ai, uint32_t dt);
+
+// The search's pick (§5.6): the step of the open block with the lowest f, the first
+// in block order on ties; open blocks without a step are skipped. steps.end() if none.
+std::map<IntVec, Step, BlockOrder>::iterator lowestOpenStep(Entry &e);
 
 // 0x2b5d90 over the world's blocks: whether `to` can be seen from `from` (dots), no
 // farther than `range` blocks; with `glass`, glass (block flag 0x40) blocks the sight too.

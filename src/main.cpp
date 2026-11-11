@@ -3527,6 +3527,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     };
     auto clientRand = [] { return std::rand(); }; // the C runtime's rand, as the game's client draws
     unsigned framesSinceTitle = 0, settledFrames = 0;
+    double captureProgressAt = 5; // --capture: readiness inputs every 5 s, observation only
+    unsigned captureProgressFrames = 0;
     double nextSteamCheck = 5;
     int exitCode = 0;
     bool returnToTitle = false;
@@ -9281,6 +9283,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // --capture: wait for the world around the player, then save and quit.
         if (!capture.empty()) {
             settledFrames = !world.preparingTerrain() && time >= runSeconds ? settledFrames + 1 : 0;
+            ++captureProgressFrames;
+            if (time >= captureProgressAt) {
+                logLine("Capture progress: " + std::to_string(time) + " s, " + std::to_string(captureProgressFrames) +
+                        " frames, " + std::to_string(world.zoneCount()) + " prepared zones, " +
+                        std::to_string(world.pendingCount()) + " pending jobs, " + std::to_string(world.loadedSourceCount()) +
+                        " loaded source zones, " + std::to_string(world.pendingSourceCount()) + " source jobs, preparing " +
+                        (world.preparingTerrain() ? "yes" : "no"));
+                captureProgressAt += 5;
+                captureProgressFrames = 0;
+            }
             if (settledFrames == 30)
                 renderer.capture(capture);
             if (settledFrames == 32)

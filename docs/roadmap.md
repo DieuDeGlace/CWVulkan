@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Native full-distance capture readiness: behavior-identical AI search pick and
+  block order plus a cached physics easing factor cut the host World's main-thread
+  cost. The previously failing Native capture settles under the unchanged deadline;
+  full CPU/no skips/Vulkan/SDK and twenty-three probes pass. The host World still
+  shares the main thread.
+  See [the checkpoint](release-status.md#native-full-distance-readiness-host-ai-and-physics-cost---2026-11-11).
+
+
 - [x] Requested World pair in the retained Game state and the selection recorder:
   last-world record, requested pair, then removal of every non-local creature in
   one World guard. Seven CPU before-failures now pass; twenty-three Native/Alpha

@@ -522,23 +522,15 @@ void expand(World &w, Entry &e) {
     if (e.steps.empty() || e.open.empty())
         return;
     // The open block whose step costs least (the first in block order on ties).
-    const IntVec *pick = nullptr;
-    int32_t lowest = 0;
-    for (const IntVec &b : e.open) {
-        auto it = e.steps.find(b);
-        if (it == e.steps.end())
-            continue;
-        if (!pick || it->second.f < lowest)
-            pick = &b, lowest = it->second.f;
-    }
-    if (!pick)
+    const auto picked = lowestOpenStep(e);
+    if (picked == e.steps.end())
         return;
-    const IntVec c = *pick;
+    const IntVec c = picked->first;
     e.open.erase(c);
     const IntVec goal = r.goalBlock();
     if (c == goal)
         return;
-    const int32_t g = e.steps[c].g;
+    const int32_t g = picked->second.g; // c is in steps; erasing it from open keeps this valid
 
     // The body's box standing in c, one block wider all round.
     const int64_t cx = (int64_t)c[0] * ONE_BLOCK + HALF_BLOCK, cy = (int64_t)c[1] * ONE_BLOCK + HALF_BLOCK;
@@ -2428,5 +2420,23 @@ void shotPoint(const uint8_t *record, int64_t out[3]) {
 
 // §2, 0x13830.
 void tick(World &world, std::map<int64_t, Entry> &ai, uint32_t dt) { Brain(world, ai, dt).run(); }
+
+std::map<IntVec, Step, BlockOrder>::iterator lowestOpenStep(Entry &e) {
+    // open and steps share one key order, so one forward walk pairs each open block
+    // with its step: no per-block lookup, the same first-lowest result.
+    auto pick = e.steps.end();
+    auto step = e.steps.begin();
+    for (const IntVec &b : e.open) {
+        while (step != e.steps.end() && BlockOrder{}(step->first, b))
+            ++step;
+        if (step == e.steps.end())
+            break; // No later open block can have a step either.
+        if (step->first != b)
+            continue;
+        if (pick == e.steps.end() || step->second.f < pick->second.f)
+            pick = step;
+    }
+    return pick;
+}
 
 } // namespace nativeai

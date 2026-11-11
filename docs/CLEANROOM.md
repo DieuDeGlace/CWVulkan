@@ -1,5 +1,30 @@
 # Clean-room process
 
+## Native full-distance readiness: host AI and physics cost - 2026-11-11
+
+The Native full-distance Help capture that failed at its unchanged 120 s observation
+deadline now settles. A sampling profile of the main thread showed the cause: the
+in-process host World runs inside the session frame, and its AI ticks and physics
+took most of every frame, so only a few frames ran each second. Terrain batches are
+integrated once per frame, so preparation outlasted the deadline. Deadlines,
+streaming order and demand are unchanged.
+
+Three measured, behavior-identical changes remove most of that cost. The AI search
+pick walks its ordered open and step containers together instead of looking up each
+open block; it keeps the first lowest cost in block order and still skips open
+blocks without a step. The search containers compare block keys directly in exactly
+the standard x, y, z order. The physics easing factor, a loop of one iteration per
+hundredth of a millisecond, is cached per thread by its complete inputs.
+
+A new test checks the pick against the previous loop and the container order against
+the standard order on 4000 random searches, with ties and stepless open blocks. All
+five targets, full required-owner CPU without skips, every Vulkan group, SDK
+independence and twenty-three actual Native/Alpha probes pass. Two Native and one
+Alpha full-distance Help captures settle. The recorded native AI tick files are not
+present on this machine, so their replay was not repeated. The host World still
+shares the main thread. No FPS, hardware or reliability claim is made.
+
+
 ## World selection record and non-local creature removal - 2026-11-11
 
 A world selection is recorded, never applied. The retained Game state now owns
