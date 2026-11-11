@@ -1,5 +1,35 @@
 # Source review checkpoint — 2026-11-08
 
+## World selection record and non-local creature removal - 2026-11-11
+
+A world selection is recorded, never applied. The retained Game state now owns
+the requested seed/name pair, starting at seed 123 and the name "world". The
+selection recorder stores the raw signed seed and the name into the bound
+character's last-world record, then into the requested pair, and then removes
+every creature except the local player, all inside one World guard. The applied
+pair, loaded zones, the world-state block and the local entity are not touched.
+The comparison is exact: seeds first, then case-sensitive name bytes.
+
+The whole independent [selection contract](specs/steam-pending-source-selection-and-world-reconfiguration-20261110.md)
+was read and hash-verified before implementation. It was written by a fresh
+original-only author that received no engine, tests, runtime outputs or
+verification feedback. Seven new CPU assertions failed against empty bodies and
+now pass. Twenty-three actual Native/Alpha probes, all five targets, six focused
+test groups, full required-owner CPU without skips, every Vulkan group and SDK
+independence pass. Private save bytes are unchanged. Broader regression checks
+retain the Alpha terrain/lighting, dry purple Undead Lands, distinct palettes,
+gentler Savannah and Omega water paths.
+
+No frontend page calls the recorder yet. The contract leaves the visible result
+of differing requested and applied pairs unresolved, so the update's comparison
+gate is deliberately not wired. The create/select world pages, host-switch zone
+undo, the unidentified second World list and the contract's provider limits
+remain open. Unbound character data skips only the last-world record, as an
+owned engine policy. No new settled-scene, original-pixel, hardware, FPS or
+cold-start reliability claim is made. Owner content, captures, saves, private
+memory and binaries are excluded from public source.
+
+
 ## Frontend Chat ingress and retained pending order - 2026-11-10
 
 Frontend messages now reach the retained Game chat through the same admission

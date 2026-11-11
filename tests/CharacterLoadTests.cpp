@@ -336,6 +336,64 @@ void frontendLoadOwnership(const auto &check) {
           !snapshot.inventory[0].empty() && snapshot.inventory[0][0].count==4,
           "replaced CharacterData owns the canonical mutable inventory and survives the caller's temporary owner");
 }
+void worldSelectionRecord(const auto &check) {
+    ExtractedWorld blocks; blocks.openGenerated(0,0);
+    SpawnedCreatures world;
+    world.setStoredZones(blocks,nullptr,false);
+    world.setNativePlayer(true); world.setPlayer(blocks,{1,2,130},0,{},100,1,true);
+    auto data=std::make_shared<nativesaves::Character>();
+    data->worldSeed=7; data->worldName="before"; data->health=55;
+    check(world.loadPlayerSave(data),"selection fixture binds owned character data");
+    auto *actor=world.localPlayer();
+    const auto *record=actor->record;
+    actor->group={41}; actor->record[0x61]=0xa7;
+    bool first=false,second=false;
+    world.networkCreature(72,first); world.networkCreature(73,second);
+    world.markDead(900);
+    const auto ids=[&] {
+        std::vector<int64_t> order;
+        world.forEachWorldCreature([&](const uint8_t *creature) {
+            int64_t id; std::memcpy(&id,creature+8,8); order.push_back(id);
+        });
+        return order;
+    };
+    check(first && second && ids()==std::vector<int64_t>({1,72,73}),"selection fixture holds the local player and two others");
+    worldselection::Pair requested,applied;
+    check(requested.seed==123 && requested.name=="world" && worldselection::matches(requested,applied),
+          "requested and applied pairs start as seed 123 and the name world");
+    world.recordWorldSelection(requested,-2147483647-1,"Second World");
+    nativesaves::Character saved;
+    check(world.playerCharacterSource()(saved) && saved.worldSeed==INT32_MIN && saved.worldName=="Second World",
+          "selection stores the raw signed seed and name in the character's last-world record");
+    check(requested.seed==INT32_MIN && requested.name=="Second World",
+          "selection stores the same seed and name in the requested pair");
+    check(applied.seed==123 && applied.name=="world" && !worldselection::matches(requested,applied),
+          "selection never writes the applied pair, so the pairs now differ");
+    check(ids()==std::vector<int64_t>({1}) && world.count()==0,
+          "selection removes every creature except the local player");
+    check(world.localPlayer()==actor && actor->record==record && actor->group==std::set<int64_t>{41} &&
+          actor->record[0x61]==0xa7 && world.playerHealth()==55,
+          "selection retains the same local entity and its state");
+    check(world.worldDeadSet()==std::set<int64_t>{900},"selection leaves the world-state block alone");
+    bool again=false;
+    world.networkCreature(72,again);
+    check(again && ids()==std::vector<int64_t>({1,72}),"a removed identifier is admitted as a new creature afterwards");
+    world.recordWorldSelection(requested,requested.seed,requested.name);
+    check(requested.name=="Second World" && ids()==std::vector<int64_t>({1}),
+          "repeating the current selection through its own name object is unguarded and purges again");
+    worldselection::Pair sameSeed=applied; sameSeed.name="World";
+    worldselection::Pair otherSeed=applied; otherSeed.seed=124;
+    check(!worldselection::matches(sameSeed,applied) && !worldselection::matches(otherSeed,applied),
+          "the comparison is exact on the seed and on case-sensitive name bytes");
+    SpawnedCreatures unbound;
+    unbound.setNativePlayer(true); unbound.setPlayer(blocks,{1,2,130},0,{},100,1,true);
+    bool other=false; unbound.networkCreature(80,other);
+    worldselection::Pair loose;
+    unbound.recordWorldSelection(loose,5,"x");
+    size_t remaining=0; unbound.forEachWorldCreature([&](const uint8_t *) {++remaining;});
+    check(loose.seed==5 && loose.name=="x" && remaining==1,
+          "without bound character data the requested pair and purge still happen");
+}
 void absentRecord(const auto &check) {
     const auto dir = std::filesystem::temp_directory_path() /
         ("CubeVulkan-character-load-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -358,7 +416,7 @@ int characterLoadTests() {
     const auto check = [&](bool okay, const char *message) {
         if (!okay) { std::printf("FAIL character load: %s\n", message); ++failures; }
     };
-    rawNativeLoad(check); resetRetainsSeparateContainers(check); controlledInventoryUsesCurrentState(check); potionCountWidths(check); rawProgressOwnership(check); retainedPlayerAttachment(check); frontendLoadOwnership(check); absentRecord(check);
+    rawNativeLoad(check); resetRetainsSeparateContainers(check); controlledInventoryUsesCurrentState(check); potionCountWidths(check); rawProgressOwnership(check); retainedPlayerAttachment(check); frontendLoadOwnership(check); worldSelectionRecord(check); absentRecord(check);
     std::printf("Character load: raw fields, placement, reset/load ownership: %d failure(s)\n", failures);
     return failures;
 }

@@ -47,6 +47,7 @@ struct SpawnedCreatures::PlayerStorage {
     bool ready = false;
     maphistory::History history;
     std::function<void(nativesaves::Character &)> dataSource;
+    std::shared_ptr<nativesaves::Character> data; // Bound CharacterData, for its last-world record.
 };
 
 SpawnedCreatures::SpawnedCreatures(std::shared_ptr<PlayerStorage> retained)
@@ -1796,10 +1797,12 @@ void SpawnedCreatures::seedPlayerSave(std::shared_ptr<const nativesaves::Charact
     playerSaveSeed = std::move(seed);
     if (playerSaveSeed) playerStorage->dataSource = [owner=playerSaveSeed](nativesaves::Character &out) {out=*owner;};
     else playerStorage->dataSource = {};
+    playerStorage->data.reset(); // A const seed is not the mutable CharacterData owner.
     applyPlayerSaveSeed();
 }
 void SpawnedCreatures::bindPlayerCharacterData(std::shared_ptr<nativesaves::Character> owner) {
     playerStorage->dataSource = [owner](nativesaves::Character &out) {out=*owner;};
+    playerStorage->data = owner;
     player.side.inventorySource = [owner = std::move(owner)](const nativeai::InventoryVisitor &visit) {
         for (auto &tab : owner->inventory)
             for (auto &stack : tab)
@@ -1866,6 +1869,7 @@ void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
 void SpawnedCreatures::setPlayerDataSource(std::function<void(nativesaves::Character &)> source) {
     auto guard=sourceGuard();
     playerStorage->dataSource=std::move(source);
+    playerStorage->data.reset(); // The callback's owner is opaque here.
 }
 std::function<bool(nativesaves::Character &)> SpawnedCreatures::playerCharacterSource() const {
     // Keep the routine core-only save observer unchanged: ordinary persistence
@@ -3221,6 +3225,28 @@ void SpawnedCreatures::worldReset() {
     protectedDead.clear();
     dead.clear();
     seenAlive.clear();
+}
+
+void SpawnedCreatures::recordWorldSelection(worldselection::Pair &requested, int32_t seed, const std::string &name) {
+    auto guard = sourceGuard(); // One span over all four stores and the purge.
+    if (auto &data = playerStorage->data) { // Unbound data is an owned policy; the purge still runs.
+        data->worldSeed = seed;
+        data->worldName = name;
+    }
+    requested.seed = seed;
+    requested.name = name;
+    removeNonLocalCreatures();
+}
+
+void SpawnedCreatures::removeNonLocalCreatures() {
+    auto guard = sourceGuard();
+    // Zone lists never hold the local player, so every stored creature leaves.
+    for (auto &[zone, list] : zones) {
+        for (const Creature &creature : list)
+            ai.erase(get<int64_t>(creature.record, worldgen::creature::ID));
+        list.clear(); // The zone's key and side tables stay: zones are not touched.
+    }
+    made.clear(); // No resident is in the World now.
 }
 
 void SpawnedCreatures::keepReceived(const cwnet::WorldEvents &received) {

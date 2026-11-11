@@ -21,6 +21,7 @@
 #include "EnemyRespawn.h"
 #include "HairStyle.h"
 #include "MapHistory.h"
+#include "WorldSelection.h"
 #include <list>
 #include <functional>
 #include "worldgen/Residents.h"
@@ -198,6 +199,12 @@ class SpawnedCreatures {
     // Authoritative day/reset notices additionally release non-player actors; optional
     // enemy-respawn policy retains its configured timers across that broader cleanup.
     void worldReset();
+    // Selection recorder (0x8a500) under one World guard, in its store order: the
+    // character's last-world record, the requested pair, then the purge below.
+    // The applied pair, zones, world state and the local entity are not touched.
+    void recordWorldSelection(worldselection::Pair &requested, int32_t seed, const std::string &name);
+    // 0x2d2c00: every creature except the local player leaves the World.
+    void removeNonLocalCreatures();
     const std::set<int64_t> &worldDeadSet() const { return worldDead; }
     void setEnemyRespawn(enemyrespawn::Settings settings);
     void advanceRespawns(double elapsedMs);

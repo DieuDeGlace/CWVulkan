@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Requested World pair in the retained Game state and the selection recorder:
+  last-world record, requested pair, then removal of every non-local creature in
+  one World guard. Seven CPU before-failures now pass; twenty-three Native/Alpha
+  probes and full CPU/no skips/Vulkan/SDK pass. World pages, the update gate on a
+  mismatch, host-switch undo and final acceptance stay open.
+  See [the checkpoint](release-status.md#world-selection-record-and-non-local-creature-removal---2026-11-11).
+
+
 - [x] Retained frontend Chat admission after GUI, separate key/character gates,
   late HUD-parent publication, shared command actions and one newest-tail pending
   record after logging. Five actual frontend/seven CPU before-failures now pass;

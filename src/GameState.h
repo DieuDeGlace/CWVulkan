@@ -7,6 +7,7 @@
 #include "GameMouse.h"
 #include "NativeTerms.h"
 #include "Spawned.h"
+#include "WorldSelection.h"
 
 struct GameState {
     std::shared_ptr<SpawnedCreatures::PlayerStorage> player;
@@ -17,4 +18,8 @@ struct GameState {
     GameInput input;
     ChatLine chat;
     gamemouse::State mouse;
+    // Requested World pair (seed, then name). The World's applied pair keeps its
+    // start-up value; the update gate on a mismatch is not wired until its visible
+    // result is verified (steam-pending-source-selection-and-world-reconfiguration-20261110.md, U1).
+    worldselection::Pair requestedWorld;
 };
