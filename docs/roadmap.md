@@ -8,6 +8,13 @@ individual feature documents.
 
 ## Implemented
 
+- [x] World list pages checked against an independent contract: both Steam world
+  pages are unreachable from the title and character flow and the world store is
+  never opened. The engine's Back order and absent page entry already match;
+  the unreachable pages are not implemented. Runtime confirmation stays open.
+  See [the checkpoint](release-status.md#world-list-pages---2026-11-11).
+
+
 - [x] Native full-distance capture readiness: behavior-identical AI search pick and
   block order plus a cached physics easing factor cut the host World's main-thread
   cost. The previously failing Native capture settles under the unchanged deadline;

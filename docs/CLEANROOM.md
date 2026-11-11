@@ -1,5 +1,26 @@
 # Clean-room process
 
+## World list pages - 2026-11-11
+
+An independent original-only contract describes the Steam world selection and
+world creation pages, their cards, edit fields and handlers, and the world-list
+store. Its headline: in the supported image both pages are built but cannot be
+reached from the title or character flow. The selection page is shown only by
+Back from the creation page, and the creation page only from the selection page.
+A successful character selection goes straight to gameplay. The world-list store
+is never opened or read, so the list is empty at every start.
+
+The engine already matches everything reachable. Back moves world creation to
+world selection, world selection and character creation to character selection,
+and character selection to the title, as the existing literal Back tests show.
+No engine path makes either world page visible. The unreachable widgets, cards,
+handlers and store writes are deliberately not implemented, so no dead interface
+is added. The contract leaves open whether a path outside the decoded code can
+show a world page; that needs an owner-side runtime check. The contract was
+whole-read and hash-verified, and its author received no engine, test or result
+feedback. No binary changed; the last full validation still applies.
+
+
 ## Native full-distance readiness: host AI and physics cost - 2026-11-11
 
 The Native full-distance Help capture that failed at its unchanged 120 s observation
