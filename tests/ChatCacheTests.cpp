@@ -57,6 +57,48 @@ int chatCacheTests() {
     const auto beforeClose = empty.drawingRevision();
     empty.enter();
     check(empty.drawingRevision() != beforeClose, "Enter closing an empty editor invalidates");
+    const auto flat=[](const ChatLine &line) {
+        std::wstring result; for (const auto &row:line.rows()) for (const auto &word:row) result+=word.text;
+        return result;
+    };
+    const auto metric=[](const std::wstring &word) {return float(word.size()*5);};
+    ChatLine tail;
+    tail.receive(int64_t(-1),u"A"); tail.receive(int64_t(-1),u"B");
+    tail.consumeIncoming(400,metric);
+    check(tail.pending()==1 && flat(tail)==L"B","one update consumes the newest pending tail record");
+    tail.consumeIncoming(400,metric);
+    check(tail.pending()==0 && flat(tail)==L"BA","the older pending record remains for the next update");
+    ChatLine afterLog;
+    afterLog.receive(int64_t(-1),u"first"); bool enqueued=false;
+    const auto enqueueDuringMetric=[&](const std::wstring &word) {
+        if (!enqueued && word==L"first") {enqueued=true; afterLog.receive(int64_t(-1),u"new");}
+        return metric(word);
+    };
+    afterLog.consumeIncoming(400,enqueueDuringMetric);
+    afterLog.consumeIncoming(400,enqueueDuringMetric);
+    check(flat(afterLog)==L"firstfirst" && afterLog.pending()==0,"current tail removal follows logging and its reached callback effects");
+    ChatLine lookup;
+    lookup.receive(int64_t(1),u"ONE"); std::vector<int64_t> ids;
+    lookup.consumeIncoming(400,metric,[&](int64_t id)->std::optional<std::u16string> {
+        ids.push_back(id);
+        if (ids.size()==1) {lookup.receive(int64_t(2),u"TWO"); return u"first";}
+        return u"second";
+    });
+    check(ids==std::vector<int64_t>{1,2} && flat(lookup)==L"second: TWO" && lookup.pending()==1,
+          "prefix and body use the reached fresh tail and second name lookup");
+    ChatLine measured;
+    std::vector<std::wstring> tokens;
+    measured.append(u"A B\nC",{255,255,255},400,[&](const auto &word) {tokens.push_back(word); return metric(word);});
+    check(tokens==std::vector<std::wstring>{L"A",L" ",L"B",L"\n",L"C"},"new token metrics precede space and row-break decisions");
+    ChatLine negative;
+    negative.append(u"kept",{255,255,255},400,metric); negative.trim(-18);
+    check(flat(negative)==L"kept","finite negative row capacity follows signed-to-unsigned native comparison");
+    ChatLine unordered;
+    unordered.append(u"A ",{255,255,255},400,metric);
+    unordered.append(u"B",{255,255,255},400,[&](const auto &word) {
+        return word==L"A" ? std::numeric_limits<float>::quiet_NaN() : metric(word);
+    });
+    check(unordered.rows().size()==1 && flat(unordered)==L"A B","unordered carried width follows the append comparison branch");
     std::cout << "Chat cache: " << failures << " failures\n";
     return failures;
 }

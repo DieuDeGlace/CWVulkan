@@ -39,11 +39,16 @@ class Branches {
         const auto index = (size_t)branch;
         return index < roots.size() ? roots[index] : branch == Branch::Root ? &scene.root() : staging;
     }
-    void apply(const State &state) {
+    void publishGameplay() {
+        bool selected=true;
+        for (size_t index=0;index<5;++index)
+            if (roots[index]->visible) {selected=false; break;}
+        roots[size_t(Branch::Gameplay)]->visible=selected;
+    }
+    void apply(const State &state) { publishPages(state); publishGameplay(); }
+    void publishPages(const State &state) {
         for (size_t index = 0; index < state.frontend.size(); ++index)
             roots[index]->visible = state.frontend[index];
-        roots[(size_t)Branch::Gameplay]->visible =
-            std::none_of(state.frontend.begin(), state.frontend.end(), [](bool active) { return active; });
         roots[(size_t)Branch::Options]->visible = state.options;
         roots[(size_t)Branch::Controls]->visible = state.controls;
         roots[(size_t)Branch::Help]->visible = state.help;

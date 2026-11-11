@@ -1,6 +1,7 @@
 #include "ChatLine.h"
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <utility>
 
 std::optional<std::u16string> ChatLine::enter() {
@@ -39,20 +40,20 @@ void ChatLine::type(const std::string &lowBytes) {
     }
 }
 
-void ChatLine::editKey(uint8_t key,bool shift) {
+void ChatLine::editKey(uint8_t key,const Shift &shift) {
     switch (key) {
     case 0x25: // Left: an edge preserves the prior selection.
-        if (caret>0) {--caret;if (shift) ++selection;else selection=0;}
+        if (caret>0) {--caret;if (shift && shift()) ++selection;else selection=0;}
         break;
     case 0x27:
-        if (caret<(int)line.size()) {++caret;if (shift) --selection;else selection=0;}
+        if (caret<(int)line.size()) {++caret;if (shift && shift()) --selection;else selection=0;}
         break;
     case 0x24:
-        if (shift) selection+=caret;else selection=0;
+        if (shift && shift()) selection+=caret;else selection=0;
         caret=0;
         break;
     case 0x23:
-        if (shift) selection+=caret-(int)line.size();else selection=0;
+        if (shift && shift()) selection+=caret-(int)line.size();else selection=0;
         caret=(int)line.size();
         break;
     case 0x2E:
@@ -67,6 +68,9 @@ void ChatLine::editKey(uint8_t key,bool shift) {
 }
 
 void ChatLine::keyDown(uint8_t key,bool shift,const std::function<void(const std::u16string &)> &submit) {
+    keyDownWithShift(key,[shift] {return shift;},submit);
+}
+void ChatLine::keyDownWithShift(uint8_t key,const Shift &shift,const std::function<void(const std::u16string &)> &submit) {
     if (!open) {
         if (key==0x0D) open=true;
         return;
@@ -91,7 +95,7 @@ void ChatLine::key(Key key,bool shift) {
     if (!open) return;
     const uint8_t code=key==Key::Left ? 0x25 : key==Key::Right ? 0x27 : key==Key::Home ? 0x24 :
                        key==Key::End ? 0x23 : key==Key::Delete ? 0x2E : 0x08;
-    editKey(code,shift);
+    editKey(code,[shift] {return shift;});
 }
 
 void ChatLine::append(const std::u16string &text, Colour colour, float frameWidth, const Measure &measure) {
@@ -104,13 +108,16 @@ void ChatLine::append(const std::u16string &text, Colour colour, float frameWidt
     bool glue = !history.back().empty() && !history.back().back().text.empty() && history.back().back().text != L" ";
     const int limit = (int)(frameWidth - 30);
     auto appendToken = [&](std::wstring token) {
+        // The reached metric call precedes delimiter/space decisions, even when
+        // its result is then discarded for an explicit break or fixed-width space.
+        const float measured=measure(token);
         if (token == L"\r" || token == L"\n") {
             history.emplace_back();
             used = 0;
             return; // Explicit row breaks do not consume the glue allowance.
         }
-        const float incomingWidth = (float)(int)width(token);
-        if (!(used + incomingWidth < (float)limit)) {
+        const float incomingWidth = token==L" " ? 5.0f : (float)(int)measured;
+        if (used + incomingWidth >= (float)limit) {
             if (glue)
                 glue = false;
             else {
@@ -142,8 +149,12 @@ void ChatLine::append(const std::u16string &text, Colour colour, float frameWidt
 }
 
 void ChatLine::trim(float frameHeight) {
-    const int keep = std::max(0, (int)(frameHeight / 18));
-    while (history.size() > (size_t)keep)
+    const float rows=frameHeight/18.0f;
+    // Invalid conversion inputs are outside the proved native FP environment.
+    // This owned safety policy retains rows instead of invoking C++ undefined behavior.
+    if (!std::isfinite(rows) || rows<-2147483648.f || rows>=2147483648.f) return;
+    const uint64_t keep=uint64_t(int64_t(int32_t(rows)));
+    while (history.size() > keep)
         history.pop_front();
 }
 
@@ -158,11 +169,16 @@ void ChatLine::receive(int64_t sender, std::u16string body) {
 void ChatLine::consumeIncoming(float frameWidth, const Measure &measure, const NameResolver &name) {
     if (incoming.empty())
         return;
-    auto entry = std::move(incoming.front());
-    incoming.pop_front();
-    if (entry.resolve)
-        entry.sender = entry.id >= 0 && name ? name(entry.id) : std::nullopt;
-    if (entry.sender)
-        append(*entry.sender + u": ", {0, 255, 255}, frameWidth, measure);
-    append(entry.body + u"\n", {255, 255, 255}, frameWidth, measure);
+    std::optional<std::u16string> sender=incoming.back().sender;
+    if (incoming.back().resolve) {
+        sender.reset();
+        const int64_t firstId=incoming.back().id;
+        if (firstId>=0 && name && name(firstId) && !incoming.empty())
+            sender=name(incoming.back().id); // Native repeats the lookup from the reached current tail.
+    }
+    if (sender) append(*sender + u": ", {0, 255, 255}, frameWidth, measure);
+    if (incoming.empty()) return; // Owned safety boundary for a provider that removed every record.
+    const auto body=incoming.back().body;
+    append(body + u"\n", {255, 255, 255}, frameWidth, measure);
+    if (!incoming.empty()) incoming.pop_back(); // Current tail, after all reached log callbacks.
 }

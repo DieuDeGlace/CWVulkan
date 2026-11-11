@@ -354,6 +354,29 @@ void chatCommands() {
     LOOT_CHECK(startMotion(creature.data(), 99, 0xa3) && creature[0x68] == 0xa3);
     std::memcpy(&clock, creature.data() + 0x6c, 4);
     LOOT_CHECK(clock == 0 && !startMotion(nullptr, 0, 0x57));
+    Actions actions;
+    bool enabled=false;
+    std::vector<std::u16string> feedback,ordinary,petNames;
+    std::vector<uint8_t> motions;
+    actions.toggleCheck=[&] {enabled=!enabled;return enabled;};
+    actions.feedback=[&](const auto &text) {feedback.push_back(text);};
+    actions.text=[&](const auto &text) {ordinary.push_back(text);};
+    actions.namePet=[&](const auto &text) {petNames.push_back(text);};
+    actions.motion=[&](uint8_t value) {motions.push_back(value);};
+    submit(u"/check ignored",actions);
+    submit(u"/check",actions);
+    submit(u"/namepet",actions);
+    submit(u"/namepet ABCDEFGHIJKLMNOP",actions);
+    submit(u"/namepet One Two",actions);
+    submit(u"/wave extra",actions);
+    submit(u"  /Wave extra  ",actions);
+    LOOT_CHECK(!enabled && feedback==std::vector<std::u16string>({u"multiplayerWidget->checkGame = 1",
+        u"multiplayerWidget->checkGame = 0",u"Name is too long."}));
+    LOOT_CHECK(petNames==std::vector<std::u16string>({u"One"}) && motions==std::vector<uint8_t>({0xa1}));
+    LOOT_CHECK(ordinary==std::vector<std::u16string>({u"  /Wave extra  "}));
+    actions.namePet={};actions.motion={};
+    submit(u"/namepet missing-provider",actions);submit(u"/sit",actions);
+    LOOT_CHECK(ordinary.size()==1); // Recognized commands never fall through to ordinary text.
 }
 
 void chatLine() {
@@ -414,10 +437,11 @@ void chatLine() {
     delivery.receive(std::nullopt, u"\u03a9");
     delivery.consumeIncoming(400, measure);
     LOOT_CHECK(delivery.pending() == 1 && delivery.rows().size() == 2);
-    LOOT_CHECK(delivery.rows()[0][0].text == L"Ada:" && delivery.rows()[0][0].colour == ChatLine::Colour({0, 255, 255}));
-    LOOT_CHECK(delivery.rows()[0].back().text == L"hello" && delivery.rows()[0].back().colour == ChatLine::Colour({255, 255, 255}));
+    LOOT_CHECK(delivery.rows()[0][0].text == L"\u03a9" && delivery.rows()[0][0].colour == ChatLine::Colour({255,255,255}));
     delivery.consumeIncoming(400, measure);
-    LOOT_CHECK(delivery.pending() == 0 && delivery.rows()[1][0].text == L"\u03a9");
+    LOOT_CHECK(delivery.pending() == 0 && delivery.rows()[1][0].text == L"Ada:");
+    LOOT_CHECK(delivery.rows()[1][0].colour == ChatLine::Colour({0,255,255}));
+    LOOT_CHECK(delivery.rows()[1].back().text == L"hello" && delivery.rows()[1].back().colour == ChatLine::Colour({255,255,255}));
     delivery.receive((int64_t)12, u"later");
     std::u16string currentName = u"Renamed";
     delivery.consumeIncoming(400, measure, [&](int64_t id) -> std::optional<std::u16string> {

@@ -988,6 +988,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     front.hud = &hud;
     front.sampledControls = &gameState.input;
     front.helpTerms = &gameState.terms;
+    front.chat = &gameState.chat;
     front.helpActor = [&] {return spawnedReady && nativePlayer ? spawned.localPlayer() : nullptr;};
     front.window = window, front.input = &input, front.assets = &assets, front.renderer = &renderer, front.world = &world;
     front.extracted = useExtracted ? &extractedWorld : nullptr;
@@ -1021,6 +1022,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     front.dayNight = dayNight, front.minutesPerSecond = minutesPerSecond;
     front.startHour = saves.world().timeMs / 3600000.0f; // (Save/world.db, or a new world's 10:00)
     front.log = [](const std::string &line) { logLine(line); };
+    chatcommand::Actions frontendChat;
+    frontendChat.toggleCheck=[&] {return session.toggleGameCheck();};
+    frontendChat.feedback=[&](const std::u16string &text) {hud.appendChat(gameState.chat,text+u"\n",{255,127,127});};
+    frontendChat.namePet=[&](const std::u16string &name) {
+        if (auto *actor=spawned.localPlayer();actor && actor->record) chatcommand::namePet(actor->record+0x8b8,name);
+    };
+    frontendChat.motion=[&](uint8_t ability) {
+        if (auto *actor=spawned.localPlayer();actor && actor->record)
+            chatcommand::startMotion(actor->record,spawned.playerAbilityDuration(),ability);
+    };
+    frontendChat.text=[&](const std::u16string &text) {
+        if (const auto *actor=spawned.localPlayer();actor && actor->record) {
+            int64_t id; std::memcpy(&id,actor->record+8,8);
+            gameState.chat.receive(id,text); // Native pending record; transport remains a separate provider.
+        }
+    };
+    front.submitChat=[&](const std::u16string &line) {chatcommand::submit(line,frontendChat);};
     std::vector<CharacterEntry> recordedOnly = listCharacters(assets.gameDir());
     front.recorded = &recordedOnly;
     std::optional<hair::Style> createdHairStyle;
@@ -3689,39 +3707,22 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         cameraPosition.distance = viewZoom;
     }
 
-    auto submitChat = [&](const std::u16string &line) {
-        const auto command = chatcommand::parse(line);
-        auto feedback = [&](const std::u16string &text) { hud.appendChat(chat, text + u"\n", {255, 127, 127}); };
-        switch (command.kind) {
-        case chatcommand::Kind::Check:
-            feedback(std::u16string(u"multiplayerWidget->checkGame = ") + (session.toggleGameCheck() ? u"1" : u"0"));
-            break;
-        case chatcommand::Kind::NamePet:
-            if (command.argument.size() >= 16)
-                feedback(u"Name is too long.");
-            else if (auto *me = spawned.localPlayer(); me && me->record) {
-                auto *item = me->record + 0x8b8;
-                if (chatcommand::namePet(item, command.argument) && gear.equipped(Gear::Pet).category == 20) {
-                    auto pet = gear.equipped(Gear::Pet);
-                    Gear::cubesFrom(item, pet);
-                    gear.updateWorn(Gear::Pet, pet);
-                    if (nativeInventory)
-                        nativeInventory->equipment[Gear::Pet] = Gear::toRecord(pet);
-                }
+    auto gameplayChat=frontendChat;
+    gameplayChat.namePet=[&](const std::u16string &name) {
+        if (auto *me=spawned.localPlayer();me && me->record) {
+            auto *item=me->record+0x8b8;
+            if (chatcommand::namePet(item,name) && gear.equipped(Gear::Pet).category==20) {
+                auto pet=gear.equipped(Gear::Pet);
+                Gear::cubesFrom(item,pet); gear.updateWorn(Gear::Pet,pet);
+                if (nativeInventory) nativeInventory->equipment[Gear::Pet]=Gear::toRecord(pet);
             }
-            break;
-        case chatcommand::Kind::Motion:
-            if (auto *me = spawned.localPlayer())
-                chatcommand::startMotion(me->record, spawned.playerAbilityDuration(), command.ability);
-            break;
-        case chatcommand::Kind::Text:
-            if (session.started())
-                session.say(line);
-            else
-                chat.receive(std::u16string(character.name.begin(), character.name.end()), line);
-            break;
         }
     };
+    gameplayChat.text=[&](const std::u16string &line) {
+        if (session.started()) session.say(line);
+        else chat.receive(std::u16string(character.name.begin(),character.name.end()),line);
+    };
+    auto submitChat=[&](const std::u16string &line) {chatcommand::submit(line,gameplayChat);};
 
     const auto syncInventoryVisibility=[&] {
         hud.setInventoryPanelVisibility(inventoryOpen && bagShown,inventoryOpen && craftingOpen,
@@ -4068,17 +4069,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         return true; // The remaining Game business still uses the frame adapter below.
     };
     std::vector<uint8_t> nativeChatConsumed;
+    gamewindow::Chat gameChat;
+    gameChat.selected=[&] {const auto *node=hud.interfaceBranchRoot(uiroot::Branch::Gameplay); return node && node->visible;};
+    gameChat.focused=[&] {return hud.interfaceHasFocus();};
+    gameChat.capture=[&] {return menusReady ? menus.bindingCaptureIndex() : -1;};
+    gameChat.current=[&] {return &chat;};
+    gameChat.shift=[&] {return hud.interfaceKeyHeld(0x10);};
+    gameChat.submit=submitChat;
     input.gameKeyDown=[&](uint8_t key) {
-        const auto *gameplay=hud.interfaceBranchRoot(uiroot::Branch::Gameplay);
-        if (session.dedicated() || !gameplay || !gameplay->visible || hud.interfaceHasFocus() ||
-            (menusReady && menus.bindingCaptureIndex()>=0)) return;
-        const bool consumed=key==0x0D || (chat.typing() && key!=0x1B);
-        chat.keyDown(key,hud.interfaceKeyHeld(0x10),submitChat);
-        if (consumed) nativeChatConsumed.push_back(key);
+        if (!session.dedicated() && gamewindow::chatKeyDown(gameChat,key)) nativeChatConsumed.push_back(key);
     };
-    input.gameCharacter=[&](uint8_t unit) {
-        if (!hud.interfaceHasFocus()) chat.type(std::string(1,char(unit)));
-    };
+    input.gameCharacter=[&](uint8_t unit) {gamewindow::chatCharacter(gameChat,unit);};
 
     sampledactions::Menus sampledMenus;
     sampledMenus.chatEditing=[&] {return chat.typing();};

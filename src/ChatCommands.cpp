@@ -22,6 +22,27 @@ Command parse(const std::u16string &text) {
     return {}; // Caller sends the original text, with its whitespace intact.
 }
 
+void submit(const std::u16string &line,const Actions &actions) {
+    const auto command=parse(line);
+    switch (command.kind) {
+    case Kind::Check:
+        if (actions.toggleCheck) {
+            const bool enabled=actions.toggleCheck();
+            if (actions.feedback) actions.feedback(std::u16string(u"multiplayerWidget->checkGame = ")+(enabled ? u"1" : u"0"));
+        }
+        break;
+    case Kind::NamePet:
+        if (command.argument.size()>=16) {if (actions.feedback) actions.feedback(u"Name is too long.");}
+        else if (!command.argument.empty() && actions.namePet) actions.namePet(command.argument);
+        break;
+    case Kind::Motion:
+        if (actions.motion) actions.motion(command.ability);
+        break;
+    case Kind::Text:
+        if (actions.text) actions.text(line);
+        break;
+    }
+}
 bool namePet(uint8_t *item, const std::u16string &name) {
     if (!item || item[0] != 20 || name.empty() || name.size() >= 16)
         return false;

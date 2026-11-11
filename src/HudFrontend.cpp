@@ -75,11 +75,18 @@ glm::vec2 Hud::helpText(std::vector<OverlayVertex> &out,const ScreenItem &item) 
 }
 
 void Hud::setInterfaceState(const uiroot::State &state) {
+    publishFrontendState(state);
+    publishGameplayParent();
+}
+void Hud::publishFrontendState(const uiroot::State &state) {
     if (interfaceBranches) {
-        auto current = state;
-        current.help = helpRootShown;
-        interfaceBranches->apply(current);
+        auto current=state;
+        current.help=helpRootShown;
+        interfaceBranches->publishPages(current);
     }
+}
+void Hud::publishGameplayParent() {
+    if (interfaceBranches) interfaceBranches->publishGameplay();
 }
 void Hud::setInterfaceShown(bool shown) {
     interfaceRootShown = shown;

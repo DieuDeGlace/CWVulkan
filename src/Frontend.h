@@ -32,6 +32,7 @@
 #include <vector>
 
 class Assets;
+class ChatLine;
 class Audio;
 class Config;
 class ExtractedWorld;
@@ -85,7 +86,8 @@ struct MenuInput {
     void keyMessage(int glfwKey, bool repeat);
     void rawKeyMessage(InterfaceMessage kind,uint16_t unit);
     void wheelMessage(int16_t delta); // Normalize each actual message, including zero.
-    void routeInterfaceMessages(Hud &,const WheelCallback & = {},const std::function<void(uint8_t)> &special = {});
+    void routeInterfaceMessages(Hud &,const WheelCallback & = {},const std::function<void(uint8_t)> &special = {},
+                                const std::function<void(gamewindow::Target &)> &currentKeyboard = {});
     void routeGamepadButtons(Hud &);
     void routeInterfacePress(Hud &,int button);
     void routeInterfaceRelease(Hud &,int button);
@@ -366,6 +368,8 @@ struct Services {
     MenuInput *input = nullptr;
     GameInput *sampledControls = nullptr; // Borrowed Game owner, also while title/character pages run.
     const nativeterms::Dictionary *helpTerms = nullptr;
+    ChatLine *chat = nullptr; // Retained Game editor/history/pending owner.
+    std::function<void(const std::u16string &)> submitChat;
     std::function<nativeai::Creature *()> helpActor; // Fresh current actor, independent of frontend simulation ownership.
     const Assets *assets = nullptr;
     Renderer *renderer = nullptr;

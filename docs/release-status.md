@@ -1,5 +1,53 @@
 # Source review checkpoint — 2026-11-08
 
+## Frontend Chat ingress and retained pending order - 2026-11-10
+
+Frontend messages now reach the retained Game chat through the same admission
+helpers as gameplay, after the GUI receiver returns. Keydown tests the HUD parent's
+own selected value, raw GUI focus and signed Controls capture index. Characters
+retain their separate focus/typing admission and signed low-byte conversion.
+Hidden manager ancestors and frontend pages do not add character gates. Shift is
+queried only at the reached caret-edit phase. Escape retains the editor draft.
+
+Frontend page callbacks publish their page roots while retaining the previous
+HUD-parent value until the selected later update. Chat callbacks are scoped to
+each message; completed Session objects leave no stored callback behind. Shared
+command dispatch binds the current actor, feedback and pending-message owner
+before title menus run. Ordinary transitions retain the editor, history and queue.
+
+One pending-message traversal chooses the newest tail record. It repeats the
+reached name/tail lookups, logs from the current tail and removes the then-current
+tail after logging. New-token metrics run before space/line-break decisions;
+unordered carried widths append, and finite negative row capacities preserve
+the selected signed-to-unsigned comparison. Generic providers and unsafe native
+interleavings are not inferred from these normally returning selected paths.
+
+The whole independent [Chat ingress/ownership contract](specs/steam-frontend-chat-ingress-and-owner-lifetime-20261110.md)
+was read and hash-verified before implementation. Earlier lifetime/entry contracts
+and their receipts remain unchanged. The original-only author received no engine,
+tests, runtime outputs or verification feedback. Five actual frontend assertions
+and seven CPU queue/layout assertions failed before the correction and now pass.
+Eight frontend Chat cases pass in each Native/Alpha profile, along with twenty-one
+affected actual probes, all five targets, six focused test groups, full required-
+owner CPU without skips, every Vulkan group and SDK independence. An earlier
+build failed four Native Help assertions because that fixture assumed immediate
+HUD-parent publication; the fixture now requests the late publication explicitly
+and the failed run is preserved. Private save
+bytes are unchanged. Broader regression checks retain the Alpha terrain/lighting,
+dry purple Undead Lands, distinct palettes, gentler Savannah and Omega water paths.
+
+Native first-frame HUD-parent initialization, the complete Game update schedule,
+transport delivery/producers, full GUI geometry/fonts, reentry/concurrency and
+broader Game/World/backend behavior remain open. The owned first-frame publication,
+legacy direct-state API, safe missing-provider/invalid-height handling and existing
+gameplay transport/local-echo adapter remain explicitly bounded engine policies.
+The pending-tail rule does not establish whole native network-chat delivery.
+No new settled-scene, original-pixel, hardware, FPS or cold-start reliability claim
+is made. The earlier Native full-distance readiness failure and source deadline
+miss retain their exact evidence and unchanged deadlines. Owner content, captures,
+saves, private memory and binaries are excluded from public source.
+
+
 ## Retained character entry and single startup handoff - 2026-11-10
 
 Continue and character Select previously entered through a cached preview and a

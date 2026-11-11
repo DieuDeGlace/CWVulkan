@@ -131,6 +131,23 @@ int gameWindowInputTests() {
     check(observedLiveText && chat.typing() && chat.text().empty() && chat.caretIndex()==0 && chat.selectedUnits()==0,
           "active Return submits before current-text clear and later clamp, preserving a callback's reopened active byte");
 
+    ChatLine deferredShift;
+    std::vector<int> reachedCarets;
+    const auto shift=[&] {reachedCarets.push_back(deferredShift.caretIndex());return true;};
+    deferredShift.keyDownWithShift(13,shift);
+    deferredShift.type("ABC");
+    deferredShift.keyDownWithShift(0x25,shift);
+    check(reachedCarets==std::vector<int>{2},"Shift membership is queried after the admitted Left caret store");
+    deferredShift.keyDownWithShift(0x24,shift);
+    deferredShift.keyDownWithShift(0x25,shift);
+    deferredShift.keyDownWithShift(0x23,shift);
+    deferredShift.keyDownWithShift(0x27,shift);
+    deferredShift.keyDownWithShift(0x26,shift);
+    deferredShift.keyDownWithShift(0x1b,shift);
+    deferredShift.keyDownWithShift(13,shift);
+    check(reachedCarets==std::vector<int>{2,2,0},
+          "Home/End query Shift before their caret store; edge, no-op, Escape and Return do not query it");
+
     // Actual GUI focus/edit and Game chat admission, including rereads in one message.
     plx::Document document;
     plasma::Scene scene(document);
@@ -158,15 +175,17 @@ int gameWindowInputTests() {
         else if (kind==Key::Up) input.keyUp(key);
         else input.character(key);
     };
+    gamewindow::Chat liveChat;
+    liveChat.selected=[&] {return gameplaySelected;};
+    liveChat.focused=[&] {return input.focusWidget()!=nullptr;};
+    liveChat.capture=[&] {return captureIndex;};
+    liveChat.current=[&] {return &actual;};
+    liveChat.shift=[&] {return input.keyHeld(0x10);};
     const auto actualGame=[&] {
         gamewindow::Target target;
         target.keyboard=&actualKeys;
-        target.down=[&](uint8_t key) {
-            if (gameplaySelected && !input.focusWidget() && captureIndex<0) actual.keyDown(key,input.keyHeld(0x10));
-        };
-        target.character=[&](uint8_t byte) {
-            if (!input.focusWidget() && actual.typing()) actual.type(std::string(1,char(byte)));
-        };
+        target.down=[&](uint8_t key) {gamewindow::chatKeyDown(liveChat,key);};
+        target.character=[&](uint8_t byte) {gamewindow::chatCharacter(liveChat,byte);};
         return target;
     };
     input.focus(node);

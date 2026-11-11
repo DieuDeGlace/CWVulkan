@@ -10,6 +10,7 @@
 #include "Assets.h"
 #include "Audio.h"
 #include "Character.h"
+#include "ChatLine.h"
 #include "CubModel.h"
 #include "Extracted.h"
 #include "GameInput.h"
@@ -139,7 +140,8 @@ void MenuInput::routeInterfacePress(Hud &hud,int button) {
     }
 }
 
-void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const std::function<void(uint8_t)> &special) {
+void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const std::function<void(uint8_t)> &special,
+                                        const std::function<void(gamewindow::Target &)> &currentKeyboard) {
     interfacePresses.clear();
     gamePresses.clear();
     const auto keyboard=[&](gamewindow::Key kind,uint16_t unit) {
@@ -157,6 +159,7 @@ void MenuInput::routeInterfaceMessages(Hud &hud,const WheelCallback &wheel,const
             // Fetch the current ports after the GUI receiver has returned.
             target.down=gameKeyDown;
             target.character=gameCharacter;
+            if (currentKeyboard) currentKeyboard(target); // Fresh ports after the GUI phase; no retained Session callback.
             return target;
         });
     };
@@ -426,7 +429,8 @@ class Session {
     bool riding() const { return titleShown || charactersShown; }
     bool front() const { return std::any_of(frontendPages.begin(),frontendPages.end(),[](bool shown){return shown;}); }
     void syncInterfaceState() {
-        hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
+        if (gameplaySession) hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
+        else hud.publishFrontendState({frontendPages,optionsOpen,controlsOpen});
     }
 
     // The characters of characters.db and the list's state.
@@ -510,6 +514,9 @@ class Session {
     uint32_t account() const;
     bool frame();
     void readInput(bool poll, double frameMs = 0);
+    void routeMessages();
+    void publishHudParent() { hud.publishGameplayParent(); }
+    gamewindow::Chat chatSource();
     void handleInterfaceKeys(std::vector<int> &keys,bool native = false);
     void handleKeys(bool inGame);
     void handleClick(bool inGame);
@@ -632,6 +639,7 @@ bool Session::start(std::string &error) {
     } else
         stageDefaultPlayer();
     camera.set(90, 0, 180, 8);
+    publishHudParent(); // Owned first-frame initialization; later page callbacks defer this publication.
     playSound(SOUND_MENU_OPEN);
     return true;
 }
@@ -1113,6 +1121,34 @@ void Session::compatibilityBack(bool inGame) {
 
 // The frame's time and pointer. The title polls the window itself; in play the game has polled
 // it and gives the frame's time.
+gamewindow::Chat Session::chatSource() {
+    gamewindow::Chat source;
+    source.selected=[this] {const auto *node=hud.interfaceBranchRoot(uiroot::Branch::Gameplay); return node && node->visible;};
+    source.focused=[this] {return hud.interfaceHasFocus();};
+    source.capture=[this] {return controls.waiting;};
+    source.current=[this] {return s.chat;};
+    source.shift=[this] {return hud.interfaceKeyHeld(0x10);};
+    source.submit=s.submitChat;
+    return source;
+}
+void Session::routeMessages() {
+    s.input->routeInterfaceMessages(hud, [this](int delta, glm::vec2 point) {
+        if (s.inventoryWheel && s.inventoryWheel(delta, point))
+            return;
+        if (wheel(delta, point))
+            return;
+        if (s.zoomWheel)
+            s.zoomWheel(delta, point);
+    },[this](uint8_t key) {
+        std::vector<int> keys{GLFW_KEY_F1+int(key-0x70)};
+        handleInterfaceKeys(keys,true);
+    },[this](gamewindow::Target &target) {
+        if (gameplaySession || !s.chat) return;
+        target.down=[this](uint8_t key) {gamewindow::chatKeyDown(chatSource(),key);};
+        target.character=[this](uint8_t unit) {gamewindow::chatCharacter(chatSource(),unit);};
+    });
+}
+
 void Session::readInput(bool poll, double frameMs) {
     nativeBackPressed=false;
     nativeControlsHandled=false;
@@ -1127,17 +1163,7 @@ void Session::readInput(bool poll, double frameMs) {
     pointerUp = std::any_of(messages.begin(), messages.end(), [](const auto &event) {
         return event.kind == MenuInput::InterfaceMessage::LeftUp;
     });
-    s.input->routeInterfaceMessages(hud, [this](int delta, glm::vec2 point) {
-        if (s.inventoryWheel && s.inventoryWheel(delta, point))
-            return;
-        if (wheel(delta, point))
-            return;
-        if (s.zoomWheel)
-            s.zoomWheel(delta, point);
-    },[this](uint8_t key) {
-        std::vector<int> keys{GLFW_KEY_F1+int(key-0x70)};
-        handleInterfaceKeys(keys,true);
-    });
+    routeMessages();
     if (poll) {
         static const auto defaults=gameoptions::defaultControls();
         hud.updateMenuCaptions(s.controls ? *s.controls : defaults);
@@ -2189,6 +2215,62 @@ bool Session::frame() {
             return false;
         }
     }
+    if (req.page=="frontend-chat-test") {
+        bool passed=true;
+        const auto verify=[&](bool value,const char *label) {
+            log(std::string("Frontend Chat: ")+(value ? "PASS " : "FAIL ")+label); passed=passed && value;
+        };
+        verify(s.chat && !hud.interfaceHasFocus(),"retained Chat owner and null GUI focus are available");
+        if (!s.chat) {outcome.error="Frontend Chat fixture missing owner"; decide(Result::Quit); return false;}
+        auto originalChat=*s.chat; const auto originalPages=frontendPages;
+        const auto originalKeyboard=s.input->gameKeyboard;
+        const int originalCapture=controls.waiting;
+        const bool originalShown=hud.interfaceShown();
+        const auto originalSubmit=s.submitChat;
+        const auto draft=[&] {*s.chat=ChatLine{}; s.chat->keyDown(13,false); s.chat->type("kept");};
+        const auto parent=[&](bool shown) {
+            frontendPages.fill(false); titleShown=!shown;
+            hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
+        };
+        const auto key=[&](uint16_t unit) {s.input->interfaceMessages.emplace_back(MenuInput::InterfaceMessage::KeyDown,0,unit);};
+        const auto character=[&](uint16_t unit) {s.input->interfaceMessages.emplace_back(MenuInput::InterfaceMessage::Character,0,unit);};
+        controls.waiting=-1; parent(false); draft();
+        character(0x00e9); routeMessages();
+        verify(s.chat->typing() && s.chat->text()==u"kept\uffe9",
+               "hidden HUD parent still admits retained typing through the low-byte character route");
+        parent(false); draft(); key(8); routeMessages();
+        verify(s.chat->text()==u"kept" && s.chat->typing() && s.input->gameKeyboard.raw[8]==1,
+               "keydown raw publication precedes its separate HUD-parent Chat gate");
+        parent(true); draft(); controls.waiting=0; key(8); character('Z'); routeMessages();
+        verify(s.chat->text()==u"keptZ" && s.chat->typing(),
+               "Controls capture blocks key editing but does not add a character gate");
+        controls.waiting=-1; parent(true); draft(); hud.setInterfaceShown(false);
+        key(8); character('Y'); routeMessages();
+        verify(s.chat->text()==u"kepY" && s.chat->typing(),
+               "hidden manager ancestor does not replace the HUD parent's own selected integer");
+        hud.setInterfaceShown(originalShown); parent(false); draft();
+        frontendPages.fill(false); syncInterfaceState(); key(8); routeMessages();
+        const auto *hudParent=hud.interfaceBranchRoot(uiroot::Branch::Gameplay);
+        verify(hudParent && !hudParent->visible && s.chat->text()==u"kept",
+               "page callback retains the previous HUD-parent publication until the late update");
+        publishHudParent();
+        bool duringSubmit=false; std::u16string submitted;
+        s.submitChat=[&](const std::u16string &line) {
+            duringSubmit=!s.chat->typing() && s.chat->text()==u"kept";
+            submitted=line; s.chat->receive(int64_t(-1),line);
+        };
+        key(13); routeMessages();
+        verify(duringSubmit && submitted==u"kept" && !s.chat->typing() && s.chat->text().empty() && s.chat->pending()==1,
+               "late publication admits submission before draft clear and retains the pending record");
+        draft(); s.input->gameKeyboard.menu=0; key(0x1b); character(0x0100); routeMessages();
+        verify(s.input->gameKeyboard.menu==1 && s.chat->typing() && s.chat->text()==u"kept",
+               "Escape toggles its independent byte while retained typing ignores a control character");
+        *s.chat=std::move(originalChat); frontendPages=originalPages;
+        controls.waiting=originalCapture; s.submitChat=originalSubmit; s.input->gameKeyboard=originalKeyboard;
+        hud.setInterfaceShown(originalShown); hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
+        if (!passed) outcome.error="Frontend Chat ingress contract failed";
+        decide(Result::Quit); return false;
+    }
     if (req.page=="continue-play-test") {
         auto *actor=s.spawned ? s.spawned->localPlayer() : nullptr;
         if (!actor || !actor->record || !s.extracted || selectedSlot<0) {
@@ -2329,6 +2411,8 @@ bool Session::frame() {
         int queries=0;
         s.helpActor=[&] {++queries; return savedActor ? savedActor() : nullptr;};
         frontendPages.fill(false);
+        syncInterfaceState();
+        publishHudParent(); // Help hangs under the HUD parent, which only the late update selects.
         hud.setHelpShown(true);
         (void)buildScreen(false,false);
         verify(queries==0,"layout publication does not invoke the Help draw body");
@@ -2603,6 +2687,7 @@ bool Session::frame() {
         return false;
     }
 
+    publishHudParent(); // After this visit's messages and page callbacks, independent of F4/draw admission.
     Camera cam;
     Lighting light;
     glm::vec3 focus;

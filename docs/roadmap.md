@@ -8,6 +8,14 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Retained frontend Chat admission after GUI, separate key/character gates,
+  late HUD-parent publication, shared command actions and one newest-tail pending
+  record after logging. Five actual frontend/seven CPU before-failures now pass;
+  Native/Alpha Chat plus twenty-one regressions and full CPU/no skips/Vulkan/SDK
+  pass. Whole native scheduling, transport/providers and final acceptance stay open.
+  See [the checkpoint](release-status.md#frontend-chat-ingress-and-retained-pending-order---2026-11-10).
+
+
 - [x] Selected Continue/character-Select entry into the retained actor, current
   backend data, raw health/position/buffs, distinct camera/slot publications and
   one frontend-to-gameplay handoff. Eight before-failures, ten entry/four actual

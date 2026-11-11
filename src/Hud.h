@@ -523,6 +523,8 @@ class Hud {
     };
     using Screen = std::vector<ScreenItem>;
     void setInterfaceState(const uiroot::State &);
+    void publishFrontendState(const uiroot::State &); // Page callbacks leave the retained HUD parent alone.
+    void publishGameplayParent(); // Selected late five-root publication, independent of drawing.
     void setInterfaceShown(bool);
     bool interfaceShown() const { return interfaceRootShown; }
     // Help owns a selected value under the HUD; ancestor hiding does not clear it.
