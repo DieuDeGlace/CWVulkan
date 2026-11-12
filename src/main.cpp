@@ -285,6 +285,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool sessionLifetimeTest = false; // --session-lifetime-test: two actual runSession teardowns.
     bool entityLifetimeTest = false; // --entity-lifetime-test: retained selected entity fields.
     bool doorSeatTest = false; // --door-seat-test: the player's door and seat presses through the host, seen in its World.
+    bool maxHealthTest = false; // --max-health-test: health follows a maximum that changes inside the world batch.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -448,6 +449,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         else if (a == "--door-seat-test")
             doorSeatTest = true;
+        else if (a == "--max-health-test")
+            maxHealthTest = true;
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -4916,8 +4919,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (mode != progression::Mode::Pyro && haveGear && !(regionHere() == playerRegion))
                     applyGear();
             }
+            // The maximum health before the world batch (Game update phase 17); a change during
+            // the batch rescales the player's health right after it (phase 27).
+            const bool healthFollows = spawned.localPlayer() != nullptr;
+            const float maximumBefore = healthFollows ? spawned.playerMaxHealth() : 0.0f;
             spawned.think(extractedWorld, ms, hour);
             spawned.simulate(extractedWorld, ms, {}, [&] { spawned.update(extractedWorld, player.position); });
+            if (healthFollows && spawned.localPlayer()) {
+                if (const float maximum = spawned.playerMaxHealth(); maximum != maximumBefore) {
+                    logLine("Maximum health changed from " + std::to_string(maximumBefore) + " to " + std::to_string(maximum));
+                    spawned.setPlayerHealth(gamemath::rescaledHealth(spawned.playerHealth(), maximumBefore, maximum));
+                }
+            }
             {
                 auto clockHold = serverMode ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
                 const SpawnedCreatures &steppedClock = serverMode ? hostWorld : spawned;
@@ -7218,6 +7231,55 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     hostWorld.layItem(authorityTerrain(), coin.data(), spot, 1);
                 }
                 logLine("Test coins: five laid by the host");
+            }
+            if (maxHealthTest && spawned.localPlayer()) {
+                // (testing: a health buff that doubles the maximum, with health full, runs out inside
+                // the world batch; the player's health must follow the maximum down, Game update phase 27)
+                static int stage = 0;
+                static double startedAt = -1, stageAt = 0;
+                static float maximum = 0;
+                if (startedAt < 0)
+                    startedAt = time;
+                auto *me = spawned.localPlayer();
+                const auto hasBuff = [&] {
+                    for (const auto &b : me->buffs)
+                        if (b[0] == 0x16)
+                            return true;
+                    return false;
+                };
+                auto finish = [&](bool passed, const std::string &why) {
+                    logLine(std::string("Max health: ") + (passed ? "PASS " : "FAIL ") + why);
+                    if (!passed)
+                        exitCode = 1;
+                    maxHealthTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                };
+                if (stage == 0 && time - startedAt > 4.0 && spawned.playerHealth() > 0 && !hasBuff()) {
+                    maximum = spawned.playerMaxHealth();
+                    nativebuffs::Buff b{};
+                    b[0] = 0x16;
+                    const float value = 2.0f, duration = 300.0f;
+                    std::memcpy(b.data() + 4, &value, 4);
+                    std::memcpy(b.data() + 8, &duration, 4);
+                    me->buffs.push_back(b);
+                    const float doubled = spawned.playerMaxHealth();
+                    spawned.setPlayerHealth(doubled);
+                    logLine("Max health: buff added, maximum " + std::to_string(maximum) + " -> " + std::to_string(doubled) + ", health set full");
+                    stageAt = time;
+                    stage = doubled == 2 * maximum ? 1 : 3;
+                    if (stage == 3)
+                        finish(false, "the buff did not double the maximum");
+                } else if (stage == 1) {
+                    if (!hasBuff()) {
+                        const float hp = spawned.playerHealth(), most = spawned.playerMaxHealth();
+                        const std::string values = "health " + std::to_string(hp) + ", maximum " + std::to_string(most);
+                        if (most != maximum)
+                            finish(false, "the maximum did not return after the buff (" + values + ")");
+                        else
+                            finish(hp == most, "health followed the maximum down when the buff ran out (" + values + ")");
+                    } else if (time - stageAt > 5.0)
+                        finish(false, "the buff never ran out");
+                }
             }
             if (doorSeatTest && session.hostSide() && !session.guestElsewhere() && spawned.localPlayer()) {
                 // (testing: the player's use of a door, twice, and of a seat goes to the host as

@@ -8,6 +8,12 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's Game update schedule recorded; the player's health follows a maximum
+  that changes inside the world step (new/old, capped). Six CPU and one in-game
+  before-failure pass; full CPU/no skips/Vulkan/SDK and twenty-five probes pass. See
+  [the checkpoint](release-status.md#maximum-health-follows-the-world-step---2026-11-12).
+
+
 - [x] Steam's first-frame HUD parent: one at construction, written only by the late
   five-root publication, never by page changes; Chat keydown reads the previous frame's
   value. Five before-failures pass; full CPU/no skips/Vulkan/SDK and twenty-five probes pass.

@@ -1,5 +1,23 @@
 # Source review checkpoint — 2026-11-08
 
+## Maximum health follows the world step - 2026-11-12
+
+An independent original-only contract now lists every phase of Steam's Game update
+in order, with its gates. Following it, the player's maximum health is taken before
+the world step and, if the step changes it, the player's health is rescaled by the
+new maximum over the old and capped at the new maximum, before creatures' drawn
+places are updated. Before, health stayed where it was: a buff that raised the
+maximum could run out and leave health above the maximum.
+
+Six of seven CPU checks failed against a stub, and an in-game fixture whose doubling
+buff runs out inside the world step left health at twice the maximum before the
+change. Both now pass in Native and Alpha. All five targets, full required-owner CPU
+without skips, every Vulkan group, SDK independence and twenty-five Native/Alpha
+probes pass. The other compared phases that differ (notices, the frontend lamp, the
+Ring close, short-frame caps, frame-limit placement, the reward popup and some
+ordering) are recorded as open and unchanged.
+
+
 ## First-frame HUD parent - 2026-11-12
 
 Following the held first-frame contract, the HUD parent that gates Chat's keydown now

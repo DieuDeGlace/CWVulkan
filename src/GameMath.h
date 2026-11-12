@@ -14,6 +14,16 @@ inline double frameMilliseconds(double elapsedMs) {
     return std::min(elapsedMs, 1000.0);
 }
 
+// Game update phase 27 (steam-game-update-complete-phase-schedule-20261112 §3.3): after the
+// world batch, a maximum health that differs from its value before the batch rescales
+// health by new/old in binary32; only a strictly greater result is clamped to the new maximum.
+inline float rescaledHealth(float health, float before, float after) {
+    if (!(after != before))
+        return health;
+    const float scaled = health * (after / before);
+    return scaled > after ? after : scaled;
+}
+
 // Four-byte native counter updates retain the low32 bits before signed use.
 inline int32_t add32(int32_t a, int32_t b) {
     const uint32_t bits = uint32_t(a) + uint32_t(b);
