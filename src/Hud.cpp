@@ -403,13 +403,16 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
             style.lineSpacing = 1;
             bakeStyle(style, root);
         }
-    plasma::TextStyle featStyle;
-    featStyle.font = "resource1.dat";
-    featStyle.pixelSize = feattext::FONT_SIZE;
-    featStyle.strokeRadius = feattext::OUTLINE;
-    bakeStyle(featStyle, glm::mat4(1));
-    featStyle.strokeRadius = 0;
-    bakeStyle(featStyle, glm::mat4(1));
+    // textFX records: the feat (30) and the progress notices (16), each outlined then filled.
+    for (const float size : {feattext::FONT_SIZE, 16.0f}) {
+        plasma::TextStyle featStyle;
+        featStyle.font = "resource1.dat";
+        featStyle.pixelSize = size;
+        featStyle.strokeRadius = feattext::outlineRadius(size);
+        bakeStyle(featStyle, glm::mat4(1));
+        featStyle.strokeRadius = 0;
+        bakeStyle(featStyle, glm::mat4(1));
+    }
 }
 
 void Hud::prepareFrame(Renderer &renderer, VkExtent2D screen) {

@@ -29,21 +29,28 @@ std::optional<glm::vec2> project(Point physical, const scenevisibility::Projecti
     return glm::vec2(half.x * clip.x + half.x, -half.y * clip.y + half.y);
 }
 } // namespace
+Record feat(Point physical) {
+    Record record;
+    record.anchor = physical, record.text = L"FEAT!", record.colour = {.7f, .2f, 1, 1}, record.fontSize = FONT_SIZE;
+    return record;
+}
 std::vector<Label> Store::visit(const std::optional<scenevisibility::Projection> &projection, glm::vec2 viewport, int32_t elapsedMs) {
     std::vector<Label> labels;
     labels.reserve(entries.size());
     for (auto &entry : entries) {
+        const Record &record = entry.record;
         if (projection)
-            if (const auto at = project(entry.physical, *projection, viewport)) {
-                const float progress = (float)entry.age / 3000.f;
-                const float alpha = 1 - progress;
-                const glm::vec3 colour(.7f, .2f, 1);
+            if (const auto at = project(record.anchor, *projection, viewport)) {
+                const float progress = (float)entry.age / (float)LIFETIME;
+                const float alpha = record.colour.a * (1 - progress);
+                const glm::vec3 colour(record.colour);
                 const float y = at->y + progress * -100.f;
-                labels.push_back({glm::vec2(at->x + 5, y - 100.f), glm::vec4(colour, alpha), glm::vec4(colour * .1f, alpha)});
+                labels.push_back({glm::vec2(at->x + 5, y + record.offsetY), glm::vec4(colour, alpha), glm::vec4(colour * .1f, alpha),
+                                  record.text, record.fontSize, outlineRadius(record.fontSize)});
             }
         entry.age = std::bit_cast<int32_t>((uint32_t)entry.age + (uint32_t)elapsedMs);
     }
-    std::erase_if(entries, [](const Entry &entry) { return entry.age > 3000; });
+    std::erase_if(entries, [](const Entry &entry) { return entry.age > LIFETIME; });
     return labels;
 }
 } // namespace feattext

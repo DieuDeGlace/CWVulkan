@@ -8,6 +8,11 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's progress notices: "+N GOLD" and per-zone "+N PLATINUM" floating texts;
+  XP and level notices as specified (never shown in vanilla play, as in Steam). Twelve
+  CPU and one Native in-game before-failure pass; full CPU/no skips/Vulkan/SDK and the probes
+  pass. See [the checkpoint](release-status.md#gold-and-platinum-notices---2026-11-12).
+
 - [x] The frame budget sleep is measured from frame entry and taken just before
   present, on the frontend pages too; map smoothing uses the 1000 ms cap. Three CPU
   before-failures and a 1500 ms in-game budget pass; full CPU/no skips/Vulkan/SDK and

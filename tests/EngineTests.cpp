@@ -197,6 +197,7 @@ int interfaceRootTests(); // tests/InterfaceRootTests.cpp
 int worldListTests(); // tests/WorldListTests.cpp
 int hostThreadTests(); // tests/HostThreadTests.cpp
 int gameUpdateTests(); // tests/GameUpdateTests.cpp
+int progressNoticesTests(); // tests/ProgressNoticesTests.cpp
 int storedWorldDiagnosticsTests(); // tests/StoredWorldDiagnosticsTests.cpp
 int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int nativeInventoryTests(); // tests/NativeInventoryTests.cpp
@@ -9547,6 +9548,8 @@ int main(int argc, char **argv) {
         return hostThreadTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "gameupdate")
         return gameUpdateTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "notices")
+        return progressNoticesTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "worldlist")
         return worldListTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "interfaceroot")
@@ -11055,6 +11058,7 @@ int main(int argc, char **argv) {
     failures += worldListTests();
     failures += hostThreadTests();
     failures += gameUpdateTests();
+    failures += progressNoticesTests();
     failures += storedWorldDiagnosticsTests();
     failures += nativeCreaturePoseTests();
     failures += nativeInventoryTests();

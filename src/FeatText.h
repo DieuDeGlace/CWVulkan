@@ -1,28 +1,47 @@
 #pragma once
-// Received-feat display only: steam-chat-feat-presentation.md section 4.
-// Origination and the descriptor's meaning are deliberately outside this store.
+// Floating texts of the Game's textFX list: steam-chat-feat-presentation.md section 4 and
+// steam-progress-notices-and-floating-text-20261112.md sections 2-4. Origination of the feat
+// descriptor is deliberately outside this store.
 #include "SceneVisibility.h"
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 namespace feattext {
 using Point = std::array<int64_t, 3>;
-constexpr float FONT_SIZE = 30, OUTLINE = 3.75f;
+constexpr float FONT_SIZE = 30, OUTLINE = 3.75f; // the feat record
 constexpr int SOUND = 0x1f;
+constexpr int32_t LIFETIME = 3000;
+// One record (progress-notices section 2): age starts at 0, drift -100 px, X offset +5 px.
+struct Record {
+    Point anchor{};
+    std::wstring text;
+    glm::vec4 colour{};
+    float offsetY = -100, fontSize = 16;
+};
+// Outline stroke radius of a record's font (section 4 step 7): font/8, at least 3.
+inline float outlineRadius(float fontSize) {
+    const float scaled = fontSize * 0.125f;
+    return scaled > 3.0f ? scaled : 3.0f;
+}
+Record feat(Point physical);
 struct Label {
     glm::vec2 at{};
     glm::vec4 fill{}, outline{};
+    std::wstring text = L"FEAT!";
+    float fontSize = FONT_SIZE, outlineRadius = OUTLINE;
 };
 class Store {
   public:
-    void received(Point physical) { entries.push_back({physical, 0}); }
+    void received(Point physical) { append(feat(physical)); }
+    void append(Record record) { entries.push_back({std::move(record), 0}); }
     std::vector<Label> visit(const std::optional<scenevisibility::Projection> &, glm::vec2 viewport, int32_t elapsedMs);
     size_t size() const { return entries.size(); }
 
   private:
     struct Entry {
-        Point physical;
+        Record record;
         int32_t age;
     };
     std::vector<Entry> entries;

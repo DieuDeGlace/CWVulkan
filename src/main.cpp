@@ -85,6 +85,7 @@
 #include "ChatLine.h"
 #include "ChatCommands.h"
 #include "FeatText.h"
+#include "ProgressNotices.h"
 #include "IdentifyWindow.h"
 #include "UpgradeWidget.h"
 #include "VoxelCustomization.h"
@@ -235,6 +236,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     //   --pos X Y  --z Z  --hour H  --yaw R  --pitch R  --zoom Z  --capture FILE.png
     std::string capture;
     std::string captureFeat; // --capture-feat FILE: local display fixture, never an award or network send
+    std::string captureNotice; // --capture-notice FILE: the first frame that draws a progress notice (testing only)
     bool featFixtureQueued = false, featFixtureCaptured = false;
     std::vector<std::string> chatTestLines; // --chat-line TEXT: local capture fixture, never transmitted
     std::string captureSpeech; // --capture-speech FILE: first visible eight-unit NPC prefix (testing)
@@ -287,6 +289,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool doorSeatTest = false; // --door-seat-test: the player's door and seat presses through the host, seen in its World.
     bool maxHealthTest = false; // --max-health-test: health follows a maximum that changes inside the world batch.
     int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
+    bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -344,6 +347,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             capture = argv[++i];
         else if (a == "--capture-feat" && i + 1 < argc)
             captureFeat = argv[++i];
+        else if (a == "--capture-notice" && i + 1 < argc)
+            captureNotice = argv[++i];
         else if (a == "--chat-line" && i + 1 < argc)
             chatTestLines.push_back(argv[++i]);
         else if (a == "--capture-speech" && i + 1 < argc)
@@ -452,6 +457,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             doorSeatTest = true;
         else if (a == "--max-health-test")
             maxHealthTest = true;
+        else if (a == "--notice-test")
+            noticeTest = true;
         else if (a == "--frame-budget-test" && i + 1 < argc)
             frameBudgetTest = std::max(1, std::atoi(argv[++i]));
         else if (a == "--open-native-menu")
@@ -4582,6 +4589,24 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (benchmark <= 0)
             framepacing::sleepBeforePresent(frameEntryTick, budget);
     };
+    // Progress notices (steam-progress-notices-and-floating-text-20261112): the local creature's
+    // gold, current-zone platinum counter, zone, level and XP field, on the native inventory path.
+    const auto progressNow = [&]() -> std::optional<progressnotices::Progress> {
+        const uint8_t *me = spawned.localPlayer() ? spawned.playerRecord() : nullptr;
+        if (!nativeInventory || !me)
+            return {};
+        progressnotices::Progress p;
+        p.gold = playerGold;
+        std::memcpy(p.zone.data(), me + 0x150, sizeof p.zone);
+        if (const auto counter = saveGame.regionCounters.find(p.zone); counter != saveGame.regionCounters.end())
+            p.platinum = counter->second;
+        std::memcpy(&p.level, me + 0x144, sizeof p.level);
+        std::memcpy(&p.experience, me + 0x148, sizeof p.experience);
+        return p;
+    };
+    std::optional<progressnotices::BeforeWorld> noticesBefore; // phase 17 of this frame
+    int64_t noticedGold = 0, noticedPlatinum = 0; // (summed for --notice-test)
+    int noticeChatLines = 0;
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();
@@ -4604,6 +4629,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             lastSave = std::chrono::steady_clock::now();
         }
         frameEntryTick = framepacing::entryTick(), framePaced = false;
+        noticesBefore.reset();
         renderer.beforePresent = [&paceFrame] { paceFrame(true); }; // (the frontend clears its own)
         auto now = std::chrono::steady_clock::now();
         const double frameMs =
@@ -4942,6 +4968,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             // the batch rescales the player's health right after it (phase 27).
             const bool healthFollows = spawned.localPlayer() != nullptr;
             const float maximumBefore = healthFollows ? spawned.playerMaxHealth() : 0.0f;
+            if (const auto progress = progressNow()) // gold, platinum and zone (phase 17)
+                noticesBefore = progressnotices::beforeWorld(*progress);
             spawned.think(extractedWorld, ms, hour);
             spawned.simulate(extractedWorld, ms, {}, [&] { spawned.update(extractedWorld, player.position); });
             if (healthFollows && spawned.localPlayer()) {
@@ -7251,6 +7279,43 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 logLine("Test coins: five laid by the host");
             }
+            if (noticeTest && spawned.localPlayer() && nativeInventory && session.hostSide() && !session.guestElsewhere()) {
+                // (testing: three gold and two platinum coins at the player's feet, laid by the host
+                // world; every gain must arrive as its notice, with no chat line, phases 90-91)
+                static int stage = 0;
+                static double stageAt = 0;
+                static int64_t gold = 0, platinum = 0;
+                const auto platinumTotal = [&] {
+                    int64_t sum = 0;
+                    for (const auto &[zone, count] : saveGame.regionCounters)
+                        sum += count;
+                    return sum;
+                };
+                if (stage == 0 && time > 4.0) {
+                    gold = playerGold, platinum = platinumTotal(), stage = 1, stageAt = time;
+                    auto coinsHold = session.lockHost();
+                    int64_t at[3];
+                    playerUnits(at);
+                    for (int k = 0; k < 5; k++) {
+                        const nativesaves::Item coin =
+                            nativesaves::makeItem(grounditems::type::COIN, 0, k < 3 ? grounditems::COIN_MATERIAL : 0x0d);
+                        const int64_t spot[3] = {at[0] + k * 20000, at[1], at[2]};
+                        hostWorld.layItem(authorityTerrain(), coin.data(), spot, 1);
+                    }
+                    logLine("Notice test: three gold and two platinum coins laid by the host");
+                } else if (stage == 1 && time - stageAt > 8.0) {
+                    const int64_t goldGain = playerGold - gold, platinumGain = platinumTotal() - platinum;
+                    const bool passed = goldGain > 0 && platinumGain > 0 && noticedGold == goldGain && noticedPlatinum == platinumGain &&
+                                        noticeChatLines == 0;
+                    logLine(std::string("Notice test: ") + (passed ? "PASS" : "FAIL") + " gold +" + std::to_string(goldGain) + " noticed " +
+                            std::to_string(noticedGold) + ", platinum +" + std::to_string(platinumGain) + " noticed " +
+                            std::to_string(noticedPlatinum) + ", chat lines " + std::to_string(noticeChatLines));
+                    if (!passed)
+                        exitCode = 1;
+                    noticeTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+            }
             if (frameBudgetTest > 0 && spawned.localPlayer()) {
                 // (testing: with an N ms budget, every frame sleeps before present and no frame is
                 // shorter than its budget on average, frame driver §2.3)
@@ -7991,6 +8056,28 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         const auto featViewport = renderer.screenSize();
         const auto featLabels = featTexts.visit(earlySpeechProjection, {(float)featViewport.width, (float)featViewport.height},
                                                 (int32_t)std::clamp(frameMs, 0.0, 1000.0));
+        // Phases 75 and 89-92: the XP/level snapshot, then the comparisons. Records appended now are
+        // first drawn by the next frame's visit. No engine writer of level or XP runs between this
+        // snapshot and the comparison (the per-frame progress store precedes it), as in Steam.
+        if (noticesBefore)
+            if (const auto progress = progressNow(); progress && spawned.playerRecord()) {
+                feattext::Point physical;
+                std::memcpy(physical.data(), spawned.playerRecord() + 0x10, sizeof physical);
+                for (auto &notice : progressnotices::compare(*noticesBefore, progressnotices::afterCamera(*progress), *progress,
+                                                             physical, [&] { return spawned.drawWorldRandom(); })) {
+                    if (notice.sound)
+                        audio.playInterface(notice.sound);
+                    const std::string text(notice.record.text.begin(), notice.record.text.end());
+                    logLine("Notice: " + text);
+                    if (text.ends_with(" GOLD"))
+                        noticedGold += std::stoll(text.substr(1));
+                    else if (text.ends_with(" PLATINUM"))
+                        noticedPlatinum += std::stoll(text.substr(1));
+                    featTexts.append(std::move(notice.record));
+                    if (!notice.chat.empty())
+                        hud.appendChat(chat, notice.chat, notice.chatColour), ++noticeChatLines;
+                }
+            }
         // Interface/frame cleanup is independent of drawing and does not consume an item.
         mapSelection.afterInterface();
         if (nativeCustomization.edit.open && !(mapOpen && input.lastUsedPad)) {
@@ -9354,6 +9441,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 (!menusReady || menus.interfaceShown()) && hud.hasInterface()) {
                 renderer.capture(captureFeat);
                 featFixtureCaptured = true;
+            }
+            if (!captureNotice.empty() && noticedGold + noticedPlatinum > 0 &&
+                std::any_of(featLabels.begin(), featLabels.end(), [](const feattext::Label &l) { return l.text != L"FEAT!"; }) &&
+                (!menusReady || menus.interfaceShown()) && hud.hasInterface()) {
+                renderer.capture(captureNotice);
+                logLine("Notice capture: " + captureNotice);
+                captureNotice.clear();
             }
             if (menusReady && !menus.interfaceShown()) // F4: the whole interface hidden
                 hudVertices.clear();

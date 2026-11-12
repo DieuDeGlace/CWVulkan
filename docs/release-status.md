@@ -1,5 +1,24 @@
 # Source review checkpoint — 2026-11-08
 
+## Gold and platinum notices - 2026-11-12
+
+An independent original-only contract now describes Steam's progress notices. Gold
+gained during the frame shows a pale gold "+N GOLD", and platinum coins collected in
+the current zone show "+N PLATINUM", each floating up from a random point near the
+player for three seconds. The XP and level notices ("+N XP", "LEVEL UP!", their chat
+lines and the level sound) are implemented as specified, but Steam never shows them in
+ordinary play because the level is recomputed before its snapshot; CubeVulkan behaves
+the same. Gold from selling does not show a notice, as in Steam. The FEAT! text now
+shares the same floating-text records.
+
+Twelve of sixteen CPU checks failed against stubs, and an in-game fixture that lays
+three gold and two platinum coins showed no notice before the change. Every gain now
+arrives as its notice in Native, and a capture shows the text. In Alpha the fixture's
+coins are never collected, before and after the change, so it proves nothing there. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence
+and the earlier probes pass. Pyro mode keeps its own XP texts.
+
+
 ## Frame budget sleeps before present - 2026-11-12
 
 Following the held Game update schedule (section 2.3), the frame limit is now
