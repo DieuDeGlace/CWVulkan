@@ -433,10 +433,8 @@ class Session {
     bool &controlsOpen;
     bool riding() const { return titleShown || charactersShown; }
     bool front() const { return std::any_of(frontendPages.begin(),frontendPages.end(),[](bool shown){return shown;}); }
-    void syncInterfaceState() {
-        if (gameplaySession) hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
-        else hud.publishFrontendState({frontendPages,optionsOpen,controlsOpen});
-    }
+    // Page stores never publish the HUD parent; only the late update does (first-frame contract 2.2).
+    void syncInterfaceState() { hud.publishFrontendState({frontendPages,optionsOpen,controlsOpen}); }
 
     // The characters of characters.db and the list's state.
     // Each listed character's creature as the entry draws it: its recording wearing its look,
@@ -690,7 +688,8 @@ bool Session::start(std::string &error) {
     } else
         stageDefaultPlayer();
     camera.set(90, 0, 180, 8);
-    publishHudParent(); // Owned first-frame initialization; later page callbacks defer this publication.
+    // No publication here: the HUD parent keeps its value (one from construction, or the
+    // gameplay value on a return) until this visit's first late update (first-frame contract 2).
     playSound(SOUND_MENU_OPEN);
     return true;
 }
@@ -2465,6 +2464,48 @@ bool Session::frame() {
             return false;
         }
     }
+    if (req.page=="first-frame-hud-test") {
+        // Explicit owned fixture (steam-first-frame-hud-parent-and-interface-update-order-20261112.md):
+        // messages are queued directly, no OS input injection. It runs before this visit's
+        // first message drain and late publication.
+        bool passed=true;
+        const auto verify=[&](bool value,const char *label) {
+            log(std::string("First-frame HUD: ")+(value ? "PASS " : "FAIL ")+label); passed=passed && value;
+        };
+        if (!s.chat) {outcome.error="First-frame HUD fixture missing Chat owner"; decide(Result::Quit); return false;}
+        const auto originalChat=*s.chat; const auto originalPages=frontendPages;
+        const auto originalKeyboard=s.input->gameKeyboard; const int originalCapture=controls.waiting;
+        const bool originalGameplay=gameplaySession;
+        const auto *parent=hud.interfaceBranchRoot(uiroot::Branch::Gameplay);
+        const auto key=[&](uint16_t unit) {s.input->interfaceMessages.emplace_back(MenuInput::InterfaceMessage::KeyDown,0,unit);};
+        verify(parent && parent->visible && titleShown,
+               "before the first late publication the HUD parent keeps its default one while the title is shown (2.1)");
+        *s.chat=ChatLine{}; controls.waiting=-1;
+        key(13); routeMessages();
+        verify(s.chat->typing() && s.chat->text().empty(),
+               "a first-drain Enter passes all three gates and opens typing on the title page (example 2)");
+        publishHudParent();
+        verify(parent && !parent->visible, "the first late publication writes zero while the title root is shown (example 1)");
+        key(13); routeMessages();
+        verify(s.chat->typing(), "a later title Enter fails the HUD-parent gate and typing stays open (example 2)");
+        // Return direction in a gameplay-owned visit: the title store is a callback, not a publication.
+        gameplaySession=true; frontendPages.fill(false); hud.setInterfaceState({frontendPages,optionsOpen,controlsOpen});
+        *s.chat=ChatLine{};
+        titleShown=true; syncInterfaceState();
+        verify(parent && parent->visible, "return to title retains the gameplay value one until the late update (2.3)");
+        // The frontend Chat owner takes the following key (a gameplay-owned visit leaves Chat
+        // keys to the game's frame); the parent is still unpublished.
+        gameplaySession=false;
+        key(13); routeMessages();
+        verify(s.chat->typing(), "an Enter after the title callback in the same drain still opens typing (example 5)");
+        publishHudParent();
+        verify(parent && !parent->visible, "that iteration's publication then writes zero (example 5)");
+        *s.chat=originalChat; frontendPages=originalPages; gameplaySession=originalGameplay;
+        controls.waiting=originalCapture; s.input->gameKeyboard=originalKeyboard;
+        syncInterfaceState(); publishHudParent();
+        if (!passed) outcome.error="First-frame HUD-parent contract failed";
+        decide(Result::Quit); return false;
+    }
     if (req.page=="frontend-chat-test") {
         bool passed=true;
         const auto verify=[&](bool value,const char *label) {
@@ -2982,8 +3023,13 @@ bool Session::frame() {
     handleClick(false);
     s.input->finishPointerCallbacks();
     s.input->clear();
-    if (done)
+    // Steam's frame driver runs on every iteration after the drain, so the late publication
+    // also follows a callback that ends this visit; only quitting leaves before it (contract 3, 5).
+    if (done) {
+        if (outcome.action != Result::Quit)
+            publishHudParent();
         return false;
+    }
     if (glfwWindowShouldClose(s.window)) {
         decide(Result::Quit);
         return false;

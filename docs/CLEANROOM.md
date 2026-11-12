@@ -1,5 +1,22 @@
 # Clean-room process
 
+## First-frame HUD parent - 2026-11-12
+
+Following the held first-frame contract, the HUD parent that gates Chat's keydown now
+keeps its value until the interface's late publication, as in Steam. It starts at one,
+so an Enter in the very first message drain opens Chat on the title page; the first
+late publication then writes zero. Page changes never publish it: after a return to
+the title a key still sees the gameplay value until that frame's publication. The
+publication also runs on the frame whose callback ends a menu visit, except on quit.
+Before, the engine published at the start of every visit and on in-game page changes.
+
+Five of seven first-frame checks failed before the change and all seven pass in both
+profiles now. All five targets, full required-owner CPU without skips, every Vulkan
+group, SDK independence and twenty-five Native/Alpha probes pass. The fixture queues
+messages directly; OS message timing during loading and the contract's unproved items
+remain open.
+
+
 ## Doors and seats through the host thread - 2026-11-11
 
 A new `--door-seat-test` fixture checks that, with the host thread running, the

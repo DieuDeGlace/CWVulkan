@@ -8,6 +8,12 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's first-frame HUD parent: one at construction, written only by the late
+  five-root publication, never by page changes; Chat keydown reads the previous frame's
+  value. Five before-failures pass; full CPU/no skips/Vulkan/SDK and twenty-five probes pass.
+  See [the checkpoint](release-status.md#first-frame-hud-parent---2026-11-12).
+
+
 - [x] Door and seat uses verified through the host thread: a runtime fixture shows the
   player's presses reach the host and return to the viewed World in two frames, and
   host creatures still swing doors. Alpha and remote guests unrun.
