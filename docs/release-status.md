@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Doors and seats through the host thread - 2026-11-11
+
+A new `--door-seat-test` fixture checks that, with the host thread running, the
+player's door and seat uses still reach the host and come back. It hands the player
+two door uses and one seat use as the use key hands them. Each reaches the host as a
+packet-9 interaction; the host applies it and sends the changed zone's objects back.
+The viewed World shows the door opened, shut again and the seat taken, each after the
+minimum two frames, and the host World holds the same state. Over a 70 s Native
+session, host-side creatures swung doors on their own (counted in the host World,
+which the creature log line now reports). The Alpha start has no town nearby, so no
+Alpha door scene was run; aiming and OS input are not exercised, and remote guests
+are still unrun.
+
+
 ## Host and AI threads - 2026-11-11
 
 Following the held host-threading contract, the in-process host now runs as Steam

@@ -284,6 +284,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool sampledMenuTest = false; // --sampled-menu-test: actual retained-level/consumer admission.
     bool sessionLifetimeTest = false; // --session-lifetime-test: two actual runSession teardowns.
     bool entityLifetimeTest = false; // --entity-lifetime-test: retained selected entity fields.
+    bool doorSeatTest = false; // --door-seat-test: the player's door and seat presses through the host, seen in its World.
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -445,6 +446,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             directPlay = true;
             forceMenu = false; // Explicit fixture bypasses title selection on both visits.
         }
+        else if (a == "--door-seat-test")
+            doorSeatTest = true;
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -7216,6 +7219,118 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 logLine("Test coins: five laid by the host");
             }
+            if (doorSeatTest && session.hostSide() && !session.guestElsewhere() && spawned.localPlayer()) {
+                // (testing: the player's use of a door, twice, and of a seat goes to the host as
+                // interactions, and the host's changed zone comes back to the viewed World)
+                namespace ni = nativeinteract;
+                static int stage = 0;
+                static double stageAt = 0, startedAt = -1;
+                static int frames = 0, stageFrame = 0;
+                ++frames;
+                struct Spot { int zx = 0, zy = 0, index = -1; };
+                static Spot door, seat;
+                static uint8_t doorBefore = 0;
+                if (startedAt < 0)
+                    startedAt = time;
+                auto viewed = [&](const Spot &at) -> const nativeai::Object * {
+                    const auto *objects = spawned.zoneObjects(at.zx, at.zy);
+                    return objects && at.index >= 0 && at.index < (int)objects->size() ? &(*objects)[(size_t)at.index] : nullptr;
+                };
+                auto press = [&](const Spot &at) {
+                    nativeai::Interaction in = ni::fresh(ni::USE_OBJECT);
+                    std::memcpy(in.data() + ni::ZONE_X, &at.zx, 4);
+                    std::memcpy(in.data() + ni::ZONE_Y, &at.zy, 4);
+                    std::memcpy(in.data() + ni::OBJECT, &at.index, 4);
+                    spawned.localPlayer()->interactions.push_back(in); // as the use key hands it over
+                    stageAt = time, stageFrame = frames;
+                };
+                auto finish = [&](bool passed, const std::string &why) {
+                    logLine(std::string("Door seat: ") + (passed ? "PASS " : "FAIL ") + why);
+                    if (!passed)
+                        exitCode = 1;
+                    doorSeatTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                };
+                const auto type = [](const nativeai::Object &o) { int32_t t; std::memcpy(&t, o.data() + ni::OBJECT_TYPE, 4); return t; };
+                const auto user = [](const nativeai::Object &o) { int64_t u; std::memcpy(&u, o.data() + ni::OBJECT_USER, 8); return u; };
+                const auto isDoor = [&](const nativeai::Object &o) {
+                    const int32_t t = type(o);
+                    return o[ni::OBJECT_ITEM] == 0 && (t == 3 || t == 4 || t == 5 || t == 6 || t == 0x54 || t == 0x55 || t == 0x56 || t == 0x57 || t == 0x69);
+                };
+                const auto isSeat = [&](const nativeai::Object &o) {
+                    const int32_t t = type(o);
+                    return user(o) == 0 && (t == 0x1c || t == 0x1e || t == 0x1f || t == 0x73);
+                };
+                const auto took = [&] { return std::to_string((int)((time - stageAt) * 1000)) + " ms, " + std::to_string(frames - stageFrame) + " frames"; };
+                const bool late = time - stageAt > 3.0;
+                if (stage == 0 && time - startedAt > 4.0) {
+                    // The nearest zones (in rings) with a plain door and with a free seat, the same
+                    // list on both sides.
+                    int64_t dots[3];
+                    std::memcpy(dots, spawned.localPlayer()->record + worldgen::creature::POSITION, sizeof dots);
+                    const auto zoneOfDots = [](int64_t v) { const int32_t b = terrainray::blockCoordinate(v); return b / 64 - (b < 0 && b % 64 != 0 ? 1 : 0); };
+                    const int px = zoneOfDots(dots[0]), py = zoneOfDots(dots[1]);
+                    door = seat = {};
+                    std::map<int32_t, int> seen; // (for a failure: the object types near the player)
+                    for (int r = 0; r <= 6 && (door.index < 0 || seat.index < 0); r++)
+                        for (int dx = -r; dx <= r; dx++)
+                            for (int dy = -r; dy <= r; dy++) {
+                                if (std::max(std::abs(dx), std::abs(dy)) != r)
+                                    continue;
+                                const auto *objects = spawned.zoneObjects(px + dx, py + dy);
+                                for (int i = 0; objects && i < (int)objects->size(); i++) {
+                                    ++seen[type((*objects)[(size_t)i])];
+                                    if (door.index < 0 && isDoor((*objects)[(size_t)i]))
+                                        door = {px + dx, py + dy, i};
+                                    if (seat.index < 0 && isSeat((*objects)[(size_t)i]))
+                                        seat = {px + dx, py + dy, i};
+                                }
+                            }
+                    if (door.index < 0 || seat.index < 0) {
+                        if (time - startedAt > 30.0)
+                            {
+                            std::string types;
+                            for (const auto &[t, n] : seen)
+                                types += " " + std::to_string(t) + "x" + std::to_string(n);
+                            finish(false, std::string("no zone within 6 of the player has a ") + (door.index < 0 ? "plain door" : "free seat") + "; types seen:" + types);
+                        }
+                    } else {
+                        logLine("Door seat: door " + std::to_string(door.index) + " in zone " + std::to_string(door.zx) + ", " + std::to_string(door.zy) +
+                                ", seat " + std::to_string(seat.index) + " in zone " + std::to_string(seat.zx) + ", " + std::to_string(seat.zy) +
+                                (session.hostThreadRunning() ? " (host thread running)" : " (no host thread)"));
+                        doorBefore = (*viewed(door))[ni::OBJECT_STATE];
+                        press(door);
+                        stage = 1;
+                    }
+                } else if (stage == 1) {
+                    if (viewed(door) && (*viewed(door))[ni::OBJECT_STATE] != doorBefore) {
+                        logLine(std::string("Door seat: PASS the first press ") + (doorBefore ? "opened" : "shut") + " the door in the viewed World after " + took());
+                        press(door);
+                        stage = 2;
+                    } else if (late)
+                        finish(false, "the first door press never reached the viewed World");
+                } else if (stage == 2) {
+                    if (viewed(door) && (*viewed(door))[ni::OBJECT_STATE] == doorBefore) {
+                        logLine("Door seat: PASS the second press put the door back after " + took());
+                        press(seat);
+                        stage = 3;
+                    } else if (late)
+                        finish(false, "the second door press never reached the viewed World");
+                } else if (stage == 3) {
+                    if (viewed(seat) && user(*viewed(seat)) == spawned.playerId()) {
+                        logLine("Door seat: PASS the seat's user is the player in the viewed World after " + took());
+                        auto hold = session.lockHost();
+                        const auto hostObject = [&](const Spot &at) -> const nativeai::Object * {
+                            const auto *objects = hostWorld.zoneObjects(at.zx, at.zy);
+                            return objects && at.index < (int)objects->size() ? &(*objects)[(size_t)at.index] : nullptr;
+                        };
+                        const nativeai::Object *hostDoor = hostObject(door), *hostSeat = hostObject(seat);
+                        finish(hostDoor && hostSeat && (*hostDoor)[ni::OBJECT_STATE] == doorBefore && user(*hostSeat) == spawned.playerId(),
+                               "the host World holds the same door and seat");
+                    } else if (late)
+                        finish(false, "the seat press never reached the viewed World");
+                }
+            }
             // The hits this player made (the host applies them), shown as the game shows numbers.
             for (const cwnet::DamageRecord &number : spawned.events().damageNumbers) {
                 int64_t attacker, target, at[3];
@@ -7352,12 +7467,20 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         " along a path), " + std::to_string(spawned.afterPlayer()) + " after the player" + (spawned.roadTrips() ? ", " + std::to_string(spawned.roadTrips()) + " packs on the roads" : std::string()));
                 size_t using_ = 0, started = 0;
                 spawned.abilities(using_, started);
+                // The World that performs interactions and runs AI counts them: the host's when here.
+                const auto objectCounts = [&] {
+                    const bool host = session.hostSide() && !session.guestElsewhere();
+                    auto hold = host ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
+                    const SpawnedCreatures &counted = host ? hostWorld : spawned;
+                    return std::to_string(counted.objectUses()) + " zone objects taken up (" + std::to_string(counted.doorSwings()) +
+                           " door swings; " + std::to_string(counted.interactionsHanded()) + " interactions waiting over the AI's ticks" +
+                           (host ? ", in the host World)" : ")");
+                };
                 logLine("Creatures: " + std::to_string(using_) + " in an ability (" + std::to_string(started) +
                         " started since the last count); " + (nativePlayer ? "the player started " + std::to_string(spawned.playerMoves()) + " moves and landed " + std::to_string(spawned.playerStrikes()) + " hits (drawn in " + std::to_string(spawned.playerParts()) + " parts, " + std::to_string(spawned.heroicShouts()) + " heroic shouts, " + std::to_string(spawned.summonsMade()) + " summoned); " : std::string()) + std::to_string(spawnedHits) + " hits on the player (" +
                         std::to_string((int)std::round(spawnedDamage)) + " damage), " + std::to_string(spawnedBlocked) +
                         " blocked, " + std::to_string(spawned.killed()) + " creatures killed by others; " +
-                        std::to_string(spawned.objectUses()) + " zone objects taken up (" + std::to_string(spawned.doorSwings()) +
-                        " door swings; " + std::to_string(spawned.interactionsHanded()) + " interactions waiting over the AI's ticks)");
+                        objectCounts());
                 if (const std::string a = spawned.angriest(extractedWorld, player.position); !a.empty())
                     logLine("Creatures: nearest after the player: " + a);
                 double tx, ty;

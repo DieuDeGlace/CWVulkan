@@ -8,6 +8,12 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Door and seat uses verified through the host thread: a runtime fixture shows the
+  player's presses reach the host and return to the viewed World in two frames, and
+  host creatures still swing doors. Alpha and remote guests unrun.
+  See [the checkpoint](release-status.md#doors-and-seats-through-the-host-thread---2026-11-11).
+
+
 - [x] Steam's host and AI threads: a 32 ms host thread, a 40 ms AI thread for the host
   World only, no AI on a mirror World, and host results posted to the game thread.
   Ten before-failures pass; full CPU/no skips/Vulkan/SDK and twenty-three probes pass;
