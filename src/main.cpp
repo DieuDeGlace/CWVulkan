@@ -9531,6 +9531,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             // UI state can change even when the HUD could not be loaded.
             sampleInterfaceSound();
         }
+        // The music (sound.md §3; Game update phases 85-86, before the frame-budget sleep and
+        // present, steam-reward-popup-and-music-order §4.1): the place's track, or the shrine's,
+        // the spirit world's, a boss's or the success track, with the game's waits and fades.
+        const auto updateMusic = [&] {
+            int64_t here[3];
+            playerUnits(here);
+            const int32_t bx = worldgen::floorDots(here[0]), by = worldgen::floorDots(here[1]), bz = worldgen::floorDots(here[2]);
+            constexpr uint8_t SHRINE_FLAG = 0x20; // the block's flag byte (+5)
+            bool shrineLoaded = false;
+            const bool shrine = (extractedWorld.gameBlock(bx, by, bz, &shrineLoaded)[5] & SHRINE_FLAG) && shrineLoaded;
+            soundrules::MusicPlace place = musicPlaceAt(bx, by, shrine);
+            float strength = 0, left = 0;
+            constexpr int SPIRIT_WORLD_BUFF = 0x13;
+            place.spiritWorld = spawned.playerRecord() && spawned.playerBuff(SPIRIT_WORLD_BUFF, strength, left);
+            place.boss = spawnedReady && spawned.bossAfterPlayer();
+            audio.updateMusic(place, std::min(frameMs, 1000.0));
+        };
         if (serverMode) {
             // A dedicated server draws nothing: it keeps the world running at about
             // 60 updates a second and reports who is playing now and then.
@@ -9539,6 +9556,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 reported = time;
                 logLine("Server: " + std::to_string(session.guests()) + " player(s) connected");
             }
+            updateMusic();
             // The shared world is saved as the game's host saves it, once a minute (native-saves.md §5.5).
             static double worldSaved = 0;
             if (spawnedReady && !hostWorld.physicalSourceState() && savesWritable && saves.isOpen() && time - worldSaved > 60) {
@@ -9561,6 +9579,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             publishCharacterSaveGates();
             sourceStateScope.unlock(); // draw uses immutable meshes and copied source inputs
+            updateMusic();
             renderer.frame(camera, lighting, player.position, time, opaque, water);
         }
         if (spawnedReady) {
@@ -9574,17 +9593,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             int64_t here[3];
             playerUnits(here);
             const int32_t bx = worldgen::floorDots(here[0]), by = worldgen::floorDots(here[1]), bz = worldgen::floorDots(here[2]);
-            // The music (sound.md §3): the place's track, or the shrine's, the spirit world's,
-            // a boss's or the success track, with the game's waits and fades.
-            constexpr uint8_t SHRINE_FLAG = 0x20; // the block's flag byte (+5)
-            bool shrineLoaded = false;
-            const bool shrine = (extractedWorld.gameBlock(bx, by, bz, &shrineLoaded)[5] & SHRINE_FLAG) && shrineLoaded;
-            soundrules::MusicPlace place = musicPlaceAt(bx, by, shrine);
-            float strength = 0, left = 0;
-            constexpr int SPIRIT_WORLD_BUFF = 0x13;
-            place.spiritWorld = spawned.playerRecord() && spawned.playerBuff(SPIRIT_WORLD_BUFF, strength, left);
-            place.boss = spawnedReady && spawned.bossAfterPlayer();
-            audio.updateMusic(place, std::min(frameMs, 1000.0));
 
             // The ambient sounds (§4): the emitters of the 3 x 3 zones around the player, or
             // around where it flies to (ability 0x9c, +0x1b0).

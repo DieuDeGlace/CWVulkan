@@ -175,9 +175,11 @@ bool Audio::successRunning() const { return s->successMs > 0; }
 const std::string &Audio::currentTrack() const { return s->music.current; }
 
 void Audio::updateMusic(const MusicPlace &place, double dtMs) {
+    // Phase 85: both timers count down in whole ms before the track is chosen and the music
+    // engine reads them, on the title pages as in the world.
     dtMs = std::min(dtMs, 1000.0);
-    s->successMs = (float)std::max(0.0, (double)s->successMs - dtMs);
-    s->duckMs = (float)std::max(0.0, (double)s->duckMs - dtMs);
+    s->successMs = countDown(s->successMs, dtMs);
+    s->duckMs = countDown(s->duckMs, dtMs);
     MusicPlace here = place;
     here.success = s->successMs > 0;
     musicStep(dtMs, chooseTrack(here, s->music.current));
@@ -186,7 +188,7 @@ void Audio::updateMusic(const MusicPlace &place, double dtMs) {
 void Audio::menuMusic(double dtMs) {
     MusicPlace menu;
     menu.menu = true;
-    musicStep(dtMs, chooseTrack(menu, s->music.current));
+    updateMusic(menu, dtMs);
 }
 
 void Audio::musicStep(double dtMs, const Track &wanted) {

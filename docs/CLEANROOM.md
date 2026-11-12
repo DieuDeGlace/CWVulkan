@@ -1,5 +1,18 @@
 # Clean-room process
 
+## Music order and reward popup - 2026-11-12
+
+An independent original-only contract answers the reward popup and music questions.
+Steam's reward popup never appears: nothing in the game ever queues one, so CubeVulkan's
+lack of it already matches. Steam updates the music inside the game update, before the
+frame-limit sleep and present; CubeVulkan did it after present, in the world and on the
+title pages. It now runs before present in both, and the title pages count the success and
+instrument timers down as the world does. Those timers and the track's play counter are
+whole milliseconds in Steam, truncated every frame; CubeVulkan kept fractions. Three CPU
+checks failed against a stub and pass now. All five targets, full required-owner CPU without
+skips, every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Night lamp - 2026-11-12
 
 Steam lights the player's lamp by night (before 05:00 or from 19:00, by the world's time

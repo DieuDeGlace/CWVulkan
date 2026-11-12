@@ -8,6 +8,10 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's music order: updated before present (world and title pages) with whole-ms
+  timers; the reward popup never fires in Steam, so none is shown. See
+  [the checkpoint](release-status.md#music-order-and-reward-popup---2026-11-12).
+
 - [x] Steam's night lamp (Game update phase 10): lit by night on the title, selection and
   creation pages and during eagle flights, from the world's time of day. See
   [the checkpoint](release-status.md#night-lamp---2026-11-12).

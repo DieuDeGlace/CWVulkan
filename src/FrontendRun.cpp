@@ -3091,14 +3091,14 @@ bool Session::frame() {
             ++layer.before.items;
     }
     s.renderer->overlay(std::move(overlay), std::move(items), std::move(layers));
+    if (s.audio) // the music runs in the Game update, before the sleep and present (phases 85-86)
+        s.audio->menuMusic(dtMs);
     s.renderer->beforePresent = [this] { paceFrame(); };
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
     s.renderer->beforePresent = nullptr;
     paceFrame(); // a frame the renderer did not present still takes its budget sleep
-    if (s.audio) {
-        s.audio->menuMusic(dtMs);
+    if (s.audio)
         s.audio->update();
-    }
     if (!req.capture.empty() && req.clickAfter < 0) {
         settled = s.world->pendingCount() == 0 && seconds >= req.captureAfter ? settled + 1 : 0;
         if (settled == 30)

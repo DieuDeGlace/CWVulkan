@@ -165,6 +165,10 @@ Track chooseTrack(const MusicPlace &place, const std::string &current) {
     return t;
 }
 
+float countDown(float timer, double ms) {
+    return (float)std::max(0.0, std::trunc((double)timer - ms));
+}
+
 float easeMusicVolume(float volume, float target, double dtMs, float rate) {
     const float share = gamemath::blendFactor(std::min(dtMs, 1000.0), rate);
     return volume + (target - volume) * share;
@@ -186,7 +190,7 @@ void stepMusic(MusicState &s, const Track &wanted, bool playing, double dtMs, co
         s.firstDifference = true;
         return;
     }
-    s.playedMs = (float)((double)s.playedMs + dtMs);
+    s.playedMs = (float)std::trunc((double)s.playedMs + dtMs); // whole ms (§4.4)
     if (!differs) {
         // Place music fades after five minutes unless the player loops it.
         s.threshold = wanted.placeMusic && !options.loop ? PLACE_FADE_MS : s.playedMs + PLACE_FADE_MS;

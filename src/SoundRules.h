@@ -66,6 +66,10 @@ float cappedPitch(float pitch);
 // The final volume of a sound (§2 step 6): the soundVolume option (percent) times the asked
 // volume times the attenuation, as a fraction.
 float finalVolume(int soundOption, float volume, float attenuation);
+// The success and duck timers each Game update (steam-reward-popup-and-music-order §4.2):
+// truncated toward zero after subtracting the capped ms, never below zero.
+float countDown(float timer, double ms);
+
 // Whether a sound number is an instrument's note, which ducks the music (§3.5).
 bool isInstrument(int number);
 // Native fixed differences narrow to float before conversion to blocks.

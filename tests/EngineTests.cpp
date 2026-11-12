@@ -8986,6 +8986,15 @@ static void soundRules() {
         recovering.volume = 0.015f;
         stepMusic(recovering, Track{"old", false, 0}, true, 16, options, false, 0);
         CHECK(about(recovering.volume, easeMusicVolume(0.015f, 0.5f, 16, 0.001f)));
+        // steam-reward-popup-and-music-order §4.2/§4.4: the timers and the play counter are
+        // whole milliseconds, truncated toward zero every frame.
+        CHECK(countDown(60000, 16.6) == 59983.0f && countDown(5, 16.6) == 0.0f && countDown(100, 0) == 100.0f);
+        CHECK(countDown(6000, 0.4) == 5999.0f); // a fraction of a millisecond still truncates
+        MusicState counted;
+        stepMusic(counted, place, false, 16, options, false, 0);
+        stepMusic(counted, place, true, 16.6, options, false, 0);
+        stepMusic(counted, place, true, 16.6, options, false, 0);
+        CHECK(counted.playedMs == 32); // trunc(trunc(16.6) + 16.6)
     }
     { // §4: the staggered ticks.
         CHECK(staggeredTick(999, 2, 0, 1000) && !staggeredTick(0, 999, 0, 1000) && staggeredTick(0, 1000, 0, 1000));
@@ -9548,6 +9557,10 @@ int main(int argc, char **argv) {
         return hostThreadTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "gameupdate")
         return gameUpdateTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "soundrules") {
+        soundRules();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "notices")
         return progressNoticesTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "worldlist")
