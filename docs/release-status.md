@@ -1,5 +1,23 @@
 # Source review checkpoint — 2026-11-08
 
+## Frame budget sleeps before present - 2026-11-12
+
+Following the held Game update schedule (section 2.3), the frame limit is now
+measured from a millisecond tick taken when the frame starts and its sleep is taken
+just before the frame is presented, with the timer resolution raised to 1 ms. Before,
+CubeVulkan slept after presenting. The title, character and creation pages share
+the same frame driver in Steam, so they now take the same sleep; before they had no
+limit. Map presentation smoothing now steps by the 1000 ms-capped interval (section
+2.4, phase 81) instead of a 100 ms cap.
+
+Three of six CPU checks of the budget rule failed against a stub. An in-game fixture
+with a 1500 ms budget, above the start-up frame time, shows every frame sleeping
+just before present and the mean interval reaching the budget in Native and Alpha.
+All five targets, full required-owner CPU without skips, every Vulkan group, SDK
+independence and the earlier probes pass. The Ring closing while the full map is
+open was checked and already matches Steam, where the Interface update hides it.
+
+
 ## Maximum health follows the world step - 2026-11-12
 
 An independent original-only contract now lists every phase of Steam's Game update

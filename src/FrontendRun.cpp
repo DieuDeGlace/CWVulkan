@@ -419,6 +419,15 @@ class Session {
     }
     double dtMs = 0;
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
+    // The frame driver's entry tick and its one budget sleep before present (schedule §2.3);
+    // the title, selection and creation pages share the gameplay frame driver.
+    uint32_t frameEntryTick = 0;
+    bool framePaced = false;
+    void paceFrame() {
+        if (!framePaced && s.options)
+            framepacing::sleepBeforePresent(frameEntryTick, uint32_t(s.options->shortestFrameMs()));
+        framePaced = true;
+    }
     double seconds = 0, nextSteamCheck = 0;
     bool testClicked = false; // Request::clickAfter's click was made
     uint32_t previewPanelMesh = 0;
@@ -1218,6 +1227,7 @@ void Session::readInput(bool poll, double frameMs) {
         static const auto defaults=gameoptions::defaultControls();
         hud.updateMenuCaptions(s.controls ? *s.controls : defaults);
     }
+    frameEntryTick = framepacing::entryTick(), framePaced = false;
     const auto now = std::chrono::steady_clock::now();
     dtMs = poll ? gamemath::frameMilliseconds(
                       gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count()))
@@ -3083,7 +3093,10 @@ bool Session::frame() {
             ++layer.before.items;
     }
     s.renderer->overlay(std::move(overlay), std::move(items), std::move(layers));
+    s.renderer->beforePresent = [this] { paceFrame(); };
     s.renderer->frame(cam, light, focus, seconds, opaque, water);
+    s.renderer->beforePresent = nullptr;
+    paceFrame(); // a frame the renderer did not present still takes its budget sleep
     if (s.audio) {
         s.audio->menuMusic(dtMs);
         s.audio->update();

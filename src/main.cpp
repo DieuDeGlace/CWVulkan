@@ -286,6 +286,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool entityLifetimeTest = false; // --entity-lifetime-test: retained selected entity fields.
     bool doorSeatTest = false; // --door-seat-test: the player's door and seat presses through the host, seen in its World.
     bool maxHealthTest = false; // --max-health-test: health follows a maximum that changes inside the world batch.
+    int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -451,6 +452,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             doorSeatTest = true;
         else if (a == "--max-health-test")
             maxHealthTest = true;
+        else if (a == "--frame-budget-test" && i + 1 < argc)
+            frameBudgetTest = std::max(1, std::atoi(argv[++i]));
         else if (a == "--open-native-menu")
             openNativeMenu = true;
         else if (a == "--open-system-menu")
@@ -4565,6 +4568,20 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     }
 
     int mouseChatOrderStage = 0;
+    // The frame driver's entry tick and its one budget sleep, taken just before present
+    // (steam-game-update-complete-phase-schedule-20261112 §2.3); --benchmark runs unpaced.
+    uint32_t frameEntryTick = framepacing::entryTick();
+    bool framePaced = false;
+    uint64_t pacedFrames = 0, pacedBeforePresent = 0; // (counted for --frame-budget-test)
+    const auto paceFrame = [&](bool presenting) {
+        if (framePaced)
+            return;
+        framePaced = true;
+        ++pacedFrames, pacedBeforePresent += presenting;
+        const uint32_t budget = frameBudgetTest > 0 ? uint32_t(frameBudgetTest) : uint32_t(gameOptions.shortestFrameMs());
+        if (benchmark <= 0)
+            framepacing::sleepBeforePresent(frameEntryTick, budget);
+    };
     while (!glfwWindowShouldClose(window)) {
         auto sourceStateScope = extractedWorld.lockSourceState();
         previewSources.ground.reset();
@@ -4586,6 +4603,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             saveProgress();
             lastSave = std::chrono::steady_clock::now();
         }
+        frameEntryTick = framepacing::entryTick(), framePaced = false;
+        renderer.beforePresent = [&paceFrame] { paceFrame(true); }; // (the frontend clears its own)
         auto now = std::chrono::steady_clock::now();
         const double frameMs =
             gamemath::millisecondsFromNanoseconds(std::chrono::duration_cast<std::chrono::nanoseconds>(now - previous).count());
@@ -7232,6 +7251,28 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 logLine("Test coins: five laid by the host");
             }
+            if (frameBudgetTest > 0 && spawned.localPlayer()) {
+                // (testing: with an N ms budget, every frame sleeps before present and no frame is
+                // shorter than its budget on average, frame driver §2.3)
+                static double startedAt = -1;
+                static uint32_t startTick = 0;
+                static uint64_t startFrames = 0, startBeforePresent = 0;
+                if (startedAt < 0 && time > 4.0)
+                    startedAt = time, startTick = frameEntryTick, startFrames = pacedFrames, startBeforePresent = pacedBeforePresent;
+                if (startedAt >= 0 && time - startedAt > 6.0) {
+                    const uint64_t frames = pacedFrames - startFrames, before = pacedBeforePresent - startBeforePresent;
+                    const double mean = frames ? double(frameEntryTick - startTick) / double(frames) : 0.0;
+                    const bool passed = frames > 0 && before == frames && mean >= frameBudgetTest - 0.5;
+                    char line[200];
+                    std::snprintf(line, sizeof line, "Frame budget: %s %llu frames, %llu slept before present, mean %.2f ms for a %d ms budget",
+                                  passed ? "PASS" : "FAIL", (unsigned long long)frames, (unsigned long long)before, mean, frameBudgetTest);
+                    logLine(line);
+                    if (!passed)
+                        exitCode = 1;
+                    frameBudgetTest = 0;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+            }
             if (maxHealthTest && spawned.localPlayer()) {
                 // (testing: a health buff that doubles the maximum, with health full, runs out inside
                 // the world batch; the player's health must follow the maximum down, Game update phase 27)
@@ -8147,7 +8188,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     mapcontrol::fromBlocks(targetMapPosition), [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y, 0); }));
             mapPosition = mapcontrol::blocks(
                 mapcontrol::ease(mapcontrol::fromBlocks(mapPosition), mapcontrol::fromBlocks(targetMapPosition), frameMs));
-            const double stepMs = dt * 1000.0;
+            const double stepMs = gamemath::frameMilliseconds(frameMs); // phase 81: the 1000 ms-capped interval
             const VkExtent2D size = renderer.screenSize();
             const float w = (float)std::max(1u, size.width), h = (float)std::max(1u, size.height);
             const glm::vec2 cornerPosition(1.0f - h * 0.3f / w * minimapScale, 1.0f - minimapScale * 0.2f);
@@ -9473,12 +9514,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         if (sourceStateScope.owns_lock()) sourceStateScope.unlock();
         if (serverMode) Sleep(16);
-        // The FPS limit (minTimeStep): a frame lasts at least that many milliseconds. CPU usage
-        // REDUCED: what the game does differently is not specified (frontend-options.md §1.2);
+        // The FPS limit (minTimeStep) already slept before present (paceFrame); a frame that
+        // presented nothing (server mode, a lost swapchain) takes it here. CPU usage REDUCED:
+        // what the game does differently is not specified (frontend-options.md §1.2);
         // CubeVulkan gives the processor up for a millisecond each frame.
+        paceFrame(false);
         if (benchmark <= 0) {
-            if (const int shortest = gameOptions.shortestFrameMs(); shortest > 0)
-                std::this_thread::sleep_until(now + std::chrono::milliseconds(shortest));
             if (gameOptions.cpuPerformance == 0)
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

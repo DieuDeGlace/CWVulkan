@@ -240,6 +240,9 @@ class Renderer {
     void release(uint32_t id);
     void frame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time,
                const std::vector<DrawItem> &opaque, const std::vector<DrawItem> &water);
+    // Runs once per frame() after submission, immediately before presentation (the frame
+    // driver's budget sleep precedes present, steam-game-update-complete-phase-schedule §2.3).
+    std::function<void()> beforePresent;
     const std::string &deviceName() const { return gpuName; }
     unsigned drawsLastFrame() const { return lastDraws; }
     // Last completed CPU camera phase, independent of swapchain presentation.

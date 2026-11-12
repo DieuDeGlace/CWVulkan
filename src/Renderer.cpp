@@ -2372,6 +2372,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         capturePath.clear();
     }
 
+    if (beforePresent)
+        beforePresent();
     VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present.waitSemaphoreCount = 1;
     present.pWaitSemaphores = &renderDone[imageIndex];

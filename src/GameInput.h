@@ -44,6 +44,13 @@ class GamepadFrame {
     bool suppressJump = false;
 };
 
+// The frame driver's pacing (steam-game-update-complete-phase-schedule-20261112 §2.3): the
+// millisecond tick at driver entry, and the frame-budget sleep taken just before present.
+namespace framepacing {
+uint32_t entryTick();
+void sleepBeforePresent(uint32_t entry, uint32_t budget);
+} // namespace framepacing
+
 class GameInput {
   public:
     // The application already sampled devices before motion/XInput. Consumers see

@@ -19,5 +19,12 @@ int gameUpdateTests() {
     check(rescaledHealth(-10, 100, 200) == -20, "health below zero keeps its sign; there is no lower clamp (phase 27)");
     const float ratio = 7.0f / 3.0f;
     check(rescaledHealth(2, 3, 7) == 2 * ratio, "the ratio is taken in binary32 before the multiply (phase 27)");
+    using gamemath::frameBudgetSleep;
+    check(frameBudgetSleep(1005, 1000, 16) == 11, "a frame below its budget sleeps for the rest of it (section 2.3 step 8)");
+    check(frameBudgetSleep(1016, 1000, 16) == 0, "a frame that spent exactly its budget does not sleep (section 2.3 step 8)");
+    check(frameBudgetSleep(1040, 1000, 16) == 0, "a frame over its budget does not sleep or carry the excess (section 2.3 step 8)");
+    check(frameBudgetSleep(2, 0xFFFFFFF0u, 20) == 2, "the spent time wraps in 32 bits across a tick rollover (section 2.3 step 8)");
+    check(frameBudgetSleep(1000, 1000, 0) == 0, "a zero budget never sleeps (section 2.3 step 8)");
+    check(frameBudgetSleep(1000, 1000, 33) == 33, "a frame that spent no whole millisecond sleeps the whole budget (section 2.3 step 8)");
     return failures;
 }

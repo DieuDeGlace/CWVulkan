@@ -8,6 +8,12 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The frame budget sleep is measured from frame entry and taken just before
+  present, on the frontend pages too; map smoothing uses the 1000 ms cap. Three CPU
+  before-failures and a 1500 ms in-game budget pass; full CPU/no skips/Vulkan/SDK and
+  the probes pass. See
+  [the checkpoint](release-status.md#frame-budget-sleeps-before-present---2026-11-12).
+
 - [x] Steam's Game update schedule recorded; the player's health follows a maximum
   that changes inside the world step (new/old, capped). Six CPU and one in-game
   before-failure pass; full CPU/no skips/Vulkan/SDK and twenty-five probes pass. See

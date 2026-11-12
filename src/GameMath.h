@@ -14,6 +14,14 @@ inline double frameMilliseconds(double elapsedMs) {
     return std::min(elapsedMs, 1000.0);
 }
 
+// Frame driver (steam-game-update-complete-phase-schedule-20261112 §2.3 steps 2 and 8): the
+// millisecond tick taken at driver entry; before present, a frame that has spent less than
+// the dword budget sleeps for the difference. Tick differences wrap in 32 bits.
+inline uint32_t frameBudgetSleep(uint32_t tick, uint32_t entry, uint32_t budget) {
+    const uint32_t spent = tick - entry;
+    return spent < budget ? budget - spent : 0;
+}
+
 // Game update phase 27 (steam-game-update-complete-phase-schedule-20261112 §3.3): after the
 // world batch, a maximum health that differs from its value before the batch rescales
 // health by new/old in binary32; only a strictly greater result is clamped to the new maximum.

@@ -1,5 +1,6 @@
 // The game's controls read each frame, from docs/specs/frontend-options.md §4.1.
 #include "GameInput.h"
+#include "GameMath.h"
 #include "NativeCrt.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -180,3 +181,20 @@ void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool mapMode, bool
         // Panel scrolling preserves the previous turn pair, including on a neutral sample.
     }
 }
+
+namespace framepacing {
+// steam-game-update-complete-phase-schedule-20261112 §2.3: the tick and the budget sleep are
+// each taken with the 1 ms timer resolution raised, then restored.
+uint32_t entryTick() {
+    timeBeginPeriod(1);
+    const uint32_t tick = timeGetTime();
+    timeEndPeriod(1);
+    return tick;
+}
+void sleepBeforePresent(uint32_t entry, uint32_t budget) {
+    timeBeginPeriod(1);
+    if (const uint32_t ms = gamemath::frameBudgetSleep(timeGetTime(), entry, budget))
+        Sleep(ms);
+    timeEndPeriod(1);
+}
+} // namespace framepacing
