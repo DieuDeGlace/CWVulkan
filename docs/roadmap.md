@@ -8,6 +8,10 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Alpha coin fixture: the notice and test-coin fixtures wait for the host world's zone,
+  so Alpha collects the laid coins (the published build collected none). See
+  [the checkpoint](release-status.md#alpha-coin-fixture---2026-11-12).
+
 - [x] Steam's progress notices: "+N GOLD" and per-zone "+N PLATINUM" floating texts;
   XP and level notices as specified (never shown in vanilla play, as in Steam). Twelve
   CPU and one Native in-game before-failure pass; full CPU/no skips/Vulkan/SDK and the probes

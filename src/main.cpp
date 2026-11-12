@@ -7266,7 +7266,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 });
                 logLine(line);
             }
-            if (testCoins >= 0 && time >= testCoins && session.hostSide() && !session.guestElsewhere()) {
+            // (testing: the host world takes a laid item only into a loaded zone, and its zones
+            // load some seconds into the session, later in Alpha than in Native)
+            const auto hostHoldsPlayerZone = [&] {
+                int64_t at[3];
+                playerUnits(at);
+                bool loaded = false;
+                auto hold = session.lockHost();
+                authorityTerrain().gameBlock((at[0] >> 22) * 64, (at[1] >> 22) * 64, 0, &loaded);
+                return loaded;
+            };
+            if (testCoins >= 0 && time >= testCoins && session.hostSide() && !session.guestElsewhere() && hostHoldsPlayerZone()) {
                 testCoins = -1; // (testing: five coins at the player's feet, laid by the host world)
                 auto coinsHold = session.lockHost();
                 const nativesaves::Item coin = nativesaves::makeItem(grounditems::type::COIN, 0, grounditems::COIN_MATERIAL);
@@ -7291,7 +7301,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         sum += count;
                     return sum;
                 };
-                if (stage == 0 && time > 4.0) {
+                if (stage == 0 && time > 4.0 && hostHoldsPlayerZone()) {
                     gold = playerGold, platinum = platinumTotal(), stage = 1, stageAt = time;
                     auto coinsHold = session.lockHost();
                     int64_t at[3];
@@ -7302,14 +7312,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         const int64_t spot[3] = {at[0] + k * 20000, at[1], at[2]};
                         hostWorld.layItem(authorityTerrain(), coin.data(), spot, 1);
                     }
-                    logLine("Notice test: three gold and two platinum coins laid by the host");
-                } else if (stage == 1 && time - stageAt > 8.0) {
+                    logLine("Notice test: three gold and two platinum coins laid by the host at " + std::to_string(time) + " s");
+                } else if (stage == 1 && ((playerGold - gold >= 3 && platinumTotal() - platinum >= 2) || time - stageAt > 30.0)) {
+                    // (each coin is its own queued pick-up interaction with the host, so the check
+                    // waits for all five, up to 30 s)
                     const int64_t goldGain = playerGold - gold, platinumGain = platinumTotal() - platinum;
-                    const bool passed = goldGain > 0 && platinumGain > 0 && noticedGold == goldGain && noticedPlatinum == platinumGain &&
+                    const bool passed = goldGain == 3 && platinumGain == 2 && noticedGold == goldGain && noticedPlatinum == platinumGain &&
                                         noticeChatLines == 0;
                     logLine(std::string("Notice test: ") + (passed ? "PASS" : "FAIL") + " gold +" + std::to_string(goldGain) + " noticed " +
                             std::to_string(noticedGold) + ", platinum +" + std::to_string(platinumGain) + " noticed " +
-                            std::to_string(noticedPlatinum) + ", chat lines " + std::to_string(noticeChatLines));
+                            std::to_string(noticedPlatinum) + ", chat lines " + std::to_string(noticeChatLines) + ", after " +
+                            std::to_string((int)(time - stageAt)) + " s");
                     if (!passed)
                         exitCode = 1;
                     noticeTest = false;

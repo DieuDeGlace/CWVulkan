@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## Alpha coin fixture - 2026-11-12
+
+The notice fixture's coins were never collected in the Alpha world. The cause was the
+fixture, not the game: it laid the coins at 4 s, before the host world had loaded the
+player's zone, and Steam's drop rule discards an item laid in a zone that is not loaded.
+The host loads that zone about 7 s into a Native session and 12 to 16 s into an Alpha
+one. The coin fixtures now wait for the host's zone, and the notice check waits for all
+five coins (up to 30 s). The published build failed in Alpha (nothing collected); Alpha
+and Native now both collect three gold and two platinum with every notice. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence and
+the Native/Alpha probes pass.
+
+
 ## Gold and platinum notices - 2026-11-12
 
 An independent original-only contract now describes Steam's progress notices. Gold
