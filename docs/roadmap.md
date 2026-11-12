@@ -8,6 +8,10 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's night lamp (Game update phase 10): lit by night on the title, selection and
+  creation pages and during eagle flights, from the world's time of day. See
+  [the checkpoint](release-status.md#night-lamp---2026-11-12).
+
 - [x] Alpha coin fixture: the notice and test-coin fixtures wait for the host world's zone,
   so Alpha collects the laid coins (the published build collected none). See
   [the checkpoint](release-status.md#alpha-coin-fixture---2026-11-12).

@@ -26,5 +26,17 @@ int gameUpdateTests() {
     check(frameBudgetSleep(2, 0xFFFFFFF0u, 20) == 2, "the spent time wraps in 32 bits across a tick rollover (section 2.3 step 8)");
     check(frameBudgetSleep(1000, 1000, 0) == 0, "a zero budget never sleeps (section 2.3 step 8)");
     check(frameBudgetSleep(1000, 1000, 33) == 33, "a frame that spent no whole millisecond sleeps the whole budget (section 2.3 step 8)");
+    using gamemath::nightLamp;
+    check(nightLamp(0x40, true, 0, 82800000.0f) == 0x41, "a frontend page lights the lamp at 23:00, keeping the other toggles (phase 10)");
+    check(nightLamp(0x41, true, 0, 43200000.0f) == 0x40, "a frontend page puts the lamp out at noon (phase 10)");
+    check(nightLamp(0, true, 0, 17999998.0f) == 1, "just before 05:00 is night (phase 10)");
+    check(nightLamp(1, true, 0, 18000000.0f) == 0, "05:00 itself is day: the night test is strictly below 18,000,000 (phase 10)");
+    check(nightLamp(1, true, 0, 68399992.0f) == 0, "the binary32 just below 19:00 is day (phase 10)");
+    check(nightLamp(0, true, 0, 68400000.0f) == 1, "19:00 itself is night: at least 68,400,000 (phase 10)");
+    check(nightLamp(0, false, 0x9c, 0.0f) == 1, "an eagle flight lights the lamp at midnight outside the frontend (phase 10)");
+    check(nightLamp(1, false, 0x9c, 43200000.0f) == 0, "an eagle flight puts the lamp out by day (phase 10)");
+    check(nightLamp(1, false, 0x9d, 43200000.0f) == 1, "ability 0x9D does not drive the lamp (phase 10)");
+    check(nightLamp(0, false, 0, 0.0f) == 0 && nightLamp(1, false, 0, 43200000.0f) == 1,
+          "in ordinary play the lamp is the player's own toggle (phase 10)");
     return failures;
 }

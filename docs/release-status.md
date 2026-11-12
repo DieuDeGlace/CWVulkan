@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## Night lamp - 2026-11-12
+
+Steam lights the player's lamp by night (before 05:00 or from 19:00, by the world's time
+of day) while the title, character selection or character creation is shown, and during
+an eagle flight, and puts it out by day; otherwise the lamp is the player's own toggle.
+CubeVulkan also drove it on the world pages and never during a flight. Both now follow
+Game update phase 10 through one rule read before the world step. Eight of ten CPU checks
+failed against a stub, and an in-game flight with the lamp set the wrong way stayed wrong
+at 23:00 and at noon; Native and Alpha flights now set and clear it. All five targets,
+full required-owner CPU without skips, every Vulkan group, SDK independence and the
+Native/Alpha probes pass.
+
+
 ## Alpha coin fixture - 2026-11-12
 
 The notice fixture's coins were never collected in the Alpha world. The cause was the

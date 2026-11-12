@@ -290,6 +290,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool maxHealthTest = false; // --max-health-test: health follows a maximum that changes inside the world batch.
     int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
+    bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -459,6 +460,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             maxHealthTest = true;
         else if (a == "--notice-test")
             noticeTest = true;
+        else if (a == "--lamp-test")
+            lampTest = true;
         else if (a == "--frame-budget-test" && i + 1 < argc)
             frameBudgetTest = std::max(1, std::atoi(argv[++i]));
         else if (a == "--open-native-menu")
@@ -4964,6 +4967,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (mode != progression::Mode::Pyro && haveGear && !(regionHere() == playerRegion))
                     applyGear();
             }
+            // The lamp by night during an eagle flight, from the world's time of day before the
+            // world batch (Game update phase 10; the frontend pages are the frontend's).
+            if (spawned.localPlayer()) {
+                float abilityMs = 0;
+                const uint8_t ability = (uint8_t)spawned.playerAbility(abilityMs);
+                const uint16_t toggles = (uint16_t)spawned.playerToggles();
+                const uint16_t lit = gamemath::nightLamp(toggles, false, ability, spawned.timeOfDay());
+                if (lit != toggles)
+                    spawned.setPlayerToggle(1, (lit & 1) != 0);
+            }
             // The maximum health before the world batch (Game update phase 17); a change during
             // the batch rescales the player's health right after it (phase 27).
             const bool healthFollows = spawned.localPlayer() != nullptr;
@@ -7326,6 +7339,38 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (!passed)
                         exitCode = 1;
                     noticeTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+            }
+            if (lampTest && spawned.localPlayer() && session.hostSide() && !session.guestElsewhere()) {
+                // (testing: with the lamp set the wrong way for the time of day, an eagle flight
+                // must set it by night and clear it by day, while ordinary play leaves it, phase 10)
+                static int stage = 0;
+                static double stageAt = 0;
+                static bool expected = false;
+                float abilityMs = 0;
+                const int ability = spawned.playerAbility(abilityMs);
+                const float dayMs = spawned.timeOfDay();
+                if (stage == 0 && time > 5.0 && hostHoldsPlayerZone()) {
+                    expected = dayMs < 18000000.0f || dayMs >= 68400000.0f;
+                    spawned.setPlayerToggle(1, !expected);
+                    stage = 1, stageAt = time;
+                } else if (stage == 1 && time - stageAt > 1.0) {
+                    const bool kept = ((spawned.playerToggles() & 1) != 0) == !expected; // ordinary play: untouched
+                    const int32_t x = (int32_t)std::floor(player.position.x) + (int32_t)(extractedWorld.originDotsX() >> 16) + 400;
+                    const int32_t y = (int32_t)std::floor(player.position.y) + (int32_t)(extractedWorld.originDotsY() >> 16) + 400;
+                    const bool off = spawned.startFlight(x, y);
+                    logLine(std::string("Lamp test: before the flight the lamp ") + (kept ? "kept" : "CHANGED") + "; flight " +
+                            (off ? "off" : "not started") + " at " + std::to_string(dayMs) + " ms of day");
+                    stage = kept && off ? 2 : 3, stageAt = time;
+                } else if ((stage == 2 && ability == 0x9c && abilityMs > 1000.0f) || (stage >= 2 && time - stageAt > 30.0) || stage == 3) {
+                    const bool lit = (spawned.playerToggles() & 1) != 0;
+                    const bool passed = stage == 2 && ability == 0x9c && lit == expected;
+                    logLine(std::string("Lamp test: ") + (passed ? "PASS" : "FAIL") + " ability " + std::to_string(ability) + " at " +
+                            std::to_string(dayMs) + " ms of day, lamp " + (lit ? "on" : "off") + ", expected " + (expected ? "on" : "off"));
+                    if (!passed)
+                        exitCode = 1;
+                    lampTest = false;
                     glfwSetWindowShouldClose(window, 1);
                 }
             }

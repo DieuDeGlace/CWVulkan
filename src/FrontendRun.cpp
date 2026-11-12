@@ -219,8 +219,6 @@ constexpr int SOUND_MENU_OPEN = 0x56, SOUND_MENU_CLOSE = 0x57, SOUND_MENU_SELECT
 // The ability of rising on the eagle, and the record fields the title sets on the player.
 constexpr uint8_t EAGLE_RISE = 0x9d;
 constexpr size_t ABILITY = 0x68, TOGGLES = 0x128, HEALTH = 0x180, FLIGHT_POINT = 0x1b0, FLIGHT_START = 0x1b8;
-constexpr uint32_t LANTERN_BIT = 0x1;
-constexpr float NIGHT_FROM = 19.0f, NIGHT_UNTIL = 5.0f; // the lantern on the title (hours)
 
 // Buttons and sizes the spec gives (GUI units).
 constexpr glm::vec2 SELECT_SIZE{200, 30}, DELETE_TOGGLE_SIZE{20, 20}, DELETE_SIZE{300, 30}, BACK_SIZE{200, 40};
@@ -1654,6 +1652,7 @@ void Session::confirmCreation() {
 void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vector<DrawItem> &opaque,
                         std::vector<DrawItem> &water) {
     if (s.spawned && s.steam) s.spawned->publishPlayerAccount(accountProvider);
+    const float timeOfDayBefore = hour * 3600000.0f; // the lamp reads the clock before this frame's advance (phase 10)
     hour = std::fmod(hour + (float)(dtMs / 60000.0) * s.minutesPerSecond / 60.0f * 60.0f, 24.0f);
     s.world->advanceClock(dtMs); // (the plants sway by the world's clock, vegetation-wind.md §2)
     glm::vec3 lookAt;
@@ -1669,13 +1668,12 @@ void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vec
             std::memcpy(r + FLIGHT_POINT, block, sizeof block);
             std::memcpy(r + FLIGHT_START, position, sizeof position);
         }
-        uint32_t toggles;
-        std::memcpy(&toggles, r + TOGGLES, 4);
-        if (front()) {
-            const bool night = hour < NIGHT_UNTIL || hour >= NIGHT_FROM;
-            toggles = night ? toggles | LANTERN_BIT : toggles & ~LANTERN_BIT;
-        }
-        std::memcpy(r + TOGGLES, &toggles, 4);
+        // The lamp by night on the title, selection and creation pages (not the world pages)
+        // or during an eagle flight (Game update phase 10).
+        uint16_t toggles;
+        std::memcpy(&toggles, r + TOGGLES, sizeof toggles);
+        toggles = gamemath::nightLamp(toggles, titleShown || charactersShown || creationShown, r[ABILITY], timeOfDayBefore);
+        std::memcpy(r + TOGGLES, &toggles, sizeof toggles);
         float health;
         std::memcpy(&health, r + HEALTH, 4);
         if (health <= 0)

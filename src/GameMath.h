@@ -32,6 +32,18 @@ inline float rescaledHealth(float health, float before, float after) {
     return scaled > after ? after : scaled;
 }
 
+// Game update phase 10 (steam-game-update-complete-phase-schedule-20261112 §3.1): while the
+// title, character selection or character creation is shown, or the player's ability is
+// 0x9C (an eagle flight), bit 0x0001 of the toggles (+0x128) follows the world's time of day
+// (+0x0C, binary32 ms) read before this frame's world batch: set below 18,000,000 or at
+// 68,400,000 and above, clear otherwise. In any other state the toggles are left as they are.
+inline uint16_t nightLamp(uint16_t toggles, bool frontendShown, uint8_t ability, float timeOfDayMs) {
+    if (!frontendShown && ability != 0x9c)
+        return toggles;
+    const bool night = timeOfDayMs < 18000000.0f || timeOfDayMs >= 68400000.0f;
+    return night ? (uint16_t)(toggles | 1u) : (uint16_t)(toggles & ~1u);
+}
+
 // Four-byte native counter updates retain the low32 bits before signed use.
 inline int32_t add32(int32_t a, int32_t b) {
     const uint32_t bits = uint32_t(a) + uint32_t(b);
