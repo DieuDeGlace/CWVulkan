@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Pickup requests and success music - 2026-11-12
+
+An independent original-only contract describes Steam's success-music triggers and how
+ground coins are requested. Each world step, Steam counts down a dropped item's pickup delay
+in the zones near players, on the host as well; CubeVulkan's host never did, so every resend
+restarted the delay. A walked-over coin is requested every frame unless the same request is
+still waiting; CubeVulkan asked only once a second. Both now match. The success track now
+starts as in Steam: when a treasure, artifact, special item or glyph is received while the
+player is free to hold it up, when a reward chest's hold pose is taken, and when the place the
+player stood in becomes completed; shop purchases, crafting, identifying and taming no longer
+start it. Seven CPU checks failed against stubs and pass now. All five targets, full
+required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha
+probes pass.
+
+
 ## Music order and reward popup - 2026-11-12
 
 An independent original-only contract answers the reward popup and music questions.

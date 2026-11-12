@@ -178,6 +178,47 @@ int objectClockTests() {
           steamscenery::queue(wetBounds, 1) == steamscenery::Queue::WaterOpaque &&
           steamscenery::queue(wetBounds, 0.5f) == steamscenery::Queue::WaterFaded,
           "water flag retains its own opaque and faded queues before water");
+    { // Ground items in the selected zones: delay +0xc8 and timer +0xcc (loot-pickup.md §1 steps 2-3).
+        auto ground = [](float delay, int32_t timer) {
+            nativesaves::Record r{};
+            std::memcpy(r.data() + 0xc8, &delay, 4);
+            std::memcpy(r.data() + 0xcc, &timer, 4);
+            return r;
+        };
+        auto delayOf = [](const nativesaves::Record &r) { float f; std::memcpy(&f, r.data() + 0xc8, 4); return f; };
+        auto timerOf = [](const nativesaves::Record &r) { int32_t t; std::memcpy(&t, r.data() + 0xcc, 4); return t; };
+        zonestates::ZoneStates items;
+        auto &here = items.load({0, 0}, {ground(600, 10), ground(10, 0), ground(0, 3)}, {});
+        auto &far = items.load({4, 0}, {ground(600, 10)}, {});
+        items.advanceGroundItems(16, {{0, 0}});
+        check(delayOf(here.groundItems[0]) == 584 && timerOf(here.groundItems[0]) == 0,
+              "a laid item's delay counts down and its timer truncates toward zero (trunc(10 - 16) clamps to 0)");
+        check(delayOf(here.groundItems[1]) == 0.0f, "a delay that passes zero is set to exactly 0");
+        check(delayOf(here.groundItems[2]) == 0.0f && timerOf(here.groundItems[2]) == 0, "a timer of 3 after 16 ms is 0");
+        check(delayOf(far.groundItems[0]) == 600 && timerOf(far.groundItems[0]) == 10, "zones beyond three of a player are not advanced");
+        check(!here.groundItemsChanged, "the countdown raises no change notice");
+        auto &frac = items.load({1, 1}, {ground(600, 10)}, {});
+        items.advanceGroundItems(2.5f, {{0, 0}});
+        check(timerOf(frac.groundItems[0]) == 7 && delayOf(frac.groundItems[0]) == 597.5f, "the timer truncates trunc(10 - 2.5) = 7");
+    }
+    { // Walk-over pick-ups already pending are not queued twice (pickup-rate §B.1 step 7).
+        auto pick = [](int zx, int zy, int index, uint8_t type) {
+            nativeai::Interaction in = nativeinteract::fresh(nativeinteract::PICK_UP);
+            in[nativeinteract::ITEM] = type;
+            std::memcpy(in.data() + nativeinteract::ZONE_X, &zx, 4);
+            std::memcpy(in.data() + nativeinteract::ZONE_Y, &zy, 4);
+            std::memcpy(in.data() + nativeinteract::OBJECT, &index, 4);
+            return in;
+        };
+        check(nativeinteract::samePickUp(pick(1, -2, 3, 12), pick(1, -2, 3, 12)), "the same coin request is pending");
+        check(!nativeinteract::samePickUp(pick(1, -2, 3, 12), pick(1, -2, 4, 12)) &&
+                  !nativeinteract::samePickUp(pick(1, -2, 3, 12), pick(1, -2, 3, 14)) &&
+                  !nativeinteract::samePickUp(pick(1, -2, 3, 12), pick(0, -2, 3, 12)),
+              "another index, item or zone is a different request");
+        nativeai::Interaction use = pick(1, -2, 3, 12);
+        use[nativeinteract::KIND] = 5;
+        check(!nativeinteract::samePickUp(pick(1, -2, 3, 12), use), "only kind-7 records match");
+    }
     std::puts("object clocks and light shafts: selection, reversal, personal state, geometry, fade and native model light checked");
     return failures;
 }

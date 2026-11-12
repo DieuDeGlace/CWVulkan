@@ -1903,6 +1903,12 @@ static void groundItemRules() {
         CHECK(receive(keeper, boat, boat, 1, 0, at, region, 0, true).holdUpAbility == 0);
         CHECK(receive(keeper, boat, boat, 1, 0, at, region, 2, true).holdUpAbility == 0x79);
         CHECK(receive(keeper, boat, boat, 1, 0, at, region, 2, false).holdUpAbility == 0);
+        // steam-success-music-triggers-and-pickup-rate §A.2: the receipt branch starts the success
+        // music when the ability test passes, even for a boat that is not held up.
+        CHECK(receive(keeper, boat, boat, 1, 0, at, region, 0, true).success);
+        CHECK(!receive(keeper, boat, boat, 1, 0, at, region, 2, false).success);
+        CHECK(receive(keeper, treasure, sword, 1, 0, at, region, 0, true).success);
+        CHECK(!receive(keeper, coin, coin, 1, 0, at, region, 0, true).success && !receive(keeper, bag, bag, 1, 0, at, region, 0, true).success);
     }
     // Dialog pages: give and take.
     {
@@ -9557,6 +9563,10 @@ int main(int argc, char **argv) {
         return hostThreadTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "gameupdate")
         return gameUpdateTests() ? 1 : 0;
+    if (argc == 2 && std::string(argv[1]) == "grounditems") {
+        groundItemRules();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "soundrules") {
         soundRules();
         return failures ? 1 : 0;

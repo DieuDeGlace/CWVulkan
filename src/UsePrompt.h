@@ -242,6 +242,7 @@ void applyToPlayer(const Prompt &prompt, const Scene &scene, nativeai::Creature 
 // A chest's item held up (spec 3.7.3 step 4): ability 0x7c with the item, if the player's
 // ability is 0 or over. A received vehicle is held up with its own ability (loot-pickup.md §4).
 constexpr int HOLD_UP_ABILITY = 0x7c;
-void holdUp(const Scene &scene, const Item &item, int ability = HOLD_UP_ABILITY);
+// Returns whether the pose was taken (the ability test passed).
+bool holdUp(const Scene &scene, const Item &item, int ability = HOLD_UP_ABILITY);
 
 } // namespace useprompt

@@ -1896,7 +1896,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     std::vector<FloatingText> texts;
     const glm::u8vec4 PURPLE{166, 102, 255, 255}; // PyroProgression's colour (0.65, 0.40, 1.0)
     struct Loot {
-        double asked = -10; // when this player last asked its host for it (a pick-up interaction)
         glm::vec3 at;
         std::optional<useprompt::FixedPoint> fixedPosition; // retained native ground tuple
         double age = 0;
@@ -2664,8 +2663,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     };
     // What a pouch holds, now this player's: gold, and its item into the inventory.
     auto collect = [&](const Loot &l) {
-        if (l.hasItem && l.item.category == 24) // a special item obtained: the success track (sound.md §3.3)
-            audio.startSuccess();
         if (l.hasItem && l.item.category == grounditems::type::GOLD_BAG) { // its money value (use-prompt.md §3.7.3)
             const int coins = grounditems::moneyValue(nativeplayer::item(l.item.category, l.item.id, l.item.material, l.item.rarity,
                                                                          l.item.modifier, l.item.region[0], l.item.region[1]));
@@ -2740,8 +2737,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (nativeInventory) {
             nativeInventory->inventory.add(raw, quantity);
             refreshBagAndThumb();
-            if (it.category == 24)
-                audio.startSuccess();
             texts.push_back({player.position + glm::vec3(0, 0, 3.1f), bagName(it, itemName(it)), {255, 255, 255, 255}});
         } else
             for (int count = 0; count < quantity; ++count)
@@ -3027,6 +3022,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 useprompt::holdUp(holder, adapted, r.holdUpAbility);
             }
         }
+        if (r.success) // the success music (phase 67, 0xAAD54)
+            audio.startSuccess();
         if (nativeInventory) {
             if (inventoryOpen && craftingOpen)
                 rebuildCrafting();
@@ -3883,7 +3880,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     mouseTrade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
     mouseTrade.announce = [&](const auto &item) {
         const auto view = Gear::fromRecord(item);
-        if (view.category == 24) audio.startSuccess();
         texts.push_back({player.position + glm::vec3(0, 0, 3.1f), bagName(view, itemName(view)), {255, 255, 255, 255}});
     };
     mouseTrade.sound = [&](int sound) {
@@ -4608,6 +4604,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         return p;
     };
     std::optional<progressnotices::BeforeWorld> noticesBefore; // phase 17 of this frame
+    std::optional<missions::Cell> missionCellBefore; // phase 23: the player's place cell before the world batch
+    bool missionCellCompleted = false;               // and whether it was completed then
     int64_t noticedGold = 0, noticedPlatinum = 0; // (summed for --notice-test)
     int noticeChatLines = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -4633,6 +4631,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         frameEntryTick = framepacing::entryTick(), framePaced = false;
         noticesBefore.reset();
+        missionCellBefore.reset();
         renderer.beforePresent = [&paceFrame] { paceFrame(true); }; // (the frontend clears its own)
         auto now = std::chrono::steady_clock::now();
         const double frameMs =
@@ -4983,6 +4982,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             const float maximumBefore = healthFollows ? spawned.playerMaxHealth() : 0.0f;
             if (const auto progress = progressNow()) // gold, platinum and zone (phase 17)
                 noticesBefore = progressnotices::beforeWorld(*progress);
+            if (const uint8_t *me = spawned.playerRecord()) { // phase 23 (the success music, phase 28)
+                int64_t at[2];
+                std::memcpy(at, me + worldgen::creature::POSITION, sizeof at);
+                missionCellBefore = missions::placeOf(at[0], at[1]);
+                missionCellCompleted = missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, *missionCellBefore);
+            }
             spawned.think(extractedWorld, ms, hour);
             spawned.simulate(extractedWorld, ms, {}, [&] { spawned.update(extractedWorld, player.position); });
             if (healthFollows && spawned.localPlayer()) {
@@ -6824,17 +6829,14 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (it->zoneItem[0] != INT_MIN && session.clientGame()) {
                     // A zone's ground item is its world's: picking it up is an interaction (kind 7)
                     // the host performs; its pick-up notice then gives it to this player
-                    // (zone-object-interaction.md §6, loot-pickup.md §4). Asked again after a second
-                    // while it is still there.
-                    if (time - it->asked > 1.0) {
-                        it->asked = time;
-                        nativeai::Interaction in = nativeinteract::fresh(nativeinteract::PICK_UP);
-                        std::memcpy(in.data() + nativeinteract::ITEM, it->raw.data(), it->raw.size());
-                        std::memcpy(in.data() + nativeinteract::ZONE_X, &it->zoneItem[0], 4);
-                        std::memcpy(in.data() + nativeinteract::ZONE_Y, &it->zoneItem[1], 4);
-                        std::memcpy(in.data() + nativeinteract::OBJECT, &it->zoneItem[2], 4);
-                        spawned.queueInteraction(spawned.playerId(), in);
-                    }
+                    // (zone-object-interaction.md §6, loot-pickup.md §4). Asked every frame while it
+                    // is still there, unless the same request is still pending (pickup-rate §B.1, B.3).
+                    nativeai::Interaction in = nativeinteract::fresh(nativeinteract::PICK_UP);
+                    std::memcpy(in.data() + nativeinteract::ITEM, it->raw.data(), it->raw.size());
+                    std::memcpy(in.data() + nativeinteract::ZONE_X, &it->zoneItem[0], 4);
+                    std::memcpy(in.data() + nativeinteract::ZONE_Y, &it->zoneItem[1], 4);
+                    std::memcpy(in.data() + nativeinteract::OBJECT, &it->zoneItem[2], 4);
+                    spawned.queuePickUp(in);
                     ++it;
                     continue;
                 }
@@ -7326,7 +7328,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         hostWorld.layItem(authorityTerrain(), coin.data(), spot, 1);
                     }
                     logLine("Notice test: three gold and two platinum coins laid by the host at " + std::to_string(time) + " s");
-                } else if (stage == 1 && ((playerGold - gold >= 3 && platinumTotal() - platinum >= 2) || time - stageAt > 30.0)) {
+                }
+                if (stage == 1) { // when each coin arrives (pick-up rate evidence)
+                    static int64_t seen = -1;
+                    const int64_t got = (playerGold - gold) + (platinumTotal() - platinum);
+                    if (got != seen) {
+                        if (seen >= 0)
+                            logLine("Notice test: " + std::to_string(got) + " coin(s) after " + std::to_string((int)((time - stageAt) * 1000)) + " ms");
+                        seen = got;
+                    }
+                }
+                if (stage == 1 && ((playerGold - gold >= 3 && platinumTotal() - platinum >= 2) || time - stageAt > 30.0)) {
                     // (each coin is its own queued pick-up interaction with the host, so the check
                     // waits for all five, up to 30 s)
                     const int64_t goldGain = playerGold - gold, platinumGain = platinumTotal() - platinum;
@@ -7628,10 +7640,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 missions::Effects fx;
                 const size_t finishedBefore = saveGame.finishedMissions.size(), solvedBefore = saveGame.solvedMissions.size();
                 if (missions::update(w, fx)) {
-                    if (saveGame.finishedMissions.size() != finishedBefore || saveGame.solvedMissions.size() != solvedBefore) {
+                    if (saveGame.finishedMissions.size() != finishedBefore || saveGame.solvedMissions.size() != solvedBefore)
                         logLine("Missions: " + std::to_string(saveGame.finishedMissions.size()) + " finished, " +
                                 std::to_string(saveGame.solvedMissions.size()) + " solved");
-                        audio.startSuccess(); // a mission completed: the success track (sound.md §3.3)
+                    // Phase 28: the success track only when the cell the player stood in before the
+                    // world batch became completed (success-music-triggers §A.1).
+                    if (missionCellBefore && !missionCellCompleted &&
+                        missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, *missionCellBefore)) {
+                        missionCellCompleted = true;
+                        audio.startSuccess();
                     }
                     spawned.setPlayerToggle(0x8000, fx.witch);
                     spawned.setPlayerToggle(0x800, fx.demon);
@@ -7909,12 +7926,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 showDialog({"define_item", std::to_string(type), std::to_string(got.id), std::to_string(got.modifier), std::to_string(got.material),
                             std::to_string(got.rarity), fine ? "you_received_the_item" : "you_received_an_item"},
                            chatter() % 10000);
-                // The player holds it up.
+                // The player holds it up; only then does the success music start (0x9A205).
                 if (nativeai::Creature *me = spawned.localPlayer()) {
                     useprompt::Scene holder;
                     holder.player = me->record;
                     holder.abilityDuration = spawned.playerAbilityDuration();
-                    useprompt::holdUp(holder, Gear::toRecord(got));
+                    if (useprompt::holdUp(holder, Gear::toRecord(got)))
+                        audio.startSuccess();
                 }
                 logLine("Opened a chest: " + itemName(got));
             }

@@ -110,6 +110,7 @@ struct Receipt {
     // and define_land (the caller fills the land); shown with a seed of one rand mod 10000.
     std::vector<std::string> dialog;
     int holdUpAbility = 0;               // 0x78, 0x79 or 0x7c when the player may hold it up; 0: none
+    bool success = false;                // G+0x2050 = 60000: the receipt branch with the ability test passed
     bool announce = true;                // false only for a per-player item taken before
 };
 

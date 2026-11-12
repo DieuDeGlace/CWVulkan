@@ -1348,6 +1348,20 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             if (!client && dayCount != previousDay)
                 rebuildViews();
         }
+        if (!client) { // the selected zones' ground items (0x2E3510): within three zones of a player
+            std::vector<nativesaves::Cell> playerZones;
+            const auto zoneOfRecord = [](const uint8_t *r) {
+                int64_t at[2];
+                std::memcpy(at, r + worldgen::creature::POSITION, sizeof at);
+                return zonestates::zoneOfBlock(at[0] >> 16, at[1] >> 16);
+            };
+            for (const nativeai::Creature *c : a.creatures)
+                if (c->record[0x60] == 0)
+                    playerZones.push_back(zoneOfRecord(c->record));
+            if (hasPlayer)
+                playerZones.push_back(zoneOfRecord(player.record.data()));
+            zoneStates.advanceGroundItems(dt, playerZones);
+        }
         u.time = elapsedWorldMs;
         u.day = dayMs;
         w.time = elapsedWorldMs;
@@ -2856,6 +2870,15 @@ void SpawnedCreatures::keepOnly(const std::set<int64_t> *keep) {
 void SpawnedCreatures::queueInteraction(int64_t id, const nativeai::Interaction &in) {
     if (Creature *cr = find(id))
         cr->side.interactions.push_back(in);
+}
+
+void SpawnedCreatures::queuePickUp(const nativeai::Interaction &in) {
+    if (!hasPlayer)
+        return;
+    for (const nativeai::Interaction &pending : player.side.interactions)
+        if (nativeinteract::samePickUp(pending, in))
+            return;
+    player.side.interactions.push_back(in);
 }
 
 bool SpawnedCreatures::takePlayerInteraction(nativeai::Interaction &out) {

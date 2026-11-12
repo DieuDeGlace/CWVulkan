@@ -72,6 +72,9 @@ bool openOrShut(nativeai::Object &object, uint8_t state, std::vector<Sound> &sou
 
 // 0x4df60: whether two items (0xa0 bytes) are the same item, by the fields the game compares.
 bool sameItem(const uint8_t *a, const uint8_t *b);
+// A walk-over pick-up already pending (steam-success-music-triggers-and-pickup-rate §B.1 step 7):
+// both kind 7, the same zone and index, and equal items.
+bool samePickUp(const nativeai::Interaction &a, const nativeai::Interaction &b);
 
 // The sounds these kinds play (their index in the game's sound list).
 constexpr int32_t BUBBLE_SOUND = 0x30;        // pickup.wav (also a pick-up's)

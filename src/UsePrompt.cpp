@@ -839,11 +839,12 @@ void applyToPlayer(const Prompt &p, const Scene &s, nativeai::Creature &player) 
     }
 }
 
-void holdUp(const Scene &s, const Item &item, int ability) {
+bool holdUp(const Scene &s, const Item &item, int ability) {
     if (!s.player || (abilityOf(s.player) != 0 && !abilityOver(s)))
-        return;
+        return false;
     startAbility(s.player, ability);
     std::memcpy(s.player + HELD_ITEM, item.data(), item.size());
+    return true;
 }
 
 } // namespace useprompt

@@ -95,6 +95,9 @@ class SpawnedCreatures {
     // local player's leave one at a time for the host.
     void queueInteraction(int64_t id, const nativeai::Interaction &in);
     bool takePlayerInteraction(nativeai::Interaction &out);
+    // A walk-over pick-up (kind 7) for the local player, appended unless an identical one is
+    // still pending (steam-success-music-triggers-and-pickup-rate §B.1 step 7).
+    void queuePickUp(const nativeai::Interaction &in);
     // The world's event lists (world+0x90 .. +0x170): what its steps made since they were last
     // emptied. The host hands them to its guests each tick; a client sends its own player's.
     cwnet::WorldEvents &events() { return worldEvents; }

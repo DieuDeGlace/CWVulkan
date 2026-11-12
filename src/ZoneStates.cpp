@@ -195,6 +195,37 @@ void ZoneStates::advanceObjects(float milliseconds, const std::vector<Cell> &pla
     }
 }
 
+void ZoneStates::advanceGroundItems(float milliseconds, const std::vector<Cell> &playerZones) {
+    constexpr size_t DELAY = 0xc8, TIMER = 0xcc;
+    auto guard = physical ? physical->lock() : sourcestates::Store::Guard{};
+    for (const auto &zone : zonesInMemory()) {
+        bool nearPlayer = false;
+        for (Cell player : playerZones)
+            if (std::abs((int64_t)zone[0] - player[0]) <= 3 && std::abs((int64_t)zone[1] - player[1]) <= 3) {
+                nearPlayer = true;
+                break;
+            }
+        if (!nearPlayer)
+            continue;
+        for (Record &item : find(zone)->groundItems) {
+            int32_t timer;
+            std::memcpy(&timer, item.data() + TIMER, sizeof timer);
+            if (timer > 0) {
+                timer = std::max((int32_t)std::trunc((float)timer - milliseconds), 0);
+                std::memcpy(item.data() + TIMER, &timer, sizeof timer);
+            }
+            float delay;
+            std::memcpy(&delay, item.data() + DELAY, sizeof delay);
+            if (delay > 0.0f) {
+                delay -= milliseconds;
+                if (delay <= 0.0f)
+                    delay = 0.0f;
+                std::memcpy(item.data() + DELAY, &delay, sizeof delay);
+            }
+        }
+    }
+}
+
 nativesaves::ZoneLists &ZoneStates::load(Cell zone, std::vector<Record> groundItems, std::vector<Record> staticObjects) {
     if (physical) {
         if (auto *lists = find(zone)) return *lists;

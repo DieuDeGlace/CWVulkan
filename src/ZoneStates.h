@@ -74,6 +74,11 @@ class ZoneStates {
     // A non-null usedCells means a local player exists, including an empty set.
     void advanceObjects(float milliseconds, const std::vector<Cell> &playerZones,
                         const std::set<Cell> *usedCells = nullptr);
+    // The ground items of the same selected zones each world step (loot-pickup.md §1 steps 2-3;
+    // steam-world-step-phase-order 0x2E3510): the timer +0xcc (i32) becomes
+    // max(trunc(float(timer) - ms), 0) while above 0; the pick-up delay +0xc8 (float) loses ms
+    // while above 0 and is set to exactly 0 once it reaches 0. No change notice is raised.
+    void advanceGroundItems(float milliseconds, const std::vector<Cell> &playerZones);
 
     // A zone is made with what the generator gave it; the stored state goes on top (0x2ae0c0):
     // its saved ground items and static objects replace the generated ones, its block changes

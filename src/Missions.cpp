@@ -12,14 +12,7 @@ template <class T> T get(const uint8_t *r, size_t at) {
     std::memcpy(&v, r + at, sizeof v);
     return v;
 }
-// A place cell from a position in dots (0x36160 rounds a big place's down to even).
-Cell placeOf(int64_t x, int64_t y) {
-    auto block = [](int64_t v) { return (int32_t)(v / 0x10000); }; // (a Fixed's int)
-    Cell c{worldgen::floorDiv(block(x), 10), worldgen::floorDiv(block(y), 10)};
-    if (worldgen::bigCell(c[0], c[1]))
-        c = {worldgen::floorDiv(c[0], 1) * 2, worldgen::floorDiv(c[1], 1) * 2};
-    return c;
-}
+
 // A position's zone, flooring (blocks of 64).
 int zoneOf(int64_t dots) {
     const int64_t block = dots >= 0 ? dots >> 16 : -((-dots + 0xffff) >> 16);
@@ -34,6 +27,14 @@ float within2(const uint8_t *a, int64_t x, int64_t y, int64_t z) {
 constexpr float RANGE2 = 400.0f; // 20 blocks
 } // namespace
 
+// A place cell from a position in dots (0x36160 rounds a big place's down to even).
+Cell placeOf(int64_t x, int64_t y) {
+    auto block = [](int64_t v) { return (int32_t)(v / 0x10000); }; // (a Fixed's int)
+    Cell c{worldgen::floorDiv(block(x), 10), worldgen::floorDiv(block(y), 10)};
+    if (worldgen::bigCell(c[0], c[1]))
+        c = {worldgen::floorDiv(c[0], 1) * 2, worldgen::floorDiv(c[1], 1) * 2};
+    return c;
+}
 bool completed(const std::set<Cell> &finished, const std::set<Cell> &solved, Cell place) {
     return solved.count(place) || finished.count(place);
 }

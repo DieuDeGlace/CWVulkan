@@ -184,6 +184,7 @@ Receipt receive(Keeper &keeper, const Item &noticeItem, const Item &adapted, int
                 r.holdUpAbility = (playerFlags & PLAYER_FLAG_BIT_1) ? VEHICLE_TWO : 0;
             else
                 r.holdUpAbility = HOLD_UP;
+            r.success = true; // 0xAAD54, reached even when a boat is not held up
         }
     }
     return r;

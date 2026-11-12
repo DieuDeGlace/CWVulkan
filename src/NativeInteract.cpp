@@ -640,6 +640,12 @@ bool sameItem(const uint8_t *a, const uint8_t *b) {
     return same(I_ATTRIBUTES, count * ATTRIBUTE_SIZE);
 }
 
+bool samePickUp(const nativeai::Interaction &a, const nativeai::Interaction &b) {
+    return a[KIND] == PICK_UP && b[KIND] == PICK_UP && std::memcmp(a.data() + ZONE_X, b.data() + ZONE_X, 4) == 0 &&
+           std::memcmp(a.data() + ZONE_Y, b.data() + ZONE_Y, 4) == 0 && std::memcmp(a.data() + OBJECT, b.data() + OBJECT, 4) == 0 &&
+           sameItem(a.data() + ITEM, b.data() + ITEM);
+}
+
 nativeai::Interaction fresh(uint8_t kind) {
     nativeai::Interaction in{};
     set<int64_t>(in.data(), ZONE_X, -1); // both zone coordinates -1, written as one 8-byte value

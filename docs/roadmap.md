@@ -8,6 +8,10 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's pickup requests and success-music triggers: host ground-item delays count
+  down, coins are requested every frame, and the success track starts only on Steam's events.
+  See [the checkpoint](release-status.md#pickup-requests-and-success-music---2026-11-12).
+
 - [x] Steam's music order: updated before present (world and title pages) with whole-ms
   timers; the reward popup never fires in Steam, so none is shown. See
   [the checkpoint](release-status.md#music-order-and-reward-popup---2026-11-12).

@@ -49,4 +49,8 @@ bool update(World &world, Effects &effects);
 // Whether the player has completed the place's mission (0x5e430: finished or solved).
 bool completed(const std::set<Cell> &finished, const std::set<Cell> &solved, Cell place);
 
+// The place cell of a position in dots (Game update phase 23): whole blocks by truncation,
+// floor-divided by 1024, rounded down to even for a big place (0x36160).
+Cell placeOf(int64_t x, int64_t y);
+
 } // namespace missions
