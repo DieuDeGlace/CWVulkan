@@ -44,4 +44,13 @@ void advance(World &world, float stepMs) {
         }
     }
 }
+void advanceBatch(World &world, double cappedMs) {
+    double left = cappedMs;
+    while (left > 16.0) {
+        advance(world, 16.0f);
+        left -= 16.0;
+    }
+    advance(world, (float)left);
+}
+
 } // namespace nativeclock

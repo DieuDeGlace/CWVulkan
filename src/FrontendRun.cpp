@@ -17,6 +17,7 @@
 #include "HelpActions.h"
 #include "NativeTerms.h"
 #include "GameMath.h"
+#include "NativeWorldClock.h"
 #include "MapLook.h"
 #include "PanelScroll.h"
 #include "NativePlayer.h"
@@ -488,6 +489,12 @@ class Session {
     terrainray::World cameraTerrain;
     bool cameraPositionValid = false;
     float hour = 10; // set from Services::startHour when the session starts
+    // The native World clock on these pages (steam-frontend-world-clock §4.2): binary32 ms,
+    // stepped at the 10x rule; the viewed World is a client (no crossing resets).
+    int32_t clockDay = 1;
+    float clockTimeMs = 36000000.0f, clockElapsedMs = 0;
+    const bool clockClient = true;
+    std::vector<int32_t> clockNotices;
 
     // Character creation.
     Look look;
@@ -676,6 +683,7 @@ bool Session::start(std::string &error) {
         std::to_string(selectFrame.y));
     // The title shows the live world at its own time of day (frontend-title.md §1, §3.2).
     hour = std::fmod(std::max(0.0f, s.startHour), 24.0f);
+    clockTimeMs = s.startTimeMs;
     // The logo model, lit once and drawn in screen space.
     if (auto path = s.assets->resolve(fs::path("sprites") / "cubeworld.cub")) {
         CubModel cub;
@@ -1652,8 +1660,16 @@ void Session::confirmCreation() {
 void Session::stepWorld(Camera &cam, Lighting &light, glm::vec3 &focus, std::vector<DrawItem> &opaque,
                         std::vector<DrawItem> &water) {
     if (s.spawned && s.steam) s.spawned->publishPlayerAccount(accountProvider);
-    const float timeOfDayBefore = hour * 3600000.0f; // the lamp reads the clock before this frame's advance (phase 10)
-    hour = std::fmod(hour + (float)(dtMs / 60000.0) * s.minutesPerSecond / 60.0f * 60.0f, 24.0f);
+    // The lamp reads the clock before this frame's advance (phase 10).
+    const float timeOfDayBefore = s.nativeClock ? clockTimeMs : hour * 3600000.0f;
+    if (s.nativeClock) { // phase 25: admitted on these pages, the World's 10x rule
+        nativeclock::World clock{clockDay, clockTimeMs, clockElapsedMs, clockClient, true, clockNotices, {}};
+        nativeclock::advanceBatch(clock, dtMs);
+        clockNotices.clear();
+        hour = clockTimeMs / 3600000.0f;
+    } else { // [Time] Mode=Custom: the optional constant speed
+        hour = std::fmod(hour + (float)(dtMs / 60000.0) * s.minutesPerSecond / 60.0f * 60.0f, 24.0f);
+    }
     s.world->advanceClock(dtMs); // (the plants sway by the world's clock, vegetation-wind.md §2)
     glm::vec3 lookAt;
     nativeai::Creature *p = s.spawned && s.extracted ? s.spawned->localPlayer() : nullptr;

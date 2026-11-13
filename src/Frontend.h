@@ -394,9 +394,11 @@ struct Services {
     hair::Style newHairStyle;
     std::function<hair::Style(const std::string &)> importedHairStyle;
     DayNightSettings dayNight;
-    float minutesPerSecond = 1;
+    float minutesPerSecond = 1; // [Time] Mode=Custom only
+    bool nativeClock = true;    // [Time] Mode=Native: the World clock's 10x rule (steam-frontend-world-clock)
     // The world's time of day (hours): Save/world.db's when there is one, else the new world's 10:00.
     float startHour = 10;
+    float startTimeMs = 36000000.0f; // the same, in the World's binary32 milliseconds (native clock)
     std::function<void(const std::string &)> log;
     // Puts options the options screen applied into effect (the window, the view distance, the
     // frame limit...); the screens set the volumes themselves.

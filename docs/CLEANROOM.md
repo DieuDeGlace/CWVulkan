@@ -1,5 +1,17 @@
 # Clean-room process
 
+## Title-screen clock and goddess statue - 2026-11-12
+
+Two independent original-only contracts are held. On the title, character selection and
+character creation, Steam steps its named World at the ordinary 10x rate in 16 ms steps,
+starting from the saved world time (10:00 on day 1 when there is none); there is no fixed
+backdrop hour. CubeVulkan already used Steam's clock in play but ran these pages at 60x; they
+now use the same native clock. [Time] Mode=Custom keeps the optional constant speed. The
+goddess statue's flute gift is unreachable in Steam, and CubeVulkan's statue is already inert.
+Three CPU checks failed against a stub and pass now. All five targets, full required-owner
+CPU without skips, every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Pickup requests and success music - 2026-11-12
 
 An independent original-only contract describes Steam's success-music triggers and how

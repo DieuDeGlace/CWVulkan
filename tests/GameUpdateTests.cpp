@@ -1,6 +1,8 @@
 // Game update rules (docs/specs/steam-game-update-complete-phase-schedule-20261112.md).
 #include "GameMath.h"
+#include "NativeWorldClock.h"
 #include <cstdio>
+#include <vector>
 
 int gameUpdateTests() {
     int failures = 0;
@@ -38,5 +40,20 @@ int gameUpdateTests() {
     check(nightLamp(1, false, 0x9d, 43200000.0f) == 1, "ability 0x9D does not drive the lamp (phase 10)");
     check(nightLamp(0, false, 0, 0.0f) == 0 && nightLamp(1, false, 0, 43200000.0f) == 1,
           "in ordinary play the lamp is the player's own toggle (phase 10)");
+    { // steam-frontend-world-clock §4.2: the frontend pages step the named World at the 10x rate.
+        int32_t day = 1;
+        float timeOfDay = 36000000.0f, elapsed = 0;
+        const bool client = true;
+        std::vector<int32_t> notices;
+        nativeclock::World w{day, timeOfDay, elapsed, client, true, notices, {}};
+        nativeclock::advanceBatch(w, 1000.0);
+        check(timeOfDay == 36010000.0f && elapsed == 1000.0f, "one second on the title is ten seconds of the day (10x, 16 ms steps)");
+        timeOfDay = 86399000.0f;
+        nativeclock::advanceBatch(w, 200.0);
+        check(day == 2 && timeOfDay == 1000.0f, "the day wraps past 86,400,000 and the day counter advances");
+        const float before = timeOfDay;
+        nativeclock::advanceBatch(w, 0.0);
+        check(timeOfDay == before && elapsed == 1200.0f, "a zero batch still makes its zero-input call and changes nothing");
+    }
     return failures;
 }

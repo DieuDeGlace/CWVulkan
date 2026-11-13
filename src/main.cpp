@@ -1042,6 +1042,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     front.sprites = &sprites, front.options = &gameOptions, front.controls = &gameControls;
     front.dayNight = dayNight, front.minutesPerSecond = minutesPerSecond;
     front.startHour = saves.world().timeMs / 3600000.0f; // (Save/world.db, or a new world's 10:00)
+    front.startTimeMs = (float)saves.world().timeMs, front.nativeClock = !customClock;
     front.log = [](const std::string &line) { logLine(line); };
     chatcommand::Actions frontendChat;
     frontendChat.toggleCheck=[&] {return session.toggleGameCheck();};

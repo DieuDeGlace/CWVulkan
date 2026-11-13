@@ -8,6 +8,10 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's title-screen clock: the 10x World clock from the saved time on the title,
+  selection and creation pages. See
+  [the checkpoint](release-status.md#title-screen-clock-and-goddess-statue---2026-11-12).
+
 - [x] Steam's pickup requests and success-music triggers: host ground-item delays count
   down, coins are requested every frame, and the success track starts only on Steam's events.
   See [the checkpoint](release-status.md#pickup-requests-and-success-music---2026-11-12).

@@ -22,4 +22,7 @@ struct World {
     std::function<void()> reset;     // actor cleanup, then retained metadata reset
 };
 void advance(World &world, float stepMs);
+// One admitted Game-update batch (phase 25): binary32 16.0 steps while the binary64 remainder
+// exceeds 16.0, then one final step of the remainder narrowed to binary32 (also a zero one).
+void advanceBatch(World &world, double cappedMs);
 } // namespace nativeclock
