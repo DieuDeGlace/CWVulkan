@@ -276,6 +276,7 @@ add_library(engine STATIC
     src/WorldList.cpp
     src/FeatText.cpp
     src/ProgressNotices.cpp
+    src/ShrineRespawn.cpp
     src/HudChat.cpp
     src/WorldMap.cpp
     src/MapLook.cpp
@@ -415,6 +416,7 @@ target_sources(EngineTests PRIVATE
     tests/HostThreadTests.cpp
     tests/GameUpdateTests.cpp
     tests/ProgressNoticesTests.cpp
+    tests/ShrineRespawnTests.cpp
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)

@@ -198,6 +198,7 @@ int worldListTests(); // tests/WorldListTests.cpp
 int hostThreadTests(); // tests/HostThreadTests.cpp
 int gameUpdateTests(); // tests/GameUpdateTests.cpp
 int progressNoticesTests(); // tests/ProgressNoticesTests.cpp
+int shrineRespawnTests();   // tests/ShrineRespawnTests.cpp
 int storedWorldDiagnosticsTests(); // tests/StoredWorldDiagnosticsTests.cpp
 int nativeCreaturePoseTests(); // tests/NativeCreaturePoseTests.cpp
 int nativeInventoryTests(); // tests/NativeInventoryTests.cpp
@@ -9571,6 +9572,8 @@ int main(int argc, char **argv) {
         soundRules();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "shrines")
+        return shrineRespawnTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "notices")
         return progressNoticesTests() ? 1 : 0;
     if (argc == 2 && std::string(argv[1]) == "worldlist")
@@ -11082,6 +11085,7 @@ int main(int argc, char **argv) {
     failures += hostThreadTests();
     failures += gameUpdateTests();
     failures += progressNoticesTests();
+    failures += shrineRespawnTests();
     failures += storedWorldDiagnosticsTests();
     failures += nativeCreaturePoseTests();
     failures += nativeInventoryTests();

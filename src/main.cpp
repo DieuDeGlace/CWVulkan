@@ -86,6 +86,7 @@
 #include "ChatCommands.h"
 #include "FeatText.h"
 #include "ProgressNotices.h"
+#include "ShrineRespawn.h"
 #include "IdentifyWindow.h"
 #include "UpgradeWidget.h"
 #include "VoxelCustomization.h"
@@ -291,6 +292,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
+    bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -462,6 +464,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             noticeTest = true;
         else if (a == "--lamp-test")
             lampTest = true;
+        else if (a == "--shrine-test")
+            shrineTest = true;
         else if (a == "--frame-budget-test" && i + 1 < argc)
             frameBudgetTest = std::max(1, std::atoi(argv[++i]));
         else if (a == "--open-native-menu")
@@ -1489,7 +1493,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     int &playerXp = saveGame.xp;
     int legacyGold = saveGame.gold;
     auto *nativeInventory = saveGame.nativeInventory ? &*saveGame.nativeInventory : nullptr;
-    spawned.setHudContextSource(!worldName.empty(), nativeInventory ? &nativeInventory->inventory.tabs : nullptr);
+    // The World's own name (Game +0x2070, "world" in Steam; steam-frontend-world-clock §1.3), not the
+    // extracted folder's: a generated world has no folder name but is still a named World.
+    spawned.setHudContextSource(!gameWorldName.empty(), nativeInventory ? &nativeInventory->inventory.tabs : nullptr);
     saveGame.inventoryAuthoritative = nativeInventory != nullptr;
     if (nativeInventory && nativePlayer)
         spawned.setPlayerInventorySource([owner = progressOwner](const nativeai::InventoryVisitor &visit) {
@@ -1972,6 +1978,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     std::set<std::array<int32_t, 2>> usedCells(saveGame.usedCells.begin(), saveGame.usedCells.end());
     lore::Book loreBook = lore::rebuild(usedCells);
     spawned.setUsedCells(&usedCells);
+    spawned.setDiscoverCell([&](int cx, int cy) { // a shrine the flute registered (shrine contract §3.4)
+        if (!usedCells.insert({cx, cy}).second)
+            return false;
+        saveGame.usedCells.push_back({cx, cy});
+        logLine("Shrine: registered cell " + std::to_string(cx) + " " + std::to_string(cy));
+        return true;
+    });
     world.setUsedCellProvider([&usedCells](int32_t x, int32_t y) { return usedCells.count({x, y}) != 0; });
     steampoints::TransientLights transientLights;
     std::vector<cwnet::DamageRecord> hitVisuals;
@@ -6993,10 +7006,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (nativePlayer)
                 spawned.setPlayerHealth(playerHp);
         }
-        // The native player lies dead until the use key revives it (UsePrompt.h, "Revive"):
-        // at the nearest Shrine of Life of its region
-        // (the nearest shrine search without discovered markers: each place's shrine site,
-        // within a land's span), healed.
+        // The native player lies dead until the use key revives it (UsePrompt.h, "Revive"),
+        // healed, at the place 0x2C2860 chooses (below).
         static bool deadWaiting = false;
         bool revive = playerHp <= 0;
         if (revive && nativePlayer && !player.fly && !autoAttack) {
@@ -7008,43 +7019,33 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         reviveNow = false;
         if (revive && nativePlayer && !player.fly && useExtracted) {
             deadWaiting = false;
-            const int64_t bx = (int64_t)std::floor(player.position.x) + (extractedWorld.originDotsX() >> 16);
-            const int64_t by = (int64_t)std::floor(player.position.y) + (extractedWorld.originDotsY() >> 16);
-            const worldgen::Int2 home = worldgen::regionAt((int32_t)bx, (int32_t)by);
-            auto cellOf = [](int64_t b) { return (int32_t)std::floor((double)b / 16.0); };
-            auto placeOf = [](int32_t cell) { return (int32_t)std::floor((double)cell / 64.0); };
-            double best = -1;
-            int32_t sx = 0, sy = 0;
-            for (int32_t px = placeOf(cellOf(bx - 8192)); px <= placeOf(cellOf(bx + 8192)); px++)
-                for (int32_t py = placeOf(cellOf(by - 8192)); py <= placeOf(cellOf(by + 8192)); py++) {
-                    const int32_t cx = px * 64 + 1 + (int32_t)(worldgen::random((uint32_t)px + 148289u + (uint32_t)py * 57u) % 62);
-                    const int32_t cy = py * 64 + 1 + (int32_t)(worldgen::random((uint32_t)px + 1464073u + (uint32_t)py * 57u) % 62);
-                    if (!(worldgen::regionAt(cx * 16 + 8, cy * 16 + 8) == home))
-                        continue;
-                    const double dx = (double)(cx * 16 + 8 - bx), dy = (double)(cy * 16 + 8 - by);
-                    if ((best < 0 || best > dx * dx + dy * dy) && worldgen::cellObject(cx, cy) == 53) // Shrine of Life
-                        best = dx * dx + dy * dy, sx = cx, sy = cy;
-                }
-            if (best >= 0) {
-                const float x = (float)(sx * 16 + 6 - (extractedWorld.originDotsX() >> 16));
-                const float y = (float)(sy * 16 + 8 - (extractedWorld.originDotsY() >> 16));
-                // The shrine's floor (the game's structure level, the structure level, is not
-                // ported): under its roof, the first floor below the top one, if it is not
-                // below the terrain there; else the top.
-                const float ground = worldgen::groundHeight(sx * 16 + 6, sy * 16 + 8) + (float)ExtractedWorld::Z_OFFSET - 1.0f; // the terrain (no buildings)
-                float floor = floorUnder(x, y, 400.0f);
-                if (const float under = floorUnder(x, y, floor - 3.0f); under < floor - 0.5f && under >= ground)
-                    floor = under;
-                respawn = glm::vec3(x, y, floor);
-                logLine("Reviving at the Shrine of Life of cell " + std::to_string(sx) + " " + std::to_string(sy) + ", " +
-                        std::to_string((int)std::sqrt(best)) + " blocks away, at " + std::to_string(respawn.x) + " " +
-                        std::to_string(respawn.y) + " " + std::to_string(respawn.z) + " (terrain " + std::to_string(ground) + ")");
-            }
+            // 0x2C2860 (shrine contract §6.2): the nearest known Shrine of Life in the player's
+            // current land, else the land's nearest shrine site within about 8192 blocks, else
+            // the death cell; it stands at (+6, +8) in the cell, at the cell level.
+            int64_t at[3];
+            playerUnits(at);
+            shrinerespawn::Cell land{0, 0};
+            if (const uint8_t *me = spawned.playerRecord())
+                std::memcpy(land.data(), me + worldgen::creature::REGION, sizeof land);
+            shrinerespawn::World shrines;
+            shrines.landOf = [](int32_t x, int32_t y) {
+                const worldgen::Int2 r = worldgen::regionAt(x, y);
+                return shrinerespawn::Cell{r.x, r.y};
+            };
+            shrines.isShrine = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == 53; }; // building 0x35
+            const shrinerespawn::Cell cell = shrinerespawn::choose(shrines, usedCells, at[0], at[1], land);
+            const int64_t dots[3] = {(int64_t)std::bit_cast<int32_t>((uint32_t)cell[0] * 16u + 6u) * 65536,
+                                     (int64_t)std::bit_cast<int32_t>((uint32_t)cell[1] * 16u + 8u) * 65536,
+                                     (int64_t)worldgen::cellHeight(cell[0], cell[1]) * 65536};
+            respawn = extractedWorld.toLocal(dots);
+            logLine("Reviving in cell " + std::to_string(cell[0]) + " " + std::to_string(cell[1]) +
+                    (worldgen::cellObject(cell[0], cell[1]) == 53 ? " (a Shrine of Life)" : " (where the player died)") + ", at " +
+                    std::to_string(respawn.x) + " " + std::to_string(respawn.y) + " " + std::to_string(respawn.z));
         }
         if (revive) {
             // Revived: a tombstone on the map where the player died (MapMarks.h).
             placeTombstone(0.0f);
-            // Back to where this world was first entered (the native player: the shrine), healed.
+            // Healed, where the revive rule put it (other players: where this world was entered).
             logLine("You died; respawning at home");
             player.position = respawn;
             player.verticalSpeed = 0;
@@ -7384,6 +7385,66 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (!passed)
                         exitCode = 1;
                     lampTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+            }
+            if (shrineTest && spawned.localPlayer() && session.hostSide() && !session.guestElsewhere()) {
+                // (testing: the start shrine is forgotten, the player returns to it (ability 0x75)
+                // and plays the flute with the use key; ability 0x89 must register the shrine's
+                // cell again at 5000 ms, shrine contract §3)
+                static int stage = 0;
+                static double stageAt = 0;
+                static shrinerespawn::Cell home{};
+                const uint8_t *me = spawned.playerRecord();
+                float abilityMs = 0;
+                const int ability = spawned.playerAbility(abilityMs);
+                if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && me) {
+                    std::memcpy(home.data(), me + 0x1d0, sizeof home);
+                    const bool forgot = usedCells.erase(home) > 0;
+                    const bool off = spawned.startShrineReturn(home[0], home[1]);
+                    logLine("Shrine test: start shrine cell " + std::to_string(home[0]) + " " + std::to_string(home[1]) +
+                            (forgot ? " forgotten" : " was not known") + ", return " + (off ? "started" : "NOT started"));
+                    stage = off ? 1 : 9, stageAt = time;
+                } else if (stage == 1 && time - stageAt > 5.0 && ability != 0x75) {
+                    const auto &offer = spawned.vehicleItem();
+                    int32_t subtype;
+                    std::memcpy(&subtype, offer.data() + 4, sizeof subtype);
+                    int64_t at[3];
+                    playerUnits(at);
+                    std::string statues;
+                    const int zx = gamemath::floorFixedZone(at[0]), zy = gamemath::floorFixedZone(at[1]);
+                    for (int x = zx - 1; x <= zx + 1; ++x)
+                        for (int y = zy - 1; y <= zy + 1; ++y)
+                            if (const auto *objects = spawned.zoneObjects(x, y))
+                                for (const auto &o : *objects) {
+                                    int32_t type;
+                                    std::memcpy(&type, o.data(), 4);
+                                    if (type != 0)
+                                        continue;
+                                    int64_t p[3];
+                                    std::memcpy(p, o.data() + 8, sizeof p);
+                                    const double d = std::sqrt(std::pow((p[0] - at[0]) / 65536.0, 2) + std::pow((p[1] - at[1]) / 65536.0, 2) +
+                                                               std::pow((p[2] - at[2]) / 65536.0, 2));
+                                    statues += " statue " + std::to_string((int)d) + " blocks, active " + std::to_string(o[0x28]) + ";";
+                                }
+                    uint32_t flags = 0;
+                    if (me)
+                        std::memcpy(&flags, me + 0x5c, 4);
+                    logLine("Shrine test: use-key item type " + std::to_string(offer[0]) + " subtype " + std::to_string(subtype) +
+                            ", ability " + std::to_string(ability) + ", contact " + std::to_string(flags & 3) + ";" + statues);
+                    autoUsePress = true;
+                    stage = 2, stageAt = time;
+                } else if (stage == 2 && ability == 0x89) {
+                    logLine("Shrine test: playing the flute");
+                    stage = 3;
+                } else if ((stage >= 2 && stage <= 3 && time - stageAt > 12.0) || stage == 9) {
+                    const bool known = usedCells.count(home) != 0;
+                    const bool passed = stage == 3 && known;
+                    logLine(std::string("Shrine test: ") + (passed ? "PASS" : "FAIL") + " flute " + (stage == 3 ? "played" : "not played") +
+                            ", start shrine cell " + (known ? "registered" : "not registered"));
+                    if (!passed)
+                        exitCode = 1;
+                    shrineTest = false;
                     glfwSetWindowShouldClose(window, 1);
                 }
             }

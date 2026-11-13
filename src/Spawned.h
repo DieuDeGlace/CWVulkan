@@ -319,6 +319,9 @@ class SpawnedCreatures {
     ObjectContents objectContents(ExtractedWorld &, int zx, int zy, int index);
     std::optional<objectvisual::State> objectVisual(int zx, int zy, const objectvisual::Key &key) const;
     void setUsedCells(const std::set<nativesaves::Cell> *cells) { usedCells = cells; }
+    // Inserts a cell into the local character's known cells and says whether it was new (the
+    // flute's shrine registration).
+    void setDiscoverCell(std::function<bool(int, int)> discover) { discoverCell = std::move(discover); }
     // --- What changed in the zones (ZoneStates.h, native-saves.md §5.3) ---
     // The world's stored zone states (Save/world.db): put on each zone as it is made, recorded
     // into as it leaves memory. Null: zones are kept for the session only.
@@ -616,6 +619,7 @@ class SpawnedCreatures {
     std::map<int64_t, nativeai::Entry> ai; // the AI's record of each creature
     zonestates::ZoneStates zoneStates;     // the zones in memory: their objects, ground items and block changes
     const std::set<nativesaves::Cell> *usedCells = nullptr;
+    std::function<bool(int, int)> discoverCell;
     nativesaves::WorldState *storedZones = nullptr;
     nativesaves::WorldState *archiveDestination = nullptr; // owner-thread explicit copy only
     sourcestates::Store::Guard sourceGuard() const;

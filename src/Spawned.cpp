@@ -1216,6 +1216,10 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
     a.added = iw.added;
     a.objects = iw.objects;
     a.cellObject = [](int cx, int cy) { return worldgen::cellObject(cx, cy); };
+    // The flute's registration (ability 0x89 at 5000 ms) inserts a shrine's cell into the local
+    // character's known cells (+0x1528 +0xa8), which the caller keeps (shrine contract §3.4).
+    if (hasPlayer && discoverCell)
+        a.discover = discoverCell;
     // Taming renames the creature: its old id joins the dead set, which play never empties (so
     // its spawn point is not made again and prerequisites count it), and the id map moves it
     // to its new id. It keeps its place in the creature lists.

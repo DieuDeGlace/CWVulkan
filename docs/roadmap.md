@@ -8,6 +8,10 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's Shrines of Life: the flute registers a shrine (glow, map teleport, respawn) and
+  revive picks the nearest registered shrine of the land. See
+  [the checkpoint](release-status.md#shrines-of-life---2026-11-12).
+
 - [x] Steam's title-screen clock: the 10x World clock from the saved time on the title,
   selection and creation pages. See
   [the checkpoint](release-status.md#title-screen-clock-and-goddess-statue---2026-11-12).

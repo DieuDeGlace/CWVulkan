@@ -1,5 +1,20 @@
 # Clean-room process
 
+## Shrines of Life - 2026-11-12
+
+An independent original-only contract, prompted by a player's recollection, describes Steam's
+Shrines of Life. Near a shrine statue the use key plays the flute every character owns; after
+five seconds the shrine is registered for that character, which makes it glow, puts its icon
+on the map for a free teleport and makes it a respawn point. CubeVulkan had the glow, the map
+icon and the teleport, but the use key never offered the flute in the Native world (it read
+the world's folder name, which a generated world lacks, instead of the World's own name), and
+the flute's registration was never connected. Both now work. Revive now picks the nearest
+registered shrine in the player's land, else the land's nearest shrine within about 8,192
+blocks, else the place of death, standing at the shrine's level. Three CPU checks and the
+in-game flute run failed before; all pass now. All five targets, full required-owner CPU
+without skips, every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Title-screen clock and goddess statue - 2026-11-12
 
 Two independent original-only contracts are held. On the title, character selection and
