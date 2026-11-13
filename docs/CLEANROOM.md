@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Alpha world-generation shrines - 2026-11-13
+
+The Shrine of Life checkpoint had been checked in game on Steam world generation only: the Alpha
+generation test character's home cell holds no shrine. The shrine fixture now falls back to the
+nearest Shrine-of-Life site of the land, as revive's second pass finds it. On Alpha generation
+it returns to cell (4, -39), finds the active statue two blocks away, plays the flute and
+registers the shrine; the old fixture never completed. Fixture only: no engine behaviour changed.
+All five targets, full required-owner CPU without skips, every Vulkan group, SDK independence and
+the Native/Alpha probes pass.
+
+
 ## Combat text layout - 2026-11-13
 
 Steam's combat texts pass TextShape flag 1 where the progress notices pass 0. The held Plasma

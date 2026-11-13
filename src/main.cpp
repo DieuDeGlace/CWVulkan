@@ -7405,12 +7405,32 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 const int ability = spawned.playerAbility(abilityMs);
                 if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && me) {
                     std::memcpy(home.data(), me + 0x1d0, sizeof home);
+                    // (a character whose home cell holds no shrine, such as the Alpha generation
+                    // save at 0,0, uses the nearest Shrine-of-Life site of its land instead, as
+                    // the revive's second pass finds it)
+                    if (worldgen::cellObject(home[0], home[1]) != 53) {
+                        int64_t at[3];
+                        playerUnits(at);
+                        shrinerespawn::Cell land{};
+                        std::memcpy(land.data(), me + worldgen::creature::REGION, sizeof land);
+                        shrinerespawn::World shrines;
+                        shrines.landOf = [](int32_t x, int32_t y) {
+                            const worldgen::Int2 r = worldgen::regionAt(x, y);
+                            return shrinerespawn::Cell{r.x, r.y};
+                        };
+                        shrines.isShrine = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == 53; };
+                        const shrinerespawn::Cell site = shrinerespawn::choose(shrines, {}, at[0], at[1], land);
+                        logLine("Shrine test: home cell " + std::to_string(home[0]) + " " + std::to_string(home[1]) +
+                                " holds no shrine; nearest site " + std::to_string(site[0]) + " " + std::to_string(site[1]) +
+                                (worldgen::cellObject(site[0], site[1]) == 53 ? " is a shrine" : " is NOT a shrine"));
+                        home = site;
+                    }
                     const bool forgot = usedCells.erase(home) > 0;
                     const bool off = spawned.startShrineReturn(home[0], home[1]);
                     logLine("Shrine test: start shrine cell " + std::to_string(home[0]) + " " + std::to_string(home[1]) +
                             (forgot ? " forgotten" : " was not known") + ", return " + (off ? "started" : "NOT started"));
                     stage = off ? 1 : 9, stageAt = time;
-                } else if (stage == 1 && time - stageAt > 5.0 && ability != 0x75) {
+                } else if (stage == 1 && time - stageAt > 5.0 && ability != 0x75 && hostHoldsPlayerZone()) {
                     const auto &offer = spawned.vehicleItem();
                     int32_t subtype;
                     std::memcpy(&subtype, offer.data() + 4, sizeof subtype);
