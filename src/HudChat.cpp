@@ -129,6 +129,7 @@ void Hud::drawFeatText(const std::vector<feattext::Label> &labels, std::vector<O
         style.string = label.text;
         style.pixelSize = label.fontSize;
         style.strokeRadius = label.outlineRadius;
+        style.flags = label.flags;
         style.color = glm::vec4(0);
         style.strokeColor = label.outline;
         plasmaText(out, style, matrix);

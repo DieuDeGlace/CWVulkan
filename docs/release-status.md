@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Combat text layout - 2026-11-13
+
+Steam's combat texts pass TextShape flag 1 where the progress notices pass 0. The held Plasma
+text contract defines that flag as centring each line horizontally on the anchor, with the first
+baseline staying on it, so a trailing line feed after BLOCK/MISS/ABSORB moves nothing.
+CubeVulkan drew combat texts left-aligned from the anchor; the floating-text records now carry
+their flags into the text layout. Two CPU checks and the in-game run failed with flags 0 and pass
+now. All five targets, full required-owner CPU without skips, every Vulkan group, SDK
+independence and the Native/Alpha probes pass.
+
+
 ## Combat texts - 2026-11-13
 
 An engine survey against the held Game update schedule found that Steam's combat-text step

@@ -8232,7 +8232,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (combatTextTest == 2) { // (testing: the texts appended at phase 68 are drawn this frame)
             const auto drawn = [&](const wchar_t *text, glm::vec3 fill) {
                 return std::any_of(featLabels.begin(), featLabels.end(), [&](const feattext::Label &l) {
-                    return l.text == text && l.fontSize == 20.0f && glm::vec3(l.fill) == fill && l.fill.a == 1.0f;
+                    return l.text == text && l.fontSize == 20.0f && glm::vec3(l.fill) == fill && l.fill.a == 1.0f && l.flags == 1;
                 });
             };
             const bool ko = drawn(L"K.O.", {1, 1, 0}), hurt = drawn(L"12", {1, .3f, .3f}), block = drawn(L"BLOCK\n", {1, .3f, .3f}),

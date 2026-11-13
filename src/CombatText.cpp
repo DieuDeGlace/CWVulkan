@@ -54,7 +54,7 @@ std::vector<feattext::Record> visit(const Hit &hit, const Lookup &lookup, const 
     const bool onPlayer = player && target == player;
     feattext::Record base;
     base.anchor = {get<int64_t>(h, POSITION), get<int64_t>(h, POSITION + 8), get<int64_t>(h, POSITION + 16) + 2 * BLOCK};
-    base.offsetX = 0, base.offsetY = 0, base.lifetime = LIFETIME, base.fontSize = FONT_SIZE;
+    base.offsetX = 0, base.offsetY = 0, base.lifetime = LIFETIME, base.fontSize = FONT_SIZE, base.flags = FLAGS;
     if (get<int32_t>(h, STUN) != 0) { // 3.2
         feattext::Record ko = base;
         ko.text = L"K.O.", ko.colour = {1, 1, 0, 1}, ko.drift = onPlayer ? -50.0f : 50.0f;

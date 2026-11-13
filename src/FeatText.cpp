@@ -46,7 +46,7 @@ std::vector<Label> Store::visit(const std::optional<scenevisibility::Projection>
                 const glm::vec3 colour(record.colour);
                 const float y = at->y + progress * record.drift;
                 labels.push_back({glm::vec2(at->x + record.offsetX, y + record.offsetY), glm::vec4(colour, alpha), glm::vec4(colour * .1f, alpha),
-                                  record.text, record.fontSize, outlineRadius(record.fontSize)});
+                                  record.text, record.fontSize, outlineRadius(record.fontSize), record.flags});
             }
         entry.age = std::bit_cast<int32_t>((uint32_t)entry.age + (uint32_t)elapsedMs);
     }

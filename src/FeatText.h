@@ -22,6 +22,9 @@ struct Record {
     glm::vec4 colour{};
     float offsetX = 5, offsetY = -100, drift = -100, fontSize = 16;
     int32_t lifetime = LIFETIME;
+    // Record +0x60, given to both TextShapes' flags (progress notices section 4): 0 here, 1
+    // (centre each line, plasma-shapes-and-text.md section 4.2) for the combat texts.
+    int32_t flags = 0;
 };
 // Outline stroke radius of a record's font (section 4 step 7): font/8, at least 3.
 inline float outlineRadius(float fontSize) {
@@ -34,6 +37,7 @@ struct Label {
     glm::vec4 fill{}, outline{};
     std::wstring text = L"FEAT!";
     float fontSize = FONT_SIZE, outlineRadius = OUTLINE;
+    int32_t flags = 0;
 };
 class Store {
   public:

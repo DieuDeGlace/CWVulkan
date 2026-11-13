@@ -14,6 +14,9 @@ using Hit = std::array<uint8_t, 0x48>;
 using Lookup = std::function<uint8_t *(int64_t)>;
 constexpr int32_t LIFETIME = 1000;
 constexpr float FONT_SIZE = 20, CRITICAL_FONT_SIZE = 60;
+// Section 4: flags 1 for both TextShapes (notices pass 0); plasma-shapes-and-text.md 4.2 makes it
+// "centre each line horizontally on the origin", the first baseline staying on the origin.
+constexpr int32_t FLAGS = 1;
 // Section 3.3: |amount| truncated when at least 1, otherwise in tenths; no sign.
 std::wstring number(float amount);
 // One hit record visited: the attacker's bookkeeping (section 6.1), then "K.O." and the number or

@@ -54,6 +54,8 @@ int combatTextTests() {
     check(out.size() == 1 && out[0].text == L"42" && out[0].colour == glm::vec4(1, 1, 1, 1) && out[0].drift == -100 &&
               out[0].fontSize == 20 && out[0].lifetime == 1000 && out[0].offsetX == 0 && out[0].offsetY == 0,
           "P's hit on a monster is a white 20 px number rising 100 px for 1000 ms");
+    check(out.size() == 1 && out[0].flags == 1, "combat texts pass TextShape flags 1 (centred lines)");
+    check(feattext::Record{}.flags == 0 && feattext::feat({}).flags == 0, "notices and FEAT! keep flags 0");
     check(out.size() == 1 && out[0].anchor == feattext::Point{10 * BLOCK, 20 * BLOCK, 30 * BLOCK + 2 * BLOCK + 49152},
           "the number starts two blocks plus (1 - size/2) blocks above the hit");
     check(dealt(P) == 42.7f, "the attacker's +0xBC0 accumulates the amount");
@@ -112,6 +114,7 @@ int combatTextTests() {
     auto labels = store.visit(identity, {200, 200}, 500); // drawn at age 0
     const auto first = labels.size() == 1 ? labels[0].at : glm::vec2(-1);
     labels = store.visit(identity, {200, 200}, 500); // age 500: half the drift
+    check(labels.size() == 1 && labels[0].flags == 1, "the drawn label carries the record's flags");
     check(labels.size() == 1 && labels[0].at.x == first.x && labels[0].at.y == first.y - 50 && labels[0].fill.a == .5f,
           "at age 500 the text has risen 50 px and is half faded");
     check(store.size() == 1, "kept at age 1000");

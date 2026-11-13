@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Combat texts are centred on their anchor as Steam's TextShape flag 1 lays them out. See
+  [the checkpoint](release-status.md#combat-text-layout---2026-11-13).
+
 - [x] Steam's combat texts: "K.O.", damage numbers and BLOCK/MISS/ABSORB as the Game update
   makes them. See [the checkpoint](release-status.md#combat-texts---2026-11-13).
 
