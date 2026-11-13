@@ -403,8 +403,9 @@ template <class Pack> void Hud::bakeText(Pack &pack, std::vector<uint8_t> &atlas
             style.lineSpacing = 1;
             bakeStyle(style, root);
         }
-    // textFX records: the feat (30) and the progress notices (16), each outlined then filled.
-    for (const float size : {feattext::FONT_SIZE, 16.0f}) {
+    // textFX records: the feat (30), the progress notices (16) and the combat texts (20, 60
+    // critical), each outlined then filled.
+    for (const float size : {feattext::FONT_SIZE, 16.0f, 20.0f, 60.0f}) {
         plasma::TextStyle featStyle;
         featStyle.font = "resource1.dat";
         featStyle.pixelSize = size;

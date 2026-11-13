@@ -442,6 +442,10 @@ class SpawnedCreatures {
     // A near creature's game record (null when it is gone), and letting one go at once.
     uint8_t *record(int64_t id);
     const uint8_t *record(int64_t id) const;
+    // The World's creature map lookup with the native local player included (combat texts).
+    uint8_t *creature(int64_t id) {
+        return nativePlayer && hasPlayer && id == localId ? player.record.data() : record(id);
+    }
     void remove(int64_t id);
     // Every near creature's record.
     void forEach(const std::function<void(const uint8_t *)> &f) const;

@@ -87,6 +87,7 @@
 #include "FeatText.h"
 #include "ProgressNotices.h"
 #include "ShrineRespawn.h"
+#include "CombatText.h"
 #include "IdentifyWindow.h"
 #include "UpgradeWidget.h"
 #include "VoxelCustomization.h"
@@ -293,6 +294,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
+    int combatTextTest = 0;     // --combat-text-test: hit records on the player become combat texts (phase 68).
+    bool combatTextDrawn = false; // (testing: the combat-text frame, for --capture-notice)
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
     bool openSystemMenu = false; // --open-system-menu: the system menu shown over the game from the start (testing only).
     float openFriendsAt = -1;    // --open-multiplayer-menu T: the multiplayer menu opened T s in (testing only).
@@ -466,6 +469,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             lampTest = true;
         else if (a == "--shrine-test")
             shrineTest = true;
+        else if (a == "--combat-text-test")
+            combatTextTest = 1;
         else if (a == "--frame-budget-test" && i + 1 < argc)
             frameBudgetTest = std::max(1, std::atoi(argv[++i]));
         else if (a == "--open-native-menu")
@@ -3302,7 +3307,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 std::memcpy(&damage, number.data() + 0x10, 4);
                 std::memcpy(&target, number.data() + 0x08, 8);
                 std::memcpy(at, number.data() + 0x20, sizeof at);
-                if (std::lround(damage) != 0)
+                if (!nativePlayer && std::lround(damage) != 0) // native: the combat texts
                     floating.push_back({extractedWorld.toLocal(at) + glm::vec3(0, 0, 2.4f), (int)std::lround(damage), 0,
                                         target == spawned.playerId()});
             };
@@ -7448,6 +7453,24 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     glfwSetWindowShouldClose(window, 1);
                 }
             }
+            if (combatTextTest == 1 && spawned.localPlayer() && spawned.playerRecord() && time > 5.0 && hostHoldsPlayerZone()) {
+                // (testing: three hit records on the player join this frame's hit list: a 12.75 hit
+                // with a stun, a block and a 0.35 heal; phase 68 must make "K.O.", "12", "BLOCK"
+                // and "0.3" drawn this same frame, combat-text contract §§3.2-3.3)
+                const auto hitOnPlayer = [&](float amount, uint8_t kind, int32_t stun) {
+                    cwnet::DamageRecord r{};
+                    const int64_t target = spawned.playerId();
+                    std::memcpy(r.data() + 0x08, &target, 8);
+                    std::memcpy(r.data() + 0x10, &amount, 4);
+                    std::memcpy(r.data() + 0x18, &stun, 4);
+                    std::memcpy(r.data() + 0x20, spawned.playerRecord() + 0x10, 24);
+                    r[0x45] = kind;
+                    hitVisuals.push_back(r);
+                };
+                hitOnPlayer(12.75f, 0, 500), hitOnPlayer(5.0f, 1, 0), hitOnPlayer(-0.35f, 0, 0);
+                logLine("Combat text test: three hit records on the player");
+                combatTextTest = 2;
+            }
             if (frameBudgetTest > 0 && spawned.localPlayer()) {
                 // (testing: with an N ms budget, every frame sleeps before present and no frame is
                 // shorter than its budget on average, frame driver §2.3)
@@ -7631,7 +7654,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         finish(false, "the seat press never reached the viewed World");
                 }
             }
-            // The hits this player made (the host applies them), shown as the game shows numbers.
+            // The hits this player made (the host applies them), shown as numbers by CubeVulkan's own
+            // player; the native player's are the combat texts (phase 68, with the hit lights).
+            if (!nativePlayer)
             for (const cwnet::DamageRecord &number : spawned.events().damageNumbers) {
                 int64_t attacker, target, at[3];
                 float damage;
@@ -8117,8 +8142,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
 
         // Native death responses precede hit-display flashes in the persistent list.
-        for (const auto &number : std::exchange(hitVisuals, {}))
+        // Phase 68 (steam-combat-floating-texts-20261113.md): per hit record, the lights, then
+        // "K.O." and the number or label; drawn this frame at age 0 by the visit below.
+        for (const auto &number : std::exchange(hitVisuals, {})) {
             transientLights.hit(number, [&spawned](int64_t id) { return spawned.record(id); });
+            if (nativePlayer)
+                for (auto &text : combattext::visit(number, [&spawned](int64_t id) { return spawned.creature(id); },
+                                                    spawned.playerRecord())) {
+                    if (combatTextTest)
+                        logLine("Combat text: " + std::string(text.text.begin(), text.text.end() - (text.text.ends_with(L"\n") ? 1 : 0)));
+                    featTexts.append(std::move(text));
+                }
+        }
         transientLights.advance(frameMs); // births age before their first scene collection
 
         // Death fragments (one mesh, rebuilt each frame).
@@ -8194,6 +8229,24 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         const auto featViewport = renderer.screenSize();
         const auto featLabels = featTexts.visit(earlySpeechProjection, {(float)featViewport.width, (float)featViewport.height},
                                                 (int32_t)std::clamp(frameMs, 0.0, 1000.0));
+        if (combatTextTest == 2) { // (testing: the texts appended at phase 68 are drawn this frame)
+            const auto drawn = [&](const wchar_t *text, glm::vec3 fill) {
+                return std::any_of(featLabels.begin(), featLabels.end(), [&](const feattext::Label &l) {
+                    return l.text == text && l.fontSize == 20.0f && glm::vec3(l.fill) == fill && l.fill.a == 1.0f;
+                });
+            };
+            const bool ko = drawn(L"K.O.", {1, 1, 0}), hurt = drawn(L"12", {1, .3f, .3f}), block = drawn(L"BLOCK\n", {1, .3f, .3f}),
+                       heal = drawn(L"0.3", {.4f, 1, .5f});
+            const bool passed = ko && hurt && block && heal;
+            logLine(std::string("Combat text test: ") + (passed ? "PASS" : "FAIL") + " drawn at age 0: K.O. " + (ko ? "yes" : "no") +
+                    ", 12 " + (hurt ? "yes" : "no") + ", BLOCK " + (block ? "yes" : "no") + ", 0.3 " + (heal ? "yes" : "no") + " (" +
+                    std::to_string(featLabels.size()) + " labels)");
+            if (!passed)
+                exitCode = 1;
+            combatTextDrawn = passed; // --capture-notice takes this frame
+            combatTextTest = 0;
+            glfwSetWindowShouldClose(window, 1);
+        }
         // Phases 75 and 89-92: the XP/level snapshot, then the comparisons. Records appended now are
         // first drawn by the next frame's visit. No engine writer of level or XP runs between this
         // snapshot and the comparison (the per-frame progress store precedes it), as in Steam.
@@ -9580,7 +9633,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 renderer.capture(captureFeat);
                 featFixtureCaptured = true;
             }
-            if (!captureNotice.empty() && noticedGold + noticedPlatinum > 0 &&
+            if (!captureNotice.empty() && (noticedGold + noticedPlatinum > 0 || combatTextDrawn) &&
                 std::any_of(featLabels.begin(), featLabels.end(), [](const feattext::Label &l) { return l.text != L"FEAT!"; }) &&
                 (!menusReady || menus.interfaceShown()) && hud.hasInterface()) {
                 renderer.capture(captureNotice);

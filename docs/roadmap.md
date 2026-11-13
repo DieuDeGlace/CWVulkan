@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steam's combat texts: "K.O.", damage numbers and BLOCK/MISS/ABSORB as the Game update
+  makes them. See [the checkpoint](release-status.md#combat-texts---2026-11-13).
+
 - [x] Steam's Shrines of Life: the flute registers a shrine (glow, map teleport, respawn) and
   revive picks the nearest registered shrine of the land. See
   [the checkpoint](release-status.md#shrines-of-life---2026-11-12).

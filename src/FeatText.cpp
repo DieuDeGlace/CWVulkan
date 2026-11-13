@@ -41,16 +41,16 @@ std::vector<Label> Store::visit(const std::optional<scenevisibility::Projection>
         const Record &record = entry.record;
         if (projection)
             if (const auto at = project(record.anchor, *projection, viewport)) {
-                const float progress = (float)entry.age / (float)LIFETIME;
+                const float progress = (float)entry.age / (float)record.lifetime;
                 const float alpha = record.colour.a * (1 - progress);
                 const glm::vec3 colour(record.colour);
-                const float y = at->y + progress * -100.f;
-                labels.push_back({glm::vec2(at->x + 5, y + record.offsetY), glm::vec4(colour, alpha), glm::vec4(colour * .1f, alpha),
+                const float y = at->y + progress * record.drift;
+                labels.push_back({glm::vec2(at->x + record.offsetX, y + record.offsetY), glm::vec4(colour, alpha), glm::vec4(colour * .1f, alpha),
                                   record.text, record.fontSize, outlineRadius(record.fontSize)});
             }
         entry.age = std::bit_cast<int32_t>((uint32_t)entry.age + (uint32_t)elapsedMs);
     }
-    std::erase_if(entries, [](const Entry &entry) { return entry.age > LIFETIME; });
+    std::erase_if(entries, [](const Entry &entry) { return entry.age > entry.record.lifetime; });
     return labels;
 }
 } // namespace feattext

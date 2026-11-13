@@ -14,11 +14,14 @@ constexpr float FONT_SIZE = 30, OUTLINE = 3.75f; // the feat record
 constexpr int SOUND = 0x1f;
 constexpr int32_t LIFETIME = 3000;
 // One record (progress-notices section 2): age starts at 0, drift -100 px, X offset +5 px.
+// The combat texts (steam-combat-floating-texts-20261113.md section 3) use offsets 0, their
+// own drift and lifetime 1000.
 struct Record {
     Point anchor{};
     std::wstring text;
     glm::vec4 colour{};
-    float offsetY = -100, fontSize = 16;
+    float offsetX = 5, offsetY = -100, drift = -100, fontSize = 16;
+    int32_t lifetime = LIFETIME;
 };
 // Outline stroke radius of a record's font (section 4 step 7): font/8, at least 3.
 inline float outlineRadius(float fontSize) {

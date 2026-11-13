@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## Combat texts - 2026-11-13
+
+An engine survey against the held Game update schedule found that Steam's combat-text step
+(phase 68) was missing: CubeVulkan showed only its own older damage numbers and never "K.O.",
+"BLOCK", "MISS" or "ABSORB". An independent original-only contract now drives it. Every hit of
+the frame shows "K.O." in yellow when it stuns; hits that involve the player show the number
+(whole numbers, tenths below one, no sign) or the label, white on others (tinted for spirit
+weapons, 60 px and twice the rise when critical), red and sinking on the player, green for
+healing, for one second, drawn the same frame. Eighteen CPU checks and the in-game run failed
+before and pass now. All five targets, full required-owner CPU without skips, every Vulkan
+group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Shrines of Life - 2026-11-12
 
 An independent original-only contract, prompted by a player's recollection, describes Steam's
