@@ -550,14 +550,6 @@ void SpawnedCreatures::forEach(const std::function<void(const uint8_t *)> &f) co
             f(cr.record.data());
 }
 
-void SpawnedCreatures::forEachWithBuffs(const std::function<void(const uint8_t *, const BuffList &)> &f) const {
-    if (const uint8_t *record = playerRecord())
-        f(record, player.side.buffs);
-    for (auto &[k, list] : zones)
-        for (const Creature &cr : list)
-            f(cr.record.data(), cr.side.buffs);
-}
-
 void SpawnedCreatures::keepHealthShares(const std::function<void()> &change) {
     auto maxHealth = [](const Creature &cr) {
         std::vector<nativerules::Buff> buffs;
@@ -2701,7 +2693,7 @@ nativepose::Models SpawnedCreatures::poseModels() const {
 }
 
 void SpawnedCreatures::draw(ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
-                            std::vector<DrawItem> &out) {
+                            std::vector<DrawItem> &out, const Overheads &overheads) {
     auto sourceStateScope = ew.lockSourceState();
     const auto lookup = poseModels();
     const bool nativeWorld = renderStyle() == RenderStyle::Steam;
@@ -2800,6 +2792,26 @@ void SpawnedCreatures::draw(ExtractedWorld &ew, World &world, double dtMs, uint3
             out.push_back(std::move(item));
             playerPartsDrawn += isPlayer;
         }
+        // Its overhead model (0xd8278..0xd86de, after body admission): the physical-position
+        // transform (npcspeech::emoteTransform) in the body's render space, Glow1 and opaque,
+        // with the body's sphere.
+        if (overheads.select)
+            if (const auto chosen = overheads.select(r.data(), cr.side.buffs))
+                if (const auto asset = spriteAsset(world, chosen->pose.model)) {
+                    const npcspeech::Point offset{view.renderOffset[0], view.renderOffset[1], 0};
+                    DrawItem item;
+                    item.mesh = world.modelMesh(asset->model);
+                    item.model = glm::translate(glm::mat4(1), renderShift) *
+                                 npcspeech::emoteTransform(actor, chosen->pose, asset->header, offset) *
+                                 glm::translate(glm::mat4(1), glm::vec3(asset->header.x * .5f, asset->header.y * .5f, 0));
+                    item.flags = GLOW;
+                    item.material = chosen->material;
+                    item.kind = DrawKind::Emote;
+                    item.nativeActor = *admitted;
+                    out.push_back(std::move(item));
+                    if (overheads.drawn)
+                        overheads.drawn(r.data(), *chosen);
+                }
         drawn += !isPlayer;
     };
     for (Creature *creature : registeredCreatures(nativePlayer && hasPlayer ? &player : nullptr, zones))

@@ -22,6 +22,7 @@
 #include "HairStyle.h"
 #include "MapHistory.h"
 #include "MapMarks.h"
+#include "NpcSpeech.h"
 #include "WorldSelection.h"
 #include <list>
 #include <functional>
@@ -427,8 +428,18 @@ class SpawnedCreatures {
         x = trips.begin()->second.x, y = trips.begin()->second.y;
         return true;
     }
-    // Pose admitted entries in registration order, preserving culled caches (dt in ms).
-    void draw(ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view, std::vector<DrawItem> &out);
+    // The model over an admitted living actor (steam-creature-overhead-models.md): `select`
+    // chooses it from the actor's record and buffs (none: no model); `drawn` sees each one
+    // submitted (testing).
+    using BuffList = std::vector<std::array<uint8_t, 0x18>>; // a creature's buffs (0x18 bytes each)
+    struct Overheads {
+        std::function<std::optional<npcspeech::Overhead>(const uint8_t *record, const BuffList &buffs)> select;
+        std::function<void(const uint8_t *record, const npcspeech::Overhead &)> drawn;
+    };
+    // Pose admitted entries in registration order, preserving culled caches (dt in ms). Each
+    // admitted actor's overhead model follows its body, in the same render space and sphere.
+    void draw(ExtractedWorld &ew, World &world, double dtMs, uint32_t nowMs, const creaturescene::View &view,
+              std::vector<DrawItem> &out, const Overheads &overheads = {});
     size_t count() const;
     // How many creatures stand on the ground (+0x5c bit 0), are in water (bit 1), and in all.
     void contacts(size_t &ground, size_t &water, size_t &all) const;
@@ -468,9 +479,6 @@ class SpawnedCreatures {
     void forEach(const std::function<void(const uint8_t *)> &f) const;
     // All registered creatures, including the player, in retained insertion order.
     void forEachWorldCreature(const std::function<void(const uint8_t *)> &f) const;
-    // The native player (when there is one) and then every near creature, with its buffs.
-    using BuffList = std::vector<std::array<uint8_t, 0x18>>;
-    void forEachWithBuffs(const std::function<void(const uint8_t *, const BuffList &)> &f) const;
     // A model id's sprite (sprites/<name>.cub); empty when there is none.
     std::string spriteName(int id) const { return id >= 0 && (size_t)id < sprites.size() ? sprites[(size_t)id].name : std::string(); }
     // While `change` alters what the creatures' maximum health depends on (the player's

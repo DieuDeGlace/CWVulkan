@@ -322,6 +322,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool overheadTest = false;  // --overhead-test: the player's buff-7 heart and collection marker are drawn (testing).
     struct OverheadDrawn { int64_t id; int model; float scale; glm::vec4 material; };
     std::vector<OverheadDrawn> overheadDrawn; // the last frame's overhead submissions (for --overhead-test)
+// The last frame's overhead models, and how many sat in the actor pass beside a body part of the
+// same admitted actor (for --overhead-test).
+struct OverheadQueue { size_t models = 0, withBody = 0; } overheadQueue;
     int combatTextTest = 0;     // --combat-text-test: hit records on the player become combat texts (phase 68).
     bool combatTextDrawn = false; // (testing: the combat-text frame, for --capture-notice)
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
@@ -7355,6 +7358,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         opaque.clear();
         water.clear();
         std::optional<size_t> nativeActorsAt;
+        size_t nativeActorsEnd = 0;
         // Mesh streaming/changed blocks and this frame's native object updates are ready.
         world.collect(opaque, water);
         if (spawnedReady) {
@@ -7719,11 +7723,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     stage = expect(0xdf0, 1.5f, orange, "selected heart") ? 3 : 9, stageAt = time;
                     std::erase_if(me.buffs, [](const nativebuffs::Buff &b) { return b[0] == 7; });
                 } else if (stage == 3 && time - stageAt > .5) {
-                    const bool passed = expect(0xdc2, 1.f, orange, "selected collection marker");
+                    const bool marker = expect(0xdc2, 1.f, orange, "selected collection marker");
                     size_t markers = 0;
                     for (const auto &d : overheadDrawn) markers += d.id != id;
+                    // (0xd3170: each model is drawn inside its actor's admitted route, after the body,
+                    // so it shares that actor's queue position and sphere; culled actors draw none)
+                    const bool queued = overheadQueue.models > 0 && overheadQueue.withBody == overheadQueue.models;
+                    const bool passed = marker && queued;
                     logLine(std::string("Overhead test: ") + (passed ? "PASS" : "FAIL") + ", " + std::to_string(markers) +
-                            " other actors drew an overhead model");
+                            " other actors drew an overhead model, " + std::to_string(overheadQueue.withBody) + " of " +
+                            std::to_string(overheadQueue.models) + " queued with their admitted body");
                     creatureCollection.remove(id);
                     creatureCollection.selectedId = 0;
                     if (!passed) exitCode = 1;
@@ -8944,11 +8953,34 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 view.flags = mapOpen ? 2 : 0;
                 view.renderOffset = renderer.steamRenderOffset();
                 view.visible = [&](const auto &sphere) { return renderer.steamActorVisible(sphere); };
+                // Overhead models (class/collection markers, emotes, the buff-7 heart), drawn by the
+                // body pass after each admitted actor (steam-creature-overhead-models.md).
+                SpawnedCreatures::Overheads overheads;
+                overheads.select = [&](const uint8_t *record, const SpawnedCreatures::BuffList &buffs) {
+                    const int64_t id = npcspeech::actor(record).id;
+                    npcspeech::OverheadInputs inputs;
+                    inputs.creatureClass = record[worldgen::creature::CLASS];
+                    inputs.collected = creatureCollection.find(id) != nullptr;
+                    inputs.selected = inputs.collected && creatureCollection.selectedId == id;
+                    if (const auto active = npcSpeech.emotes().find(id); active != npcSpeech.emotes().end())
+                        inputs.emote = &active->second;
+                    if (const auto *heart = nativebuffs::find(buffs, 7))
+                        inputs.heartStrength = nativebuffs::strength(*heart);
+                    return npcspeech::overhead(inputs);
+                };
+                if (overheadTest) {
+                    overheadDrawn.clear();
+                    overheads.drawn = [&](const uint8_t *record, const npcspeech::Overhead &o) {
+                        overheadDrawn.push_back({npcspeech::actor(record).id, o.pose.model, o.pose.scale, o.material});
+                    };
+                }
                 const size_t oldEnd = opaque.size();
                 spawned.draw(extractedWorld, world, gamemath::frameMilliseconds(frameMs),
-                             (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(), view, opaque);
+                             (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(), view,
+                             opaque, overheads);
                 // Keep actor descriptors in their original queue position without copying a second list.
                 std::rotate(opaque.begin() + *nativeActorsAt, opaque.begin() + oldEnd, opaque.end());
+                nativeActorsEnd = *nativeActorsAt + (opaque.size() - oldEnd);
             }
         }
         // The map (the game's frame update, the map rendering): its position, its overlay between the
@@ -9716,42 +9748,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hs.crosshair = visible && !aiming && currentAbility != 0x9c;
                 hs.zoomCrosshair = visible && aiming;
             }
-            // Overhead models (class/collection markers, emotes, the buff-7 heart): Glow1, opaque,
-            // through the shared actor-sphere gate (steam-creature-overhead-models.md).
-            if (overheadTest)
-                overheadDrawn.clear();
-            spawned.forEachWithBuffs([&](const uint8_t *record, const SpawnedCreatures::BuffList &buffs) {
-                const npcspeech::Actor actor = npcspeech::actor(record);
-                if (!(actor.health > 0))
-                    return;
-                npcspeech::OverheadInputs inputs;
-                inputs.creatureClass = record[worldgen::creature::CLASS];
-                inputs.collected = creatureCollection.find(actor.id) != nullptr;
-                inputs.selected = inputs.collected && creatureCollection.selectedId == actor.id;
-                if (const auto active = npcSpeech.emotes().find(actor.id); active != npcSpeech.emotes().end())
-                    inputs.emote = &active->second;
-                if (const auto *heart = nativebuffs::find(buffs, 7))
-                    inputs.heartStrength = nativebuffs::strength(*heart);
-                const auto selected = npcspeech::overhead(inputs);
-                if (!selected)
-                    return;
-                const auto asset = spawned.spriteAsset(world, selected->pose.model);
-                if (!asset)
-                    return;
-                const npcspeech::Point offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY(), 0};
-                const auto game = npcspeech::emoteTransform(actor, selected->pose, asset->header, offset);
-                DrawItem draw;
-                draw.mesh = world.modelMesh(asset->model);
-                draw.model = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
-                             glm::translate(glm::mat4(1), glm::vec3(asset->header.x * .5f, asset->header.y * .5f, 0));
-                draw.flags = GLOW;
-                draw.material = selected->material;
-                draw.kind = DrawKind::Emote;
-                draw.nativeActor = npcspeech::actorSphere(actor);
-                opaque.push_back(std::move(draw));
-                if (overheadTest)
-                    overheadDrawn.push_back({actor.id, selected->pose.model, selected->pose.scale, selected->material});
-            });
             for (auto &q : quests) { // the tracker: what is left to do, in the game's words
                 if (q.state == 2)
                     continue;
@@ -10241,6 +10237,21 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             publishCharacterSaveGates();
             sourceStateScope.unlock(); // draw uses immutable meshes and copied source inputs
             updateMusic();
+            if (overheadTest) { // (testing: overhead models are queued with their admitted body)
+                overheadQueue = {};
+                for (size_t i = 0; i < opaque.size(); ++i) {
+                    if (opaque[i].kind != DrawKind::Emote)
+                        continue;
+                    ++overheadQueue.models;
+                    const bool inPass = nativeActorsAt && i >= *nativeActorsAt && i < nativeActorsEnd;
+                    bool body = false;
+                    for (size_t j = nativeActorsAt.value_or(0); inPass && j < nativeActorsEnd && !body; ++j)
+                        body = opaque[j].kind != DrawKind::Emote && opaque[j].nativeActor && opaque[i].nativeActor &&
+                               opaque[j].nativeActor->centre == opaque[i].nativeActor->centre &&
+                               opaque[j].nativeActor->radius == opaque[i].nativeActor->radius;
+                    overheadQueue.withBody += inPass && body;
+                }
+            }
             renderer.frame(camera, lighting, player.position, time, opaque, water);
         }
         if (spawnedReady) {

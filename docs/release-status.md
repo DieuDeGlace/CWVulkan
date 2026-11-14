@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Overhead models in the body pass - 2026-11-14
+
+Per the [overhead-model contract](specs/steam-creature-overhead-models.md) and
+[speech rendering](specs/steam-npc-speech-rendering.md) sections 6-7, an overhead model belongs to its
+actor's admitted living route. CubeVulkan chose markers in a separate loop over every actor, with a
+session-origin matrix, queued after all actors. They are now chosen and drawn by the body pass right
+after each admitted actor, with the body's sphere and renderer origin. The fixture failed (0 of 3
+queued with their body) on the old loop and passes. All five targets, full required-owner CPU without
+skips, every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Death marker - 2026-11-14
 
 The [death-marker contract](specs/steam-local-death-tombstone-and-marker-review-20261114.md) puts

@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Overhead models drawn by the body pass with each admitted actor's sphere and render origin, as Steam's.
+  See [the checkpoint](release-status.md#overhead-models-in-the-body-pass---2026-11-14).
+
 - [x] The map's death marker at the exact revived body, run down by World steps and never saved, as Steam's.
   See [the checkpoint](release-status.md#death-marker---2026-11-14).
 
