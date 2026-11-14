@@ -42,8 +42,8 @@ struct Audio::State {
 
     // The game's side.
     int64_t listener[3] = {0, 0, 0};
-    float duckMs = 0;      // game +0x204c
-    float successMs = 0;   // game +0x2050
+    int32_t duckMs = 0;      // game +0x204c
+    int32_t successMs = 0;   // game +0x2050
     float shake = 0;       // game +0x1e00
     MusicState music;
 

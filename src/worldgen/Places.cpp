@@ -263,7 +263,7 @@ float placeWeight(int kind, bool big, float d2) {
         return 0.0f;
     const int32_t r = placeRadius(big);
     const float r2 = (float)(r * r);
-    if (!(d2 < r2))
+    if (d2 >= r2)
         return 0.0f;
     const float f = 1.0f - d2 / r2;
     return f * f;

@@ -1,6 +1,7 @@
 // The rules of the game's sound and music (docs/specs/sound.md). See SoundRules.h.
 #include "SoundRules.h"
 #include "GameMath.h"
+#include "worldgen/Noise.h"
 
 #include <algorithm>
 #include <bit>
@@ -79,14 +80,14 @@ RequestRecord makeRequest(const Request &r) {
 namespace {
 constexpr float BEACH_BELOW = 10.0f; // ground height under which the coast plays
 constexpr float OCEAN_BELOW = 0.0f;
-constexpr float SPIRIT_THRESHOLD = 100.0f;
-constexpr float QUICK_THRESHOLD = 500.0f;    // success and menus
-constexpr float PLACE_FADE_MS = 300000.0f;   // five minutes
-constexpr float SUCCESS_FADE_MS = 10000.0f;
-constexpr float EARLIEST_CHANGE_MS = 30000.0f;
-constexpr float LATE_TRACK_MS = 25000.0f;    // a track this far in waits 5 s more
-constexpr float LATE_CHANGE_WAIT_MS = 5000.0f;
-constexpr float URGENT_CHANGE_WAIT_MS = 500.0f; // boss and success
+constexpr int32_t SPIRIT_THRESHOLD = 100;
+constexpr int32_t QUICK_THRESHOLD = 500;    // success and menus
+constexpr int32_t PLACE_FADE_MS = 300000;   // five minutes
+constexpr int32_t SUCCESS_FADE_MS = 10000;
+constexpr int32_t EARLIEST_CHANGE_MS = 30000;
+constexpr int32_t LATE_TRACK_MS = 25000;    // a track this far in waits 5 s more
+constexpr int32_t LATE_CHANGE_WAIT_MS = 5000;
+constexpr int32_t URGENT_CHANGE_WAIT_MS = 500; // boss and success
 
 // The track of a region's biome (§3.3 step 3).
 const char *biomeTrack(int biome) {
@@ -110,10 +111,10 @@ const char *placeTrack(const MusicPlace &p) {
     switch (p.placeKind) {
     case 4:
     case 9: return "unholy pact";
-    case 5: // a town: its forest weight decides (open question 7)
+    case 5: // The landmark center determines the forest override.
         if (p.forestWeight > PLACE_WEIGHT_MIN)
             return "unholy pact";
-        return p.placeHashOdd ? "village2" : "village";
+        return p.placeHashOdd ? "village" : "village2";
     case 8: return "order of the light";
     case 10: return "mountains";
     case 13:
@@ -129,7 +130,9 @@ const char *placeTrack(const MusicPlace &p) {
     }
 }
 
-bool urgentTrack(const std::string &name) { return name == "boss" || name == "success"; }
+int32_t addClock(int32_t elapsed, int32_t delay) {
+    return std::bit_cast<int32_t>(uint32_t(elapsed) + uint32_t(delay));
+}
 } // namespace
 
 int32_t insidePlaceKind(int32_t zoneX, int32_t zoneY, int32_t kind, bool big) {
@@ -154,9 +157,16 @@ int32_t insidePlaceKind(int32_t zoneX, int32_t zoneY, int32_t kind, bool big) {
     }
 }
 
+int32_t musicBlock(int64_t fixed) {
+    return int32_t(fixed / 65536);
+}
+
 int32_t musicZone(int64_t fixed) {
-    const int32_t block = (int32_t)(fixed / 65536); // toward zero
-    return block >> 10;                             // floored (arithmetic shift, C++20)
+    return musicBlock(fixed) >> 10;
+}
+
+int32_t weightedPlaceKind(int32_t kind, float weight) {
+    return PLACE_WEIGHT_MIN > weight ? 0 : kind;
 }
 
 Track chooseTrack(const MusicPlace &place, const std::string &current) {
@@ -176,25 +186,29 @@ Track chooseTrack(const MusicPlace &place, const std::string &current) {
             t.name = own;
         t.placeMusic = true;
     }
-    auto switchTo = [&](const char *name, float threshold) {
-        if (current != name && threshold > 0)
+    auto switchTo = [&](const char *name, int32_t threshold) {
+        if (threshold > 0 && current != name)
             t.threshold = threshold;
         t.name = name;
-        t.placeMusic = false;
     };
     if (place.spiritWorld)
         switchTo("deadlands", SPIRIT_THRESHOLD);
-    if (place.boss)
+    t.boss = place.boss;
+    if (place.boss) {
         switchTo("boss", 0);
+        t.placeMusic = false;
+    }
     if (place.success)
         switchTo("success", QUICK_THRESHOLD);
-    if (place.menu)
+    if (place.menu) {
         switchTo("maintheme", QUICK_THRESHOLD);
+        t.placeMusic = false;
+    }
     return t;
 }
 
-float countDown(float timer, double ms) {
-    return (float)std::max(0.0, std::trunc((double)timer - ms));
+int32_t countDown(int32_t timer, double ms) {
+    return std::max(0, worldgen::trunc32(double(timer) - ms));
 }
 
 float easeMusicVolume(float volume, float target, double dtMs, float rate) {
@@ -203,9 +217,10 @@ float easeMusicVolume(float volume, float target, double dtMs, float rate) {
 }
 
 void stepMusic(MusicState &s, const Track &wanted, bool playing, double dtMs, const MusicOptions &options,
-               bool successRunning, float duckMs) {
+               bool successRunning, int32_t duckMs) {
     const bool differs = wanted.name != s.current;
-    if (differs && wanted.threshold > 0)
+    const bool urgent = wanted.boss || successRunning;
+    if (wanted.threshold > 0)
         s.threshold = wanted.threshold;
     const float full = (float)options.volume * OPTION_SCALE;
     if (!playing) {
@@ -218,19 +233,19 @@ void stepMusic(MusicState &s, const Track &wanted, bool playing, double dtMs, co
         s.firstDifference = true;
         return;
     }
-    s.playedMs = (float)std::trunc((double)s.playedMs + dtMs); // whole ms (§4.4)
+    s.playedMs = worldgen::trunc32(double(s.playedMs) + dtMs);
     if (!differs) {
         // Place music fades after five minutes unless the player loops it.
-        s.threshold = wanted.placeMusic && !options.loop ? PLACE_FADE_MS : s.playedMs + PLACE_FADE_MS;
+        s.threshold = wanted.placeMusic && !options.loop ? PLACE_FADE_MS : addClock(s.playedMs, PLACE_FADE_MS);
         s.firstDifference = true;
     } else if (s.firstDifference) {
         // Another track is wanted: the current one plays on for a while, then fades.
-        if (urgentTrack(wanted.name))
-            s.threshold = s.playedMs + URGENT_CHANGE_WAIT_MS;
+        if (urgent)
+            s.threshold = addClock(s.playedMs, URGENT_CHANGE_WAIT_MS);
         else if (s.playedMs < LATE_TRACK_MS)
             s.threshold = EARLIEST_CHANGE_MS;
         else
-            s.threshold = s.playedMs + LATE_CHANGE_WAIT_MS;
+            s.threshold = addClock(s.playedMs, LATE_CHANGE_WAIT_MS);
         s.firstDifference = false;
     }
     float target, rate;
@@ -242,7 +257,7 @@ void stepMusic(MusicState &s, const Track &wanted, bool playing, double dtMs, co
         rate = 0.001f;
     } else {
         target = 0;
-        rate = wanted.name == "boss" || successRunning ? 0.005f : 0.0004f;
+        rate = urgent ? 0.005f : 0.0004f;
     }
     s.volume = easeMusicVolume(s.volume, target, dtMs, rate);
 }

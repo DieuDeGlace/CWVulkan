@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Music inputs and leaf motion - 2026-11-14
+
+The implementation used the whole held
+[music place inputs](specs/steam-music-inside-building-20261114.md),
+[music ordering and timer review](specs/steam-reward-popup-and-music-order-20261112.md),
+[music operands and urgency review](specs/steam-music-inputs-and-urgent-transitions-review-20261114.md)
+and [leaf and scene writer addendum](specs/steam-ambient-leaf-and-scene-writer-addendum-20261114.md).
+The implementer used engine code and owned runtime tests after accepting the
+verified prose. The original source review remained isolated. The gameplay logs
+establish request generation, with original playback and scene comparison open.
+
 ## Exact pickup receipts - 2026-11-14
 
 The implementer applied the completed

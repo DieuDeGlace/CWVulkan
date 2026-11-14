@@ -252,6 +252,8 @@ class Renderer {
     void prepareScene(const Camera &, const Lighting &, double time);
     // First scene-zone gate, before the separate distance limit for models.
     std::optional<float> admittedZoneDistance(const scenevisibility::Bounds &) const;
+    // The ordinary, inclusive camera-centered scene sweep. The ambient scan itself uses the player.
+    std::optional<std::pair<steampoints::ZoneKey, int>> ambientSceneArea() const;
     bool steamActorVisible(const scenevisibility::Sphere &) const;
     bool steamModelVisible(const scenevisibility::Sphere &) const;
     float steamModelFade(const steampoints::Point &) const;

@@ -1,5 +1,24 @@
 # Source review checkpoint — 2026-11-08
 
+## Music inputs and leaf motion - 2026-11-14
+
+Ambient leaves now undergo block collision from their first motion step. Scene
+distance publication stays inside the active camera's inclusive zone square.
+The first distance sample for a newly loaded zone still uses CubeVulkan's
+initial admission policy while its native starting value is unverified.
+
+Music uses the live character's region and the inside block flag. It floors the
+warp sample, truncates the ground-height sample, and samples the forest weight
+at the landmark center for the village tracks. Boss and success state carry
+through title-theme overrides. Signed millisecond clocks and the independent
+ordinary-track flag govern wait and fade behavior. Device playback timing and
+the original audio worker's scheduling remain open.
+
+The before-and-after sound-rule tests, required owner-data and Vulkan suites,
+and SDK-free extractor audit passed. Licensed gameplay on Native/Steam,
+Alpha/Steam and Alpha/Alpha generated music and ambient requests and preserved
+the disposable saves.
+
 ## Exact pickup receipts - 2026-11-14
 
 The native pickup receipt now passes its original fixed-point coordinates and

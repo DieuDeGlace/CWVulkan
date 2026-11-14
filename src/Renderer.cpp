@@ -1185,6 +1185,14 @@ std::array<int64_t, 2> Renderer::steamRenderOffset() const {
                       : std::array<int64_t, 2>{};
 }
 
+std::optional<std::pair<steampoints::ZoneKey, int>> Renderer::ambientSceneArea() const {
+    if (!sceneFrame)
+        return std::nullopt;
+    const auto &eye = sceneFrame->visibility.eye;
+    return std::pair{steampoints::ZoneKey{gamemath::floorFixedZone(eye[0]), gamemath::floorFixedZone(eye[1])},
+                     settings.nativeZoneRadius};
+}
+
 std::optional<float> Renderer::admittedZoneDistance(const scenevisibility::Bounds &bounds) const {
     if (!sceneFrame || !bounds.meshed || !sceneFrame->visibility.box(bounds, sceneFrame->ranges.scene + 64))
         return std::nullopt;

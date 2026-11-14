@@ -24,8 +24,8 @@ constexpr float MAX_PITCH = 2.0f;            // the sound voices' largest freque
 constexpr float OPTION_SCALE = 0.01f;        // the integer volume options are percent
 constexpr float MUSIC_STOP_VOLUME = 0.01f;   // the music thread stops the music below this
 constexpr float DUCKED_MUSIC_VOLUME = 0.015f;          // the music while an instrument plays
-constexpr float DUCK_MS = 6000.0f;                     // how long one instrument note ducks the music
-constexpr float SUCCESS_MS = 60000.0f;                 // how long the success track is wanted
+constexpr int32_t DUCK_MS = 6000;                     // how long one instrument note ducks the music
+constexpr int32_t SUCCESS_MS = 60000;                 // how long the success track is wanted
 constexpr float EXPLOSION_SHAKE_DISTANCE_SQ = 2500.0f; // blocks squared; zero shake at 50 blocks
 constexpr float RAND_SCALE = 32767.0f;                 // the C runtime's rand() maximum
 
@@ -70,7 +70,7 @@ float cappedPitch(float pitch);
 float finalVolume(int soundOption, float volume, float attenuation);
 // The success and duck timers each Game update (steam-reward-popup-and-music-order §4.2):
 // truncated toward zero after subtracting the capped ms, never below zero.
-float countDown(float timer, double ms);
+int32_t countDown(int32_t timer, double ms);
 
 // Whether a sound number is an instrument's note, which ducks the music (§3.5).
 bool isInstrument(int number);
@@ -107,7 +107,7 @@ struct MusicPlace {
     int biome = 0;               // B: the region's biome
     float ground = 0;            // the ground height at the player's column
     int placeKind = 0;           // K: the place kind, already 0 where its weight is under 0.5
-    float forestWeight = 0;      // the forest weight at the column (decides kind 5)
+    float forestWeight = 0;      // the forest weight at the landmark center (decides kind 5)
     bool placeHashOdd = false;   // the low bit of the place cell's hash
     bool shrine = false;         // the block flag 0x20 at the player
     bool spiritWorld = false;    // the player has buff 0x13
@@ -121,7 +121,8 @@ struct MusicPlace {
 struct Track {
     std::string name;
     bool placeMusic = false;
-    float threshold = 0;
+    int32_t threshold = 0;
+    bool boss = false;
 };
 // The weight a place must have for its kind to count (§3.3).
 constexpr float PLACE_WEIGHT_MIN = 0.5f;
@@ -131,15 +132,17 @@ constexpr float PLACE_WEIGHT_MIN = 0.5f;
 int32_t insidePlaceKind(int32_t zoneX, int32_t zoneY, int32_t kind, bool big);
 // The music's zone coordinate of a fixed-point position (§1 step 2): the block coordinate divided
 // toward zero, then floored by 1024.
+int32_t musicBlock(int64_t fixed);
 int32_t musicZone(int64_t fixed);
+int32_t weightedPlaceKind(int32_t kind, float weight);
 // The track a place wants (§3.3). `current` is the track now chosen, so the rules that only
 // set a threshold when they change the track can tell.
 Track chooseTrack(const MusicPlace &place, const std::string &current);
 // The music's state between frames (§3.4).
 struct MusicState {
     std::string current;      // C: the track last requested
-    float playedMs = 0;       // E: how long the current track has played
-    float threshold = 300000; // T: the play time after which it fades out
+    int32_t playedMs = 0;       // E: how long the current track has played
+    int32_t threshold = 300000; // T: the play time after which it fades out
     bool firstDifference = true; // F: the next frame wanting another track sets T
     float volume = 0;         // the music volume now (game +0x2048)
 };
@@ -151,7 +154,7 @@ struct MusicOptions {
 // the state on and returns the path to request (Music\<current>.ogg) through state.current
 // and the volume through state.volume.
 void stepMusic(MusicState &state, const Track &wanted, bool playing, double dtMs, const MusicOptions &options,
-               bool successRunning, float duckMs);
+               bool successRunning, int32_t duckMs);
 // Native frame smoothing; the rate depends on ducking, recovery and the wanted track.
 // See remaining-runtime-gaps.md §8.1 for the verified coefficients and frame cap.
 float easeMusicVolume(float volume, float target, double dtMs, float rate = 0.001f);

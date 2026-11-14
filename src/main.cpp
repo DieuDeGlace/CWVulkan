@@ -192,27 +192,42 @@ struct Player {
     float verticalSpeed = 0;
 };
 
-// What the music choice reads of the place at the player's fixed-point position (sound.md §3.3,
-// steam-music-inside-building §1): its zone, region biome, ground height and place kind.
+// Music's position queries (steam-music-inputs-and-urgent-transitions-review).
 // `shrine` is flag 0x20 of the player's block, which is also the game's "inside" test: then the
 // kind is 0x2aa270's, with no weight test. The boss, spirit-world and success states are the caller's.
-soundrules::MusicPlace musicPlaceAt(const int64_t at[2], bool shrine) {
+soundrules::MusicPlace musicPlaceAt(const int64_t at[2], bool shrine, const uint8_t *actor) {
     soundrules::MusicPlace m;
-    const int32_t x = worldgen::floorDots(at[0]), y = worldgen::floorDots(at[1]);
+    const int32_t groundX = soundrules::musicBlock(at[0]), groundY = soundrules::musicBlock(at[1]);
     m.cellX = soundrules::musicZone(at[0]);
     m.cellY = soundrules::musicZone(at[1]);
-    m.biome = worldgen::biomeAt(x, y);
-    m.ground = worldgen::groundHeight(x, y, 0);
-    const worldgen::Place p = worldgen::placeAt(x, y);
-    if (shrine) {
-        const bool big = worldgen::bigCell(m.cellX, m.cellY);
-        m.placeKind = soundrules::insidePlaceKind(m.cellX, m.cellY, worldgen::placeKind(m.cellX, m.cellY, big), big);
-    } else {
-        m.placeKind = p.weight >= soundrules::PLACE_WEIGHT_MIN ? p.kind : 0; // a place counts from half its weight in
-    }
-    m.forestWeight = worldgen::forestRegion(worldgen::neighbourhood(x, y), p.kind, p.weight);
-    m.placeHashOdd = (worldgen::random(worldgen::cellKey(m.cellX, m.cellY)) & 1) != 0;
     m.shrine = shrine;
+    const bool big = worldgen::bigCell(m.cellX, m.cellY);
+    const int32_t kind = worldgen::placeKind(m.cellX, m.cellY, big);
+    if (shrine) {
+        m.placeKind = soundrules::insidePlaceKind(m.cellX, m.cellY, kind, big);
+        return m;
+    }
+    if (actor) {
+        int32_t region[2];
+        std::memcpy(region, actor + worldgen::creature::REGION, sizeof region);
+        m.biome = worldgen::regionBiome(region[0], region[1]);
+    } else {
+        m.biome = worldgen::biomeAt(groundX, groundY); // Recorded sessions have no live actor region.
+    }
+    worldgen::Int2 center;
+    if (kind != 0) {
+        center = worldgen::cellPoint(m.cellX, m.cellY, big);
+        const int32_t warpX = gamemath::floorFixedBlock(at[0]), warpY = gamemath::floorFixedBlock(at[1]);
+        const float distance = worldgen::warpedDist2(center, warpX, warpY);
+        m.placeKind = soundrules::weightedPlaceKind(kind, worldgen::placeWeight(kind, big, distance));
+    }
+    if (m.cellX == 0 && m.cellY == 0 && m.placeKind != 0)
+        return m;
+    m.ground = worldgen::groundHeight(groundX, groundY, 0);
+    if (m.placeKind == 5) {
+        m.forestWeight = worldgen::forestRegion(worldgen::neighbourhood(center.x, center.y), kind, 1.0f);
+        m.placeHashOdd = (worldgen::random(worldgen::cellKey(m.cellX, m.cellY)) & 1) != 0;
+    }
     return m;
 }
 
@@ -9998,7 +10013,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             constexpr uint8_t SHRINE_FLAG = 0x20; // the block's flag byte (+5)
             bool shrineLoaded = false;
             const bool shrine = (extractedWorld.gameBlock(bx, by, bz, &shrineLoaded)[5] & SHRINE_FLAG) && shrineLoaded;
-            soundrules::MusicPlace place = musicPlaceAt(here, shrine);
+            soundrules::MusicPlace place = musicPlaceAt(here, shrine, spawned.playerRecord());
             float strength = 0, left = 0;
             constexpr int SPIRIT_WORLD_BUFF = 0x13;
             place.spiritWorld = spawned.playerRecord() && spawned.playerBuff(SPIRIT_WORLD_BUFF, strength, left);

@@ -1,4 +1,5 @@
 #include "WaterLilies.h"
+#include "GameMath.h"
 #include "AlphaLook.h"
 #include <array>
 #include <charconv>
@@ -8897,14 +8898,14 @@ static void soundRules() {
             CHECK(track(p).name == name);
         }
         p.placeKind = 5; // a town: the village tracks by the place's hash, the forest's otherwise
-        CHECK(track(p).name == "village");
-        p.placeHashOdd = true;
         CHECK(track(p).name == "village2");
+        p.placeHashOdd = true;
+        CHECK(track(p).name == "village");
         p.forestWeight = 0.6f;
         CHECK(track(p).name == "unholy pact");
         p.forestWeight = 0, p.placeHashOdd = false;
         p.ground = -5; // a place's music wins over the sea
-        CHECK(track(p).name == "village" && track(p).placeMusic);
+        CHECK(track(p).name == "village2" && track(p).placeMusic);
         p.ground = 50;
         MusicPlace title = p;
         title.cellX = 0;
@@ -8928,11 +8929,39 @@ static void soundRules() {
         MusicPlace menu;
         menu.menu = true;
         CHECK(track(menu, "woodlands").threshold == 500.0f && track(menu, "maintheme").threshold == 0.0f);
+        const float unordered = std::numeric_limits<float>::quiet_NaN();
+        CHECK(std::isnan(worldgen::placeWeight(5, false, unordered)));
+        p.forestWeight = 0.5f;
+        p.placeHashOdd = true;
+        CHECK(track(p).name == "village");
+        p.forestWeight = unordered;
+        p.placeHashOdd = false;
+        CHECK(track(p).name == "village2");
+        CHECK(track(spirit).placeMusic);
+        MusicPlace reward = p;
+        reward.success = true;
+        CHECK(track(reward).placeMusic);
+        MusicPlace bossMenu = p;
+        bossMenu.boss = true;
+        bossMenu.menu = true;
+        MusicOptions timing;
+        timing.volume = 50;
+        MusicState playing;
+        playing.current = "woodlands";
+        playing.playedMs = 11900;
+        playing.volume = 0.5f;
+        stepMusic(playing, track(bossMenu, playing.current), true, 100, timing, false, 0);
+        CHECK(playing.threshold == 12500);
+        stepMusic(playing, track(bossMenu, playing.current), true, 16, timing, false, 0);
+        CHECK(playing.threshold == 500 && about(playing.volume, easeMusicVolume(0.5f, 0, 16, 0.005f)));
+        MusicState ready;
+        stepMusic(ready, track(boss, ready.current), false, 16, timing, true, 0);
+        CHECK(ready.current == "maintheme" && ready.threshold == 10000);
     }
     { // §3.4: when the music changes.
         MusicOptions options;
         options.volume = 50;
-        const Track place{"woodlands", true, 0}, desert{"desert", true, 0}, boss{"boss", false, 0};
+        const Track place{"woodlands", true, 0}, desert{"desert", true, 0}, boss{"boss", false, 0, true};
         MusicState s;
         stepMusic(s, place, false, 16, options, false, 0); // silence: starts at once at full volume
         CHECK(s.current == "woodlands" && s.playedMs == 0 && s.threshold == 300000.0f && about(s.volume, 0.5f));
@@ -8981,6 +9010,15 @@ static void soundRules() {
             stepMusic(ducked, place, true, 16, options, false, 1000);
         CHECK(std::fabs(ducked.volume - DUCKED_MUSIC_VOLUME) < 0.001f);
 
+        MusicPlace menuSuccess;
+        menuSuccess.success = true;
+        menuSuccess.menu = true;
+        MusicState withMenu;
+        withMenu.current = "woodlands";
+        withMenu.playedMs = 4000;
+        stepMusic(withMenu, chooseTrack(menuSuccess, withMenu.current), true, 100, options, true, 0);
+        CHECK(withMenu.threshold == 4600.0f);
+
         MusicState success;
         stepMusic(success, Track{"success", false, 500}, false, 16, options, true, 0);
         CHECK(success.threshold == 10000.0f && success.current == "success");
@@ -8991,7 +9029,7 @@ static void soundRules() {
         fading.firstDifference = false, fading.volume = 0.5f;
         MusicState fast = fading, recovering = fading;
         stepMusic(fading, Track{"new", false, 0}, true, 16, options, false, 0);
-        stepMusic(fast, Track{"boss", false, 0}, true, 16, options, false, 0);
+        stepMusic(fast, boss, true, 16, options, false, 0);
         CHECK(about(fading.volume, easeMusicVolume(0.5f, 0, 16, 0.0004f)));
         CHECK(about(fast.volume, easeMusicVolume(0.5f, 0, 16, 0.005f)) && fast.volume < fading.volume);
         recovering.volume = 0.015f;
@@ -9006,6 +9044,14 @@ static void soundRules() {
         stepMusic(counted, place, true, 16.6, options, false, 0);
         stepMusic(counted, place, true, 16.6, options, false, 0);
         CHECK(counted.playedMs == 32); // trunc(trunc(16.6) + 16.6)
+        CHECK(musicBlock(-1) == 0 && gamemath::floorFixedBlock(-1) == -1);
+        CHECK(musicBlock(-1024LL * 65536 - 1) == -1024 && musicZone(-1024LL * 65536 - 1) == -1);
+        CHECK(countDown(60000, std::numeric_limits<double>::quiet_NaN()) == 0);
+        MusicState precise;
+        precise.current = "woodlands";
+        precise.playedMs = 16777216;
+        stepMusic(precise, place, true, 1, options, false, 0);
+        CHECK(precise.playedMs == 16777217);
     }
     { // §4: the staggered ticks.
         CHECK(staggeredTick(999, 2, 0, 1000) && !staggeredTick(0, 999, 0, 1000) && staggeredTick(0, 1000, 0, 1000));
@@ -9041,6 +9087,8 @@ static void soundRules() {
         CHECK(musicZone(0) == 0 && musicZone(1023 * 65536 + 65535) == 0 && musicZone(1024 * 65536) == 1);
         CHECK(musicZone(-32768) == 0 && musicZone(-65535) == 0); // toward zero first: -0.5 block is block 0
         CHECK(musicZone(-65536) == -1 && musicZone(-1024 * 65536) == -1 && musicZone(-1025 * 65536) == -2);
+        CHECK(weightedPlaceKind(42, .49f) == 0 && weightedPlaceKind(42, .5f) == 42 &&
+              weightedPlaceKind(42, std::numeric_limits<float>::quiet_NaN()) == 42);
     }
     { // §4: what the emitters play and when.
         struct Played {
@@ -9151,6 +9199,16 @@ static void soundRules() {
                   about(birth.spin.y, (10000.f / 32767.f - .5f) * 10) &&
                   about(birth.spin.z, (1000.f / 32767.f - .5f) * 10));
             CHECK(leavesInWorld.states().back().age == 31);
+            CHECK(birth.collision && !birth.frozen);
+        }
+        nativeparticles::System collidingLeaf;
+        collidingLeaf.prependAmbientLeaf({{32768, 32768, 13107}, {0, 0, -2}, {1, 2, 3}, {.1f, .2f, .3f}});
+        collidingLeaf.update(200, [](int32_t, int32_t, int32_t z) { return uint8_t(z < 0 ? 1 : 8); });
+        CHECK(collidingLeaf.states().size() == 1);
+        if (!collidingLeaf.states().empty()) {
+            const auto &rest = collidingLeaf.states().front();
+            CHECK(rest.age == 200 && rest.position[2] == 13107 && rest.velocity == glm::vec3(0) && rest.spin == glm::vec3(0));
+            CHECK(about(rest.angles.x, .2f) && about(rest.angles.y, .4f) && about(rest.angles.z, .6f));
         }
         std::vector<int> eventOrder;
         next = 0;

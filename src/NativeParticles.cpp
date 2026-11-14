@@ -180,6 +180,7 @@ void System::prependAmbientLeaf(const soundrules::AmbientLeaf &leaf) {
     p.spin = {leaf.spin[0], leaf.spin[1], leaf.spin[2]};
     p.colour = {leaf.colour[0], leaf.colour[1], leaf.colour[2], 1};
     p.size = 0.5f;
+    p.collision = true;
     p.lifetime = 20000;
     live.insert(live.begin(), p);
 }

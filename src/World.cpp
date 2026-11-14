@@ -1160,12 +1160,18 @@ void World::collectScenery(const Zone &zone, int32_t ax, int32_t ay, std::vector
 }
 
 void World::publishAmbientSceneDistances() {
-    if (!extracted)
+    const auto area = renderer.ambientSceneArea();
+    if (!extracted || !area)
         return;
     ambientDistances.clear();
+    const auto &[camera, radius] = *area;
+    const int localX = camera.first - extracted->originZoneX(), localY = camera.second - extracted->originZoneY();
     const int64_t localToAbsolute[] = {extracted->originDotsX(), extracted->originDotsY()};
-    for (const auto &[key, zone] : zones) {
-        if (!zone.nativeBounds || !zone.nativeBounds->meshed || !zone.boundsSource)
+    for (auto it = zones.lower_bound({localX - radius, INT32_MIN});
+         it != zones.end() && it->first.first <= localX + radius; ++it) {
+        const auto &[key, zone] = *it;
+        if (key.second < localY - radius || key.second > localY + radius ||
+            !zone.nativeBounds || !zone.nativeBounds->meshed || !zone.boundsSource)
             continue;
         auto bounds = *zone.nativeBounds;
         for (int axis = 0; axis < 2; ++axis) {
