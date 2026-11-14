@@ -550,6 +550,14 @@ void SpawnedCreatures::forEach(const std::function<void(const uint8_t *)> &f) co
             f(cr.record.data());
 }
 
+void SpawnedCreatures::forEachWithBuffs(const std::function<void(const uint8_t *, const BuffList &)> &f) const {
+    if (const uint8_t *record = playerRecord())
+        f(record, player.side.buffs);
+    for (auto &[k, list] : zones)
+        for (const Creature &cr : list)
+            f(cr.record.data(), cr.side.buffs);
+}
+
 void SpawnedCreatures::keepHealthShares(const std::function<void()> &change) {
     auto maxHealth = [](const Creature &cr) {
         std::vector<nativerules::Buff> buffs;

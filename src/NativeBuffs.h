@@ -42,12 +42,13 @@ inline int64_t source(const Buff &b) {
 }
 
 // The creature's first buff of `type`, searching front to back; null if it has none.
-inline const Buff *find(const nativeai::Creature &c, uint8_t type) {
-    for (const Buff &b : c.buffs)
+inline const Buff *find(const std::vector<Buff> &buffs, uint8_t type) {
+    for (const Buff &b : buffs)
         if (b[0] == type)
             return &b;
     return nullptr;
 }
+inline const Buff *find(const nativeai::Creature &c, uint8_t type) { return find(c.buffs, type); }
 
 // Buff types that always replace their own earlier entry from the same source: 1, 2, 3,
 // 6, 7, 9, 10 and 11 (the mask 0xece over the types below 12).

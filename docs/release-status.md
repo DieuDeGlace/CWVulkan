@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## Creature overhead models - 2026-11-14
+
+Steam draws a model over living actors beyond active emotes: class markers (classes 128-131,
+139, 155), the creature-collection marker (orange for the selected member) and the buff-7 heart
+scaled by 0.5 plus the buff's strength, in the order of
+[the overhead-model contract](specs/steam-creature-overhead-models.md). CubeVulkan drew only
+emotes. The selection now covers every admitted actor and shares the emote transform, Glow1 and
+the actor-sphere gate. Thirteen CPU checks failed on a stub and pass; Native and Alpha world
+generation fixtures confirm the heart, the selected tint and the marker in actual frames. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence and the
+Native/Alpha probes pass. Pixel comparison against the original game remains open.
+
+
 ## Ambient sound clock - 2026-11-13
 
 Steam's ambient emitters tick on the World clock (W+0x440) as it stands after the frame's world

@@ -77,6 +77,7 @@
 #include "ProceduralItems.h"
 #include "UsePrompt.h"
 #include "UseCreatureCollection.h"
+#include "NativeBuffs.h"
 #include "NativeVehicle.h"
 #include "ItemSelector.h"
 #include "Renderer.h"
@@ -295,6 +296,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
     bool reviveTest = false;    // --revive-test: the dead player waits for Revive, then stands at a shrine (testing).
+    bool overheadTest = false;  // --overhead-test: the player's buff-7 heart and collection marker are drawn (testing).
+    struct OverheadDrawn { int64_t id; int model; float scale; glm::vec4 material; };
+    std::vector<OverheadDrawn> overheadDrawn; // the last frame's overhead submissions (for --overhead-test)
     int combatTextTest = 0;     // --combat-text-test: hit records on the player become combat texts (phase 68).
     bool combatTextDrawn = false; // (testing: the combat-text frame, for --capture-notice)
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
@@ -472,6 +476,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             shrineTest = true;
         else if (a == "--revive-test")
             reviveTest = true;
+        else if (a == "--overhead-test")
+            overheadTest = true;
         else if (a == "--combat-text-test")
             combatTextTest = 1;
         else if (a == "--frame-budget-test" && i + 1 < argc)
@@ -7564,6 +7570,59 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     glfwSetWindowShouldClose(window, 1);
                 }
             }
+            if (overheadTest && spawned.localPlayer() && spawned.playerRecord()) {
+                // (testing: a buff-7 heart of strength 1 on the player draws 0xdf0 at 1.5 in white; making the
+                // player the selected collection member turns it orange; without the buff the orange 0xdc2
+                // marker remains, overhead-models contract §1)
+                static int stage = 0;
+                static double stageAt = 0;
+                nativeai::Creature &me = *spawned.localPlayer();
+                const int64_t id = spawned.playerId();
+                const auto drawnFor = [&]() -> const OverheadDrawn * {
+                    for (const auto &d : overheadDrawn)
+                        if (d.id == id) return &d;
+                    return nullptr;
+                };
+                const auto expect = [&](int model, float scale, glm::vec4 material, const char *what) {
+                    const OverheadDrawn *d = drawnFor();
+                    const bool good = d && d->model == model && d->scale == scale && d->material == material;
+                    logLine(std::string("Overhead test: ") + what + (good ? " PASS" : " FAIL") +
+                            (d ? " model " + std::to_string(d->model) + " scale " + std::to_string(d->scale) + " material " +
+                                     std::to_string(d->material.r) + "," + std::to_string(d->material.g) + "," +
+                                     std::to_string(d->material.b)
+                               : std::string(" nothing drawn")));
+                    return good;
+                };
+                const glm::vec4 orange = npcspeech::SELECTED_MATERIAL;
+                if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && playerHp > 0) {
+                    nativebuffs::give(me, nativebuffs::make(7, 1.f, 600000.f, id), false);
+                    stage = 1, stageAt = time;
+                } else if (stage == 1 && time - stageAt > .5) {
+                    stage = expect(0xdf0, 1.5f, glm::vec4(1), "heart") ? 2 : 9, stageAt = time;
+                    creatureCollection.add(spawned.playerRecord());
+                    creatureCollection.selectedId = id;
+                } else if (stage == 2 && time - stageAt > .5) {
+                    stage = expect(0xdf0, 1.5f, orange, "selected heart") ? 3 : 9, stageAt = time;
+                    std::erase_if(me.buffs, [](const nativebuffs::Buff &b) { return b[0] == 7; });
+                } else if (stage == 3 && time - stageAt > .5) {
+                    const bool passed = expect(0xdc2, 1.f, orange, "selected collection marker");
+                    size_t markers = 0;
+                    for (const auto &d : overheadDrawn) markers += d.id != id;
+                    logLine(std::string("Overhead test: ") + (passed ? "PASS" : "FAIL") + ", " + std::to_string(markers) +
+                            " other actors drew an overhead model");
+                    creatureCollection.remove(id);
+                    creatureCollection.selectedId = 0;
+                    if (!passed) exitCode = 1;
+                    overheadTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+                if (stage == 9 || (stage == 0 && time > 60.0)) {
+                    logLine("Overhead test: FAIL at stage " + std::to_string(stage));
+                    exitCode = 1;
+                    overheadTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+            }
             if (combatTextTest == 1 && spawned.localPlayer() && spawned.playerRecord() && time > 5.0 && hostHoldsPlayerZone()) {
                 // (testing: three hit records on the player join this frame's hit list: a 12.75 hit
                 // with a stun, a block and a 0.35 heal; phase 68 must make "K.O.", "12", "BLOCK"
@@ -9315,26 +9374,42 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hs.crosshair = visible && !aiming && currentAbility != 0x9c;
                 hs.zoomCrosshair = visible && aiming;
             }
-            if (!npcSpeech.emotes().empty())
-                speechEnvironment.eachActor([&](const npcspeech::Actor &actor) {
-                    const auto active = npcSpeech.emotes().find(actor.id);
-                    if (active == npcSpeech.emotes().end() || !(actor.health > 0))
-                        return;
-                    const auto pose = npcspeech::emotePose(active->second);
-                    const auto asset = spawned.spriteAsset(world, pose.model);
-                    if (!asset)
-                        return;
-                    const npcspeech::Point offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY(), 0};
-                    const auto game = npcspeech::emoteTransform(actor, pose, asset->header, offset);
-                    DrawItem draw;
-                    draw.mesh = world.modelMesh(asset->model);
-                    draw.model = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
-                                 glm::translate(glm::mat4(1), glm::vec3(asset->header.x * .5f, asset->header.y * .5f, 0));
-                    draw.flags = GLOW;
-                    draw.kind = DrawKind::Emote;
-                    draw.nativeActor = npcspeech::actorSphere(actor);
-                    opaque.push_back(std::move(draw));
-                });
+            // Overhead models (class/collection markers, emotes, the buff-7 heart): Glow1, opaque,
+            // through the shared actor-sphere gate (steam-creature-overhead-models.md).
+            if (overheadTest)
+                overheadDrawn.clear();
+            spawned.forEachWithBuffs([&](const uint8_t *record, const SpawnedCreatures::BuffList &buffs) {
+                const npcspeech::Actor actor = npcspeech::actor(record);
+                if (!(actor.health > 0))
+                    return;
+                npcspeech::OverheadInputs inputs;
+                inputs.creatureClass = record[worldgen::creature::CLASS];
+                inputs.collected = creatureCollection.find(actor.id) != nullptr;
+                inputs.selected = inputs.collected && creatureCollection.selectedId == actor.id;
+                if (const auto active = npcSpeech.emotes().find(actor.id); active != npcSpeech.emotes().end())
+                    inputs.emote = &active->second;
+                if (const auto *heart = nativebuffs::find(buffs, 7))
+                    inputs.heartStrength = nativebuffs::strength(*heart);
+                const auto selected = npcspeech::overhead(inputs);
+                if (!selected)
+                    return;
+                const auto asset = spawned.spriteAsset(world, selected->pose.model);
+                if (!asset)
+                    return;
+                const npcspeech::Point offset{-extractedWorld.originDotsX(), -extractedWorld.originDotsY(), 0};
+                const auto game = npcspeech::emoteTransform(actor, selected->pose, asset->header, offset);
+                DrawItem draw;
+                draw.mesh = world.modelMesh(asset->model);
+                draw.model = glm::translate(glm::mat4(1), glm::vec3(0, 0, (float)ExtractedWorld::Z_OFFSET)) * game *
+                             glm::translate(glm::mat4(1), glm::vec3(asset->header.x * .5f, asset->header.y * .5f, 0));
+                draw.flags = GLOW;
+                draw.material = selected->material;
+                draw.kind = DrawKind::Emote;
+                draw.nativeActor = npcspeech::actorSphere(actor);
+                opaque.push_back(std::move(draw));
+                if (overheadTest)
+                    overheadDrawn.push_back({actor.id, selected->pose.model, selected->pose.scale, selected->material});
+            });
             for (auto &q : quests) { // the tracker: what is left to do, in the game's words
                 if (q.state == 2)
                     continue;

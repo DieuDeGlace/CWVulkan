@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Generic creature overhead models: class and collection markers and the buff-7 heart, as Steam's.
+  See [the checkpoint](release-status.md#creature-overhead-models---2026-11-14).
+
 - [x] Ambient sounds tick on the World clock with the whole frame ms capped at 1000, as Steam's.
   See [the checkpoint](release-status.md#ambient-sound-clock---2026-11-13).
 

@@ -454,6 +454,9 @@ class SpawnedCreatures {
     void forEach(const std::function<void(const uint8_t *)> &f) const;
     // All registered creatures, including the player, in retained insertion order.
     void forEachWorldCreature(const std::function<void(const uint8_t *)> &f) const;
+    // The native player (when there is one) and then every near creature, with its buffs.
+    using BuffList = std::vector<std::array<uint8_t, 0x18>>;
+    void forEachWithBuffs(const std::function<void(const uint8_t *, const BuffList &)> &f) const;
     // A model id's sprite (sprites/<name>.cub); empty when there is none.
     std::string spriteName(int id) const { return id >= 0 && (size_t)id < sprites.size() ? sprites[(size_t)id].name : std::string(); }
     // While `change` alters what the creatures' maximum health depends on (the player's

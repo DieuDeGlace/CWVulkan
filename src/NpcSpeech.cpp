@@ -166,4 +166,30 @@ glm::mat4 emoteTransform(const Actor &actor, const EmotePose &pose, glm::ivec3 h
     matrix = glm::scale(matrix, glm::vec3(scale));
     return glm::translate(matrix, glm::vec3(header) * -.5f);
 }
+std::optional<Overhead> overhead(const OverheadInputs &in) {
+    Overhead result;
+    int model = 0;
+    switch (in.creatureClass) {
+    case 128: case 129: case 130: model = 0xc3d; break;
+    case 131: model = 0xc3c; break;
+    case 139: case 155: model = 0xdaf; break;
+    default: break;
+    }
+    if (in.collected) {
+        model = 0xdc2;
+        if (in.selected) result.material = SELECTED_MATERIAL;
+    }
+    if (in.emote) {
+        result.pose = emotePose(*in.emote);
+        result.material = glm::vec4(1);
+        return result;
+    }
+    if (in.heartStrength) {
+        model = 0xdf0;
+        result.pose.scale = .5f + *in.heartStrength; // no clamp; the material above is kept
+    }
+    if (!model) return {};
+    result.pose.model = model;
+    return result;
+}
 } // namespace npcspeech

@@ -201,6 +201,47 @@ int npcSpeechTests() {
             renderer.shutdown();
         } else std::cout << "SKIP owner speech template: " << error << '\n';
     } else std::cout << "SKIP owner speech template: installed assets unavailable\n";
+
+    { // Generic overhead models: steam-creature-overhead-models.md §1-2.
+        const glm::vec4 white(1);
+        auto chosen = [](OverheadInputs in) { return overhead(in); };
+        auto model = [&](OverheadInputs in) { const auto o = chosen(in); return o ? o->pose.model : 0; };
+        OverheadInputs plain;
+        check(!chosen(plain), "an ordinary class selects no overhead model");
+        for (uint8_t c : {128, 129, 130}) { plain.creatureClass = c; check(model(plain) == 0xc3d, "classes 128-130 select 0xc3d"); }
+        plain.creatureClass = 131;
+        check(model(plain) == 0xc3c, "class 131 selects 0xc3c");
+        for (uint8_t c : {139, 155}) { plain.creatureClass = c; check(model(plain) == 0xdaf, "classes 139/155 select 0xdaf"); }
+        plain.creatureClass = 132;
+        check(!chosen(plain), "class 132 selects nothing");
+        auto marker = chosen({.creatureClass = 128});
+        check(marker && marker->pose.scale == 1 && marker->pose.bounce == 0 && marker->pose.tilt == 0 && marker->material == white,
+              "a class marker has multiplier 1, no extra height/angle and white material");
+        auto member = chosen({.creatureClass = 131, .collected = true});
+        check(member && member->pose.model == 0xdc2 && member->material == white, "a collection member replaces the class marker, white");
+        auto picked = chosen({.collected = true, .selected = true});
+        check(picked && picked->pose.model == 0xdc2 && picked->material == glm::vec4(1, .25f, 0, 1),
+              "the selected collection member is tinted (1, 0.25, 0, 1)");
+        Emote love{0xdf0, 100};
+        auto emoting = chosen({.creatureClass = 128, .collected = true, .selected = true, .emote = &love, .heartStrength = 2.f});
+        check(emoting && emoting->pose.model == 0xdf0 && emoting->material == white &&
+                  emoting->pose.scale == emotePose(love).scale && emoting->pose.bounce == emotePose(love).bounce,
+              "an active emote replaces the marker, resets the material to white and blocks the heart");
+        auto heart = chosen({.creatureClass = 139, .collected = true, .selected = true, .heartStrength = 1.5f});
+        check(heart && heart->pose.model == 0xdf0 && heart->pose.scale == 2.f && heart->material == glm::vec4(1, .25f, 0, 1),
+              "the buff-7 heart replaces the marker, scales 0.5 + strength and keeps the orange material");
+        auto weak = chosen({.heartStrength = -.5f});
+        check(weak && weak->pose.model == 0xdf0 && weak->pose.scale == 0.f, "the heart's strength is not clamped");
+        Actor tall;
+        tall.physical = {10 << 16, 20 << 16, 30 << 16};
+        tall.body = {1, 1, 3};
+        tall.drop = .25f;
+        const auto m = emoteTransform(tall, EmotePose{0xdf0, 2.f}, {16, 12, 8}, {0, 0, 0});
+        const glm::vec4 centre = m * glm::vec4(8, 6, 4, 1);
+        check(std::abs(centre.x - 10) < 1e-4f && std::abs(centre.y - 20) < 1e-4f && std::abs(centre.z - (30 + 1.5f + 1 - .25f)) < 1e-4f,
+              "a marker centres on body Z*0.5 + 1 - drop above the actor");
+        check(std::abs(glm::length(glm::vec3(m[0])) - .8f / 16 * 2.f) < 1e-6f, "the heart's scale is 0.8 / header X times the multiplier");
+    }
     std::cout << "NPC speech: " << (failures ? "FAIL\n" : "PASS\n");
     return failures;
 }

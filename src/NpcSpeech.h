@@ -50,6 +50,21 @@ class Playback {
 struct EmotePose { int model = 0; float scale = 1, bounce = 0, tilt = 0; };
 EmotePose emotePose(Emote);
 glm::mat4 emoteTransform(const Actor &, const EmotePose &, glm::ivec3 header, Point renderOffset);
+// The model drawn over an admitted living actor (steam-creature-overhead-models.md §1): a class
+// marker, then the creature-collection marker, then the active emote, else the buff-7 heart.
+struct OverheadInputs {
+    uint8_t creatureClass = 0;              // record +0x14c, unsigned
+    bool collected = false;                 // the actor's ID is in the creature collection
+    bool selected = false;                  // ... and equals its selected ID
+    const Emote *emote = nullptr;           // the actor's active emote
+    std::optional<float> heartStrength;     // the first buff-7 entry's strength float
+};
+struct Overhead {
+    EmotePose pose;          // the emote's own pose, or the model at scale multiplier
+    glm::vec4 material{1};   // white, or the selected collection member's orange
+};
+constexpr glm::vec4 SELECTED_MATERIAL{1, .25f, 0, 1};
+std::optional<Overhead> overhead(const OverheadInputs &);
 using ActorSphere = scenevisibility::Sphere;
 using creaturescene::actorSphere;
 } // namespace npcspeech
