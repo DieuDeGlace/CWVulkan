@@ -1433,6 +1433,11 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             return (ew.gameBlock(x, y, z)[4] & 0xfd) != 0;
         };
         for (const auto &visit : selected) {
+            if (!client) // the Zone's +0x498 creatures, then its ground items and static objects
+                nativeobjects::markZoneReferences(missionIds(visit.key[0], visit.key[1]), [&](int64_t id) -> uint8_t * {
+                    nativeai::Creature *creature = u.byId(id);
+                    return creature ? creature->record : nullptr;
+                });
             nativesaves::ZoneLists *lists = zoneStates.find(visit.key);
             if (!lists)
                 continue;

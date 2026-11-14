@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## Zone actor-reference pass - 2026-11-14
+
+The [Zone reference contract](specs/steam-zone-actor-reference-prepass-20261114.md), from a new
+isolated original-only author, shows the World step's first pass over each selected Zone, before its
+ground items and static objects: in the authoritative World, every creature named by the Zone's
++0x498 list that is found by id and whose kind byte is not 8 gains state bit 0x0100. CubeVulkan kept
+the list and the bit's readers but never set it. It now does, first in each Zone. Three CPU checks
+failed on a stub and pass. All five targets, full required-owner CPU without skips, every Vulkan
+group, SDK independence and the Native/Alpha probes pass. A [second contract](specs/steam-zone-actor-reference-writers-20261114.md)
+confirms CubeVulkan's generator-made list matches Steam's writers. No original recording.
+
+
 ## Overhead models in the body pass - 2026-11-14
 
 Per the [overhead-model contract](specs/steam-creature-overhead-models.md) and

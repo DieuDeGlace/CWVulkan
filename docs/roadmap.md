@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The World step's Zone +0x498 pass marking listed creatures (bit 0x0100) before ground items, as Steam's.
+  See [the checkpoint](release-status.md#zone-actor-reference-pass---2026-11-14).
+
 - [x] Overhead models drawn by the body pass with each admitted actor's sphere and render origin, as Steam's.
   See [the checkpoint](release-status.md#overhead-models-in-the-body-pass---2026-11-14).
 

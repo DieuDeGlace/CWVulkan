@@ -7712,7 +7712,8 @@ struct OverheadQueue { size_t models = 0, withBody = 0; } overheadQueue;
                     return good;
                 };
                 const glm::vec4 orange = npcspeech::SELECTED_MATERIAL;
-                if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && playerHp > 0) {
+                // (an overhead model is drawn only with its admitted body, so start once the body is drawn)
+                if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && playerHp > 0 && spawned.playerParts() > 0) {
                     nativebuffs::give(me, nativebuffs::make(7, 1.f, 600000.f, id), false);
                     stage = 1, stageAt = time;
                 } else if (stage == 1 && time - stageAt > .5) {

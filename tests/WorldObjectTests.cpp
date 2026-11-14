@@ -486,6 +486,25 @@ int worldObjectTests() {
         nativeobjects::collectZones(scene.world, [&](auto key) { lookups.push_back(key); });
         check(lookups.empty() && scene.world.gatePlayers.empty(), "nonplayers do not select zones or join the gate actor snapshot");
     }
+    { // Zone +0x498 references: bit 0x0100 for each found creature except kind 8, nothing else.
+        Actor listed(5, 1), summoned(6, 8), unlisted(7, 1);
+        put(listed.record.data(), 0x128, uint16_t(0x0002));
+        put(summoned.record.data(), 0x128, uint16_t(0));
+        put(unlisted.record.data(), 0x128, uint16_t(0));
+        const auto before = listed.record;
+        std::vector<int64_t> asked;
+        nativeobjects::markZoneReferences({5, 6, 99, 5}, [&](int64_t id) -> uint8_t * {
+            asked.push_back(id);
+            return id == 5 ? listed.record.data() : id == 6 ? summoned.record.data() : id == 7 ? unlisted.record.data() : nullptr;
+        });
+        check(get<uint16_t>(listed.record.data(), 0x128) == 0x0102, "a listed creature gains bit 0x0100 and keeps its other bits");
+        check(get<uint16_t>(summoned.record.data(), 0x128) == 0, "a listed kind-8 creature is left alone");
+        check(get<uint16_t>(unlisted.record.data(), 0x128) == 0, "a creature the list does not name is left alone");
+        check(asked == std::vector<int64_t>{5, 6, 99, 5}, "every entry is looked up in list order, missing ones included");
+        auto expected = before;
+        put(expected.data(), 0x128, uint16_t(0x0102));
+        check(listed.record == expected, "nothing but the state word changes");
+    }
     {
         Scene scene;
         std::vector<nativeobjects::Cell> searched;

@@ -37,6 +37,11 @@ struct World {
 // zone lookup keys. The caller does lookup-only collection and unsigned Zone-pointer
 // sorting/deduplication while retaining each selected zone's lifetime.
 void collectZones(World &world, const std::function<void(Cell)> &lookup);
+// The authoritative World's first pass over each selected Zone, before its ground items
+// (0x2e3510; steam-zone-actor-reference-prepass-20261114.md): every creature the Zone's
+// +0x498 list names that `actor` finds, unless its kind byte (+0x60) is 8, gains state bit
+// 0x0100. Nothing else is read or written, so order and duplicates do not matter.
+void markZoneReferences(const std::vector<int64_t> &ids, const std::function<uint8_t *(int64_t)> &actor);
 
 // Shared clock/personal-state portion, also used by clock-only storage callers.
 void advanceClock(nativeai::Object &object, float milliseconds, const std::set<Cell> *usedCells);

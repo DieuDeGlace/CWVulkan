@@ -123,6 +123,12 @@ void collectZones(World &world, const std::function<void(Cell)> &lookup) {
     }
 }
 
+void markZoneReferences(const std::vector<int64_t> &ids, const std::function<uint8_t *(int64_t)> &actor) {
+    for (const int64_t id : ids)
+        if (uint8_t *record = actor(id); record && record[KIND] != 8)
+            write<uint16_t>(record, STATE_FLAGS, read<uint16_t>(record, STATE_FLAGS) | uint16_t(0x0100));
+}
+
 void advanceClock(nativeai::Object &object, float milliseconds, const std::set<Cell> *usedCells) {
     auto *record = object.data();
     write<float>(record, nativeinteract::OBJECT_SWING, read<float>(record, nativeinteract::OBJECT_SWING) + milliseconds);
