@@ -41,6 +41,7 @@ class World {
     void update(glm::vec3 focus);
     std::shared_ptr<characterpersistence::Session> characterSaveSession() const { return characterPersistence; }
     void finishCharacterSaves(); // outside World guards, before releasing live session inputs
+    void publishAmbientSceneDistances();
     void collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const;
     using ObjectProvider = std::function<std::optional<objectvisual::State>(int zx, int zy, const objectvisual::Key &)>;
     void setObjectProvider(ObjectProvider provider) { objectProvider = std::move(provider); }
@@ -136,6 +137,7 @@ class World {
         Mesh opaque, water, lava;
         std::vector<TerrainMeshBand> terrainBands;
         std::optional<scenevisibility::Bounds> nativeBounds;
+        std::shared_ptr<const void> boundsSource;
         std::shared_ptr<const steampoints::ZoneSources> nativeLights;
         std::vector<Scenery> scenery;
         std::shared_ptr<const void> modelSnapshot;
@@ -168,6 +170,7 @@ class World {
         };
         std::vector<Band> terrainBands;
         std::shared_ptr<const scenevisibility::Bounds> nativeBounds;
+        std::shared_ptr<const void> boundsSource; // retain the small loaded-zone identity only
         std::shared_ptr<const steampoints::ZoneSources> nativeLights;
         std::vector<DrawItem> scenery;
         std::vector<Moving> moving;
@@ -191,6 +194,7 @@ class World {
     Renderer &renderer;
     int viewZones;
     int sourceRenderDistance = 50;
+    std::vector<scenevisibility::ZoneDistance> ambientDistances;
     class ExtractedWorld *extracted;
     uint32_t beamMesh = 0;
     std::vector<Model> models;

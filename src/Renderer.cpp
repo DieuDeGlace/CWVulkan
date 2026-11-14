@@ -1185,6 +1185,12 @@ std::array<int64_t, 2> Renderer::steamRenderOffset() const {
                       : std::array<int64_t, 2>{};
 }
 
+std::optional<float> Renderer::admittedZoneDistance(const scenevisibility::Bounds &bounds) const {
+    if (!sceneFrame || !bounds.meshed || !sceneFrame->visibility.box(bounds, sceneFrame->ranges.scene + 64))
+        return std::nullopt;
+    return steamscenery::distanceSquaredFixed(bounds.center, sceneFrame->visibility.eye);
+}
+
 bool Renderer::steamActorVisible(const scenevisibility::Sphere &sphere) const {
     return sceneFrame && sceneFrame->visibility.visible(sphere, sceneFrame->ranges.abilities);
 }

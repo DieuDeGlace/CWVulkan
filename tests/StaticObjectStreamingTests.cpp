@@ -62,6 +62,19 @@ void fixtureZone(const fs::path &folder, int32_t x, int32_t y, int32_t objectX, 
         if (!bytes.empty())
             records.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
     }
+    if (x == -1) {
+        field(records, uint32_t(0xa8));
+        field(records, uint32_t(0x40));
+        field(records, uint32_t(1));
+        std::array<uint8_t, 0x40> emitter{};
+        const uint32_t type = 77;
+        const std::array<int64_t, 3> position{-1, -65536, 3 * 65536};
+        const std::array<float, 3> colour{.15f, .4f, .8f};
+        std::memcpy(emitter.data(), &type, sizeof type);
+        std::memcpy(emitter.data() + 8, position.data(), sizeof position);
+        std::memcpy(emitter.data() + 0x2c, colour.data(), 3 * sizeof(float));
+        records.write(reinterpret_cast<const char *>(emitter.data()), emitter.size());
+    }
 }
 std::vector<DrawItem> objects(World &world) {
     std::vector<DrawItem> opaque, water;
@@ -114,7 +127,26 @@ int staticObjectStreamingTests() {
         const bool ready = assets.locate(utf8(root)) && blocks.open(folder, error);
         check(ready, "synthetic assets and captured zones open");
         if (ready) {
+            check(!blocks.ambientEmitters(-1, 0) && !blocks.gameZoneLoaded(-1, 0),
+                  "ambient eligibility does not generate or load its source");
             blocks.propsAbsolute(-1, 0); // Load data only; no World terrain mesh exists.
+            const auto emitters = blocks.ambientEmitters(-1, 0);
+            check(emitters && emitters->size() == 1 && emitters->front().type == 77 &&
+                      emitters->front().position[0] == -1 && emitters->front().colour[2] == .8f,
+                  "fresh capture exposes the exact loaded emitter record");
+            auto source = blocks.gameZoneToken(-1, 0);
+            check(source.has_value(), "the admitted source has a stable identity");
+            std::array<scenevisibility::ZoneDistance, 1> sceneDistance{{{{-1, 0},
+                source ? source->identity : nullptr, 4096}}};
+            blocks.publishAmbientSceneDistances(sceneDistance);
+            check(!blocks.ambientEmitters(-1, 0), "stored scene sample at equality gates the subsequent visit");
+            sceneDistance.front().squaredDistance = 4095;
+            blocks.publishAmbientSceneDistances(sceneDistance);
+            check(blocks.ambientEmitters(-1, 0) == emitters, "an admitted scene update reuses the loaded zone's list");
+            sceneDistance.front().identity = std::make_shared<int>(1);
+            sceneDistance.front().squaredDistance = 6000;
+            blocks.publishAmbientSceneDistances(sceneDistance);
+            check(blocks.ambientEmitters(-1, 0) == emitters, "a stale scene identity cannot update another loaded zone");
             check(!blocks.loadedObjectProps(1, 0) && !blocks.gameZoneLoaded(1, 0), "object lookup does not load a present disk zone");
             Terrain terrain;
             World world(terrain, assets, renderer, 0, &blocks);

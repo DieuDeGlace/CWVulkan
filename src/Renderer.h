@@ -250,6 +250,8 @@ class Renderer {
     // Installs one CPU camera/range snapshot before normal actor posing. frame()
     // reuses it; earlier Game consumers still see the previous scene until this call.
     void prepareScene(const Camera &, const Lighting &, double time);
+    // First scene-zone gate, before the separate distance limit for models.
+    std::optional<float> admittedZoneDistance(const scenevisibility::Bounds &) const;
     bool steamActorVisible(const scenevisibility::Sphere &) const;
     bool steamModelVisible(const scenevisibility::Sphere &) const;
     float steamModelFade(const steampoints::Point &) const;

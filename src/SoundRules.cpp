@@ -3,6 +3,7 @@
 #include "GameMath.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -260,7 +261,14 @@ constexpr int CRICKET_EVERY = 20; // only every twentieth emitter of a zone chir
 constexpr float AMBIENT_VOLUME = 0.1f;
 constexpr float CRICKET_VOLUME = 0.05f;
 
-int64_t blocksOf(int64_t units) { return units >= 0 ? units / UNITS_PER_BLOCK : -((-units + UNITS_PER_BLOCK - 1) / UNITS_PER_BLOCK); }
+int32_t wholeMillis(float value) {
+    // Match the instruction's signed-indefinite result outside the representable range.
+    if (!(value >= -2147483648.0f && value < 2147483648.0f))
+        return INT32_MIN;
+    return int32_t(value);
+}
+
+int32_t blocksOf(int64_t units) { return std::bit_cast<int32_t>(uint32_t(units / UNITS_PER_BLOCK)); }
 
 // The cricket an emitter type chirps with, 0 for none.
 int cricketOf(uint32_t type) {
@@ -275,67 +283,64 @@ int cricketOf(uint32_t type) {
 bool isNight(float t) { return t <= NIGHT_END_MS || t >= NIGHT_START_MS; }
 
 AmbientFrame ambientFrame(float worldClockMs, double frameMs, float timeOfDayMs) {
-    AmbientFrame frame;
-    frame.clockMs = worldClockMs;
-    frame.dtMs = std::trunc(gamemath::frameMilliseconds(frameMs));
-    frame.timeOfDayMs = timeOfDayMs;
-    return frame;
+    return {wholeMillis(worldClockMs), int32_t(gamemath::frameMilliseconds(frameMs)), timeOfDayMs};
 }
 
-bool staggeredTick(double clockMs, double dtMs, int64_t offset, int periodMs) {
-    const int64_t before = (int64_t)((clockMs + (double)offset) / periodMs);
-    const int64_t after = (int64_t)((clockMs + dtMs + (double)offset) / periodMs);
-    return before != after;
+bool staggeredTick(int32_t clockMs, int32_t dtMs, int32_t offset, int32_t periodMs) {
+    const int32_t before = gamemath::add32(clockMs, offset);
+    const int32_t after = gamemath::add32(before, dtMs);
+    return before / periodMs != after / periodMs;
 }
 
-int64_t tickOffset(int64_t x, int64_t y, int64_t scale, int periodMs) {
-    return blocksOf(x * scale) % periodMs + blocksOf(y * scale + Y_STAGGER) % periodMs;
+int32_t tickOffset(int64_t x, int64_t y, int64_t scale, int32_t divisor) {
+    return blocksOf(gamemath::multiplyFixed(x, scale)) % divisor +
+           blocksOf(gamemath::addFixed(gamemath::multiplyFixed(y, scale), Y_STAGGER)) % divisor;
 }
 
-void ambientZone(const std::vector<Emitter> &emitters, const AmbientFrame &frame, const std::function<int()> &rand,
-                 const PlayAt &play) {
-    const bool night = isNight(frame.timeOfDayMs);
+void ambientZone(std::span<const Emitter> emitters, const AmbientFrame &frame, const std::function<int()> &rand,
+                 const PlayAt &play, const SpawnLeaf &leaf) {
+    const bool daylight = frame.timeOfDayMs > NIGHT_END_MS && frame.timeOfDayMs < NIGHT_START_MS;
     const bool crickets = frame.timeOfDayMs > CRICKET_FROM_MS && frame.timeOfDayMs < CRICKET_TO_MS;
-    for (size_t k = 0; k < emitters.size(); k++) {
+    for (size_t k = 0; k < emitters.size(); ++k) {
         const Emitter &e = emitters[k];
-        const size_t index = k + 1; // the game counts from 1
-        auto ticks = [&](int period, int64_t scale) {
-            return staggeredTick(frame.clockMs, frame.dtMs, tickOffset(e.position[0], e.position[1], scale, period), period);
+        const auto ticks = [&](int32_t period, int32_t offset) {
+            return staggeredTick(frame.clockMs, frame.dtMs, offset, period);
         };
         if (e.type == emitter::WATER) {
-            if (ticks(WATER_PERIOD_MS, WATER_SCALE) && oneIn(rand, WATER_CHANCE)) {
+            if (ticks(WATER_PERIOD_MS, tickOffset(e.position[0], e.position[1], WATER_SCALE, BIRD_PERIOD_MS)) &&
+                oneIn(rand, WATER_CHANCE)) {
                 const float pitch = randomPitch(rand, 0.4f, 0.8f);
                 play(soundid::RIVER_FIRST + rand() % 3, e.position, AMBIENT_VOLUME, pitch);
             }
             continue;
         }
         if (e.type == emitter::SPARKLE) {
-            // A particle effect (not drawn by CubeVulkan yet); its draw keeps rand in step.
-            if (ticks(BIRD_PERIOD_MS, 1))
-                oneIn(rand, SPARKLE_CHANCE);
-            continue;
-        }
-        const bool bird = e.type >= emitter::BIRD_FIRST && e.type <= emitter::BIRD_LAST;
-        if (bird && !night) {
-            if (ticks(BIRD_PERIOD_MS, 1) && oneIn(rand, BIRD_CHANCE)) {
-                const float pitch = randomPitch(rand, 0.2f, 0.9f);
-                play(soundid::BIRD_FIRST + (int)(e.type - emitter::BIRD_FIRST), e.position, AMBIENT_VOLUME, pitch);
+            if (ticks(BIRD_PERIOD_MS, 0) && oneIn(rand, SPARKLE_CHANCE)) {
+                const auto draw = [&](float scale) { return (float(rand()) / RAND_SCALE - 0.5f) * scale; };
+                const float vy = draw(4.0f);
+                const float vx = draw(4.0f);
+                const float az = draw(10.0f);
+                const float ay = draw(10.0f);
+                const float ax = draw(10.0f);
+                if (leaf)
+                    leaf({{e.position[0], e.position[1], e.position[2]}, {vx, vy, -2.0f}, {ax, ay, az}, e.colour});
             }
             continue;
         }
-        if (e.type == emitter::BIRD_FIRST && night) { // the first bird is an owl by night
-            if (ticks(BIRD_PERIOD_MS, 1) && oneIn(rand, BIRD_CHANCE)) {
-                const float pitch = randomPitch(rand, 0.2f, 0.5f);
-                play(soundid::OWL_FIRST + rand() % 2, e.position, AMBIENT_VOLUME, pitch);
+        if (e.type >= emitter::BIRD_FIRST && e.type <= emitter::BIRD_LAST) {
+            if ((daylight || e.type == emitter::BIRD_FIRST) &&
+                ticks(BIRD_PERIOD_MS, tickOffset(e.position[0], e.position[1], 1, BIRD_PERIOD_MS)) && oneIn(rand, BIRD_CHANCE)) {
+                const float pitch = randomPitch(rand, 0.2f, daylight ? 0.9f : 0.5f);
+                const int sound = daylight ? soundid::BIRD_FIRST + int(e.type - emitter::BIRD_FIRST) : soundid::OWL_FIRST + rand() % 2;
+                play(sound, e.position, AMBIENT_VOLUME, pitch);
             }
             continue;
         }
-        // Everything else may chirp in the afternoon and evening, one emitter in twenty.
-        if (!crickets || index % CRICKET_EVERY != 0 || !ticks(CRICKET_PERIOD_MS, 1))
+        if (!crickets || (k + 1) % CRICKET_EVERY != 0)
             continue;
-        if (!oneIn(rand, CRICKET_CHANCE))
-            continue;
-        if (const int cricket = cricketOf(e.type))
+        const int cricket = cricketOf(e.type);
+        if (cricket && ticks(CRICKET_PERIOD_MS, tickOffset(e.position[0], e.position[1], 1, CRICKET_PERIOD_MS)) &&
+            oneIn(rand, CRICKET_CHANCE))
             play(cricket, e.position, CRICKET_VOLUME, randomPitch(rand, 0.2f, 0.9f));
     }
 }

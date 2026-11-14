@@ -3580,10 +3580,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             glfwGetCursorPos(window, x, y);
     };
     auto start = std::chrono::steady_clock::now(), previous = start, titleTime = start;
-    // Sounds (sound.md): the world clock the ambient emitters tick by (world +0x440, ms) and
-    // each zone's emitters, read once.
-    double worldClockMs = 0;
-    std::map<std::pair<int32_t, int32_t>, std::vector<soundrules::Emitter>> zoneEmitters;
+    double worldClockMs = 0; // Compatibility clock for sessions without a stepped World.
     // A local point in world units (1/65536 block), where the game's sounds are placed.
     auto toUnits = [&](glm::vec3 local, int64_t out[3]) {
         out[0] = (int64_t)std::llround((double)local.x * 65536) + extractedWorld.originDotsX();
@@ -7196,9 +7193,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             [&](glm::dvec3 at) {
                 return useExtracted ? extractedWorld.solidAt(at.x, at.y, at.z) : at.z < groundAt((float)at.x, (float)at.y);
             });
-        // Native Game-frame notice consumer requests meshes independently of mutation/history.
-        if (!serverMode)
-            extractedWorld.invalidateGameBlocks(spawned.events().blockChanges);
         for (const auto &[ax, ay] : extractedWorld.takeChangedModels())
             world.refreshModels(ax - extractedWorld.originZoneX(), ay - extractedWorld.originZoneY());
         // Zones whose blocks changed are meshed again.
@@ -8439,6 +8433,33 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             combatTextTest = 0;
             glfwSetWindowShouldClose(window, 1);
         }
+        // Phase 74 follows camera publication and the existing particle advance.
+        // Scene admission refreshes the distance operand for later frames.
+        if (!serverMode)
+            extractedWorld.invalidateGameBlocks(spawned.events().blockChanges);
+        if (!serverMode && useExtracted) {
+            int64_t here[3];
+            playerUnits(here);
+            int32_t centre[2] = {gamemath::floorFixedBlock(here[0]), gamemath::floorFixedBlock(here[1])};
+            if (const uint8_t *me = spawned.playerRecord(); me && me[worldgen::creature::ABILITY] == 0x9c)
+                std::memcpy(centre, me + worldgen::creature::HOME_PLACE, sizeof centre);
+            const int32_t ambientZoneX = worldgen::floorDiv(centre[0], 6);
+            const int32_t ambientZoneY = worldgen::floorDiv(centre[1], 6);
+            const auto frame = soundrules::ambientFrame(
+                spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), frameMs,
+                spawnedReady ? spawned.timeOfDay() : hour * 3600000.0f);
+            const auto random = [&] { return spawnedReady ? spawned.drawWorldRandom() : clientRand(); };
+            const auto play = [&](int number, const int64_t *position, float gain, float pitch) {
+                audio.playAt(number, position, gain, pitch);
+            };
+            const auto leaf = [&](const soundrules::AmbientLeaf &particle) {
+                burstParticles.prependAmbientLeaf(particle);
+            };
+            for (int32_t zx = ambientZoneX - 1; zx <= ambientZoneX + 1; ++zx)
+                for (int32_t zy = ambientZoneY - 1; zy <= ambientZoneY + 1; ++zy)
+                    if (const auto emitters = extractedWorld.ambientEmitters(zx, zy))
+                        soundrules::ambientZone(*emitters, frame, random, play, leaf);
+        }
         // Phases 75 and 89-92: the XP/level snapshot, then the comparisons. Records appended now are
         // first drawn by the next frame's visit. No engine writer of level or XP runs between this
         // snapshot and the comparison (the per-frame progress store precedes it), as in Steam.
@@ -8486,6 +8507,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (!serverMode) {
             renderer.prepareScene(camera, lighting, time);
             if (useExtracted) {
+                world.publishAmbientSceneDistances();
                 particlescene::Coordinates coordinates;
                 coordinates.homeOffset = {-extractedWorld.originDotsX(), -extractedWorld.originDotsY()};
                 coordinates.homeZ = ExtractedWorld::Z_OFFSET;
@@ -9929,44 +9951,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             spawned.events() = cwnet::WorldEvents{};
         }
         auto column = columnAt(player.position.x, player.position.y);
-        {
-            int64_t here[3];
-            playerUnits(here);
-            const int32_t bx = worldgen::floorDots(here[0]), by = worldgen::floorDots(here[1]), bz = worldgen::floorDots(here[2]);
-
-            // The ambient sounds (§4): the emitters of the 3 x 3 zones around the player, or
-            // around where it flies to (ability 0x9c, +0x1b0).
-            int32_t centre[2] = {bx, by};
-            float flightMs = 0;
-            if (const uint8_t *me = spawned.playerRecord(); me && spawned.playerAbility(flightMs) == 0x9c)
-                std::memcpy(centre, me + worldgen::creature::HOME_PLACE, sizeof centre);
-            // (W+0x440 after this frame's world steps; before a World exists, CubeVulkan's own clock)
-            const soundrules::AmbientFrame frame = soundrules::ambientFrame(
-                spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), frameMs, hour * 3600000.0f);
-            constexpr int ZONE_SHIFT = 6; // zones of 64 blocks
-            const int32_t zx = worldgen::floorDiv(centre[0], ZONE_SHIFT), zy = worldgen::floorDiv(centre[1], ZONE_SHIFT);
-            for (int32_t ax = zx - 1; ax <= zx + 1; ax++)
-                for (int32_t ay = zy - 1; ay <= zy + 1; ay++) {
-                    // Only zones in memory sound. HOOK: the game also skips a zone whose +0x234 is
-                    // 4096 or more; the spec does not say what that field is (open question 6).
-                    bool loaded = false;
-                    extractedWorld.gameBlock((int64_t)ax * 64, (int64_t)ay * 64, 0, &loaded);
-                    if (!loaded)
-                        continue;
-                    auto [cached, fresh] = zoneEmitters.try_emplace({ax, ay});
-                    if (fresh) {
-                        cached->second = extractedWorld.soundEmitters(ax, ay);
-                        if (cached->second.empty())
-                            cached->second = worldgen::soundEmitters(ax, ay);
-                    }
-                    soundrules::ambientZone(cached->second, frame, clientRand,
-                                            [&](int number, const int64_t at[3], float volume, float pitch) {
-                                                audio.playAt(number, at, volume, pitch);
-                                            });
-                }
-            worldClockMs += frameMs;
-            world.advanceClock(frameMs); // (the plants sway by it, vegetation-wind.md §2)
-        }
+        worldClockMs += frameMs;
+        world.advanceClock(frameMs); // Plants sway on the same elapsed rendering clock.
         for (const auto &error : hostWorld.takeSourceSaveErrors()) logLine("Save: " + error);
         audio.update();
 

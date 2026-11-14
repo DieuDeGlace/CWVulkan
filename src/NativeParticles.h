@@ -9,6 +9,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+namespace soundrules { struct AmbientLeaf; }
+
 namespace nativeparticles {
 using Burst = std::array<uint8_t, 0x48>;
 using Random = std::function<int()>;
@@ -45,6 +47,7 @@ class System {
     // One prepared part, in native X/Y/Z sampling and randomized deque order.
     // Body and ordinary particles share the same later cap/update/draw lifetime.
     void prependBody(const BodyPart &, const Random &);
+    void prependAmbientLeaf(const soundrules::AmbientLeaf &);
     void update(int32_t milliseconds, const BlockType &);
     const std::vector<Particle> &states() const { return live; }
     void clear() { live.clear(); }

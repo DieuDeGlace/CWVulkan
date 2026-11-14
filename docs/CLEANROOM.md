@@ -1,5 +1,21 @@
 # Clean-room process
 
+## Ambient emitters and falling leaves - 2026-11-14
+
+An isolated original-only author delivered the full
+[ambient emitter contract](specs/steam-ambient-emitter-admission-and-order-20261114.md).
+The implementer read and hashed the complete held file before implementing
+from it and copied it unchanged. The research context received no code, tests,
+or verification results. The implementation uses the held frame, source
+admission, coordinate, random-draw and particle publication rules.
+
+Loaded source identity owns the emitter cache and the previous scene sample.
+The engine admits a fresh source until the first scene write because the
+verified native trace leaves the initial operand unresolved. Active engine
+mesh bounds supply the zone culler. Exact pending mesh publication timing,
+the initial CRT state and native mixer output remain open. Private game saves,
+captured assets and verification outputs stay outside the source package.
+
 ## Host switch and Alpha startup joins - 2026-11-14
 
 The implementer used the full held

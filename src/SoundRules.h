@@ -10,6 +10,8 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -160,6 +162,7 @@ float easeMusicVolume(float volume, float target, double dtMs, float rate = 0.00
 struct Emitter {
     uint32_t type = 0;
     int64_t position[3] = {0, 0, 0};
+    std::array<float, 3> colour{};
 };
 namespace emitter {
 constexpr size_t RECORD_SIZE = 0x40;
@@ -178,16 +181,16 @@ constexpr float CRICKET_TO_MS = 86400000.0f;   // 24:00 (exclusive)
 bool isNight(float timeOfDayMs);
 // The staggered tick (§4): an emitter whose offset is `offset` ticks on a period of `periodMs`
 // when trunc((clock + offset) / period) changes over the frame.
-bool staggeredTick(double clockMs, double dtMs, int64_t offset, int periodMs);
+bool staggeredTick(int32_t clockMs, int32_t dtMs, int32_t offset, int32_t periodMs);
 // The offset of an emitter at world position (x, y) for a period: (x × scale) in blocks and
-// (y × scale + 0x14d0000) in blocks, each modulo the period, added. The water emitters use
-// scale 13, the others 1.
-int64_t tickOffset(int64_t x, int64_t y, int64_t scale, int periodMs);
+// (y × scale + 0x14d0000) in blocks, each modulo the phase divisor, added. Water
+// uses scale 13 and independent 500 ms cadence and 1000-block phase divisors.
+int32_t tickOffset(int64_t x, int64_t y, int64_t scale, int32_t divisor);
 // What one zone's emitters play this frame, in order (the 1-based index counts within the
 // zone). `rand` is the C runtime's rand; `play` receives each sound to place.
 struct AmbientFrame {
-    double clockMs = 0;     // the world clock (W+0x440) when the sounds are visited
-    double dtMs = 0;        // the frame's whole ms
+    int32_t clockMs = 0; // the world clock (W+0x440), truncated once
+    int32_t dtMs = 0;    // the frame's whole ms
     float timeOfDayMs = 0;  // the time of day
 };
 // The values the visit sees (game-update schedule §2.4 and phase 74): the World clock W+0x440
@@ -195,8 +198,18 @@ struct AmbientFrame {
 // to whole ms, as the update's other integer-ms consumers receive it.
 AmbientFrame ambientFrame(float worldClockMs, double frameMs, float timeOfDayMs);
 using PlayAt = std::function<void(int number, const int64_t position[3], float volume, float pitch)>;
-void ambientZone(const std::vector<Emitter> &emitters, const AmbientFrame &frame, const std::function<int()> &rand,
-                 const PlayAt &play);
+struct AmbientLeaf {
+    std::array<int64_t, 3> position;
+    std::array<float, 3> velocity, spin, colour;
+};
+using SpawnLeaf = std::function<void(const AmbientLeaf &)>;
+inline bool ambientZoneAdmitted(float sceneDistanceSquared) { return sceneDistanceSquared < HEARING_RANGE_SQ; }
+void ambientZone(std::span<const Emitter> emitters, const AmbientFrame &frame, const std::function<int()> &rand,
+                 const PlayAt &play, const SpawnLeaf &leaf = {});
+inline void ambientZone(std::initializer_list<Emitter> emitters, const AmbientFrame &frame, const std::function<int()> &rand,
+                        const PlayAt &play, const SpawnLeaf &leaf = {}) {
+    ambientZone(std::span<const Emitter>(emitters.begin(), emitters.size()), frame, rand, play, leaf);
+}
 
 // --- The wind while gliding (§5.1) --------------------------------------------------------------
 

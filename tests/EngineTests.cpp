@@ -64,6 +64,7 @@
 #include "PlasmaText.h"
 #include "PlasmaScene.h"
 #include "SoundRules.h"
+#include "NativeParticles.h"
 #include "stb_image_write.h"
 #include <functional>
 #include "worldgen/Residents.h"
@@ -9016,7 +9017,7 @@ static void soundRules() {
     }
     { // §4 with the game-update schedule (§2.4, phase 74): the World clock and the whole capped ms.
         const AmbientFrame slow = ambientFrame(850.5f, 150.9, 7.0f);
-        CHECK(slow.clockMs == 850.5 && slow.dtMs == 150 && slow.timeOfDayMs == 7.0f); // truncated, not capped at 100
+        CHECK(slow.clockMs == 850 && slow.dtMs == 150 && slow.timeOfDayMs == 7.0f); // both time operands are whole milliseconds
         CHECK(staggeredTick(slow.clockMs, slow.dtMs, 0, 1000)); // a 150 ms frame from 850 reaches the 1000 ms tick
         CHECK(ambientFrame(0, 2500, 0).dtMs == 1000 && ambientFrame(0, 1000, 0).dtMs == 1000); // the update's cap
         CHECK(ambientFrame(0, 0.6, 0).dtMs == 0 && ambientFrame(0, 16.7, 0).dtMs == 16); // fractions give 0 / whole ms
@@ -9108,6 +9109,81 @@ static void soundRules() {
             ambientZone({water}, frame, lcg, play);
         }
         CHECK(played.size() > 1600 && played.size() < 2000);
+    }
+    { // Independently verified ambient writer order and native signed phase arithmetic.
+        constexpr int64_t block = 65536;
+        CHECK(tickOffset(-1, -333 * block - 1, 1, 1000) == 0);
+        CHECK(staggeredTick(INT32_MAX - 5, 8, 0, 1000));
+        auto frame = ambientFrame(950.25f, 50.9, 80000000.0f);
+        Emitter leaves;
+        leaves.type = emitter::SPARKLE;
+        leaves.position[0] = 300 * block;
+        int calls = 0, sounds = 0;
+        const auto random = [&] { ++calls; return 0; };
+        const auto play = [&](int, const int64_t *, float, float) { ++sounds; };
+        ambientZone({leaves}, frame, random, play);
+        CHECK(calls == 6 && sounds == 0); // Unphased boundary, chance, Y/X and angular Z/Y/X.
+        CHECK(ambientZoneAdmitted(4095.0f) && !ambientZoneAdmitted(4096.0f) &&
+              !ambientZoneAdmitted(std::numeric_limits<float>::quiet_NaN()));
+
+        leaves.position[1] = -1;
+        leaves.position[2] = 5 * block;
+        leaves.colour = {0.15f, 0.4f, 0.8f};
+        Emitter river;
+        river.type = emitter::WATER;
+        const std::array draws{0, 32767, 0, 1000, 10000, 20000, 0, 32767, 2};
+        size_t next = 0;
+        nativeparticles::System leavesInWorld;
+        leavesInWorld.prependAmbientLeaf({{0, 0, 0}, {}, {}, {}});
+        leavesInWorld.update(31, {});
+        frame = ambientFrame(990.5f, 30.5, 80000000.0f);
+        ambientZone({leaves}, frame, [&] { return next < 6 ? draws[next++] : 1; }, play,
+                    [&](const AmbientLeaf &leaf) { leavesInWorld.prependAmbientLeaf(leaf); });
+        CHECK(next == 6 && leavesInWorld.states().size() == 2);
+        if (leavesInWorld.states().size() == 2) {
+            const auto &birth = leavesInWorld.states().front();
+            CHECK(birth.style == 4 && birth.age == 0 && birth.size == .5f && birth.lifetime == 20000);
+            CHECK((birth.position == std::array<int64_t, 3>{300 * block, -1, 5 * block}));
+            CHECK(birth.velocity == glm::vec3(-2, 2, -2) && birth.colour == glm::vec4(.15f, .4f, .8f, 1));
+            CHECK(about(birth.spin.x, (20000.f / 32767.f - .5f) * 10) &&
+                  about(birth.spin.y, (10000.f / 32767.f - .5f) * 10) &&
+                  about(birth.spin.z, (1000.f / 32767.f - .5f) * 10));
+            CHECK(leavesInWorld.states().back().age == 31);
+        }
+        std::vector<int> eventOrder;
+        next = 0;
+        frame = ambientFrame(499, 501, 80000000.0f);
+        ambientZone({leaves, river}, frame, [&] { return next < draws.size() ? draws[next++] : 1; },
+                    [&](int sound, const int64_t *, float volume, float pitch) {
+                        eventOrder.push_back(sound);
+                        CHECK(about(volume, 0.1f) && about(pitch, 1.2f));
+                    },
+                    [&](const AmbientLeaf &) { eventOrder.push_back(77); });
+        CHECK(next == draws.size() && (eventOrder == std::vector<int>{77, soundid::RIVER_FIRST + 2}));
+
+        calls = 0;
+        frame.clockMs = 100;
+        frame.dtMs = 600;
+        ambientZone({leaves}, frame, random, play);
+        CHECK(calls == 0 && sounds == 0); // A positional phase must not create a leaf tick.
+
+        calls = 0;
+        std::vector<Emitter> field(20);
+        for (auto &entry : field)
+            entry.type = 2; // Unsupported even at the twentieth slot in the cricket window.
+        frame.dtMs = 5000;
+        ambientZone(field, frame, random, play);
+        CHECK(calls == 0 && sounds == 0);
+
+        Emitter water;
+        water.type = emitter::WATER;
+        water.position[0] = -600 * block / 13;
+        water.position[1] = -333 * block / 13;
+        calls = 0;
+        frame.clockMs = 500;
+        frame.dtMs = 200;
+        ambientZone({water}, frame, random, play);
+        CHECK(calls == 0 && sounds == 0);
     }
     { // §5.1: the wind while gliding; §5.2: an item landing.
         CHECK(!windDue(0, 400) && !windDue(400, 500) && windDue(400, 600) && !windDue(600, 900) && windDue(900, 1001));

@@ -4,6 +4,8 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <utility>
 #include <optional>
 #include <glm/glm.hpp>
 
@@ -21,6 +23,11 @@ struct Bounds {
 using Columns = std::function<std::optional<Column>(int64_t x, int64_t y)>;
 using BlockType = std::function<uint8_t(int64_t x, int64_t y, int64_t z)>;
 Bounds build(int32_t zx, int32_t zy, const Columns &, const BlockType &);
+struct ZoneDistance {
+    std::pair<int32_t, int32_t> key;
+    std::shared_ptr<const void> identity;
+    float squaredDistance;
+};
 struct Projection {
     std::array<int64_t, 3> offset{};
     glm::mat4 view{1}, perspective{1}; // native positive-Z, without Vulkan Y flip

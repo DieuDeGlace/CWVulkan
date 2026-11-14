@@ -1,5 +1,24 @@
 # Source review checkpoint — 2026-11-08
 
+## Ambient emitters and falling leaves - 2026-11-14
+
+The ambient pass now uses the current camera listener after particle advance
+and before progress notices, music and scene collection. It visits the loaded
+source's own emitters in zone and record order, using the last admitted scene
+distance. A generated empty list stays empty. Leaves enter the shared particle
+list at age zero with the recorded tint and the specified random draw order.
+
+Six previously failing checks cover integer clock and coordinate phases,
+unphased leaf ticks and unsupported draws. Tests also check distance equality
+and NaN, source identity, particle order and the unchanged block-edit history
+and render request path. Native and Alpha world generation ran in private
+gameplay checks, including the Alpha appearance and Omega water. Save hashes
+matched before and after. The CPU, Vulkan and SDK-free extractor suites passed.
+
+The engine admits a fresh zone before its first scene sample. The current
+evidence establishes the later native writer and leaves the original value at
+first use unresolved. Playback remains subject to the audio backend.
+
 ## Host switch and Alpha startup joins - 2026-11-14
 
 Switching hosts now drops the previous authority's creatures, peer state and

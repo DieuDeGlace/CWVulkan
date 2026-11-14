@@ -393,15 +393,4 @@ void forgetZones() {
     liveZones.clear();
 }
 
-std::vector<soundrules::Emitter> soundEmitters(int32_t zx, int32_t zy) {
-    std::vector<soundrules::Emitter> out;
-    for (const Model &m : zone(zx, zy)->emitters) {
-        soundrules::Emitter e;
-        e.type = (uint32_t)m.type;
-        e.position[0] = m.x, e.position[1] = m.y, e.position[2] = m.z;
-        out.push_back(e);
-    }
-    return out;
-}
-
 } // namespace worldgen

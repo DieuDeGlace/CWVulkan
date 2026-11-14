@@ -92,7 +92,8 @@ class ExtractedWorld {
     }
     // Opaque and water meshes in local world coordinates (thread-safe).
     bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,
-              worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr, std::vector<TerrainMeshBand> *terrainBands = nullptr);
+              worldgen::MeshLightVolume *nativeLight = nullptr, Mesh *lava = nullptr, std::vector<TerrainMeshBand> *terrainBands = nullptr,
+              std::shared_ptr<const void> *boundsSource = nullptr);
     // Loaded source lookup only; mesh preparation owns derived light updates.
     std::shared_ptr<const steampoints::ZoneSources> lightSources(int zx, int zy);
     std::vector<steampoints::ZoneKey> loadedLightZones() const;
@@ -183,6 +184,7 @@ class ExtractedWorld {
         uint64_t order; // Unsigned address of the stable loaded-zone identity.
         std::shared_ptr<const void> keepAlive;
         bool generated = false; // source provenance, independent of later saved/received object replacements
+        std::shared_ptr<const void> identity;
     };
     std::optional<ZoneToken> gameZoneToken(int32_t x, int32_t y) const; // Lookup only; retain the selected zone during a pass.
     struct LoadedObjectProps {
@@ -241,9 +243,9 @@ class ExtractedWorld {
     // A loaded generated zone's static objects (zone+0x60) at absolute zone (ax, ay); false
     // when the zone is not in memory.
     bool gameObjects(int ax, int ay, std::vector<worldgen::ZoneObject> &out);
-    // The zone's ambient sound emitters (zone +0xa8, sound.md §4) at absolute zone (ax, ay),
-    // from its .rec file; empty when the extraction did not record that list.
-    std::vector<soundrules::Emitter> soundEmitters(int ax, int ay) const;
+    // Reads previous scene distance and the immutable emitter list of an existing zone.
+    std::shared_ptr<const std::vector<soundrules::Emitter>> ambientEmitters(int32_t ax, int32_t ay);
+    void publishAmbientSceneDistances(std::span<const scenevisibility::ZoneDistance> distances);
     // Inspector/importer access using native zone coordinates, without a float round trip.
     std::vector<Scenery> propsAbsolute(int ax, int ay, std::shared_ptr<const void> *modelSnapshot = nullptr);
     size_t propNames() const { return environment.size() + buildingParts.size(); }
@@ -256,6 +258,9 @@ class ExtractedWorld {
     struct ZoneIdentity {
         // Loaded-source control is shared by COW storage, not by later reloads.
         mutable bool needsState = true; // guarded by cacheMutex, like the source map
+        // Fresh allocations have no verified native value. Admit them until a scene writes one.
+        mutable std::optional<float> ambientSceneDistance; // guarded by cacheMutex
+        mutable std::shared_ptr<const std::vector<soundrules::Emitter>> emitters; // guarded by cacheMutex
         mutable std::shared_ptr<sourcestates::Source> state; // guarded by the owning World scope
     };
     struct Zone {
@@ -275,6 +280,7 @@ class ExtractedWorld {
         std::shared_ptr<const steampoints::ZoneSources> lightSources; // independent auxiliary value copies
 
     };
+    std::vector<soundrules::Emitter> readSoundEmitters(int32_t ax, int32_t ay) const;
     static bool writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t x, int32_t y, int32_t z, const GameBlock &block);
     static GameBlock readGameBlock(const Zone &zone, int32_t ax, int32_t ay, int64_t x, int64_t y, int32_t z);
     static thread_local BlockEdits *activeEdits;

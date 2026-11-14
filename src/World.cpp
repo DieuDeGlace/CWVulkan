@@ -820,7 +820,7 @@ void World::update(glm::vec3 focus) {
             continue; // A failed source read publishes neither geometry nor metadata.
         // Native publication requires a nonempty whole-group staging list. An
         // empty water stream inside other geometry still replaces active water.
-        const bool retainActive = g.nativeBounds && g.terrainBands.empty() &&
+        const bool retainActive = nativePreparation && g.nativeBounds && g.terrainBands.empty() &&
                                   g.opaque.empty() && g.water.empty() && g.lava.empty();
         Zone z;
         if (auto old = zones.find(key); old != zones.end()) {
@@ -881,6 +881,7 @@ void World::update(glm::vec3 focus) {
             }
             g.nativeBounds->meshed = z.opaque || z.water || z.lava || !z.terrainBands.empty();
             z.nativeBounds = std::make_shared<const scenevisibility::Bounds>(*g.nativeBounds);
+            z.boundsSource = std::move(g.boundsSource);
         }
         buildScenery(z, g.scenery);
         zones[key] = std::move(z);
@@ -1001,8 +1002,8 @@ void World::update(glm::vec3 focus) {
                 Generated g;
                 worldgen::MeshLightVolume nativeLight;
                 g.meshSucceeded = ex->mesh(k.first, k.second, g.opaque, g.water,
-                                           alphaLook ? nullptr : &g.nativeBounds, alphaLook ? nullptr : &nativeLight,
-                                           &g.lava, alphaLook ? nullptr : &g.terrainBands);
+                                           &g.nativeBounds, alphaLook ? nullptr : &nativeLight,
+                                           &g.lava, alphaLook ? nullptr : &g.terrainBands, &g.boundsSource);
                 if (!g.meshSucceeded)
                     return g;
                 if (g.nativeBounds)
@@ -1158,6 +1159,27 @@ void World::collectScenery(const Zone &zone, int32_t ax, int32_t ay, std::vector
     }
 }
 
+void World::publishAmbientSceneDistances() {
+    if (!extracted)
+        return;
+    ambientDistances.clear();
+    const int64_t localToAbsolute[] = {extracted->originDotsX(), extracted->originDotsY()};
+    for (const auto &[key, zone] : zones) {
+        if (!zone.nativeBounds || !zone.nativeBounds->meshed || !zone.boundsSource)
+            continue;
+        auto bounds = *zone.nativeBounds;
+        for (int axis = 0; axis < 2; ++axis) {
+            bounds.minimum[axis] = gamemath::addFixed(bounds.minimum[axis], localToAbsolute[axis]);
+            bounds.maximum[axis] = gamemath::addFixed(bounds.maximum[axis], localToAbsolute[axis]);
+            bounds.center[axis] = gamemath::addFixed(bounds.center[axis], localToAbsolute[axis]);
+        }
+        if (const auto distance = renderer.admittedZoneDistance(bounds))
+            ambientDistances.push_back({{key.first + extracted->originZoneX(), key.second + extracted->originZoneY()},
+                                        zone.boundsSource, *distance});
+    }
+    extracted->publishAmbientSceneDistances(ambientDistances);
+}
+
 void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water) const {
     const bool steamLook = renderStyle() == RenderStyle::Steam;
     const auto player = scenePlayerProvider ? scenePlayerProvider() : std::nullopt;
@@ -1187,8 +1209,10 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
                     0,
                     castShadow,
                     kind};
-                draw.nativeZone = z.nativeBounds;
-                draw.nativeLights = z.nativeLights;
+                if (steamLook) {
+                    draw.nativeZone = z.nativeBounds;
+                    draw.nativeLights = z.nativeLights;
+                }
                 if (extracted) {
                     const int32_t x = std::bit_cast<int32_t>(uint32_t(key.first + extracted->originZoneX()) << 6);
                     const int32_t y = std::bit_cast<int32_t>(uint32_t(key.second + extracted->originZoneY()) << 6);

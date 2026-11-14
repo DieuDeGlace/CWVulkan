@@ -1,5 +1,6 @@
 #include "NativeParticles.h"
 #include "GameMath.h"
+#include "SoundRules.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -169,6 +170,18 @@ void System::prependBody(const BodyPart &part, const Random &random) {
                     temporary.push_back(p);
             }
     live.insert(live.begin(), temporary.rbegin(), temporary.rend());
+}
+
+void System::prependAmbientLeaf(const soundrules::AmbientLeaf &leaf) {
+    Particle p;
+    p.style = 4;
+    p.position = leaf.position;
+    p.velocity = {leaf.velocity[0], leaf.velocity[1], leaf.velocity[2]};
+    p.spin = {leaf.spin[0], leaf.spin[1], leaf.spin[2]};
+    p.colour = {leaf.colour[0], leaf.colour[1], leaf.colour[2], 1};
+    p.size = 0.5f;
+    p.lifetime = 20000;
+    live.insert(live.begin(), p);
 }
 
 bool System::step(Particle &p, int32_t milliseconds, const BlockType &block) {

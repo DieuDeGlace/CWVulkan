@@ -5,7 +5,6 @@
 // (Structures.h).
 #include "worldgen/BuildingRules.h"
 #include "worldgen/ZoneBuild.h"
-#include "SoundRules.h"
 
 #include <functional>
 #include <set>
@@ -73,10 +72,5 @@ void markObjectBlocks(std::span<const StaticObject> objects, std::set<std::tuple
 // C9: the campfire and things of the daily refresh's travellers' camp, in cell (cx, cy) with spots
 // of `kind`; `race` the travellers' race. Part C's refresh calls it with the zone's stream seeded.
 void campObjects(ZoneBuild &zone, int32_t cx, int32_t cy, int kind, int race);
-
-// The zone's ambient sound emitters (zone +0xa8, 0x40 bytes each: rivers 0x1f, leaves 0x4d,
-// birds 0x4e..0x50; docs/specs/sound.md §4), which Audio's ambient rules play: the emitter list
-// of C2.1 as the generator makes it (Generator.cpp, from the zone cache).
-std::vector<soundrules::Emitter> soundEmitters(int32_t zx, int32_t zy);
 
 } // namespace worldgen

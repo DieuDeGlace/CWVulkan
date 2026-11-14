@@ -808,7 +808,7 @@ void ExtractedWorld::invalidateGameBlocks(std::span<const BlockNotice> changes) 
     {
         std::lock_guard lock(cacheMutex);
         for (const Key &key : affected)
-            if (std::any_of(cache.begin(), cache.end(), [&](const auto &entry) { return entry.first == key && entry.second; }))
+            if (cachedUnlocked(key.first, key.second))
                 loaded.push_back(key);
     }
     std::lock_guard lock(changesMutex);
@@ -879,7 +879,7 @@ std::vector<std::pair<int, int>> ExtractedWorld::takeChangedModels() {
 std::optional<ExtractedWorld::ZoneToken> ExtractedWorld::gameZoneToken(int32_t x, int32_t y) const {
     std::lock_guard lock(cacheMutex);
     if (const auto zone = cachedUnlocked(x, y))
-        return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated};
+        return ZoneToken{uint64_t(reinterpret_cast<uintptr_t>(zone->identity.get())), zone, generatedMode || zone->generated, zone->identity};
     return std::nullopt;
 }
 
@@ -1589,30 +1589,79 @@ std::vector<Scenery> ExtractedWorld::propsForZone(const std::shared_ptr<const Zo
     return out;
 }
 
-std::vector<soundrules::Emitter> ExtractedWorld::soundEmitters(int ax, int ay) const {
-    constexpr uint32_t EMITTER_LIST = 0xa8; // the zone's emitter list
+std::shared_ptr<const std::vector<soundrules::Emitter>> ExtractedWorld::ambientEmitters(int32_t ax, int32_t ay) {
+    std::shared_ptr<Zone> zone;
+    {
+        std::lock_guard lock(cacheMutex);
+        zone = cachedUnlocked(ax, ay);
+        if (!zone)
+            return {};
+        const auto &identity = *zone->identity;
+        if (identity.ambientSceneDistance && !soundrules::ambientZoneAdmitted(*identity.ambientSceneDistance))
+            return {};
+        if (identity.emitters)
+            return identity.emitters;
+    }
+    // Never generate a zone from an ambient lookup. Captured legacy sets lacking
+    // an emitter chunk likewise have no independently supplied list to play.
+    std::vector<soundrules::Emitter> emitters;
+    if (zone->things) {
+        emitters.reserve(zone->things->emitters.size());
+        for (const worldgen::Model &model : zone->things->emitters)
+            emitters.push_back({uint32_t(model.type), {model.x, model.y, model.z}, {model.r, model.g, model.b}});
+    } else
+        emitters = readSoundEmitters(ax, ay);
+    auto list = std::make_shared<const std::vector<soundrules::Emitter>>(std::move(emitters));
+    std::lock_guard lock(cacheMutex);
+    const auto current = cachedUnlocked(ax, ay);
+    if (!current || current->identity != zone->identity)
+        return {};
+    const auto &identity = *current->identity;
+    if (identity.ambientSceneDistance && !soundrules::ambientZoneAdmitted(*identity.ambientSceneDistance))
+        return {};
+    if (!identity.emitters)
+        identity.emitters = std::move(list);
+    return identity.emitters;
+}
+
+void ExtractedWorld::publishAmbientSceneDistances(std::span<const scenevisibility::ZoneDistance> distances) {
+    std::lock_guard lock(cacheMutex);
+    for (const auto &[key, identity, squaredDistance] : distances)
+        if (const auto zone = cachedUnlocked(key.first, key.second); zone && zone->identity == identity)
+            zone->identity->ambientSceneDistance = squaredDistance;
+}
+
+std::vector<soundrules::Emitter> ExtractedWorld::readSoundEmitters(int32_t ax, int32_t ay) const {
+    constexpr uint32_t EMITTER_LIST = 0xa8;
+    std::ifstream in(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec"),
+                     std::ios::binary | std::ios::ate);
+    if (!in || in.tellg() < 4 || in.tellg() > 128 * 1024 * 1024)
+        return {};
+    std::vector<uint8_t> data(size_t(in.tellg()));
+    in.seekg(0);
+    if (!in.read(reinterpret_cast<char *>(data.data()), data.size()) || std::memcmp(data.data(), "CWR1", 4))
+        return {};
     std::vector<soundrules::Emitter> out;
-    std::ifstream in(folder / ("z_" + std::to_string(ax) + "_" + std::to_string(ay) + ".rec"), std::ios::binary);
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), {});
-    if (data.size() < 4 || memcmp(data.data(), "CWR1", 4) != 0)
-        return out;
     for (size_t at = 4; at + 12 <= data.size();) {
         uint32_t offset, stride, count;
-        memcpy(&offset, &data[at], 4);
-        memcpy(&stride, &data[at + 4], 4);
-        memcpy(&count, &data[at + 8], 4);
+        std::memcpy(&offset, &data[at], 4);
+        std::memcpy(&stride, &data[at + 4], 4);
+        std::memcpy(&count, &data[at + 8], 4);
         at += 12;
         if (!stride || count > (data.size() - at) / stride)
             break;
-        if (offset == EMITTER_LIST && stride == soundrules::emitter::RECORD_SIZE)
-            for (uint32_t i = 0; i < count; i++) {
-                const uint8_t *r = &data[at + (size_t)i * stride];
+        if (offset == EMITTER_LIST && stride == soundrules::emitter::RECORD_SIZE) {
+            out.reserve(out.size() + count);
+            for (uint32_t i = 0; i < count; ++i) {
+                const uint8_t *r = &data[at + size_t(i) * stride];
                 soundrules::Emitter e;
-                memcpy(&e.type, r + soundrules::emitter::TYPE, 4);
-                memcpy(e.position, r + soundrules::emitter::POSITION, sizeof e.position);
+                std::memcpy(&e.type, r + soundrules::emitter::TYPE, 4);
+                std::memcpy(e.position, r + soundrules::emitter::POSITION, sizeof e.position);
+                std::memcpy(e.colour.data(), r + 0x2c, 3 * sizeof(float));
                 out.push_back(e);
             }
-        at += (size_t)stride * count;
+        }
+        at += size_t(stride) * count;
     }
     return out;
 }
@@ -1801,7 +1850,8 @@ std::optional<scenevisibility::Bounds> ExtractedWorld::meshBounds(int zx, int zy
 }
 
 bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds,
-                          worldgen::MeshLightVolume *nativeLight, Mesh *lava, std::vector<TerrainMeshBand> *terrainBands) {
+                          worldgen::MeshLightVolume *nativeLight, Mesh *lava, std::vector<TerrainMeshBand> *terrainBands,
+                          std::shared_ptr<const void> *boundsSource) {
     meshprofile::Sample profile(zx, zy, renderStyle() == RenderStyle::Alpha);
     const size_t opaqueStart = opaque.indices.size(), waterStart = water.indices.size(), lavaStart = lava ? lava->indices.size() : 0;
     if (terrainBands)
@@ -1810,6 +1860,8 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         *nativeLight = {};
     if (nativeBounds)
         nativeBounds->reset();
+    if (boundsSource)
+        boundsSource->reset();
     const int64_t absoluteX = (int64_t)zx + originX, absoluteY = (int64_t)zy + originY;
     if (absoluteX <= INT32_MIN || absoluteX >= INT32_MAX || absoluteY <= INT32_MIN || absoluteY >= INT32_MAX)
         return false;
@@ -1828,9 +1880,12 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     if (!self)
         return false;
     const bool alphaLook = renderStyle() == RenderStyle::Alpha;
-    const auto nativeBox = (!alphaLook || nativeBounds) ? boundsFor(ax, ay, around) : std::nullopt;
+    const bool needsAmbientBounds = nativeBounds && (!self->things || !self->things->emitters.empty());
+    const auto nativeBox = (!alphaLook || needsAmbientBounds) ? boundsFor(ax, ay, around) : std::nullopt;
     if (nativeBounds)
         *nativeBounds = nativeBox;
+    if (nativeBox && boundsSource)
+        *boundsSource = self->identity;
     profile.mark(meshprofile::Bounds);
     worldgen::MeshLightVolume localLight;
     auto &solvedLight = nativeLight ? *nativeLight : localLight;
