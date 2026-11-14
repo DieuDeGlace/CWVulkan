@@ -131,6 +131,33 @@ const char *placeTrack(const MusicPlace &p) {
 bool urgentTrack(const std::string &name) { return name == "boss" || name == "success"; }
 } // namespace
 
+int32_t insidePlaceKind(int32_t zoneX, int32_t zoneY, int32_t kind, bool big) {
+    if (!big)
+        return 0;
+    if (kind == 0x2a || (kind >= 0x2c && kind <= 0x2f))
+        return kind;
+    if (kind != 5 && kind != 9 && kind != 0xf)
+        return 0;
+    // The even zone's hash, in 32-bit wrapping arithmetic, then the image's exact high-product step.
+    const uint32_t ex = (uint32_t)(zoneX & ~1), ey = (uint32_t)(zoneY & ~1);
+    uint32_t u = ey * 0x39u + 0x62ad0u + ex;
+    u ^= u << 13;
+    const uint32_t v = ((u * u * 0xec4du + 0x131071fu) * u + 0xd208dd0du) & 0x7fffffffu;
+    const int32_t high = (int32_t)(((int64_t)(int32_t)v * (int64_t)(int32_t)0x9e5706b3u) >> 32);
+    const int32_t shifted = high >> 13;
+    const int32_t q = shifted < 0 ? shifted + 1 : shifted;
+    switch (kind) {
+    case 5: return (q & 7) == 0 ? 0x29 : 0;
+    case 9: return (q & 1) == 0 ? 0x28 : 0;
+    default: return (q & 1) == 0 ? 0x2b : 0;
+    }
+}
+
+int32_t musicZone(int64_t fixed) {
+    const int32_t block = (int32_t)(fixed / 65536); // toward zero
+    return block >> 10;                             // floored (arithmetic shift, C++20)
+}
+
 Track chooseTrack(const MusicPlace &place, const std::string &current) {
     Track t;
     if (place.cellX == 0 && place.cellY == 0 && place.placeKind != 0) {

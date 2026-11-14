@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The music's place kind inside a building (block flag 0x20) and its toward-zero zone, as Steam's.
+  See [the checkpoint](release-status.md#music-inside-a-building---2026-11-14).
+
 - [x] Generic creature overhead models: class and collection markers and the buff-7 heart, as Steam's.
   See [the checkpoint](release-status.md#creature-overhead-models---2026-11-14).
 

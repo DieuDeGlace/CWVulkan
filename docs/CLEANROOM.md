@@ -1,5 +1,17 @@
 # Clean-room process
 
+## Music inside a building - 2026-11-14
+
+The [inside-building contract](specs/steam-music-inside-building-20261114.md) shows Steam's
+"inside a building" test is the shrine test itself: flag 0x20 of the block at the player. Inside,
+the music's place kind comes from 0x2aa270 with no weight test; the zone divides the position
+toward zero before flooring. CubeVulkan already tested the flag but always took the weighted kind
+and floored the zone. It now takes the inside kind and the toward-zero zone; only the title rule at
+zone (0, 0) can hear the difference. Eleven CPU checks failed on a stub and pass. All five targets,
+full required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha
+probes pass. No in-game audio observation.
+
+
 ## Creature overhead models - 2026-11-14
 
 Steam draws a model over living actors beyond active emotes: class markers (classes 128-131,

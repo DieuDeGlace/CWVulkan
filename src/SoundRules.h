@@ -123,6 +123,13 @@ struct Track {
 };
 // The weight a place must have for its kind to count (§3.3).
 constexpr float PLACE_WEIGHT_MIN = 0.5f;
+// The place kind the music takes when the player's block has flag 0x20 (inside), in place of the
+// weighted zone kind (steam-music-inside-building §2, 0x2aa270): 0 outside a big zone; kinds 0x2a and
+// 0x2c..0x2f unchanged; 5, 9 and 0xf become 0x29, 0x28 and 0x2b on the even zone's hash; else 0.
+int32_t insidePlaceKind(int32_t zoneX, int32_t zoneY, int32_t kind, bool big);
+// The music's zone coordinate of a fixed-point position (§1 step 2): the block coordinate divided
+// toward zero, then floored by 1024.
+int32_t musicZone(int64_t fixed);
 // The track a place wants (§3.3). `current` is the track now chosen, so the rules that only
 // set a threshold when they change the track can tell.
 Track chooseTrack(const MusicPlace &place, const std::string &current);

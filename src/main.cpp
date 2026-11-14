@@ -192,20 +192,24 @@ struct Player {
     float verticalSpeed = 0;
 };
 
-// What the music choice reads of the place at absolute block column (x, y) (sound.md §3.3):
-// its place cell, region biome, ground height and place. `shrine` is the shrine flag of the
-// player's block; the boss, spirit-world and success states are the caller's.
-soundrules::MusicPlace musicPlaceAt(int32_t x, int32_t y, bool shrine) {
+// What the music choice reads of the place at the player's fixed-point position (sound.md §3.3,
+// steam-music-inside-building §1): its zone, region biome, ground height and place kind.
+// `shrine` is flag 0x20 of the player's block, which is also the game's "inside" test: then the
+// kind is 0x2aa270's, with no weight test. The boss, spirit-world and success states are the caller's.
+soundrules::MusicPlace musicPlaceAt(const int64_t at[2], bool shrine) {
     soundrules::MusicPlace m;
-    m.cellX = worldgen::floorDiv(x, worldgen::PLACE_SHIFT);
-    m.cellY = worldgen::floorDiv(y, worldgen::PLACE_SHIFT);
+    const int32_t x = worldgen::floorDots(at[0]), y = worldgen::floorDots(at[1]);
+    m.cellX = soundrules::musicZone(at[0]);
+    m.cellY = soundrules::musicZone(at[1]);
     m.biome = worldgen::biomeAt(x, y);
     m.ground = worldgen::groundHeight(x, y, 0);
-    // A place counts from half its weight in. HOOK: inside a building the game takes the big
-    // structure's kind (0x2aa270) instead; CubeVulkan does not yet tell when the player is
-    // inside one (the spec does not say how the game does).
     const worldgen::Place p = worldgen::placeAt(x, y);
-    m.placeKind = p.weight >= soundrules::PLACE_WEIGHT_MIN ? p.kind : 0;
+    if (shrine) {
+        const bool big = worldgen::bigCell(m.cellX, m.cellY);
+        m.placeKind = soundrules::insidePlaceKind(m.cellX, m.cellY, worldgen::placeKind(m.cellX, m.cellY, big), big);
+    } else {
+        m.placeKind = p.weight >= soundrules::PLACE_WEIGHT_MIN ? p.kind : 0; // a place counts from half its weight in
+    }
     m.forestWeight = worldgen::forestRegion(worldgen::neighbourhood(x, y), p.kind, p.weight);
     m.placeHashOdd = (worldgen::random(worldgen::cellKey(m.cellX, m.cellY)) & 1) != 0;
     m.shrine = shrine;
@@ -9860,7 +9864,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             constexpr uint8_t SHRINE_FLAG = 0x20; // the block's flag byte (+5)
             bool shrineLoaded = false;
             const bool shrine = (extractedWorld.gameBlock(bx, by, bz, &shrineLoaded)[5] & SHRINE_FLAG) && shrineLoaded;
-            soundrules::MusicPlace place = musicPlaceAt(bx, by, shrine);
+            soundrules::MusicPlace place = musicPlaceAt(here, shrine);
             float strength = 0, left = 0;
             constexpr int SPIRIT_WORLD_BUFF = 0x13;
             place.spiritWorld = spawned.playerRecord() && spawned.playerBuff(SPIRIT_WORLD_BUFF, strength, left);

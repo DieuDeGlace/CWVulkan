@@ -9021,6 +9021,24 @@ static void soundRules() {
         CHECK(ambientFrame(0, 2500, 0).dtMs == 1000 && ambientFrame(0, 1000, 0).dtMs == 1000); // the update's cap
         CHECK(ambientFrame(0, 0.6, 0).dtMs == 0 && ambientFrame(0, 16.7, 0).dtMs == 16); // fractions give 0 / whole ms
     }
+    { // steam-music-inside-building §1-2: the inside kind (0x2aa270) and the music's zone.
+        CHECK(insidePlaceKind(0, 0, 5, false) == 0 && insidePlaceKind(4, 6, 0x2a, false) == 0); // not a big zone
+        for (int32_t kept : {0x2a, 0x2c, 0x2d, 0x2e, 0x2f})
+            CHECK(insidePlaceKind(-3, 7, kept, true) == kept);
+        for (int32_t none : {0, 1, 0x28, 0x29, 0x2b, 0x30, 6, -5})
+            CHECK(insidePlaceKind(0, 0, none, true) == 0);
+        // Expected values computed separately from the contract's wording.
+        CHECK(insidePlaceKind(0, 0, 5, true) == 0x29 && insidePlaceKind(0, 0, 9, true) == 0x28 && insidePlaceKind(0, 0, 0xf, true) == 0x2b);
+        CHECK(insidePlaceKind(1, 1, 5, true) == 0x29); // odd zones round down to the even one
+        CHECK(insidePlaceKind(-1, -1, 5, true) == 0 && insidePlaceKind(-1, -1, 9, true) == 0 && insidePlaceKind(-1, -1, 0xf, true) == 0);
+        CHECK(insidePlaceKind(100, 200, 5, true) == 0 && insidePlaceKind(100, 200, 9, true) == 0x28 &&
+              insidePlaceKind(100, 200, 0xf, true) == 0x2b);
+        CHECK(insidePlaceKind(4, 6, 5, true) == 0x29 && insidePlaceKind(-3, -9, 5, true) == 0 && insidePlaceKind(-3, -9, 9, true) == 0x28);
+        CHECK(insidePlaceKind(11, -2, 9, true) == 0 && insidePlaceKind(8, -8, 0xf, true) == 0x2b);
+        CHECK(musicZone(0) == 0 && musicZone(1023 * 65536 + 65535) == 0 && musicZone(1024 * 65536) == 1);
+        CHECK(musicZone(-32768) == 0 && musicZone(-65535) == 0); // toward zero first: -0.5 block is block 0
+        CHECK(musicZone(-65536) == -1 && musicZone(-1024 * 65536) == -1 && musicZone(-1025 * 65536) == -2);
+    }
     { // §4: what the emitters play and when.
         struct Played {
             int number;
