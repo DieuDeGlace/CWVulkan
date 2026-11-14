@@ -554,9 +554,9 @@ void Multiplayer::startHostThread() {
             hostWorld->reset = [this, reset] { post(reset); };
         hostWorld->separateAi = true;
         hostIdle = guestElsewhere();
+        hostThread = std::jthread([this](std::stop_token stop) { hostLoop(stop); });
+        aiThread = std::jthread([this](std::stop_token stop) { aiLoop(stop); });
     }
-    hostThread = std::jthread([this](std::stop_token stop) { hostLoop(stop); });
-    aiThread = std::jthread([this](std::stop_token stop) { aiLoop(stop); });
 }
 
 void Multiplayer::joinHostThreads() {

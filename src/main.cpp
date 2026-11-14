@@ -809,7 +809,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     gameState.player = spawned.retainedPlayer();
     spawned.setControlState(gameplayControls);
     SpawnedCreatures hostWorld; // the host world
-    // Multiplayer (Multiplayer.h), set up below once the character is known.
+    // The dedicated frame driver still reads the frame World's terrain. Its
+    // authority must have a separate reader so it cannot wait on that guard
+    // while the frame is waiting to enter the host lock.
+    std::unique_ptr<ExtractedWorld> dedicatedHostSource;
     Multiplayer session;
     auto authorityTerrain = [&]() -> ExtractedWorld & {
         if (auto *blocks = session.hostBlocks())
@@ -3261,7 +3264,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         setup.steam = &steam;
         setup.hostWorld = &hostWorld;
         setup.clientWorld = serverMode ? nullptr : &spawned;
-        setup.blocks = &extractedWorld;
+        if (serverMode)
+            dedicatedHostSource = extractedWorld.forkSource();
+        setup.blocks = dedicatedHostSource ? dedicatedHostSource.get() : &extractedWorld;
         setup.loss = netLoss;
         if (byAddress) {
             setup.way = Multiplayer::Way::Address;
@@ -3336,7 +3341,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         if (HostSide *host = session.hostSide()) {
             host->setStandIn(player.position);
-            host->deaths = [&](const std::vector<SpawnedCreatures::Death> &died) { // the world remembers who died
+            host->deaths = [&](const std::vector<SpawnedCreatures::Death> &died) {
+                // The events' stat callbacks read guardian state on the host.
+                auto hostHold = session.lockHost();
                 for (const SpawnedCreatures::Death &d : died) {
                     events.death(d.id);
                     if (std::find(saveGame.killed.begin(), saveGame.killed.end(), d.id) == saveGame.killed.end())
@@ -8199,7 +8206,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             const auto deaths = spawned.takeDeaths(extractedWorld);
             for (const SpawnedCreatures::Death &d : deaths) {
-                events.death(d.id);
+                if (events.enabled()) {
+                    auto hostHold = session.lockHost();
+                    events.death(d.id);
+                }
                 if (std::find(saveGame.killed.begin(), saveGame.killed.end(), d.id) == saveGame.killed.end())
                     saveGame.killed.push_back(d.id); // (the world remembers who died)
                 // Credited by its kill credit (packet 7 list 10), which names everyone it was

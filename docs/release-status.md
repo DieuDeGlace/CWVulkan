@@ -1,5 +1,35 @@
 # Source review checkpoint — 2026-11-08
 
+## Dedicated host startup and retrospective checkpoint audit - 2026-11-14
+
+A dedicated server could stall before its first status report. Its frame driver held
+the terrain state lock while asking for the host lock. The host thread held the host
+lock while waiting on the same terrain state. The dedicated frame driver now keeps
+its reader and supplies the authority with a separate reader of the same terrain
+source. The host takes its first tick after both worker handles are assigned.
+Event death bookkeeping uses the host lock while updating the data that its stat
+callbacks read.
+
+The published executable stalled under a 25-second observation deadline. On the
+fixed executable, the same five-second dedicated session starts, runs and shuts
+down on both Native and Alpha world generation. Eleven loopback and gameplay
+probes, the required owner-data CPU suite, Vulkan image groups and the SDK-free
+extractor audit passed. The probes used disposable saves, with matching save hashes
+before and after. Original Steam peers and two-account sessions remain release gates.
+
+The retrospective audit matched 25 publication receipts to 50 private archives,
+their manifests, the local source commits, the published Git trees and recorded
+specification hashes. The older pickup receipt records implementation remarks
+exposed through two assigned files. A fresh isolated author independently derived
+the pickup cadence and success-music writer rules from the original image. The
+new pickup contract, the older receipt and the separate Goddess admission audit
+form the record for that scope. The earlier Goddess audit supplies the vanilla
+reachability conditions for its dormant gift route.
+
+See [the independent pickup review](specs/steam-pickup-and-success-writers-independent-review-20261114.md)
+and [the Goddess admission audit](specs/steam-goddess-statue-gift-20261112.md).
+
+
 ## Music inside a building - 2026-11-14
 
 The [inside-building contract](specs/steam-music-inside-building-20261114.md) shows Steam's
