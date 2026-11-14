@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Ground landing sounds - 2026-11-14
+
+The implementer used the whole held
+[pickup and landing review](specs/steam-pickup-feedback-and-landing-20261114.md)
+and the [ground-clock and pickup admission review](specs/steam-ground-clock-admission-and-pickup-gate-20261114.md). Sources and test results
+remained separate. The Native and Alpha harness staged actual host drops and
+examined the World sound requests delivered through the in-process connection.
+The results establish queued records, independent of platform audio output.
+
 ## Pickup chat and live currency - 2026-11-14
 
 The implementer used the whole held

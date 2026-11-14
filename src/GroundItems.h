@@ -64,7 +64,7 @@ using SolidAt = std::function<bool(int32_t x, int32_t y, int32_t z)>;
 void snapToWall(int64_t &x, int64_t &y, float &angle, int64_t groundZ, const SolidAt &solid);
 
 // §1 steps 2–3: the timer counts down to 0 and the delay runs out. True on the update the delay
-// reaches 0: the caller plays the landing sound (soundrules::itemLanded) unless it is a server.
+// reaches 0. Authority and local reservation gates are applied by the World.
 bool countDown(float &delayMs, int32_t &timerMs, float dtMs);
 
 // --- Drawing (§2) -------------------------------------------------------------------------

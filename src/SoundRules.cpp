@@ -382,8 +382,12 @@ LandingSound itemLanded(int category, bool reservedForLocalPlayer, const std::fu
     LandingSound s;
     s.number = category == COINS ? soundid::DROP_COIN : soundid::DROP_ITEM;
     s.pitch = randomPitch(rand, 0.1f, 1.0f);
-    s.chime = reservedForLocalPlayer && ((category >= 3 && category <= 9) || category == 0x1a);
+    s.chime = reservedLandingChime(category, reservedForLocalPlayer);
     return s;
+}
+
+bool reservedLandingChime(int category, bool reservedForLocalPlayer) {
+    return reservedForLocalPlayer && ((category >= 3 && category <= 9) || category == 0x1a);
 }
 
 } // namespace soundrules

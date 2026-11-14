@@ -1360,20 +1360,6 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             if (!client && dayCount != previousDay)
                 rebuildViews();
         }
-        if (!client) { // the selected zones' ground items (0x2E3510): within three zones of a player
-            std::vector<nativesaves::Cell> playerZones;
-            const auto zoneOfRecord = [](const uint8_t *r) {
-                int64_t at[2];
-                std::memcpy(at, r + worldgen::creature::POSITION, sizeof at);
-                return zonestates::zoneOfBlock(at[0] >> 16, at[1] >> 16);
-            };
-            for (const nativeai::Creature *c : a.creatures)
-                if (c->record[0x60] == 0)
-                    playerZones.push_back(zoneOfRecord(c->record));
-            if (hasPlayer)
-                playerZones.push_back(zoneOfRecord(player.record.data()));
-            zoneStates.advanceGroundItems(dt, playerZones);
-        }
         u.time = elapsedWorldMs;
         u.day = dayMs;
         w.time = elapsedWorldMs;
@@ -1431,10 +1417,34 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
                 residents != zoneResidents.end() ? residents->second : worldgen::zone(visit.key[0], visit.key[1]);
             zonestates::rebuildSourceSummaries(*lists, source->spawns, worldDead);
         }
+        const auto landItem = [&](const nativesaves::Record &item) {
+            soundrules::Request sound;
+            std::memcpy(sound.position, item.data() + grounditems::ground::POSITION, sizeof sound.position);
+            const int category = item[grounditems::ground::ITEM];
+            const bool reserved = hasPlayer &&
+                cwnet::field<int64_t>(item, grounditems::ground::OWNER) == get<int64_t>(player.record, 0x968);
+            if (!client) {
+                const auto landing = soundrules::itemLanded(category, reserved, w.rand);
+                sound.number = landing.number;
+                sound.pitch = landing.pitch;
+                objectWorld.sound(soundrules::makeRequest(sound));
+                if (!landing.chime)
+                    return;
+            } else if (!soundrules::reservedLandingChime(category, reserved)) {
+                return;
+            }
+            sound.number = soundrules::soundid::CRAFT_SPECIAL;
+            sound.pitch = 1.0f;
+            objectWorld.sound(soundrules::makeRequest(sound));
+        };
+        const grounditems::SolidAt solidGroundNeighbour = [&](int32_t x, int32_t y, int32_t z) {
+            return (ew.gameBlock(x, y, z)[4] & 0xfd) != 0;
+        };
         for (const auto &visit : selected) {
             nativesaves::ZoneLists *lists = zoneStates.find(visit.key);
             if (!lists)
                 continue;
+            zoneStates.advanceGroundItems(visit.key, dt, landItem, solidGroundNeighbour);
             objectWorld.gateThreshold = [owner = visit.key, generated = std::shared_ptr<const worldgen::ZoneContents>{}]
                                         (nativeobjects::Cell key) mutable -> std::optional<int32_t> {
                 if (!generated)

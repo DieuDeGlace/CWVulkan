@@ -190,7 +190,13 @@ int objectClockTests() {
         zonestates::ZoneStates items;
         auto &here = items.load({0, 0}, {ground(600, 10), ground(10, 0), ground(0, 3)}, {});
         auto &far = items.load({4, 0}, {ground(600, 10)}, {});
-        items.advanceGroundItems(16, {{0, 0}});
+        int landings = 0;
+        items.advanceGroundItems({0, 0}, 16, [&](const auto &item) {
+            ++landings;
+            check(&item == &here.groundItems[1] && delayOf(item) == 0.0f, "the landing callback sees the exact record after its delay crosses");
+        });
+        items.advanceGroundItems({5, 5}, 16, [&](const auto &) { ++landings; });
+        check(landings == 1, "only one loaded item whose delay crossed emitted a landing callback");
         check(delayOf(here.groundItems[0]) == 584 && timerOf(here.groundItems[0]) == 0,
               "a laid item's delay counts down and its timer truncates toward zero (trunc(10 - 16) clamps to 0)");
         check(delayOf(here.groundItems[1]) == 0.0f, "a delay that passes zero is set to exactly 0");
@@ -198,7 +204,20 @@ int objectClockTests() {
         check(delayOf(far.groundItems[0]) == 600 && timerOf(far.groundItems[0]) == 10, "zones beyond three of a player are not advanced");
         check(!here.groundItemsChanged, "the countdown raises no change notice");
         auto &frac = items.load({1, 1}, {ground(600, 10)}, {});
-        items.advanceGroundItems(2.5f, {{0, 0}});
+        items.advanceGroundItems({1, 1}, 2.5f, [&](const auto &) { ++landings; });
+        check(landings == 1, "positive remaining delays do not emit a sound");
+        auto wall = ground(8, 0);
+        wall[0] = 0x11;
+        const std::array<int64_t, 3> at{-30000, 20 * 65536 + 40000, 6 * 65536};
+        std::memcpy(wall.data() + 0xa0, at.data(), sizeof at);
+        items.load({-1, 0}, {wall}, {});
+        items.advanceGroundItems({-1, 0}, 8, [&](const auto &record) {
+            ++landings;
+            auto expected = at;
+            expected[1] = 20 * 65536 + 13107;
+            check(zonestates::groundItemPosition(record) == expected, "wall clock snapshots its snapped position before emitting");
+        }, [](int32_t x, int32_t y, int32_t z) { return x == -1 && y == 19 && z == 6; });
+        check(landings == 2, "wall item also has exactly one crossing");
         check(timerOf(frac.groundItems[0]) == 7 && delayOf(frac.groundItems[0]) == 597.5f, "the timer truncates trunc(10 - 2.5) = 7");
     }
     { // Walk-over pick-ups already pending are not queued twice (pickup-rate §B.1 step 7).

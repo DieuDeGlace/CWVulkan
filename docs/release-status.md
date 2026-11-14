@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Ground landing sounds - 2026-11-14
+
+Loaded ground records snap wall items and advance both clocks during the
+selected World step, before that zone's static-object pass. The host emits the
+ordinary coin or item landing sound on the delay crossing, using the drop's
+fixed position and one World random draw. A viewing World can emit the separate
+fixed-pitch chime for its reserved gear. The display list leaves standard
+landing sound to the World and reads the live clocks for pickup selection.
+Manual pickup can queue with a positive landing timer.
+
+Native and Alpha loopback gameplay delivered one coin and one item request
+with the exact coordinates, owner zero and unit gain. The actual host coin
+pickup fixtures, required owner-data and Vulkan suites and SDK-free extractor
+audit passed with disposable saves. Original-device playback remains open.
+
 ## Pickup chat and live currency - 2026-11-14
 
 Resolved pickup receipts now append the recipient, item name and punctuation as

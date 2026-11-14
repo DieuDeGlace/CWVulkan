@@ -314,6 +314,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
     bool pickupReceiptTest = false; // --pickup-receipt-test: feed exact native receipts through the Game phase.
     bool pickupFeedbackTest = false;
+    bool landingTest = false; // --ground-landing-test: actual host-to-viewed sound requests.
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
@@ -496,6 +497,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             pickupReceiptTest = true;
         else if (a == "--pickup-feedback-test")
             pickupFeedbackTest = true;
+        else if (a == "--ground-landing-test")
+            landingTest = true;
         else if (a == "--lamp-test")
             lampTest = true;
         else if (a == "--shrine-test")
@@ -1973,6 +1976,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         std::array<uint8_t, 0xa0> raw{}; // a zone's ground item: its item as the zone keeps it
     };
     std::vector<Loot> loot;
+    const auto hasWorldGroundRecord = [&](const Loot &item) {
+        return spawnedReady && item.zoneItem[0] != INT_MIN;
+    };
     // Where a dropped item is drawn, as the game draws a zone's items: scaled (1/14; coins
     // 0.04), lying or standing by category, arcing five blocks high while it drops and
     // tumbling. The model (of `size`) has its corner at the matrix's origin.
@@ -3639,6 +3645,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     double nextSteamCheck = 5;
     int exitCode = 0;
     bool returnToTitle = false;
+    struct LandingProbe {
+        double laidAt = -1;
+        std::array<std::array<int64_t, 3>, 2> position{};
+        std::array<int, 2> received{};
+        bool correctPayload = true;
+    } landingProbe;
     std::vector<DrawItem> opaque, water;
     // The screens over the game (Frontend.h): the system menu and the options, controls and
     // help screens, drawn with the game's own interface while the world runs on behind them.
@@ -6526,6 +6538,17 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             for (Loot &l : loot) {
                 if (!l.onGround || !l.hasItem)
                     continue;
+                if (hasWorldGroundRecord(l)) {
+                    const auto *record = spawned.findGroundItem(l.zoneItem);
+                    if (!record || !zonestates::holdsItem(*record) || !nativeinteract::sameItem(record->data(), l.raw.data()))
+                        continue;
+                    using namespace grounditems::ground;
+                    l.fixedPosition = zonestates::groundItemPosition(*record);
+                    l.at = extractedWorld.toLocal(l.fixedPosition->data());
+                    std::memcpy(&l.rotation, record->data() + ANGLE, sizeof l.rotation);
+                    std::memcpy(&l.dropMs, record->data() + DELAY, sizeof l.dropMs);
+                    std::memcpy(&l.timerMs, record->data() + TIMER, sizeof l.timerMs);
+                }
                 const float distance = l.fixedPosition ? gamemath::fixedDistanceSquared(playerFixed.data(), l.fixedPosition->data())
                                                        : glm::dot(l.at - scene.playerAt, l.at - scene.playerAt);
                 if (distance > 16.0f)
@@ -6883,7 +6906,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         for (auto it = loot.begin(); it != loot.end();) {
             it->age += dt;
             glm::vec3 d = it->at - player.position;
-            if (it->onGround && it->item.category == grounditems::type::WALL_ITEM && useExtracted) {
+            const bool worldGround = hasWorldGroundRecord(*it);
+            if (!worldGround && it->onGround && it->item.category == grounditems::type::WALL_ITEM && useExtracted) {
                 int64_t at[3];
                 toUnits(it->at, at);
                 const double ox = (double)(extractedWorld.originDotsX() >> 16), oy = (double)(extractedWorld.originDotsY() >> 16);
@@ -6893,9 +6917,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 const glm::vec3 snapped = extractedWorld.toLocal(at);
                 it->at.x = snapped.x, it->at.y = snapped.y;
             }
-            const bool delayEnded = grounditems::countDown(it->dropMs, it->timerMs, (float)dt * 1000.0f);
-            if (delayEnded && it->onGround && !serverMode) {
-                // Its pick-up delay ran out: it lands with a sound (sound.md §5.2).
+            const bool delayEnded = !worldGround && grounditems::countDown(it->dropMs, it->timerMs, (float)dt * 1000.0f);
+            if (delayEnded && it->onGround && !serverMode && !(spawnedReady && it->zone[0] != INT_MIN)) {
+                // Standalone pouches and compatibility drops have no World clock.
                 const soundrules::LandingSound landed = soundrules::itemLanded(it->item.category, it->forPlayer, clientRand);
                 int64_t at[3];
                 toUnits(it->at, at);
@@ -6905,7 +6929,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
             // A dropped item is taken with the use key, the nearest within 10 blocks (the
             // game's input); a pouch (CubeVulkan's quest rewards) by walking over it.
-            const bool take = it->onGround ? it->taken && it->dropMs <= 0
+            const bool take = it->onGround ? it->taken && (worldGround || it->dropMs <= 0)
                                            : it->age > .6 && glm::length(glm::vec2(d)) < 1.8f && std::abs(d.z) < 2.5f;
             if (!serverMode && take) {
                 if (it->zoneItem[0] != INT_MIN && session.clientGame()) {
@@ -7374,6 +7398,30 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     hostWorld.layItem(authorityTerrain(), coin.data(), spot, 1);
                 }
                 logLine("Test coins: five laid by the host");
+            }
+            if (landingTest && spawned.playerRecord() && session.hostSide() && !session.guestElsewhere() &&
+                landingProbe.laidAt < 0 && time > 4 && hostHoldsPlayerZone()) {
+                const auto host = session.lockHost();
+                auto &terrain = authorityTerrain();
+                int64_t at[3];
+                playerUnits(at);
+                const auto zone = zonestates::zoneOfFixed(at[0], at[1]);
+                for (size_t i = 0; i < landingProbe.position.size(); ++i) {
+                    const auto item = i == 0 ? nativesaves::makeItem(12, 0, 11) : nativesaves::makeItem(14, 0, 0);
+                    // Stay within the owner's loaded zone, away from walk-over pickup range.
+                    const int64_t zoneLeft = int64_t(zone[0]) * 64 * 65536;
+                    const int64_t side = at[0] - zoneLeft < 32 * 65536 ? 1 : -1;
+                    const int64_t spot[3]{at[0] + side * (7 + int64_t(i)) * 65536 + 17, at[1] + 13, at[2]};
+                    hostWorld.layItem(terrain, item.data(), spot, 1);
+                    const auto *records = hostWorld.groundItems(terrain, zone[0], zone[1]);
+                    if (!records || records->empty() || (*records).back()[0] != item[0]) {
+                        landingProbe.correctPayload = false;
+                        break;
+                    }
+                    landingProbe.position[i] = zonestates::groundItemPosition(records->back());
+                }
+                landingProbe.laidAt = time;
+                logLine("Ground landing: host laid a coin and a mana cube");
             }
             if (noticeTest && spawned.localPlayer() && nativeInventory && session.hostSide() && !session.guestElsewhere()) {
                 // (testing: three gold and two platinum coins at the player's feet, laid by the host
@@ -7900,7 +7948,35 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             { // The world's sound requests (hits, abilities, steps, upkeep, effects, interactions).
                 int64_t at[3];
                 playerUnits(at);
-                audio.playRequests(spawned.takeSounds(), at);
+                auto requests = spawned.takeSounds();
+                if (landingTest && landingProbe.laidAt >= 0) {
+                    using namespace soundrules;
+                    for (const auto &raw : requests) {
+                        const auto sound = readRequest(raw);
+                        size_t index;
+                        if (sound.number == soundid::DROP_COIN) index = 0;
+                        else if (sound.number == soundid::DROP_ITEM) index = 1;
+                        else continue;
+                        if (!std::equal(landingProbe.position[index].begin(), landingProbe.position[index].end(), sound.position))
+                            continue;
+                        ++landingProbe.received[index];
+                        landingProbe.correctPayload &= sound.owner == 0 && sound.volume == 1.0f && sound.pitch >= 1.0f && sound.pitch <= 1.1f;
+                    }
+                    const double age = time - landingProbe.laidAt;
+                    const bool heardBoth = landingProbe.received[0] != 0 && landingProbe.received[1] != 0;
+                    if (age > 8.0 || (heardBoth && age > 3.0)) {
+                        const auto check = [&](bool passed, const char *what) {
+                            logLine(std::string("Ground landing: ") + (passed ? "PASS " : "FAIL ") + what);
+                            if (!passed) exitCode = 1;
+                        };
+                        check(landingProbe.received[0] == 1, "one host coin landing at the exact fixed position");
+                        check(landingProbe.received[1] == 1, "one host noncoin landing at the exact fixed position");
+                        check(heardBoth && landingProbe.correctPayload, "both wire requests carry owner zero, unit gain and bounded pitch");
+                        landingTest = false;
+                        glfwSetWindowShouldClose(window, 1);
+                    }
+                }
+                audio.playRequests(requests, at);
             }
             if (const int nights = spawned.takeInnNights()) { // slept at the innkeeper's (the interaction pass)
                 day += nights;

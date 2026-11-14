@@ -237,5 +237,6 @@ struct LandingSound {
     bool chime = false; // also soundid::CRAFT_SPECIAL at pitch 1
 };
 LandingSound itemLanded(int category, bool reservedForLocalPlayer, const std::function<int()> &rand);
+bool reservedLandingChime(int category, bool reservedForLocalPlayer);
 
 } // namespace soundrules

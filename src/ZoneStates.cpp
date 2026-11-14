@@ -1,6 +1,7 @@
 // The zones' stored states applied and recorded, from docs/specs/native-saves.md §5.2 and §5.3.
 #include "ZoneStates.h"
 #include "GameMath.h"
+#include "GroundItems.h"
 
 #include "NativeInteract.h"
 #include "NativeWorldObjects.h"
@@ -195,34 +196,32 @@ void ZoneStates::advanceObjects(float milliseconds, const std::vector<Cell> &pla
     }
 }
 
-void ZoneStates::advanceGroundItems(float milliseconds, const std::vector<Cell> &playerZones) {
-    constexpr size_t DELAY = 0xc8, TIMER = 0xcc;
-    auto guard = physical ? physical->lock() : sourcestates::Store::Guard{};
-    for (const auto &zone : zonesInMemory()) {
-        bool nearPlayer = false;
-        for (Cell player : playerZones)
-            if (std::abs((int64_t)zone[0] - player[0]) <= 3 && std::abs((int64_t)zone[1] - player[1]) <= 3) {
-                nearPlayer = true;
-                break;
-            }
-        if (!nearPlayer)
-            continue;
-        for (Record &item : find(zone)->groundItems) {
-            int32_t timer;
-            std::memcpy(&timer, item.data() + TIMER, sizeof timer);
-            if (timer > 0) {
-                timer = std::max((int32_t)std::trunc((float)timer - milliseconds), 0);
-                std::memcpy(item.data() + TIMER, &timer, sizeof timer);
-            }
-            float delay;
-            std::memcpy(&delay, item.data() + DELAY, sizeof delay);
-            if (delay > 0.0f) {
-                delay -= milliseconds;
-                if (delay <= 0.0f)
-                    delay = 0.0f;
-                std::memcpy(item.data() + DELAY, &delay, sizeof delay);
-            }
+void ZoneStates::advanceGroundItems(Cell zone, float milliseconds, const std::function<void(const Record &)> &landed,
+                                    const std::function<bool(int32_t, int32_t, int32_t)> &solid) {
+    auto guard = lockSources();
+    auto *lists = find(zone);
+    if (!lists)
+        return;
+    for (Record &item : lists->groundItems) {
+        using namespace grounditems::ground;
+        auto *record = item.data();
+        if (record[ITEM] == grounditems::type::WALL_ITEM && solid) {
+            auto [x, y, z] = groundItemPosition(item);
+            float angle = get<float>(record, ANGLE);
+            grounditems::snapToWall(x, y, angle, z, solid);
+            put(record, POSITION, x);
+            put(record, POSITION + 8, y);
+            put(record, ANGLE, angle);
         }
+        float delay = get<float>(record, DELAY);
+        int32_t timer = get<int32_t>(record, TIMER);
+        if (!(delay > 0.0f) && timer <= 0)
+            continue;
+        const bool reachedGround = grounditems::countDown(delay, timer, milliseconds);
+        put(record, DELAY, delay);
+        put(record, TIMER, timer);
+        if (reachedGround && landed)
+            landed(item);
     }
 }
 

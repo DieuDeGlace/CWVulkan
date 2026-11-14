@@ -5,6 +5,7 @@
 
 #include "NativeInteract.h"
 #include "NativeRules.h"
+#include "worldgen/Noise.h"
 
 #include <algorithm>
 #include <cmath>
@@ -53,8 +54,8 @@ bool isGear(int t) { return (t >= 3 && t <= 9) || t == 0x1a; }
 } // namespace
 
 void snapToWall(int64_t &x, int64_t &y, float &angle, int64_t groundZ, const SolidAt &solid) {
-    const int32_t z = (int32_t)truncatedBlock(groundZ);
-    auto solidAt = [&](int64_t px, int64_t py) { return solid((int32_t)truncatedBlock(px), (int32_t)truncatedBlock(py), z); };
+    const int32_t z = gamemath::floorFixedBlock(groundZ);
+    auto solidAt = [&](int64_t px, int64_t py) { return solid(gamemath::floorFixedBlock(px), gamemath::floorFixedBlock(py), z); };
     if (solidAt(x, y - BLOCK))
         y = truncatedBlock(y) * BLOCK + WALL_GAP, angle = 180.0f;
     if (solidAt(x, y + BLOCK))
@@ -67,14 +68,15 @@ void snapToWall(int64_t &x, int64_t &y, float &angle, int64_t groundZ, const Sol
 
 bool countDown(float &delayMs, int32_t &timerMs, float dtMs) {
     if (timerMs > 0)
-        timerMs = std::max((int32_t)((float)timerMs - dtMs), 0);
+        timerMs = std::max(worldgen::trunc32(float(timerMs) - dtMs), 0);
     if (!(delayMs > 0.0f))
         return false;
     delayMs -= dtMs;
-    if (delayMs > 0.0f)
-        return false;
-    delayMs = 0.0f;
-    return true;
+    if (delayMs <= 0.0f) {
+        delayMs = 0.0f;
+        return true;
+    }
+    return false;
 }
 
 float hopHeight(float delayMs) {
