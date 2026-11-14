@@ -5,6 +5,7 @@
 #include "Spawned.h"
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <thread>
 
@@ -91,5 +92,51 @@ int hostThreadTests() {
     std::this_thread::sleep_for(100ms);
     check(!session.hostThreadRunning() && hostTime() == stopped && !session.hostSide()->separateAi,
           "stopping joins both threads and returns AI to the host step");
+    // A local host selection uses the actual connect callback even when workers are stopped.
+    const auto self = session.net()->self();
+    check(session.host()->link().isConnected(self), "the local connection is present before switching");
+    constexpr int64_t residentId = 901;
+    bool made = false;
+    const bool hostHasPlayer = authority.networkCreature(1, made) && made;
+    check(hostHasPlayer && authority.networkCreature(residentId, made) && made,
+          "the authority holds a guest creature and an independent resident");
+    authority.markDead(902);
+    const auto store = session.hostBlocks()->sourceStateStore();
+    auto savedSource = store->make({7, -3}, 123, {}, {}, {});
+    savedSource->lists.placeCounters[{2, 3}] = 81;
+    store->install(savedSource);
+    const auto hostDay = authority.day();
+    const auto hostRole = authority.remoteClient();
+    const auto homeRegion = worldgen::regionAt(0, 0);
+    if (auto *record = authority.record(1)) {
+        const int32_t level = 18;
+        std::memcpy(record+worldgen::creature::LEVEL, &level, sizeof level);
+        session.setRegionScaling(true);
+        session.hostSide()->playerObserved(record);
+    }
+    check(session.regionLevel(homeRegion, 99)==18, "the existing guest occupies its local region");
+    mirror.setNativePlayer(true);
+    mirror.setPlayer(world, {0, 0, 100}, 0, {}, 100, 1, true);
+    const auto *local = mirror.playerRecord();
+    mirror.networkCreature(residentId, made);
+    session.net()->send(self, cwnet::Channel::ToHost, cwnet::encode(cwnet::Join{}, cwnet::Direction::ToHost));
+    session.join(2);
+    check(session.guestElsewhere() && !session.host()->link().isConnected(self),
+          "switching away publishes the new peer and clears local connections");
+    check(!authority.hasCreature(1) && !authority.hasCreature(residentId),
+          "switching away removes both guest and resident creatures from the authority");
+    check(session.net()->receiveBatch(cwnet::Channel::ToHost).empty(),
+          "old in-process host messages are discarded before a new Join is issued");
+    check(mirror.playerRecord()==local && local && !mirror.hasCreature(residentId) && mirror.remoteClient(),
+          "the viewed World retains its local actor and purges its other creatures");
+    check(store->find({7, -3})==savedSource && savedSource->lists.placeCounters.at({2,3})==81 &&
+              authority.day()==hostDay && authority.remoteClient()==hostRole && authority.persistentDeadSet().contains(902),
+          "the authority keeps its source identity, retained counters, calendar, role and saved dead set");
+    session.leave();
+    check(session.regionLevel(homeRegion, 99)==1, "returning home drops the prior guests' extension occupancy");
+    session.beginFrame(Multiplayer::clockNow()+1000);
+    const auto *connection = session.host()->link().connection(self);
+    check(connection && connection->creatureId==1,
+          "a fresh local Join can immediately reuse the smallest free player id");
     return failures;
 }

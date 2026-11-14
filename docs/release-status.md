@@ -1,5 +1,24 @@
 # Source review checkpoint — 2026-11-08
 
+## Host switch and Alpha startup joins - 2026-11-14
+
+Switching hosts now drops the previous authority's creatures, peer state and
+messages queued to its local host. Zone contents, the applied seed, the clock
+and saved death state persist. Loopback and UDP checks verify that the clear
+preserves remote packets and the client queue. Returning home assigns the
+first free player ID again. The viewed World retains its local actor.
+
+A matching Alpha client could send Join early enough for the host's five-second
+generation handshake to expire during initial drawing. Joins requested by
+configuration or the command line now start after the first gameplay frame.
+The handshake deadline and generation equality check are unchanged.
+
+Private two-process tests join and return home on Native and Alpha generation.
+A mismatched Alpha seed is rejected and the local session reconnects. The
+tests used disposable progress, with matching save hashes before and after.
+The required-owner CPU and Vulkan suites, extractor audit and affected gameplay
+checks pass. Original Steam peers and two-account Steam sessions remain open.
+
 ## Dedicated host startup and retrospective checkpoint audit - 2026-11-14
 
 A dedicated server could stall before its first status report. Its frame driver held

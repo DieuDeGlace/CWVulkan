@@ -36,6 +36,7 @@ class HostGame {
     HostGame(Transport &transport, HostWorld &world);
 
     HostLink &link() { return hostLink; }
+    void resetConnections();
 
     // One tick if one is due (`nowMs` from any steady millisecond clock). Returns whether one ran.
     bool frame(uint32_t nowMs);

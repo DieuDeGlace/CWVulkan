@@ -48,6 +48,11 @@ bool SteamTransport::receive(Channel channel, Received &out) {
     return true;
 }
 
+void SteamTransport::clearLocalHostMessages() {
+    std::lock_guard hold(lock);
+    local[(int)Channel::ToHost].clear();
+}
+
 void SteamTransport::pump(uint32_t) { steam.pump(); }
 
 } // namespace cwnet

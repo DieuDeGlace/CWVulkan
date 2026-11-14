@@ -710,6 +710,26 @@ void singlePlayer() {
     NET_CHECK(hin.creatureUpdates.size() == 1);
 }
 
+// Reset only the host's in-process messages. Remote traffic and the client queue stay ordered.
+void clearLocalHostMessages() {
+    LoopbackNetwork network;
+    SerializedTransport machine(network.endpoint(HOST_MACHINE));
+    auto peer = network.endpoint(HOST_MACHINE + 1);
+    NET_CHECK(machine.send(machine.self(), Channel::ToHost, Bytes{1}));
+    NET_CHECK(peer->send(machine.self(), Channel::ToHost, Bytes{2}));
+    NET_CHECK(machine.send(machine.self(), Channel::ToClient, Bytes{3}));
+    NET_CHECK(machine.send(machine.self(), Channel::ToHost, Bytes{4}));
+    NET_CHECK(machine.send(peer->self(), Channel::ToHost, Bytes{5}));
+    machine.clearLocalHostMessages();
+    machine.clearLocalHostMessages();
+    auto host = machine.receiveBatch(Channel::ToHost);
+    auto client = machine.receiveBatch(Channel::ToClient);
+    auto remote = peer->receiveBatch(Channel::ToHost);
+    NET_CHECK(host.size() == 1 && host[0].from == peer->self() && host[0].bytes == Bytes{2});
+    NET_CHECK(client.size() == 1 && client[0].bytes == Bytes{3});
+    NET_CHECK(remote.size() == 1 && remote[0].bytes == Bytes{5});
+}
+
 // --- UDP on this machine ------------------------------------------------------------------------------
 
 void udpTransport() {
@@ -765,6 +785,25 @@ void udpTransport() {
         guest.receive(clock, in);
     }
     NET_CHECK(guest.localId() == 1 && host.connection(clientAddress));
+
+    NET_CHECK(server.send(server.self(), Channel::ToHost, Bytes{42}));
+    NET_CHECK(server.send(server.self(), Channel::ToClient, Bytes{43}));
+    NET_CHECK(client.send(serverAddress, Channel::ToHost, Bytes{44}));
+    for (int i = 0; i < 100 && client.unacknowledged(); ++i) {
+        server.pump(clock += 10);
+        client.pump(clock);
+    }
+    NET_CHECK(client.unacknowledged() == 0);
+    server.clearLocalHostMessages();
+    auto queuedForHost = server.receiveBatch(Channel::ToHost);
+    auto queuedForClient = server.receiveBatch(Channel::ToClient);
+    // The real Join exchange queued a Hello before we sent the test payload.
+    NET_CHECK(queuedForHost.size() == 2);
+    if (queuedForHost.size() == 2) {
+        NET_CHECK(queuedForHost[0].from == clientAddress && queuedForHost[0].bytes == encode(CubeVulkanHello{}, Direction::ToHost));
+        NET_CHECK(queuedForHost[1].from == clientAddress && queuedForHost[1].bytes == Bytes{44});
+    }
+    NET_CHECK(queuedForClient.size() == 1 && queuedForClient[0].bytes == Bytes{43});
 }
 
 // --- Recordings ---------------------------------------------------------------------------------------
@@ -1162,6 +1201,7 @@ int netTests() {
     generationHandshake();
     sessionTimers();
     singlePlayer();
+    clearLocalHostMessages();
     udpTransport();
     recordings();
     steamIds();

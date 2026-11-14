@@ -137,11 +137,8 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
         mirrorWorld = std::make_unique<MirrorSide>(*setup.clientWorld, *setup.blocks);
         // Native send/request clocks belong to the process, across client lifetimes.
         static const auto processClocks = std::make_shared<cwnet::GuestLink::Clocks>();
-        client = std::make_unique<cwnet::ClientGame>(*transport, *mirrorWorld, [this] {
-            auto hold = lockHost();
-            if (hostGame)
-                hostGame->link().dropAll();
-        }, setup.clientTiming.value_or(cwnet::GuestLink::Timing{clockNow, processClocks, {}}));
+        client = std::make_unique<cwnet::ClientGame>(*transport, *mirrorWorld, [this] { resetOwnHost(); },
+            setup.clientTiming.value_or(cwnet::GuestLink::Timing{clockNow, processClocks, {}}));
         client->link().waitForWorldHandshake(worldIdentityRequired);
         client->extra = [this](const cwnet::CubeVulkanMessage &message) {
             if (message.channel == "cwv.world-generation.v1") {
@@ -176,6 +173,24 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
         client->link().goHome(clockNow());
     }
     return true;
+}
+
+void Multiplayer::resetOwnHost() {
+    if (!hostGame)
+        return;
+    bool changed;
+    {
+        auto host = lockHost();
+        hostGame->resetConnections();
+        hostWorld->clearHostCreatures();
+        sentRegionLevels.clear();
+        sentWorldIdentities.clear();
+        pendingWorldIdentities.clear();
+        std::lock_guard hold(occupancyMutex);
+        changed = regionOccupancy.clear();
+    }
+    if (changed)
+        post([this] { if (regionLevelsChanged) regionLevelsChanged(); });
 }
 
 void Multiplayer::setRegionScaling(bool enabled) {

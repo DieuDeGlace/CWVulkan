@@ -3301,6 +3301,21 @@ void SpawnedCreatures::removeNonLocalCreatures() {
     made.clear(); // No resident is in the World now.
 }
 
+void SpawnedCreatures::clearHostCreatures() {
+    auto guard = sourceGuard();
+    if (hasPlayer)
+        resetPlayer();
+    // Retain zone storage and its catalogs. The AI pass prunes records for absent creatures.
+    for (auto &[zone, list] : zones)
+        list.clear();
+    made.clear();
+    seenAlive.clear();
+    dead.clear();
+    visualDeaths.clear();
+    lastAbility.clear();
+    trips.clear();
+}
+
 void SpawnedCreatures::keepReceived(const cwnet::WorldEvents &received) {
     cwnet::WorldEvents &e = worldEvents;
     e.sounds.insert(e.sounds.end(), received.sounds.begin(), received.sounds.end());

@@ -112,6 +112,12 @@ void HostGame::tick(uint32_t nowMs, uint32_t elapsedMs) {
     world.events() = WorldEvents{};
 }
 
+void HostGame::resetConnections() {
+    hostLink.dropAll();
+    transport.clearLocalHostMessages();
+    list.clear();
+}
+
 void HostGame::sendToGuest(HostLink::Connection &guest) {
     const CreatureView *self = nullptr;
     for (const CreatureView &c : list)

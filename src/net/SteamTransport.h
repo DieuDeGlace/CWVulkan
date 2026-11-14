@@ -31,6 +31,7 @@ class SteamTransport : public Transport {
     bool valid(PeerId peer) const override { return validSteamId(peer); }
     bool send(PeerId to, Channel channel, const Bytes &packet) override;
     bool receive(Channel channel, Received &out) override;
+    void clearLocalHostMessages() override;
     void pump(uint32_t nowMs) override;
 
   private:

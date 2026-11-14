@@ -53,10 +53,12 @@ void Occupancy::unload(worldgen::Int2 region) {
     regions.erase(active);
 }
 
-void Occupancy::clear() {
+bool Occupancy::clear() {
     std::lock_guard hold(mutex);
+    const bool changed = !regions.empty();
     players.clear();
     regions.clear();
+    return changed;
 }
 
 int Occupancy::basis(worldgen::Int2 region) const {

@@ -3241,6 +3241,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     //   * by address over UDP, CubeVulkan only: --host [port], --join address[:port] (or
     //     [Multiplayer] Host=1, Join=address, Port=), and the dedicated --server [port].
     std::set<int64_t> creditedKills; // kill credits naming this player, kept until its death is seen
+    const int multiplayerPort = (int)config.number("Multiplayer", "Port", Multiplayer::DEFAULT_PORT, 1, 65535);
+    std::string startupJoinAddress;
     if (spawnedReady) {
         // The host world takes the stored zone states and the world's clock; the client world is
         // a mirror from now on.
@@ -3257,9 +3259,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (!spawned.physicalSourceState())
             spawned.setStoredZones(extractedWorld, nullptr, false);
         spawned.setClock(day, hour * 3600000.0f);
-        const int port = (int)config.number("Multiplayer", "Port", Multiplayer::DEFAULT_PORT, 1, 65535);
-        std::string join = joinAddress.empty() ? config.text("Multiplayer", "Join") : joinAddress;
-        const bool byAddress = serverMode ? !hostSteam : (hostPort > 0 || !join.empty() || config.flag("Multiplayer", "Host", false));
+        startupJoinAddress = joinAddress.empty() ? config.text("Multiplayer", "Join") : joinAddress;
+        const bool byAddress = serverMode ? !hostSteam :
+            (hostPort > 0 || !startupJoinAddress.empty() || config.flag("Multiplayer", "Host", false));
         Multiplayer::Setup setup;
         setup.steam = &steam;
         setup.hostWorld = &hostWorld;
@@ -3270,7 +3272,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         setup.loss = netLoss;
         if (byAddress) {
             setup.way = Multiplayer::Way::Address;
-            setup.port = (uint16_t)(hostPort > 0 ? hostPort : join.empty() ? port : 0);
+            setup.port = (uint16_t)(hostPort > 0 ? hostPort : startupJoinAddress.empty() ? multiplayerPort : 0);
         } else if (!offline && config.flag("Multiplayer", "Steam", true))
             setup.way = Multiplayer::Way::Steam;
         std::string why;
@@ -3292,31 +3294,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             break;
         default: logLine("Multiplayer: none (single player through the loopback)"); break;
         }
-        if (!join.empty() && session.way() == Multiplayer::Way::Address && !serverMode) {
-            std::string address = join;
-            int joinPort = port;
-            if (auto colon = join.rfind(':'); colon != std::string::npos)
-                address = join.substr(0, colon), joinPort = std::atoi(join.c_str() + colon + 1);
-            if (session.joinAddress(address, (uint16_t)joinPort, why))
-                logLine("Multiplayer: joining " + address + ":" + std::to_string(joinPort));
-            else
-                logLine("Multiplayer: cannot join (" + why + ")");
-        }
-        if (!joinSteam.empty() && session.way() == Multiplayer::Way::Steam) {
-            const bool number = std::all_of(joinSteam.begin(), joinSteam.end(), [](char c) { return std::isdigit((unsigned char)c); });
-            uint64_t id = number ? std::strtoull(joinSteam.c_str(), nullptr, 10) : 0;
-            for (uint64_t f : steam.friendIds())
-                if (!id && steam.friendName(f) == joinSteam)
-                    id = f;
-            if (id) {
-                session.join(id);
-                logLine("Multiplayer: joining " + joinSteam + " through Steam");
-            } else
-                logLine("Multiplayer: no Steam friend " + joinSteam);
-        }
-        for (const std::string &name : invites)
-            if (!session.invite(name))
-                logLine("Multiplayer: cannot invite " + name + " (Steam friends only)");
         // What the client world tells the game frame.
         if (MirrorSide *mirror = session.mirrorSide()) {
             mirror->damageShown = [&](const cwnet::DamageRecord &number) { // a hit someone else made
@@ -3360,6 +3337,37 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
     } else
         logLine("Multiplayer: none (it needs the game's own creatures)");
+    const auto connectAtStartup = [&] {
+        if (!session.started())
+            return;
+        std::string why;
+        if (!startupJoinAddress.empty() && session.way() == Multiplayer::Way::Address && !serverMode) {
+            std::string address = startupJoinAddress;
+            int joinPort = multiplayerPort;
+            if (auto colon = startupJoinAddress.rfind(':'); colon != std::string::npos)
+                address = startupJoinAddress.substr(0, colon), joinPort = std::atoi(startupJoinAddress.c_str() + colon + 1);
+            if (session.joinAddress(address, (uint16_t)joinPort, why))
+                logLine("Multiplayer: joining " + address + ":" + std::to_string(joinPort));
+            else
+                logLine("Multiplayer: cannot join (" + why + ")");
+        }
+        if (!joinSteam.empty() && session.way() == Multiplayer::Way::Steam) {
+            const bool number = std::all_of(joinSteam.begin(), joinSteam.end(), [](char c) { return std::isdigit((unsigned char)c); });
+            uint64_t id = number ? std::strtoull(joinSteam.c_str(), nullptr, 10) : 0;
+            for (uint64_t f : steam.friendIds())
+                if (!id && steam.friendName(f) == joinSteam)
+                    id = f;
+            if (id) {
+                session.join(id);
+                logLine("Multiplayer: joining " + joinSteam + " through Steam");
+            } else
+                logLine("Multiplayer: no Steam friend " + joinSteam);
+        }
+        for (const std::string &name : invites)
+            if (!session.invite(name))
+                logLine("Multiplayer: cannot invite " + name + " (Steam friends only)");
+    };
+    bool startupConnectionPending = !startupJoinAddress.empty() || !joinSteam.empty() || !invites.empty();
     double sinceHurt = 99;
     bool attackLanded = false;
     int struck = -1; // last monster struck, for the title bar
@@ -10006,6 +10014,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
         }
         if (sourceStateScope.owns_lock()) sourceStateScope.unlock();
+        // Start configured joins after the first frame has initialized streaming and rendering.
+        // The peer can start its handshake lease as soon as it receives Join.
+        if (std::exchange(startupConnectionPending, false) && !glfwWindowShouldClose(window))
+            connectAtStartup();
         if (serverMode) Sleep(16);
         // The FPS limit (minTimeStep) already slept before present (paceFrame); a frame that
         // presented nothing (server mode, a lost swapchain) takes it here. CPU usage REDUCED:

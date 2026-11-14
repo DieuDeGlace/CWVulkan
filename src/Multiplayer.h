@@ -166,6 +166,7 @@ class Multiplayer {
     void hostTick(uint32_t nowMs, uint32_t elapsedMs);
     void runPosted();
     void joinHostThreads();
+    void resetOwnHost();
     void hostNotify(std::function<void()> action); // posted while threaded, else run now
     void exchangeHostWorldIdentity(uint32_t nowMs);
     void exchangeClientWorldIdentity(uint32_t nowMs);

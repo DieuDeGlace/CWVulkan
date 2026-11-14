@@ -41,6 +41,7 @@ class UdpTransport : public Transport {
     bool receive(Channel channel, Received &out) override;
     std::vector<Received> receiveBatch(Channel channel) override;
     // Reads the socket and resends what is not yet acknowledged. Call every frame or tick.
+    void clearLocalHostMessages() override;
     void pump(uint32_t nowMs) override;
     bool cubeVulkanOnly() const override { return true; }
 

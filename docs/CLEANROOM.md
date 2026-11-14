@@ -1,5 +1,21 @@
 # Clean-room process
 
+## Host switch and Alpha startup joins - 2026-11-14
+
+The implementer used the full held
+[host-thread contract](specs/steam-in-process-host-thread-and-world-step-scheduling-20261111.md)
+and [world reconfiguration contract](specs/steam-pending-source-selection-and-world-reconfiguration-20261110.md).
+Both are unchanged. The selected reset runs while the connection lock is held,
+retains the source store and drops locally queued host traffic and authority
+creatures. Engine-specific handshake and occupancy state is cleared with the
+authority. The existing AI pass retains responsibility for pruning AI records.
+
+The startup Join fix is owned configuration and command-line behavior, motivated
+by actual replacement-engine timing. The Alpha rejection reproduced on the prior
+audited binary while both peers used the same generation identity. The next
+tested binary admits the matching peers and rejects a mismatched seed. All runs
+use localhost and disposable saves. Steam P2P and human acceptance remain open.
+
 ## Dedicated host startup and retrospective checkpoint audit - 2026-11-14
 
 A dedicated server could stall before its first status report. Its frame driver held

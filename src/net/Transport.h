@@ -57,6 +57,8 @@ class Transport {
         while (receive(channel, packet)) batch.push_back(std::move(packet));
         return batch;
     }
+    // Discard packets sent to our own host during the old connection.
+    virtual void clearLocalHostMessages() {}
     // Lets the transport do its own work (Steam callbacks, UDP resends). Call once a frame.
     virtual void pump(uint32_t nowMs) { (void)nowMs; }
     // Whether every peer on this transport is CubeVulkan (UDP): extras need no hello there.
@@ -79,6 +81,7 @@ class SerializedTransport : public Transport {
         std::lock_guard hold(lock);
         return inner->receiveBatch(channel);
     }
+    void clearLocalHostMessages() override { std::lock_guard hold(lock); inner->clearLocalHostMessages(); }
     void pump(uint32_t nowMs) override { std::lock_guard hold(lock); inner->pump(nowMs); }
     bool cubeVulkanOnly() const override { std::lock_guard hold(lock); return inner->cubeVulkanOnly(); }
 

@@ -20,7 +20,7 @@ class Occupancy {
     void update(int64_t player, worldgen::Int2 region, int level);
     void leave(int64_t player);
     void unload(worldgen::Int2 region);
-    void clear();
+    bool clear();
     int basis(worldgen::Int2 region) const;
     std::optional<Region> regionOf(int64_t player) const;
     Levels snapshot() const;

@@ -208,6 +208,7 @@ class SpawnedCreatures {
     void recordWorldSelection(worldselection::Pair &requested, int32_t seed, const std::string &name);
     // 0x2d2c00: every creature except the local player leaves the World.
     void removeNonLocalCreatures();
+    void clearHostCreatures();
     const std::set<int64_t> &worldDeadSet() const { return worldDead; }
     void setEnemyRespawn(enemyrespawn::Settings settings);
     void advanceRespawns(double elapsedMs);

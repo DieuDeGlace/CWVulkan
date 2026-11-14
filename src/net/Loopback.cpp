@@ -1,5 +1,7 @@
 #include "net/Transport.h"
 
+#include <algorithm>
+
 namespace cwnet {
 
 class LoopbackNetwork::Endpoint : public Transport {
@@ -39,6 +41,13 @@ class LoopbackNetwork::Endpoint : public Transport {
             }
         }
         return batch;
+    }
+
+    void clearLocalHostMessages() override {
+        std::lock_guard hold(network.lock);
+        const auto queue = network.queues.find({id, (int)Channel::ToHost});
+        if (queue != network.queues.end())
+            std::erase_if(queue->second, [&](const Received &packet) { return packet.from == id; });
     }
 
   private:

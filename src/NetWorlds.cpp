@@ -50,6 +50,11 @@ void HostSide::removeCreature(int64_t id) {
     world.remove(id);
 }
 
+void HostSide::clearHostCreatures() {
+    playerFields.clear();
+    world.clearHostCreatures();
+}
+
 void HostSide::advance(uint32_t dtMs) {
     auto sourceGuard = blocks.lockSourceState();
     // The native world advances in 16-ms slices, including its spawn and reset passes.

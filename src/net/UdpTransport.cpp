@@ -221,6 +221,13 @@ std::vector<Received> UdpTransport::receiveBatch(Channel channel) {
     return batch;
 }
 
+void UdpTransport::clearLocalHostMessages() {
+    std::lock_guard hold(lock);
+    const auto queue = inbox.find((int)Channel::ToHost);
+    if (queue != inbox.end())
+        std::erase_if(queue->second, [&](const Received &packet) { return packet.from == me; });
+}
+
 void UdpTransport::pump(uint32_t nowMs) {
     std::lock_guard<std::mutex> hold(lock);
     clock = nowMs;
