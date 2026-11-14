@@ -1855,7 +1855,9 @@ static void groundItemRules() {
     }
     // Receiving a pick-up.
     {
-        Keeper keeper;
+        std::set<std::array<int32_t, 3>> perPlayerTaken;
+        std::map<std::array<int32_t, 2>, int32_t> regionCounters;
+        Keeper keeper{perPlayerTaken, regionCounters};
         const int64_t at[3] = {3 * BLOCK + 5, -2 * BLOCK, 7 * BLOCK};
         const int32_t region[2] = {4, 5};
         Item coin{};

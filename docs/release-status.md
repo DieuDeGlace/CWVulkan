@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Exact pickup receipts - 2026-11-14
+
+The native pickup receipt now passes its original fixed-point coordinates and
+complete item to the live character. Nearby positions that round to one display
+point keep their own per-player pickup keys. The canonical inventory receives
+the complete adapted item, including the original rarity and attribute fields.
+The receipt updates the character's pickup maps in place and takes its dialogue
+seed from the main World random stream when a presentation reaches that branch.
+
+The three failing gameplay assertions now pass on Native and Alpha generation.
+Actual host pickups still grant three gold and two platinum coins and produce
+the expected progress notices. The required-owner CPU and Vulkan suites and
+the SDK-free extractor audit passed. The fixtures used disposable saves.
+
 ## Ambient emitters and falling leaves - 2026-11-14
 
 The ambient pass now uses the current camera listener after particle advance

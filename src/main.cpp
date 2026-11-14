@@ -296,6 +296,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool doorSeatTest = false; // --door-seat-test: the player's door and seat presses through the host, seen in its World.
     bool maxHealthTest = false; // --max-health-test: health follows a maximum that changes inside the world batch.
     int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
+    bool pickupReceiptTest = false; // --pickup-receipt-test: feed exact native receipts through the Game phase.
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
@@ -474,6 +475,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             maxHealthTest = true;
         else if (a == "--notice-test")
             noticeTest = true;
+        else if (a == "--pickup-receipt-test")
+            pickupReceiptTest = true;
         else if (a == "--lamp-test")
             lampTest = true;
         else if (a == "--shrine-test")
@@ -3012,33 +3015,31 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // (loot-pickup.md §4): an item that stays for others only once per character, the region
     // counter, money, coins into the gold counter, the used cell of treasure, the receipt dialog
     // and holding it up. Returns how many of it go on into the bag or gear (collect).
-    auto receivePickup = [&](const Loot &l) -> int {
-        nativeplayer::Item adapted = Gear::toRecord(l.item);
-        nativeplayer::Item noticeItem = adapted;
-        noticeItem[0] = (uint8_t)l.noticeType;
-        const int64_t position[3] = {(int64_t)std::llround((double)l.at.x * 65536) + extractedWorld.originDotsX(),
-                                     (int64_t)std::llround((double)l.at.y * 65536) + extractedWorld.originDotsY(),
-                                     (int64_t)std::llround(((double)l.at.z - ExtractedWorld::Z_OFFSET) * 65536)};
+    const auto applyPickup = [&](const grounditems::Item &noticeItem, const grounditems::Item &adapted,
+                                 int count, uint8_t flags, const useprompt::FixedPoint &position) {
+        const uint8_t *playerRecord = spawned.playerRecord();
         int32_t region[2] = {0, 0};
         uint32_t playerFlags = 0;
-        if (const uint8_t *who = spawned.playerRecord()) {
+        if (const uint8_t *who = playerRecord) {
             std::memcpy(region, who + worldgen::creature::REGION, 8);
             std::memcpy(&playerFlags, who + 0x5c, 4); // (the record's flags +0x5c)
         }
         grounditems::Keeper keeper{saveGame.perPlayerTaken, saveGame.regionCounters};
-        const auto *playerRecord = spawned.playerRecord();
         float abilityMs = 0;
         if (playerRecord) std::memcpy(&abilityMs, playerRecord + 0x6c, sizeof abilityMs);
         const bool abilityFree = !playerRecord || playerRecord[0x68] == 0 || abilityMs > spawned.playerAbilityDuration();
-        const grounditems::ReceiptRegion descriptionRegion{
-            worldgen::regionBiome(l.item.region[0], l.item.region[1]),
-            (int32_t)worldgen::random((uint32_t)l.item.region[0] + 57u * (uint32_t)l.item.region[1])};
-        const auto r = grounditems::receive(keeper, noticeItem, adapted, l.count, l.flags, position, region,
-                                          playerFlags, abilityFree, descriptionRegion);
-        saveGame.perPlayerTaken = std::move(keeper.perPlayerTaken);
-        saveGame.regionCounters = std::move(keeper.regionCounters);
+        std::optional<grounditems::ReceiptRegion> descriptionRegion;
+        if (adapted[0] == grounditems::type::VEHICLE) {
+            int32_t land[2];
+            std::memcpy(land, adapted.data() + nativesaves::item::REGION, sizeof land);
+            descriptionRegion = grounditems::ReceiptRegion{
+                worldgen::regionBiome(land[0], land[1]),
+                (int32_t)worldgen::random(uint32_t(land[0]) + 57u * uint32_t(land[1]))};
+        }
+        auto r = grounditems::receive(keeper, noticeItem, adapted, count, flags, position.data(), region,
+                                      playerFlags, abilityFree, descriptionRegion);
         if (!r.announce)
-            return 0; // taken before by this character
+            return r;
         if (nativeInventory) {
             if (r.into == grounditems::Into::Gold)
                 playerGold = gamemath::add32(playerGold, r.amount);
@@ -3049,7 +3050,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (r.markCell && usedCells.insert(r.cell).second)
             saveGame.usedCells.push_back(r.cell);
         if (!r.dialog.empty()) {
-            showDialog(r.dialog, chatter() % 10000);
+            const uint32_t draw = nativeInventory ? uint32_t(spawned.drawWorldRandom()) : chatter();
+            showDialog(r.dialog, draw % 10000);
             if (nativeai::Creature *me = spawned.localPlayer(); me && r.holdUpAbility) {
                 useprompt::Scene holder;
                 holder.player = me->record;
@@ -3059,11 +3061,27 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         if (r.success) // the success music (phase 67, 0xAAD54)
             audio.startSuccess();
-        if (nativeInventory) {
-            if (inventoryOpen && craftingOpen)
-                rebuildCrafting();
-            return 0; // The complete notice amount was applied once before refresh/receipt presentation.
+        if (nativeInventory && inventoryOpen && craftingOpen)
+            rebuildCrafting();
+        return r;
+    };
+    // Recorded pouches and fallback zone interactions still supply a Loot entry.
+    const auto receivePickup = [&](const Loot &l) -> int {
+        const uint8_t *actor = spawned.playerRecord();
+        auto adapted = Gear::toRecord(l.item);
+        auto noticeItem = adapted;
+        noticeItem[0] = uint8_t(l.noticeType);
+        if (nativeInventory && l.raw[0]) {
+            noticeItem = l.raw;
+            adapted = nativeplayer::transformed(noticeItem, actor ? actor[worldgen::creature::CLASS] : 0);
         }
+        const auto position = l.fixedPosition ? *l.fixedPosition : useprompt::FixedPoint{
+            (int64_t)std::llround((double)l.at.x * 65536) + extractedWorld.originDotsX(),
+            (int64_t)std::llround((double)l.at.y * 65536) + extractedWorld.originDotsY(),
+            (int64_t)std::llround(((double)l.at.z - ExtractedWorld::Z_OFFSET) * 65536)};
+        const auto r = applyPickup(noticeItem, adapted, l.count, l.flags, position);
+        if (nativeInventory || !r.announce)
+            return 0;
         const glm::u8vec4 gold{255, 214, 64, 255};
         switch (r.into) {
         case grounditems::Into::RegionCounter:
@@ -8120,13 +8138,60 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         std::remove_if(loot.begin(), loot.end(), [&](const Loot &l) { return l.zoneItem[0] == zx && l.zoneItem[1] == zy; }),
                         loot.end());
                 }
+                // Test only: stages the exact payloads after the transport drain, at the retained receipt list.
+                const bool verifyPickupReceipt = pickupReceiptTest && nativeInventory && spawned.playerRecord() && session.playerId() > 0;
+                const int32_t receiptSubtype = 7;
+                const auto fixtureItem = [&] {
+                    auto item = nativesaves::makeItem(3, receiptSubtype, 0x2d);
+                    item[nativesaves::item::RARITY] = 5;
+                    item[0x1d] = 0xa7;
+                    item[0x20] = 0x51;
+                    item[nativesaves::item::ATTRIBUTE_COUNT] = 1;
+                    return item;
+                };
+                const std::array<int64_t, 3> boundary{int64_t(64000) * 65536 + extractedWorld.originDotsX(),
+                                                      int64_t(-64000) * 65536 + extractedWorld.originDotsY(), 120 * 65536};
+                auto below = boundary;
+                --below[0];
+                const auto blockKey = [](const std::array<int64_t, 3> &position) {
+                    return std::array<int32_t, 3>{gamemath::floorFixedBlock(position[0]), gamemath::floorFixedBlock(position[1]),
+                                                  gamemath::floorFixedBlock(position[2])};
+                };
+                if (verifyPickupReceipt) {
+                    const auto append = [&](int64_t picker, const std::array<int64_t, 3> &position) {
+                        const auto item = fixtureItem();
+                        cwnet::PickupRecord receipt{};
+                        const uint16_t count = 1;
+                        const uint32_t flags = grounditems::ground::STAYS_FOR_OTHERS;
+                        std::memcpy(receipt.data(), &picker, sizeof picker);
+                        std::memcpy(receipt.data() + 8, item.data(), item.size());
+                        std::memcpy(receipt.data() + 0xa8, &count, sizeof count);
+                        std::memcpy(receipt.data() + 0xb0, position.data(), sizeof position);
+                        std::memcpy(receipt.data() + 0xc8, &flags, sizeof flags);
+                        spawned.events().pickups.push_back(receipt);
+                    };
+                    saveGame.perPlayerTaken.erase(blockKey(below));
+                    saveGame.perPlayerTaken.erase(blockKey(boundary));
+                    auto unresolved = boundary;
+                    unresolved[1] += 2 * 65536;
+                    append(0x5feeed, unresolved);
+                    append(spawned.playerId(), below);
+                    append(spawned.playerId(), boundary);
+                    append(spawned.playerId(), below); // exact duplicate goes through the same receipt pass
+                }
                 // What this player picked up: the host's pick-up notices (loot-pickup.md §4).
                 for (const cwnet::PickupRecord &n : spawned.events().pickups) {
                     using namespace grounditems::ground;
                     const auto notice = grounditems::decodePickupNotice(n);
-                    if (notice.picker != spawned.playerId())
+                    if (notice.picker != spawned.playerId() || (nativeInventory && !spawned.playerRecord()))
                         continue;
-                    nativesaves::Record g{}; // (the ground item it was)
+                    if (nativeInventory) {
+                        const uint8_t *actor = spawned.playerRecord();
+                        const auto adapted = nativeplayer::transformed(notice.item, actor[worldgen::creature::CLASS]);
+                        applyPickup(notice.item, adapted, notice.quantity, uint8_t(notice.flags), notice.position);
+                        continue;
+                    }
+                    nativesaves::Record g{}; // Recorded sessions retain their presentation adapter.
                     std::memcpy(g.data() + ITEM, notice.item.data(), notice.item.size());
                     std::memcpy(g.data() + POSITION, notice.position.data(), sizeof notice.position);
                     const int32_t many = notice.quantity; // Native MOVZX, not a signed-word extension.
@@ -8138,6 +8203,35 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     const int k = receivePickup(got);
                     for (int c = 0; c < k; c++)
                         collect(got);
+                }
+                if (verifyPickupReceipt) {
+                    const auto check = [&](bool passed, const char *what) {
+                        logLine(std::string("Pickup receipt: ") + (passed ? "PASS " : "FAIL ") + what);
+                        if (!passed)
+                            exitCode = 1;
+                    };
+                    const auto original = fixtureItem();
+                    const auto *actor = spawned.playerRecord();
+                    const auto expected = nativeplayer::transformed(original, actor[worldgen::creature::CLASS]);
+                    int exactItems = 0, fixtureItems = 0;
+                    for (const auto &tab : nativeInventory->inventory.tabs)
+                        for (const auto &stack : tab)
+                            if (stack.count > 0 && stack.item[0] == expected[0] && stack.item[0x1c] == 0x2d) {
+                                fixtureItems += stack.count;
+                                const bool exact = std::equal(stack.item.begin() + 4, stack.item.begin() + 0x15, expected.begin() + 4) &&
+                                    std::equal(stack.item.begin() + 0x18, stack.item.begin() + 0x9e, expected.begin() + 0x18);
+                                if (exact)
+                                    exactItems += stack.count;
+                            }
+                    auto unresolved = boundary;
+                    unresolved[1] += 2 * 65536;
+                    check(saveGame.perPlayerTaken.contains(blockKey(below)) && saveGame.perPlayerTaken.contains(blockKey(boundary)),
+                          "adjacent exact fixed-coordinate keys both survive");
+                    check(exactItems == 2, "canonical inventory receives both exact class-adapted items");
+                    check(fixtureItems == 2 && !saveGame.perPlayerTaken.contains(blockKey(unresolved)),
+                          "duplicate and unresolved receipts add no item or personal key");
+                    pickupReceiptTest = false;
+                    glfwSetWindowShouldClose(window, 1);
                 }
                 const int32_t pzx = (int32_t)std::floor((player.position.x + (float)(extractedWorld.originDotsX() >> 16)) / 64.0f);
                 const int32_t pzy = (int32_t)std::floor((player.position.y + (float)(extractedWorld.originDotsY() >> 16)) / 64.0f);

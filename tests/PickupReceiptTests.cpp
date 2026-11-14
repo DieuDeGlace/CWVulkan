@@ -40,7 +40,9 @@ int pickupReceiptTests() {
         check(notice.picker == 77 && notice.quantity == quantities[i] && notice.flags == 0xffffff80 &&
                   std::memcmp(notice.position.data(), position, sizeof position) == 0 && notice.item == item,
               "wire-to-receipt decoder retains unsigned quantity, flags32, item and signed positions");
-        grounditems::Keeper keeper;
+        std::set<std::array<int32_t, 3>> perPlayerTaken;
+        std::map<std::array<int32_t, 2>, int32_t> regionCounters;
+        grounditems::Keeper keeper{perPlayerTaken, regionCounters};
         const auto receipt = grounditems::receive(keeper, notice.item, notice.item, notice.quantity,
                                                   uint8_t(notice.flags), position, region, 0, true);
         check(receipt.into == grounditems::Into::Inventory && receipt.amount == quantities[i],
@@ -61,7 +63,9 @@ int pickupReceiptTests() {
     }
     grounditems::Item bag{};
     bag[0] = grounditems::type::GOLD_BAG;
-    grounditems::Keeper keeper;
+    std::set<std::array<int32_t, 3>> perPlayerTaken;
+    std::map<std::array<int32_t, 2>, int32_t> regionCounters;
+    grounditems::Keeper keeper{perPlayerTaken, regionCounters};
     const int64_t position[3]{};
     const int value = grounditems::moneyValue(bag);
     const auto zero = grounditems::receive(keeper, bag, bag, 0, 0, position, region, 0, true);

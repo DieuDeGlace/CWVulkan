@@ -94,8 +94,8 @@ int moneyValue(const Item &item);
 
 // What the local player keeps about picked-up items (player data).
 struct Keeper {
-    std::set<std::array<int32_t, 3>> perPlayerTaken;           // +0x88: blocks of items that stay for others
-    std::map<std::array<int32_t, 2>, int32_t> regionCounters;  // +0xf8: type 12 material 13, by region
+    std::set<std::array<int32_t, 3>> &perPlayerTaken;           // +0x88: blocks of items that stay for others
+    std::map<std::array<int32_t, 2>, int32_t> &regionCounters;  // +0xf8: type 12 material 13, by region
 };
 
 // Where a received item goes (§4 step 3.2).

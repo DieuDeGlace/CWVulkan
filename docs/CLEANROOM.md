@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Exact pickup receipts - 2026-11-14
+
+The implementer applied the completed
+[independent pickup receipt review](specs/steam-pickup-and-success-writers-independent-review-20261114.md)
+from its whole verified prose. The source research and original artifacts were
+separate from the implementation and the before-and-after tests. The same exact
+record feeds class adaptation, the personal pickup key and the local grant.
+The owned runtime fixture feeds synthetic receipts at the Game's post-drain
+list. Companion gold and platinum probes exercise the actual host protocol.
+Original peer behavior and receipt chat formatting remain open.
+
 ## Ambient emitters and falling leaves - 2026-11-14
 
 An isolated original-only author delivered the full
