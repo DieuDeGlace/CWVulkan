@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Ambient sound clock - 2026-11-13
+
+Steam's ambient emitters tick on the World clock (W+0x440) as it stands after the frame's world
+steps, with the frame's ms capped at 1000 inside the Game update and truncated to whole ms. CubeVulkan
+still used a 100 ms cap on fractional ms against its own frame-sum clock, so a frame over 100 ms
+skipped emitter ticks. The ambient frame now takes the World clock and the whole capped ms. Four CPU
+checks failed on the old rule and pass. All five targets, full required-owner CPU without skips,
+every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Exact revive placement - 2026-11-13
 
 The revive path had no in-game check. A new fixture (`--revive-test`) sets the player's health to

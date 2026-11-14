@@ -247,6 +247,14 @@ int cricketOf(uint32_t type) {
 
 bool isNight(float t) { return t <= NIGHT_END_MS || t >= NIGHT_START_MS; }
 
+AmbientFrame ambientFrame(float worldClockMs, double frameMs, float timeOfDayMs) {
+    AmbientFrame frame;
+    frame.clockMs = worldClockMs;
+    frame.dtMs = std::trunc(gamemath::frameMilliseconds(frameMs));
+    frame.timeOfDayMs = timeOfDayMs;
+    return frame;
+}
+
 bool staggeredTick(double clockMs, double dtMs, int64_t offset, int periodMs) {
     const int64_t before = (int64_t)((clockMs + (double)offset) / periodMs);
     const int64_t after = (int64_t)((clockMs + dtMs + (double)offset) / periodMs);

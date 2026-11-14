@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Ambient sounds tick on the World clock with the whole frame ms capped at 1000, as Steam's.
+  See [the checkpoint](release-status.md#ambient-sound-clock---2026-11-13).
+
 - [x] Revival stands the player exactly at Steam's respawn point, checked in game (Native and Alpha
   world generation). See [the checkpoint](release-status.md#exact-revive-placement---2026-11-13).
 

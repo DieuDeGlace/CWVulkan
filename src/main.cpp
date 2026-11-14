@@ -9833,7 +9833,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         auto column = columnAt(player.position.x, player.position.y);
         {
-            const float ambientFrameMs = (float)(dt * 1000.0);
             int64_t here[3];
             playerUnits(here);
             const int32_t bx = worldgen::floorDots(here[0]), by = worldgen::floorDots(here[1]), bz = worldgen::floorDots(here[2]);
@@ -9844,8 +9843,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             float flightMs = 0;
             if (const uint8_t *me = spawned.playerRecord(); me && spawned.playerAbility(flightMs) == 0x9c)
                 std::memcpy(centre, me + worldgen::creature::HOME_PLACE, sizeof centre);
-            soundrules::AmbientFrame frame;
-            frame.clockMs = worldClockMs, frame.dtMs = ambientFrameMs, frame.timeOfDayMs = hour * 3600000.0f;
+            // (W+0x440 after this frame's world steps; before a World exists, CubeVulkan's own clock)
+            const soundrules::AmbientFrame frame = soundrules::ambientFrame(
+                spawnedReady ? spawned.elapsedWorldTime() : float(worldClockMs), frameMs, hour * 3600000.0f);
             constexpr int ZONE_SHIFT = 6; // zones of 64 blocks
             const int32_t zx = worldgen::floorDiv(centre[0], ZONE_SHIFT), zy = worldgen::floorDiv(centre[1], ZONE_SHIFT);
             for (int32_t ax = zx - 1; ax <= zx + 1; ax++)

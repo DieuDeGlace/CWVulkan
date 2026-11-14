@@ -9014,6 +9014,13 @@ static void soundRules() {
         CHECK(tickOffset(100 * block, 0, 13, 500) == 1300 % 500 + (0x14d0000 / 65536) % 500);
         CHECK(isNight(0) && isNight(21600000) && !isNight(21600100) && !isNight(75599900) && isNight(75600000));
     }
+    { // §4 with the game-update schedule (§2.4, phase 74): the World clock and the whole capped ms.
+        const AmbientFrame slow = ambientFrame(850.5f, 150.9, 7.0f);
+        CHECK(slow.clockMs == 850.5 && slow.dtMs == 150 && slow.timeOfDayMs == 7.0f); // truncated, not capped at 100
+        CHECK(staggeredTick(slow.clockMs, slow.dtMs, 0, 1000)); // a 150 ms frame from 850 reaches the 1000 ms tick
+        CHECK(ambientFrame(0, 2500, 0).dtMs == 1000 && ambientFrame(0, 1000, 0).dtMs == 1000); // the update's cap
+        CHECK(ambientFrame(0, 0.6, 0).dtMs == 0 && ambientFrame(0, 16.7, 0).dtMs == 16); // fractions give 0 / whole ms
+    }
     { // §4: what the emitters play and when.
         struct Played {
             int number;

@@ -179,10 +179,14 @@ int64_t tickOffset(int64_t x, int64_t y, int64_t scale, int periodMs);
 // What one zone's emitters play this frame, in order (the 1-based index counts within the
 // zone). `rand` is the C runtime's rand; `play` receives each sound to place.
 struct AmbientFrame {
-    double clockMs = 0;     // the world clock before this frame
-    double dtMs = 0;        // the frame's ms
+    double clockMs = 0;     // the world clock (W+0x440) when the sounds are visited
+    double dtMs = 0;        // the frame's whole ms
     float timeOfDayMs = 0;  // the time of day
 };
+// The values the visit sees (game-update schedule §2.4 and phase 74): the World clock W+0x440
+// as it stands after this frame's world batch, and the frame's ms capped at 1000 and truncated
+// to whole ms, as the update's other integer-ms consumers receive it.
+AmbientFrame ambientFrame(float worldClockMs, double frameMs, float timeOfDayMs);
 using PlayAt = std::function<void(int number, const int64_t position[3], float volume, float pitch)>;
 void ambientZone(const std::vector<Emitter> &emitters, const AmbientFrame &frame, const std::function<int()> &rand,
                  const PlayAt &play);
