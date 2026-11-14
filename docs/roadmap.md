@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Revival stands the player exactly at Steam's respawn point, checked in game (Native and Alpha
+  world generation). See [the checkpoint](release-status.md#exact-revive-placement---2026-11-13).
+
 - [x] Shrines of Life verified in game on Alpha world generation (flute, registration, return).
   See [the checkpoint](release-status.md#alpha-world-generation-shrines---2026-11-13).
 

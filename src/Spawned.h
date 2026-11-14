@@ -288,6 +288,9 @@ class SpawnedCreatures {
     // The take-off on the eagle (the mouse handling on a known flight point): the native
     // player flies from where it stands (+0x1b8) to block (x, y) (+0x1b0) in ability 0x9c.
     bool startFlight(int32_t x, int32_t y);
+    // The native player's record put at fixed point `at` exactly (+0x10, and where it is drawn,
+    // +0xb10), as the revival puts it (shrine contract §6.1 step 4). False before it exists.
+    bool placePlayer(const ExtractedWorld &ew, const int64_t at[3]);
     // Accepted known shrine cell: ability0x75, time0 and home-cell fields; travel happens later.
     bool startShrineReturn(int32_t cellX, int32_t cellY);
     // The native player's health is its record's: the game's hits (0x29eb60) and healing

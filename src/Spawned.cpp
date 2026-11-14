@@ -1964,6 +1964,17 @@ void SpawnedCreatures::setPlayer(const ExtractedWorld &ew, glm::vec3 local, floa
     put<uint32_t>(r, 0x5c, (get<uint32_t>(r, 0x5c) & ~1u) | (onGround ? 1u : 0u));
 }
 
+bool SpawnedCreatures::placePlayer(const ExtractedWorld &ew, const int64_t at[3]) {
+    auto sourceStateScope = ew.lockSourceState();
+    if (!hasPlayer || !nativePlayer)
+        return false;
+    worldgen::CreatureRecord &r = player.record;
+    std::memcpy(&r[worldgen::creature::POSITION], at, 3 * sizeof(int64_t));
+    std::memcpy(&r[0xb10], at, 3 * sizeof(int64_t));
+    placed = true;
+    return true;
+}
+
 nativecontrol::World SpawnedCreatures::controlWorld() {
     nativecontrol::World world;
     world.byId = [this](int64_t id) -> const uint8_t * {

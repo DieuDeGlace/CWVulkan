@@ -1,5 +1,19 @@
 # Clean-room process
 
+## Exact revive placement - 2026-11-13
+
+The revive path had no in-game check. A new fixture (`--revive-test`) sets the player's health to
+0 and checks the held shrine contract's section 6: the player stays dead with "Revive" on the use
+key; the press revives it healed, with +0x140 at -0.5 and a tombstone where it died, at the
+respawn point. It found the revived player 2 blocks east of the point on Native generation: the
+point went through a float, which rounds x near 122 million blocks to a multiple of 8, and the
+legacy player bridge put the record a block above it. The revival now writes the native record
+exactly at ((cx * 16) + 6, (cy * 16) + 8, cell level). Native (known shrine) and Alpha world
+generation (nearest shrine site) pass; three CPU checks failed on a stub and pass. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence and the
+Native/Alpha probes pass.
+
+
 ## Alpha world-generation shrines - 2026-11-13
 
 The Shrine of Life checkpoint had been checked in game on Steam world generation only: the Alpha

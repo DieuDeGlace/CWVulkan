@@ -294,6 +294,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
+    bool reviveTest = false;    // --revive-test: the dead player waits for Revive, then stands at a shrine (testing).
     int combatTextTest = 0;     // --combat-text-test: hit records on the player become combat texts (phase 68).
     bool combatTextDrawn = false; // (testing: the combat-text frame, for --capture-notice)
     bool openNativeMenu = false; // --open-native-menu: explicit replacement-engine UI capture fixture.
@@ -469,6 +470,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             lampTest = true;
         else if (a == "--shrine-test")
             shrineTest = true;
+        else if (a == "--revive-test")
+            reviveTest = true;
         else if (a == "--combat-text-test")
             combatTextTest = 1;
         else if (a == "--frame-budget-test" && i + 1 < argc)
@@ -7043,6 +7046,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                      (int64_t)std::bit_cast<int32_t>((uint32_t)cell[1] * 16u + 8u) * 65536,
                                      (int64_t)worldgen::cellHeight(cell[0], cell[1]) * 65536};
             respawn = extractedWorld.toLocal(dots);
+            // The record takes the point exactly (a float would round it at large coordinates);
+            // CubeVulkan's feet are a block below the record (NATIVE_FEET).
+            if (spawned.placePlayer(extractedWorld, dots))
+                respawn.z -= SpawnedCreatures::NATIVE_FEET;
             logLine("Reviving in cell " + std::to_string(cell[0]) + " " + std::to_string(cell[1]) +
                     (worldgen::cellObject(cell[0], cell[1]) == 53 ? " (a Shrine of Life)" : " (where the player died)") + ", at " +
                     std::to_string(respawn.x) + " " + std::to_string(respawn.y) + " " + std::to_string(respawn.z));
@@ -7470,6 +7477,90 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (!passed)
                         exitCode = 1;
                     shrineTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+            }
+            if (reviveTest && spawned.localPlayer() && session.hostSide() && !session.guestElsewhere()) {
+                // (testing: the player's health is set to 0; it must stay dead with "Revive" on the
+                // use key, and the press must revive it healed at the cell 0x2C2860 chooses, with
+                // +0x140 at -0.5 and a tombstone where it died, shrine contract §6)
+                static int stage = 0;
+                static double stageAt = 0;
+                static int64_t died[3];
+                static shrinerespawn::Cell expected{};
+                static bool anyKnown = false;
+                const uint8_t *me = spawned.playerRecord();
+                int64_t at[3];
+                playerUnits(at);
+                const auto blocksApart = [](const int64_t *a, double x, double y) {
+                    return std::hypot(a[0] / 65536.0 - x, a[1] / 65536.0 - y);
+                };
+                if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && me && playerHp > 0 && playerMaxHp > 0) {
+                    shrinerespawn::Cell land{};
+                    std::memcpy(land.data(), me + worldgen::creature::REGION, sizeof land);
+                    shrinerespawn::World shrines;
+                    shrines.landOf = [](int32_t x, int32_t y) {
+                        const worldgen::Int2 r = worldgen::regionAt(x, y);
+                        return shrinerespawn::Cell{r.x, r.y};
+                    };
+                    shrines.isShrine = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == 53; };
+                    for (const auto &c : usedCells)
+                        if (shrines.isShrine(c[0], c[1]) && shrines.landOf(c[0] * 16 + 8, c[1] * 16 + 8) == land)
+                            anyKnown = true;
+                    std::memcpy(died, at, sizeof died);
+                    expected = shrinerespawn::choose(shrines, usedCells, at[0], at[1], land);
+                    logLine("Revive test: dying at " + std::to_string(at[0] >> 16) + " " + std::to_string(at[1] >> 16) +
+                            ", land " + std::to_string(land[0]) + " " + std::to_string(land[1]) + ", " +
+                            (anyKnown ? "a known shrine" : "no known shrine") + " in the land, expected cell " +
+                            std::to_string(expected[0]) + " " + std::to_string(expected[1]) +
+                            (worldgen::cellObject(expected[0], expected[1]) == 53 ? " (a shrine)" : " (NOT a shrine)"));
+                    spawned.setPlayerHealth(0);
+                    stage = 1, stageAt = time;
+                } else if (stage == 1 && time - stageAt > 3.0) {
+                    const bool dead = playerHp <= 0;
+                    const bool prompt = usePrompt.action == useprompt::Action::Revive && usePrompt.text == "Revive";
+                    const double moved = blocksApart(at, died[0] / 65536.0, died[1] / 65536.0);
+                    logLine(std::string("Revive test: after 3 s ") + (dead ? "still dead" : "ALIVE") + ", use key '" + usePrompt.text +
+                            "', moved " + std::to_string(moved) + " blocks");
+                    if (dead && prompt) {
+                        autoUsePress = true;
+                        stage = 2, stageAt = time;
+                    } else
+                        stage = 9;
+                } else if (stage == 2 && playerHp > 0 && me) {
+                    float revived = 0;
+                    std::memcpy(&revived, me + 0x140, sizeof revived);
+                    // (§6.2: the position becomes exactly (cx*16+6, cy*16+8, cell level) in fixed point)
+                    const int64_t point[3] = {((int64_t)expected[0] * 16 + 6) * 65536, ((int64_t)expected[1] * 16 + 8) * 65536,
+                                              (int64_t)worldgen::cellHeight(expected[0], expected[1]) * 65536};
+                    const bool exact = at[0] == point[0] && at[1] == point[1] && at[2] == point[2];
+                    logLine("Revive test: record at " + std::to_string(at[0]) + " " + std::to_string(at[1]) + " " + std::to_string(at[2]) +
+                            ", respawn point " + std::to_string(point[0]) + " " + std::to_string(point[1]) + " " + std::to_string(point[2]) +
+                            (exact ? " (exact)" : " (DIFFERENT)"));
+                    const bool healed = playerHp == playerMaxHp;
+                    const bool tomb = saveGame.tombstoneMs > mapmarks::TOMBSTONE_MS - 2000 &&
+                                      std::hypot((double)saveGame.deathPosition[0] - std::floor(died[0] / 65536.0),
+                                                 (double)saveGame.deathPosition[1] - std::floor(died[1] / 65536.0)) <= 1.5;
+                    logLine("Revive test: revived, +0x140 " + std::to_string(revived) + ", health " + std::to_string(playerHp) + " of " +
+                            std::to_string(playerMaxHp) + ", tombstone " + (tomb ? "at the death place" : "MISSING"));
+                    stage = exact && revived < 0 && revived >= -0.5f && healed && tomb ? 3 : 9, stageAt = time;
+                } else if (stage == 3 && time - stageAt > 1.0) {
+                    // (after a second of the world's own physics the player still stands there)
+                    const double apart = blocksApart(at, expected[0] * 16.0 + 6, expected[1] * 16.0 + 8);
+                    const bool shrine = worldgen::cellObject(expected[0], expected[1]) == 53;
+                    const bool passed = apart < 1.0 && shrine;
+                    logLine(std::string("Revive test: ") + (passed ? "PASS" : "FAIL") + " standing " + std::to_string(apart) +
+                            " blocks from the respawn point of cell " + std::to_string(expected[0]) + " " + std::to_string(expected[1]) +
+                            (shrine ? ", a Shrine of Life" : ", not a shrine") + (anyKnown ? " (known shrine, pass 1)" : " (shrine site, pass 2)"));
+                    if (!passed)
+                        exitCode = 1;
+                    reviveTest = false;
+                    glfwSetWindowShouldClose(window, 1);
+                }
+                if (stage == 9 || (stage >= 1 && stage <= 2 && time - stageAt > 20.0)) {
+                    logLine("Revive test: FAIL at stage " + std::to_string(stage));
+                    exitCode = 1;
+                    reviveTest = false;
                     glfwSetWindowShouldClose(window, 1);
                 }
             }
