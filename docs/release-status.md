@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## Death marker - 2026-11-14
+
+The [death-marker contract](specs/steam-local-death-tombstone-and-marker-review-20261114.md) puts
+Steam's one map tombstone in the local character's attachment: an accepted Revive copies the body's
+exact 64-bit position before the destination moves it and restarts a 300,000 ms timer, which the
+World step runs down per substep (not in abilities 0x98/0x9c/0x9d) and clears strictly within 20
+blocks (binary32, 3D). The character save never holds it. CubeVulkan stored floored blocks, counted
+once per frame and saved the marker; it now keeps the exact slot with the session's World and drops
+older engine saves' death lines. Nine CPU checks failed on a stub and pass; the revive fixture checks
+the exact anchor and the World-step countdown. All five targets, full required-owner CPU without
+skips, every Vulkan group, SDK independence and the Native/Alpha probes pass. No original recording.
+
+
 ## Ground landing sounds - 2026-11-14
 
 Loaded ground records snap wall items and advance both clocks during the

@@ -2070,23 +2070,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         return std::any_of(saveGame.marked.begin(), saveGame.marked.end(),
                            [&](const SaveGame::Marked &m) { return m.x == place[0] && m.y == place[1]; });
     };
-    // The player's position in the game's blocks.
-    auto playerInBlocks = [&]() {
-        return glm::dvec3((double)player.position.x + (double)(extractedWorld.originDotsX() >> 16),
-                          (double)player.position.y + (double)(extractedWorld.originDotsY() >> 16),
-                          (double)player.position.z - ExtractedWorld::Z_OFFSET);
-    };
-    // The tombstone where the player died (revived there; `east` blocks east of it for testing),
-    // on the map for five minutes (MapMarks.h).
-    auto placeTombstone = [&](float east) {
-        const glm::dvec3 at = playerInBlocks();
-        saveGame.deathPosition = {(int64_t)std::floor(at.x + east), (int64_t)std::floor(at.y), (int64_t)std::floor(at.z)};
-        saveGame.tombstoneMs = mapmarks::TOMBSTONE_MS;
-    };
     // The use key (UsePrompt.h): its state between frames, this frame's prompt and the icon
     // shown with it, the view its crosshair is in (last frame's camera), a chest it opened
     // (given once the frame's drops are made) and whether it revives the dead player.
     useprompt::KeyState useKey;
+    std::optional<std::array<int64_t, 3>> lastReviveCorpse; // (testing: the last accepted Revive's body)
     itemselector::Selector itemSelector;
     itemSelector.shown = openSelector;
     itemselector::SoundEdges interfaceSoundEdges;
@@ -7109,6 +7097,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             revive = reviveNow;
         }
         reviveNow = false;
+        // An accepted Revive's tombstone anchor: the body's exact position before the
+        // destination below moves it (tombstone contract, revive order).
+        int64_t corpse[3] = {};
+        if (revive)
+            playerUnits(corpse);
         if (revive && nativePlayer && !player.fly && useExtracted) {
             deadWaiting = false;
             // 0x2C2860 (shrine contract §6.2): the nearest known Shrine of Life in the player's
@@ -7139,8 +7132,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     std::to_string(respawn.x) + " " + std::to_string(respawn.y) + " " + std::to_string(respawn.z));
         }
         if (revive) {
-            // Revived: a tombstone on the map where the player died (MapMarks.h).
-            placeTombstone(0.0f);
+            // Revived: the map's tombstone where the body lay (MapMarks.h).
+            spawned.placeTombstone(corpse);
+            lastReviveCorpse = {corpse[0], corpse[1], corpse[2]};
             // Healed, where the revive rule put it (other players: where this world was entered).
             logLine("You died; respawning at home");
             player.position = respawn;
@@ -7591,7 +7585,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 // +0x140 at -0.5 and a tombstone where it died, shrine contract §6)
                 static int stage = 0;
                 static double stageAt = 0;
-                static int64_t died[3];
+                static int64_t died[3], pressedAt[3];
                 static shrinerespawn::Cell expected{};
                 static bool anyKnown = false;
                 const uint8_t *me = spawned.playerRecord();
@@ -7628,6 +7622,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     logLine(std::string("Revive test: after 3 s ") + (dead ? "still dead" : "ALIVE") + ", use key '" + usePrompt.text +
                             "', moved " + std::to_string(moved) + " blocks");
                     if (dead && prompt) {
+                        std::memcpy(pressedAt, at, sizeof pressedAt);
                         autoUsePress = true;
                         stage = 2, stageAt = time;
                     } else
@@ -7643,20 +7638,40 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             ", respawn point " + std::to_string(point[0]) + " " + std::to_string(point[1]) + " " + std::to_string(point[2]) +
                             (exact ? " (exact)" : " (DIFFERENT)"));
                     const bool healed = playerHp == playerMaxHp;
-                    const bool tomb = saveGame.tombstoneMs > mapmarks::TOMBSTONE_MS - 2000 &&
-                                      std::hypot((double)saveGame.deathPosition[0] - std::floor(died[0] / 65536.0),
-                                                 (double)saveGame.deathPosition[1] - std::floor(died[1] / 65536.0)) <= 1.5;
+                    // (the tombstone contract: the anchor is the body's exact 64-bit position when Revive
+                    // was accepted, the press frame's or the next, never the destination or a whole block)
+                    const mapmarks::Tombstone tomb = spawned.tombstone();
+                    const bool anchored = lastReviveCorpse && tomb.at == *lastReviveCorpse &&
+                                          std::abs(tomb.at[0] - pressedAt[0]) < 65536 / 4 &&
+                                          std::abs(tomb.at[1] - pressedAt[1]) < 65536 / 4 &&
+                                          std::abs(tomb.at[2] - pressedAt[2]) < 65536 / 4 &&
+                                          !(tomb.at[0] == point[0] && tomb.at[1] == point[1]);
+                    const bool timed = tomb.ms > mapmarks::TOMBSTONE_MS - 2000 && tomb.ms <= mapmarks::TOMBSTONE_MS;
+                    const bool tombOk = anchored && (timed || tomb.ms == 0); // (zero: the destination is within 20 blocks)
                     logLine("Revive test: revived, +0x140 " + std::to_string(revived) + ", health " + std::to_string(playerHp) + " of " +
-                            std::to_string(playerMaxHp) + ", tombstone " + (tomb ? "at the death place" : "MISSING"));
-                    stage = exact && revived < 0 && revived >= -0.5f && healed && tomb ? 3 : 9, stageAt = time;
+                            std::to_string(playerMaxHp) + ", tombstone at " + std::to_string(tomb.at[0]) + " " + std::to_string(tomb.at[1]) +
+                            " " + std::to_string(tomb.at[2]) + " with " + std::to_string(tomb.ms) + " ms" +
+                            (tombOk ? " (the accepted body)" : " (WRONG)"));
+                    stage = exact && revived < 0 && revived >= -0.5f && healed && tombOk ? 3 : 9, stageAt = time;
                 } else if (stage == 3 && time - stageAt > 1.0) {
                     // (after a second of the world's own physics the player still stands there)
                     const double apart = blocksApart(at, expected[0] * 16.0 + 6, expected[1] * 16.0 + 8);
                     const bool shrine = worldgen::cellObject(expected[0], expected[1]) == 53;
-                    const bool passed = apart < 1.0 && shrine;
+                    // (the World steps keep the tombstone beyond 20 blocks and clear it within; a second
+                    // of steps takes about 1000 ms off)
+                    const mapmarks::Tombstone tomb = spawned.tombstone();
+                    double d2 = 0;
+                    for (int i = 0; i < 3; i++)
+                        d2 += std::pow((double)(tomb.at[i] - at[i]) / 65536.0, 2);
+                    const bool clear = std::abs(std::sqrt(d2) - 20.0) > 0.5;
+                    const bool kept = tomb.ms > 0 && tomb.ms < mapmarks::TOMBSTONE_MS - 900;
+                    const bool tombOk = clear && (d2 < 400 ? tomb.ms == 0 : kept);
+                    const bool passed = apart < 1.0 && shrine && tombOk;
                     logLine(std::string("Revive test: ") + (passed ? "PASS" : "FAIL") + " standing " + std::to_string(apart) +
                             " blocks from the respawn point of cell " + std::to_string(expected[0]) + " " + std::to_string(expected[1]) +
-                            (shrine ? ", a Shrine of Life" : ", not a shrine") + (anyKnown ? " (known shrine, pass 1)" : " (shrine site, pass 2)"));
+                            (shrine ? ", a Shrine of Life" : ", not a shrine") + (anyKnown ? " (known shrine, pass 1)" : " (shrine site, pass 2)") +
+                            ", tombstone " + std::to_string(std::sqrt(d2)) + " blocks away with " + std::to_string(tomb.ms) + " ms" +
+                            (tombOk ? "" : " (WRONG)"));
                     if (!passed)
                         exitCode = 1;
                     reviveTest = false;
@@ -7983,20 +7998,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hour = 7.0f;
                 logLine("Slept at the inn until 7:00 of day " + std::to_string(day));
             }
-            if (deathTest >= 0) { // (testing: a tombstone as if the player had died that far east)
-                placeTombstone(deathTest);
+            if (deathTest >= 0) { // (testing: a tombstone as if the player had been revived that far east)
+                int64_t at[3];
+                playerUnits(at);
+                at[0] += (int64_t)std::llround((double)deathTest * 65536);
+                spawned.placeTombstone(at);
                 deathTest = -1;
             }
-            { // The world update's timers (MapMarks.h): the tombstone's and the map's "NEW" notes.
-                float flightMs = 0;
-                const int ability = spawned.playerRecord() ? spawned.playerAbility(flightMs) : 0;
-                if (saveGame.tombstoneMs > 0 && mapmarks::tombstoneCounts(ability)) {
-                    const glm::dvec3 d = glm::dvec3((double)saveGame.deathPosition[0], (double)saveGame.deathPosition[1],
-                                                    (double)saveGame.deathPosition[2]) - playerInBlocks();
-                    saveGame.tombstoneMs = mapmarks::tombstoneLeft(saveGame.tombstoneMs, (float)ms, glm::dot(d, d));
-                }
-                mapmarks::tickNotes(saveGame.missionTimers, (float)ms);
-            }
+            // The map's "NEW" notes (the tombstone runs down in the World's own steps).
+            mapmarks::tickNotes(saveGame.missionTimers, (float)ms);
             if (const uint8_t *me = spawned.playerRecord()) { // the world's mission update (0x2e1750)
                 missions::World w;
                 w.player = me;
@@ -9122,12 +9132,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         k.pulses = hostility != 0;
                         view.marks.push_back(k);
                     });
-                    if (saveGame.tombstoneMs > 0) {
+                    if (const mapmarks::Tombstone tomb = spawned.tombstone(); spawned.playerRecord() && tomb.ms > 0) {
                         constexpr int TOMBSTONE_MODEL = 0xde7; // tombstone.cub in the world's model table
                         worldmap::Map::View::Mark k;
                         k.looks = looks(spawned.spriteName(TOMBSTONE_MODEL), "", glm::u8vec3(255));
-                        k.at = glm::dvec3((double)saveGame.deathPosition[0], (double)saveGame.deathPosition[1],
-                                          (double)saveGame.deathPosition[2]);
+                        k.at = glm::dvec3((double)tomb.at[0], (double)tomb.at[1], (double)tomb.at[2]) / 65536.0;
                         k.pulses = true;
                         view.marks.push_back(k);
                     }

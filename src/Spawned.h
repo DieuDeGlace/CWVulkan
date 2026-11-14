@@ -21,6 +21,7 @@
 #include "EnemyRespawn.h"
 #include "HairStyle.h"
 #include "MapHistory.h"
+#include "MapMarks.h"
 #include "WorldSelection.h"
 #include <list>
 #include <functional>
@@ -293,6 +294,17 @@ class SpawnedCreatures {
     // The native player's record put at fixed point `at` exactly (+0x10, and where it is drawn,
     // +0xb10), as the revival puts it (shrine contract §6.1 step 4). False before it exists.
     bool placePlayer(const ExtractedWorld &ew, const int64_t at[3]);
+    // The local character's tombstone (MapMarks.h): an accepted Revive places it at `corpse`,
+    // the exact position before the destination moves the player; each World step of
+    // `simulate` runs it down. It lives with this session, so a reloaded character has none.
+    void placeTombstone(const int64_t corpse[3]) {
+        auto guard = sourceGuard();
+        mapmarks::placeTombstone(tombstoneSlot, corpse);
+    }
+    mapmarks::Tombstone tombstone() const {
+        auto guard = sourceGuard();
+        return tombstoneSlot;
+    }
     // Accepted known shrine cell: ability0x75, time0 and home-cell fields; travel happens later.
     bool startShrineReturn(int32_t cellX, int32_t cellY);
     // The native player's health is its record's: the game's hits (0x29eb60) and healing
@@ -665,6 +677,7 @@ class SpawnedCreatures {
     void settle(std::list<Creature> &born);
     uint8_t lastPlayerMove = 0;
     bool placed = false; // the native player has been put where the save had it
+    mapmarks::Tombstone tombstoneSlot; // this session's character attachment +0x28c..+0x2a0
     worldgen::CreatureRecord gearRecord; // what setPlayerGear gave, applied as the player is made
     nativecontrol::World controlWorld();
     void noteControlMove();

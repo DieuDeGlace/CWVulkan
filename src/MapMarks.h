@@ -98,13 +98,24 @@ void tickNotes(NoteTimers &timers, float elapsedMs);
 
 // --- The tombstone (spec 2.3) -------------------------------------------------------------------------
 
-constexpr float TOMBSTONE_MS = 300000.0f;      // shown for five minutes after a revival ...
-constexpr double TOMBSTONE_CLEAR_DISTANCE2 = 400.0; // ... or until the player is within 20 blocks
-// Whether the tombstone's timer runs while the player's ability is `ability` (not while
-// flying to a flight point or the like: 0x98, 0x9c, 0x9d).
+// The local character's one tombstone slot (docs/specs/steam-local-death-tombstone-and-marker-
+// review-20261114.md): its attachment's +0x28c timer and +0x290 anchor. It belongs to the
+// running character only; the character save never holds it, so a reloaded character has none.
+struct Tombstone {
+    float ms = 0;                // milliseconds left; the map shows it while strictly positive
+    std::array<int64_t, 3> at{}; // fixed point: where the body was when Revive was accepted
+};
+constexpr float TOMBSTONE_MS = 300000.0f;           // five minutes after an accepted Revive ...
+constexpr float TOMBSTONE_CLEAR_DISTANCE2 = 400.0f; // ... or until strictly within 20 blocks
+// Whether the World step's tombstone branch runs while the player's ability is `ability`
+// (not while flying to a flight point or the like: 0x98, 0x9c, 0x9d).
 bool tombstoneCounts(int ability);
-// The timer after one world update, given the squared distance in blocks to the tombstone.
-float tombstoneLeft(float timerMs, float elapsedMs, double distance2);
+// An accepted Revive, before the destination moves the creature: the anchor takes its exact
+// physical position (all 64 bits, no rounding) and the timer restarts at five minutes.
+void placeTombstone(Tombstone &tomb, const int64_t position[3]);
+// One World step of `stepMs`: the timer runs down to no less than zero, then a position whose
+// binary32 squared distance (x, y, then z) is below 400 blocks clears it. The anchor is kept.
+void stepTombstone(Tombstone &tomb, float stepMs, const int64_t position[3]);
 
 // --- The world map's creature markers (spec 2.2, 2.5) ------------------------------------------------
 

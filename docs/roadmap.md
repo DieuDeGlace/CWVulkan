@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The map's death marker at the exact revived body, run down by World steps and never saved, as Steam's.
+  See [the checkpoint](release-status.md#death-marker---2026-11-14).
+
 - [x] The music's place kind inside a building (block flag 0x20) and its toward-zero zone, as Steam's.
   See [the checkpoint](release-status.md#music-inside-a-building---2026-11-14).
 

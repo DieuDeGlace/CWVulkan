@@ -153,7 +153,6 @@ bool SaveGame::parseFields(const std::string &text) {
     missionTimers.clear();
     takenItems.clear();
     usedObjects.clear();
-    deathPosition = {0, 0, 0}, tombstoneMs = 0;
     marked.clear();
     hasPosition = hasGear = false;
     bool any = false;
@@ -263,9 +262,11 @@ bool SaveGame::parseFields(const std::string &text) {
             if (!(s >> t[0] >> t[1] >> t[2]) || treasures.size() >= 1000000) return false;
             treasures.push_back(t);
         } else if (key == "death") {
+            // An older engine save's tombstone. Steam's character never keeps one, so it
+            // is read past and dropped (MapMarks.h Tombstone).
             long long x, y, z;
-            if (!(s >> x >> y >> z >> tombstoneMs)) return false;
-            deathPosition = {x, y, z};
+            float ms;
+            if (!(s >> x >> y >> z >> ms)) return false;
         } else if (key == "used") {
             std::array<int32_t, 3> t;
             if (!(s >> t[0] >> t[1] >> t[2]) || usedObjects.size() >= 1000000) return false;
@@ -357,8 +358,6 @@ std::string SaveGame::text() const {
         out << "timer " << c[0] << ' ' << c[1] << ' ' << ms << '\n';
     for (auto &t : treasures) // treasure <x> <y> <z>
         out << "treasure " << t[0] << ' ' << t[1] << ' ' << t[2] << '\n';
-    if (tombstoneMs > 0) // death <x> <y> <z> <ms left>
-        out << "death " << deathPosition[0] << ' ' << deathPosition[1] << ' ' << deathPosition[2] << ' ' << tombstoneMs << '\n';
     for (auto &t : usedObjects) // used <zone x> <zone y> <index>
         out << "used " << t[0] << ' ' << t[1] << ' ' << t[2] << '\n';
     for (auto &t : takenItems) // taken <zone x> <zone y> <index>

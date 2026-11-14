@@ -2238,12 +2238,10 @@ static void progressionRules() {
     save.finishedMissions = {{125, -15}, {-3, 8}};
     save.solvedMissions = {{-3, 8}};
     save.missionTimers[{4, 5}] = 1234.5f;
-    save.deathPosition = {-128445750, -15874800, 30}, save.tombstoneMs = 250000.0f; // a tombstone on the map
     save.usedCells = {{-8020000, -990000}, {12, 7}}; // a lore cell read, a chest opened
     SaveGame back;
     CHECK(back.parse(save.text()));
     CHECK(back.finishedMissions == save.finishedMissions && back.solvedMissions == save.solvedMissions);
-    CHECK(back.deathPosition == save.deathPosition && back.tombstoneMs == 250000.0f);
     CHECK(back.usedCells == save.usedCells);
     CHECK(save.text().find("\nlore ") == std::string::npos); // (the lore by realm is rebuilt, not saved)
     { // An older save's lore lines: their cells become used cells, once each.
@@ -8254,6 +8252,78 @@ static void loreAndArtifacts() {
 }
 
 // The map's markers (MapMarks.h; docs/specs/map-markers.md).
+// The local death marker (steam-local-death-tombstone-and-marker-review-20261114.md): the one
+// slot an accepted Revive fills with the exact corpse position, run down by World steps,
+// cleared strictly within 20 blocks and never written with the character.
+static void deathMarkerTests() {
+    using namespace mapmarks;
+    constexpr int64_t B = 65536; // ticks a block
+    CHECK(TOMBSTONE_MS == 300000.0f && TOMBSTONE_CLEAR_DISTANCE2 == 400.0f);
+    Tombstone tomb;
+    CHECK(tomb.ms == 0.0f); // the attachment's constructor: inactive
+    // The anchor is the exact physical position, sub-block and negative ticks included.
+    const int64_t corpse[3] = {-128445750 * B - 12345, -15874800 * B + 7, 30 * B + 40000};
+    placeTombstone(tomb, corpse);
+    CHECK(tomb.ms == 300000.0f && tomb.at == (std::array<int64_t, 3>{corpse[0], corpse[1], corpse[2]}));
+    // Far away: each World step takes its own interval.
+    const int64_t distantPos[3] = {corpse[0] + 500 * B, corpse[1], corpse[2]};
+    stepTombstone(tomb, 16.0f, distantPos);
+    CHECK(tomb.ms == 299984.0f);
+    stepTombstone(tomb, 4.5f, distantPos);
+    CHECK(tomb.ms == 299979.5f);
+    // A later Revive overwrites the one tuple and renews the countdown.
+    const int64_t second[3] = {corpse[0] + 3, corpse[1] - 3, corpse[2]};
+    placeTombstone(tomb, second);
+    CHECK(tomb.ms == 300000.0f && tomb.at[0] == second[0] && tomb.at[1] == second[1]);
+    // The timer stops at zero; expiry keeps the anchor.
+    Tombstone ending;
+    placeTombstone(ending, corpse);
+    ending.ms = 10.0f;
+    stepTombstone(ending, 16.0f, distantPos);
+    CHECK(ending.ms == 0.0f && ending.at[0] == corpse[0]);
+    // Exactly 20 blocks (squared 400) keeps it; one tick nearer clears it.
+    const int64_t origin[3] = {0, 0, 0};
+    Tombstone edge;
+    placeTombstone(edge, origin);
+    const int64_t twenty[3] = {20 * B, 0, 0};
+    stepTombstone(edge, 16.0f, twenty);
+    CHECK(edge.ms == 299984.0f);
+    const int64_t nearer[3] = {20 * B - 1, 0, 0};
+    stepTombstone(edge, 16.0f, nearer);
+    CHECK(edge.ms == 0.0f && edge.at == (std::array<int64_t, 3>{0, 0, 0}));
+    // Three-dimensional: height alone counts, and 12, 12, 12 (432) is still outside.
+    Tombstone tall;
+    placeTombstone(tall, origin);
+    const int64_t outside[3] = {12 * B, -12 * B, 12 * B};
+    stepTombstone(tall, 16.0f, outside);
+    CHECK(tall.ms == 299984.0f);
+    const int64_t below[3] = {0, 0, -19 * B};
+    stepTombstone(tall, 16.0f, below);
+    CHECK(tall.ms == 0.0f);
+    // The distance is taken from the signed 64-bit differences, so far from the origin it is
+    // as exact as near it (absolute coordinates in binary32 would lose the 20 blocks).
+    Tombstone distant;
+    const int64_t away[3] = {(int64_t(1) << 46) + 5, -(int64_t(1) << 45) - 9, 0};
+    placeTombstone(distant, away);
+    const int64_t awayTwenty[3] = {away[0] + 20 * B, away[1], 0};
+    stepTombstone(distant, 16.0f, awayTwenty);
+    CHECK(distant.ms == 299984.0f);
+    const int64_t awayNear[3] = {away[0] + 19 * B, away[1] - 3 * B, 5 * B};
+    stepTombstone(distant, 16.0f, awayNear);
+    CHECK(distant.ms == 0.0f);
+    // Proximity also clears an already inactive slot without touching the anchor.
+    Tombstone idle;
+    idle.at = {7, 8, 9};
+    const int64_t close[3] = {7, 8, 9};
+    stepTombstone(idle, 16.0f, close);
+    CHECK(idle.ms == 0.0f && idle.at == (std::array<int64_t, 3>{7, 8, 9}));
+    // The character save omits the marker: an older engine save's line still loads, and is
+    // neither kept nor written again.
+    SaveGame old;
+    CHECK(old.parse("cubevulkan-save 1\nlevel 3\ndeath -128445750 -15874800 30 250000\n"));
+    CHECK(old.level == 3 && old.text().find("death") == std::string::npos);
+}
+
 static void mapMarkers() {
     using namespace mapmarks;
     // Sizes by zoom (unit: blocks a map unit) and the map's scale.
@@ -8310,11 +8380,9 @@ static void mapMarkers() {
     CHECK(TALK_NOTE_MS == 180000.0f && LORE_NOTE_MS == 18000.0f);
     CHECK(bob(0) == 5.0f);
 
-    // The tombstone: five minutes, counted down, gone within 20 blocks, held while flying.
-    CHECK(TOMBSTONE_MS == 300000.0f);
-    CHECK(tombstoneLeft(300000.0f, 16.0f, 400.0) == 299984.0f && tombstoneLeft(300000.0f, 16.0f, 399.0) == 0.0f &&
-          tombstoneLeft(10.0f, 16.0f, 1e6) == 0.0f);
-    CHECK(tombstoneCounts(0) && !tombstoneCounts(0x98) && !tombstoneCounts(0x9c) && !tombstoneCounts(0x9d));
+    // The tombstone's World branch is held while flying (its slot: deathMarkerTests).
+    CHECK(tombstoneCounts(0) && tombstoneCounts(0x99) && !tombstoneCounts(0x98) && !tombstoneCounts(0x9c) &&
+          !tombstoneCounts(0x9d));
 
     // The world map's creature markers.
     CHECK(showsCreature(0, 0, 0, true) && !showsCreature(0, 0x9d, 0, false) && showsCreature(3, 0, 0x100, false) &&
@@ -9730,6 +9798,10 @@ int main(int argc, char **argv) {
         groundItemRules();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "deathmarker") {
+        deathMarkerTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "soundrules") {
         soundRules();
         return failures ? 1 : 0;
@@ -11142,6 +11214,7 @@ int main(int argc, char **argv) {
     specialSkillsAndInteractions();
     loreAndArtifacts();
     mapMarkers();
+    deathMarkerTests();
     plasmaLibrary();
     useKeyTargets();
     useKeyPrompts();

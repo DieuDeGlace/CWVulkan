@@ -149,10 +149,6 @@ struct SaveGame {
     // The objects given the item they take (a brazier its flame): no longer active
     // (static object +0x28). By zone x, y and the object's index in the zone.
     std::vector<std::array<int32_t, 3>> usedObjects;
-    // Where the character last died (the character's death position, game blocks), and the ms its
-    // tombstone stays on the map (MapMarks.h: 5 minutes, or until the player is within 20 blocks).
-    std::array<int64_t, 3> deathPosition{0, 0, 0};
-    float tombstoneMs = 0;
     // Places townspeople told this character about (the game's mark_location): the
     // 1024-block cell, its name and what is there. The game keeps them with the character.
     struct Marked {

@@ -165,10 +165,17 @@ void tickNotes(NoteTimers &timers, float elapsedMs) {
 
 bool tombstoneCounts(int ability) { return ability != 0x98 && ability != 0x9c && ability != 0x9d; }
 
-float tombstoneLeft(float timerMs, float elapsedMs, double distance2) {
-    if (distance2 < TOMBSTONE_CLEAR_DISTANCE2)
-        return 0.0f;
-    return std::max(0.0f, timerMs - elapsedMs);
+void placeTombstone(Tombstone &tomb, const int64_t position[3]) {
+    tomb.at = {position[0], position[1], position[2]};
+    tomb.ms = TOMBSTONE_MS;
+}
+
+void stepTombstone(Tombstone &tomb, float stepMs, const int64_t position[3]) {
+    tomb.ms = std::max(0.0f, tomb.ms - stepMs);
+    const auto blocks = [&](int i) { return (float)(tomb.at[i] - position[i]) / 65536.0f; };
+    const float x = blocks(0), y = blocks(1), z = blocks(2);
+    if (x * x + y * y + z * z < TOMBSTONE_CLEAR_DISTANCE2)
+        tomb.ms = 0.0f;
 }
 
 // --- The world map's creature markers -------------------------------------------------------------

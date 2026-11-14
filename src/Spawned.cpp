@@ -1555,6 +1555,13 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
             return hudcontext::Zone{lists->groundItems, lists->staticObjects};
         };
         hudcontext::rebuild(contextState, context);
+        // The local branch of the World step (0x2da6c0), before the creatures move: the
+        // tombstone's countdown and its 20-block clearing, held while flying (MapMarks.h).
+        if (hasPlayer && mapmarks::tombstoneCounts(get<uint8_t>(player.record, worldgen::creature::ABILITY))) {
+            int64_t at[3];
+            std::memcpy(at, player.record.data() + worldgen::creature::POSITION, sizeof at);
+            mapmarks::stepTombstone(tombstoneSlot, dt, at);
+        }
         // A separate World pass clears this bit on all current entries, including
         // dead creatures and prelude births. Later body-pass births miss this pass.
         for (uint8_t *record : w.creatures) {
