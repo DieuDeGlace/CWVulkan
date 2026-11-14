@@ -224,6 +224,7 @@ add_library(engine STATIC
     src/PanelScroll.cpp
     src/HudMap.cpp
     src/UsePrompt.cpp
+    src/GameFixtures.cpp
     src/NativeItems.cpp
     src/ProceduralItemData.cpp
     src/ProceduralItems.cpp

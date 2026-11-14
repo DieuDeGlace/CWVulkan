@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The game-run test scenarios live in GameFixtures, out of the frame loop's file (no behavior change).
+  See [the checkpoint](release-status.md#game-run-scenarios-in-their-own-file---2026-11-14).
+
 - [x] The World step's Zone +0x498 pass marking listed creatures (bit 0x0100) before ground items, as Steam's.
   See [the checkpoint](release-status.md#zone-actor-reference-pass---2026-11-14).
 

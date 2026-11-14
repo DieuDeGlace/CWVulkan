@@ -1,5 +1,14 @@
 # Source review checkpoint — 2026-11-08
 
+## Game-run scenarios in their own file - 2026-11-14
+
+The nine contiguous `--*-test` scenarios moved verbatim from `src/main.cpp` into `src/GameFixtures.cpp`
+(527 lines; main.cpp 10450 -> 9932). The frame calls them at the same point, only while a scenario
+switch is set. A mechanical check shows the moved bodies equal the original apart from indentation and
+one renamed reference. No behavior change: all five targets, full required-owner CPU without skips,
+every Vulkan group, SDK independence and the Native/Alpha probes (which run these scenarios) pass.
+
+
 ## Zone actor-reference pass - 2026-11-14
 
 The [Zone reference contract](specs/steam-zone-actor-reference-prepass-20261114.md), from a new
