@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Pickup chat and live currency - 2026-11-14
+
+The implementer used the whole held
+[pickup chat and landing review](specs/steam-pickup-feedback-and-landing-20261114.md)
+for the receipt formatter and local currency fields. The isolated author
+traced the original delivery and formatting. Tests exercised the owned
+post-drain receipt lane and the normal in-process host coin path. Original
+peer delivery, arbitrary localized names and landing emission remain open.
+
 ## Music inputs and leaf motion - 2026-11-14
 
 The implementation used the whole held

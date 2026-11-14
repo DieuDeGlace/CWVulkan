@@ -4,6 +4,7 @@
 #include "GameMath.h"
 
 #include "NativeInteract.h"
+#include "NativeRules.h"
 
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,70 @@ bool picksUpItself(int itemType, uint8_t flags, float delayMs, float distance2) 
     if (flags & ground::STAYS_FOR_OTHERS)
         return false;
     return delayMs == 0.0f && distance2 <= AUTO_PICK_UP_RANGE * AUTO_PICK_UP_RANGE;
+}
+
+static std::array<uint8_t, 3> pickupTextColour(const Item &item, const int32_t region[2]) {
+    const auto category = item[TYPE];
+    switch (category) {
+    case 0: return {255, 255, 255};
+    case 0x0d: return {127, 25, 255};
+    case 0x15: return {178, 255, 63};
+    case 0x16: return {127, 255, 255};
+    case 0x17:
+    case 0x18: return {255, 153, 63};
+    }
+    if (category == 1 && get<int32_t>(item.data(), SUBTYPE) == 13)
+        return {127, 255, 255};
+
+    constexpr uint32_t REGIONAL = 0x440083fc; // categories 2-9, 15, 26 and 30
+    constexpr std::array<uint8_t, 3> PALETTE[] = {
+        {204, 204, 204}, {255, 255, 255}, {0, 255, 0}, {76, 114, 255}, {140, 51, 255}, {255, 255, 0},
+    };
+    const bool regional = category < 32 && (REGIONAL & (1u << category));
+    const int quality = regional ? nativerules::itemLevel(item.data(), region) : item[RARITY];
+    return PALETTE[std::clamp(quality, -1, 4) + 1];
+}
+
+std::optional<std::array<PickupText, 3>> pickupFeedback(const Item &item, int32_t quantity, bool local,
+                                                       const uint8_t *recipientName, const int32_t region[2],
+                                                       bool showRarity, const NameItem &nameItem) {
+    const auto category = item[TYPE];
+    if (category == type::COIN)
+        return std::nullopt;
+
+    constexpr std::array<uint8_t, 3> CYAN{127, 255, 255};
+    std::array<PickupText, 3> segments;
+    auto &[prefix, body, tail] = segments;
+    prefix.colour = CYAN;
+    if (local) {
+        prefix.text = u"You receive ";
+        if (category == 0x16)
+            prefix.colour = {255, 204, 76};
+    } else {
+        // The replicated creature name has sixteen bytes. Preserve signed widening.
+        for (size_t i = 0; i < 16 && recipientName[i] != 0; ++i)
+            prefix.text.push_back(static_cast<char16_t>(static_cast<int8_t>(recipientName[i])));
+        prefix.text += u" receives ";
+    }
+
+    constexpr uint32_t SHOW_COUNT = 0x10402c02;
+    if (quantity > 0 && category < 32 && (SHOW_COUNT & (1u << category))) {
+        const auto count = std::to_string(quantity);
+        body.text.assign(count.begin(), count.end());
+        body.text += u" X ";
+    }
+    body.text += nameItem(item.data());
+    if (isGear(category)) {
+        if (nativerules::renowned(item.data()))
+            body.text += u'+';
+        if (showRarity) {
+            body.text += u' ';
+            body.text.append(size_t(nativerules::itemLevel(item.data(), region) + 1), u'\u00b1');
+        }
+    }
+    body.colour = pickupTextColour(item, region);
+    tail = {u".\n", CYAN};
+    return segments;
 }
 
 int moneyValue(const Item &item) {

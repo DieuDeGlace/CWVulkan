@@ -177,6 +177,7 @@ class SpawnedCreatures {
         if (player.side.inventorySource) player.side.inventory.clear();
     }
     void setPlayerProgress(int32_t level, int32_t experience);
+    void setPlayerCurrency(int32_t gold, int32_t manaCubes);
     void setHudContextSource(bool namedWorld, const hudcontext::Tabs *inventory) {
         contextNamedWorld = namedWorld;
         contextInventory = inventory;

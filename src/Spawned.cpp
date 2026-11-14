@@ -1892,6 +1892,13 @@ void SpawnedCreatures::setPlayerProgress(int32_t level, int32_t experience) {
         put<int32_t>(player.record, 0x148, experience);
     }
 }
+void SpawnedCreatures::setPlayerCurrency(int32_t gold, int32_t manaCubes) {
+    auto guard = sourceGuard();
+    if (nativePlayer && hasPlayer) {
+        put<int32_t>(player.record, worldgen::creature::UNSET_AAC, gold);
+        put<int32_t>(player.record, worldgen::creature::UNSET_AB0, manaCubes);
+    }
+}
 void SpawnedCreatures::setPlayerDataSource(std::function<void(nativesaves::Character &)> source) {
     auto guard=sourceGuard();
     playerStorage->dataSource=std::move(source);

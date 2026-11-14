@@ -19,6 +19,7 @@
 #include "NativeParticles.h"
 #include "ParticleScene.h"
 #include "Speech.h"
+#include "DialogueWords.h"
 #include "DialogueChoices.h"
 #include "DialoguePanel.h"
 #include "NpcSpeech.h"
@@ -312,6 +313,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     bool maxHealthTest = false; // --max-health-test: health follows a maximum that changes inside the world batch.
     int frameBudgetTest = 0;    // --frame-budget-test N: an N ms frame budget whose sleep must precede present (testing only).
     bool pickupReceiptTest = false; // --pickup-receipt-test: feed exact native receipts through the Game phase.
+    bool pickupFeedbackTest = false;
     bool noticeTest = false;    // --notice-test: gold and platinum coins by the player; their notices must match the gains.
     bool lampTest = false;      // --lamp-test: an eagle flight sets the lamp by the time of day (phase 10).
     bool shrineTest = false;    // --shrine-test: the flute registers a forgotten start shrine (testing).
@@ -492,6 +494,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             noticeTest = true;
         else if (a == "--pickup-receipt-test")
             pickupReceiptTest = true;
+        else if (a == "--pickup-feedback-test")
+            pickupFeedbackTest = true;
         else if (a == "--lamp-test")
             lampTest = true;
         else if (a == "--shrine-test")
@@ -3060,6 +3064,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 playerGold = gamemath::add32(playerGold, r.amount);
             else if (r.into == grounditems::Into::Inventory)
                 nativeInventory->inventory.add(adapted, r.amount);
+            spawned.setPlayerCurrency(playerGold, nativeInventory->inventory.fieldAb0);
             refreshBagAndThumb(true);
         }
         if (r.markCell && usedCells.insert(r.cell).second)
@@ -8155,6 +8160,50 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 // Test only: stages the exact payloads after the transport drain, at the retained receipt list.
                 const bool verifyPickupReceipt = pickupReceiptTest && nativeInventory && spawned.playerRecord() && session.playerId() > 0;
+                const bool verifyPickupFeedback = pickupFeedbackTest && nativeInventory && spawned.playerRecord() && session.playerId() > 0;
+                int32_t manaBefore = 0, goldBefore = 0;
+                constexpr int64_t feedbackGuest = 0x5fed00;
+                auto feedbackAt = [&](int64_t offset) {
+                    int64_t position[3];
+                    playerUnits(position);
+                    return std::array<int64_t, 3>{position[0] + offset * 65536, position[1], position[2]};
+                };
+                if (verifyPickupFeedback) {
+                    bool fresh = false;
+                    auto *guest = spawned.networkCreature(feedbackGuest, fresh);
+                    const char name[] = "Ada";
+                    std::memcpy(guest + worldgen::creature::NAME, name, sizeof name);
+                    chat = ChatLine{};
+                    manaBefore = nativeInventory->inventory.fieldAb0;
+                    goldBefore = playerGold;
+                    const auto append = [&](int64_t picker, int type, uint8_t material, uint16_t count,
+                                            uint32_t flags, const std::array<int64_t, 3> &position) {
+                        cwnet::PickupRecord packet{};
+                        const auto item = nativesaves::makeItem(type, 0, material);
+                        std::memcpy(packet.data(), &picker, sizeof picker);
+                        std::memcpy(packet.data() + 8, item.data(), item.size());
+                        std::memcpy(packet.data() + 0xa8, &count, sizeof count);
+                        std::memcpy(packet.data() + 0xb0, position.data(), sizeof position);
+                        std::memcpy(packet.data() + 0xc8, &flags, sizeof flags);
+                        spawned.events().pickups.push_back(packet);
+                    };
+                    const auto at = feedbackAt(1800);
+                    const auto missing = feedbackAt(1802);
+                    const auto key = [](const std::array<int64_t, 3> &p) {
+                        return std::array<int32_t, 3>{gamemath::floorFixedBlock(p[0]), gamemath::floorFixedBlock(p[1]),
+                                                      gamemath::floorFixedBlock(p[2])};
+                    };
+                    for (const auto &position : {at, missing})
+                        saveGame.perPlayerTaken.erase(key(position));
+                    const auto me = spawned.playerId();
+                    constexpr auto personal = grounditems::ground::STAYS_FOR_OTHERS;
+                    append(0x5feedd, 14, 0, 18, personal, missing);
+                    append(me, 14, 0, 3, personal, at);
+                    append(feedbackGuest, 14, 0, 5, personal, at); // a local key cannot hide other actors' messages
+                    append(me, 14, 0, 9, personal, at);
+                    append(me, 12, 11, 2, 0, at);
+                    append(feedbackGuest, 12, 11, 20, 0, at);
+                }
                 const int32_t receiptSubtype = 7;
                 const auto fixtureItem = [&] {
                     auto item = nativesaves::makeItem(3, receiptSubtype, 0x2d);
@@ -8194,18 +8243,35 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     append(spawned.playerId(), boundary);
                     append(spawned.playerId(), below); // exact duplicate goes through the same receipt pass
                 }
-                // What this player picked up: the host's pick-up notices (loot-pickup.md §4).
+                // Resolve each receipt before granting locally and appending the styled chat runs.
+                const grounditems::NameItem namePickup = [&](const uint8_t *item) {
+                    const auto wide = dialoguewords::wide(itemnames::name(speech, itemNameParts, item));
+                    return std::u16string(wide.begin(), wide.end());
+                };
+                const uint8_t *viewer = spawned.playerRecord();
                 for (const cwnet::PickupRecord &n : spawned.events().pickups) {
                     using namespace grounditems::ground;
                     const auto notice = grounditems::decodePickupNotice(n);
-                    if (notice.picker != spawned.playerId() || (nativeInventory && !spawned.playerRecord()))
-                        continue;
                     if (nativeInventory) {
-                        const uint8_t *actor = spawned.playerRecord();
+                        const uint8_t *actor = spawned.creature(notice.picker);
+                        if (!viewer || !actor)
+                            continue;
                         const auto adapted = nativeplayer::transformed(notice.item, actor[worldgen::creature::CLASS]);
-                        applyPickup(notice.item, adapted, notice.quantity, uint8_t(notice.flags), notice.position);
+                        const bool local = actor == viewer;
+                        if (local && !applyPickup(notice.item, adapted, notice.quantity, uint8_t(notice.flags), notice.position).announce)
+                            continue;
+                        int32_t region[2];
+                        std::memcpy(region, viewer + worldgen::creature::REGION, sizeof region);
+                        if (const auto feedback = grounditems::pickupFeedback(adapted, notice.quantity, local,
+                                                                              actor + worldgen::creature::NAME,
+                                                                              region, showRarity != 0, namePickup)) {
+                            for (const auto &segment : *feedback)
+                                hud.appendChat(chat, segment.text, segment.colour);
+                        }
                         continue;
                     }
+                    if (notice.picker != spawned.playerId())
+                        continue;
                     nativesaves::Record g{}; // Recorded sessions retain their presentation adapter.
                     std::memcpy(g.data() + ITEM, notice.item.data(), notice.item.size());
                     std::memcpy(g.data() + POSITION, notice.position.data(), sizeof notice.position);
@@ -8218,6 +8284,44 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     const int k = receivePickup(got);
                     for (int c = 0; c < k; c++)
                         collect(got);
+                }
+                if (verifyPickupFeedback) {
+                    const auto check = [&](bool passed, const char *what) {
+                        logLine(std::string("Pickup feedback: ") + (passed ? "PASS " : "FAIL ") + what);
+                        if (!passed) exitCode = 1;
+                    };
+                    std::vector<std::wstring> visible;
+                    bool styled = false, correctColours = true;
+                    for (const auto &row : chat.rows()) {
+                        std::wstring line;
+                        for (const auto &word : row) {
+                            line += word.text;
+                            const bool item = word.text == L"Mana" || word.text == L"Cube";
+                            styled |= item;
+                            if (word.text != L" ") {
+                                const ChatLine::Colour expected = item ? ChatLine::Colour{255, 255, 255} : ChatLine::Colour{127, 255, 255};
+                                correctColours &= word.colour == expected;
+                            }
+                        }
+                        if (!line.empty()) visible.push_back(std::move(line));
+                    }
+                    check(std::count(visible.begin(), visible.end(), L"You receive Mana Cube.") == 1,
+                          "local mana cue is singular and its duplicate is silent");
+                    check(std::count(visible.begin(), visible.end(), L"Ada receives Mana Cube.") == 1,
+                          "other actor uses its live name despite the local pickup key");
+                    check(visible.size() == 2, "coins and an unresolved recipient add no chat");
+                    check(styled && correctColours, "local and remote mana words are white with cyan recipient and punctuation");
+                    const uint8_t *local = spawned.playerRecord();
+                    int32_t liveMana = 0, liveGold = 0;
+                    std::memcpy(&liveMana, local + 0xab0, sizeof liveMana);
+                    std::memcpy(&liveGold, local + 0xaac, sizeof liveGold);
+                    check(nativeInventory->inventory.fieldAb0 == gamemath::add32(manaBefore, 3) &&
+                              playerGold == gamemath::add32(goldBefore, 2), "local totals increase exactly once and the guest grants nothing");
+                    check(liveMana == nativeInventory->inventory.fieldAb0 && liveGold == playerGold,
+                          "native creature and persisted currency counters agree at receipt");
+                    spawned.remove(feedbackGuest);
+                    pickupFeedbackTest = false;
+                    glfwSetWindowShouldClose(window, 1);
                 }
                 if (verifyPickupReceipt) {
                     const auto check = [&](bool passed, const char *what) {

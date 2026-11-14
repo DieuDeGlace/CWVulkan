@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Pickup chat and live currency - 2026-11-14
+
+Resolved pickup receipts now append the recipient, item name and punctuation as
+three styled chat runs. The local receipt applies the item and synchronizes its
+live gold and mana cube counters before the message. Duplicate personal picks,
+unresolved recipient IDs and ordinary coins produce no chat. Other resolved
+actors produce their own message and leave the local inventory untouched.
+
+The Native and Alpha engine runs verified singular mana cube text and its
+colours, remote labels, duplicate and missing recipients, quiet coins, and
+matching live and saved counters. The fixed-coordinate and ordinary host coin
+fixtures, full required owner-data and Vulkan suites, and SDK-free extractor
+audit passed. The remote-label case used a controlled engine fixture.
+
 ## Music inputs and leaf motion - 2026-11-14
 
 Ambient leaves now undergo block collision from their first motion step. Scene

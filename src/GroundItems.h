@@ -88,6 +88,16 @@ bool picksUpItself(int itemType, uint8_t flags, float delayMs, float distance2);
 
 // --- Receiving a pick-up (§4) -------------------------------------------------------------
 
+struct PickupText {
+    std::u16string text;
+    std::array<uint8_t, 3> colour{};
+};
+// Three ordered chat segments for a resolved pickup. Coins leave the widget untouched.
+using NameItem = std::function<std::u16string(const uint8_t *item)>;
+std::optional<std::array<PickupText, 3>> pickupFeedback(const Item &resolved, int32_t quantity, bool local,
+                                                       const uint8_t *recipientName, const int32_t region[2],
+                                                       bool showRarity, const NameItem &);
+
 // The money value of an item (0x109070, use-prompt.md §3.7.3): only a gold bag (type 0x1f) has
 // one: ((h mod 100000) / 100000 + rarity + 1) × 10, h a xorshift of its modifier + 0xcc72f.
 int moneyValue(const Item &item);
