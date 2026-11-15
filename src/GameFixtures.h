@@ -75,6 +75,9 @@ struct GameFixtures {
     void run();
 
   private:
+    // A scenario's end: a failure sets the exit code; its switch goes off and the window closes.
+    void end(bool passed, bool &on);
+    void end(bool passed, int &on);
     void notice();
     void lamp();
     void shrine();

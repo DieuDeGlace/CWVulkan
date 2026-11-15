@@ -17,6 +17,20 @@
 #include <cstring>
 #include <map>
 
+void GameFixtures::end(bool passed, bool &on) {
+    if (!passed)
+        exitCode = 1;
+    on = false;
+    glfwSetWindowShouldClose(window, 1);
+}
+
+void GameFixtures::end(bool passed, int &on) {
+    if (!passed)
+        exitCode = 1;
+    on = 0;
+    glfwSetWindowShouldClose(window, 1);
+}
+
 void GameFixtures::run() {
     notice();
     lamp();
@@ -74,10 +88,7 @@ void GameFixtures::notice() {
                     std::to_string(noticedGold) + ", platinum +" + std::to_string(platinumGain) + " noticed " +
                     std::to_string(noticedPlatinum) + ", chat lines " + std::to_string(noticeChatLines) + ", after " +
                     std::to_string((int)(time - stageAt)) + " s");
-            if (!passed)
-                exitCode = 1;
-            noticeTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, noticeTest);
         }
     }
 }
@@ -109,10 +120,7 @@ void GameFixtures::lamp() {
             const bool passed = stage == 2 && ability == 0x9c && lit == expected;
             logLine(std::string("Lamp test: ") + (passed ? "PASS" : "FAIL") + " ability " + std::to_string(ability) + " at " +
                     std::to_string(dayMs) + " ms of day, lamp " + (lit ? "on" : "off") + ", expected " + (expected ? "on" : "off"));
-            if (!passed)
-                exitCode = 1;
-            lampTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, lampTest);
         }
     }
 }
@@ -187,10 +195,7 @@ void GameFixtures::shrine() {
             const bool passed = stage == 3 && known;
             logLine(std::string("Shrine test: ") + (passed ? "PASS" : "FAIL") + " flute " + (stage == 3 ? "played" : "not played") +
                     ", start shrine cell " + (known ? "registered" : "not registered"));
-            if (!passed)
-                exitCode = 1;
-            shrineTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, shrineTest);
         }
     }
 }
@@ -284,16 +289,11 @@ void GameFixtures::revive() {
                     (shrine ? ", a Shrine of Life" : ", not a shrine") + (anyKnown ? " (known shrine, pass 1)" : " (shrine site, pass 2)") +
                     ", tombstone " + std::to_string(std::sqrt(d2)) + " blocks away with " + std::to_string(tomb.ms) + " ms" +
                     (tombOk ? "" : " (WRONG)"));
-            if (!passed)
-                exitCode = 1;
-            reviveTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, reviveTest);
         }
         if (stage == 9 || (stage >= 1 && stage <= 2 && time - stageAt > 20.0)) {
             logLine("Revive test: FAIL at stage " + std::to_string(stage));
-            exitCode = 1;
-            reviveTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(false, reviveTest);
         }
     }
 }
@@ -347,15 +347,11 @@ void GameFixtures::overhead() {
                     std::to_string(overheadQueue.models) + " queued with their admitted body");
             creatureCollection.remove(id);
             creatureCollection.selectedId = 0;
-            if (!passed) exitCode = 1;
-            overheadTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, overheadTest);
         }
         if (stage == 9 || (stage == 0 && time > 60.0)) {
             logLine("Overhead test: FAIL at stage " + std::to_string(stage));
-            exitCode = 1;
-            overheadTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(false, overheadTest);
         }
     }
 }
@@ -398,10 +394,7 @@ void GameFixtures::frameBudget() {
             std::snprintf(line, sizeof line, "Frame budget: %s %llu frames, %llu slept before present, mean %.2f ms for a %d ms budget",
                           passed ? "PASS" : "FAIL", (unsigned long long)frames, (unsigned long long)before, mean, frameBudgetTest);
             logLine(line);
-            if (!passed)
-                exitCode = 1;
-            frameBudgetTest = 0;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, frameBudgetTest);
         }
     }
 }
@@ -424,10 +417,7 @@ void GameFixtures::maxHealth() {
         };
         auto finish = [&](bool passed, const std::string &why) {
             logLine(std::string("Max health: ") + (passed ? "PASS " : "FAIL ") + why);
-            if (!passed)
-                exitCode = 1;
-            maxHealthTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, maxHealthTest);
         };
         if (stage == 0 && time - startedAt > 4.0 && spawned.playerHealth() > 0 && !hasBuff()) {
             maximum = spawned.playerMaxHealth();
@@ -486,10 +476,7 @@ void GameFixtures::doorSeat() {
         };
         auto finish = [&](bool passed, const std::string &why) {
             logLine(std::string("Door seat: ") + (passed ? "PASS " : "FAIL ") + why);
-            if (!passed)
-                exitCode = 1;
-            doorSeatTest = false;
-            glfwSetWindowShouldClose(window, 1);
+            end(passed, doorSeatTest);
         };
         const auto type = [](const nativeai::Object &o) { int32_t t; std::memcpy(&t, o.data() + ni::OBJECT_TYPE, 4); return t; };
         const auto user = [](const nativeai::Object &o) { int64_t u; std::memcpy(&u, o.data() + ni::OBJECT_USER, 8); return u; };

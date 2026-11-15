@@ -1,5 +1,12 @@
 # Clean-room process
 
+## One ending for the game-run scenarios - 2026-11-14
+
+`GameFixtures::end` replaces the ten repeated scenario endings (exit code on failure, switch off,
+window closed). No behavior change: all five targets, full required-owner CPU without skips, every
+Vulkan group, SDK independence and the Native/Alpha probes, which run every scenario, pass.
+
+
 ## One generated-world shrine helper - 2026-11-14
 
 `shrinerespawn::generatedWorld()` and `isShrineCell()` replace three copies of the generated-world

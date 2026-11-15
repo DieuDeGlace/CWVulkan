@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] One shared ending for the game-run scenarios (no behavior change).
+  See [the checkpoint](release-status.md#one-ending-for-the-game-run-scenarios---2026-11-14).
+
 - [x] One generated-world Shrine-of-Life helper for the revive and its scenarios (no behavior change).
   See [the checkpoint](release-status.md#one-generated-world-shrine-helper---2026-11-14).
 
