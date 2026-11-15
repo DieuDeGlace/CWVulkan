@@ -1,5 +1,13 @@
 # Source review checkpoint — 2026-11-08
 
+## One generated-world shrine helper - 2026-11-14
+
+`shrinerespawn::generatedWorld()` and `isShrineCell()` replace three copies of the generated-world
+Shrine-of-Life setup and six bare building-number tests. No behavior change: all five targets, full
+required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha probes,
+including the shrine and revive scenarios, pass.
+
+
 ## Game-run scenarios in their own file - 2026-11-14
 
 The nine contiguous `--*-test` scenarios moved verbatim from `src/main.cpp` into `src/GameFixtures.cpp`

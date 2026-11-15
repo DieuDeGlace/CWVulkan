@@ -7113,12 +7113,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             shrinerespawn::Cell land{0, 0};
             if (const uint8_t *me = spawned.playerRecord())
                 std::memcpy(land.data(), me + worldgen::creature::REGION, sizeof land);
-            shrinerespawn::World shrines;
-            shrines.landOf = [](int32_t x, int32_t y) {
-                const worldgen::Int2 r = worldgen::regionAt(x, y);
-                return shrinerespawn::Cell{r.x, r.y};
-            };
-            shrines.isShrine = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == 53; }; // building 0x35
+            const shrinerespawn::World shrines = shrinerespawn::generatedWorld();
             const shrinerespawn::Cell cell = shrinerespawn::choose(shrines, usedCells, at[0], at[1], land);
             const int64_t dots[3] = {(int64_t)std::bit_cast<int32_t>((uint32_t)cell[0] * 16u + 6u) * 65536,
                                      (int64_t)std::bit_cast<int32_t>((uint32_t)cell[1] * 16u + 8u) * 65536,
@@ -7129,7 +7124,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (spawned.placePlayer(extractedWorld, dots))
                 respawn.z -= SpawnedCreatures::NATIVE_FEET;
             logLine("Reviving in cell " + std::to_string(cell[0]) + " " + std::to_string(cell[1]) +
-                    (worldgen::cellObject(cell[0], cell[1]) == 53 ? " (a Shrine of Life)" : " (where the player died)") + ", at " +
+                    (shrinerespawn::isShrineCell(cell[0], cell[1]) ? " (a Shrine of Life)" : " (where the player died)") + ", at " +
                     std::to_string(respawn.x) + " " + std::to_string(respawn.y) + " " + std::to_string(respawn.z));
         }
         if (revive) {

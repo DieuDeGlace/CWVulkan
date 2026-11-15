@@ -1,11 +1,26 @@
 #include "ShrineRespawn.h"
 
+#include "worldgen/Generator.h"
 #include "worldgen/Noise.h"
+#include "worldgen/Regions.h"
 
 namespace shrinerespawn {
 namespace {
 int32_t floorDiv(int64_t a, int64_t b) { return (int32_t)(a >= 0 ? a / b : -((-a + b - 1) / b)); }
+constexpr int SHRINE_OF_LIFE = 0x35; // the cell building
 } // namespace
+
+bool isShrineCell(int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == SHRINE_OF_LIFE; }
+
+World generatedWorld() {
+    World world;
+    world.landOf = [](int32_t x, int32_t y) {
+        const worldgen::Int2 r = worldgen::regionAt(x, y);
+        return Cell{r.x, r.y};
+    };
+    world.isShrine = isShrineCell;
+    return world;
+}
 
 Cell siteOf(int32_t rx, int32_t ry) {
     const uint32_t base = worldgen::cellKey(rx, ry);

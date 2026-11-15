@@ -15,6 +15,11 @@ struct World {
     std::function<bool(int32_t cx, int32_t cy)> isShrine;      // the cell's building is 0x35
 };
 
+// Whether a generated cell's building (0x69C60) is a Shrine of Life (0x35).
+bool isShrineCell(int32_t cx, int32_t cy);
+// The generated world: its lands (0x2ADA20) and Shrine-of-Life cells.
+World generatedWorld();
+
 // The site cell of a 64-cell site region (0x2D3B60).
 Cell siteOf(int32_t rx, int32_t ry);
 

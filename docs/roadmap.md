@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] One generated-world Shrine-of-Life helper for the revive and its scenarios (no behavior change).
+  See [the checkpoint](release-status.md#one-generated-world-shrine-helper---2026-11-14).
+
 - [x] The game-run test scenarios live in GameFixtures, out of the frame loop's file (no behavior change).
   See [the checkpoint](release-status.md#game-run-scenarios-in-their-own-file---2026-11-14).
 

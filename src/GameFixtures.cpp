@@ -133,21 +133,16 @@ void GameFixtures::shrine() {
             // (a character whose home cell holds no shrine, such as the Alpha generation
             // save at 0,0, uses the nearest Shrine-of-Life site of its land instead, as
             // the revive's second pass finds it)
-            if (worldgen::cellObject(home[0], home[1]) != 53) {
+            if (!shrinerespawn::isShrineCell(home[0], home[1])) {
                 int64_t at[3];
                 playerUnits(at);
                 shrinerespawn::Cell land{};
                 std::memcpy(land.data(), me + worldgen::creature::REGION, sizeof land);
-                shrinerespawn::World shrines;
-                shrines.landOf = [](int32_t x, int32_t y) {
-                    const worldgen::Int2 r = worldgen::regionAt(x, y);
-                    return shrinerespawn::Cell{r.x, r.y};
-                };
-                shrines.isShrine = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == 53; };
+                const shrinerespawn::World shrines = shrinerespawn::generatedWorld();
                 const shrinerespawn::Cell site = shrinerespawn::choose(shrines, {}, at[0], at[1], land);
                 logLine("Shrine test: home cell " + std::to_string(home[0]) + " " + std::to_string(home[1]) +
                         " holds no shrine; nearest site " + std::to_string(site[0]) + " " + std::to_string(site[1]) +
-                        (worldgen::cellObject(site[0], site[1]) == 53 ? " is a shrine" : " is NOT a shrine"));
+                        (shrinerespawn::isShrineCell(site[0], site[1]) ? " is a shrine" : " is NOT a shrine"));
                 home = site;
             }
             const bool forgot = usedCells.erase(home) > 0;
@@ -219,12 +214,7 @@ void GameFixtures::revive() {
         if (stage == 0 && time > 5.0 && hostHoldsPlayerZone() && me && playerHp > 0 && playerMaxHp > 0) {
             shrinerespawn::Cell land{};
             std::memcpy(land.data(), me + worldgen::creature::REGION, sizeof land);
-            shrinerespawn::World shrines;
-            shrines.landOf = [](int32_t x, int32_t y) {
-                const worldgen::Int2 r = worldgen::regionAt(x, y);
-                return shrinerespawn::Cell{r.x, r.y};
-            };
-            shrines.isShrine = [](int32_t cx, int32_t cy) { return worldgen::cellObject(cx, cy) == 53; };
+            const shrinerespawn::World shrines = shrinerespawn::generatedWorld();
             for (const auto &c : usedCells)
                 if (shrines.isShrine(c[0], c[1]) && shrines.landOf(c[0] * 16 + 8, c[1] * 16 + 8) == land)
                     anyKnown = true;
@@ -234,7 +224,7 @@ void GameFixtures::revive() {
                     ", land " + std::to_string(land[0]) + " " + std::to_string(land[1]) + ", " +
                     (anyKnown ? "a known shrine" : "no known shrine") + " in the land, expected cell " +
                     std::to_string(expected[0]) + " " + std::to_string(expected[1]) +
-                    (worldgen::cellObject(expected[0], expected[1]) == 53 ? " (a shrine)" : " (NOT a shrine)"));
+                    (shrinerespawn::isShrineCell(expected[0], expected[1]) ? " (a shrine)" : " (NOT a shrine)"));
             spawned.setPlayerHealth(0);
             stage = 1, stageAt = time;
         } else if (stage == 1 && time - stageAt > 3.0) {
@@ -278,7 +268,7 @@ void GameFixtures::revive() {
         } else if (stage == 3 && time - stageAt > 1.0) {
             // (after a second of the world's own physics the player still stands there)
             const double apart = blocksApart(at, expected[0] * 16.0 + 6, expected[1] * 16.0 + 8);
-            const bool shrine = worldgen::cellObject(expected[0], expected[1]) == 53;
+            const bool shrine = shrinerespawn::isShrineCell(expected[0], expected[1]);
             // (the World steps keep the tombstone beyond 20 blocks and clear it within; a second
             // of steps takes about 1000 ms off)
             const mapmarks::Tombstone tomb = spawned.tombstone();
