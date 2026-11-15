@@ -8609,12 +8609,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             index = worldMap.looks(renderer, model, hairPath && hair.load(*hairPath) ? &hair : nullptr, colour);
                         return looksOf[key] = index;
                     };
-                    worldmap::Map::View::Mark me; // (a player: no pulse)
-                    me.looks = mapPlayerLooks;
-                    me.at = playerBlocks;
-                    me.turnDegrees = glm::degrees(heading - character.forward()); // (as the body turns)
-                    view.marks.push_back(me);
-                    spawned.forEach([&](const uint8_t *c) {
+                    // Records walk the World's creature list, the local player included (§2.2);
+                    // the recorded character's head stands in only when there is no native player.
+                    if (!spawned.playerRecord()) {
+                        worldmap::Map::View::Mark me; // (a player: no pulse)
+                        me.looks = mapPlayerLooks;
+                        me.at = playerBlocks;
+                        me.turnDegrees = glm::degrees(heading - character.forward()); // (as the body turns)
+                        view.marks.push_back(me);
+                    }
+                    spawned.forEachWorldCreature([&](const uint8_t *c) {
                         const int hostility = c[worldgen::creature::HOSTILITY], ability = c[worldgen::creature::ABILITY];
                         uint16_t toggles;
                         int32_t destination[2];

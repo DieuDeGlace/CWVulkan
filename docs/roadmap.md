@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The local player's own head and hair marker on the world map, from the World creature list, as Steam's.
+  See [the checkpoint](release-status.md#local-player-on-the-world-map---2026-11-15).
+
 - [x] The corner map's half radius (4) and no cursor pick, as Steam's; checked against the first original recording.
   See [the checkpoint](release-status.md#corner-map-radius---2026-11-14).
 

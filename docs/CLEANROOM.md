@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Local player on the world map - 2026-11-15
+
+The second original recording shows the player's own head model under the blue ring on the corner and
+full map. CubeVulkan drew only the ring for a native saved character: its map records walked zone
+creatures and took the player's head from the recorded snapshot only. Per
+[map markers](specs/map-markers.md) section 2.2 the records now walk the World creature list, the local
+player included, and the snapshot head is a fallback for the legacy adapter. Before/after captures are
+kept privately. All five targets, full required-owner CPU without skips, every Vulkan group, SDK
+independence and the Native/Alpha probes pass.
+
+
 ## Corner map radius - 2026-11-14
 
 The first original-game recording showed CubeVulkan's corner map about twice the original's size. A new isolated
