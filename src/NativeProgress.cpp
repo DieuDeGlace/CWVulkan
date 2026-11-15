@@ -472,6 +472,12 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
     s.regionHistory = c.regionHistory;
     s.finishedMissions = c.finishedMissions;
     s.solvedMissions = c.setC8;
+    // The marked missions (+0xb8, map-markers.md §0.4): a mission is known when its zone is in
+    // this set or solved. The notes only add the place and item names a talk gave.
+    for (const nativesaves::Cell &zone : c.setB8)
+        if (std::none_of(s.marked.begin(), s.marked.end(),
+                         [&](const SaveGame::Marked &m) { return m.x == zone[0] && m.y == zone[1]; }))
+            s.marked.push_back({zone[0], zone[1], "", ""});
     s.missionTimers = c.missionTimers;
     s.purchases = c.purchases;
     for (const auto &[block, z] : c.map88) // (the file keeps x and y as the key and z as the value)
@@ -496,6 +502,9 @@ void captureProgressCollections(const SaveGame &s, Character &c, std::string &no
         c.regionHistory = *s.regionHistory;
     c.finishedMissions = s.finishedMissions;
     c.setC8 = s.solvedMissions;
+    c.setB8.clear();
+    for (const SaveGame::Marked &m : s.marked)
+        c.setB8.insert({m.x, m.y});
     c.missionTimers = s.missionTimers;
     c.purchases = s.purchases;
     c.map88.clear();

@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Marked missions in Steam saves - 2026-11-15
+
+A Steam recording showed the Laron Lava Lake mission on the map with its gnome icon, green label and two
+marks after a villager talk. CubeVulkan loading the same save drew a plain white label: it read the
+solved-mission set but not the marked-mission set (player data +0xb8). Per [map markers](specs/map-markers.md)
+section 0.4 and [native saves](specs/native-saves.md) field 20, the set now loads as known missions and
+marks made in CubeVulkan are written back to it. Four CPU checks failed on the old code and pass. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha
+probes pass.
+
+
 ## HUD aura strip - 2026-11-15
 
 The third original recording shows a purple mana pump icon with "x 1" under the money counter at a village

@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Missions marked in a Steam character's save (+0xb8) load as known and are written back, as Steam's; checked against a recording.
+  See [the checkpoint](release-status.md#marked-missions-in-steam-saves---2026-11-15).
+
 - [x] The HUD aura strip (buff icons with counts or remaining time) under the money, as Steam's; checked against the third original recording.
   See [the checkpoint](release-status.md#hud-aura-strip---2026-11-15).
 

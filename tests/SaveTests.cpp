@@ -437,6 +437,30 @@ void importing() {
     fs::remove_all(game, ec), fs::remove_all(own, ec);
 }
 
+// The marked missions (+0xb8, map-markers.md §0.4): a Steam character's marks load as known
+// missions, the notes only add names, and marks made here are written back to the set.
+void markedMissions() {
+    Character c = testCharacter();
+    c.setB8 = {{7, 7}, {-3, 12}};
+    const auto plain = nativeprogress::toProgress(c, {}, {}, {});
+    auto has = [](const SaveGame &s, int x, int y) {
+        return std::count_if(s.marked.begin(), s.marked.end(), [&](const SaveGame::Marked &m) { return m.x == x && m.y == y; });
+    };
+    SAVE_CHECK(plain.marked.size() == 2 && has(plain, 7, 7) == 1 && has(plain, -3, 12) == 1);
+    SaveGame named;
+    named.marked = {{7, 7, "Laron Lava Lake", "Supplier Gnome"}};
+    auto withNames = nativeprogress::toProgress(c, named.text(), {}, {});
+    SAVE_CHECK(withNames.marked.size() == 2 && has(withNames, 7, 7) == 1 && has(withNames, -3, 12) == 1);
+    SAVE_CHECK(withNames.marked[0].place == "Laron Lava Lake" && withNames.marked[0].item == "Supplier Gnome");
+    withNames.marked.push_back({20, 21, "", ""});
+    std::string notes;
+    nativeprogress::fromProgress(withNames, nullptr, 0, {}, c, notes);
+    SAVE_CHECK((c.setB8 == std::set<Cell>{{-3, 12}, {7, 7}, {20, 21}}));
+    Character reloaded;
+    readCharacter(writeCharacter(c), reloaded);
+    SAVE_CHECK(nativeprogress::toProgress(reloaded, notes, {}, {}).marked.size() == 3);
+}
+
 void zoneStates() {
     WorldState w;
     ZoneLists generated;
@@ -708,6 +732,7 @@ int saveFormatTests() {
     zlibStreams();
     characterFile();
     importing();
+    markedMissions();
     zoneStates();
     retainedSourceLifetimes();
     generatedObjectMetadata();
