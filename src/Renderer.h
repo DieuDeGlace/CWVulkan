@@ -390,7 +390,9 @@ class Renderer {
     bool createPostTargets();
     void destroyPostTargets();
     void destroyPostResources();
+    // A sampled image filled from `data` through a one-time staging copy (empty on failure).
     Image uploadImage(uint32_t w, uint32_t h, VkFormat format, const void *data, size_t bytes);
+    VkShaderModule shaderModule(const uint32_t *code, size_t bytes) const; // null on failure
     void recordPost(VkCommandBuffer cmd, uint32_t imageIndex, glm::vec2 jitter, const glm::mat4 &clipToPrevious, bool reproject);
     bool uploadOverlay();
     void drawOverlayRange(VkCommandBuffer cmd, uint32_t first, uint32_t count, bool depth, bool layer = false,

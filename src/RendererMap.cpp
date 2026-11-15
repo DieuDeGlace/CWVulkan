@@ -25,15 +25,7 @@ static_assert(sizeof(MapPush) <= 128, "push constants beyond Vulkan's guaranteed
 } // namespace
 
 bool Renderer::createMapPipeline(std::string &error) {
-    auto module = [&](const uint32_t *code, size_t bytes) {
-        VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        info.codeSize = bytes;
-        info.pCode = code;
-        VkShaderModule m = VK_NULL_HANDLE;
-        vkCreateShaderModule(device, &info, nullptr, &m);
-        return m;
-    };
-    VkShaderModule vs = module(spv_map_vert, sizeof(spv_map_vert)), fs = module(spv_map_frag, sizeof(spv_map_frag));
+    VkShaderModule vs = shaderModule(spv_map_vert, sizeof(spv_map_vert)), fs = shaderModule(spv_map_frag, sizeof(spv_map_frag));
 
     VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MapPush)};
     VkPipelineLayoutCreateInfo pli{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};

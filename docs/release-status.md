@@ -1,5 +1,13 @@
 # Source review checkpoint — 2026-11-08
 
+## Shared renderer helpers - 2026-11-14
+
+The renderer files now share one set of image-barrier helpers (`VulkanSync.h`), one shader-module
+helper and one staging upload, removing about 95 duplicated lines. Rendering is unchanged: all five
+targets, full required-owner CPU without skips, every Vulkan image group, SDK independence and the
+Native/Alpha probes pass. A failed staging allocation now yields an empty image instead of a crash.
+
+
 ## One ending for the game-run scenarios - 2026-11-14
 
 `GameFixtures::end` replaces the ten repeated scenario endings (exit code on failure, switch off,

@@ -1,5 +1,6 @@
 #include "GameMath.h"
 #include "Renderer.h"
+#include "VulkanSync.h"
 #include <utility>
 #include "Config.h"
 #include "RendererUniforms.h"
@@ -86,31 +87,8 @@ constexpr float ALPHA_CLOUD_REACH = 1.5f, FAR_MARGIN = 64;
 // The Steam star dome's radius is counted in units of 64 blocks (§B.6).
 constexpr float STAR_DOME_UNIT = 64;
 
-VkImageMemoryBarrier2 imageBarrier(VkImage image, VkImageAspectFlags aspect, VkImageLayout from,
-                                   VkImageLayout to, VkPipelineStageFlags2 srcStage,
-                                   VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage,
-                                   VkAccessFlags2 dstAccess) {
-    VkImageMemoryBarrier2 b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-    b.srcStageMask = srcStage;
-    b.srcAccessMask = srcAccess;
-    b.dstStageMask = dstStage;
-    b.dstAccessMask = dstAccess;
-    b.oldLayout = from;
-    b.newLayout = to;
-    b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    b.image = image;
-    b.subresourceRange = {aspect, 0, 1, 0, 1};
-    return b;
-}
-void barriers(VkCommandBuffer cmd, const VkImageMemoryBarrier2 *images, uint32_t count,
-              const VkMemoryBarrier2 *memory = nullptr) {
-    VkDependencyInfo d{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-    d.imageMemoryBarrierCount = count;
-    d.pImageMemoryBarriers = images;
-    d.memoryBarrierCount = memory ? 1 : 0;
-    d.pMemoryBarriers = memory;
-    vkCmdPipelineBarrier2(cmd, &d);
-}
+using vksync::apply;
+using vksync::barrier;
 
 // Light-space matrix centred on `center`, snapped to whole shadow texels so
 // shadow edges do not crawl as the player moves.
@@ -472,33 +450,34 @@ void Renderer::destroySwapchain() {
     swapchain = VK_NULL_HANDLE;
 }
 
+VkShaderModule Renderer::shaderModule(const uint32_t *code, size_t bytes) const {
+    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    info.codeSize = bytes;
+    info.pCode = code;
+    VkShaderModule m = VK_NULL_HANDLE;
+    vkCreateShaderModule(device, &info, nullptr, &m);
+    return m;
+}
+
 bool Renderer::createPipelines(std::string &error) {
-    auto module = [&](const uint32_t *code, size_t bytes) {
-        VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        info.codeSize = bytes;
-        info.pCode = code;
-        VkShaderModule m = VK_NULL_HANDLE;
-        vkCreateShaderModule(device, &info, nullptr, &m);
-        return m;
-    };
-    VkShaderModule sceneV = module(spv_scene_vert, sizeof(spv_scene_vert)),
-                   sceneF = module(spv_scene_frag, sizeof(spv_scene_frag)),
-                   shadowV = module(spv_shadow_vert, sizeof(spv_shadow_vert)),
-                   waterF = module(spv_water_frag, sizeof(spv_water_frag)),
-                   omegaWaterF = module(spv_omega_water_frag, sizeof(spv_omega_water_frag)),
-                   skyV = module(spv_sky_vert, sizeof(spv_sky_vert)),
-                   skyF = module(spv_sky_frag, sizeof(spv_sky_frag)),
-                   alphaV = module(spv_alpha_scene_vert, sizeof(spv_alpha_scene_vert)),
-                   alphaF = module(spv_alpha_scene_frag, sizeof(spv_alpha_scene_frag)),
-                   alphaWaterF = module(spv_alpha_water_frag, sizeof(spv_alpha_water_frag)),
-                   alphaSkyF = module(spv_alpha_sky_frag, sizeof(spv_alpha_sky_frag)),
-                   spriteV = module(spv_alpha_sprite_vert, sizeof(spv_alpha_sprite_vert)),
-                   spriteF = module(spv_alpha_sprite_frag, sizeof(spv_alpha_sprite_frag)),
-                   alphaCloudF = module(spv_alpha_cloud_frag, sizeof(spv_alpha_cloud_frag)),
-                   steamCloudF = module(spv_steam_cloud_frag, sizeof(spv_steam_cloud_frag)),
-                   steamStarF = module(spv_steam_star_frag, sizeof(spv_steam_star_frag)),
-                   beamV = module(spv_light_beam_vert, sizeof(spv_light_beam_vert)),
-                   beamF = module(spv_light_beam_frag, sizeof(spv_light_beam_frag));
+    VkShaderModule sceneV = shaderModule(spv_scene_vert, sizeof(spv_scene_vert)),
+                   sceneF = shaderModule(spv_scene_frag, sizeof(spv_scene_frag)),
+                   shadowV = shaderModule(spv_shadow_vert, sizeof(spv_shadow_vert)),
+                   waterF = shaderModule(spv_water_frag, sizeof(spv_water_frag)),
+                   omegaWaterF = shaderModule(spv_omega_water_frag, sizeof(spv_omega_water_frag)),
+                   skyV = shaderModule(spv_sky_vert, sizeof(spv_sky_vert)),
+                   skyF = shaderModule(spv_sky_frag, sizeof(spv_sky_frag)),
+                   alphaV = shaderModule(spv_alpha_scene_vert, sizeof(spv_alpha_scene_vert)),
+                   alphaF = shaderModule(spv_alpha_scene_frag, sizeof(spv_alpha_scene_frag)),
+                   alphaWaterF = shaderModule(spv_alpha_water_frag, sizeof(spv_alpha_water_frag)),
+                   alphaSkyF = shaderModule(spv_alpha_sky_frag, sizeof(spv_alpha_sky_frag)),
+                   spriteV = shaderModule(spv_alpha_sprite_vert, sizeof(spv_alpha_sprite_vert)),
+                   spriteF = shaderModule(spv_alpha_sprite_frag, sizeof(spv_alpha_sprite_frag)),
+                   alphaCloudF = shaderModule(spv_alpha_cloud_frag, sizeof(spv_alpha_cloud_frag)),
+                   steamCloudF = shaderModule(spv_steam_cloud_frag, sizeof(spv_steam_cloud_frag)),
+                   steamStarF = shaderModule(spv_steam_star_frag, sizeof(spv_steam_star_frag)),
+                   beamV = shaderModule(spv_light_beam_vert, sizeof(spv_light_beam_vert)),
+                   beamF = shaderModule(spv_light_beam_frag, sizeof(spv_light_beam_frag));
 
     VkVertexInputBindingDescription binding{0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX};
     VkVertexInputAttributeDescription attributes[] = {
@@ -688,16 +667,8 @@ bool Renderer::createOverlayPipeline(std::string &error) {
     pli.pPushConstantRanges = &push;
     vkCreatePipelineLayout(device, &pli, nullptr, &overlayLayout);
 
-    auto module = [&](const uint32_t *code, size_t bytes) {
-        VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        info.codeSize = bytes;
-        info.pCode = code;
-        VkShaderModule m = VK_NULL_HANDLE;
-        vkCreateShaderModule(device, &info, nullptr, &m);
-        return m;
-    };
-    VkShaderModule vs = module(spv_overlay_vert, sizeof(spv_overlay_vert)),
-                   fs = module(spv_overlay_frag, sizeof(spv_overlay_frag));
+    VkShaderModule vs = shaderModule(spv_overlay_vert, sizeof(spv_overlay_vert)),
+                   fs = shaderModule(spv_overlay_frag, sizeof(spv_overlay_frag));
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs, "main"};
     stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fs, "main"};
@@ -783,46 +754,9 @@ bool Renderer::setOverlayAtlas(uint32_t width, uint32_t height, const uint8_t *r
         return true;
     vkDeviceWaitIdle(device);
     destroyImage(overlayImage);
-    overlayImage = createImage(width, height, VK_FORMAT_R8G8B8A8_UNORM,
-                               VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    overlayImage = uploadImage(width, height, VK_FORMAT_R8G8B8A8_UNORM, rgba, (size_t)width * height * 4);
     if (!overlayImage.image)
         return false;
-    VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
-    Buffer staging = createBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    if (!staging.buffer)
-        return false;
-    std::memcpy(staging.mapped, rgba, bytes);
-    VkCommandBufferAllocateInfo cai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-    cai.commandPool = pool;
-    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cai.commandBufferCount = 1;
-    VkCommandBuffer cmd;
-    vkAllocateCommandBuffers(device, &cai, &cmd);
-    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd, &begin);
-    auto toCopy = imageBarrier(overlayImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
-                               VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    barriers(cmd, &toCopy, 1);
-    VkBufferImageCopy region{};
-    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.imageExtent = {width, height, 1};
-    vkCmdCopyBufferToImage(cmd, staging.buffer, overlayImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    auto toRead = imageBarrier(overlayImage.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
-                               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                               VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-    barriers(cmd, &toRead, 1);
-    vkEndCommandBuffer(cmd);
-    VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-    vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
-    vkQueueWaitIdle(queue);
-    vkFreeCommandBuffers(device, pool, 1, &cmd);
-    destroyBuffer(staging);
     VkDescriptorImageInfo images[] = {{overlaySampler, overlayImage.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                                       {overlayMaskSampler, overlayImage.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
     VkWriteDescriptorSet writes[2]{};
@@ -1659,7 +1593,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         mb.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
         mb.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
         mb.dstAccessMask = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_2_INDEX_READ_BIT;
-        barriers(cmd, nullptr, 0, &mb);
+        apply(cmd, nullptr, 0, &mb);
     }
 
     unsigned draws = 0;
@@ -1811,7 +1745,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // --- Shadow maps ---
     auto shadowPass = [&](Image &map, uint32_t res, const glm::mat4 &matrix, float cascade,
                           float radius) {
-        auto toWrite = imageBarrier(map.image, VK_IMAGE_ASPECT_DEPTH_BIT,
+        auto toWrite = barrier(map.image, VK_IMAGE_ASPECT_DEPTH_BIT,
                                     shadowsInitialized ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                                                        : VK_IMAGE_LAYOUT_UNDEFINED,
                                     VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1819,7 +1753,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
                                         VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-        barriers(cmd, &toWrite, 1);
+        apply(cmd, &toWrite, 1);
         VkRenderingAttachmentInfo depthAttachment{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
         depthAttachment.imageView = map.view;
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
@@ -1857,13 +1791,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             }
         }
         vkCmdEndRendering(cmd);
-        auto toRead = imageBarrier(map.image, VK_IMAGE_ASPECT_DEPTH_BIT,
+        auto toRead = barrier(map.image, VK_IMAGE_ASPECT_DEPTH_BIT,
                                    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                    VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-        barriers(cmd, &toRead, 1);
+        apply(cmd, &toRead, 1);
     };
     // Maps are only redrawn while shadows are visible; otherwise they are
     // cleared once so the descriptors always reference valid contents.
@@ -1939,17 +1873,17 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // --- Main pass (off-screen: the scene image and this frame's depth) ---
     Image &depth = depthImages[parity];
     VkImageMemoryBarrier2 toAttachment[2] = {
-        imageBarrier(sceneColor.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+        barrier(sceneColor.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT),
-        imageBarrier(depth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+        barrier(depth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                      VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT),
     };
-    barriers(cmd, toAttachment, 2);
+    apply(cmd, toAttachment, 2);
     VkRenderingAttachmentInfo color{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     color.imageView = sceneColor.view;
     color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -2331,19 +2265,19 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     if (capturing) {
         readback = createBuffer((VkDeviceSize)extent.width * extent.height * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        auto toCopy = imageBarrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
+        auto toCopy = barrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
                                    VK_ACCESS_2_TRANSFER_READ_BIT);
-        barriers(cmd, &toCopy, 1);
+        apply(cmd, &toCopy, 1);
         VkBufferImageCopy region{};
         region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         region.imageExtent = {extent.width, extent.height, 1};
         vkCmdCopyImageToBuffer(cmd, swapImages[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                readback.buffer, 1, &region);
     }
-    auto toPresent = imageBarrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
+    auto toPresent = barrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
                                   capturing ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
                                             : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -2351,7 +2285,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                                             : VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                   capturing ? VK_ACCESS_2_NONE : VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                                   VK_PIPELINE_STAGE_2_NONE, 0);
-    barriers(cmd, &toPresent, 1);
+    apply(cmd, &toPresent, 1);
     vkEndCommandBuffer(cmd);
     lastDraws = draws;
 

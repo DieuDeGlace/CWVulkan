@@ -41,6 +41,10 @@ Renderer::Image Renderer::uploadImage(uint32_t w, uint32_t h, VkFormat format, c
         return img;
     Buffer staging = createBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (!staging.buffer) {
+        destroyImage(img);
+        return img;
+    }
     std::memcpy(staging.mapped, data, bytes);
     VkCommandBufferAllocateInfo cai{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
     cai.commandPool = pool;
@@ -120,17 +124,9 @@ bool Renderer::createPostResources(std::string &error) {
         vkAllocateDescriptorSets(device, &dai, s);
     }
 
-    auto module = [&](const uint32_t *code, size_t bytes) {
-        VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        info.codeSize = bytes;
-        info.pCode = code;
-        VkShaderModule m = VK_NULL_HANDLE;
-        vkCreateShaderModule(device, &info, nullptr, &m);
-        return m;
-    };
     auto pipeline = [&](const uint32_t *vs, size_t vsBytes, const uint32_t *fs, size_t fsBytes, VkFormat format,
                         VkPipeline &out) {
-        VkShaderModule v = module(vs, vsBytes), f = module(fs, fsBytes);
+        VkShaderModule v = shaderModule(vs, vsBytes), f = shaderModule(fs, fsBytes);
         VkPipelineShaderStageCreateInfo stages[2]{};
         stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, v, "main"};
         stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, f, "main"};

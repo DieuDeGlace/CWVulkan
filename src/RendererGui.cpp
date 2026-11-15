@@ -1,30 +1,13 @@
 #include "Renderer.h"
 #include "RendererUniforms.h"
+#include "VulkanSync.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cstring>
 
 namespace {
-VkImageMemoryBarrier2 imageBarrier(VkImage image, VkImageAspectFlags aspect, VkImageLayout from, VkImageLayout to,
-                                   VkPipelineStageFlags2 before, VkAccessFlags2 read, VkPipelineStageFlags2 after, VkAccessFlags2 write) {
-    VkImageMemoryBarrier2 b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-    b.srcStageMask = before;
-    b.srcAccessMask = read;
-    b.dstStageMask = after;
-    b.dstAccessMask = write;
-    b.oldLayout = from;
-    b.newLayout = to;
-    b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    b.image = image;
-    b.subresourceRange = {aspect, 0, 1, 0, 1};
-    return b;
-}
-void barriers(VkCommandBuffer cmd, std::initializer_list<VkImageMemoryBarrier2> images) {
-    VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-    dependency.imageMemoryBarrierCount = (uint32_t)images.size();
-    dependency.pImageMemoryBarriers = images.begin();
-    vkCmdPipelineBarrier2(cmd, &dependency);
-}
+using vksync::apply;
+using vksync::barrier;
 } // namespace
 
 bool Renderer::prepareGui(size_t count) {
@@ -144,19 +127,19 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             return; // vertex and callback cuts must describe the same append order
     }
     // Fullscreen resolve and the following load are separate rendering instances.
-    barriers(cmd, {imageBarrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    apply(cmd, {barrier(swapImages[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)});
     if (models) {
         // Retain the native scene/overlay depth without putting GUI writes into TAA's
         // history depth. No per-item clear, and no clear between black/main/cube draws.
-        barriers(
+        apply(
             cmd,
-            {imageBarrier(depthImages[parity].image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            {barrier(depthImages[parity].image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT),
-             imageBarrier(
+             barrier(
                  guiDepth.image, VK_IMAGE_ASPECT_DEPTH_BIT,
                  guiDepthFresh ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                  guiDepthFresh ? VK_PIPELINE_STAGE_2_NONE
@@ -168,10 +151,10 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
         copy.extent = {extent.width, extent.height, 1};
         vkCmdCopyImage(cmd, depthImages[parity].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, guiDepth.image,
                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-        barriers(cmd, {imageBarrier(depthImages[parity].image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        apply(cmd, {barrier(depthImages[parity].image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
                                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT),
-                       imageBarrier(guiDepth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       barrier(guiDepth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                     VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
                                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)});
@@ -238,13 +221,13 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             const VkImage image = target        ? clipLayers[target - 1].colour.image
                                   : cacheTarget ? cacheTarget->target.colour.image
                                                 : swapImages[imageIndex];
-            barriers(cmd, {imageBarrier(image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            apply(cmd, {barrier(image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                         VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)});
             if (!layer && models)
-                barriers(cmd,
-                         {imageBarrier(guiDepth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                apply(cmd,
+                         {barrier(guiDepth.image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -307,7 +290,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             cacheTarget = &cachedLayers.at(CacheKey(command.surface));
             guiTargetRectangle = glm::vec4(command.rectangle);
             auto &layer = cacheTarget->target;
-            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
+            apply(cmd, {barrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
                                         layer.sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
                                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                         layer.sampled ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
@@ -316,7 +299,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             beginTarget(true);
         } else if (command.kind == plasma::LayerCommand::Kind::CacheEnd) {
             auto &layer = cacheTarget->target;
-            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            apply(cmd, {barrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT)});
@@ -327,7 +310,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
             beginTarget(false);
         } else if (command.kind == plasma::LayerCommand::Kind::Push) {
             auto &layer = clipLayers[target++];
-            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
+            apply(cmd, {barrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT,
                                         layer.sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
                                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                         layer.sampled ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE,
@@ -337,7 +320,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
         } else {
             maskSource = --target;
             auto &layer = clipLayers[maskSource];
-            barriers(cmd, {imageBarrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            apply(cmd, {barrier(layer.colour.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT)});

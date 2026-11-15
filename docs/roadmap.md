@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Shared renderer barrier, shader-module and upload helpers (rendering unchanged).
+  See [the checkpoint](release-status.md#shared-renderer-helpers---2026-11-14).
+
 - [x] One shared ending for the game-run scenarios (no behavior change).
   See [the checkpoint](release-status.md#one-ending-for-the-game-run-scenarios---2026-11-14).
 
