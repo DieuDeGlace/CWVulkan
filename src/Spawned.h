@@ -406,6 +406,8 @@ class SpawnedCreatures {
     // when it has none. Giving one replaces the type's (0x29d2f0 with replace); ending it
     // takes it away (0x2d2b40).
     bool playerBuff(int type, float &strength, float &ms) const;
+    // The local player's whole buff list, in order (empty without a player).
+    const std::vector<std::array<uint8_t, 0x18>> &playerBuffs() const;
     void givePlayerBuff(int type, float strength, float ms);
     void endPlayerBuff(int type);
     // The world's dead (world+0x20): creatures that died here or in the owner's game. The

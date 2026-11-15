@@ -160,6 +160,7 @@ class Hud {
         bool showXp = false;     // pyro progression: the XP bar fills and shows its numbers
         int xp = 0, xpMax = 1;
         int32_t contextCount = 0; // derived World context total, including hidden-interface updates
+        const std::vector<std::array<uint8_t, 0x18>> *auras = nullptr; // the local player's buffs (src/HudAuras.*)
         struct ModelRow {
             struct Item {
                 std::string icon;
@@ -687,6 +688,7 @@ class Hud {
         plasma::SceneNode *inGame = nullptr, *templates = nullptr, *cellTemplate = nullptr, *character = nullptr, *preview = nullptr;
         plasma::SceneNode *chat = nullptr, *identification = nullptr, *identificationFrame = nullptr, *customization = nullptr;
         plasma::SceneNode *ring = nullptr; // Direct retained selector, distinct from crafting's itemselector.
+        plasma::SceneNode *auras = nullptr; // The aura strip's container (src/HudAuras.*), drawn by the HUD pass.
         std::array<plasma::SceneNode *,size_t(Menu::Count)> menus{};
         InvPanel bag, vendor, crafting;
         std::vector<plasma::SceneNode *> slots;

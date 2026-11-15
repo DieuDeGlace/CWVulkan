@@ -2507,6 +2507,11 @@ bool SpawnedCreatures::playerBuff(int type, float &strength, float &ms) const {
     return false;
 }
 
+const std::vector<std::array<uint8_t, 0x18>> &SpawnedCreatures::playerBuffs() const {
+    static const std::vector<std::array<uint8_t, 0x18>> none;
+    return hasPlayer ? player.side.buffs : none;
+}
+
 void SpawnedCreatures::givePlayerBuff(int type, float strength, float ms) {
     if (!hasPlayer)
         return;

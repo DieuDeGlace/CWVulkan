@@ -43,6 +43,7 @@
 #include "Missions.h"
 #include "Lore.h"
 #include "MapMarks.h"
+#include "HudAuras.h"
 #include "UsePrompt.h"
 #include "GameCraft.h"
 #include "GameShop.h"
@@ -8251,6 +8252,69 @@ static void loreAndArtifacts() {
                   playable(lore::artifactTale(realm, made, {5, -3}, seed % 2 ? 41 : 8, seed)));
 }
 
+// The HUD aura strip (HudAuras.h; steam-hud-poi-count-widget-20261115.md and
+// steam-hud-aura-strip-constants-20261115.md): one template copy per buff with an icon, in
+// list order at x 45 + 50 per shown entry, y 120; counts for 0x21/0x22, rounded time else.
+static void hudAuraTests() {
+    using namespace hudauras;
+    CHECK(FIRST_X == 45.0f && PITCH == 50.0f && Y == 120.0f && SCALE == 3.0f);
+    auto is = [](const char *name, const char *expected) { return name && std::string(name) == expected; };
+    CHECK(is(icon(0x22), "aura:manaabsorption") && is(icon(0x21), "aura:ancientpower"));
+    CHECK(is(icon(19), "aura:spiritworld") && is(icon(26), "aura:heatresistance"));
+    CHECK(!icon(0) && !icon(5) && !icon(7) && !icon(0x13 + 1) && !icon(0x23));
+    CHECK(text(0x22, 1.0f, 60000.0f) == L"x 1" && text(0x21, 2.9f, 0) == L"x 2" && text(0x22, 0.0f, 0) == L"x 0");
+    CHECK(text(0x22, -1.5f, 0) == L"x -1");
+    CHECK(text(1, 0, 30000.0f) == L"30 s" && text(1, 0, 1499.0f) == L"1 s" && text(1, 0, 1500.0f) == L"2 s");
+    CHECK(text(1, 0, 60000.0f) == L"60 s" && text(1, 0, 60001.0f) == L"1 m" && text(1, 0, 89999.0f) == L"1 m");
+    CHECK(text(1, 0, 90000.0f) == L"2 m" && text(1, 0, 3600000.0f) == L"60 m" && text(1, 0, 3600001.0f) == L"1 h");
+    CHECK(text(1, 0, 5400000.0f) == L"2 h" && text(1, 0, 0) == L"0 s" && text(1, 0, -400.0f) == L"0 s");
+    auto buff = [](uint8_t type, float value, float ms) {
+        Buff b{};
+        b[0] = type;
+        std::memcpy(&b[4], &value, 4);
+        std::memcpy(&b[8], &ms, 4);
+        return b;
+    };
+    const std::vector<Buff> buffs = {buff(7, 1, 1000), buff(0x22, 1, 60000), buff(0x13, 1, 120000), buff(1, 1, 5000)};
+    auto all = [](const char *) { return true; };
+    const auto shown = strip(buffs, all);
+    CHECK(shown.size() == 3);
+    if (shown.size() == 3) {
+        CHECK(is(shown[0].icon, "aura:manaabsorption") && shown[0].text == L"x 1" && shown[0].x == 45.0f && shown[0].y == 120.0f);
+        CHECK(is(shown[1].icon, "aura:spiritworld") && shown[1].text == L"2 m" && shown[1].x == 95.0f);
+        CHECK(is(shown[2].icon, "aura:bulwark") && shown[2].text == L"5 s" && shown[2].x == 145.0f);
+    }
+    const auto missing = strip(buffs, [&](const char *n) { return !is(n, "aura:spiritworld"); });
+    CHECK(missing.size() == 2 && missing[1].x == 95.0f); // a missing template takes no slot
+    CHECK(strip({}, all).empty());
+
+    Assets assets;
+    if (!assets.locate("")) {
+        std::printf("skip: Steam Cube World not found (aura templates)\n");
+        return;
+    }
+    plx::Document icons; // the interface's sprite library
+    std::string why;
+    CHECK(plx::read(assets.gameDir() / "icons.plx", icons, {plx::keyOf("PlasmaXGraphics")}, &why, plx::LOAD_SCALABLE_TEXT));
+    int found = 0;
+    for (int type = 0; type < 64; type++)
+        if (const char *name = icon(type))
+            found += icons.find(name) >= 0;
+    CHECK(found == 24); // every aura the interface loads has its template
+    // The count's text lands on the template's text shapes.
+    const int pump = icons.find("aura:manaabsorption");
+    int texts = 0;
+    std::vector<int> pending = {pump};
+    while (pump >= 0 && !pending.empty()) {
+        const plx::Node &n = icons.nodes[(size_t)pending.back()];
+        pending.pop_back();
+        plasma::TextStyle style;
+        texts += n.shape >= 0 && plasma::textStyle(icons.shapes[(size_t)n.shape], icons.loaderFlags, style);
+        pending.insert(pending.end(), n.children.begin(), n.children.end());
+    }
+    CHECK(texts == 2);
+}
+
 // The map's markers (MapMarks.h; docs/specs/map-markers.md).
 // The local death marker (steam-local-death-tombstone-and-marker-review-20261114.md): the one
 // slot an accepted Revive fills with the exact corpse position, run down by World steps,
@@ -9802,6 +9866,10 @@ int main(int argc, char **argv) {
         deathMarkerTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "hudauras") {
+        hudAuraTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "soundrules") {
         soundRules();
         return failures ? 1 : 0;
@@ -11215,6 +11283,7 @@ int main(int argc, char **argv) {
     loreAndArtifacts();
     mapMarkers();
     deathMarkerTests();
+    hudAuraTests();
     plasmaLibrary();
     useKeyTargets();
     useKeyPrompts();

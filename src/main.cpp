@@ -9034,6 +9034,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 const auto &context = spawned.hudContext();
                 hs.contextCount = context.count;
+                hs.auras = &spawned.playerBuffs();
                 hs.modelRow.worldMilliseconds = spawned.elapsedWorldTime();
                 hs.modelRow.farPlane = float(gameOptions.zonesDrawn() << 6);
                 if (const auto *record = spawned.playerRecord()) {

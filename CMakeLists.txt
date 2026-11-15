@@ -218,6 +218,7 @@ add_library(engine STATIC
     src/Missions.cpp
     src/Lore.cpp
     src/MapMarks.cpp
+    src/HudAuras.cpp
     src/MapPreview.cpp
     src/MapHistory.cpp
     src/MapControls.cpp

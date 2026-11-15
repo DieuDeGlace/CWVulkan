@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## HUD aura strip - 2026-11-15
+
+The third original recording shows a purple mana pump icon with "x 1" under the money counter at a village
+with a mana pump in its area; CubeVulkan drew nothing there. Three new isolated contracts
+([widget](specs/steam-hud-poi-count-widget-20261115.md), [constants](specs/steam-hud-aura-strip-constants-20261115.md),
+[clone object](specs/steam-hud-aura-clone-object-20261115.md)) show it is the HUD aura strip: one icons.plx
+"aura:" template per player buff that has one, at x 45 then every 50 and y 120, three times its size, reading
+"x N" for ancient power and mana absorption and the rounded remaining time otherwise. The engine now draws it
+and matches the recording at the same spawn. Eleven CPU checks failed on a stub and pass. All five targets,
+full required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Local player on the world map - 2026-11-15
 
 The second original recording shows the player's own head model under the blue ring on the corner and

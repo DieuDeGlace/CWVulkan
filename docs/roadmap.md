@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The HUD aura strip (buff icons with counts or remaining time) under the money, as Steam's; checked against the third original recording.
+  See [the checkpoint](release-status.md#hud-aura-strip---2026-11-15).
+
 - [x] The local player's own head and hair marker on the world map, from the World creature list, as Steam's.
   See [the checkpoint](release-status.md#local-player-on-the-world-map---2026-11-15).
 

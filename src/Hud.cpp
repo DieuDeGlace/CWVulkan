@@ -3,6 +3,7 @@
 #include "IdentifyWindow.h"
 #include "FeatText.h"
 #include "NativeHudContext.h"
+#include "HudAuras.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #include "stb_image.h"
@@ -1120,6 +1121,19 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
     const auto contextText = hudcontext::countText(state.contextCount);
     if (guiLoaded && !contextText.empty())
         plasmaLabel(out, std::wstring(contextText.begin(), contextText.end()), {0, 0}, {255, 60}, 24, 5);
+    if (auto *strip = panels.auras; strip && scene && iconsLoaded && state.auras) {
+        // The aura strip (src/HudAuras.*), rebuilt every update: icons.plx copies under the
+        // interface root, each three times its size and its text on every text shape.
+        scene->clearChildren(*strip);
+        for (const auto &aura : hudauras::strip(*state.auras, [&](const char *name) { return iconsDoc.find(name) >= 0; }))
+            if (auto *copy = scene->instance(iconsDoc, aura.icon, strip)) {
+                copy->transform.deformation[0] *= hudauras::SCALE; // (the deformation's first two rows)
+                copy->transform.deformation[1] *= hudauras::SCALE;
+                copy->setAllText(aura.text);
+                scene->setPosition(*copy, {0, 0}, {aura.x, aura.y});
+            }
+        sceneNode(out, *strip, glm::vec4(1));
+    }
     // The health and mana bars: the game's own shapes and text (the interface's layout for the window size:
     // the bottom middle, offset -181/8 and -50; Interface's update: the "bar" child scaled by
     // the fraction, the "text" shapes given "hp/max" and "mana/100").

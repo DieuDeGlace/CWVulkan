@@ -142,6 +142,7 @@ void Hud::buildPanels() {
     panels.templates = s.create(nullptr, "templates"); // Source prototypes are outside the live tree.
     panels.templates->visible = false;
     buildMenuControls();
+    panels.auras = s.create(panels.inGame); // (an empty container under the interface root)
     if ((panels.ring=s.instance("selector",panels.inGame))) {
         panels.ring->initializeWidgets();
         panels.ring->visible=false;
@@ -727,7 +728,12 @@ void Hud::drawPanels(const Inventory &inv, std::vector<OverlayVertex> &out) cons
     const bool customizationShown = panels.customization && panels.customization->visible;
     if (panels.customization)
         panels.customization->visible = false; // its independent root callback follows the ordinary inventory tree
+    const bool aurasShown = panels.auras && panels.auras->visible;
+    if (panels.auras)
+        panels.auras->visible = false; // drawn by the HUD pass
     sceneNode(out, *panels.inGame, glm::vec4(1), nullptr, drawWidget);
+    if (panels.auras)
+        panels.auras->visible = aurasShown;
     if (panels.customization)
         panels.customization->visible = customizationShown;
     setRingShown(ringWasShown); setIdentificationShown(identificationWasShown);
