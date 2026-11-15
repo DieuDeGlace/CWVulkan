@@ -51,7 +51,6 @@ class FieldOfView;
 // What the window gave since the last frame (filled by main's GLFW callbacks).
 struct MenuInput {
     bool shiftDown = false; // Physical message state survives per-frame clear.
-    bool controlDown = false;
     std::vector<int> pressed, buttons, released;
     gamewindow::Keyboard gameKeyboard;
     physicalinput::Editor controlEditor; // Retained with the application, across frontend sessions.

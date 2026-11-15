@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] The corner map's half radius (4) and no cursor pick, as Steam's; checked against the first original recording.
+  See [the checkpoint](release-status.md#corner-map-radius---2026-11-14).
+
 - [x] Shared renderer barrier, shader-module and upload helpers (rendering unchanged).
   See [the checkpoint](release-status.md#shared-renderer-helpers---2026-11-14).
 

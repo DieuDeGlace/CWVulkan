@@ -767,12 +767,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (captureChatInput)
             chatInput.push_back({ChatInputEvent::Character, (int)(c & 255)});
     });
-    input.shiftDown = input.controlDown = false;
+    input.shiftDown = false;
     glfwSetKeyCallback(window, [](GLFWwindow *, int key, int, int action, int modifiers) {
         if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
             input.shiftDown = action != GLFW_RELEASE;
-        if (key == GLFW_KEY_LEFT_CONTROL || key == GLFW_KEY_RIGHT_CONTROL)
-            input.controlDown = action != GLFW_RELEASE;
         if (action == GLFW_PRESS || action == GLFW_REPEAT)
             input.keyMessage(key, action == GLFW_REPEAT);
         if (captureChatInput && (action == GLFW_PRESS || action == GLFW_REPEAT))
@@ -8544,9 +8542,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 if (overHistory)
                     mapPointerText.clear();
             }
-            // GUI keycode0x11 is a retained Control message bit, independent of map mode.
-            const bool halfRadius = input.controlDown;
-            const int radius = halfRadius ? worldmap::RADIUS / 2 : worldmap::RADIUS;
+            // The corner map draws half the radius and picks no cursor; the open map draws all of it.
+            const int radius = worldmap::drawnRadius(mapOpen);
             if (!menusReady || menus.interfaceShown()) { // Native scene bit0x20 suppresses the3D map too.
                 worldMap.update(renderer, mapPosition, mapZoom);
                 worldmap::Map::View view;
@@ -8653,7 +8650,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 mapCursorKnown = false;
                 mapCursor = {double(INT_MAX), double(INT_MAX), -1};
-                if (!halfRadius) { // Control suppresses terrain picking; dragging and minimap mode do not.
+                if (worldmap::picksCursor(mapOpen)) {
 
                     double px, py;
                     pointerPosition(&px, &py);

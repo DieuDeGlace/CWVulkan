@@ -332,6 +332,13 @@ void hoveredLandBorder() {
     MAP_CHECK(built.borders == generated.borders);
 }
 
+// The corner map draws radius 4 without a cursor pick; the full map radius 8 with it.
+void cornerAndFullRadius() {
+    MAP_CHECK(worldmap::drawnRadius(true) == 8 && worldmap::picksCursor(true));
+    MAP_CHECK(worldmap::drawnRadius(false) == 4);
+    MAP_CHECK(!worldmap::picksCursor(false));
+}
+
 } // namespace
 
 int worldMapLookTests() {
@@ -346,6 +353,7 @@ int worldMapLookTests() {
     shrineAbilityBoundary();
     shrineWorldClock();
     hoveredLandBorder();
+    cornerAndFullRadius();
     std::printf("world map look: %s\n", failures ? "FAILED" : "ok");
     return failures;
 }

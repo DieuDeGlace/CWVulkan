@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Corner map radius - 2026-11-14
+
+The first original-game recording showed CubeVulkan's corner map about twice the original's size. A new isolated
+[corner-map contract](specs/steam-corner-map-screen-size-20261114.md) shows the renderer's half-radius argument
+is the inverse of the full-map state, not the Control key: the corner map draws radius 4 with no cursor pick,
+the full map radius 8 with it (the older worldmap-rendering.md reading is superseded here). The engine now
+follows it, and its corner map matches the recording (about 0.27 of the width, on screen). Two CPU checks
+failed on a stub and pass. All five targets, full required-owner CPU without skips, every Vulkan group, SDK
+independence and the Native/Alpha probes pass.
+
+
 ## Shared renderer helpers - 2026-11-14
 
 The renderer files now share one set of image-barrier helpers (`VulkanSync.h`), one shader-module

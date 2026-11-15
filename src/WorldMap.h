@@ -31,6 +31,10 @@ constexpr int MAX_ZOOM = 8;    // Nine native layers; the wheel independently cl
 constexpr int REGION = 16;     // map units a region
 constexpr int BORDER = 3;      // the border built around a region
 constexpr int RADIUS = 8;      // regions each way of the centre (§4.6)
+// The corner map of ordinary play draws half the radius and never picks the cursor; the open
+// full map draws the whole radius and picks (steam-corner-map-screen-size-20261114.md §4.4).
+constexpr int drawnRadius(bool fullMap) { return fullMap ? RADIUS : RADIUS / 2; }
+constexpr bool picksCursor(bool fullMap) { return fullMap; }
 
 // Blocks per map unit at a level.
 int scaleOf(int level);
@@ -59,7 +63,7 @@ class Map {
     struct View {
         glm::dvec3 center{0};     // game blocks
         int level = 0;
-        int radius = RADIUS;      // regions drawn each way (half while Control is held, §4.6)
+        int radius = RADIUS;      // regions drawn each way (drawnRadius: half in the corner map)
         float pitch = 0, yaw = 0; // the world camera's, as CubeVulkan keeps them (radians)
         glm::vec2 cursor{0.5f};   // the screen centre (fractions of the window, from the bottom left)
         float viewScale = 1;      // options mapScale x the eased map scale (§4.1)
