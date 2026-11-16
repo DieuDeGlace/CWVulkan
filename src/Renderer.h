@@ -65,10 +65,11 @@ struct RenderSettings {
     float fov = 60, fogDistance = 400, sceneryDistance = 110;
     // [AntiAliasing]: TAA as the user's Steam TemporalAA mod (its Mods/TemporalAA.ini is
     // imported), then SMAA Ultra as CWSMTAA. Defaults give the softer Omega-style edges. Both
-    // are CubeVulkan's (the games only multisample, docs/specs/shadows.md §3); edges keep 80 %
-    // history rather than the mod's 90 %, so moving creatures and swaying plants trail less.
+    // are CubeVulkan's (the games only multisample, docs/specs/shadows.md §3). 85 % history and
+    // a half-pixel jitter keep the whole picture from wobbling with the jitter (shadows.md §5);
+    // edges keep at least 80 % rather than the mod's 90 %, so moving creatures trail less.
     bool taa = true, smaa = true;
-    float historyWeight = .65f, edgeHistoryWeight = .80f, resolveBlur = .12f, jitterScale = .75f;
+    float historyWeight = .85f, edgeHistoryWeight = .80f, resolveBlur = .12f, jitterScale = .5f;
     void read(const Config &config);
 };
 

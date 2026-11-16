@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Steadier shadows (Steam-look shadow light in two-minute steps) and TAA (85 % history, half-pixel jitter).
+  See [the checkpoint](release-status.md#steadier-shadows-and-taa---2026-11-16).
+
 - [x] Dictionary word choices (any-tag conditions, first plain form, #default for argument-less calls), as Steam's.
   See [the checkpoint](release-status.md#dictionary-word-choices---2026-11-16).
 

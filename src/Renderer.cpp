@@ -75,8 +75,6 @@ glm::mat4 nativeSceneRotation(const Camera &camera) {
 // Half the light-space depth range in blocks: tall mountains far from the
 // player can still cast into the map.
 constexpr float LIGHT_DEPTH = 420;
-// The shadow direction's step: two minutes of the day, half a degree of the sun's path.
-constexpr double SHADOW_DIRECTION_STEP_MS = 2 * 60 * 1000;
 // How far a swaying plant's top can move (vegetation-wind.md §4.1: 0.2 block along y).
 constexpr float PLANT_SWAY_REACH = .2f;
 
@@ -1423,9 +1421,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     glm::vec3 shadowDir = lighting.lightDir;
     float shadowStrength = lighting.shadowStrength;
     if (alphaLook) {
-        // The direction moves in steps of half a degree of the sun's path (two game minutes),
-        // not every frame: re-rasterising the maps from a slowly turning light makes every
-        // edge crawl (shadows.md §4, shimmer 1). The texel snap in lightMatrix handles moves.
+        // The direction moves in SHADOW_DIRECTION_STEP_MS steps (DayNight.h), as the Steam look's.
         const double stepMs = SHADOW_DIRECTION_STEP_MS;
         alpha::ShadowLight caster = alpha::shadowLight(std::floor(dayMs / stepMs) * stepMs, settings.sunShadowStrength, settings.moon);
         shadowDir = caster.direction;

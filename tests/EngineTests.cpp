@@ -44,6 +44,7 @@
 #include "Lore.h"
 #include "MapMarks.h"
 #include "HudAuras.h"
+#include "DayNight.h"
 #include "UsePrompt.h"
 #include "GameCraft.h"
 #include "GameShop.h"
@@ -8264,6 +8265,26 @@ static void hudQuickTests() {
     CHECK(!hudquick::shown("", true));
 }
 
+// The Steam look's shadow light (DayNight.h): taken at the start of each two-minute step of the
+// day, as the Alpha look's is, so the maps hold still between steps (shadows.md §4, shimmer 1),
+// while the sky's sun keeps moving every frame.
+static void shadowStepTests() {
+    const DayNightSettings settings;
+    auto at = [&](float hour, float seconds) { return lightingAt(hour + seconds / 3600.f, settings); };
+    auto angle = [](glm::vec3 a, glm::vec3 b) {
+        return glm::degrees(std::acos(glm::clamp(glm::dot(glm::normalize(a), glm::normalize(b)), -1.f, 1.f)));
+    };
+    const Lighting early = at(9, 10), late = at(9, 100), next = at(9, 130);
+    CHECK(early.lightDir == late.lightDir && early.shadowStrength == late.shadowStrength); // one step
+    CHECK(early.sunDir != late.sunDir); // the sky's sun is not stepped
+    CHECK(late.lightDir != next.lightDir); // 9:02 starts the next step
+    const float turn = angle(late.lightDir, next.lightDir);
+    CHECK(turn > .3f && turn < .7f); // about half a degree of the sun's path
+    CHECK(angle(at(9, 0).lightDir, at(9, 0).sunDir) < 1e-3f); // a step starts on the sun itself
+    const Lighting night = at(1, 10), nightLate = at(1, 100);
+    CHECK(night.lightDir == nightLate.lightDir && night.shadowStrength == nightLate.shadowStrength);
+}
+
 // The dictionary grammar's choices (Speech.cpp; steam-dictionary-alternative-selection-20261116):
 // any tag of an alternative suffices, the first passing alternative wins, a seed-zero name takes
 // the first unconditioned alternative and skips optional groups, and a macro call without a
@@ -9921,6 +9942,10 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "shadowstep") {
+        shadowStepTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "speechgrammar") {
         speechGrammarTests();
         return failures ? 1 : 0;
@@ -11340,6 +11365,7 @@ int main(int argc, char **argv) {
     deathMarkerTests();
     hudAuraTests();
     hudQuickTests();
+    shadowStepTests();
     speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();

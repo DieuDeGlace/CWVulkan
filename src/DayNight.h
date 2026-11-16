@@ -11,7 +11,13 @@
 #include "MoonRules.h"
 #include "SteamSky.h"
 #include <glm/glm.hpp>
+#include <cmath>
 #include <optional>
+
+// Shadow maps follow their light in steps of two game minutes (half a degree of the sun's
+// path), not every frame: re-rasterising them from a slowly turning light makes every edge
+// crawl (shadows.md §4, shimmer 1). Both looks use it; lightMatrix's texel snap handles moves.
+constexpr double SHADOW_DIRECTION_STEP_MS = 2 * 60 * 1000;
 
 struct Lighting {
     glm::vec3 lightDir{0, 0, 1};      // Towards the shadow-casting light (sun or moon).
@@ -51,13 +57,17 @@ inline Lighting lightingAt(float hour, const DayNightSettings &s, const RegionLo
     l.moonDir = glm::normalize(glm::vec3(moon.direction[0], moon.direction[1], moon.direction[2]));
     l.sunDir = steamsky::sunDirection(ms);
     // Shadows: the sun while it is up, the moon after (both are below the horizon at the
-    // switch), each fading out towards the horizon as MoonandShadow's do.
-    if (l.sunDir.z > 0) {
-        l.lightDir = l.sunDir;
-        l.shadowStrength = s.dayStrength * moonrules::horizonFade(l.sunDir.z);
+    // switch), each fading out towards the horizon as MoonandShadow's do. Taken at the start of
+    // the current shadow step, so the maps hold still between steps.
+    const float shadowMs = float(std::floor(ms / SHADOW_DIRECTION_STEP_MS) * SHADOW_DIRECTION_STEP_MS);
+    const glm::vec3 shadowSun = steamsky::sunDirection(shadowMs);
+    if (shadowSun.z > 0) {
+        l.lightDir = shadowSun;
+        l.shadowStrength = s.dayStrength * moonrules::horizonFade(shadowSun.z);
     } else {
-        l.lightDir = l.moonDir;
-        l.shadowStrength = s.nightStrength * moon.weight * moonrules::horizonFade(l.moonDir.z);
+        auto shadowMoon = moonrules::state(shadowMs, s.nightStrength);
+        l.lightDir = glm::normalize(glm::vec3(shadowMoon.direction[0], shadowMoon.direction[1], shadowMoon.direction[2]));
+        l.shadowStrength = s.nightStrength * shadowMoon.weight * moonrules::horizonFade(l.lightDir.z);
     }
     float sunZ = l.sunDir.z;
     float day = glm::smoothstep(-.12f, .25f, sunZ);

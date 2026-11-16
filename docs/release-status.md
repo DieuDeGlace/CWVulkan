@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Steadier shadows and TAA - 2026-11-16
+
+The user saw the whole picture jitter with TAA and shadows flicker; both are CubeVulkan additions (neither game
+has shadow maps or a temporal pass). The Steam look re-aimed its shadow maps from the moving sun every frame;
+its shadow light now turns in two-minute steps of the day (about half a degree), as the Alpha look's already
+did. TAA now keeps 85 % history (was 65 %) with a half-pixel jitter (was 0.75); both remain settings. Three CPU
+checks failed on the previous code and pass. All five targets, full required-owner CPU without skips, every
+Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Dictionary word choices - 2026-11-16
 
 The first Steam recording names the starting shield Common Iron Shield; CubeVulkan showed COMMON IRON. A new
