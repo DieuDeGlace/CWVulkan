@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Quick buttons shown only with their text and hidden with the full map, as Steam's; checked against recordings.
+  See [the checkpoint](release-status.md#quick-button-visibility---2026-11-15).
+
 - [x] Missions marked in a Steam character's save (+0xb8) load as known and are written back, as Steam's; checked against a recording.
   See [the checkpoint](release-status.md#marked-missions-in-steam-saves---2026-11-15).
 

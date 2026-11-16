@@ -1173,6 +1173,8 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
             plasmaPlaced(out, "staminabar", bottomMiddle, {0, -180}, f);
         }
         auto quick = [&](const State::Quick &q, glm::vec2 at, glm::vec2 offset) {
+            if (!hudquick::shown(q.info, state.fullMapOpen))
+                return;
             PlasmaFrame f;
             f.texts = {{"name", wide(q.key)}, {"info", wide(q.info)}, {"count", wide(q.count)}};
             f.colors = {{"name", glm::vec4(1)}, {"info", q.infoColor}};

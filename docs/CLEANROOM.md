@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Quick-button visibility - 2026-11-15
+
+Steam recordings show no use button (E) in ordinary play: it appears only with a prompt such as Talk or
+Revive, and no quick buttons are shown while the full map is open. CubeVulkan drew a bare E and the Q, E
+and R buttons at all times. A new isolated [quick-button contract](specs/steam-use-button-visibility-20261115.md)
+shows each button is shown exactly when its info text is not empty and the full interactive map is closed.
+The engine now follows it and matches the recordings. Three CPU checks failed on a stub and pass. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha
+probes pass.
+
+
 ## Marked missions in Steam saves - 2026-11-15
 
 A Steam recording showed the Laron Lava Lake mission on the map with its gnome icon, green label and two

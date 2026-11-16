@@ -792,6 +792,7 @@ void equipmentCallbacks() {
     state.ring.name = "Synthetic";
     state.quickItem.icon = "synthetic-equipment";
     state.quickItem.original = weapon;
+    state.quickItem.info = "Synthetic"; // (a quick button shows only with its item's name)
     hud.draw(state, vertices);
     const auto &ringRequests = hud.itemDraws();
     GUI_CHECK(ringRequests.size() == 3);

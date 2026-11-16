@@ -51,6 +51,13 @@ struct Layout;
 class ChatLine;
 struct CubModel;
 
+namespace hudquick {
+// A quick button (item Q, use E, skill R) is shown exactly when its info text is not empty and
+// the full interactive map is closed (steam-use-button-visibility-20261115.md §b.3): so the use
+// button appears only with a prompt such as Talk or Revive.
+inline bool shown(const std::string &info, bool fullMapOpen) { return !info.empty() && !fullMapOpen; }
+} // namespace hudquick
+
 class Hud {
   public:
     Hud() = default;
@@ -180,6 +187,7 @@ class Hud {
             glm::vec4 infoColor{1};
         };
         Quick quickItem, quickUse, quickSkill;
+        bool fullMapOpen = false; // the full interactive map is open: every quick button hides
         struct Ring {
             struct Item {
                 std::string icon;

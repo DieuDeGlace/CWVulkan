@@ -8255,6 +8255,15 @@ static void loreAndArtifacts() {
 // The HUD aura strip (HudAuras.h; steam-hud-poi-count-widget-20261115.md and
 // steam-hud-aura-strip-constants-20261115.md): one template copy per buff with an icon, in
 // list order at x 45 + 50 per shown entry, y 120; counts for 0x21/0x22, rounded time else.
+// The quick buttons' visibility (Hud.h hudquick; steam-use-button-visibility-20261115.md):
+// shown with a non-empty info text, and never while the full interactive map is open.
+static void hudQuickTests() {
+    CHECK(!hudquick::shown("", false)); // no prompt: the use button hides
+    CHECK(hudquick::shown("Talk", false) && hudquick::shown("Revive", false));
+    CHECK(!hudquick::shown("Talk", true)); // the full map hides every quick button
+    CHECK(!hudquick::shown("", true));
+}
+
 static void hudAuraTests() {
     using namespace hudauras;
     CHECK(FIRST_X == 45.0f && PITCH == 50.0f && Y == 120.0f && SCALE == 3.0f);
@@ -9870,6 +9879,10 @@ int main(int argc, char **argv) {
         hudAuraTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "hudquick") {
+        hudQuickTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "soundrules") {
         soundRules();
         return failures ? 1 : 0;
@@ -11284,6 +11297,7 @@ int main(int argc, char **argv) {
     mapMarkers();
     deathMarkerTests();
     hudAuraTests();
+    hudQuickTests();
     plasmaLibrary();
     useKeyTargets();
     useKeyPrompts();

@@ -8957,6 +8957,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     return key && speech.has(key) ? speech.say(key, context, chatter) : std::string();
                 };
                 hs.quickItem.key = "Q", hs.quickUse.key = "E", hs.quickSkill.key = "R";
+                hs.fullMapOpen = mapOpen;
                 // An item's picture for a button: its sprite rendered once into the HUD's icons.
                 auto showIcon = [&](const std::string &sprite) {
                     loadInventorySprite(sprite);
