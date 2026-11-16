@@ -167,7 +167,9 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
         if (c == '{') {
             size_t end = closing(text, at);
             auto alts = alternatives(text.substr(at + 1, end - at - 1));
-            // The first alternative whose tags all hold; else one without tags, at random.
+            // The first conditioned alternative, in written order, with any of its tags present;
+            // else one without tags: the first in a seed-zero expansion, otherwise at random
+            // (steam-dictionary-alternative-selection-20261116 §a-b).
             const std::string *chosen = nullptr;
             std::vector<const std::string *> free;
             for (auto &a : alts) {
@@ -175,15 +177,16 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 if (tags.empty())
                     free.push_back(&a);
                 else if (!chosen) {
-                    bool all = true;
+                    bool any = false;
                     for (auto &t : tags)
-                        all = all && context.tags.count(t);
-                    if (all)
+                        any = any || context.tags.count(t);
+                    if (any)
                         chosen = &a;
                 }
             }
             if (!chosen && !free.empty())
-                chosen = free[std::uniform_int_distribution<size_t>(0, free.size() - 1)(random)];
+                chosen = context.firstChoice ? free.front()
+                                             : free[std::uniform_int_distribution<size_t>(0, free.size() - 1)(random)];
             if (chosen) {
                 size_t inner = 0;
                 out += expand(*chosen, inner, '\0', context, random, depth + 1, pages, words, style);
@@ -191,7 +194,8 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
             at = end + 1;
         } else if (c == '[') {
             size_t end = closing(text, at);
-            if (std::uniform_int_distribution<int>(0, 1)(random)) {
+            // (a seed-zero expansion skips every optional group, §d step 4)
+            if (!context.firstChoice && std::uniform_int_distribution<int>(0, 1)(random)) {
                 std::string inner = text.substr(at + 1, end - at - 1);
                 size_t i = 0;
                 out += expand(inner, i, '\0', context, random, depth + 1, pages, words, style);
@@ -316,6 +320,7 @@ std::string Speech::name(const std::string &id, bool plural) const {
     if (it == names.end())
         return "";
     Context context;
+    context.firstChoice = true;
     if (plural)
         context.tags.insert("plural");
     std::mt19937 fixed(0);
@@ -345,13 +350,17 @@ std::string Speech::text(const std::string &key, const std::set<std::string> &ta
         return key;
     Context context;
     context.tags = tags;
+    context.firstChoice = true;
     context.value = [&](const std::string &fn, const std::string &args) -> std::string {
         auto it = macros.find(fn);
         if (it == macros.end())
             return "";
         if (args.empty())
             return it->second;
+        // The nested qualifiers (§c): each plain argument, "default" when there is none, and
+        // with "*" the caller's own; a name=value argument binds a macro, not a qualifier.
         std::set<std::string> passed;
+        bool plain = false;
         std::string arg;
         std::istringstream in(args);
         while (std::getline(in, arg, ',')) {
@@ -359,9 +368,11 @@ std::string Speech::text(const std::string &key, const std::set<std::string> &ta
             arg.erase(arg.find_last_not_of(' ') + 1);
             if (arg == "*")
                 passed.insert(tags.begin(), tags.end());
-            else if (!arg.empty())
-                passed.insert(arg);
+            else if (!arg.empty() && arg.find('=') == std::string::npos)
+                passed.insert(arg), plain = true;
         }
+        if (!plain)
+            passed.insert("default");
         return hasEntry(it->second) ? text(it->second, passed, macros) : it->second;
     };
     std::mt19937 fixed(0);

@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Dictionary word choices (any-tag conditions, first plain form, #default for argument-less calls), as Steam's.
+  See [the checkpoint](release-status.md#dictionary-word-choices---2026-11-16).
+
 - [x] Interface vertex upload without reading back the mapped buffer (inventory about 2.5x faster).
   See [the checkpoint](release-status.md#interface-vertex-upload---2026-11-15).
 

@@ -28,6 +28,10 @@ class Speech {
         // Set when a line asked for a value the caller did not have (the line is incomplete).
         mutable bool missing = false;
         std::function<std::optional<glm::vec4>(const std::string &fn, const std::string &args)> colour;
+        // A seed-zero expansion (names and terms, steam-dictionary-alternative-selection-20261116 §b):
+        // a brace group falling back to its unconditioned alternatives takes the first, and an
+        // optional [...] group is skipped, instead of drawing at random.
+        bool firstChoice = false;
     };
     bool load(const std::filesystem::path &dictionary, std::string &error);
     bool has(const std::string &id) const { return lines.count(id) > 0; }

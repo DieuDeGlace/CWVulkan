@@ -8264,6 +8264,44 @@ static void hudQuickTests() {
     CHECK(!hudquick::shown("", true));
 }
 
+// The dictionary grammar's choices (Speech.cpp; steam-dictionary-alternative-selection-20261116):
+// any tag of an alternative suffices, the first passing alternative wins, a seed-zero name takes
+// the first unconditioned alternative and skips optional groups, and a macro call without a
+// plain argument adds #default to the nested qualifiers.
+static void speechGrammarTests() {
+    const auto dir = fs::temp_directory_path() / ("CubeVulkan-grammar-" + std::to_string(GetCurrentProcessId()));
+    fs::create_directories(dir);
+    {
+        std::ofstream out(dir / "dict.xml", std::ios::binary);
+        out << "<speech id=\"line\">x</speech>\n"
+               "<name id=\"Shield\" tags=\"n\">{ #default Shield | #plural Shields }</name>\n"
+               "<name id=\"Sword\" tags=\"n\">{ #plural Swords | Sword }</name>\n"
+               "<name id=\"MaterialIron\">Iron @item(*)</name>\n"
+               "<name id=\"item:common\">common @materialitem(*,item)</name>\n"
+               "<name id=\"either\">{ #a #b Both | Neither }</name>\n"
+               "<name id=\"order\">{ First | #b Tagged | Second }</name>\n"
+               "<name id=\"free\">{ One | Two | Three }</name>\n"
+               "<name id=\"optional\">[maybe] always</name>\n";
+    }
+    Speech speech;
+    std::string why;
+    CHECK(speech.load(dir / "dict.xml", why));
+    const std::map<std::string, std::string> shield = {{"materialitem", "MaterialIron"}, {"item", "Shield"}};
+    const std::map<std::string, std::string> sword = {{"materialitem", "MaterialIron"}, {"item", "Sword"}};
+    CHECK(speech.text("item:common", {"n"}, shield) == "common Iron Shield");
+    CHECK(speech.text("item:common", {"n"}, sword) == "common Iron Sword");
+    CHECK(speech.text("Shield", {"plural"}, {}) == "Shields");
+    CHECK(speech.text("Shield", {}, {}) == ""); // neither condition, no unconditioned alternative
+    CHECK(speech.text("either", {"b"}, {}) == "Both"); // any tag of the alternative suffices
+    CHECK(speech.text("order", {"b"}, {}) == "Tagged"); // a passing conditioned alternative wins
+    CHECK(speech.text("order", {}, {}) == "First");
+    CHECK(speech.text("free", {}, {}) == "One");
+    CHECK(speech.text("optional", {}, {}) == "always");
+    CHECK(speech.name("Shield", false) == "" && speech.name("Shield", true) == "Shields");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
 static void hudAuraTests() {
     using namespace hudauras;
     CHECK(FIRST_X == 45.0f && PITCH == 50.0f && Y == 120.0f && SCALE == 3.0f);
@@ -9883,6 +9921,10 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "speechgrammar") {
+        speechGrammarTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "soundrules") {
         soundRules();
         return failures ? 1 : 0;
@@ -11298,6 +11340,7 @@ int main(int argc, char **argv) {
     deathMarkerTests();
     hudAuraTests();
     hudQuickTests();
+    speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();
     useKeyPrompts();

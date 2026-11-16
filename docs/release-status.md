@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Dictionary word choices - 2026-11-16
+
+The first Steam recording names the starting shield Common Iron Shield; CubeVulkan showed COMMON IRON. A new
+isolated [dictionary contract](specs/steam-dictionary-alternative-selection-20261116.md) fixes how the game's
+dictionary chooses alternatives: any tag suffices, the first passing one wins, names and terms fall back to the
+first plain form and skip optional groups, and a template call without a plain argument adds #default. The engine
+now follows it and names the shield as Steam does. Five CPU checks failed on the previous code and pass. All five
+targets, full required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha probes pass.
+
+
 ## Interface vertex upload - 2026-11-15
 
 With the inventory open the engine ran at about 12-16 frames per second against about 50 with the system menu.
