@@ -265,11 +265,14 @@ bool Renderer::uploadOverlay() {
     }
     if (!vb.mapped)
         return false;
+    // Each vertex is finished locally and written once: the mapped buffer is write-combined,
+    // so reading it back (as an in-place divide would) costs far more than the copy itself.
     auto *out = (OverlayVertex *)vb.mapped;
     for (size_t i = 0; i < overlayVertices.size(); i++) {
-        out[i] = overlayVertices[i];
-        out[i].u /= overlayWidth; // Atlas texels to normalised coordinates.
-        out[i].v /= overlayHeight;
+        OverlayVertex v = overlayVertices[i];
+        v.u /= overlayWidth; // Atlas texels to normalised coordinates.
+        v.v /= overlayHeight;
+        out[i] = v;
     }
     return true;
 }

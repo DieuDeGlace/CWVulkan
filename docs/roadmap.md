@@ -8,6 +8,9 @@ individual feature documents.
 
 ## Implemented
 
+- [x] Interface vertex upload without reading back the mapped buffer (inventory about 2.5x faster).
+  See [the checkpoint](release-status.md#interface-vertex-upload---2026-11-15).
+
 - [x] Quick buttons shown only with their text and hidden with the full map, as Steam's; checked against recordings.
   See [the checkpoint](release-status.md#quick-button-visibility---2026-11-15).
 

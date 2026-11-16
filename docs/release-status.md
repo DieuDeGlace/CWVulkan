@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Interface vertex upload - 2026-11-15
+
+With the inventory open the engine ran at about 12-16 frames per second against about 50 with the system menu.
+Section timing traced it to the interface vertex upload, which read back the mapped (write-combined) vertex
+buffer for every vertex. Each vertex is now finished locally and written once, with identical output; the
+inventory runs at about 27-40 frames per second in the same runs. The --inventory test flag now takes the
+opening region refresh a key press gives, so its bag lists the region's items as in the Steam recording. All
+five targets, full required-owner CPU without skips, every Vulkan group, SDK independence and the Native/Alpha
+probes pass.
+
+
 ## Quick-button visibility - 2026-11-15
 
 Steam recordings show no use button (E) in ordinary play: it appears only with a prompt such as Talk or

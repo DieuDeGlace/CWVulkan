@@ -5472,6 +5472,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         inventoryView.canonicalTabs = nativeInventory ? &nativeInventory->inventory.tabs : nullptr;
         inventoryView.crafting.canonicalTabs = nativeInventory ? &craftingCollection.rows : nullptr;
         inventoryView.vendor.canonicalTabs = nativeInventory ? &shopCollection.rows : nullptr;
+        // --inventory starts with the bag open: it takes the opening refresh a press would give,
+        // once the player is there to choose the region from.
+        if (openInventory && inventoryOpen && nativeInventory && !inventoryRegionActive && spawned.playerRecord())
+            refreshBagOpening();
         // Native identification retains its independent root after the bag hides.
         // Recording-only inventory business remains in this presentation adapter.
         if (inventoryOpen || (nativeInventory && identify.open)) {
