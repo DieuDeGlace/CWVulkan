@@ -1855,14 +1855,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             }
     }
     // One sky model with its own look constants (see common.glsl's Push).
-    auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look) {
+    auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look, uint32_t flags = 0) {
         const GpuMesh &m = meshes[mesh];
         if (!m.indexCount)
             return;
         VkDeviceSize zero = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
-        PushConstants pc{model, glm::vec4(0), look, glm::uvec4(0)};
+        PushConstants pc{model, glm::vec4(float(flags), 0, 0, 0), look, glm::uvec4(0)};
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
         draws++;
@@ -2165,15 +2165,20 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // shows only its nearest surface. They inherit the frame fog reciprocal.
     if (!alphaLook && !cloudDraws.empty()) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, steamCloudPipeline);
+        // Use WORLD vertex lighting with the draw's white material and no point lights.
+        // Keep the direct light multiplier at one even in the zero-opacity depth draw.
+        const auto drawCloud = [&](const CloudDraw &c, float opacity) {
+            drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, opacity, 0), STEAM_WORLD | QUEUED_WORLD);
+        };
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity >= 1)
-                drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, 0, 0));
+                drawCloud(c, 1);
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity < 1)
-                drawSkyModel(c.mesh, c.model, glm::vec4(0, 0, 0, 0));
+                drawCloud(c, 0);
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity < 1)
-                drawSkyModel(c.mesh, c.model, glm::vec4(c.opacity, 0, 0, 0));
+                drawCloud(c, c.opacity);
     }
     // Steam's stars last (§B.6): cube models on a dome round the camera, just inside the far
     // plane, fading in as the night deepens. (Whether the game's dome follows the camera, and

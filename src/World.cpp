@@ -230,17 +230,16 @@ void World::loadSkyModels() {
         renderer.setSkyModels(skyModels);
         return;
     }
-    // Steam (§B.7): cloud02 recoloured a grey blue, cloud-dark as it comes; the stars (§B.6).
-    // (cloud-dark's shade colour, 10, 0, 20, has no counterpart in CubeVulkan's Steam meshes.)
+    // Steam cloud materials from docs/specs/steam-cloud-mode10-color-20261117.md.
     if (load("cloud02.cub", cloud)) {
         const uint8_t steamCloud[3] = {100, 130, 180};
         for (size_t i = 0; i + 2 < cloud.rgb.size(); i += 3)
             if (cloud.rgb[i] | cloud.rgb[i + 1] | cloud.rgb[i + 2])
                 std::copy(steamCloud, steamCloud + 3, cloud.rgb.begin() + i);
-        skyModels.cloud = renderer.upload(cloud.mesh());
+        skyModels.cloud = renderer.upload(cloud.mesh(0, {}, steamvoxel::CubEncoding::Unhalved));
     }
     if (load("cloud-dark.cub", dark))
-        skyModels.darkCloud = renderer.upload(dark.mesh());
+        skyModels.darkCloud = renderer.upload(dark.mesh(0, {10, 0, 20}));
     if (load("cube.cub", cube))
         skyModels.starCube = renderer.upload(cube.mesh());
     renderer.setSkyModels(skyModels);

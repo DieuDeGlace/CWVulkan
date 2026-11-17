@@ -16,9 +16,8 @@ struct CubModel {
     bool exposed(int x, int y, int z) const;
     bool attachmentMarker(int x, int y, int z) const;
     VoxelColor color(int x, int y, int z) const;
-    // Mesh in voxel units, centred on x/y with its base at z = 0. In the Alpha look each corner
-    // fades towards `shade`, the model's shade colour, as it is closed in (black for all but
-    // the clouds).
+    // Mesh in voxel units, centred on x/y with its base at z = 0. Alpha corners fade toward
+    // shade as they close in. The Steam CUB bake uses shade as its additive RGB.
     Mesh mesh(uint8_t flags = 0, glm::u8vec3 shade = glm::u8vec3(0), steamvoxel::CubEncoding = steamvoxel::CubEncoding::Stock,
               bool hideAttachmentMarkers = false) const;
 };

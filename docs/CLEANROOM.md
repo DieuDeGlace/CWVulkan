@@ -1,5 +1,20 @@
 # Clean-room process
 
+## Steam cloud model color and light - 2026-11-17
+
+Bright clouds retain their full baked color. Dark clouds add their native shade
+before packing. Steam clouds use the shared WORLD vertex light with white
+material and zero point lights. The mode-10 pixel stage keeps the frame fog
+and independent draw opacity. The [isolated color trace](specs/steam-cloud-mode10-color-20261117.md)
+records the active shader and the finite arithmetic references.
+
+The two held exposed-corner vectors pass. In the licensed morning replay the
+median gap across 1853 sampled cloud colors dropped from
+58.0 to 11.667 RGB counts
+per channel. The camera is estimated. Owner-data, Vulkan and extractor checks
+pass. Frame-specific retained depth state and exact native GPU rounding remain
+outside these comparisons.
+
 ## Steam cloud view range and fog - 2026-11-17
 
 Steam-look cloud cells follow the live terrain range and fixed camera eye. The
@@ -12,7 +27,7 @@ Licensed morning horizon and surface swim runs exercised the updated pass
 with 793 loaded sources. The morning replay shows both cloud formations in the
 Steam reference at comparable screen positions. They remain darker in the
 replay, which uses an estimated camera pose. The owner, Vulkan and extractor
-checks pass. Cloud model baking and vertex lighting remain open.
+checks pass.
 
 ## Ordinary NPC Talk activation - 2026-11-17
 

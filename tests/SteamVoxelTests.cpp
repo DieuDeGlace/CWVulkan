@@ -30,6 +30,11 @@ int steamVoxelTests() {
     }
     check(cubCorner({255, 255, 255}, {}, 0, open, {}, CubEncoding::Unhalved) == glm::u8vec4(255, 255, 255, 254),
           "unhalved sprite mode preserves native alpha2 low-byte wrap");
+    // The exposed bright and dark corners in the held Steam mode-10 contract.
+    check(cubCorner({100, 130, 180}, {}, 0, open, {}, CubEncoding::Unhalved) == glm::u8vec4(100, 130, 180, 254),
+          "bright cloud packs full baked RGB and alpha2 low byte");
+    check(cubCorner({90, 140, 190}, {}, 0, open, {10, 0, 20}) == glm::u8vec4(50, 70, 105, 255),
+          "dark cloud adds its shade before halving and packing");
     check(cubCorner({1, 2, 3}, {}, 0, open) == glm::u8vec4(0, 1, 1, 255),
           "half-color quantization truncates rather than rounding or canceling losslessly");
     check(cubCorner({255, 255, 255}, {}, 0, open, {255, 255, 255}) == glm::u8vec4(127, 127, 127, 255),

@@ -108,8 +108,8 @@ Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncod
         };
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = steamvoxel::CORNERS[face][k];
-            const auto encoded =
-                steamvoxel::cubCorner({c.r, c.g, c.b}, {x + corner[0], y + corner[1], z + corner[2]}, face, probe, {}, encoding);
+            const auto encoded = steamvoxel::cubCorner({c.r, c.g, c.b}, {x + corner[0], y + corner[1], z + corner[2]},
+                                                       face, probe, shadeColour, encoding);
             return CornerShade{encoded.r, encoded.g, encoded.b, encoded.a};
         };
         meshFaces({0, 0, 0}, {sx, sy, sz}, isSolid, nativeColour, shade, m, 1.f, offset, VoxelLayout::SteamCub, geometry);
