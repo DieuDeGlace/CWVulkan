@@ -93,7 +93,10 @@ The default spans are 240 blocks at 4096² and 50 blocks at 2048². Both use
 the light's depth range of ±420 blocks. The light direction and shadow
 strength use two-game-minute steps in both looks. The map centres snap to
 whole light-space texels. Casters use the same model and optional foliage
-motion as the world draw while the maps are refreshed.
+motion as the world draw while the maps are refreshed. Both maps use the
+caster's bounds projected into the light's view. The scenery distance still
+limits small props. An elevated prop can cast into the near map from beyond
+its receiver radius.
 
 `shaders/lighting.glsl` samples a 3 × 3 grid of bilinear depth comparisons.
 It offsets the lookup by 0.75 texel along the face normal, floors the basic
@@ -105,8 +108,11 @@ the enhancement.
 
 On the tested Radeon, the fixed-camera scene produced a visible cast shadow
 with either look. Repeated frames and a subtexel focus move had identical
-pixels. This covers a fixed light and static geometry. Timing at light-step
-and cascade crossings and moving foliage still needs broader motion checks.
+pixels. The casting-prop crossover fixture also kept a continuous shadow
+while its centre passed the near radius. With the shipped TAA and SMAA
+settings, the sampled shadow interior held the same brightness across ten
+frames of small camera motion in each look. Light-step transitions, the
+receiver blend ring and moving foliage still need broader motion checks.
 
 ## 5. CubeVulkan today: TAA and SMAA (additions)
 

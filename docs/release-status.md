@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Shadow caster crossing the near radius - 2026-11-17
+
+An elevated prop can project a shadow inside the near cascade while its centre
+lies beyond the near receiver radius. The renderer now applies the scenery
+distance limit and tests the caster's bounds in the light's view for both maps.
+The Alpha and Steam image cases reproduced the abrupt loss on the previous
+build and kept the shadow on the candidate. The ten-frame follow-up with TAA
+and SMAA active held the sampled shadow interior at the same brightness in
+each look. The full owner-data and Vulkan suites passed.
+[Shadow settings and evidence](specs/shadows.md#4-cubevulkan-today-shadow-maps-an-addition).
+
 ## Alpha terrain, shadows and temporal resolve review - 2026-11-17
 
 The held Steam trace covers the native height and palette inputs and

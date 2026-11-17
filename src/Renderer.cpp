@@ -1739,8 +1739,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     };
 
     // --- Shadow maps ---
-    auto shadowPass = [&](Image &map, uint32_t res, const glm::mat4 &matrix, float cascade,
-                          float radius) {
+    auto shadowPass = [&](Image &map, uint32_t res, const glm::mat4 &matrix, float cascade) {
         auto toWrite = barrier(map.image, VK_IMAGE_ASPECT_DEPTH_BIT,
                                     shadowsInitialized ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                                                        : VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1775,8 +1774,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                 glm::vec3 c;
                 float r;
                 sphereOf(item, c, r);
-                // Small props only cast inside the near map's radius.
-                if (r < 2 && glm::length(glm::vec2(c - focus)) > std::min(radius, settings.sceneryDistance))
+                // An elevated caster can project into the cascade from outside its receiver radius.
+                if (r < 2 && glm::length(glm::vec2(c - focus)) > settings.sceneryDistance)
                     continue;
                 // Light frustum, ignoring its near plane (depth clamp catches casters behind it).
                 bool inside = true;
@@ -1798,8 +1797,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // Maps are only redrawn while shadows are visible; otherwise they are
     // cleared once so the descriptors always reference valid contents.
     if (shadowsOn || !shadowsInitialized) {
-        shadowPass(shadowFar, settings.resolution, u.lightFar, 0, farRadius);
-        shadowPass(shadowNear, settings.cascades ? settings.nearResolution : 16, u.lightNear, 1, nearRadius);
+        shadowPass(shadowFar, settings.resolution, u.lightFar, 0);
+        shadowPass(shadowNear, settings.cascades ? settings.nearResolution : 16, u.lightNear, 1);
         shadowsInitialized = true;
     }
 

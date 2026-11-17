@@ -81,6 +81,64 @@ bool revealedSkyHistory(Renderer &renderer, GLFWwindow *window, const std::files
     return (*old)[4] != (*reset)[4] && (*reset)[0] != (*sky)[0] && (*reset)[8] != (*sky)[8] &&
            (*accumulated)[4] == (*reset)[4];
 }
+// The roof is small enough to use scenery culling. Its projected shadow
+// falls ten blocks inward from the near cascade's receiver radius.
+bool shadowAcrossCascade(Renderer &renderer, RenderStyle style, const std::filesystem::path &root) {
+    const char *name = style == RenderStyle::Alpha ? "alpha" : "steam";
+    renderer.settings.smaa = renderer.settings.taa = renderer.settings.shadows = false;
+    const Lighting light = lightingAt(10.f, {});
+    const auto &settings = renderer.settings;
+    const glm::vec3 direction = style == RenderStyle::Alpha
+        ? alpha::shadowLight(light.timeMs, settings.sunShadowStrength, settings.moon).direction : light.lightDir;
+    const glm::vec2 towardsLight = glm::normalize(glm::vec2(direction));
+    constexpr float shadowInset = 10.f;
+    const glm::vec3 spot(towardsLight * (settings.nearRadius - shadowInset), 0.f);
+    const glm::vec3 roof(towardsLight * settings.nearRadius,
+                         shadowInset * direction.z / glm::length(glm::vec2(direction)));
+    const auto plane = [&](glm::vec3 center, float radius, bool castsShadow) {
+        Mesh mesh;
+        for (const auto corner : {glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1)}) {
+            const auto point = center + glm::vec3(corner * radius, 0.f);
+            mesh.vertices.push_back({point.x, point.y, point.z, 87, 93, 102, 255, 4, STEAM_VERTEX, 0, 0});
+        }
+        mesh.min = center - glm::vec3(radius, radius, 0.f);
+        mesh.max = center + glm::vec3(radius, radius, 0.f);
+        mesh.indices = {0, 1, 2, 0, 2, 3};
+        DrawItem draw;
+        draw.mesh = renderer.upload(mesh);
+        draw.kind = DrawKind::Terrain;
+        draw.castShadow = castsShadow;
+        return draw;
+    };
+    const std::vector<DrawItem> geometry{plane(spot, 4.f, false), plane(roof, .65f, true)};
+    Camera camera;
+    camera.eye = spot + glm::vec3(towardsLight.y * 2.f, -towardsLight.x * 2.f, 7.f);
+    camera.target = spot;
+    const auto sample = [&](const char *label, float focusAlong) -> std::optional<int> {
+        const auto path = root / (std::string("cascade-") + name + "-" + label + ".png");
+        renderer.capture(path.string());
+        renderer.frame(camera, light, glm::vec3(towardsLight * focusAlong, 0.f), 0, geometry, {});
+        int w = 0, h = 0, channels = 0;
+        auto *pixels = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+        std::optional<int> result;
+        if (pixels && w > 0 && h > 0) {
+            const auto *pixel = pixels + 4 * ((h / 2) * w + w / 2);
+            result = pixel[0] + pixel[1] + pixel[2];
+        }
+        stbi_image_free(pixels);
+        return result;
+    };
+    const auto lit = sample("lit", .08f);
+    renderer.settings.shadows = true;
+    const auto fromInside = sample("inside", .08f);
+    const auto fromOutside = sample("outside", -.08f);
+    renderer.settings.cascades = false;
+    const auto farMap = sample("far", -.08f);
+    if (!lit || !fromInside || !fromOutside || !farMap)
+        return false;
+    const int darkness = *lit - *fromInside;
+    return darkness > 24 && *lit - *farMap > 24 && (*lit - *fromOutside) * 5 > darkness * 4;
+}
 } // namespace
 
 int cameraRenderTests() {
@@ -105,7 +163,8 @@ int cameraRenderTests() {
         settings.fov = 50;
         settings.water.style = waterlook::Style::Native;
         settings.vsync = settings.shadows = settings.taa = settings.smaa = false;
-        settings.resolution = settings.nearResolution = 64;
+        settings.resolution = 1024;
+        settings.nearResolution = 512;
         settings.fogDistance = settings.sceneryDistance = 1000000;
         std::string error;
         if (!renderer.init(window, settings, error)) {
@@ -213,6 +272,9 @@ int cameraRenderTests() {
             std::cout << "Temporal resolve revealed sky " << (history ? "PASS" : "FAIL") << '\n';
             failures += !history;
         }
+        const bool shadow = shadowAcrossCascade(renderer, style, root);
+        std::cout << "Shadow cascade " << name << (shadow ? " PASS" : " FAIL") << '\n';
+        failures += !shadow;
         renderer.shutdown();
         culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
         std::cout << "Camera orientation " << name << (orientation ? " PASS" : " FAIL") << " coincident target/pole\n";
