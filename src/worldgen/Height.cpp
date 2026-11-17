@@ -6,6 +6,7 @@
 #include "NativeCrt.h"
 #include "worldgen/Noise.h"
 
+#include <array>
 #include <cmath>
 
 namespace worldgen {
@@ -144,7 +145,57 @@ bool linked(int32_t cx, int32_t cy, bool big, uint32_t salt) {
     return oddHash((uint32_t)cy * 57u + salt + (uint32_t)cx);
 }
 
-Int2 landmarkOf(int32_t cx, int32_t cy) { return cellPoint(cx, cy, bigCell(cx, cy)); }
+struct RoadCell {
+    Int2 point{};
+    std::array<Int2, 4> ends{};
+    size_t count = 0;
+};
+
+RoadCell roadCell(int32_t cx, int32_t cy) {
+    const bool big = bigCell(cx, cy);
+    RoadCell cell{cellPoint(cx, cy, big)};
+    struct Link {
+        int32_t hx, hy;
+        bool hashBig;
+        uint32_t salt;
+        int32_t ox, oy;
+    };
+    const Link links[] = {
+        {cx, cy, big, ROAD_EAST_WEST_SALT, cx - 1, cy},
+        {cx + 1, cy, bigCell(cx + 1, cy), ROAD_EAST_WEST_SALT, cx + 1, cy},
+        {cx, cy, big, ROAD_NORTH_SOUTH_SALT, cx, cy - 1},
+        {cx, cy + 1, bigCell(cx, cy + 1), ROAD_NORTH_SOUTH_SALT, cx, cy + 1},
+    };
+    for (const auto &link : links) {
+        if (!linked(link.hx, link.hy, link.hashBig, link.salt))
+            continue;
+        const Int2 end = cellPoint(link.ox, link.oy, bigCell(link.ox, link.oy));
+        if (end != cell.point)
+            cell.ends[cell.count++] = end;
+    }
+    return cell;
+}
+
+using RoadNeighbourhood = std::array<RoadCell, 9>;
+
+const RoadNeighbourhood &roadNeighbourhood(int32_t cx, int32_t cy) {
+    struct Entry {
+        Int2 centre{INT32_MIN, INT32_MIN}; // outside the range of shifted block coordinates
+        RoadNeighbourhood cells{};
+    };
+    // Landmark coordinates and link membership depend only on integer cell keys.
+    // Keep both sides of each nearby boundary within a thread's four slots.
+    thread_local std::array<Entry, 4> cache;
+    auto &entry = cache[(uint32_t(cx) & 1u) | ((uint32_t(cy) & 1u) << 1)];
+    if (entry.centre != Int2{cx, cy}) {
+        size_t index = 0;
+        for (int32_t x = cx - 1; x <= cx + 1; ++x)
+            for (int32_t y = cy - 1; y <= cy + 1; ++y)
+                entry.cells[index++] = roadCell(x, y);
+        entry.centre = {cx, cy};
+    }
+    return entry.cells;
+}
 
 // --- Final height helpers (§8) ---
 
@@ -345,32 +396,12 @@ float roads(int32_t x, int32_t y, int kind, float w) {
     const int32_t cy0 = floorDiv((int32_t)(py / 65536), PLACE_SHIFT);
     // 3. Every road between the landmarks of the 3 x 3 cells around it.
     float road = 1.0f;
-    for (int32_t cx = cx0 - 1; cx <= cx0 + 1; cx++)
-        for (int32_t cy = cy0 - 1; cy <= cy0 + 1; cy++) {
-            const bool big = bigCell(cx, cy);
-            const Int2 here = cellPoint(cx, cy, big);
-            float cell = 1.0f;
-            struct Link {
-                int32_t hx, hy;
-                bool hashBig;
-                uint32_t salt;
-                int32_t ox, oy;
-            };
-            const Link links[4] = {
-                {cx, cy, big, ROAD_EAST_WEST_SALT, cx - 1, cy},
-                {cx + 1, cy, bigCell(cx + 1, cy), ROAD_EAST_WEST_SALT, cx + 1, cy},
-                {cx, cy, big, ROAD_NORTH_SOUTH_SALT, cx, cy - 1},
-                {cx, cy + 1, bigCell(cx, cy + 1), ROAD_NORTH_SOUTH_SALT, cx, cy + 1},
-            };
-            for (const Link &l : links) {
-                if (!linked(l.hx, l.hy, l.hashBig, l.salt))
-                    continue;
-                const Int2 there = landmarkOf(l.ox, l.oy);
-                if (there != here)
-                    cell = cell * segment(px, py, here, there);
-            }
-            road = road * cell;
-        }
+    for (const auto &cell : roadNeighbourhood(cx0, cy0)) {
+        float product = 1.0f;
+        for (size_t i = 0; i < cell.count; ++i)
+            product = product * segment(px, py, cell.point, cell.ends[i]);
+        road = road * product;
+    }
     // 5. Places wear or clear the road.
     if (kind == 5) {
         if (w > TINY_WEIGHT) {

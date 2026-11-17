@@ -1,5 +1,22 @@
 # Source review checkpoint — 2026-11-08
 
+## Reusing terrain road geometry - 2026-11-17
+
+Native terrain generation now keeps the ordered road links for four recent warped place cells per thread.
+The cache holds integer endpoints. Each block still computes its own warp and evaluates the same segments
+and floating-point products in the same order described in [terrain height](specs/worldgen-terrain-height.md#4-roads-0x2d4730).
+All 835,584 sampled road values matched bit for bit. In three engine-only Native50 runs per build with
+owned procedural tables, median process CPU time to the first settled sample for 793 source zones fell from
+34.0 to 20.5 seconds. Both builds used the same normal-priority diagnostic
+override and were sampled once per second. All five targets, required owner-data CPU tests, the Vulkan image
+groups and extractor SDK independence passed.
+
+The separate [source-worker handoff](specs/after) confirms Steam's below-normal entry priority and its
+CPU Usage transition requests. A bounded CPU saturation test reproduced long scheduler-yield delays with
+source-state lock wait below the timer's resolution. The engine retains the existing priority requests, source batch order and
+capture deadline. A licensed daytime replay under ordinary system load remains open.
+
+
 ## Steadier shadows and TAA - 2026-11-16
 
 The user saw the whole picture jitter with TAA and shadows flicker; both are CubeVulkan additions (neither game
