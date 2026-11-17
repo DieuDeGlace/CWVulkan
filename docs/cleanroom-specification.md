@@ -96,7 +96,7 @@ The contracts listed in the third column are the authority for each requirement.
 | Creatures and combat | Run AI, abilities, hits, damage, buffs, upkeep and poses with Steam's rules and timings | creature-\*, stat-rules, [host random streams](#b3-host-random-streams) | Authority resident and pet handoffs checked in the engine. The full Steam host sequence remains open. |
 | Player control | Map mouse, keyboard and controller input to movement, camera, skills and use actions | player-control, use-prompt, skills-and-interactions, [Ring stick routing](specs/steam-ring-stick-routing-20261117.md) | Controlled Ring cases pass in the licensed engine. Original-client and physical controller checks remain open. |
 | Items and loot | Generate, name, drop, pick up, craft, buy and sell items | drops-and-items, loot-\*, lore-and-artifacts, item-models | Ported |
-| Interface | Draw the title, character, options, HUD, inventory, map and dialogue screens from the player's Plasma files | plasma-\*, frontend-\*, hud-money, conversation-script, steam-hud-\* | Ported |
+| Interface | Draw the title, character, options, HUD, inventory, map and dialogue screens from the player's Plasma files | plasma-\*, frontend-\*, [Stock graphical entry](specs/steam-stock-graphical-entry-routes-20261117.md), hud-money, conversation-script, steam-hud-\* | Ported |
 | World map | Build the map model and draw the corner and full maps with markers, labels, missions, history and the player | worldmap-model, worldmap-rendering, map-markers | Recorded match |
 | Rendering | Reproduce the sky, clouds, lighting, shadows, water, vegetation wind and particles | sky-and-clouds, shadows, water-rendering, vegetation-wind | Waterfalls and rain not yet recorded |
 | Sound and music | Play the same sounds, ambient emitters and music for the same events and places | sound, steam-\*-music-\* | Ported |
@@ -208,6 +208,13 @@ CubeVulkan supplies the configured World name gate independently of the
 clock mode. The authority World fixture checks the unnamed scan, eagle
 flight and pet creation after the action clears. Original post-flight pet
 creation and a live death-area stream remain open.
+
+The stock client starts in its graphical frontend for the traced launch
+operands. Use Continue on the visible title menu when the saved slot is valid,
+or select a copied character through Start Game. Both paths converge on the
+ordinary pointer release. XInput can move or snap the same menu pointer and
+send its primary-button edges. Continue loads the remembered slot and closes
+the title. [Stock graphical entry](specs/steam-stock-graphical-entry-routes-20261117.md).
 
 ## Part C. Referenced material
 

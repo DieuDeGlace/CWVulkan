@@ -1,5 +1,14 @@
 # Source review checkpoint — 2026-11-08
 
+## Stock graphical entry - 2026-11-17
+
+The isolated startup trace follows the documented operand parser to the
+graphical construction. A valid saved character slot makes Continue visible.
+The menu's pointer release reloads that slot and closes the title. This
+defines the stock entry for the next copied-profile comparison. The frontend
+fixture passed on the previously validated engine. The post-flight native
+pet comparison still awaits graphical entry. [Stock graphical entry](specs/steam-stock-graphical-entry-routes-20261117.md).
+
 ## Equipped pet admission - 2026-11-17
 
 A follow-up Steam trace observed the equipped Collie on the authority in 58
