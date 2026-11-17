@@ -854,6 +854,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // before anything is generated. They go by the game's single-player world, which Game
     // (0x7ea80) names "world" with seed 0x7b, as the extractions are of it.
     const std::string gameWorldName = alphaGeneration ? terrainSaveProfile : "world";
+    spawned.setWorldNamed(!gameWorldName.empty());
+    hostWorld.setWorldNamed(!gameWorldName.empty());
     const int32_t gameWorldSeed = worldgen::STEAM_STARTUP_SEED;
     if (config.flag("Events", "Enabled", false) && config.flag("Events", "ReplaceTravelLocations", true))
         OverworldEvents::replaceTravelLocations(gameWorldSeed, gameWorldName);

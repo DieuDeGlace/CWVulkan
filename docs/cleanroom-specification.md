@@ -139,7 +139,7 @@ comparison identifies the simulation worker by the outer return chain.
 
 Two licensed original runs recorded 279 daily reseeds and 2,206 subsequent
 draws on the identified simulation workers. The game imports resolved to
-`ucrtbase.dll`. Area generation appeared on separate workers. The built
+`ucrtbase.dll`. Area generation appeared on separate workers in these licensed sessions. The built
 CubeVulkan CRT object replayed every recorded authority draw exactly.
 Each capture covers the observed window following its first recorded seed.
 
@@ -195,11 +195,19 @@ mode and the authority owner repair, link and action checks affect whether
 the pass can create a pet.
 [Held pet admission roles](specs/steam-live-pet-admission-roles-20261117.md).
 
-In the follow-up licensed capture, both live player views carried the copied
-Collie equipment for all 78 equipped samples. The sampled authority World
-had a nonempty name, the graphical World was in mode one and both sampled
-pet links stayed zero. A live trace spanning a death-area effect, pet setup
-and their subsequent consumers remains open.
+In the first follow-up, both live player views carried the copied Collie
+equipment for all 78 equipped samples. The graphical World was in mode one
+and both sampled pet links stayed zero. The later diagnostic recorded 58
+equipped samples with authority mode zero, a six-byte World name, an absent
+ownership match and a zero pet link. Action `0x9d` was present in all 58.
+This eagle-flight action satisfies an explicit creation blocker. It is used
+on the title and character-select screens.
+[Held title flight behavior](specs/frontend-title.md#31-the-player-on-the-eagle-every-frame-in-0xa5a50-before-the-world-step).
+
+CubeVulkan supplies the configured World name gate independently of the
+clock mode. The authority World fixture checks the unnamed scan, eagle
+flight and pet creation after the action clears. Original post-flight pet
+creation and a live death-area stream remain open.
 
 ## Part C. Referenced material
 

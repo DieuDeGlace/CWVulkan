@@ -1280,6 +1280,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
     };
     nativepet::World pets;
     pets.client = client;
+    pets.active = worldNamed;
     pets.local = hasPlayer ? &player.side : nullptr;
     pets.construct = iw.construct;
     pets.added = [&](nativeai::Creature *made) {
@@ -1345,7 +1346,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         if (nativeClock) {
             const int32_t previousDay = dayCount;
             bool reset = false;
-            nativeclock::World clock{dayCount, dayMs, elapsedWorldMs, client, clockNamedWorld, worldEvents.sleeps,
+            nativeclock::World clock{dayCount, dayMs, elapsedWorldMs, client, worldNamed, worldEvents.sleeps,
                                      a.creatures, hasPlayer ? player.record.data() : nullptr};
             clock.maxHealth = [&] { return playerMaxHealth(); };
             clock.reset = [&] { worldReset(); reset = true; };

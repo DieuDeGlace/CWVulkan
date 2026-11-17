@@ -187,10 +187,11 @@ class SpawnedCreatures {
     const hudcontext::State &hudContext() const { return contextState; }
     const nativesaves::Item &vehicleItem() const { return vehicleSelection; }
     void setClock(int32_t day, float timeOfDayMs) { auto guard = sourceGuard(); dayCount = day; dayMs = timeOfDayMs; }
+    void setWorldNamed(bool named) { auto guard = sourceGuard(); worldNamed = named; }
     void setNativeClock(bool namedWorld) {
         auto guard = sourceGuard();
         nativeClock = true;
-        clockNamedWorld = namedWorld;
+        worldNamed = namedWorld;
         clockRate = 0;
     }
     void setClockRate(double gameMsPerMs) {
@@ -630,7 +631,7 @@ class SpawnedCreatures {
     std::shared_ptr<SaveMetadata> saveMetadata = std::make_shared<SaveMetadata>();
     int32_t &dayCount = saveMetadata->day; // world+0x08
     bool nativeClock = false;    // normal gameplay selects the verified Steam clock
-    bool clockNamedWorld = false; // actual configured World name, not HUD/inventory context
+    bool worldNamed = true;      // configured World name for the simulation gates
     double clockRate = 0;         // custom game ms a real ms (0: externally set/frozen)
     // The event lists' records, from the native modules' arrays.
     void keepRecords(const std::vector<std::array<uint8_t, 0x30>> &sounds, const std::vector<std::array<uint8_t, 0x48>> &particles,

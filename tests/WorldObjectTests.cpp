@@ -411,6 +411,28 @@ void hostPetStreamIntegration(const auto &check) {
     check(strongPet && get<uint32_t>(strongPet, FLAGS) == 0x231 && get<int32_t>(strongPet, ABILITY_PICK) == 2,
           "fresh Terrier consumes both draws from the inherited flag");
     check(strong.drawWorldRandom() == 13821, "inherited flag advances the Terrier stream by two extra draws");
+
+    SpawnedCreatures unnamed;
+    auto *unnamedOwner = initialize(unnamed, collie, 0);
+    unnamed.setNativeClock(false);
+    unnamed.simulate(terrain, 0);
+    check(get<int64_t>(unnamedOwner, PET_ID) == 0, "an unnamed World skips equipped pet maintenance");
+    unnamed.setClockRate(0);
+    unnamed.simulate(terrain, 0);
+    check(get<int64_t>(unnamedOwner, PET_ID) == 0, "a custom clock preserves the unnamed World gate");
+
+    SpawnedCreatures flight;
+    auto *rider = initialize(flight, collie, 0);
+    rider[ABILITY] = 0x9d;
+    flight.simulate(terrain, 0);
+    SpawnedCreatures untouched;
+    check(get<int64_t>(rider, PET_ID) == 0 && flight.drawWorldRandom() == untouched.drawWorldRandom(),
+          "eagle flight blocks pet creation and leaves the random stream untouched");
+    rider[ABILITY] = 0;
+    flight.simulate(terrain, 0);
+    const auto *landedPet = flight.record(get<int64_t>(rider, PET_ID));
+    check(landedPet && get<int32_t>(landedPet, RACE) == collie,
+          "once eagle flight ends the named authority can create the equipped pet");
 }
 
 void hostResidentStreamIntegration(const auto &check) {

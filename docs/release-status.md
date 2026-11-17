@@ -1,9 +1,25 @@
 # Source review checkpoint — 2026-11-08
 
+## Equipped pet admission - 2026-11-17
+
+A follow-up Steam trace observed the equipped Collie on the authority in 58
+samples of eagle-flight action `0x9d`. The World was named and in authority
+mode, with an absent ownership match and a zero pet link. That action blocks
+creation. The built CubeVulkan CRT object exactly replayed the third capture's
+1,050 draws after 131 recorded reseeds. Both profiles matched their backups.
+
+The engine now uses the configured World name for its first pet scan as well
+as the native clock. Two World facade cases failed on the old code and pass
+with the change. The same fixture covers eagle-flight suppression and pet
+creation when the action clears. Original post-flight setup and live death
+effects still need a direct comparison. The owner-data, Vulkan, water, Alpha
+scenery and extractor independence suites passed.
+[Maintained specification](cleanroom-specification.md#b3-host-random-streams).
+
 ## Live Steam authority random stream - 2026-11-17
 
 The original simulation workers and host generation workers appeared on
-separate return chains during ordinary play. The active game imports resolved
+separate return chains during licensed sessions. The active game imports resolved
 to `ucrtbase.dll`. The built CubeVulkan CRT object exactly replayed all 2,206
 draws following 279 recorded daily reseeds in two licensed captures.
 [Held CRT return sites](specs/steam-host-live-return-sites-20261117.md).
