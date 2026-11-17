@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <map>
 
 namespace {
@@ -224,6 +225,31 @@ int residentPassTests() {
         check(!worldgen::residentReady(point, 0, 0, world), "a newly registered stored ID suppresses later points in the same pass");
         residentpass::Collection empty;
         check(!empty.withinRange(0, 0, 0), "a streaming stand-in is not a native player");
+    }
+    {
+        worldgen::ResidentWorld world;
+        world.nearPlayer = [](int64_t, int64_t, int64_t) { return true; };
+        worldgen::SpawnPoint point;
+        point.requiredDefeated = 1;
+        std::vector<worldgen::Int2> visited;
+        const auto run = [&](int32_t first, int32_t last) {
+            visited.clear();
+            world.deadTracked = [&](int32_t x, int32_t y) {
+                visited.push_back({x, y});
+                if (x == -11 && y == -3)
+                    return first;
+                if (x == 5 && y == 13)
+                    return last;
+                return int32_t(0);
+            };
+            return worldgen::residentReady(point, -3, 5, world);
+        };
+        check(run(1, 0), "defeated-count equality admits a resident");
+        check(!run(std::numeric_limits<int32_t>::max(), 1), "positive defeated-count overflow rejects after wrapping");
+        check(run(std::numeric_limits<int32_t>::min(), -1), "negative defeated-count overflow admits after wrapping");
+        check(visited.size() == 289 && visited.front() == worldgen::Int2{-11, -3} &&
+                  visited[1] == worldgen::Int2{-11, -2} && visited.back() == worldgen::Int2{5, 13},
+              "defeated-count admission reads the full source rectangle in X-outer order");
     }
     {
         using Player = worldgen::ResidentWorld::Player;

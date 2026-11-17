@@ -92,10 +92,10 @@ bool residentReady(const SpawnPoint &p, int32_t zx, int32_t zy, const ResidentWo
     if (!near)
         return false;
     if (p.requiredDefeated != 0) {
-        int64_t sum = 0;
+        int32_t sum = 0;
         for (int32_t x = zx - 8; x <= zx + 8; x++)
             for (int32_t y = zy - 8; y <= zy + 8; y++)
-                sum += world.deadTracked ? world.deadTracked(x, y) : 0;
+                sum = gamemath::add32(sum, world.deadTracked ? world.deadTracked(x, y) : 0);
         if (sum < p.requiredDefeated)
             return false;
     }

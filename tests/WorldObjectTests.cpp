@@ -326,6 +326,8 @@ void generatedGateIntegration(const auto &check) {
               "generated gate and owner threshold match the recorded test case");
         if (door == source->objects.end() || threshold == source->gateThresholds.end())
             continue;
+        const int32_t dx = gamemath::floorFixedBlock(door->x), dy = gamemath::floorFixedBlock(door->y);
+        const int32_t dz = gamemath::floorFixedBlock(door->z);
         if (gate.countRoute && gate.threshold == 1) {
             std::set<int64_t> identifiers;
             for (const auto &[id, point] : source->spawns.points)
@@ -334,7 +336,9 @@ void generatedGateIntegration(const auto &check) {
                     }))
                     identifiers.insert(id);
             check(!identifiers.empty(), "catalog fixture supplies a source key for the gate");
-            if (!identifiers.empty()) {
+            for (bool liveGuard : {false, true}) {
+                if (identifiers.empty())
+                    break;
                 auto markedTerrain = terrain.forkSource();
                 markedTerrain->loadSourceZone(gate.zone[0], gate.zone[1]);
                 markedTerrain->loadSourceZone(gamemath::floorFixedZone(gate.approach[0] * BLOCK),
@@ -345,9 +349,24 @@ void generatedGateIntegration(const auto &check) {
                 marked.setNativePlayer(true);
                 const int64_t at[] = {int64_t(gate.approach[0]) * BLOCK, int64_t(gate.approach[1]) * BLOCK, door->z};
                 marked.setPlayer(*markedTerrain, markedTerrain->toLocal(at), 0, {}, 100, 1, true);
-                marked.setWorldDead(identifiers);
-                check(std::none_of(identifiers.begin(), identifiers.end(), [&](int64_t id) { return marked.hasCreature(id); }),
-                      "recorded source identifiers have no admitted live actors");
+                if (liveGuard) {
+                    marked.update(*markedTerrain, markedTerrain->toLocal(at));
+                    const auto guard = std::find_if(identifiers.begin(), identifiers.end(), [&](int64_t id) { return marked.record(id); });
+                    check(guard != identifiers.end(), "the dungeon producer admits a live gate guard");
+                    if (guard == identifiers.end())
+                        continue;
+                    check(!marked.isWorldDead(*guard) && (markedTerrain->gameBlock(dx, dy, dz)[5] & 0x40),
+                          "the admitted guard's gate starts closed");
+                    put(marked.record(*guard), worldgen::creature::HEALTH, 0.0f);
+                    marked.simulate(*markedTerrain, 0);
+                    marked.zoneChangeLists();
+                    check(marked.isWorldDead(*guard) && (markedTerrain->gameBlock(dx, dy, dz)[5] & 0x40),
+                          "a guard death is recorded after the current step's gate count");
+                } else {
+                    marked.setWorldDead(identifiers);
+                    check(std::none_of(identifiers.begin(), identifiers.end(), [&](int64_t id) { return marked.hasCreature(id); }),
+                          "recorded source identifiers have no admitted live actors");
+                }
                 marked.simulate(*markedTerrain, 0);
                 marked.zoneChangeLists();
                 cwnet::ZoneAnswer reply;
@@ -357,11 +376,17 @@ void generatedGateIntegration(const auto &check) {
                                  get<int64_t>(o.data(), nativeinteract::OBJECT_POSITION) == door->x &&
                                  get<int64_t>(o.data(), nativeinteract::OBJECT_POSITION + 8) == door->y &&
                                  !o[nativeinteract::OBJECT_STATE];
-                      }), "recorded catalog identifiers open the gate without admitted live residents");
+                      }), liveGuard ? "the next world step publishes the gate opened by the defeated guard"
+                                    : "recorded catalog identifiers open the gate without admitted live residents");
+                if (liveGuard) {
+                    check(!(markedTerrain->gameBlock(dx, dy, dz)[5] & 0x40), "the defeated guard's gate clears its footprint");
+                    const auto sounds = marked.takeSounds();
+                    check(std::count_if(sounds.begin(), sounds.end(), [](const auto &sound) {
+                              return soundrules::readRequest(sound).number == 0x36;
+                          }) == 1, "the defeated guard's gate emits its opening sound once");
+                }
             }
         }
-        const int32_t dx = gamemath::floorFixedBlock(door->x), dy = gamemath::floorFixedBlock(door->y);
-        const int32_t dz = gamemath::floorFixedBlock(door->z);
         check(terrain.gameBlock(dx, dy, dz)[5] & 0x40, "closed generated gate marks its footprint");
 
         const auto [px, py, pz] = gate.approach;

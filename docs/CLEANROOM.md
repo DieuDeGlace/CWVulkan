@@ -1,5 +1,19 @@
 # Clean-room process
 
+## Dungeon and encounter resident count checks - 2026-11-17
+
+Resident admission accumulates the defeated count in signed 32-bit units,
+preserving Steam's wraparound before the threshold comparison. Two boundary
+checks reproduced the mismatch on the previous engine. The contract covers
+the 17×17 source window and loaded and retained count reads.
+[Held prerequisite contract](specs/steam-source-prerequisite-summaries-20261107.md)
+
+The generated fortress gate regression admits a local guard and takes that
+guard to zero health. The current world step records the guard's death and the
+next step opens the gate. The fixture checks the updated object publication,
+cleared footprint and one opening sound. The full owner, Vulkan and extractor
+checks pass. Live original-client gate transitions remain open.
+
 ## Steam sky clock and forest night palette - 2026-11-17
 
 The Steam renderer uses its gameplay daylight calculation for the palette.
