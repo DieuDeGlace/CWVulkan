@@ -1817,9 +1817,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         m = glm::scale(m, glm::vec3(c.scale));
         return glm::rotate(m, glm::radians(c.turnDegrees), glm::vec3(0, 0, 1));
     };
-    const auto cloudEye = glm::dvec2(eyeGame) + (alphaLook ? worldProbe.alphaCloudOrigin : glm::dvec2(0));
-    const int32_t centreX = clouds::cellOf(cloudEye.x), centreY = clouds::cellOf(cloudEye.y);
     if (alphaLook && skyModels.cloud && worldProbe.column && worldProbe.zone) {
+        const glm::dvec2 cloudEye = glm::dvec2(eyeGame) + worldProbe.alphaCloudOrigin;
+        const int32_t centreX = clouds::cellOf(cloudEye.x), centreY = clouds::cellOf(cloudEye.y);
         // Alpha: a 13 x 13 grid, only while the player's column is moist and not on fire.
         const alpha::ZoneFactors player = worldProbe.zone(focus);
         if (clouds::alphaCloudsShown(player.moisture, player.fire))
@@ -1828,19 +1828,26 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
                     if (const auto &c = cloudOfCell(centreX + i, centreY + j, true))
                         cloudDraws.push_back({skyModels.cloud, cloudMatrix(*c), 1});
     } else if (!alphaLook && !menuSky && skyModels.cloud && worldProbe.column) {
-        // Steam: cells out past the view distance, faded near the camera.
-        const float V = settings.fogDistance;
-        const int reach = clouds::steamReach(V);
+        // The Steam cloud grid and its anchor range both follow the installed terrain range.
+        // See docs/specs/steam-cloud-view-distance-fog-20261117.md.
+        constexpr double blocksPerFixedUnit = 1.0 / 65536.0;
+        const auto &fixedEye = sceneFrame->visibility.eye;
+        const glm::dvec3 cloudEye = glm::dvec3(fixedEye[0], fixedEye[1], fixedEye[2]) * blocksPerFixedUnit;
+        const int32_t centreX = clouds::cellOf(cloudEye.x), centreY = clouds::cellOf(cloudEye.y);
+        const int reach = clouds::steamReach(sceneDistance);
+        const float cloudRange = sceneDistance + clouds::STEAM_CULL_BEYOND;
         for (int i = -reach; i <= reach; i++)
             for (int j = -reach; j <= reach; j++) {
                 const auto &c = cloudOfCell(centreX + i, centreY + j, false);
                 if (!c)
                     continue;
-                const glm::vec3 base = glm::vec3(c->base - worldProbe.origin);
-                const float distance = glm::length(base - camera.eye);
-                if (distance > V + clouds::STEAM_CULL_BEYOND || !viewFrustum.sphere(base, clouds::STEAM_CULL_RADIUS))
+                const scenevisibility::Sphere anchor{{int64_t(c->base.x / blocksPerFixedUnit),
+                                                       int64_t(c->base.y / blocksPerFixedUnit),
+                                                       int64_t(c->base.z / blocksPerFixedUnit)},
+                                                      clouds::STEAM_CULL_RADIUS};
+                if (!sceneFrame->visibility.visible(anchor, cloudRange))
                     continue;
-                const float opacity = clouds::steamOpacity(distance);
+                const float opacity = clouds::steamOpacity(glm::length(glm::vec3(c->base - cloudEye)));
                 if (opacity < clouds::STEAM_HIDDEN_BELOW)
                     continue;
                 const uint32_t mesh = c->dark && skyModels.darkCloud ? skyModels.darkCloud : skyModels.cloud;
@@ -2155,20 +2162,18 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         drawSceneryQueue(steamscenery::Queue::OrdinaryFaded, true);
     // Steam's clouds after the world (§B.7): the opaque ones, then the faded ones laid down at no
     // opacity (only their depth counts) and drawn again over that with their opacity, so each
-    // shows only its nearest surface. The fog scale is CubeVulkan's choice (an open point of
-    // the spec): a cloud is all sky by the time it is culled.
+    // shows only its nearest surface. They inherit the frame fog reciprocal.
     if (!alphaLook && !cloudDraws.empty()) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, steamCloudPipeline);
-        const float fogScale = 1 / (sceneDistance + clouds::STEAM_CULL_BEYOND);
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity >= 1)
-                drawSkyModel(c.mesh, c.model, glm::vec4(1, fogScale, 0, 0));
+                drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, 0, 0));
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity < 1)
-                drawSkyModel(c.mesh, c.model, glm::vec4(0, fogScale, 0, 0));
+                drawSkyModel(c.mesh, c.model, glm::vec4(0, 0, 0, 0));
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity < 1)
-                drawSkyModel(c.mesh, c.model, glm::vec4(c.opacity, fogScale, 0, 0));
+                drawSkyModel(c.mesh, c.model, glm::vec4(c.opacity, 0, 0, 0));
     }
     // Steam's stars last (§B.6): cube models on a dome round the camera, just inside the far
     // plane, fading in as the night deepens. (Whether the game's dome follows the camera, and

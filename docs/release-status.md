@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Steam cloud view range and fog - 2026-11-17
+
+Steam-look cloud cells follow the live terrain range and fixed camera eye. The
+native sphere gate tests each anchor with the 200-block allowance. The cloud
+shader takes the frame's fog reciprocal, including its underwater cap, and the
+view-space position from the vertex stage. The [held Steam cloud contract](specs/steam-cloud-view-distance-fog-20261117.md)
+records both range owners and the independently traced model lighting.
+
+Licensed morning horizon and surface swim runs exercised the updated pass
+with 793 loaded sources. The morning replay shows both cloud formations in the
+Steam reference at comparable screen positions. They remain darker in the
+replay, which uses an estimated camera pose. The owner, Vulkan and extractor
+checks pass. Cloud model baking and vertex lighting remain open.
+
 ## Ordinary NPC Talk activation - 2026-11-17
 
 The licensed live Use path reproduced an extra activation while the NPC's speech
