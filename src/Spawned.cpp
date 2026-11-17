@@ -1253,7 +1253,7 @@ void SpawnedCreatures::simulate(ExtractedWorld &ew, double dtMs, const std::func
         const worldgen::CreatureExtras extras = worldgen::makePet(pet->record, owner, worldgen::creatureTables(), [&](int64_t id) {
             nativeai::Creature *c = u.byId(id);
             return c ? c->record : nullptr;
-        });
+        }, &randState);
         pet->skills = extras.abilities;
         pet->summonRaces = extras.abilities2;
         pet->inventory = worldgen::inventoryRecords(extras.inventory);

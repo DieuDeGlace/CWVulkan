@@ -90,9 +90,10 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
 // Makes creature `record` the pet of `owner` (0x2b67b0, §7.4): its race's looks and gear drawn
 // from srand(race), the owner and the pet's AI flags. The caller has set its race, hostility,
 // level and flags. `ownerRecord` finds the owner's record (null when it is not in the world),
-// whose pet id is then set. Returns what the gear gave beside the record.
+// whose pet id is then set. A supplied authority state receives the stream after
+// appearance and gear. Returns what the gear gave beside the record.
 CreatureExtras makePet(uint8_t *record, int64_t owner, const CreatureTables &tables,
-                       const std::function<uint8_t *(int64_t id)> &ownerRecord = {});
+                       const std::function<uint8_t *(int64_t id)> &ownerRecord = {}, uint32_t *authorityRandom = nullptr);
 
 // A creature made in play rather than from a spawn point: the constructor with `id`, its race,
 // hostility, level, position (1/65536 blocks) and region, then made the pet of `owner` (0 for

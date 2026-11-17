@@ -199,7 +199,7 @@ MadeCreature makeResident(const SpawnPoint &p, Draw worldRand, bool spared, cons
 // --- §7.4 Pets -------------------------------------------------------------------------------
 
 CreatureExtras makePet(uint8_t *record, int64_t owner, const CreatureTables &tables,
-                       const std::function<uint8_t *(int64_t id)> &ownerRecord) {
+                       const std::function<uint8_t *(int64_t id)> &ownerRecord, uint32_t *authorityRandom) {
     using namespace creature;
     const int32_t race = get<int32_t>(record, RACE);
     // 1. Every pet of a race draws the same numbers.
@@ -217,6 +217,8 @@ CreatureExtras makePet(uint8_t *record, int64_t owner, const CreatureTables &tab
     g.cls = record[CLASS];
     makeGear({record[HOSTILITY], race, get<int32_t>(record, LEVEL), get<uint32_t>(record, FLAGS), record[PEOPLE]}, rand, g);
     wearGear(record, g);
+    if (authorityRandom)
+        *authorityRandom = crt.state;
     // 4. Its owner.
     put(record, OWNER, owner);
     put(record, ROAM, PET_ROAM);

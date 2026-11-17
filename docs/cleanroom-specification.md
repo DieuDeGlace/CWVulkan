@@ -93,7 +93,7 @@ The contracts listed in the third column are the authority for each requirement.
 | Area | The engine must | Governing specs | Status |
 |---|---|---|---|
 | World generation | Produce the same terrain, structures, residents and creatures as Steam from the same seed and zone, in the same random-draw order | worldgen-terrain\*, worldgen-structures\*, worldgen-creatures\* | Gaps listed in worldgen-parity-gaps |
-| Creatures and combat | Run AI, abilities, hits, damage, buffs, upkeep and poses with Steam's rules and timings | creature-\*, stat-rules, [host random streams](#b3-host-random-streams) | Authority resident handoff checked in the engine. The full Steam host sequence remains open. |
+| Creatures and combat | Run AI, abilities, hits, damage, buffs, upkeep and poses with Steam's rules and timings | creature-\*, stat-rules, [host random streams](#b3-host-random-streams) | Authority resident and pet handoffs checked in the engine. The full Steam host sequence remains open. |
 | Player control | Map mouse, keyboard and controller input to movement, camera, skills and use actions | player-control, use-prompt, skills-and-interactions, [Ring stick routing](specs/steam-ring-stick-routing-20261117.md) | Controlled Ring cases pass in the licensed engine. Original-client and physical controller checks remain open. |
 | Items and loot | Generate, name, drop, pick up, craft, buy and sell items | drops-and-items, loot-\*, lore-and-artifacts, item-models | Ported |
 | Interface | Draw the title, character, options, HUD, inventory, map and dialogue screens from the player's Plasma files | plasma-\*, frontend-\*, hud-money, conversation-script, steam-hud-\* | Ported |
@@ -151,8 +151,24 @@ nonempty traces and eight empty traces. The engine matched the complete draw
 lists. A separate engine fixture checks the handoff, same-day continuation,
 rejected and existing residents, day changes and replacement sources. It also
 checks the saved object overlay, base restoration and same-day object edits. The
-native refresh diagnostic invokes the refresh directly. A populated Steam
-host trace across combat, pets and ticks remains open.
+native refresh diagnostic invokes the refresh directly.
+
+When the host creates a pet or changes its equipped race, pet setup seeds the
+same thread's stream from the pet's unsigned race. Appearance and gear leave
+their final state for subsequent host work. The pet phase keeps the current
+stream on a same-race item change. CubeVulkan also continues the authority stream after
+the same setup called by taming. [Held pet stream contract](specs/steam-host-pet-setup-stream-20261117.md),
+[native taming call](specs/creature-abilities-ranged.md#142-taming-0x7e-0x2ce833).
+
+The engine fixture checks Collie creation, a same-race item edit, a Terrier
+race change and a fresh Terrier that inherits the flag for two extra gear
+draws. The controlled World step consumes one movement draw before each
+comparison. A private setup trace matched the held static vectors directly.
+The independent reset
+trace verifies that a race change zeroes class and specialization before setup.
+Its explicit store supersedes the earlier class-preservation statement in the
+pet stream contract. [Held pet reset contract](specs/steam-pet-transient-class-reset-20261117.md).
+The populated Steam host trace across combat, pets and ticks remains open.
 
 ## Part C. Referenced material
 

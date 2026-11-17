@@ -292,6 +292,64 @@ void sourceSummaryValues(const auto &check) {
           "empty selected source inputs replace both old summaries with empty or zero");
 }
 
+void hostPetStreamIntegration(const auto &check) {
+    using namespace worldgen::creature;
+    constexpr int32_t collie = 0x13, terrier = 0x1a;
+    constexpr size_t petItem = 0x8b8, petRace = petItem + 4, nameLength = petItem + 0x9d;
+
+    ExtractedWorld terrain;
+    terrain.openGenerated(0, 0, {});
+    terrain.setClientStreaming(true);
+    const auto initialize = [&](SpawnedCreatures &authority, int32_t race, uint32_t flags) {
+        authority.setNativePlayer(true);
+        const auto position = std::array<int64_t, 3>{BLOCK, BLOCK, 10 * BLOCK};
+        authority.setPlayer(terrain, terrain.toLocal(position.data()), 0, {}, 100, 1, true);
+        auto *owner = authority.localPlayer()->record;
+        owner[petItem] = 0x14;
+        put(owner, petRace, race);
+        put(owner, petItem + 0x18, int32_t(1));
+        put(owner, FLAGS, flags);
+        return owner;
+    };
+    SpawnedCreatures authority;
+    auto *owner = initialize(authority, collie, 0);
+    authority.simulate(terrain, 0);
+    const int64_t id = get<int64_t>(owner, PET_ID);
+    auto *pet = authority.record(id);
+    check(id < 0 && pet && get<int32_t>(pet, RACE) == collie && get<uint32_t>(pet, FLAGS) == 0x31,
+          "the first authority step creates the equipped Collie");
+    // The colocated actors consume one movement draw after the pet pass.
+    check(authority.drawWorldRandom() == 17664, "Collie setup and movement leave the correct next host draw");
+
+    owner[nameLength] = 1;
+    put(owner, petItem + 0x20, uint32_t('P'));
+    authority.simulate(terrain, 0);
+    pet = authority.record(id);
+    check(pet && pet[NAME] == 'P' && pet[NAME + 1] == 0, "a same-race item edit names the existing pet");
+    check(authority.drawWorldRandom() == 15916, "same-race edit preserves the stream through another movement draw");
+
+    if (pet) {
+        pet[CLASS] = 0x8a;
+        pet[SPEC] = 1;
+    }
+    put(owner, petRace, terrier);
+    authority.simulate(terrain, 0);
+    pet = authority.record(id);
+    check(get<int64_t>(owner, PET_ID) == id && pet && get<int32_t>(pet, RACE) == terrier &&
+              get<uint32_t>(pet, FLAGS) == 0x31,
+          "changing the cached subtype reconfigures the same pet with default appearance flags");
+    check(pet && pet[CLASS] == 0 && pet[SPEC] == 0, "race change resets class and specialization before gear");
+    check(authority.drawWorldRandom() == 7959, "Terrier race change and movement leave the correct next host draw");
+
+    SpawnedCreatures strong;
+    const auto *strongOwner = initialize(strong, terrier, 0x200);
+    strong.simulate(terrain, 0);
+    const auto *strongPet = strong.record(get<int64_t>(strongOwner, PET_ID));
+    check(strongPet && get<uint32_t>(strongPet, FLAGS) == 0x231 && get<int32_t>(strongPet, ABILITY_PICK) == 2,
+          "fresh Terrier consumes both draws from the inherited flag");
+    check(strong.drawWorldRandom() == 13821, "inherited flag advances the Terrier stream by two extra draws");
+}
+
 void hostResidentStreamIntegration(const auto &check) {
     ExtractedWorld terrain;
     terrain.openGenerated(0, 0, {});
@@ -1000,6 +1058,7 @@ int worldObjectTests() {
     sourceSummaryValues(check);
     generatedGateIntegration(check);
     hostResidentStreamIntegration(check);
+    hostPetStreamIntegration(check);
     std::printf("World objects, gate transitions, trap state/hits/sounds and facade timing: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

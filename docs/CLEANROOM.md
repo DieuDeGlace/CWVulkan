@@ -1,5 +1,22 @@
 # Clean-room process
 
+## Authority pet setup and random continuation - 2026-11-17
+
+The host's pets and taming share the stream left by appearance and gear after
+race-seeded pet setup. A change confined to the equipped item's name preserves
+the stream. [Held pet stream contract](specs/steam-host-pet-setup-stream-20261117.md),
+[taming call](specs/creature-abilities-ranged.md#142-taming-0x7e-0x2ce833).
+
+The ordinary engine pet pass matches the static Collie and Terrier sequence
+vectors. Four before-and-after checks cover creation, name changes, race
+changes and the two extra draws from an inherited appearance flag. The existing
+reset already clears class and specialization on a race change, as verified
+by the independent store trace and engine fixture.
+[Held pet reset contract](specs/steam-pet-transient-class-reset-20261117.md).
+Required owner-data, Vulkan and extractor checks pass. The live original-client
+sequence remains open.
+[Maintained specification](cleanroom-specification.md#b3-host-random-streams).
+
 ## Host resident refresh and random continuation - 2026-11-17
 
 The authority World tracks the resident refresh day on each live source. On
