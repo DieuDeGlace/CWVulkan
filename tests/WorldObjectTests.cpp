@@ -292,6 +292,69 @@ void sourceSummaryValues(const auto &check) {
           "empty selected source inputs replace both old summaries with empty or zero");
 }
 
+void hostPreludeStreamIntegration(const auto &check) {
+    // Selected source refresh, protected area hit, and equipped pet all
+    // run on one authority stream in this World step.
+    using namespace worldgen::creature;
+    constexpr size_t petItem = 0x8b8;
+    ExtractedWorld terrain;
+    terrain.openGenerated(0, 0, {});
+    terrain.setClientStreaming(true);
+    nativesaves::WorldState save;
+    SpawnedCreatures authority;
+    authority.setStoredZones(terrain, &save, false);
+    authority.setNativePlayer(true);
+    authority.setClock(1, 36000000.0f);
+    const auto position = std::array<int64_t, 3>{BLOCK, BLOCK, 200 * BLOCK};
+    const glm::vec3 local = terrain.toLocal(position.data());
+    authority.setPlayer(terrain, local, 0, {}, 100, 1, true);
+    auto *owner = authority.localPlayer()->record;
+    put(owner, FLAGS, uint32_t(0x02000000)); // Skip overlap separation in this fixture.
+    put(owner, TOGGLES, uint16_t(0x80)); // Deflect the blast before it changes HP.
+    owner[petItem] = 0x14;
+    put(owner, petItem + 4, int32_t(0x13));
+    put(owner, petItem + 0x18, int32_t(1));
+    const float health = get<float>(owner, HEALTH);
+
+    const bool loaded = terrain.loadSourceZone(0, 0);
+    const auto source = terrain.sourceStateStore()->find({0, 0});
+    check(loaded && source, "ordered prelude fixture admits one generated source");
+    if (!source)
+        return;
+    auto catalog = std::make_shared<worldgen::ZoneContents>();
+    worldgen::refreshZoneCreatures(*catalog, worldgen::currentWorld(), worldgen::creatureTables(), 1);
+    source->catalog = std::move(catalog);
+
+    bool made = false;
+    auto *blast = authority.networkCreature(201, made);
+    check(blast && made, "ordered prelude fixture registers the blast source");
+    if (!blast)
+        return;
+    blast[HOSTILITY] = 1;
+    put(blast, RACE, int32_t(0x119));
+    put(blast, HEALTH, 0.0f);
+    put(blast, ABILITY + 4, 0.0f);
+    put(blast, BLOCK_POWER, 20.0f);
+    put(blast, POSITION, position[0] + BLOCK);
+    put(blast, POSITION + 8, position[1]);
+    put(blast, POSITION + 16, get<int64_t>(owner, POSITION + 16));
+
+    authority.simulate(terrain, 0, {}, [&] { authority.update(terrain, local); });
+    const auto sounds = authority.takeSounds();
+    const auto deflected = std::find_if(sounds.begin(), sounds.end(), [](const auto &sound) {
+        return soundrules::readRequest(sound).number == 0x18;
+    });
+    // Draw 25871 gates the blast's critical hit. Draw 15424 supplies the
+    // deflection sound from the same day-1 zone stream.
+    const float pitch = 1.0f + (15424.0f * 0.3f) / 32767.0f;
+    check(deflected != sounds.end() && soundrules::readRequest(*deflected).pitch == pitch &&
+              get<float>(owner, HEALTH) == health,
+          "area hit consumes the resident continuation and deflects without HP damage");
+    const auto *pet = authority.record(get<int64_t>(owner, PET_ID));
+    check(pet && get<int32_t>(pet, RACE) == 0x13 && authority.drawWorldRandom() == 16204,
+          "the pet pass reseeds after the completed area hit");
+}
+
 void hostPetStreamIntegration(const auto &check) {
     using namespace worldgen::creature;
     constexpr int32_t collie = 0x13, terrier = 0x1a;
@@ -1059,6 +1122,7 @@ int worldObjectTests() {
     generatedGateIntegration(check);
     hostResidentStreamIntegration(check);
     hostPetStreamIntegration(check);
+    hostPreludeStreamIntegration(check);
     std::printf("World objects, gate transitions, trap state/hits/sounds and facade timing: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

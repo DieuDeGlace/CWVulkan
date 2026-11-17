@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Authority prelude draw order - 2026-11-17
+
+An independent original trace establishes the resolved stream from resident
+retention through the dead-actor pass. The range removal uses no resolved
+draws. The death pass advances the incoming stream through its sound and
+candidate checks and synchronous nested hits and items.
+[Held authority prelude contract](specs/steam-host-pre-pet-prelude-stream-20261117.md).
+
+The combined engine World step uses the first two day-1 refresh continuation
+draws for a protected area hit and its deflection sound. Pet setup then
+replaces that stream from its race seed. The focused fixture and full
+owner-data, Vulkan and extractor checks pass. Live original-client populated
+order and runtime indirect targets remain open.
+[Maintained specification](cleanroom-specification.md#b3-host-random-streams).
+
 ## Authority pet setup and random continuation - 2026-11-17
 
 The host's pets and taming share the stream left by appearance and gear after

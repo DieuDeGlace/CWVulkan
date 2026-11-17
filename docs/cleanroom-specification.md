@@ -153,6 +153,14 @@ rejected and existing residents, day changes and replacement sources. It also
 checks the saved object overlay, base restoration and same-day object edits. The
 native refresh diagnostic invokes the refresh directly.
 
+Between residents and pets, the host removes distant actors and processes
+dead actors. The resolved removal path uses no CRT draws. Death effects can
+draw for block-sweep sound and each eligible blast candidate. Nested hit and
+item work uses the same stream synchronously. None of these resolved paths
+reseeds it. The combined World-step fixture checks a resident refresh, a blast
+deflected using the next two draws, and the following pet setup.
+[Held authority prelude contract](specs/steam-host-pre-pet-prelude-stream-20261117.md).
+
 When the host creates a pet or changes its equipped race, pet setup seeds the
 same thread's stream from the pet's unsigned race. Appearance and gear leave
 their final state for subsequent host work. The pet phase keeps the current
