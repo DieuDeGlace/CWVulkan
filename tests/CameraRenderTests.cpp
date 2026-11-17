@@ -10,6 +10,78 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <optional>
+
+namespace {
+// A 3-by-3 neighborhood contains two diagonal patches. All five pixels in
+// the centre's depth cross are clear. Only the previous frame has a surface there.
+bool revealedSkyHistory(Renderer &renderer, GLFWwindow *window, const std::filesystem::path &root) {
+    renderer.settings.fov = 50;
+    renderer.settings.taa = true;
+    renderer.settings.jitterScale = renderer.settings.resolveBlur = 0;
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    if (width < 4 || height < 4)
+        return false;
+    const int x = width / 2, y = height / 2;
+    const float worldPerPixel = 8 * std::tan(glm::radians(25.f)) / height;
+    const auto patch = [&](int dx, int dy, float halfWidth, uint8_t shade) {
+        Mesh mesh;
+        for (const auto corner : {glm::vec2(-1, -1), glm::vec2(1, -1), glm::vec2(1, 1), glm::vec2(-1, 1)}) {
+            const glm::vec3 p((x + dx + .5f - width * .5f + corner.x * halfWidth) * worldPerPixel, 0,
+                              (height * .5f - y - dy - .5f + corner.y * halfWidth) * worldPerPixel);
+            mesh.vertices.push_back({p.x, p.y, p.z, shade, shade, shade, 255, 4, STEAM_VERTEX, 0, 0});
+            mesh.min = glm::min(mesh.min, p);
+            mesh.max = glm::max(mesh.max, p);
+        }
+        mesh.indices = {0, 1, 2, 0, 2, 3};
+        DrawItem item;
+        item.mesh = renderer.upload(mesh);
+        item.kind = DrawKind::Scenery;
+        item.standingLight = 1.0f;
+        return item;
+    };
+    const auto foreground = patch(0, 0, 3.25f, 180);
+    const std::vector<DrawItem> revealed{patch(-1, -1, .45f, 3), patch(1, 1, .45f, 255)};
+    Camera camera;
+    camera.eye = {0, -4, 0};
+    camera.target = {0, 0, 0};
+    Lighting light;
+    light.timeMs = 43200000;
+    using Pixels = std::array<std::array<uint8_t, 3>, 9>;
+    const auto draw = [&](const char *name, const std::vector<DrawItem> &items) -> std::optional<Pixels> {
+        const auto path = root / (std::string(name) + ".png");
+        renderer.capture(path.string());
+        renderer.frame(camera, light, {0, 0, 0}, 0, items, {});
+        int w = 0, h = 0, channels = 0;
+        auto *image = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+        std::optional<Pixels> result;
+        if (image && w == width && h == height) {
+            auto &sample = result.emplace();
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx)
+                    std::copy_n(image + 4 * ((y + dy) * w + x + dx), 3, sample[(dy + 1) * 3 + dx + 1].begin());
+        }
+        stbi_image_free(image);
+        return result;
+    };
+
+    renderer.cutHistory();
+    const auto sky = draw("temporal-sky", {});
+    renderer.cutHistory();
+    const auto old = draw("temporal-foreground", {foreground});
+    const auto accumulated = draw("temporal-history", revealed);
+    renderer.cutHistory();
+    const auto reset = draw("temporal-reset", revealed);
+    if (!sky || !old || !accumulated || !reset)
+        return false;
+    for (int i : {1, 3, 4, 5, 7})
+        if ((*sky)[i] != (*reset)[i])
+            return false;
+    return (*old)[4] != (*reset)[4] && (*reset)[0] != (*sky)[0] && (*reset)[8] != (*sky)[8] &&
+           (*accumulated)[4] == (*reset)[4];
+}
+} // namespace
 
 int cameraRenderTests() {
     if (!glfwInit())
@@ -136,6 +208,11 @@ int cameraRenderTests() {
         renderer.frame(camera, lighting, {0, 0, 0}, 0, {}, {});
         orientation = orientation && renderer.steamSphereVisible({0, 0, 4 * 65536}, .5f, 160) &&
                       !renderer.steamSphereVisible({0, 0, -4 * 65536}, .5f, 160);
+        if (style == RenderStyle::Alpha) {
+            const bool history = revealedSkyHistory(renderer, window, root);
+            std::cout << "Temporal resolve revealed sky " << (history ? "PASS" : "FAIL") << '\n';
+            failures += !history;
+        }
         renderer.shutdown();
         culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
         std::cout << "Camera orientation " << name << (orientation ? " PASS" : " FAIL") << " coincident target/pole\n";

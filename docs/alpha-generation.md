@@ -1,5 +1,19 @@
 # Alpha terrain generation
 
+## Terrain review, 2026-11-17
+
+The in-engine cross sections retained the volcano's 269-block and forest
+mound's 281-block centres with exact native core columns. The largest
+neighbouring map steps were 64 and 32 blocks on these transects at a 32-block
+sample spacing. Away from the cores, seven selected high-relief land samples
+showed 52 to 210 blocks of additional solid height over the Native columns.
+
+The focused terrain suite also kept the one-block coastal mound seam, dry purple
+ground in the sampled 4,096 Undead Lands columns, and exact native ground in
+two 4,096-column Savannah sites. The isolated Steam trace documents the native
+location smoothing, regional channels and surface palette used as references.
+[Held Steam terrain and frame trace](specs/steam-terrain-render-review-20261117.md).
+
 ## Steam land and biome-color continuity, 2026-11-09
 
 The hybrid preserves the Steam land floor beneath named land biomes, including

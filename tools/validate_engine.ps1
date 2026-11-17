@@ -49,6 +49,10 @@ try {
         $cameraPassed = @(Select-String -LiteralPath $cameraLog -Pattern '^Camera renderer .* PASS ')
         if ($cameraPassed.Count -ne 2) { throw "Expected both camera styles; read $cameraLog" }
         Write-Output "Camera projection image checks passed: $($cameraPassed.Count); $cameraLog"
+        if (!(Select-String -LiteralPath $cameraLog -Pattern '^Temporal resolve revealed sky PASS$')) {
+            throw "Missing temporal resolve result; read $cameraLog"
+        }
+        Write-Output "Temporal resolve image check passed: $cameraLog"
         $guiLog = Join-Path $LogDirectory 'gui-item-images.log'
         & $testProgram guirender *> $guiLog
         if ($LASTEXITCODE -ne 0) { throw "GUI item image tests failed; read $guiLog" }

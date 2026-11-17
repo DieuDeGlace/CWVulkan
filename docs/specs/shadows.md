@@ -22,6 +22,11 @@ with `D3DCompiler_47`. Infinite-Cubes was not used. Conventions: `alpha-renderin
 * So there is **no technique, map size, cascade, range, bias, filter or softness to match**. A
   creature, a tree or a house casts nothing onto the ground in either game.
 
+The dated Steam trace confirms current-frame multisample presentation in the
+reviewed route. It also identifies projected ground spots and translucent
+beams composed against ordinary scene depth.
+[Held Steam terrain and frame trace](steam-terrain-render-review-20261117.md).
+
 ## 2. What darkens things instead (the vanilla "shadow")
 
 Everything that reads as shade in Cube World is baked or per-object:
@@ -83,94 +88,45 @@ blur, no temporal ghosting, no jitter. CubeVulkan's TAA and SMAA are its own add
 
 ## 4. CubeVulkan today: shadow maps (an addition)
 
-`src/Renderer.cpp`, `src/Renderer.h`, `shaders/lighting.glsl`, `shaders/shadow.vert`,
-`shaders/alpha_scene.*`. The code says it ports the user's own MoonandShadow / SteamShadows mods.
-Defaults: `[Shadows] Enabled=1` (config/CubeVulkan.ini), far map 4096² over a radius of 120
-blocks, near map 2048² over 50 blocks (`Cascades=1`), D32_SFLOAT, light box depth ±420 blocks,
-strength 0.9, fade from 20 % of the radius; one hardware PCF tap (LINEAR compare sampler);
-receiver-plane depth bias plus a constant 0.008 blocks; the Alpha look removes only the sun's
-direct term in shadow, and CubeVulkan's moon casts at night.
+`Renderer.cpp` builds two directional depth maps when shadows are active.
+The default spans are 240 blocks at 4096² and 50 blocks at 2048². Both use
+the light's depth range of ±420 blocks. The light direction and shadow
+strength use two-game-minute steps in both looks. The map centres snap to
+whole light-space texels. Casters use the same model and optional foliage
+motion as the world draw while the maps are refreshed.
 
-**Parity note.** In the Alpha look these shadows are on by default, but Alpha has none (§1).
-Under the project's vanilla-parity rule they belong behind an option that is off in the vanilla
-look, the way the moon is (`[Render] Moon`). When on, they should only *add* sun-directional
-shade on top of §2 and never darken what the baked light already darkened twice: the Alpha look
-already multiplies the sun term by the vertex light, so an area under a crown is dimmed once by
-§2 and again by the map. Scaling the shadow's strength by the vertex light (or by S × light)
-avoids the double darkening.
+`shaders/lighting.glsl` samples a 3 × 3 grid of bilinear depth comparisons.
+It offsets the lookup by 0.75 texel along the face normal, floors the basic
+depth bias at half a texel, and caps the additional slope bias at two texels.
+The near and far results blend over the last 20% of the near radius. The
+Alpha and Steam shader paths attenuate the direct light while preserving
+the existing baked or indirect contribution. `[Shadows] Enabled` controls
+the enhancement.
 
-**Likely problems, by kind** (from reading; none was measured):
-
-* **Shimmer / crawl.**
-  1. The light direction changes every frame (the sun moves with the clock; at
-     `MinutesPerSecond=1` about 0.25° a second), so both maps are re-rasterised from a rotated
-     view each frame; `lightMatrix` snaps the *centre* to whole texels, which only stops crawl
-     under translation, not rotation. Shadow edges therefore crawl continuously. Remedy: update
-     the shadow direction in steps (e.g. every 0.25–0.5° or every few seconds) and cross-fade, or
-     snap the direction to a fixed angular grid.
-  2. Swaying leaves and plants are drawn into the maps (`shadow.vert` calls `sway`), so every
-     canopy shadow ripples every frame; with one PCF tap at ~0.05 blocks per texel this reads as
-     sparkle. Vanilla has neither the sway of blocks (`vegetation-wind.md` §1) nor shadows.
-  3. Small props cast only within `min(radius, SceneryDistance)` of the focus
-     (Renderer.cpp ~1348): their shadows pop at that ring.
-  4. The maps are centred on the focus (the player), the fade on the camera (`CameraFade`):
-     orbiting the camera moves the fade ring over a static map.
-* **Acne.** The base bias is 0.008 blocks, scaled by 1 + 2(1 − N·L); with the far map at
-  240 / 4096 ≈ 0.059 blocks per texel that is far below one texel, so the receiver-plane term
-  carries all the work. Where its derivative test fails (|det| ≤ 1e-12: tiny or degenerate
-  screen footprints, e.g. distant faces) it falls back to `worldTexel × min(slope, 8)`, which is
-  close to zero on faces facing the sun. Flat-lit tops at a distance are the likely place for
-  acne bands. A bias of half to one texel of the map in use (≈ 0.03–0.06 blocks) as the floor is
-  safer for axis-aligned voxel faces.
-* **Peter-panning / light leaks.** The slope-scaled part is capped at 16 texels × 1.1
-  (≈ 1 block on the far map) and grows at grazing light, i.e. mornings and evenings: shadows lift
-  away from the foot of walls and trunks by up to a block, leaving a lit gap where a wall meets
-  the ground. Also `exposure = smoothstep(0.15, 0.30, N·L)` forces faces at N·L < 0.15 to "fully
-  shadowed": vertical faces near sunrise flip between lit and shaded as the sun crosses that band.
-  For cubes, a normal offset (moving the lookup along the face normal by ~0.5–1 texel) is a better
-  bias than a large depth slope.
-* **Cascades that do little.** Near 50 blocks / 2048 ≈ 0.049 blocks per texel vs far
-  ≈ 0.059: the near map is only 20 % sharper, at the cost of a second pass and a blend band
-  (0.8–1.0 of the near radius) where two slightly different results are mixed. Either make the
-  near map clearly finer (e.g. 25 blocks at 2048) or drop it.
-* **Softness.** One bilinear compare tap gives a hard, stair-stepped edge one texel wide. The
-  vanilla shade (§2) is soft over a few blocks. If the addition is to sit with the Alpha look, a
-  wider filter (a 3 × 3 or Poisson PCF over ~0.25 block, or PCSS-like widening with distance to
-  the caster) matches it better than sharpness.
+On the tested Radeon, the fixed-camera scene produced a visible cast shadow
+with either look. Repeated frames and a subtexel focus move had identical
+pixels. This covers a fixed light and static geometry. Timing at light-step
+and cascade crossings and moving foliage still needs broader motion checks.
 
 ## 5. CubeVulkan today: TAA and SMAA (additions)
 
-`shaders/taa.frag` (ported, it says, from the user's TemporalAA mod), `src/RendererPost.cpp`,
-SMAA passes. Defaults: `[AntiAliasing] TAA=1, SMAA=1`, history 0.65, edge history 0.90, resolve
-blur 0.12, jitter 0.75 px over an 8-frame Halton sequence.
+`[AntiAliasing]` defaults enable both effects. The renderer uses an eight-frame
+Halton sequence at a half-pixel jitter scale. The TAA defaults are 85% base
+history, an 80% edge setting and 12% resolve blur. The high-edge weight uses
+the greater of the base and edge settings. SMAA follows the temporal resolve. The interface
+draw follows both passes.
 
-**Parity note.** Vanilla is MSAA (§3). A vanilla-faithful option is multisampling the scene with
-`antiAliasingSamples` (Steam default 8) and no temporal pass; TAA stays a CubeVulkan option.
+The TAA shader reprojects camera motion from the nearest depth in a small
+cross. It compares the current and previous sky classification before
+blending. Geometry also has to pass the existing projected depth check.
+Unavailable or rejected history returns the current filtered sample. When
+TAA is disabled, that path returns the single current sample. Target changes,
+toggles, title cuts and large camera jumps reset the available history.
 
-**Likely problems** (from reading):
-
-* **Ghosting on anything that moves by itself.** Reprojection uses camera motion only
-  (`clipToPrevious` from the depth of the current pixel): there are no motion vectors for
-  creatures, the eagle, projectiles, water, swaying leaves and plants (vertex animation), cloud
-  pop-in or the shadow maps' changes. Those pixels reproject to where the surface *was*, and only
-  the neighbourhood clip saves them. With edge history 0.90, edges of moving creatures and swaying
-  foliage trail. Remedy: write per-object (and per-vertex for sway) motion vectors, or lower the
-  history where the depth test or a velocity flag says "moving".
-* **Blur.** The current frame is sampled at `(gl_FragCoord + jitter) / size` with bilinear
-  filtering, i.e. between texels every frame, plus a 0.12 cross blur, plus Catmull-Rom history:
-  textures-free voxel faces lose their crisp single-colour edges (vanilla MSAA keeps interiors
-  exact). Sampling the current frame with `texelFetch` at the pixel and removing the jitter by
-  reprojection instead keeps faces sharp.
-* **Depth test in NDC.** `sameSurface` compares non-linear NDC depths with a tolerance plus 4 ×
-  the depth derivatives; far away (most of NDC's range is near 1) unrelated surfaces pass, near
-  the camera small moves fail. Linearising both depths before the comparison makes the test
-  uniform.
-* **Sky pixels always accepted** (`d ≥ 0.99999`): the sun sprite, stars and the moon move across
-  the sky with the clock and the camera; accepted history smears them (stars are a few pixels).
-* **Interaction with the shadow maps.** Shadows that crawl or ripple (§4) change shading under a
-  static camera; TAA cannot reproject that and turns the sparkle into a slow shimmer.
-* **History reset only on toggle or a jump of more than 8 blocks**: a cut on the title (Continue,
-  a camera snap) of under 8 blocks keeps a stale history for a few frames.
+A Vulkan regression covers a newly visible sky pixel beside a silhouette.
+The corrected frame matches its history-reset reference. Moving objects still
+share the camera-only reprojection, which limits what fixed-camera coverage
+establishes about animated creatures, water and foliage.
 
 ## 6. Verification
 

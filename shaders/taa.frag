@@ -39,13 +39,17 @@ vec3 historyAt(vec2 uv, vec2 size) {
 }
 
 void main() {
-    float weight = pc.a.x, valid = pc.a.y;
+    float weight = pc.a.x;
+    bool valid = pc.a.y > .5;
     vec2 jitter = pc.a.zw;
     float blurStrength = pc.b.x, edgeWeight = pc.b.y, reproject = pc.b.z, depthTolerance = pc.b.w;
     ivec2 isize = textureSize(scene, 0);
     vec2 size = vec2(isize);
     vec2 uv = (gl_FragCoord.xy + jitter) / size; // unjittered sample of this frame
     vec4 current = textureLod(scene, uv, 0);
+    outColor = current;
+    if (!valid && blurStrength == 0)
+        return;
     vec3 lo = current.rgb, hi = current.rgb, left = current.rgb, right = current.rgb, up = current.rgb,
          down = current.rgb;
     for (int y = -1; y <= 1; y++)
@@ -60,7 +64,11 @@ void main() {
             if (x == 0 && y == -1) up = c;
             if (x == 0 && y == 1) down = c;
         }
-    float accepted = valid;
+    vec3 filtered = mix(current.rgb, (current.rgb * 4 + left + right + up + down) / 8, blurStrength);
+    outColor = vec4(filtered, current.a);
+    if (!valid)
+        return;
+
     bool sky = false;
     vec3 raw;
     if (reproject > .5) {
@@ -88,9 +96,12 @@ void main() {
         float previousSurface = texelFetch(previousDepth, previousPixel, 0).r;
         float tolerance = depthTolerance + 4 * (abs(dFdx(previousNdc.z)) + abs(dFdy(previousNdc.z)));
         sky = d >= .99999;
-        bool sameSurface = sky || abs(previousSurface - previousNdc.z) <= tolerance;
-        accepted *= inside && sameSurface ? 1 : 0;
-        raw = historyAt(clamp(historyUV, vec2(0), vec2(1)), size);
+        // Keep the history on the same side of a revealed sky silhouette.
+        bool previousSky = previousSurface >= .99999;
+        bool sameSurface = sky ? previousSky : !previousSky && abs(previousSurface - previousNdc.z) <= tolerance;
+        if (!inside || !sameSurface)
+            return;
+        raw = historyAt(historyUV, size);
     } else
         raw = texelFetch(history, ivec2(gl_FragCoord.xy), 0).rgb;
     // Clip history toward this pixel's colour until it enters the neighbourhood.
@@ -101,10 +112,9 @@ void main() {
     float outside = maxChannel(abs(raw - old));
     float confidence = 1 - smoothstep(.02, .12, outside);
     float edge = smoothstep(.04, .20, maxChannel(hi - lo));
-    float accumulation = mix(weight, max(weight, edgeWeight), edge) * accepted * confidence;
+    float accumulation = mix(weight, max(weight, edgeWeight), edge) * confidence;
     if (sky)
         accumulation *= SKY_HISTORY; // (stars are a few pixels: a long history smears them)
-    vec3 filtered = mix(current.rgb, (current.rgb * 4 + left + right + up + down) / 8, blurStrength);
     float currentWeight = (1 - accumulation) / (1 + maxChannel(filtered));
     float historyWeight = accumulation / (1 + maxChannel(old));
     outColor = vec4((filtered * currentWeight + old * historyWeight) / (currentWeight + historyWeight), current.a);

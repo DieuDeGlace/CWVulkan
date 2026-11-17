@@ -115,11 +115,17 @@ parity claims:
 | Extension | Provenance |
 |---|---|
 | Alpha terrain and lighting profile | Reuses the sister AlphaVulkan project's own clean-room GPL implementation under its independent contracts |
+| Directional shadow maps and TAA/SMAA | CubeVulkan's optional lighting and image passes. The traced Steam path presents current-frame MSAA. [Rendering settings](specs/shadows.md) |
 | Dual-tone hair controls | Built on CubeVulkan's own tinting and profile APIs |
 | World list pages | An optional extension beside the native world selection |
 
 Every checkpoint preserves these looks: Alpha relief and lighting, the dry purple Undead Lands,
 distinct biome palettes, and the gentler Savannah and Omega water.
+
+Recent review checked two landmark cores, their map approaches, open-land
+relief and representative Undead Lands and Savannah columns. Its original
+Steam evidence covers the scoped location, channel, palette and frame paths.
+[Terrain measurements](alpha-generation.md), [held Steam trace](specs/steam-terrain-render-review-20261117.md).
 
 ### B3. Host random streams
 

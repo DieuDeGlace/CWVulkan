@@ -1,5 +1,21 @@
 # Source review checkpoint — 2026-11-08
 
+## Alpha terrain, shadows and temporal resolve review - 2026-11-17
+
+The held Steam trace covers the native height and palette inputs and
+current-frame multisample presentation. A comparison with the project's
+authored Steam Vulkan test shaders identified a missing depth rejection in
+CubeVulkan's temporal resolve. A controlled Vulkan sequence reproduced a
+foreground tint on a revealed sky pixel. The corrected frame matched its
+history-reset reference byte for byte. The camera render suite now covers
+this transition.
+
+The current Alpha samples retain volcano and forest mound peaks, a smooth
+approach in the measured transects, higher open-land relief, dry purple
+Undead Lands and gentler Savannah terrain. Both looks passed fixed-camera
+cast-shadow comparisons. Broader animation and visual parity still require
+live acceptance. [Terrain review](alpha-generation.md), [rendering settings](specs/shadows.md).
+
 ## Stock graphical entry - 2026-11-17
 
 The isolated startup trace follows the documented operand parser to the
