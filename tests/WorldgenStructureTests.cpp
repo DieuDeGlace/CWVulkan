@@ -914,7 +914,7 @@ int worldgenStructureTests() {
     dungeonGuardFloorChecks();
     const fs::path game = gameDir();
     if (game.empty())
-        return 0;
+        return failures;
     cellsOracle(game, false, 5000);
     const auto directory = generatedZonesDir(game);
     zonesOracle(directory, 6, false);

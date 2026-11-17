@@ -1,5 +1,19 @@
 # Clean-room process
 
+## Host startup combat random stream - 2026-11-17
+
+The original host simulation launch carries the session pointer. Its empty
+first tick consumes zero resolved game-side CRT draws or seeds while its
+actors, selected zones, peers, projectiles and incoming work stay empty.
+Once work is admitted, pre-step damage, expiring zone effects and the
+ordered daily zone refresh can reach different first random operations.
+[Held host startup trace](specs/steam-host-startup-crt-route-20261117.md)
+
+The live entry state remains unresolved across the external runtime boundary.
+The engine still keeps zone-refresh generation and resident altitude sampling
+in separate streams. The populated host sequence needs matching seed and
+draw evidence before changing that path.
+
 ## Ring Menu retained controller movement - 2026-11-17
 
 The Ring Menu uses the processed movement stick for auto-close, selection
