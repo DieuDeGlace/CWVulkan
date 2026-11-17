@@ -1,5 +1,24 @@
 # Clean-room process
 
+## Stock room furniture and candle variants - 2026-11-17
+
+Stock room construction leaves the alternate wall list empty. The traced
+construction path has no entries for wall selectors 8–10 or center selectors
+1–3. The independent raw-table review supersedes the first report's entries
+for wall selectors 4 and 5, including its attribution of the shelf's draws.
+Selector 4 builds the shelf and can place a Candle. Selector 5 builds the
+stepped pillar and draws no local random values.
+[Held stock room trace](specs/steam-stock-room-furniture-reach-20261117.md)
+[Held dispatch and item verification](specs/steam-wall-piece-dispatch-verification-20261117.md)
+
+The generated Candle record stores the final draw modulo three. The seeded
+room test checks the cavity, Candle position, turn and variant, and the
+separate lower-room pillar. The variant assertion fails on the previous
+generator. The earlier building spec's raw-draw item modifier is superseded
+by the independently held verification. Required owner-data and Vulkan
+checks, including Alpha scenery and shared water, and extractor independence
+passed. Original-client furnished-room captures for this case remain open.
+
 ## Dungeon and encounter resident count checks - 2026-11-17
 
 Resident admission accumulates the defeated count in signed 32-bit units,

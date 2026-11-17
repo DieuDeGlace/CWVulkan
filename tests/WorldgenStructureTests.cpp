@@ -796,6 +796,55 @@ void hangingConeChecks() {
     WS_CHECK(terrain.draws.empty());
 }
 
+void roomWallFurnitureChecks() {
+    const auto world = wg::worldValues(123);
+    wg::CellObjects cells(world);
+    wg::BuildingRules rules(cells);
+    for (bool belowGround : {false, true}) {
+        wg::ZoneTerrain terrain;
+        terrain.columns.resize(wg::ZONE_COLUMNS);
+        terrain.retainedColours.resize(wg::ZONE_COLUMNS);
+        wg::ZoneBuild zone(terrain, world, cells, true);
+        zone.seed(14);
+        wg::BuildingBuilder building(zone, rules, 1, 1, 1, 1, belowGround ? 0 : 35,
+                                     belowGround ? wg::CastleCell{1, 0, 2, 1} : wg::CastleCell{});
+        const wg::Block ground{100, 90, 80, 0, wg::blocktype::ROCK, 0};
+        for (int x = 0; x < wg::ZONE_SIZE; ++x)
+            for (int y = 0; y < wg::ZONE_SIZE; ++y)
+                zone.store(x, y, 38, ground);
+        const wg::Block wall{140, 110, 90, 0, wg::blocktype::ROCK, 0x02};
+        for (int x = 22; x <= 26; ++x)
+            for (int z = 41; z < 62; ++z)
+                zone.store(x, 17, z, wall);
+        wg::Floor floor;
+        floor.f = belowGround ? -1 : 0;
+        floor.level = belowGround;
+        floor.z0 = 40;
+        floor.top0 = 64;
+        floor.floorColour = {140, 110, 90};
+        floor.floorColour2 = {130, 120, 110};
+        building.roomContents(floor);
+
+        // The first wall roll accepts the supported wall. The next draw picks
+        // selector 4 at site 35 and selector 5 in the plain style-2 lower room.
+        const auto firstCavity = zone.read(25, 19, 41);
+        if (belowGround) {
+            WS_CHECK(firstCavity.type == wg::blocktype::ROCK && zone.items.empty());
+            WS_CHECK(terrain.draws.size() >= 3 && terrain.draws[2] == 9192);
+            continue;
+        }
+        WS_CHECK(wg::isOpen(firstCavity) && firstCavity.flags == 0x02);
+        WS_CHECK(terrain.draws.size() >= 8 && terrain.draws[7] == 24071);
+        WS_CHECK(zone.items.size() == 1);
+        if (zone.items.size() == 1) {
+            const auto &candle = zone.items.front();
+            WS_CHECK(candle.item.category == 19 && candle.item.id == 0);
+            WS_CHECK(candle.item.modifier == 2); // The eighth draw is reduced modulo three.
+            WS_CHECK(candle.x == 1671168 && candle.y == 1277952 && candle.z == 2686976 && candle.angle == 270.0f);
+        }
+    }
+}
+
 void plannerDoorChecks() {
     // Independent arithmetic examples from worldgen-parity-gaps.md §10.
     WS_CHECK(wg::cellRandomUnsigned(26966, 0, 0x4e6289) == 0xffffffffu);
@@ -860,6 +909,7 @@ void dungeonGuardFloorChecks() {
 int worldgenStructureTests() {
     failures = 0;
     hangingConeChecks();
+    roomWallFurnitureChecks();
     plannerDoorChecks();
     dungeonGuardFloorChecks();
     const fs::path game = gameDir();
@@ -1614,6 +1664,7 @@ int worldgenDungeonGuardTargets(int seed, int32_t blockX, int32_t blockY) {
 int worldgenStructureCommand(int maxZones) {
     failures = 0;
     hangingConeChecks();
+    roomWallFurnitureChecks();
     plannerDoorChecks();
     dungeonGuardFloorChecks();
     const fs::path game = gameDir();

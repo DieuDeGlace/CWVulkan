@@ -176,11 +176,11 @@ public:
             c.box(-3, 0, z, 7, 1, 4);
             break;
         case 7: windowBox(c, z); break;
-        default: break; // 8-10 belong to lists no room fills (open question 6)
+        default: break; // Stock room construction does not populate selectors 8 through 10.
         }
     }
 
-    // The bookshelf (0x69ce0) and its books.
+    // The shelf (0x69ce0) and its candles.
     void bookshelf(Mason &c, int32_t z, int32_t top) {
         c.box(-4, 0, z - 1, 9, 1, 1);
         const int32_t h = top - z;
@@ -195,15 +195,14 @@ public:
                 continue;
             const int32_t a = zone.draw() % 2, b = zone.draw() % 2;
             const Mason::World w = c.world(a, b, zz);
-            GroundItem book;
-            book.angle = (float)(zone.draw() % 4 * 90);
-            book.item.category = itemcategory::BOOK;
-            book.item.id = 0;
-            book.item.modifier = (uint32_t)zone.draw(); // the raw draw
-            book.x = trunc64(((double)w.x + 0.5) * 65536.0);
-            book.y = trunc64(((double)w.y + 0.5) * 65536.0);
-            book.z = dotsOf(w.z);
-            zone.items.push_back(book);
+            GroundItem candle;
+            candle.angle = (float)(zone.draw() % 4 * 90);
+            candle.item.category = itemcategory::CANDLE;
+            candle.item.modifier = zone.draw() % 3;
+            candle.x = trunc64(((double)w.x + 0.5) * 65536.0);
+            candle.y = trunc64(((double)w.y + 0.5) * 65536.0);
+            candle.z = dotsOf(w.z);
+            zone.items.push_back(candle);
         }
     }
 

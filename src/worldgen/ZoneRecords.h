@@ -21,7 +21,7 @@ constexpr uint32_t OBJECTS_COPY = 0x78;
 struct Item {
     uint8_t category = 0; // +0x00; 0 for none
     int32_t id = 0;       // +0x04
-    uint32_t modifier = 0; // +0x08: a generated item's seed
+    uint32_t modifier = 0; // +0x08: category-specific seed or variant
     Int2 region;          // +0x0c, +0x10
     uint8_t rarity = 0;   // +0x14: the rarity, or a worn item's level
     uint32_t realm = 0;   // +0x18: an artifact's realm
@@ -68,7 +68,7 @@ constexpr uint32_t PER_PLAYER = 2;
 // Item categories the generator lays down.
 namespace itemcategory {
 constexpr uint8_t PLANT = 0xb;   // herbs, shells, crops, water flasks
-constexpr uint8_t BOOK = 0x13;
+constexpr uint8_t CANDLE = 0x13;
 constexpr uint8_t SPECIAL = 24;  // role items, boats
 constexpr uint8_t GENERATED = 30; // a reward: weapon, armour or the like made from its modifier
 } // namespace itemcategory
