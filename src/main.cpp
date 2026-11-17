@@ -3118,17 +3118,20 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             return 0;
         }
     };
+    // True only for a fresh native Talk. The Use caller then queues the activation.
     auto startTalk = [&](const Speaker &k) {
         const auto *c = personOf(k);
         const int64_t who = speakerId(k);
         if (!who)
-            return;
+            return false;
         lastTalkedSpeaker = k;
-        if (k.native && npcSpeech.repeatUse(who)) return;
+        if (k.native && npcSpeech.repeatUse(who))
+            return false;
         answers.clear(); // a newly addressed conversation replaces its offered answers
         if (k.native) {
             TalkScript script;
-            if (!conversationFor(k, who, script)) return;
+            if (!conversationFor(k, who, script))
+                return true; // A fresh Talk still activates without a script.
             auto play = playScript(script, speech, Speech::Choice(talkPhraseSeed(who)), &talkNames);
             for (const auto &what : play.unrendered)
                 logLine("Conversation: " + script.speaker + " cannot say this in full yet: " + what);
@@ -3141,7 +3144,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             const auto speaker = npcspeech::actor(spawned.record(who));
             npcSpeech.attach(who, spawned.playerId(), std::move(pages), speaker.drawn);
             for (const auto &line : play.lines) logLine("Talk: " + line);
-            return;
+            return true;
         }
         Talk t;
         t.npc = k;
@@ -3203,7 +3206,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (!t.lines.empty() || !answers.empty()) {
                 if (!t.lines.empty()) { talk = std::move(t); pageShown(); }
                 else talk.reset();
-                return; // answers are independent of the speaker bubble
+                return false; // answers are independent of the speaker bubble
             }
         } else if (inventedQuests && c && !mine && c->id % 3 == 0 && std::count_if(quests.begin(), quests.end(), [](auto &q) { return q.state < 2; }) < 3) {
             // A request: the nearest kind of monster in reach, and how many to defeat.
@@ -3261,6 +3264,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         t.lines.push_back(speech.say("goodbye", speakerContext(k, nullptr, {}), chatter));
         talk = t;
+        return false;
     };
     // Multiplayer (Multiplayer.h, docs/multiplayer.md). Every game runs its own host world, which
     // decides, and the client world the player sees, a mirror of whichever host it is joined to;
@@ -6701,8 +6705,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     flightmasterMode = true;
                     break;
                 case Action::Converse:
-                    startTalk(Speaker{true, SIZE_MAX, p.creature, race});
-                    spawned.activate(p.creature);
+                    if (startTalk(Speaker{true, SIZE_MAX, p.creature, race}))
+                        spawned.activate(p.creature);
                     break;
                 case Action::Shrine:
                     mapSelection.openShrines();
@@ -9179,11 +9183,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (talk)
                         for (auto &line : talk->lines)
                             logLine("Talk: " + line);
-                } else
-                    logLine("Talk: no person within 400 blocks");
-                talkTo = -1;
+                    talkTo = -1;
+                }
             }
-            if (talkTo >= 0 && time > 1.5) { // --talk: walk up to that townsperson and talk
+            if (talkTo >= 0 && time > 1.5 && !spawnedReady) { // --talk: walk up to that townsperson and talk
                 std::vector<std::pair<float, size_t>> people;
                 for (size_t k = 0; k < actors.count(); k++)
                     if (actors.townsperson(k))
@@ -9842,6 +9845,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         logLine(featFixtureCaptured ? "Feat capture: visible owner-font frame captured" : "Feat capture: no visible frame");
         if (!featFixtureCaptured) exitCode = 1;
     }
+    if (talkTo >= 0 && spawnedReady)
+        logLine("Talk: no person within 400 blocks before exit");
     if (lastTalkedSpeaker && lastTalkedSpeaker->native) {
         logLine("NPC speech retained: " + std::to_string(npcSpeech.bubbles().size()) + " bubbles, " +
                 std::to_string(npcSpeech.emotes().size()) + " emotes");

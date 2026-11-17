@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## Ordinary NPC Talk activation - 2026-11-17
+
+The licensed live Use path reproduced an extra activation while the NPC's speech
+was active. A fresh Talk still queues one activation, including when the script
+is empty. A repeat advances the existing bubble and exits before queuing another
+activation, as described by the [held Talk contract](specs/steam-npc-talk-dictionary-seed-20261117.md).
+The hidden before and after probes waited for the same resident and drove two
+ordinary rising Use presses. The repeat produced one queued activation before
+the fix and zero after it. Both runs displayed the speech and advanced its read
+time on the second press. The local native `--talk` probe also waits for a nearby
+resident to load. Full owner-data CPU, Vulkan and extractor checks pass.
+
 ## Stable NPC dialogue choices - 2026-11-17
 
 Fresh NPC Talk starts each phrase from the unsigned 64-bit speaker ID modulo 100,000. The specialization
