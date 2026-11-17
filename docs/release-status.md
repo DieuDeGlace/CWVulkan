@@ -1,5 +1,22 @@
 # Source review checkpoint — 2026-11-08
 
+## Ring Menu retained controller movement - 2026-11-17
+
+The Ring Menu uses the processed movement stick for auto-close, selection
+repeat and arrow feedback. The sampled pair is cleared on admitted ordinary
+menu and failed XInput polls and retained through input bypasses. Selection
+still responds to a nonzero horizontal axis, and arrow feedback uses the
+strict 0.2 threshold in each direction.
+[Held controller and Ring trace](specs/steam-ring-stick-routing-20261117.md)
+
+Eleven paired cases exercised the Ring update in a licensed hidden engine
+session with controlled controller samples and a disposable profile. The
+prior build moved on a suppressed horizontal sample and closed on a suppressed
+vertical sample. The corrected build also retained the cleared pair on the
+following bypass. The repeat, arrow, failed poll and vertical boundary cases
+passed. Required owner-data, Vulkan and extractor checks passed. Physical
+controller testing and a live original-client comparison remain open.
+
 ## Stock room furniture and candle variants - 2026-11-17
 
 Stock room construction leaves the alternate wall list empty. The traced

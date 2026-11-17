@@ -8995,7 +8995,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     const auto choices = itemselector::candidates(nativeInventory->inventory);
                     // HUD/name selection precedes this frame's left/right repeat changes.
                     const size_t selected = itemselector::wrappedIndex(itemSelector.index, choices.size());
-                    const auto analog = gamepadStick(input.gamepad.leftX, input.gamepad.leftY);
+                    const auto analog = gameInput.gamepad().movement;
                     itemselector::Input selectorInput;
                     selectorInput.allowToggle = false; // Native toggle/latch already visited in its late owner.
                     selectorInput.toggle = itemInputHeld(gameoptions::RING_MENU);
