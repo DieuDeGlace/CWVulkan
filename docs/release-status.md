@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Steam sky clock and forest night palette - 2026-11-17
+
+The Steam renderer uses its gameplay daylight calculation for the palette.
+The twilight blends divide by the native binary32 spans, and the forest modifier
+now includes the lower night sky. The [isolated palette trace](specs/steam-submerged-sky-palette-clock-20261117.md)
+records the frame clock, regional inputs, submerged palette, easing and sky shader.
+
+Two exact boundary values and the forest night color failed before the fix.
+The neutral settled 05:06 underwater sky matches the held GPU reference
+RGB (84, 88, 215) before and after. Matching the compass heading in the licensed
+lake replay on the same binary brought the upper blue background within two RGB
+counts per channel of the Steam capture. The replay still estimates the lens and
+avatar pose. Full owner-data, Vulkan and extractor checks passed.
+
 ## Screenshot readback performance - 2026-11-17
 
 The renderer copies the presented frame once from the mapped Vulkan buffer.

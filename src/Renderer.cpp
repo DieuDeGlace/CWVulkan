@@ -1353,7 +1353,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         steamLights.update(steamlighting::targets(lighting.timeMs, environment),
                            steamlighting::frameMilliseconds(std::max(elapsedMs, 0.0)));
         // §B.3, eased as §B.4.
-        steamsky::Palette target = steamsky::palette(alpha::paletteDaylight(dayMs), environment.region, underwater,
+        steamsky::Palette target = steamsky::palette(steamlighting::dayCoordinate(lighting.timeMs), environment.region, underwater,
                                                      {lighting.farFlight, lighting.effect13RemainingMs});
         if (sharedWater && underwater) {
             const auto submerged = waterlook::submerged(S);

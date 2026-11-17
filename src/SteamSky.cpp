@@ -97,6 +97,7 @@ Palette palette(float L, const Region &region, bool underwater, const Conditions
         day = {lerp(day.sky1, {.2f, .6f, .4f, 1}, k), lerp(day.sky2, {0, .1f, .2f, 1}, k), lerp(day.fog, {.4f, .1f, .8f, 1}, k)};
         duskB = {lerp(duskB.sky1, {.1f, .6f, .3f, 1}, k), lerp(duskB.sky2, {0, .05f, .1f, 1}, k), lerp(duskB.fog, {.4f, .1f, .8f, 1}, k)};
         duskA = {lerp(duskA.sky1, {.3f, .1f, .4f, 1}, k), lerp(duskA.sky2, {.2f, .2f, .2f, 1}, k), lerp(duskA.fog, {.4f, .2f, .5f, 1}, k)};
+        night.sky1 = lerp(night.sky1, {.3f, .1f, .4f, 1}, k);
         night.fog = lerp(night.fog, {.1f, .15f, .2f, 1}, k);
     }
     // 6. Places of kind 27: pink and blue skies by day and at the later dusk.
@@ -115,18 +116,18 @@ Palette palette(float L, const Region &region, bool underwater, const Conditions
         day.sky2 = duskB.sky2 = glm::vec4(0, 0, 0, 1);
     }
 
-    // Interpolate over L.
+    // Interpolate over L with the native binary32 spans.
     Key sky;
     Palette p;
     if (L > DAY_FROM) {
         sky = day;
         p.sun = DAY_SUN;
     } else if (L > DUSK_B_AT) {
-        const float t = (L - DUSK_B_AT) / (DAY_FROM - DUSK_B_AT);
+        const float t = (L - DUSK_B_AT) / .15f;
         sky = lerp(duskB, day, t);
         p.sun = lerp(DUSK_SUN, DAY_SUN, t);
     } else if (L > DUSK_A_AT) {
-        const float t = (L - DUSK_A_AT) / (DUSK_B_AT - DUSK_A_AT);
+        const float t = (L - DUSK_A_AT) / .40f;
         sky = lerp(duskA, duskB, t);
         p.sun = DUSK_SUN;
     } else {

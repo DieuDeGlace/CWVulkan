@@ -5,6 +5,7 @@
 #include "Clouds.h"
 #include "GameMath.h"
 #include "SteamSky.h"
+#include "SteamLighting.h"
 #include "worldgen/Noise.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -182,6 +183,9 @@ void steamPaletteKeys() {
     steamsky::Palette p = steamsky::palette(.6f, temperate, false);
     SKY_CHECK(near(p.sky1, {1, .95f, .5f}) && near(p.sky2, {.3f, .5f, 1}) && near(p.fog, {.7f, .6f, .3f}) &&
               near(p.sun, {1.5f, .85f, .25f}));
+    // Exact inclusive blend endpoints from the held Steam palette trace.
+    SKY_CHECK(std::bit_cast<uint32_t>(steamsky::palette(.60f, temperate, false).sky2.r) == 0x3e999999u);
+    SKY_CHECK(std::bit_cast<uint32_t>(steamsky::palette(.75f, temperate, false).sky1.r) == 0x34400000u);
     p = steamsky::palette(.675f, temperate, false);
     SKY_CHECK(near(p.sky1, {.5f, .775f, .75f}) && near(p.sun, {1.5f, 1.075f, .325f}));
     // Dusk A at L 0.2, halfway to dusk B at 0.4.
@@ -203,6 +207,10 @@ void steamPaletteKeys() {
     // Under water the sky takes the upper colour.
     p = steamsky::palette(1, temperate, true);
     SKY_CHECK(near(p.sky1, p.sky2) && near(p.fog, p.sky2) && near(p.sky2, {0, 0, .8f}));
+    const float dawn = steamlighting::dayCoordinate(18'360'000.f);
+    p = steamsky::palette(dawn, temperate, true);
+    SKY_CHECK(near(dawn, .4302347600f, 1e-7) && p.sky1 == p.sky2 && p.fog == p.sky2 &&
+              near(p.sky2, {.38488263f, .37267607f, .91511738f}, 1e-7f));
 
     // The region modifiers at full strength, at noon.
     steamsky::Region moist = temperate;
@@ -225,7 +233,8 @@ void steamPaletteKeys() {
     forest.forest = 1;
     p = steamsky::palette(1, forest, false);
     SKY_CHECK(near(p.sky1, {.2f, .6f, .4f}) && near(p.sky2, {0, .1f, .2f}) && near(p.fog, {.4f, .1f, .8f}));
-    SKY_CHECK(near(steamsky::palette(0, forest, false).fog, {.1f, .15f, .2f}));
+    p = steamsky::palette(0, forest, false);
+    SKY_CHECK(near(p.sky1, {.3f, .1f, .4f}) && near(p.sky2, {0, 0, 0}) && near(p.fog, {.1f, .15f, .2f}));
     steamsky::Region pink = temperate;
     pink.kind27 = 1;
     p = steamsky::palette(1, pink, false);
@@ -240,7 +249,11 @@ void steamPaletteKeys() {
     SKY_CHECK(steamsky::palette(0, temperate, false).sun.a == 0);
     // Far flight changes selected keys after place modifiers; fog receives the full saved RGBA.
     p = steamsky::palette(.6f, pink, false, {true, {}});
-    SKY_CHECK(p.sky1 == glm::vec4(0, 0, 0, 1) && p.sky2 == glm::vec4(0, 0, 0, 1));
+    // At exactly 0.60 the preceding key contributes -2^-23 to the selected blend.
+    constexpr float residual = -0x1p-23f;
+    const glm::vec3 upperAtBoundary = residual * glm::vec3(.3f, .35f, .8f);
+    SKY_CHECK(p.sky1 == glm::vec4(residual * glm::vec3(1, .5f, .1f), 1) &&
+              p.sky2 == glm::vec4(upperAtBoundary, 1));
     SKY_CHECK(near(p.fog.a, .75) && near(p.fog, {.9f, .575f, .75f}));
     p = steamsky::palette(.2f, pink, false, {true, {}});
     SKY_CHECK(near(p.sky1, {1, .5f, .1f}) && near(p.fog, {1, .5f, .2f}));
@@ -249,7 +262,7 @@ void steamPaletteKeys() {
     // Camera water replacement precedes effect13; its age uses an upper-only clamp.
     p = steamsky::palette(.6f, pink, true, {true, 58500.f});
     SKY_CHECK(near(p.sky1, {.45f, .5f, .5f}) && p.sky1.a == 1 && p.fog == p.sky1);
-    SKY_CHECK(p.sky2 == glm::vec4(0, 0, 0, 1) && p.sun.a == 1);
+    SKY_CHECK(p.sky2 == glm::vec4(upperAtBoundary * .5f, 1) && p.sun.a == 1);
     p = steamsky::palette(1, temperate, false, {false, 63000.f});
     SKY_CHECK(near(p.sky1, {-.9f, .2f, 1}));
 

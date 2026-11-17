@@ -1258,6 +1258,22 @@ int steamShaderTests() {
             const bool survived = kept && reset && *reset == *warm;
             std::cout << "Steam shader directional-range-reset" << (survived ? " PASS\n" : " FAIL\n");
             failures += !survived;
+
+            // Neutral region, no geometry, and enough simulated time for the submerged palette to settle.
+            WorldProbe submerged;
+            submerged.water = [](glm::vec3) { return true; };
+            retained.setWorldProbe(std::move(submerged));
+            Lighting dawn;
+            dawn.timeMs = 18'360'000.f;
+            for (int second = 1; second < 45; ++second)
+                retained.frame(view, dawn, {}, second, {}, {});
+            const auto path = root / "submerged-dawn.png";
+            retained.capture(path.string());
+            retained.frame(view, dawn, {}, 45, {}, {});
+            const auto pixel = centre(path);
+            const bool matched = pixel && *pixel == std::array<int, 3>{84, 88, 215};
+            std::cout << "Steam shader submerged dawn " << (matched ? "PASS\n" : "FAIL\n");
+            failures += !matched;
         }
         retained.shutdown();
     }
