@@ -1,4 +1,5 @@
 #include "Speech.h"
+#include "TalkGen.h"
 #include <cctype>
 #include <cstring>
 #include <fstream>
@@ -155,8 +156,22 @@ dialoguewords::Style scopeStyle(const std::string &text, dialoguewords::Style in
 }
 }
 
+size_t Speech::Choice::index(size_t count) const {
+    if (legacy)
+        return std::uniform_int_distribution<size_t>(0, count - 1)(*legacy);
+    return talkgen::xorshift(seed) % count;
+}
+
+std::optional<Speech::Choice> Speech::Choice::optionalChild() const {
+    if (legacy)
+        return std::uniform_int_distribution<int>(0, 1)(*legacy) ? std::optional<Choice>(*this) : std::nullopt;
+    if ((talkgen::xorshift(seed) & 1u) == 0)
+        return std::nullopt;
+    return Choice(seed + 1u);
+}
+
 std::string Speech::expand(const std::string &text, size_t &at, char until, const Context &context,
-                           std::mt19937 &random, int depth, bool pages, dialoguewords::Builder *words,
+                           Choice choices, int depth, bool pages, dialoguewords::Builder *words,
                            dialoguewords::Style style) const {
     std::string out;
     if (depth > 24)
@@ -168,8 +183,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
             size_t end = closing(text, at);
             auto alts = alternatives(text.substr(at + 1, end - at - 1));
             // The first conditioned alternative, in written order, with any of its tags present;
-            // else one without tags: the first in a seed-zero expansion, otherwise at random
-            // (steam-dictionary-alternative-selection-20261116 §a-b).
+            // else take the seeded index among unconditioned alternatives in written order.
             const std::string *chosen = nullptr;
             std::vector<const std::string *> free;
             for (auto &a : alts) {
@@ -185,20 +199,19 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 }
             }
             if (!chosen && !free.empty())
-                chosen = context.firstChoice ? free.front()
-                                             : free[std::uniform_int_distribution<size_t>(0, free.size() - 1)(random)];
+                chosen = free[context.firstChoice ? 0 : choices.index(free.size())];
             if (chosen) {
                 size_t inner = 0;
-                out += expand(*chosen, inner, '\0', context, random, depth + 1, pages, words, style);
+                out += expand(*chosen, inner, '\0', context, choices, depth + 1, pages, words, style);
             }
             at = end + 1;
         } else if (c == '[') {
             size_t end = closing(text, at);
-            // (a seed-zero expansion skips every optional group, §d step 4)
-            if (!context.firstChoice && std::uniform_int_distribution<int>(0, 1)(random)) {
+            const auto child = context.firstChoice ? std::nullopt : choices.optionalChild();
+            if (child) {
                 std::string inner = text.substr(at + 1, end - at - 1);
                 size_t i = 0;
-                out += expand(inner, i, '\0', context, random, depth + 1, pages, words, style);
+                out += expand(inner, i, '\0', context, *child, depth + 1, pages, words, style);
             }
             at = end + 1;
         } else if (c == '*' || c == '@' || c == '$' || c == '#') {
@@ -211,7 +224,7 @@ std::string Speech::expand(const std::string &text, size_t &at, char until, cons
                 auto it = lines.find(id);
                 if (it != lines.end()) {
                     size_t inner = 0;
-                    out += expand(it->second, inner, '\0', context, random, depth + 1, pages, words, style);
+                    out += expand(it->second, inner, '\0', context, choices, depth + 1, pages, words, style);
                 } else {
                     const auto value = name(id);
                     out += value;
@@ -295,13 +308,13 @@ std::vector<std::string> Speech::sayPages(const std::string &id, const Context &
 }
 
 std::vector<Speech::StyledPage> Speech::sayStyledPages(const std::string &id, const Context &context,
-                                                      std::mt19937 &random, std::vector<dialoguewords::Word> initial) const {
+                                                      Choice choices, std::vector<dialoguewords::Word> initial) const {
     const auto found = lines.find(id);
     if (found == lines.end()) return {};
     dialoguewords::Builder words;
     words.pages[0] = std::move(initial);
     size_t at = 0;
-    const auto expanded = expand(found->second, at, '\0', context, random, 0, true, &words);
+    const auto expanded = expand(found->second, at, '\0', context, choices, 0, true, &words);
     std::vector<StyledPage> result;
     size_t from = 0, page = 0;
     for (;;) {
@@ -323,9 +336,8 @@ std::string Speech::name(const std::string &id, bool plural) const {
     context.firstChoice = true;
     if (plural)
         context.tags.insert("plural");
-    std::mt19937 fixed(0);
     size_t at = 0;
-    std::string s = expand(it->second.first, at, '\0', context, fixed, 0);
+    std::string s = expand(it->second.first, at, '\0', context, Choice(0), 0);
     // Names keep their own capitals; only spaces are tidied.
     std::string out;
     for (char c : s) {
@@ -375,9 +387,8 @@ std::string Speech::text(const std::string &key, const std::set<std::string> &ta
             passed.insert("default");
         return hasEntry(it->second) ? text(it->second, passed, macros) : it->second;
     };
-    std::mt19937 fixed(0);
     size_t at = 0;
-    const std::string s = expand(*body, at, '\0', context, fixed, 0);
+    const std::string s = expand(*body, at, '\0', context, Choice(0), 0);
     std::string out;
     for (char c : s) {
         if (std::isspace((unsigned char)c)) {

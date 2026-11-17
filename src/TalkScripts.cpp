@@ -152,7 +152,7 @@ void setNameTags(std::set<std::string> &tags, const Speech &speech, const std::s
 }
 } // namespace
 
-TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937 &random, const TalkNames *names,
+TalkPlay playScript(const TalkScript &script, const Speech &speech, Speech::Choice choices, const TalkNames *names,
                     std::vector<TalkPlay::Page> initial) {
     TalkPlay play;
     play.pages = std::move(initial);
@@ -202,7 +202,7 @@ TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937
             const auto found = variableColours.find(fn);
             return found == variableColours.end() ? std::nullopt : std::optional<glm::vec4>(found->second);
         };
-        const auto said = speech.sayStyledPages(id, context, random, std::move(initial));
+        const auto said = speech.sayStyledPages(id, context, choices, std::move(initial));
         for (const std::string &fn : missing) // (realms' and rulers' names are not made yet)
             unrendered(id + ": " + fn);
         return said;

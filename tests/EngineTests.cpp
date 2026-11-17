@@ -8302,7 +8302,10 @@ static void speechGrammarTests() {
                "<name id=\"either\">{ #a #b Both | Neither }</name>\n"
                "<name id=\"order\">{ First | #b Tagged | Second }</name>\n"
                "<name id=\"free\">{ One | Two | Three }</name>\n"
-               "<name id=\"optional\">[maybe] always</name>\n";
+               "<name id=\"optional\">[maybe] always</name>\n"
+               "<speech id=\"selection\">{ amber | birch | cedar | dill | elm | fern | grass } { north | east | south }</speech>\n"
+               "<speech id=\"nested\">[ *inside ] { alpha | beta | gamma | delta | omega } [ *inside ]</speech>\n"
+               "<macro id=\"inside\">{ oak | pine | spruce | ash | yew }</macro>\n";
     }
     Speech speech;
     std::string why;
@@ -8319,6 +8322,25 @@ static void speechGrammarTests() {
     CHECK(speech.text("free", {}, {}) == "One");
     CHECK(speech.text("optional", {}, {}) == "always");
     CHECK(speech.name("Shield", false) == "" && speech.name("Shield", true) == "Shields");
+
+    const auto forSpeaker = [&](int64_t id, std::vector<std::string> tokens, bool response = false) {
+        TalkScript script{id, 0, 1, "", std::move(tokens)};
+        const Speech::Choice choices(response ? specializationPhraseSeed(id) : talkPhraseSeed(id));
+        return playScript(script, speech, choices).lines;
+    };
+    using Lines = std::vector<std::string>;
+    const Lines birchNorth{"Birch north"};
+    CHECK(forSpeaker(1, {"selection"}) == birchNorth);
+    CHECK(forSpeaker(100001, {"selection"}) == birchNorth); // same unsigned remainder
+    CHECK(forSpeaker(2, {"selection"}) == Lines{"Cedar north"});
+    CHECK(forSpeaker(INT64_C(4294967296), {"selection"}) == Lines{"Elm east"});
+    CHECK(forSpeaker(-1, {"selection"}) == Lines{"Birch east"});
+    CHECK(forSpeaker(100000, {"selection"}) == Lines{"Amber north"});
+    CHECK((forSpeaker(1, {"selection", "new_page", "selection"}) == Lines{"Birch north", "Birch north"}));
+    CHECK(forSpeaker(1, {"selection"}) == birchNorth);
+    CHECK(forSpeaker(3, {"nested"}) == Lines{"Pine gamma pine"}); // optional children use seed 4, sibling still uses 3
+    CHECK(forSpeaker(100000, {"nested"}) == Lines{"Alpha"});
+    CHECK(forSpeaker(INT64_C(4294967297), {"selection"}, true) == birchNorth); // response uses the low word directly
     std::error_code ec;
     fs::remove_all(dir, ec);
 }

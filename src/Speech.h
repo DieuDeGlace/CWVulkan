@@ -43,7 +43,21 @@ class Speech {
         std::string text;
         std::vector<dialoguewords::Word> words;
     };
-    std::vector<StyledPage> sayStyledPages(const std::string &id, const Context &, std::mt19937 &,
+    // The native seed is copied into each phrase and its children. Legacy callers
+    // can still pass their existing mutable random stream.
+    class Choice {
+      public:
+        explicit Choice(uint32_t seed) : seed(seed) {}
+        Choice(std::mt19937 &stream) : legacy(&stream) {}
+
+      private:
+        friend class Speech;
+        size_t index(size_t count) const;
+        std::optional<Choice> optionalChild() const;
+        std::mt19937 *legacy = nullptr;
+        uint32_t seed = 0;
+    };
+    std::vector<StyledPage> sayStyledPages(const std::string &id, const Context &, Choice,
                                           std::vector<dialoguewords::Word> initial = {}) const;
     // A <name id> ("Wizard"), or its plural.
     std::string name(const std::string &id, bool plural = false) const;
@@ -64,6 +78,6 @@ class Speech {
     std::map<std::string, std::string> lines; // speech and macro bodies
     std::map<std::string, std::pair<std::string, std::string>> names; // id -> body, tags
     std::string expand(const std::string &text, size_t &at, char until, const Context &context,
-                       std::mt19937 &random, int depth, bool pages = false,
+                       Choice choices, int depth, bool pages = false,
                        dialoguewords::Builder *words = nullptr, dialoguewords::Style style = {}) const;
 };

@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Stable NPC dialogue choices - 2026-11-17
+
+Fresh NPC Talk starts each phrase from the unsigned 64-bit speaker ID modulo 100,000. The specialization
+confirmation uses the low 32 bits of that ID. The formatter carries the seed by value through each
+phrase, chooses untagged alternatives with the native unsigned scramble, and advances the seed only
+for the children of an admitted optional group. The existing active speech entry still owns its pages.
+The [isolated Talk handoff](specs/steam-npc-talk-dictionary-seed-20261117.md) describes the separate mission-script seed and the reached
+response paths.
+
+The shipped English speech data uses flat entries. Eleven checks cover high ID bits, zero, repeated
+phrases across pages, nested groups and the specialization response. Ten assertions failed with the
+previous selection adapter. All five targets, required owner-data CPU tests, Vulkan image groups and
+extractor SDK independence passed.
+
+
 ## Reusing terrain road geometry - 2026-11-17
 
 Native terrain generation now keeps the ordered road links for four recent warped place cells per thread.

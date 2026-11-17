@@ -3129,7 +3129,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         if (k.native) {
             TalkScript script;
             if (!conversationFor(k, who, script)) return;
-            auto play = playScript(script, speech, chatter, &talkNames);
+            auto play = playScript(script, speech, Speech::Choice(talkPhraseSeed(who)), &talkNames);
             for (const auto &what : play.unrendered)
                 logLine("Conversation: " + script.speaker + " cannot say this in full yet: " + what);
             std::vector<dialoguechoice::Row> rows;
@@ -3918,8 +3918,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             TalkScript confirmation;
             confirmation.tokens = {"define_specialization", std::to_string(playerCls), std::to_string(playerSpec),
                                    "your_specialization_is_now"};
-            std::mt19937 feedbackRandom((uint32_t)action.speaker);
-            auto feedback = playScript(confirmation, speech, feedbackRandom, &talkNames, generalDialogue.pages());
+            const Speech::Choice choices(specializationPhraseSeed(action.speaker));
+            auto feedback = playScript(confirmation, speech, choices, &talkNames, generalDialogue.pages());
             generalDialogue.applyCompilation(std::move(feedback.pages));
         }
     };

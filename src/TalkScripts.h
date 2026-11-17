@@ -107,5 +107,10 @@ struct TalkPlay {
     // cannot name yet ("their_ruler_was_famous: @ruler").
     std::vector<std::string> unrendered;
 };
-TalkPlay playScript(const TalkScript &script, const Speech &speech, std::mt19937 &random, const TalkNames *names = nullptr,
+// Steam fresh Talk reduces the full unsigned ID. The specialization response
+// passes the low word directly (steam-npc-talk-dictionary-seed-20261117).
+inline uint32_t talkPhraseSeed(int64_t speaker) { return uint32_t(uint64_t(speaker) % 100000u); }
+inline uint32_t specializationPhraseSeed(int64_t speaker) { return uint32_t(speaker); }
+
+TalkPlay playScript(const TalkScript &script, const Speech &speech, Speech::Choice choices, const TalkNames *names = nullptr,
                     std::vector<TalkPlay::Page> initial = {});
