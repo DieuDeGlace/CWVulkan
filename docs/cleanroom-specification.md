@@ -132,6 +132,17 @@ and which operation runs first in a populated tick depend on the runtime and
 admitted work. [Host stream ownership](specs/steam-host-crt-stream.md),
 [bounded startup trace](specs/steam-host-startup-crt-route-20261117.md).
 
+Steam can also enter the shared world step from the frame thread on its own
+World instance. The mode byte governs access to resident refresh. The live
+comparison identifies the simulation worker by the outer return chain.
+[Held CRT return sites](specs/steam-host-live-return-sites-20261117.md).
+
+Two licensed original runs recorded 279 daily reseeds and 2,206 subsequent
+draws on the identified simulation workers. The game imports resolved to
+`ucrtbase.dll`. Area generation appeared on separate workers. The built
+CubeVulkan CRT object replayed every recorded authority draw exactly.
+Each capture covers the observed window following its first recorded seed.
+
 In the ordinary authority resident phase, selected loaded zones are visited in
 Zone-address order. Each zone's live refresh stamp is checked before its
 residents. A changed day reseeds the simulation stream. Any refresh draws and
@@ -176,7 +187,19 @@ The independent reset
 trace verifies that a race change zeroes class and specialization before setup.
 Its explicit store supersedes the earlier class-preservation statement in the
 pet stream contract. [Held pet reset contract](specs/steam-pet-transient-class-reset-20261117.md).
-The populated Steam host trace across combat, pets and ticks remains open.
+The first pet maintenance scan reads the byte length of the World's narrow
+name. It skips the scan at zero length. The graphical selected character
+loads its pet equipment from the version 11 save. The embedded authority
+receives that equipment through an accepted peer update. The graphical
+mode and the authority owner repair, link and action checks affect whether
+the pass can create a pet.
+[Held pet admission roles](specs/steam-live-pet-admission-roles-20261117.md).
+
+In the follow-up licensed capture, both live player views carried the copied
+Collie equipment for all 78 equipped samples. The sampled authority World
+had a nonempty name, the graphical World was in mode one and both sampled
+pet links stayed zero. A live trace spanning a death-area effect, pet setup
+and their subsequent consumers remains open.
 
 ## Part C. Referenced material
 

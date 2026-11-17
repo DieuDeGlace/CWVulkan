@@ -1,5 +1,22 @@
 # Clean-room process
 
+## Live Steam authority random stream - 2026-11-17
+
+The original simulation workers and host generation workers appeared on
+separate return chains during ordinary play. The active game imports resolved
+to `ucrtbase.dll`. The built CubeVulkan CRT object exactly replayed all 2,206
+draws following 279 recorded daily reseeds in two licensed captures.
+[Held CRT return sites](specs/steam-host-live-return-sites-20261117.md).
+
+The follow-up verified the equipped test item in both live player views and
+the authority World's nonempty name. Both sampled pet links stayed zero.
+[Held pet admission roles](specs/steam-live-pet-admission-roles-20261117.md).
+
+The live death-area and pet sequence remains open. The installed and
+disposable profiles matched their backups. Owner-data, Vulkan and SDK
+independence checks passed on the existing binaries.
+[Maintained specification](cleanroom-specification.md#b3-host-random-streams).
+
 ## Authority prelude draw order - 2026-11-17
 
 An independent original trace establishes the resolved stream from resident
