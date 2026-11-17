@@ -2315,16 +2315,19 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     vkQueueSubmit2(queue, 1, &submit, fr.fence);
     if (capturing) {
         vkWaitForFences(device, 1, &fr.fence, VK_TRUE, UINT64_MAX);
-        auto *px = (uint8_t *)readback.mapped;
-        bool bgra = swapFormat == VK_FORMAT_B8G8R8A8_UNORM || swapFormat == VK_FORMAT_B8G8R8A8_SRGB;
-        for (size_t i = 0; i < (size_t)extent.width * extent.height; i++) {
-            if (bgra)
-                std::swap(px[i * 4], px[i * 4 + 2]);
-            if (!captureAlpha)
-                px[i * 4 + 3] = 255;
-        }
-        stbi_write_png(capturePath.c_str(), extent.width, extent.height, 4, px, extent.width * 4);
+        const size_t pixelCount = size_t(extent.width) * extent.height;
+        const auto *mappedPixels = static_cast<const uint8_t *>(readback.mapped);
+        // PNG filtering reads each row several times. Copy once from the Vulkan mapping.
+        std::vector<uint8_t> pixels(mappedPixels, mappedPixels + pixelCount * 4);
         destroyBuffer(readback);
+        const bool bgra = swapFormat == VK_FORMAT_B8G8R8A8_UNORM || swapFormat == VK_FORMAT_B8G8R8A8_SRGB;
+        for (size_t i = 0; i < pixelCount; ++i) {
+            if (bgra)
+                std::swap(pixels[i * 4], pixels[i * 4 + 2]);
+            if (!captureAlpha)
+                pixels[i * 4 + 3] = 255;
+        }
+        stbi_write_png(capturePath.c_str(), extent.width, extent.height, 4, pixels.data(), extent.width * 4);
         capturePath.clear();
     }
 

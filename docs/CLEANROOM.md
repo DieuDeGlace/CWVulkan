@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Screenshot readback performance - 2026-11-17
+
+The renderer copies the presented frame once from the mapped Vulkan buffer.
+Channel ordering, alpha handling and PNG filtering then run on CPU memory.
+A fixed 1920-class scene on the Radeon PRO W6600 yielded byte-identical PNGs.
+The opaque capture frame took 17.176 seconds before and
+0.813 seconds after the copy. The alpha-preserving frame took
+14.782 and 0.683 seconds. The owner-data, Vulkan and
+extractor checks passed. The licensed full-distance lake replay captured after
+all 793 sources and 673 prepared zones settled.
+
 ## Steam cloud depth inheritance - 2026-11-17
 
 Steam mode-10 cloud draws use the offset left by the current frame's ordered
@@ -27,8 +38,8 @@ The two held exposed-corner vectors pass. In the licensed morning replay the
 median gap across 1853 sampled cloud colors dropped from
 58.0 to 11.667 RGB counts
 per channel. The camera is estimated. Owner-data, Vulkan and extractor checks
-pass. Frame-specific retained depth state and exact native GPU rounding remain
-outside these comparisons.
+pass. The depth checkpoint above covers the retained frame state. Exact native
+GPU rounding remains open.
 
 ## Steam cloud view range and fog - 2026-11-17
 
@@ -82,7 +93,7 @@ owned procedural tables, median process CPU time to the first settled sample for
 override and were sampled once per second. All five targets, required owner-data CPU tests, the Vulkan image
 groups and extractor SDK independence passed.
 
-The separate [source-worker handoff](specs/after) confirms Steam's below-normal entry priority and its
+The separate [source-worker handoff](specs/steam-viewed-source-worker-priority-20261117.md) confirms Steam's below-normal entry priority and its
 CPU Usage transition requests. A bounded CPU saturation test reproduced long scheduler-yield delays with
 source-state lock wait below the timer's resolution. The engine retains the existing priority requests, source batch order and
 capture deadline. A licensed daytime replay under ordinary system load remains open.
