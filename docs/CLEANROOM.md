@@ -1,5 +1,26 @@
 # Clean-room process
 
+## Host resident refresh and random continuation - 2026-11-17
+
+The authority World tracks the resident refresh day on each live source. On
+first touch or a changed day, the daily refresh's ending random state carries
+into the same host stream used by admitted mode-0x8A residents. A prepared
+catalog supplies its ending state for the matching day. A new day restores
+the base static objects even if the catalog was prepared for that day.
+Same-day visits keep live changes and continue the stream. A replacement
+source starts with its own stamp.
+[Held resident stream contract](specs/steam-host-resident-refresh-stream-20261117.md).
+
+The native diagnostic in a disposable copy recorded twelve fresh/refreshed zone
+pairs at day 137. The engine's full draw lists match the 242 recorded refresh
+draws and eight empty traces. A separate engine fixture caught seven failures
+in the previous host path and one failure for the skipped base object reset.
+The corrected fixture checks first touch, same-day visitation, rejected and
+existing actors, day change and reloaded sources. The required
+owner-data, Vulkan and extractor checks pass. The native diagnostic exercised
+direct refresh calls. Populated Steam worker order across ticks and pet setup
+remain open. [Maintained specification](cleanroom-specification.md#b3-host-random-streams).
+
 ## Host startup combat random stream - 2026-11-17
 
 The original host simulation launch carries the session pointer. Its empty

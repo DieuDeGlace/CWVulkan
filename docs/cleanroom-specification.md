@@ -93,8 +93,8 @@ The contracts listed in the third column are the authority for each requirement.
 | Area | The engine must | Governing specs | Status |
 |---|---|---|---|
 | World generation | Produce the same terrain, structures, residents and creatures as Steam from the same seed and zone, in the same random-draw order | worldgen-terrain\*, worldgen-structures\*, worldgen-creatures\* | Gaps listed in worldgen-parity-gaps |
-| Creatures and combat | Run AI, abilities, hits, damage, buffs, upkeep and poses with Steam's rules and timings | creature-\*, stat-rules | Ported |
-| Player control | Map mouse, keyboard and controller input to movement, camera, skills and use actions | player-control, use-prompt, skills-and-interactions | Controller untested |
+| Creatures and combat | Run AI, abilities, hits, damage, buffs, upkeep and poses with Steam's rules and timings | creature-\*, stat-rules, [host random streams](#b3-host-random-streams) | Authority resident handoff checked in the engine. The full Steam host sequence remains open. |
+| Player control | Map mouse, keyboard and controller input to movement, camera, skills and use actions | player-control, use-prompt, skills-and-interactions, [Ring stick routing](specs/steam-ring-stick-routing-20261117.md) | Controlled Ring cases pass in the licensed engine. Original-client and physical controller checks remain open. |
 | Items and loot | Generate, name, drop, pick up, craft, buy and sell items | drops-and-items, loot-\*, lore-and-artifacts, item-models | Ported |
 | Interface | Draw the title, character, options, HUD, inventory, map and dialogue screens from the player's Plasma files | plasma-\*, frontend-\*, hud-money, conversation-script, steam-hud-\* | Ported |
 | World map | Build the map model and draw the corner and full maps with markers, labels, missions, history and the player | worldmap-model, worldmap-rendering, map-markers | Recorded match |
@@ -121,6 +121,39 @@ parity claims:
 Every checkpoint preserves these looks: Alpha relief and lighting, the dry purple Undead Lands,
 distinct biome palettes, and the gentler Savannah and Omega water.
 
+### B3. Host random streams
+
+Each Steam execution thread owns its CRT stream. Host simulation, host services
+and zone generation, and AI run on distinct workers. The public world seed and
+the derived generation seed govern content preparation. The empty first
+authority tick has zero resolved game-side draws or seeds under the documented
+empty-queue, actor, zone and projectile conditions. The incoming numeric state
+and which operation runs first in a populated tick depend on the runtime and
+admitted work. [Host stream ownership](specs/steam-host-crt-stream.md),
+[bounded startup trace](specs/steam-host-startup-crt-route-20261117.md).
+
+In the ordinary authority resident phase, selected loaded zones are visited in
+Zone-address order. Each zone's live refresh stamp is checked before its
+residents. A changed day reseeds the simulation stream. Any refresh draws and
+an admitted mode-0x8A resident's altitude draw advance that same stream.
+When the stamps match, the refresh leaves the incoming stream unchanged.
+A zone loaded for the first time starts with a stamp of minus one. A
+replacement instance starts with its own stamp. [Authority resident and daily
+refresh contract](specs/steam-host-resident-refresh-stream-20261117.md).
+
+CubeVulkan tracks that stamp on the live source. The first authority visit
+restores the base static objects and adopts the refresh's final random state.
+A changed day repeats both steps. Source preparation can supply a prepared
+catalog for the sampled day, and same-day visits keep live object changes and
+the current stream. Twelve diagnostic refreshes at day 137 in the supported
+Steam game produced 242 recorded draws across four
+nonempty traces and eight empty traces. The engine matched the complete draw
+lists. A separate engine fixture checks the handoff, same-day continuation,
+rejected and existing residents, day changes and replacement sources. It also
+checks the saved object overlay, base restoration and same-day object edits. The
+native refresh diagnostic invokes the refresh directly. A populated Steam
+host trace across combat, pets and ticks remains open.
+
 ## Part C. Referenced material
 
 ### C1. Evidence sources
@@ -141,10 +174,10 @@ original Steam evidence.
 
 ### C2. Specification library
 
-`docs/specs` holds 355 contracts: 272 bounded Steam contracts (`steam-*`), 23 Alpha contracts
-(`alpha-*`) and 60 subsystem references. Each bounded contract answers one question, carries a date
-in its filename, and ends with an evidence-boundaries section and the author's exposure statement.
-[CLEANROOM.md](CLEANROOM.md) records which contracts governed each checkpoint.
+The [specification library](specs/) groups Steam and Alpha contracts alongside
+cross-cutting subsystem references. Check each contract's stated evidence scope
+and author provenance before using it. [CLEANROOM.md](CLEANROOM.md) records which
+contracts governed each checkpoint and any observed limits.
 
 ### C3. Third-party and provenance
 
@@ -169,11 +202,12 @@ Tests compare behaviour, never code.
 | Generation oracles | Generated zones, structures and creatures against zones exported from the game | wgterrain, wgstructures, wgcreatures, zonediff, objdiff, rolesoracle, gearoracle, looksoracle |
 | Extractor captures | Values read from a live game | cameracapture, inventorycapture, itemcapture, appearancecapture, creatureposecapture |
 | Image checks | Vulkan renders against expected images | steamshader, guiitems, maprender, nativewater, sharedwater, alphascenery |
-| Runtime probes | The full engine under the Native and Alpha profiles | 40 runs per checkpoint |
+| Runtime probes | Changed behavior in the full engine under the applicable profiles | Focused private runs with inputs and scope recorded |
 | Steam recordings | An engine capture beside a recording with the same save, time of day and settings | private, one set per session |
 
-**Before-failure rule.** A new check must fail against a stub or the old behaviour, and pass after
-the change. The failing log is kept with the checkpoint.
+**Before-failure rule.** For behavior corrections, keep the case that fails
+against a stub or the old behavior and passes after the change. Retain the
+failing log with the checkpoint.
 
 ### D2. Checkpoint gate
 
@@ -181,11 +215,13 @@ A checkpoint is published only when all of the following pass on the exact binar
 
 - **Builds:** all five targets build.
 - **CPU suite:** the full required owner-data suite passes, with no skips.
-- **Images:** 92 shader, 2 camera, 106 GUI item, 17 map and 14 native water images, plus the shared
-  water and Alpha scenery groups.
+- **Images:** Run the shader, camera, GUI item, map, native water, shared water
+  and Alpha scenery groups. Record the counts for the exact checkpoint.
 - **SDK independence:** the extractor builds and passes without SDK material.
 - **Focused groups:** the feature's own groups pass.
-- **Runtime probes:** 40 probe runs pass, each leaving the private saves unchanged.
+- **Runtime probes:** Exercise the affected live paths with disposable profiles
+  and record the scope and save hashes. Track original-client, physical hardware
+  and broader release acceptance separately from engine-only runs.
 
 ## Appendix. Process
 

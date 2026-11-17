@@ -304,8 +304,6 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
                 for (const auto &[id, point] : zone->spawns.points)
                     if (enemyrespawn::isEnemy(point.hostility) && !enemyDeaths.contains(id) && !protectedDead.count(id))
                         worldDead.erase(id);
-            const uint32_t seed = uint32_t(key.first) * 73856093u ^ uint32_t(key.second) * 19349663u;
-            zoneRand.emplace(key, std::mt19937(seed)); // Legacy altitude stream; native CRT integration remains separate.
             zoneTracked[key] = zone->spawns.tracked;
             if (!zone->spawns.mission.empty())
                 zoneMissions[key] = zone->spawns.mission;
@@ -314,19 +312,25 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
         // Archive restoration precedes the daily refresh of the same live object
         // vector. It must not be deferred until after today's base objects return.
         auto *lists = zoneLists(ew, key.first, key.second);
-        if (zone->spawns.day != dayCount) {
-            auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
-            worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
-            zone = refreshed;
-            if (physical) physical->catalog = refreshed;
-            for (const auto &[id, point] : refreshed->spawns.points)
-                if (enemyDeaths.contains(id) && !enemyrespawn::isEnemy(point.hostility)) {
-                    enemyDeaths.forget(id);
-                    worldDead.erase(id);
-                }
+        const int32_t lastRefreshDay = physical ? physical->residentRefreshDay : zone->spawns.day;
+        if (lastRefreshDay != dayCount) {
+            // Source preparation can already supply today's catalog. The live
+            // source still restores its base objects and takes over the stream.
+            if (zone->spawns.day != dayCount) {
+                auto refreshed = std::make_shared<worldgen::ZoneContents>(*zone);
+                worldgen::refreshZoneCreatures(*refreshed, worldgen::currentWorld(), worldgen::creatureTables(), dayCount);
+                zone = refreshed;
+                if (physical) physical->catalog = refreshed;
+                for (const auto &[id, point] : refreshed->spawns.points)
+                    if (enemyDeaths.contains(id) && !enemyrespawn::isEnemy(point.hostility)) {
+                        enemyDeaths.forget(id);
+                        worldDead.erase(id);
+                    }
+            }
             if (lists) {
                 std::vector<nativesaves::Record> objects;
-                for (const auto &source : refreshed->objects) {
+                objects.reserve(zone->objects.size());
+                for (const auto &source : zone->objects) {
                     worldgen::ZoneObject object;
                     static_cast<worldgen::StaticObject &>(object) = source;
                     objects.push_back(zonestates::staticObjectRecord(object));
@@ -338,11 +342,20 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
                     objectsChanged.insert(key);
                 }
             }
+            if (physical) {
+                physical->residentRefreshDay = dayCount;
+                randState = zone->terrain.random.state;
+            }
         }
         // Complete this zone's admission and effect request before the next refresh.
         auto &list = zones[key];
         residentfx::Request request;
-        auto rand = [&, &worldRand = zoneRand.at(key)] { return (int)(worldRand() & 0x7fff); };
+        auto residentRandom = [&] {
+            if (physical)
+                return drawWorldRandom();
+            const uint32_t seed = uint32_t(key.first) * 73856093u ^ uint32_t(key.second) * 19349663u;
+            return int(zoneRand.try_emplace(key, seed).first->second() & 0x7fff);
+        };
         for (const auto &[id, sp] : zone->spawns.points) {
             if (participants.contains(sp.id)) {
                 request.existing(sp.mode);
@@ -353,7 +366,7 @@ void SpawnedCreatures::update(ExtractedWorld &ew, glm::vec3 playerLocal) {
             made.insert(sp.id);
             const worldgen::Int2 region = worldgen::residentRegion(sp);
             worldgen::MadeCreature m =
-                worldgen::makeResident(sp, worldgen::Draw(rand), participants.portalCleared({region.x, region.y}), maxHealth);
+                worldgen::makeResident(sp, worldgen::Draw(residentRandom), participants.portalCleared({region.x, region.y}), maxHealth);
             // What 0x2e17d0 copies beside the record: who it keeps with (+0xc08), its special
             // moves (+0xbd0), the races it may call up (+0xbf0) and its inventory (+0x9f0).
             Creature cr{std::move(m.record), {}};

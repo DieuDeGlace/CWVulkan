@@ -7,6 +7,7 @@
 #include "GameMath.h"
 #include "ObjectOccupancyCapture.h"
 #include "worldgen/Generator.h"
+#include "worldgen/ZoneCreatures.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -289,6 +290,115 @@ void sourceSummaryValues(const auto &check) {
     zonestates::rebuildSourceSummaries(live, {}, {11, 41});
     check(live.placeCounters.empty() && live.deadTracked == 0,
           "empty selected source inputs replace both old summaries with empty or zero");
+}
+
+void hostResidentStreamIntegration(const auto &check) {
+    ExtractedWorld terrain;
+    terrain.openGenerated(0, 0, {});
+    // The fixture admits each source explicitly before the authority resident pass.
+    terrain.setClientStreaming(true);
+    nativesaves::WorldState saved;
+    const std::vector<nativesaves::Record> overlay{object(31, 0, 100)};
+    auto &stored = saved.zones[{0, 0}];
+    stored.flags = nativesaves::ZoneState::STATIC_OBJECTS_SAVED;
+    stored.staticObjects = overlay;
+
+    worldgen::ZoneObject base;
+    base.type = 31;
+    base.x = 5 * BLOCK;
+    const std::vector<nativesaves::Record> baseObjects{zonestates::staticObjectRecord(base)};
+
+    SpawnedCreatures authority;
+    authority.setStoredZones(terrain, &saved, false);
+    authority.setNativePlayer(true);
+    const glm::vec3 player = terrain.toLocal(std::array<int64_t, 3>{BLOCK, BLOCK, 10 * BLOCK}.data());
+    authority.setPlayer(terrain, player, 0, {}, 100, 1, true);
+    authority.setClock(1, 36000000.0f);
+
+    const auto admit = [&](int x, int day) {
+        if (!terrain.loadSourceZone(x, 0))
+            return std::shared_ptr<sourcestates::Source>{};
+        auto source = terrain.sourceStateStore()->find({x, 0});
+        if (!source)
+            return source;
+        auto catalog = std::make_shared<worldgen::ZoneContents>();
+        catalog->terrain.zx = x;
+        if (x == 0)
+            catalog->lists.objectsCopy.push_back(base);
+        worldgen::refreshZoneCreatures(*catalog, worldgen::currentWorld(), worldgen::creatureTables(), day);
+        source->catalog = std::move(catalog);
+        return source;
+    };
+    const auto add = [](sourcestates::Source &source, int64_t id) {
+        auto catalog = std::make_shared<worldgen::ZoneContents>(*source.catalog);
+        auto &point = catalog->spawns.points[id];
+        point.id = id;
+        point.mode = 0x8A;
+        point.hostility = worldgen::hostility::HOSTILE;
+        point.x = (int64_t(source.key[0]) * 64 + 1) * BLOCK;
+        point.y = BLOCK;
+        point.z = 10 * BLOCK;
+        source.catalog = std::move(catalog);
+    };
+    const auto atHeight = [&](int64_t id, int blocksAboveBase) {
+        const auto *record = authority.record(id);
+        return record && get<int64_t>(record, worldgen::creature::POSITION + 16) == (10 + blocksAboveBase) * BLOCK &&
+               get<int64_t>(record, worldgen::creature::HOME + 16) == 10 * BLOCK;
+    };
+
+    const auto a = admit(0, 1);
+    auto b = admit(1, 1);
+    check(a && b, "host random fixture publishes both physical sources");
+    if (!a || !b)
+        return;
+    check(a->catalog->terrain.random.state == 17945 && b->catalog->terrain.random.state == 95324,
+          "fresh catalogs contain the contract's zero-draw refresh seeds");
+    check(a->lists.staticObjects == overlay, "saved objects are visible before the first authority refresh");
+    add(*a, 12001);
+    add(*a, 12002);
+    add(*b, 22002);
+    authority.setWorldDead({12001});
+    authority.update(terrain, player);
+    check(a->lists.staticObjects == baseObjects,
+          "first authority refresh restores base objects even with a prepared catalog");
+    check(!authority.hasCreature(12001), "dead descriptor bypasses the resident altitude draw");
+    check(atHeight(12002, 101) && atHeight(22002, 94),
+          "first live touch reseeds even with a pre-refreshed catalog");
+    const bool aFirst = a->order < b->order;
+    check(authority.drawWorldRandom() == (aFirst ? 31754 : 15424),
+          "last visited fresh source leaves its stream for later host work");
+
+    a->lists.staticObjects = overlay;
+    add(*a, 12003);
+    add(*b, 22003);
+    authority.update(terrain, player);
+    check(a->lists.staticObjects == overlay, "same-day visits preserve live object changes");
+    check(atHeight(12003, aFirst ? 124 : 128) && atHeight(22003, aFirst ? 117 : 81),
+          "same-day sources share successive draws in live source order");
+    check(authority.drawWorldRandom() == (aFirst ? 31507 : 30229),
+          "existing and rejected residents consume no draws before advancing the host");
+
+    authority.setClock(6, 36000000.0f);
+    add(*a, 12004);
+    add(*b, 22004);
+    authority.update(terrain, player);
+    check(a->lists.staticObjects == baseObjects, "a changed day restores base objects again");
+    check(atHeight(12004, 117) && atHeight(22004, 111),
+          "new day recomputes stale catalogs and reseeds both live sources");
+    check(authority.drawWorldRandom() == (aFirst ? 19960 : 3630),
+          "the changed-day continuation remains available to the host");
+
+    const auto old = b;
+    const auto retired = terrain.retireClientSource({-1, 0}, 1);
+    b = admit(1, 6);
+    check(retired == std::pair{1, 0} && b && b != old,
+          "a replacement source has a new live identity");
+    if (!b)
+        return;
+    add(*b, 22005);
+    authority.update(terrain, player);
+    check(atHeight(22005, 111) && authority.drawWorldRandom() == 19960,
+          "replacement on the same day reseeds before admitting a new resident");
 }
 
 void generatedGateIntegration(const auto &check) {
@@ -889,6 +999,7 @@ int worldObjectTests() {
     }
     sourceSummaryValues(check);
     generatedGateIntegration(check);
+    hostResidentStreamIntegration(check);
     std::printf("World objects, gate transitions, trap state/hits/sounds and facade timing: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

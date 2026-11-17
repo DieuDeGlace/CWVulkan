@@ -20,6 +20,7 @@ struct Metadata {
 struct Source {
     Cell key{};
     uint64_t order = 0;
+    int32_t residentRefreshDay = -1; // Each loaded source has its own live refresh stamp.
     nativesaves::ZoneLists lists;
     std::shared_ptr<const worldgen::ZoneContents> catalog;
 };
