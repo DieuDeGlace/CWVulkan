@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Steam cloud depth inheritance - 2026-11-17
+
+Steam mode-10 cloud draws use the offset left by the current frame's ordered
+WORLD submissions. This uses the existing retained value after the ordinary
+faded color sweep. The [isolated depth trace](specs/steam-cloud-incoming-depth-20261117.md)
+records frame reset, pass order, descriptor eligibility and the stock hair
+offset of +0.0001.
+
+A new Vulkan case changes which geometry wins at the center pixel using that
+offset. It covers an unready faded draw that submits its offset, an unready
+opaque group that skips its descriptors, and a later faded zero. The case
+fails on the preceding renderer and passes after the change. The full owner,
+Vulkan and extractor checks and a licensed replay of the morning view pass.
+The frequency of nonzero incoming offsets in ordinary play remains open.
+
 ## Steam cloud model color and light - 2026-11-17
 
 Bright clouds retain their full baked color. Dark clouds add their native shade

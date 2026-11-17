@@ -923,6 +923,46 @@ int steamShaderTests() {
         unavailable.nativeScenery->water = false; // ordinary faded context is consumed after water/effects
         checkCube("queued-ordinary-faded-after-effects", captureGround("queued-ordinary-faded-after-effects", {unavailable, cube}),
                   cubeOnly);
+
+        // A cloud just behind the foreground only wins with the stock hair offset.
+        renderer.settings.fogDistance = renderer.settings.sceneryDistance = 512;
+        WorldProbe cloudProbe;
+        cloudProbe.column = [](int32_t x, int32_t y) {
+            SkyColumn column;
+            column.region.dryness = x == 0 && y == 0 ? 1.f : 0.f;
+            return column;
+        };
+        renderer.setWorldProbe(cloudProbe);
+        renderer.setSkyModels({item.mesh, 0, 0});
+        nearby.eye = {0, -220, 200};
+        nearby.target = {0, 0, 200};
+        steady.timeMs = 12 * 60 * 60 * 1000;
+        DrawItem foreground;
+        foreground.mesh = item.mesh;
+        foreground.kind = DrawKind::Scenery;
+        foreground.model = glm::translate(glm::mat4(1), {0, -.2f, 200}) * glm::scale(glm::mat4(1), {7, 1, 7});
+        foreground.nativeControls = worldmodel::Controls{0, 0, 1, 0, false};
+        const auto freeCloud = captureGround("cloud-depth-unoccluded", {});
+        const auto blocked = captureGround("cloud-depth-zero", {foreground});
+        unavailable.nativeGround = scenevisibility::Sphere{{0, 0, 200LL * 65536}, 10};
+        unavailable.nativeControls->depthOffset = .0001f;
+        const auto faded = captureGround("cloud-depth-faded-unready", {foreground, unavailable});
+        DrawItem last = unavailable;
+        last.nativeControls->depthOffset = 0;
+        const auto reset = captureGround("cloud-depth-later-zero", {foreground, unavailable, last});
+        unavailable.opacity = 1;
+        const auto skipped = captureGround("cloud-depth-opaque-unready", {foreground, unavailable});
+        const bool fixture = freeCloud && blocked && *freeCloud != *blocked;
+        const bool inherited = fixture && faded && *faded == *freeCloud;
+        const bool skippedOrCleared = fixture && reset && skipped && *reset == *blocked && *skipped == *blocked;
+        if (!(fixture && inherited && skippedOrCleared)) {
+            std::cout << "Cloud depth observations: distinct baseline=" << fixture << " retained=" << inherited
+                      << " skipped/later zero=" << skippedOrCleared << '\n';
+            ++failures;
+        }
+        std::cout << "Steam shader cloud retained depth" << (fixture && inherited && skippedOrCleared ? " PASS\n" : " FAIL\n");
+        renderer.setSkyModels({});
+        renderer.setWorldProbe({});
     }
     {
         // Native arithmetic reference: a quarter block survives a fixed origin at block2^24.

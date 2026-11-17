@@ -1855,14 +1855,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             }
     }
     // One sky model with its own look constants (see common.glsl's Push).
-    auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look, uint32_t flags = 0) {
+    auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look, uint32_t flags = 0, float depthOffset = 0) {
         const GpuMesh &m = meshes[mesh];
         if (!m.indexCount)
             return;
         VkDeviceSize zero = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
-        PushConstants pc{model, glm::vec4(float(flags), 0, 0, 0), look, glm::uvec4(0)};
+        PushConstants pc{model, glm::vec4(float(flags), 0, depthOffset, 0), look, glm::uvec4(0)};
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
         draws++;
@@ -2168,7 +2168,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         // Use WORLD vertex lighting with the draw's white material and no point lights.
         // Keep the direct light multiplier at one even in the zero-opacity depth draw.
         const auto drawCloud = [&](const CloudDraw &c, float opacity) {
-            drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, opacity, 0), STEAM_WORLD | QUEUED_WORLD);
+            // Mode 10 uses the offset left by the ordered WORLD draws.
+            drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, opacity, 0), STEAM_WORLD | QUEUED_WORLD,
+                         inheritedWorldDepthOffset);
         };
         for (const CloudDraw &c : cloudDraws)
             if (c.opacity >= 1)
