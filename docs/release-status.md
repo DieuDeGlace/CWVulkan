@@ -1,5 +1,21 @@
 # Source review checkpoint — 2026-11-08
 
+## Local UDP reconnect and guest pickups - 2026-11-18
+
+A late send to a closed UDP port can surface a Winsock port-unreachable
+error while the shared server socket is reading another guest's data.
+The server continues reading other datagrams in the same bounded pass. The regression
+queues a live guest's packet behind a closed endpoint and checks delivery
+in the first receive batch. The old implementation missed that packet.
+The two-client protocol fixture also checks a replacement player's position
+after ID reuse and a pickup notice delivered to both mirrors.
+
+Two licensed guests saw one another. The first exited normally and disappeared
+from the remaining guest's world. A fresh client then joined the dedicated
+server, received the released actor ID, and exchanged avatars with the
+continuing guest. Windows reported loopback bindings for all four processes.
+Each process exited with status zero and the copied profiles matched by hash.
+
 ## Original Steam gameplay and local reconnect - 2026-11-17
 
 The original Steam client entered a playable world with a Collie in the copied

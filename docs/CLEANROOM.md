@@ -1,5 +1,15 @@
 # Clean-room process
 
+## Local UDP reconnect and guest pickups - 2026-11-18
+
+The independent original-side author traced the normal ground-item request,
+host validation, broadcast and recipient's award. The implementation role
+read and hashed the complete held contract before using it. The Windows
+UDP correction came from the engine's own socket path and localhost tests.
+Original-peer multiplayer and long-session pickup persistence remain open.
+
+[Held guest pickup contract](specs/steam-remote-guest-item-pickup-20261118.md)
+
 ## Original Steam gameplay and local reconnect - 2026-11-17
 
 The original Steam client entered a playable world with a Collie in the copied

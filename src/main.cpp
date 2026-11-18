@@ -3318,6 +3318,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         setup.loss = netLoss;
         if (byAddress) {
             setup.way = Multiplayer::Way::Address;
+            setup.loopbackOnly = config.flag("Multiplayer", "LoopbackOnly", false);
             setup.port = (uint16_t)(hostPort > 0 ? hostPort : startupJoinAddress.empty() ? multiplayerPort : 0);
         } else if (!offline && config.flag("Multiplayer", "Steam", true))
             setup.way = Multiplayer::Way::Steam;

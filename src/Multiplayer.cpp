@@ -58,7 +58,7 @@ bool Multiplayer::start(const Setup &setup, std::string &error) {
         break;
     case Way::Address: {
         auto udp = std::make_unique<cwnet::UdpTransport>();
-        if (!udp->open(setup.port, error))
+        if (!udp->open(setup.port, error, setup.loopbackOnly))
             return false;
         udp->loss = setup.loss;
         transport = std::make_unique<cwnet::SerializedTransport>(std::move(udp));

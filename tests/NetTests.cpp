@@ -17,6 +17,7 @@
 #include <zlib.h>
 
 #include <chrono>
+#include <thread>
 #include <deque>
 #include <cmath>
 #include <cstdio>
@@ -754,10 +755,38 @@ void clearLocalHostMessages() {
 
 // --- UDP on this machine ------------------------------------------------------------------------------
 
+// A late retransmit to a closed localhost port can put an ICMP error ahead
+// of another guest's packet on the same Winsock socket.
+void udpClosedPeer() {
+    UdpTransport host, live;
+    std::string error;
+    if (!host.open(0, error, true) || !live.open(0, error, true)) {
+        NET_CHECK(false);
+        return;
+    }
+    PeerId departed;
+    {
+        UdpTransport closing;
+        if (!closing.open(0, error, true)) {
+            NET_CHECK(false);
+            return;
+        }
+        departed = closing.self();
+    }
+    NET_CHECK(host.send(departed, Channel::ToClient, Bytes{1}));
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    NET_CHECK(live.send(host.self(), Channel::ToHost, Bytes{42}));
+    // Both datagrams are local. Wait for the receiver's first dispatch, as
+    // a game frame would, then check that the live packet arrived in it.
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    const auto batch = host.receiveBatch(Channel::ToHost);
+    NET_CHECK(batch.size() == 1 && batch.front().from == live.self() && batch.front().bytes == Bytes{42});
+}
+
 void udpTransport() {
     UdpTransport server, client;
     std::string error;
-    if (!server.open(0, error) || !client.open(0, error)) {
+    if (!server.open(0, error, true) || !client.open(0, error, true)) {
         std::printf("net: UDP skipped (%s)\n", error.c_str());
         return;
     }
@@ -1043,6 +1072,78 @@ void receivedListOrder() {
 
 // Single player through the loopback, then a second machine joining: interest, removal by
 // omission, the event filters, zone answers, the guests' events, interactions and the clock.
+// A second process can reuse a released actor ID. Its first full record and
+// subsequent updates must reach the guest that stayed connected.
+void udpGuestRejoin() {
+    UdpTransport server, first, continuing, returning;
+    std::string error;
+    for (auto *endpoint : {&server, &first, &continuing, &returning}) {
+        if (!endpoint->open(0, error, true)) {
+            std::printf("net: localhost reconnect socket failed (%s)\n", error.c_str());
+            NET_CHECK(false);
+            return;
+        }
+    }
+    FakeHostWorld authority;
+    HostGame host(server, authority);
+    FakeMirrorWorld firstWorld, continuingWorld, returningWorld;
+    ClientGame a(first, firstWorld), b(continuing, continuingWorld), rejoin(returning, returningWorld);
+    uint32_t now = 0;
+    auto frame = [&](UdpTransport &socket, ClientGame &client) {
+        socket.pump(now);
+        client.receive(now);
+        client.consumeWorldUpdates();
+        client.send(now);
+    };
+    const auto firstFrame = [&] { frame(first, a); };
+    const auto returningFrame = [&] { frame(returning, rejoin); };
+    auto advance = [&](auto otherFrame, auto done) {
+        for (int i = 0; i < 100 && !done(); ++i) {
+            now += 33;
+            server.pump(now);
+            host.frame(now);
+            frame(continuing, b);
+            otherFrame();
+        }
+        return done();
+    };
+
+    a.link().connectTo(server.self(), now);
+    NET_CHECK(advance(firstFrame, [&] { return authority.hasCreature(1); }));
+    b.link().connectTo(server.self(), now);
+    NET_CHECK(advance(firstFrame, [&] { return firstWorld.others.count(2) && continuingWorld.others.count(1); }));
+    a.link().notifyDeparture();
+    NET_CHECK(advance([] {}, [&] { return !authority.hasCreature(1) && !continuingWorld.others.count(1); }));
+
+    constexpr int64_t returnX = 12 * 65536;
+    put(returningWorld.player.data() + creature::POSITION, returnX);
+    rejoin.link().connectTo(server.self(), now);
+    // Check the new character's position as well as the reused numeric ID.
+    const auto bothVisible = [&] {
+        auto it = continuingWorld.others.find(1);
+        if (it == continuingWorld.others.end() || !returningWorld.others.count(2))
+            return false;
+        int64_t x;
+        std::memcpy(&x, it->second.data() + creature::POSITION, sizeof x);
+        return x == returnX;
+    };
+    NET_CHECK(advance(returningFrame, bothVisible));
+    NET_CHECK(returningWorld.local == 1 && continuingWorld.local == 2 && host.link().connections().size() == 2);
+    NET_CHECK(returningWorld.others.size() == 1 && continuingWorld.others.size() == 1);
+
+    PickupRecord receipt{};
+    setField(receipt, 0, int64_t(1));
+    receipt[8] = 0x0c;
+    setField(receipt, 0xa8, uint16_t(3));
+    authority.pending.pickups.push_back(receipt);
+    NET_CHECK(advance(returningFrame, [&] {
+        return !continuingWorld.kept.pickups.empty() && !returningWorld.kept.pickups.empty();
+    }));
+    NET_CHECK(continuingWorld.kept.pickups == std::vector<PickupRecord>{receipt});
+    NET_CHECK(returningWorld.kept.pickups == std::vector<PickupRecord>{receipt});
+    NET_CHECK(!rejoin.wentHome && !b.wentHome);
+}
+
 void hostAndClientGames() {
     LoopbackNetwork network;
     auto a = network.endpoint(HOST_MACHINE);
@@ -1226,10 +1327,12 @@ int netTests() {
     singlePlayer();
     clearLocalHostMessages();
     udpTransport();
+    udpClosedPeer();
     recordings();
     steamIds();
     receivedListOrder();
     hostAndClientGames();
+    udpGuestRejoin();
     mirrorInterpolation();
     return failures;
 }

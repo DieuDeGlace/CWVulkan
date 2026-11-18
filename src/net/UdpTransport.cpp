@@ -62,7 +62,7 @@ UdpTransport::~UdpTransport() {
         closesocket((SOCKET)socketHandle);
 }
 
-bool UdpTransport::open(uint16_t port, std::string &error) {
+bool UdpTransport::open(uint16_t port, std::string &error, bool loopbackOnly) {
     if (!startWinsock()) {
         error = "Windows sockets could not start";
         return false;
@@ -74,7 +74,7 @@ bool UdpTransport::open(uint16_t port, std::string &error) {
     }
     sockaddr_in a{};
     a.sin_family = AF_INET;
-    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    a.sin_addr.s_addr = htonl(loopbackOnly ? INADDR_LOOPBACK : INADDR_ANY);
     a.sin_port = htons(port);
     if (bind(s, (sockaddr *)&a, sizeof a) != 0) {
         closesocket(s);
@@ -191,8 +191,13 @@ void UdpTransport::readSocket() {
         sockaddr_in a{};
         int length = sizeof a;
         const int got = recvfrom((SOCKET)socketHandle, (char *)buffer, sizeof buffer, 0, (sockaddr *)&a, &length);
-        if (got < 0)
-            break; // nothing more (or an ICMP "port unreachable" from a peer that left)
+        if (got == SOCKET_ERROR) {
+            // A departed UDP peer can report an ICMP error on this shared socket.
+            // Other peers still have datagrams waiting in the same receive queue.
+            if (WSAGetLastError() == WSAECONNRESET)
+                continue;
+            break;
+        }
         handle(peerOf(a), buffer, (size_t)got);
     }
 }

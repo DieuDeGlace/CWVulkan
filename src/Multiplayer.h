@@ -61,6 +61,7 @@ class Multiplayer {
         ExtractedWorld *blocks = nullptr;
         // Optional deterministic clock/storage injection; production uses fresh process clocks.
         std::optional<cwnet::GuestLink::Timing> clientTiming;
+        bool loopbackOnly = false; // Address: bind to 127.0.0.1 for same-machine sessions
     };
 
     Multiplayer();

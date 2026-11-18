@@ -26,8 +26,8 @@ class UdpTransport : public Transport {
     UdpTransport(const UdpTransport &) = delete;
     UdpTransport &operator=(const UdpTransport &) = delete;
 
-    // Opens a socket on `port` (0: any free port), on every interface.
-    bool open(uint16_t port, std::string &error);
+    // Select loopback for sessions confined to this machine. Port zero chooses a free port.
+    bool open(uint16_t port, std::string &error, bool loopbackOnly = false);
     uint16_t port() const { return boundPort; }
 
     // The peer id of an IPv4 address and port (address and port packed: ip << 16 | port), or 0

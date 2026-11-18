@@ -139,6 +139,7 @@ int regionLevelsTests() {
         auto clock = std::make_shared<uint32_t>(Multiplayer::clockNow());
         Multiplayer::Setup setup;
         setup.way = Multiplayer::Way::Address;
+        setup.loopbackOnly = true;
         setup.clientTiming = cwnet::GuestLink::Timing{[clock] { return *clock; },{}, {}};
         setup.hostWorld = &homeWorld;
         setup.clientWorld = &homePlayer;

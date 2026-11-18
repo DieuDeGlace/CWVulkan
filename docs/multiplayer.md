@@ -112,6 +112,9 @@ kill credit it is, and loot lies on the ground in the host's zones for whoever p
 * Host with `--host [port]` or `[Multiplayer] Host=1`. The port is 27016 unless `Port=` says
   otherwise.
 * Join with `--join address[:port]` or `[Multiplayer] Join=address`.
+* For a same-PC session, pass `--set Multiplayer.LoopbackOnly=1` to the server
+  and every guest. Each UDP socket then binds to `127.0.0.1`. By default UDP
+  binds on all IPv4 interfaces for LAN play.
 * J lists the players on your host (with uninvite to kick) and the host you are on (with
   leave).
 
@@ -175,7 +178,7 @@ no client:
 * `frontend::FriendsMenu` (`src/Frontend.h`) is what the J menu draws from. Anything that fills
   it in can supply the rows.
 
-## Licensed local reconnect test
+## Local reconnect baseline on November 17
 
 Closing a joined guest used the live return-home transition after its
 frame-owned mirror data had been destroyed. Both baseline runs reached a
@@ -190,15 +193,40 @@ accepted a third connection. Both clients returned to their own worlds before
 reciprocal avatars could be verified after rejoin. The harness stopped its
 remaining processes at the deadline. The copied profiles matched by hash.
 The focused protocol case checks the Leave packet and callback counts.
-Longer reconnect acceptance, two Steam accounts and an original network peer
+Long sessions, two Steam accounts and an original network peer
 remain open.
+
+## Local UDP reconnect verification
+
+A late send to a closed UDP port can surface a Winsock port-unreachable
+error while the shared server socket is reading another guest's data.
+The server continues reading other datagrams in the same bounded pass. The regression
+queues a live guest's packet behind a closed endpoint and checks delivery
+in the first receive batch. The old implementation missed that packet.
+The two-client protocol fixture also checks a replacement player's position
+after ID reuse and a pickup notice delivered to both mirrors.
+
+Two licensed guests saw one another. The first exited normally and disappeared
+from the remaining guest's world. A fresh client then joined the dedicated
+server, received the released actor ID, and exchanged avatars with the
+continuing guest. Windows reported loopback bindings for all four processes.
+Each process exited with status zero and the copied profiles matched by hash.
+
+## Guest ground-item pickups
+
+The host validates the selected ground slot and broadcasts a pickup notice.
+Each client resolves the picker. The recipient applies the bag item or currency,
+and other clients can show who picked it up. Platinum goes to the recipient's
+current region. Persistent shared drops use each character's collected positions.
+The fixture verifies receipt delivery on local UDP. Save timing and original-peer
+play remain open. [Original Steam contract](specs/steam-remote-guest-item-pickup-20261118.md)
 
 ## Not done yet
 
 * No session with a real second Steam account has been tried. The Steam path is built to the
   spec, but only the loopback and UDP paths have been run.
 * Its open questions (netcode-compatibility.md §5.2) remain. These include the feat notice's
-  payload, who gives the picked-up item to a guest, what a guest learns from talking to a quest
+  payload, what a guest learns from talking to a quest
   giver, and the exact arithmetic of a monster's hit on the local player, which here uses the
   hit routine's apply (0x29dcf0) as a stand-in.
 * The menu greys out friends who are not playing Cube World only once the spec traces that flag
