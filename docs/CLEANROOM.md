@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Water Mage recording and evidence limits - 2026-11-18
+
+The verification role compared a disposable Water Mage session with the
+held stock death-area contract and replayed the authority random stream
+through the compiled engine. The trace identifies the Water Bubbles action
+and the shared area-target draw. Attribution to an individual dying actor
+requires its model or identity alongside that draw. The raw trace, copied
+saves and frames stay private. The isolated author received no runtime data.
+
 ## Remote gold pickup comparison - 2026-11-18
 
 The existing held guest pickup contract governed the local multiplayer check.

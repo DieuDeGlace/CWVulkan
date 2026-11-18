@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Original Steam Water Mage comparison - 2026-11-18
+
+The original Steam authority sampled the Water Mage's Water Bubbles action
+18 times during play. The samples identify the active action. Cast and
+bubble counts remain unknown. The same recording contains 56 target rolls
+from the area pass shared by Water Bubbles, Bombs and Barrels. It records
+no source actor ID per roll, so individual bubble lifetimes, damage and
+healing remain unverified in the original. CubeVulkan reproduced all 1,163
+recorded post-seed authority draws across 78 seeds. The recorder retained
+1,523 events and reported zero overflow losses.
+
 ## Remote gold pickup and saved balance - 2026-11-18
 
 A dedicated host laid five ordinary gold coins beside a remote Native Warrior.

@@ -198,9 +198,15 @@ the next step emits the first area burst, changes breakable terrain and
 queues the rolled terrain sound. A later step keeps the events without
 emitting another first-visit burst.
 
-The second copied game stayed on the title screen through its recording
-window. No Water Mage cast was established. The original Water Bubbles
-and Bomb area traces remain open.
+The original Steam authority sampled the Water Mage's Water Bubbles action
+18 times during play. The samples identify the active action. Cast and
+bubble counts remain unknown. The same recording contains 56 target rolls
+from the area pass shared by Water Bubbles, Bombs and Barrels. It records
+no source actor ID per roll, so individual bubble lifetimes, damage and
+healing remain unverified in the original. CubeVulkan reproduced all 1,163
+recorded post-seed authority draws across 78 seeds. The recorder retained
+1,523 events and reported zero overflow losses.
+The original Bomb terrain comparison remains open.
 
 When the host creates a pet or changes its equipped race, pet setup seeds the
 same thread's stream from the pet's unsigned race. Appearance and gear leave
