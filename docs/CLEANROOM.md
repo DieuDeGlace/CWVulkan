@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Stock death-area capture routes - 2026-11-17
+
+Independent static evidence establishes the Bomb quick item and the Water
+Mage's Water Bubbles ultimate as stock producers for the host death-area
+pass. The contract identifies the terrain and target random-draw markers.
+The World facade test admits the actual Bomb item interaction, waits for
+the fuse, checks the first blast and terrain edit, and checks the following
+step for repeat effects. The complete owner-data and Vulkan suites passed.
+The original post-flight pet and area effects still need a live recording.
+[Held death-area capture routes](specs/steam-stock-death-area-capture-route-20261117.md).
+
 ## Shadow coverage on steep terrain - 2026-11-17
 
 Receivers now blend into the far cascade when their projected positions

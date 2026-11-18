@@ -292,6 +292,68 @@ void sourceSummaryValues(const auto &check) {
           "empty selected source inputs replace both old summaries with empty or zero");
 }
 
+void stockBombIntegration(const std::filesystem::path &root, const auto &check) {
+    using namespace worldgen::creature;
+    writeFixture(root, 1, 1, false, 0x01);
+    ExtractedWorld terrain;
+    std::string why;
+    if (!terrain.open(root, why) || !terrain.loadSourceZone(0, 0)) {
+        check(false, "stock Bomb fixture loads a breakable floor");
+        return;
+    }
+    nativesaves::WorldState saved;
+    SpawnedCreatures authority;
+    authority.setStoredZones(terrain, &saved, false);
+    authority.setNativePlayer(true);
+    const std::array<int64_t, 3> position{32 * BLOCK + BLOCK / 2, 32 * BLOCK + BLOCK / 2, 2 * BLOCK};
+    authority.setPlayer(terrain, terrain.toLocal(position.data()), 0, {}, 100, 1, true);
+    put(authority.localPlayer()->record, FLAGS, uint32_t(0x02000000)); // Keep the colocated setup from separating.
+
+    std::array<uint8_t, 0xa0> item{};
+    item[0] = 1;
+    put(item.data(), 4, int32_t(9));
+    check(authority.useItem(item.data()), "ordinary Bomb item use is admitted");
+    authority.simulate(terrain, 16);
+    int64_t id = 0;
+    authority.forEachWorldCreature([&](const uint8_t *record) {
+        if (record[HOSTILITY] == 7 && get<int32_t>(record, RACE) == 0x90)
+            id = get<int64_t>(record, ID);
+    });
+    const auto *bomb = authority.record(id);
+    check(bomb && get<float>(bomb, HEALTH) > 0.f, "ordinary Bomb interaction publishes a living fuse actor");
+    if (!bomb)
+        return;
+
+    const auto centeredBursts = [&] {
+        const auto &particles = authority.events().particles;
+        return std::count_if(particles.begin(), particles.end(), [](const auto &burst) {
+            return get<int32_t>(burst.data(), 0x38) == 0x14 && get<int32_t>(burst.data(), 0x3c) == 1;
+        });
+    };
+    int elapsed = 16;
+    while (elapsed <= 4100 && bomb && get<float>(bomb, HEALTH) > 0.f) {
+        authority.simulate(terrain, 16);
+        elapsed += 16;
+        bomb = authority.record(id);
+    }
+    check(elapsed >= 3900 && elapsed <= 4100 && bomb && get<float>(bomb, HEALTH) == 0.f &&
+              get<float>(bomb, ABILITY + 4) == 0.f && centeredBursts() == 0 && authority.events().blockChanges.empty(),
+          "Bomb upkeep expires the fuse near four seconds before the area pass");
+
+    authority.simulate(terrain, 16);
+    const auto &events = authority.events();
+    const auto terrainSounds = std::count_if(events.sounds.begin(), events.sounds.end(), [](const auto &sound) {
+        const auto request = soundrules::readRequest(sound);
+        return request.number == 1 && request.pitch >= .5f && request.pitch <= .9f;
+    });
+    check(centeredBursts() == 1 && !events.blockChanges.empty() && terrain.gameBlock(32, 32, 1)[4] == 0 && terrainSounds == 1,
+          "the next authority pass emits one Bomb area, clears breakable terrain and rolls its terrain sound");
+    const auto changed = events.blockChanges.size();
+    authority.simulate(terrain, 16);
+    check(centeredBursts() == 1 && authority.events().blockChanges.size() == changed,
+          "a later step retains the Bomb events without repeating the area");
+}
+
 void hostPreludeStreamIntegration(const auto &check) {
     // Selected source refresh, protected area hit, and equipped pet all
     // run on one authority stream in this World step.
@@ -1138,6 +1200,7 @@ int worldObjectTests() {
         worldStepAdmissionOrder(root, check);
         selectedMovementIntegration(root, check);
         capturedGateFootprint(root, check);
+        stockBombIntegration(root, check);
         std::filesystem::remove_all(root);
     }
     sourceSummaryValues(check);

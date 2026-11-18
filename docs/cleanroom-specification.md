@@ -178,6 +178,20 @@ reseeds it. The combined World-step fixture checks a resident refresh, a blast
 deflected using the next two draws, and the following pet setup.
 [Held authority prelude contract](specs/steam-host-pre-pet-prelude-stream-20261117.md).
 
+A stocked Bomb reaches the destructive actor path through Use Quick Item.
+The native actor loses its health over about four seconds. The Water Mage's
+Water Bubbles ultimate instead spawns bubbles that naturally pop after about
+eighteen seconds each. The next authority area pass admits either kind at
+zero death clock. The independent contract identifies the separate block and
+target draw sites and the conditions for observing them. A stock Barrel
+encounter remains unconfirmed.
+[Held stock death-area routes](specs/steam-stock-death-area-capture-route-20261117.md).
+
+The engine World fixture uses a Bomb item, advances the fuse and checks that
+the next step emits the first area burst, changes breakable terrain and
+queues the rolled terrain sound. A later step keeps the events without
+emitting another first-visit burst. The live Steam effect comparison is open.
+
 When the host creates a pet or changes its equipped race, pet setup seeds the
 same thread's stream from the pet's unsigned race. Appearance and gear leave
 their final state for subsequent host work. The pet phase keeps the current
