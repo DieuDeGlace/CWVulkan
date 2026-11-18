@@ -1,5 +1,15 @@
 # Clean-room process
 
+## Original hit and HP comparison - 2026-11-18
+
+The original-side author traced ordinary hit production, HP settlement
+and the separate owner and observer paths. The clean team retained the
+complete held prose before using it. An existing original recording
+supported the comparison of 79 immediate HP losses. The checker keeps
+same-call outcomes distinct from later actor state. Actor-specific buffs,
+ownership and the producers of the ability-zero inputs are unresolved in
+this recording. [Steam ordinary hit and HP contract](specs/steam-ordinary-hit-hp-comparison-20261118.md).
+
 ## Water Bubble guard and shield receipt - 2026-11-18
 
 The original-side author traced guard precedence, shield overflow and the

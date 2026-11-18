@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Original hit and HP comparison - 2026-11-18
+
+The offline checker now reads the original hit probe when only hits.txt
+is available. It accounts for the signed combo, HP floor and four-decimal
+recording precision. In 356 saved Steam calls, 79 successful calls showed
+an immediate HP loss. All 79 fit the ordinary damage calculation. Another
+99 successful calls retained the same HP, and 178 calls returned false.
+A compiled engine replay of the logged scalar inputs agreed with an
+independent neutral actor model for all 356 rows. The comparison covers
+physical hits from this recording. Upstream damage rolls are a separate
+question. All 198 ratios outside the melee band carried ability zero.
+
+When a separate combat log exists, the checker reports later HP readings
+separately. Overlapping same-target windows remain ambiguous. [Steam ordinary hit and HP contract](specs/steam-ordinary-hit-hp-comparison-20261118.md).
+
 ## Water Bubble guard and shield receipt - 2026-11-18
 
 A guarding player can block a Water Bubble with two shields active. When

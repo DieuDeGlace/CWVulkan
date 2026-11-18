@@ -235,6 +235,15 @@ shield loses the full absorb-record amount. The recipient sends its resulting
 shields in list order as packet 12. It ignores its own status echoes from
 packet 7. [Steam guard and shield receipt](specs/steam-bubble-defense-receipt-20261118.md).
 
+Ordinary damage arrives at the resolver with its upstream roll already
+applied. Physical category zero selects armor and other categories select
+resistance. The attacker's signed combo divided by its positive threshold
+is capped above at one. Defense uses the remaining fraction and damage
+is floored at zero before later equipment and status effects. Eligible
+authority HP settles in single precision with a lower bound of zero.
+Production, immediate HP settlement and later guest state are separate
+observations. [Steam ordinary hit and HP contract](specs/steam-ordinary-hit-hp-comparison-20261118.md).
+
 The authority sends hit records to every peer. Pulses and sounds use a
 256-block spherical range around the peer, and sounds skip their owner.
 Non-player visibility uses 270 blocks. Threat from healing first updates
