@@ -108,7 +108,7 @@ struct Character {
     std::set<Cell> discoveredZones;          // player data +0x38
     std::set<Cell> set48;                    // player data +0x48
     std::set<Cell> discoveredLands;          // player data +0x58
-    std::map<Cell, int32_t> map88, map98;    // player data +0x88, +0x98
+    std::set<std::array<int32_t, 3>> collectedItemBlocks, set98; // two independent XYZ sets at +0x88 and +0x98
     std::set<Cell> usedCells;                // player data +0xa8: reward chests opened, lore read
     std::set<Cell> setB8;                    // player data +0xb8
     std::set<Cell> setC8;                    // player data +0xc8 (missions solved)

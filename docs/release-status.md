@@ -1,5 +1,23 @@
 # Source review checkpoint — 2026-11-08
 
+## Personal pickups across character reloads - 2026-11-18
+
+Characters now keep every collected XYZ block in their version-11 save. Two
+personal items in the same column can sit at different heights. Reloading
+preserves both awards and suppresses a repeat at either height. The adjacent
+saved collection uses the same three-coordinate format and retains its own
+membership.
+
+Two in-process guest clients received eight identical host notices. The first
+collected eight ingredients, one piece of armor and seven Mana Cubes. The
+second collected five ingredients and nineteen platinum in its own region.
+Both balances and bags survived reopening the character database. Three later
+requests confirmed that the first guest could collect neither height again
+and the second could still collect its remaining height. The ground slots
+were controlled. The two frozen original characters had empty pickup
+histories, so the vertical case uses the held Steam format and an offline
+regression.
+
 ## Daily reset and terrain edit retention - 2026-11-18
 
 The daily reset clears the archive of saved zones. A loaded zone keeps its

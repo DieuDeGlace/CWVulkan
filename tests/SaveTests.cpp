@@ -53,8 +53,8 @@ Character testCharacter() {
     c.discoveredZones = {{3, 4}, {-2, 7}};
     c.set48 = {{1, 1}};
     c.discoveredLands = {{0, 0}, {5, -5}};
-    c.map88 = {{{1, 2}, 3}};
-    c.map98 = {{{-1, -2}, 4}};
+    c.collectedItemBlocks = {{1, 2, 3}, {1, 2, -4}};
+    c.set98 = {{-1, -2, 4}, {-1, -2, -5}};
     c.usedCells = {{100, 200}, {-100, 5}};
     c.setB8 = {{7, 7}};
     c.setC8 = {{8, 8}};
@@ -209,6 +209,46 @@ void characterRoundTrip() {
     SAVE_CHECK(version == CHARACTER_VERSION);
 }
 
+void personalPickupHistory() {
+    // Start with two awards in one column, as a client receiving separate personal drops.
+    SaveGame progress;
+    progress.nativeInventory.emplace();
+    progress.inventoryAuthoritative = true;
+    progress.perPlayerTaken = {{-1, 2, -3}, {-1, 2, 4}, {-1, 3, -3}};
+    Character saved;
+    std::string notes;
+    SAVE_CHECK(nativeprogress::capturePlayerData(progress, saved, notes));
+    Character reopened;
+    readCharacter(writeCharacter(saved), reopened);
+    const auto resumed = nativeprogress::toProgress(reopened, notes, {}, {});
+    SAVE_CHECK(resumed.perPlayerTaken == progress.perPlayerTaken);
+
+    // Supply unsorted wire triples with an exact repeat in each set, followed by a used cell.
+    // Default v11 prefix through the three empty discovery sets.
+    const size_t prefix = 0x71e + 4 + 20 + 4 + 6 * 4 + 8 + 4 + 3 * 4;
+    const auto blank = writeCharacter(Character{});
+    const std::vector<int32_t> words = {4, -1, 2, 4, -1, 3, -3, -1, 2, -3, -1, 2, 4,
+                                       3, -1, 2, 4, -1, 2, -7, -1, 2, -7, 1, 23, -30};
+    const auto *wire = reinterpret_cast<const uint8_t *>(words.data());
+    std::vector<uint8_t> input(blank.begin(), blank.begin() + prefix);
+    input.insert(input.end(), wire, wire + words.size() * sizeof(int32_t));
+    input.insert(input.end(), blank.begin() + prefix + 3 * sizeof(int32_t), blank.end());
+    Character decoded;
+    readCharacter(input, decoded);
+    SAVE_CHECK(decoded.collectedItemBlocks == progress.perPlayerTaken);
+    SAVE_CHECK((decoded.set98 == std::set<std::array<int32_t, 3>>{{-1, 2, -7}, {-1, 2, 4}}));
+    SAVE_CHECK((decoded.usedCells == std::set<Cell>{{23, -30}}));
+    const std::vector<int32_t> expected = {3, -1, 2, -3, -1, 2, 4, -1, 3, -3,
+                                          2, -1, 2, -7, -1, 2, 4, 1, 23, -30};
+    const auto canonical = writeCharacter(decoded);
+    SAVE_CHECK(canonical.size() == blank.size() + (expected.size() - 3) * sizeof(int32_t) &&
+               std::memcmp(canonical.data() + prefix, expected.data(), expected.size() * sizeof(int32_t)) == 0);
+    input.resize(prefix + 4 + 12 + 9); // a partial XYZ after one complete entry
+    Character truncated;
+    readCharacter(input, truncated);
+    SAVE_CHECK((truncated.collectedItemBlocks == std::set<std::array<int32_t, 3>>{{-1, 2, 4}} && truncated.set98.empty()));
+}
+
 void worldRoundTrip() {
     const WorldState w = testWorld();
     const std::vector<uint8_t> blob = writeWorld(w);
@@ -285,7 +325,7 @@ void readingQuirks() {
     std::vector<uint8_t> v9;
     {
         Character old = c;
-        old.discoveredZones.clear(), old.set48.clear(), old.discoveredLands.clear(), old.map88.clear(), old.map98.clear();
+        old.discoveredZones.clear(), old.set48.clear(), old.discoveredLands.clear(), old.collectedItemBlocks.clear(), old.set98.clear();
         old.usedCells.clear(), old.setB8.clear(), old.setC8.clear(), old.finishedMissions.clear(), old.missionTimers.clear();
         const std::vector<uint8_t> full = writeCharacter(old);
         // The sets block is 9 empty counts and one empty map: 40 bytes after the recipes, before the tail.
@@ -513,7 +553,7 @@ void zoneStates() {
         for (const auto &stack : c.inventory.back())
             SAVE_CHECK(stack.count == 0 && stack.item == expected);
     }
-    SAVE_CHECK(c.equipment[0] == daily && c.map88.empty() && c.finishedMissions.empty() && c.purchases.empty());
+    SAVE_CHECK(c.equipment[0] == daily && c.collectedItemBlocks.empty() && c.set98 == testCharacter().set98 && c.finishedMissions.empty() && c.purchases.empty());
     SAVE_CHECK(!c.usedCells.empty());
     // Create Character's own steps: level 1, the home cell used.
     Character fresh;
@@ -557,7 +597,7 @@ void terrainProfiles() {
         SAVE_CHECK(copied.name == character.name && copied.level == character.level && copied.gold == character.gold);
         SAVE_CHECK(copied.equipment == character.equipment && copied.recipes == character.recipes);
         SAVE_CHECK((copied.position == std::array<int64_t, 3>{}) && copied.discoveredZones.empty() && copied.usedCells.empty());
-        SAVE_CHECK(copied.map88.empty() && copied.finishedMissions.empty() && copied.regionValues.empty() && copied.stars.empty());
+        SAVE_CHECK(copied.collectedItemBlocks.empty() && copied.set98.empty() && copied.finishedMissions.empty() && copied.regionValues.empty() && copied.stars.empty());
         std::string notes;
         SaveGame decoded;
         SAVE_CHECK(profile.store().readNotes(0, notes) && decoded.parse(notes) && decoded.hairStyle.has_value());
@@ -743,6 +783,7 @@ int saveFormatTests() {
     failures = 0;
     inventorySlotLoading();
     characterRoundTrip();
+    personalPickupHistory();
     worldRoundTrip();
     readingQuirks();
     zlibStreams();

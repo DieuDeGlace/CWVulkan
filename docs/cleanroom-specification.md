@@ -113,6 +113,14 @@ award. A shared drop's duplicate check belongs to the recipient. A licensed
 UDP gold pickup survived character reload. Original Steam save timing and
 two-account play remain open. [Guest pickups](specs/steam-remote-guest-item-pickup-20261118.md)
 
+A personal ground pickup records the signed X, Y and Z of its containing
+block. The character save stores the full triples in signed lexicographic
+order, including distinct heights in one column. A separate horizontal
+16-block cell controls visibility of collected treasure. The adjacent saved
+XYZ set has independent membership. The local receiver applies ordinary bag
+items, regional platinum and Mana Cubes. The original manual prompt has
+additional counter effects on specific categories. [Steam guest inventory settlement](specs/steam-guest-nongold-settlement-20261118.md). [Steam personal pickup history](specs/steam-personal-pickup-position-history-20261118.md).
+
 ### B2. Extensions and preserved looks
 
 Features the user asked for that Steam does not have are labelled as project choices, never as

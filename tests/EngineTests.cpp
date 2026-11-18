@@ -1813,12 +1813,12 @@ static void shopRules() {
         Item bought{};
         bought[0] = 3, bought[8] = 77;
         s.purchases[42] = {bought};
-        s.perPlayerTaken = {{3, -2, 7}};
+        s.perPlayerTaken = {{3, -2, 7}, {3, -2, -1}};
         s.regionCounters[{4, 5}] = 6;
         nativesaves::Character c;
         std::string notes;
         nativeprogress::fromProgress(s, nullptr, 100.0f, {}, c, notes);
-        CHECK(c.purchases[42].size() == 1 && c.purchases[42][0] == bought && (c.map88[{3, -2}] == 7) && (c.regionValues[{4, 5}] == 6));
+        CHECK(c.purchases[42].size() == 1 && c.purchases[42][0] == bought && c.collectedItemBlocks == s.perPlayerTaken && (c.regionValues[{4, 5}] == 6));
         const SaveGame back = nativeprogress::toProgress(c, notes, {}, {});
         CHECK(back.purchases == s.purchases && back.perPlayerTaken == s.perPlayerTaken && back.regionCounters == s.regionCounters);
     }

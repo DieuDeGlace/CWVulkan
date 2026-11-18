@@ -1,5 +1,15 @@
 # Clean-room process
 
+## Personal pickups across character reloads - 2026-11-18
+
+Two isolated offline Steam reviews establish recipient settlement and the
+three signed coordinates used for personal collection in version-11 saves.
+The second saved set has the same ordering and independent membership. Its
+gameplay meaning remains open. The implementation team verified both complete
+handoffs and reproduced the vertical collision before changing the reader,
+writer and progress bridge. The multiplayer comparison used generated test
+drops and a disposable character database. [Steam guest inventory settlement](specs/steam-guest-nongold-settlement-20261118.md). [Steam personal pickup history](specs/steam-personal-pickup-position-history-20261118.md).
+
 ## Daily reset and terrain edit retention - 2026-11-18
 
 An isolated original-side review traced clock crossings, resets, unload,

@@ -156,22 +156,22 @@ class Writer {
     void count(size_t n) { value((int32_t)n); }
 };
 
-// A set of pairs: a count, then the pairs (sorted when written; a duplicate keeps the first).
-void readSet(Reader &r, std::set<Cell> &out) {
+// A counted set of signed coordinates. Each key is packed in axis order.
+template <size_t N> void readSet(Reader &r, std::set<std::array<int32_t, N>> &out) {
     int32_t n;
     if (!r.count(n))
         return;
     for (int32_t i = 0; i < n; i++) {
-        Cell c;
-        if (!r.cell(c))
+        std::array<int32_t, N> key;
+        if (!r.bytes(key.data(), N * sizeof(int32_t)))
             return;
-        out.insert(c);
+        out.insert(key);
     }
 }
-void writeSet(Writer &w, const std::set<Cell> &s) {
+template <size_t N> void writeSet(Writer &w, const std::set<std::array<int32_t, N>> &s) {
     w.count(s.size());
-    for (const Cell &c : s)
-        w.cell(c);
+    for (const auto &key : s)
+        w.bytes(key.data(), N * sizeof(int32_t));
 }
 template <class V> void readMap(Reader &r, std::map<Cell, V> &out) {
     int32_t n;
@@ -328,8 +328,8 @@ void readCharacter(const std::vector<uint8_t> &blob, Character &c) {
         readSet(r, c.discoveredZones);
         readSet(r, c.set48);
         readSet(r, c.discoveredLands);
-        readMap(r, c.map88);
-        readMap(r, c.map98);
+        readSet(r, c.collectedItemBlocks);
+        readSet(r, c.set98);
         readSet(r, c.usedCells);
         readSet(r, c.setB8);
         readSet(r, c.setC8);
@@ -415,8 +415,8 @@ std::vector<uint8_t> writeCharacter(const Character &c) {
     writeSet(w, c.discoveredZones);
     writeSet(w, c.set48);
     writeSet(w, c.discoveredLands);
-    writeMap(w, c.map88);
-    writeMap(w, c.map98);
+    writeSet(w, c.collectedItemBlocks);
+    writeSet(w, c.set98);
     writeSet(w, c.usedCells);
     writeSet(w, c.setB8);
     writeSet(w, c.setC8);
@@ -577,7 +577,7 @@ void resetWorld(WorldState &w) {
 
 void resetCharacterForWorld(Character &c) {
     inventoryslots::clearType(c.inventory, 0x16);
-    c.map88.clear();
+    c.collectedItemBlocks.clear();
     c.finishedMissions.clear();
     c.purchases.clear();
 }

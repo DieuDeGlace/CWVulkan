@@ -487,8 +487,7 @@ SaveGame toProgress(const Character &c, const std::string &notes, const Frame &f
             s.marked.push_back({zone[0], zone[1], "", ""});
     s.missionTimers = c.missionTimers;
     s.purchases = c.purchases;
-    for (const auto &[block, z] : c.map88) // (the file keeps x and y as the key and z as the value)
-        s.perPlayerTaken.insert({block[0], block[1], z});
+    s.perPlayerTaken = c.collectedItemBlocks;
     s.regionCounters = c.regionValues;
     for (const auto &[group, list] : c.stars)
         for (const nativesaves::Star &star : list)
@@ -514,9 +513,7 @@ void captureProgressCollections(const SaveGame &s, Character &c, std::string &no
         c.setB8.insert({m.x, m.y});
     c.missionTimers = s.missionTimers;
     c.purchases = s.purchases;
-    c.map88.clear();
-    for (const auto &block : s.perPlayerTaken)
-        c.map88[{block[0], block[1]}] = block[2];
+    c.collectedItemBlocks = s.perPlayerTaken;
     c.regionValues = s.regionCounters;
     // Match old records by coordinate and occurrence. Equal coordinates can
     // carry different unknown values, so each original list entry is consumed once.
@@ -711,8 +708,8 @@ bool initializeProfileCharacters(const fs::path &base, const fs::path &importFro
             character.discoveredZones.clear();
             character.set48.clear();
             character.discoveredLands.clear();
-            character.map88.clear();
-            character.map98.clear();
+            character.collectedItemBlocks.clear();
+            character.set98.clear();
             character.usedCells.clear();
             character.setB8.clear();
             character.setC8.clear();

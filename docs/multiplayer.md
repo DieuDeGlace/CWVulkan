@@ -226,7 +226,13 @@ It received five pickups from actor 1. The guest's saved balance rose from
 finishing at 20 with the same equipment. A second guest saw the recipient
 from nearby and retained its own 10 gold. All five processes across the
 two runs exited normally. This verifies the CubeVulkan localhost route for
-gold. Original-peer play and the other item categories remain open.
+gold.
+
+An offline host and two guest clients also exercised stackable ingredients,
+armor, Mana Cubes and regional platinum. Each character retained its own
+awards after its database was reopened. Multiple shared drops in one
+horizontal column remain distinct by height. Original-peer play and the
+live frequency of exceptional manual currency checks remain open. [Steam guest inventory settlement](specs/steam-guest-nongold-settlement-20261118.md). [Steam personal pickup history](specs/steam-personal-pickup-position-history-20261118.md).
 
 ## Not done yet
 
