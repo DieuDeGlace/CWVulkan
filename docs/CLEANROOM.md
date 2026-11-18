@@ -1,5 +1,13 @@
 # Clean-room process
 
+## Guest terrain changes and saved-zone replay - 2026-11-18
+
+The isolated author established how a guest handles replacement, removal,
+raw history and reverse replay. The clean implementation tests cover
+colored air, work below sea level and absent columns. The private
+comparison exercised the compiled client with 98 changes in two loaded
+zones and one change outside residency. [Steam guest block changes and saved replay](specs/steam-guest-terrain-replacement-20261118.md).
+
 ## Manual ground pickup and guest rejoin - 2026-11-18
 
 The isolated author traced manual and walk-over requests, cursor counting,

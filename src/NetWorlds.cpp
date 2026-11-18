@@ -92,6 +92,8 @@ void HostSide::think(uint32_t elapsedMs) {
 // --- The client world --------------------------------------------------------------------------
 
 void MirrorSide::applyBlockChanges(const std::vector<cwnet::BlockChangeRecord> &changes) {
+    if (changes.empty())
+        return;
     auto edits = blocks.editBlocks();
     for (const auto &change : changes)
         world.applyBlockChange(change);

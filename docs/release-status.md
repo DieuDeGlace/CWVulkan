@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Guest terrain changes and saved-zone replay - 2026-11-18
+
+A guest now skips terrain locking on updates with no block changes. A
+three-run microbenchmark measured a median of 2.28 ns per empty call,
+down from 148.62 ns on the same PC. An empty update also returned while
+another thread held the terrain writer. An update containing an edit
+continued to wait for that writer.
+
+An offline comparison checked 98 edits across two loaded zones and one
+edit addressed to a missing zone. Six loaded edits had different
+physical results on receipt and on local saved-zone replay. Both zone
+histories preserved every transmitted row in order. The comparison
+used controlled terrain and the compiled guest. [Steam guest block changes and saved replay](specs/steam-guest-terrain-replacement-20261118.md).
+
 ## Manual ground pickup and guest rejoin - 2026-11-18
 
 Pressing Use on a world drop puts one request at the front of the queue.

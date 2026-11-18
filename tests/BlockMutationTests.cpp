@@ -232,6 +232,26 @@ int blockMutationTests() {
               "unload persists exact repeated native history");
     }
     {
+        ExtractedWorld guest, restored;
+        std::string error;
+        check(guest.open(directory, error) && restored.open(directory, error), "network and saved zone start from the same column");
+        SpawnedCreatures actors;
+        actors.setStoredZones(guest, nullptr, true);
+        const ExtractedWorld::GameBlock before{20, 30, 40, 0, 1, 0x11}, coloredAir{16, 32, 48, 64, 0, 0};
+        const auto edit = zonestates::blockChange(1, 1, 1, before, coloredAir);
+        actors.applyBlockChange(edit.bytes);
+        restored.setBlockChanges(0, 0, {edit});
+        cwnet::ZoneAnswer answer;
+        check(guest.gameBlock(1, 1, 1) == ExtractedWorld::GameBlock{255, 255, 255, 0, 0, 0} &&
+                  restored.gameBlock(1, 1, 1) == coloredAir, "network removal and local saved replay preserve distinct air colors");
+        check(actors.zoneAnswer(guest, {0, 0}, answer) && answer.blockChanges == std::vector<cwnet::BlockChangeRecord>{edit.bytes},
+              "the guest retains the complete received color in its zone history");
+        guest.undoBlockChanges(0, 0);
+        restored.undoBlockChanges(0, 0);
+        check(guest.gameBlock(1, 1, 1) == before && restored.gameBlock(1, 1, 1) == before,
+              "undo restores the old six bytes on both paths");
+    }
+    {
         const auto modelDirectory = directory / "models";
         fs::create_directory(modelDirectory);
         fs::copy_file(directory / "manifest.txt", modelDirectory / "manifest.txt");

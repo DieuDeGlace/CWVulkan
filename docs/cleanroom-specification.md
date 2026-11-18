@@ -270,6 +270,14 @@ older edits again. An ordinary save snapshots the archive as it stands.
 Loading a valid state restores the stored day and its ordered history.
 [Steam zone history retention](specs/steam-zone-history-retention-20261118.md).
 
+On guest receipt, zero material and zero flags remove a block only
+inside the stored column span, leaving ordinary air above sea level
+or water at and below sea level. The guest retains the transmitted
+six-byte value in its resident edit history even when the physical
+block differs. Restoring the local saved history uses the general
+setter, which can preserve colored air or extend the column downward.
+A missing zone receives no edit or history entry. [Steam guest block changes and saved replay](specs/steam-guest-terrain-replacement-20261118.md).
+
 The authority sends hit records to every peer. Pulses and sounds use a
 256-block spherical range around the peer, and sounds skip their owner.
 Non-player visibility uses 270 blocks. Threat from healing first updates
