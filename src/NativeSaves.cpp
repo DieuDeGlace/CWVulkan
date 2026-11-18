@@ -1,5 +1,6 @@
 // The game's own save files, written from docs/specs/native-saves.md.
 #include "NativeSaves.h"
+#include "InventorySlots.h"
 #include "NativeInteract.h"
 
 #include <sqlite3.h>
@@ -575,10 +576,7 @@ void resetWorld(WorldState &w) {
 }
 
 void resetCharacterForWorld(Character &c) {
-    constexpr uint8_t RESET_TYPE = 0x16;
-    for (auto &tab : c.inventory)
-        tab.erase(std::remove_if(tab.begin(), tab.end(), [](const Stack &s) { return s.item[item::TYPE] == RESET_TYPE; }),
-                  tab.end());
+    inventoryslots::clearType(c.inventory, 0x16);
     c.map88.clear();
     c.finishedMissions.clear();
     c.purchases.clear();

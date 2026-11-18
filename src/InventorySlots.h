@@ -45,6 +45,8 @@ struct Inventory {
   private:
     bool contains(Index) const;
 };
+// The daily reset clears matching slots in place in both saved and live inventories.
+void clearType(Tabs &tabs, uint8_t type);
 // Pure row insertion, shared by canonical inventory and generated shop stock.
 // Counter interception and destination-tab selection remain Inventory::add's job.
 std::optional<int> insertRow(std::vector<Stack> &, Item, int32_t quantity);

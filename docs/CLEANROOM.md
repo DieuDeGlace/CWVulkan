@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Daily reset and terrain edit retention - 2026-11-18
+
+An isolated original-side review traced clock crossings, resets, unload,
+periodic saving and terrain replay. The clean team verified the held
+prose and exercised resident and unloaded histories with existing saved
+data. The earlier and later saves do not record which zones were resident
+at reset or which actor changed their terrain. The compressed guest day
+message and subsequent local eviction were checked offline. The separate
+saved-character slot correction uses the established daily inventory
+contract. [Steam zone history retention](specs/steam-zone-history-retention-20261118.md).
+
 ## Weapon spirits in ordinary combat - 2026-11-18
 
 Combat reuses the clean engine's existing weapon-selection rules. The

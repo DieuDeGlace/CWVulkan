@@ -251,6 +251,13 @@ source-less physical hazards also pass zero for ability and category.
 The actor's action at contact alone cannot identify the producing throw.
 Resolved hit messages carry the signed amount, IDs and outcome. [Steam hit producer contract](specs/steam-direct-hit-roll-provenance-20261118.md).
 
+The day in a terrain edit records when the change occurred. A daily reset
+clears archived zones, including entries from the current day. Loaded
+zones retain their live histories. An unload after reset can archive those
+older edits again. An ordinary save snapshots the archive as it stands.
+Loading a valid state restores the stored day and its ordered history.
+[Steam zone history retention](specs/steam-zone-history-retention-20261118.md).
+
 The authority sends hit records to every peer. Pulses and sounds use a
 256-block spherical range around the peer, and sounds skip their owner.
 Non-player visibility uses 270 blocks. Threat from healing first updates

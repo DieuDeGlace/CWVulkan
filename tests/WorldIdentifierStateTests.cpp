@@ -32,10 +32,17 @@ int worldIdentifierStateTests() {
     const auto store = blocks.sourceStateStore();
     const auto source = store->find({0, 0});
     if (!source) return failures + 1;
+    nativesaves::BlockChange firstEdit{}, secondEdit{};
+    setField(firstEdit.bytes, 24, int32_t(9));
+    secondEdit = firstEdit;
+    secondEdit.bytes[18] = 0x33; // a later edit at the same position
+    setField(secondEdit.bytes, 24, int32_t(10));
     {
         auto guard = store->lock();
         store->retained().dead = {77};
         store->retained().zones[{8, 9}].deadTracked = 23;
+        store->retained().zones[{8, 9}].blockChanges = {firstEdit};
+        source->lists.blockChanges = {firstEdit, secondEdit};
         nativesaves::Record marker{}; marker[0] = 0x65;
         source->lists.groundItems = {marker};
         source->lists.groundItemsChanged = true;
@@ -103,6 +110,18 @@ int worldIdentifierStateTests() {
     client.receive(1004);
     check(changes == 1 && actor.day() == -3 && actor.isWorldDead(81) && store->snapshot().zones.contains({4, 5}),
           "an unrelated peer cannot trigger the selected clock/reset route");
+    const auto retired = blocks.retireClientSource({20, 20}, 3);
+    const auto afterRetirement = store->snapshot();
+    const auto archived = afterRetirement.zones.find({0, 0});
+    check(retired && retired->first == 0 && retired->second == 0 && !store->find({0, 0}) &&
+              archived != afterRetirement.zones.end(),
+          "retiring the resident zone after the day reset restores its saved history");
+    if (archived != afterRetirement.zones.end()) {
+        const auto &edits = archived->second.blockChanges;
+        check(edits.size() == 2 && edits[0].bytes == firstEdit.bytes && edits[1].bytes == secondEdit.bytes &&
+                  !afterRetirement.zones.contains({8, 9}),
+              "resident edits retain both old day stamps and their order while the cleared distant zone stays absent");
+    }
     std::printf("World identifier runtime state: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

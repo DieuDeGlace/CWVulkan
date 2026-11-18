@@ -1,5 +1,21 @@
 # Source review checkpoint — 2026-11-08
 
+## Daily reset and terrain edit retention - 2026-11-18
+
+The daily reset clears the archive of saved zones. A loaded zone keeps its
+live terrain and its ordered edits. Retiring it later writes those edits
+back with their original day stamps, including repeated coordinates.
+The saved-character reset now clears daily inventory items in their slots.
+This matches the live inventory's treatment of empty slots and extra tabs.
+
+An older original save held 935 edits in seven zones. A later disposable
+save held 845 edits in four different zones. Both states round-tripped
+through the engine, and all four later zone packets matched an independent
+decode. Both staged characters still had three Bombs, and none of the
+later edits was at the staged site. The cause of those edits is open.
+A controlled archive reset using each save preserved every byte of the
+chosen resident zone's 336 or 319 edits when it was retired and reloaded.
+
 ## Weapon spirits in ordinary combat - 2026-11-18
 
 Combat shares the stat system's weapon selection and visits the spirit

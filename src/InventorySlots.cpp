@@ -188,7 +188,7 @@ int32_t Inventory::quantity(const Item &item) const {
     return count;
 }
 
-void Inventory::clearType(uint8_t type) {
+void clearType(Tabs &tabs, uint8_t type) {
     for (auto &tab : tabs)
         for (auto &stack : tab)
             if (stack.item[0] == type) {
@@ -196,6 +196,8 @@ void Inventory::clearType(uint8_t type) {
                 stack.count = 0;
             }
 }
+
+void Inventory::clearType(uint8_t type) { inventoryslots::clearType(tabs, type); }
 
 std::optional<Item> Inventory::dropOne(Index source, const uint8_t *actor) {
     const auto *stack = slot(source);

@@ -495,9 +495,25 @@ void zoneStates() {
     resetWorld(w);
     SAVE_CHECK(w.dead.empty() && w.zones.empty() && w.rewards.size() == 1);
     Character c = testCharacter();
-    c.inventory[1].push_back({1, makeItem(0x16, 0)});
+    Item daily = makeItem(0x16, 7, 9);
+    daily[1] = 0xab; // padding survives a semantic item clear
+    daily[0x1d] = daily[item::ATTRIBUTE_COUNT] = 1;
+    const Stack keep{2, makeItem(3, 17)};
+    c.inventory[1] = {keep, {3, daily}, keep};
+    c.inventory.push_back({{0, daily}, {-1, daily}});
+    c.equipment[0] = daily;
+    const auto *originalSlots = c.inventory[1].data();
     resetCharacterForWorld(c);
-    SAVE_CHECK(c.inventory[1].empty() && c.map88.empty() && c.finishedMissions.empty() && c.purchases.empty());
+    SAVE_CHECK(c.inventory[1].data() == originalSlots && c.inventory[1].size() == 3 && c.inventory.back().size() == 2);
+    if (c.inventory[1].size() == 3 && c.inventory.back().size() == 2) {
+        Item expected{};
+        expected[1] = 0xab;
+        SAVE_CHECK(c.inventory[1][1].count == 0 && c.inventory[1][1].item == expected);
+        SAVE_CHECK(c.inventory[1][0].item == keep.item && c.inventory[1][2].count == keep.count);
+        for (const auto &stack : c.inventory.back())
+            SAVE_CHECK(stack.count == 0 && stack.item == expected);
+    }
+    SAVE_CHECK(c.equipment[0] == daily && c.map88.empty() && c.finishedMissions.empty() && c.purchases.empty());
     SAVE_CHECK(!c.usedCells.empty());
     // Create Character's own steps: level 1, the home cell used.
     Character fresh;
