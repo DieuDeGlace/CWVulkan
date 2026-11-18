@@ -31,6 +31,8 @@
 
 #include <glm/glm.hpp>
 
+namespace inventoryslots { struct Inventory; }
+
 namespace useprompt {
 
 using FixedPoint = std::array<int64_t, 3>;
@@ -112,6 +114,8 @@ struct GroundItem {
     std::array<glm::vec3, 8> box{};
     int32_t quantity = 1;                    // Native validity requires nonzero, including negative values.
     std::optional<FixedPoint> fixedPosition; // raw ground tuple, independent of the drawn model
+    const Item *worldItem = nullptr; // borrowed from the selected zone's presentation entry for this input pass
+    std::array<int32_t, 3> zoneSlot{};
 };
 
 // Whether the player may pick up one more of an item when it carries `count` equal to it
@@ -121,10 +125,14 @@ bool mayCarryMore(int type, int subtype, int count);
 
 // Whether a ground item may be targeted at all (0x2b8140, spec 2.4).
 bool groundItemValid(const GroundItem &g, int64_t playerOwnerId);
+bool ownsGroundSpecial(const inventoryslots::Inventory &, int32_t subtype, const int32_t region[2]);
+int32_t groundCarryCount(const inventoryslots::Inventory &, const Item &);
+nativeai::Interaction groundRequest(const Item &, const std::array<int32_t, 3> &zoneSlot);
 
 // Everything the use key looks at this frame.
 struct Scene {
     uint8_t *player = nullptr;   // the local player's record
+    inventoryslots::Inventory *inventory = nullptr; // canonical inventory for native ground prompts
     glm::vec3 playerAt{0};       // its position
     float abilityEffectTime = 0; // current ability effect threshold (0x4ead0 with -1)
     usecollection::Collection *collection = nullptr; // borrowed controller-lifetime owner

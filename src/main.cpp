@@ -6486,6 +6486,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 return count;
             };
             useprompt::Scene scene = std::move(nativeUseScene);
+            scene.inventory = nativeInventory ? &nativeInventory->inventory : nullptr;
+            int32_t pickupRegion[2];
+            std::memcpy(pickupRegion, me->record + worldgen::creature::REGION, sizeof pickupRegion);
             scene.playerAt = placeOf(me->record);
             scene.abilityDuration = spawned.playerAbilityDuration();
             scene.abilityEffectTime = spawned.playerAbilityEffectTime();
@@ -6564,7 +6567,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 g.fixedPosition = l.fixedPosition;
                 g.type = l.item.category, g.subtype = l.item.id;
                 const bool nativeGroundBox = l.fixedPosition && l.raw[0] && renderStyle() == RenderStyle::Steam;
-                if (nativeGroundBox) {
+                if (hasWorldGroundRecord(l) && session.clientGame()) {
+                    g.worldItem = &l.raw;
+                    g.zoneSlot = l.zoneItem;
+                }
+                if (g.worldItem || nativeGroundBox) {
                     g.type = l.raw[0];
                     std::memcpy(&g.subtype, l.raw.data() + 4, sizeof g.subtype);
                 }
@@ -6574,17 +6581,25 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 g.settleMs = l.dropMs;
                 g.noAutoPickup = (l.flags & grounditems::ground::STAYS_FOR_OTHERS) != 0;
                 g.pending = l.taken;
-                g.carriesOne = nativeGroundBox && nativeInventory
-                                   ? nativeInventory->inventory.quantity(l.raw) > 0
-                                   : carriedOf(l.item.category, l.item.id, l.item.modifier, l.item.material) > 0;
-                const int64_t dots[2] = {(int64_t)std::floor((double)l.at.x * 65536.0) + extractedWorld.originDotsX(),
-                                         (int64_t)std::floor((double)l.at.y * 65536.0) + extractedWorld.originDotsY()};
-                g.cellKnown = usedCells.count(lore::cellOf(dots[0], dots[1])) != 0;
-                g.ownsSpecial = std::any_of(bag.begin(), bag.end(), [&](const Carried &c) { return c.item.category == 0x18 && c.item.id == l.item.id; });
-                for (const Carried &c : bag) // (stacked as collect stacks them)
-                    if (c.item.category == l.item.category && c.item.id == l.item.id && c.item.material == l.item.material &&
-                        c.item.rarity == l.item.rarity && c.item.modifier == l.item.modifier)
-                        g.carriedCount += c.count;
+                if (g.worldItem && nativeInventory) {
+                    const auto &inventory = nativeInventory->inventory;
+                    g.carriedCount = useprompt::groundCarryCount(inventory, l.raw);
+                    g.carriesOne = g.type == 23 && inventory.quantity(l.raw) > 0;
+                    g.ownsSpecial = g.type == 24 && useprompt::ownsGroundSpecial(inventory, g.subtype, pickupRegion);
+                } else {
+                    g.carriesOne = carriedOf(l.item.category, l.item.id, l.item.modifier, l.item.material) > 0;
+                    g.ownsSpecial = std::any_of(bag.begin(), bag.end(), [&](const Carried &c) { return c.item.category == 24 && c.item.id == l.item.id; });
+                    for (const Carried &c : bag)
+                        if (c.item.category == l.item.category && c.item.id == l.item.id && c.item.material == l.item.material &&
+                            c.item.rarity == l.item.rarity && c.item.modifier == l.item.modifier)
+                            g.carriedCount += c.count;
+                }
+                if (g.type == 30) {
+                    const auto cell = l.fixedPosition ? lore::cellOf((*l.fixedPosition)[0], (*l.fixedPosition)[1])
+                        : lore::cellOf(int64_t(std::floor(double(l.at.x) * 65536)) + extractedWorld.originDotsX(),
+                                       int64_t(std::floor(double(l.at.y) * 65536)) + extractedWorld.originDotsY());
+                    g.cellKnown = usedCells.contains(cell);
+                }
                 if (l.model >= 0 && world.modelMesh(l.model)) {
                     const glm::vec3 size = world.modelSize(l.model);
                     glm::mat4 m;
@@ -6640,8 +6655,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 saveGame.missionTimers[*zone] = mapmarks::TALK_NOTE_MS;
             }
             // Coins and the like are picked up by walking over them (spec 2.4).
-            for (int i : targets.walkedOver)
-                sceneLoot[(size_t)i]->taken = true;
+            for (int i : targets.walkedOver) {
+                const auto &g = scene.groundItems[size_t(i)];
+                if (g.worldItem)
+                    spawned.queuePickUp(useprompt::groundRequest(*g.worldItem, g.zoneSlot));
+                else
+                    sceneLoot[size_t(i)]->taken = true;
+            }
 
             // The icon on the button.
             if (p.icon == useprompt::Prompt::Icon::ObjectItem)
@@ -6807,12 +6827,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     selectedItemUse(*me);
                     break;
                 case Action::PickUpItem:
-                    sceneLoot[(size_t)p.groundItem]->taken = true;
+                    if (!scene.groundItems[size_t(p.groundItem)].worldItem)
+                        sceneLoot[size_t(p.groundItem)]->taken = true;
                     break;
                 case Action::CannotCarry:
+                    audio.playAt(soundrules::soundid::HUMAN_VOICE, playerFixed.data(), 1.f, 1.f);
                     texts.push_back({player.position + glm::vec3(0, 0, 3.1f), "You can't carry more of these items.", {255, 51, 51, 255}});
                     break;
                 case Action::BagFull: {
+                    audio.playAt(soundrules::soundid::HUMAN_VOICE, playerFixed.data(), 1.f, 1.f);
                     static const std::map<int, const char *> full = {{0, "Your equipment bag is full."}, {2, "Your item bag is full."},
                                                                      {3, "Your ingredient bag is full."}, {4, "Your pet bag is full."}};
                     if (auto f = full.find(p.bag); f != full.end())
@@ -6940,16 +6963,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                            : it->age > .6 && glm::length(glm::vec2(d)) < 1.8f && std::abs(d.z) < 2.5f;
             if (!serverMode && take) {
                 if (it->zoneItem[0] != INT_MIN && session.clientGame()) {
-                    // A zone's ground item is its world's: picking it up is an interaction (kind 7)
-                    // the host performs; its pick-up notice then gives it to this player
-                    // (zone-object-interaction.md §6, loot-pickup.md §4). Asked every frame while it
-                    // is still there, unless the same request is still pending (pickup-rate §B.1, B.3).
-                    nativeai::Interaction in = nativeinteract::fresh(nativeinteract::PICK_UP);
-                    std::memcpy(in.data() + nativeinteract::ITEM, it->raw.data(), it->raw.size());
-                    std::memcpy(in.data() + nativeinteract::ZONE_X, &it->zoneItem[0], 4);
-                    std::memcpy(in.data() + nativeinteract::ZONE_Y, &it->zoneItem[1], 4);
-                    std::memcpy(in.data() + nativeinteract::OBJECT, &it->zoneItem[2], 4);
-                    spawned.queuePickUp(in);
+                    // A scripted selection can also request a world item through the host.
+                    spawned.queuePickUp(useprompt::groundRequest(it->raw, it->zoneItem));
+                    it->taken = false;
                     ++it;
                     continue;
                 }
@@ -8386,15 +8402,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             std::memcpy(&valid.subtype, original.data() + 4, sizeof valid.subtype);
                             valid.quantity = record.quantity;
                             valid.reservedFor = record.owner;
-                            valid.carriesOne = nativeInventory
-                                                   ? nativeInventory->inventory.quantity(original) > 0
-                                                   : std::any_of(bag.begin(), bag.end(), [&](const Carried &c) {
-                                                         return c.item.category == valid.type && c.item.id == valid.subtype && c.count > 0;
-                                                     });
-                            valid.cellKnown = usedCells.contains(lore::cellOf(input.position[0], input.position[1]));
-                            valid.ownsSpecial = std::any_of(bag.begin(), bag.end(), [&](const Carried &c) {
-                                return c.item.category == 24 && c.item.id == valid.subtype;
-                            });
+                            if (valid.type == 23)
+                                valid.carriesOne = nativeInventory ? nativeInventory->inventory.quantity(original) > 0
+                                    : std::any_of(bag.begin(), bag.end(), [&](const Carried &c) {
+                                          return c.item.category == valid.type && c.item.id == valid.subtype && c.count > 0;
+                                      });
+                            if (valid.type == 30)
+                                valid.cellKnown = usedCells.contains(lore::cellOf(input.position[0], input.position[1]));
+                            if (valid.type == 24)
+                                valid.ownsSpecial = nativeInventory ? useprompt::ownsGroundSpecial(nativeInventory->inventory, valid.subtype, region.data())
+                                    : std::any_of(bag.begin(), bag.end(), [&](const Carried &c) { return c.item.category == 24 && c.item.id == valid.subtype; });
                             if (!useprompt::groundItemValid(valid, owner))
                                 continue;
                             input.light = extractedWorld.gameBlockLight(gamemath::floorFixedBlock(input.position[0]),

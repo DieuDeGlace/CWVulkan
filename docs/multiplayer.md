@@ -234,6 +234,12 @@ awards after its database was reopened. Multiple shared drops in one
 horizontal column remain distinct by height. Original-peer play and the
 live frequency of exceptional manual currency checks remain open. [Steam guest inventory settlement](specs/steam-guest-nongold-settlement-20261118.md). [Steam personal pickup history](specs/steam-personal-pickup-position-history-20261118.md).
 
+For a manual pickup, one press puts the request ahead of pending actions.
+Automatic pickup compares the current slot and item with pending requests.
+A fresh guest that loaded a saved character and rejoined an offline host
+retained its personal pickup history after its player ID was reassigned.
+The existing guest kept its own independent awards. [Steam ground pickup input](specs/steam-ground-manual-capacity-20261118.md).
+
 ## Not done yet
 
 * No session with a real second Steam account has been tried. The Steam path is built to the

@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Manual ground pickup and guest rejoin - 2026-11-18
+
+The isolated author traced manual and walk-over requests, cursor counting,
+regional ownership, exceptional counter checks and rejection audio. The
+clean team verified both held documents, then compared input behavior and
+ran a fresh guest through a host departure and rejoin. The frequency of the
+exceptional checks during original gameplay remains unmeasured.
+[Steam ground pickup input](specs/steam-ground-manual-capacity-20261118.md). [Capacity, regional ownership and sound](specs/steam-ground-manual-details-20261118.md).
+
 ## Personal pickups across character reloads - 2026-11-18
 
 Two isolated offline Steam reviews establish recipient settlement and the

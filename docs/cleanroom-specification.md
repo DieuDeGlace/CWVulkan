@@ -118,8 +118,12 @@ block. The character save stores the full triples in signed lexicographic
 order, including distinct heights in one column. A separate horizontal
 16-block cell controls visibility of collected treasure. The adjacent saved
 XYZ set has independent membership. The local receiver applies ordinary bag
-items, regional platinum and Mana Cubes. The original manual prompt has
-additional counter effects on specific categories. [Steam guest inventory settlement](specs/steam-guest-nongold-settlement-20261118.md). [Steam personal pickup history](specs/steam-personal-pickup-position-history-20261118.md).
+items, regional platinum and Mana Cubes. A newly pressed Use action prepends one manual request. Walk-over pickup
+checks the pending queue before appending. The manual capacity check needs
+an existing tab and can credit one gold or one auxiliary-counter unit for
+specific item categories during prompt and press evaluation. Regional
+special-item ownership uses the player's region and ordinary bag tabs.
+[Steam ground pickup input](specs/steam-ground-manual-capacity-20261118.md). [Capacity, regional ownership and sound](specs/steam-ground-manual-details-20261118.md). [Steam guest inventory settlement](specs/steam-guest-nongold-settlement-20261118.md). [Steam personal pickup history](specs/steam-personal-pickup-position-history-20261118.md).
 
 ### B2. Extensions and preserved looks
 

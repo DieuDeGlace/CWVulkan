@@ -1,5 +1,20 @@
 # Source review checkpoint — 2026-11-08
 
+## Manual ground pickup and guest rejoin - 2026-11-18
+
+Pressing Use on a world drop puts one request at the front of the queue.
+Holding Use leaves the shared item available for a later press. Walk-over
+coins and Mana Cubes check for a matching pending request on each eligible
+scan. Carry limits include a matching cursor stack. A missing inventory
+tab can refuse a manual pickup, and an occupied tab can accept one.
+
+An offline guest left a host after saving. A new guest reopened the same
+character, received the released player ID and requested the changed zone.
+Both collected heights stayed credited. The other guest could take its
+remaining height. The check used compressed packets, controlled drops and
+logical inputs in the compiled engine. Original Steam peers and physical
+controller input remain open.
+
 ## Personal pickups across character reloads - 2026-11-18
 
 Characters now keep every collected XYZ block in their version-11 save. Two

@@ -1,5 +1,7 @@
 #include "UsePrompt.h"
 #include "ItemValue.h"
+#include "InventorySlots.h"
+#include "ItemTypes.h"
 #include "GameMath.h"
 #include "NativeKeyOrder.h"
 
@@ -421,13 +423,31 @@ void fallThrough(const Scene &s, const Targets &t, Prompt &p) {
             p.colour = RESERVED_RED, p.text = "Reserved";
             return;
         }
-        const bool more = mayCarryMore(g.type, g.subtype, g.carriedCount);
-        if (!more || !g.bagHasRoom)
-            p.colour = SHORT_RED, p.text = "Full";
-        else
+        p.bag = g.worldItem ? itemtypes::inventoryTab(g.type) : g.bag;
+        const auto checkPickup = [&] {
+            if (!mayCarryMore(g.type, g.subtype, g.carriedCount))
+                return Action::CannotCarry;
+            if (!s.inventory || !g.worldItem)
+                return g.bagHasRoom ? Action::PickUpItem : Action::BagFull;
+            if (!g.type || size_t(p.bag) >= s.inventory->tabs.size())
+                return Action::BagFull;
+            // The original one-unit bag check also credits two exceptional item categories.
+            if (g.type == 12 && (*g.worldItem)[nativesaves::item::MATERIAL] == 11) {
+                s.inventory->gold = gamemath::add32(s.inventory->gold, 1);
+                write(s.player, worldgen::creature::UNSET_AAC, s.inventory->gold);
+            } else if (g.type == 13) {
+                s.inventory->fieldAb0 = gamemath::add32(s.inventory->fieldAb0, 1);
+                write(s.player, worldgen::creature::UNSET_AB0, s.inventory->fieldAb0);
+            }
+            return Action::PickUpItem;
+        };
+        p.action = checkPickup();
+        if (p.action == Action::PickUpItem)
             p.text = "Pick up";
-        p.action = !more ? Action::CannotCarry : g.bagHasRoom ? Action::PickUpItem : Action::BagFull;
-        p.bag = g.bag;
+        else
+            p.colour = SHORT_RED, p.text = "Full";
+        if (p.pressed)
+            p.action = checkPickup();
         return;
     }
     if (s.dialogOpen)
@@ -519,6 +539,31 @@ bool mayCarryMore(int type, int subtype, int count) {
     return true;
 }
 
+int32_t groundCarryCount(const inventoryslots::Inventory &inventory, const Item &item) {
+    if (item[0] != 1 && item[0] != 11 && item[0] != 21 && item[0] != 24)
+        return 0;
+    const auto &cursor = inventory.cursor;
+    const int32_t held = nativeinteract::sameItem(cursor.item.data(), item.data()) ? cursor.count : 0;
+    return gamemath::add32(held, inventory.quantity(item));
+}
+
+bool ownsGroundSpecial(const inventoryslots::Inventory &inventory, int32_t subtype, const int32_t region[2]) {
+    if (subtype == 4)
+        return true;
+    auto canonical = nativesaves::makeItem(24, subtype);
+    std::memcpy(canonical.data() + nativesaves::item::REGION, region, 2 * sizeof(int32_t));
+    return inventory.quantity(canonical) > 0;
+}
+
+nativeai::Interaction groundRequest(const Item &item, const std::array<int32_t, 3> &zoneSlot) {
+    auto request = nativeinteract::fresh(nativeinteract::PICK_UP);
+    std::memcpy(request.data() + nativeinteract::ITEM, item.data(), item.size());
+    write(request.data(), nativeinteract::ZONE_X, zoneSlot[0]);
+    write(request.data(), nativeinteract::ZONE_Y, zoneSlot[1]);
+    write(request.data(), nativeinteract::OBJECT, zoneSlot[2]);
+    return request;
+}
+
 bool groundItemValid(const GroundItem &g, int64_t playerOwnerId) {
     if (g.type == 0 || g.quantity == 0)
         return false;
@@ -526,7 +571,7 @@ bool groundItemValid(const GroundItem &g, int64_t playerOwnerId) {
         return false;
     if (g.type == 0x1e && g.cellKnown)
         return false;
-    if (g.type == 0x18 && g.ownsSpecial)
+    if (g.type == 0x18 && (g.subtype == 4 || g.ownsSpecial))
         return false;
     return g.reservedFor == 0 || g.reservedFor == playerOwnerId;
 }
@@ -816,6 +861,13 @@ void applyToPlayer(const Prompt &p, const Scene &s, nativeai::Creature &player) 
     case Action::Pet:
         startAbility(r, PETTING);
         activate();
+        break;
+    case Action::PickUpItem:
+        if (p.groundItem >= 0 && size_t(p.groundItem) < s.groundItems.size()) {
+            const auto &g = s.groundItems[size_t(p.groundItem)];
+            if (g.worldItem)
+                player.interactions.push_front(groundRequest(*g.worldItem, g.zoneSlot));
+        }
         break;
     case Action::Activate: activate(); break;
     case Action::GiveItem: useObject(true); break;
