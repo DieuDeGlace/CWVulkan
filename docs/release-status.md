@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## First entry for an imported Alpha character - 2026-11-17
+
+A new Alpha profile clears imported geographic state. Direct play and the
+frontend used the cleared position as a resume point, placing the first
+player record inside terrain. They now resolve that record at the generated
+Alpha home surface before the world starts updating the player.
+
+The licensed direct launch started on the surface and saved five picked-up
+coins. A separate fresh profile entered through Continue, saved gold 15,
+and reopened with a second pickup to reach 20. Gear and the copied Native
+save pair stayed byte identical. This covers both Alpha first-use routes and
+one local save reload. The full owner-data and Vulkan suites passed.
+
 ## Repeat frame capture and Native save reload - 2026-11-17
 
 Isolated capture now consumes the normal frame request after its startup

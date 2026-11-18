@@ -1198,7 +1198,14 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         } else {
             auto raw = std::make_shared<nativesaves::Character>();
             had = saves.load(saveGame, saveFrame, savedWorldName, itemSprite, raw.get());
-            if (had && chosen->native && nativePlayer) loadedNativeCharacter = std::move(raw);
+            if (had && chosen->native && nativePlayer) {
+                if (alphaGeneration && useExtracted &&
+                    nativeprogress::placeImportedAlphaCharacter(*raw, saveFrame, extractedWorld.home())) {
+                    saveGame.hasPosition = true;
+                    saveGame.position = extractedWorld.home();
+                }
+                loadedNativeCharacter = std::move(raw);
+            }
         }
         if (loadedNativeCharacter) saveGame.level = loadedNativeCharacter->level;
         logLine(std::string("Save: ") + (had ? (createdNativeCharacter ? "continuing created character " : "loaded character ") +

@@ -3197,6 +3197,8 @@ void Session::enterWorld() {
         auto loadScope=s.extracted->lockSourceState();
         auto saved=std::make_shared<nativesaves::Character>();
         const bool found=s.store && s.store->isOpen() && s.store->load(outcome.slot,*saved);
+        if (found && s.extracted->generated() && worldgen::usingAlphaTerrain())
+            nativeprogress::placeImportedAlphaCharacter(*saved, frame, s.extracted->home());
         if (found && s.spawned->loadPlayerSave(saved))
             outcome.enteredCharacter=std::move(saved);
         else {

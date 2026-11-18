@@ -279,9 +279,11 @@ that input 0 equals native Steam configuration.
 
 On first writable use only, characters may be copied from the engine's canonical
 save or configured read-only import. Identity, appearance, equipment, level and
-recipes carry over; coordinates, discoveries, missions, flight points and other
-geographic state start fresh. Subsequent progression is independent in each
-profile. The native height-gate precision correction advances the landscape
+recipes carry over. Coordinates, discoveries, missions, flight points and other
+geographic state start fresh. Continue, character Select and direct play place
+an imported character with a cleared position and world identity on the
+generated Alpha home surface before the first gameplay update. Later starts
+load the saved position. Each profile keeps its own subsequent progression. The native height-gate precision correction advances the landscape
 identity to v2. Existing v1 folders are retained; the corrected generator selects
 its own v2 profile and compatible peers must agree on that identity. This does not
 migrate an existing v1 world's geographic state. Existing profile characters are never recopied. `--no-save` creates no
