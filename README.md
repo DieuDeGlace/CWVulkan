@@ -145,7 +145,8 @@ when Vulkan is unavailable. The script prints the checks actually executed.
 For local UI inspection, `--play --hidden --no-save --talk 0 --run-seconds 45
 --capture-speech speech.png` waits for a nearby NPC in a native world and captures
 the first visible text prefix. Start near a settlement so a resident can load
-within the run window.
+within the run window. In `--hidden` runs, fatal errors go to the log and the
+process returns a failure exit status.
 
 `build\EngineTests.exe scenerange` checks mesh-readiness/budget timing and native
 range boundaries. `build\EngineTests.exe scenecost` compares up to12 recent completed

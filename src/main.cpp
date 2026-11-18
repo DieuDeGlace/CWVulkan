@@ -127,10 +127,6 @@ void logLine(const std::string &line) {
     }
     std::printf("%s\n", line.c_str());
 }
-void fatal(const std::string &message) {
-    logLine("Fatal: " + message);
-    MessageBoxA(nullptr, message.c_str(), "CubeVulkan", MB_ICONERROR | MB_OK);
-}
 fs::path exeDir() {
     wchar_t buffer[MAX_PATH];
     GetModuleFileNameW(nullptr, buffer, MAX_PATH);
@@ -593,6 +589,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 settingOverrides.push_back({kv.substr(0, eq), kv.substr(eq + 1)});
         }
     }
+
+    const auto fatal = [hiddenWindow](const std::string &message) {
+        logLine("Fatal: " + message);
+        if (!hiddenWindow)
+            MessageBoxA(nullptr, message.c_str(), "CubeVulkan", MB_ICONERROR | MB_OK);
+    };
 
     // Settings: the existing Steam mods' INI files are read first (so their
     // tuning carries over), then CubeVulkan.ini overrides them.

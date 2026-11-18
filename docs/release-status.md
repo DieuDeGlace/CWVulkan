@@ -1,5 +1,13 @@
 # Source review checkpoint — 2026-11-08
 
+## Hidden run fatal errors - 2026-11-17
+
+Hidden landmark captures reached a fatal Steam message and waited for the
+interactive dialog. The hidden launch now logs its fatal error and returns
+the existing failure code. A copied build with a temporary game folder
+missing the Steam runtime exercises the real startup error path. It logged
+the error and exited with status 1. The owner-data and Vulkan suites passed.
+
 ## Shadow caster crossing the near radius - 2026-11-17
 
 An elevated prop can project a shadow inside the near cascade while its centre
