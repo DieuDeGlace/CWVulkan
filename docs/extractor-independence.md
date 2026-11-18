@@ -178,7 +178,11 @@ without reading implementation, SDK, probes or other project prose.
 - Supported-game title startup passed with the extractor as the only mod.
   The isolated title mode saved six frames, preserved all existing export
   entries in the before/after check, and restored the owner's setup.
-  Loaded-world extraction, first-run recovery and wider acceptance remain open.
+  A disposable supported-game copy also completed all five default setup
+  collection targets from an empty export folder. Recovery after an interrupted
+  setup controller restored the copied profile and kept the completed CWI3
+  export. The F11 survey, graphical wizard and fresh-machine acceptance remain
+  open.
 
 The current CMake extractor target uses no SDK headers or include paths. The
 registration/container checks detect

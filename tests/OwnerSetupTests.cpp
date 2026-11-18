@@ -62,13 +62,29 @@ std::string emptyZone(int x, int y) {
     return b;
 }
 
+// A complete CWI3 table with a single model grid and one key.
+std::string itemModelTable() {
+    const uint32_t fields[] = {660, 0x130, 1, 1, 1, 0, 1, 1, 0};
+    return std::string("CWI3") + std::string(reinterpret_cast<const char *>(fields), sizeof fields);
+}
+
 // A pretend system: whether the game runs is set by the test.
 struct FakeHost : Host {
-    bool running = false;
+    bool running = false, canLaunch = true;
+    fs::path launchedGame;
     int launches = 0, closeRequests = 0;
     uint64_t now = 1000;
     bool gameRunning(const fs::path &) override { return running; }
-    bool launchGame() override { return ++launches, true; }
+    bool launchGame(const fs::path &game, std::string &why) override {
+        launchedGame = game;
+        ++launches;
+        if (!canLaunch) {
+            why = "Fixture launch failed.";
+            return false;
+        }
+        running = true;
+        return true;
+    }
     bool askGameToClose(const fs::path &) override { return ++closeRequests, running; }
     uint64_t nowMs() override { return now += 500; }
 };
@@ -196,12 +212,21 @@ void completenessRules() {
     for (const char *f : {"spawn-table.txt", "races.txt", "pickers.txt", "looks-wild.txt", "gear.bin"})
         write(oracle / f, "x");
     write(oracle / "looks.bin", "CWL1....");
-    write(oracle / "item-models.bin", "CWI3....");
+    write(oracle / "item-models.bin", itemModelTable());
     write(oracle / "items.bin", "CIG1........");
     c = assess(game, true);
     SETUP_CHECK(c.readyToPlay() && !c.anythingToExtract() && c.missing().empty());
     SETUP_CHECK(c.find(Part::World)->detail.find("1 zones of seed 7") != std::string::npos);
     SETUP_CHECK(c.find(Part::SoundList)->detail == "2 sounds");
+
+    // An interrupted export may still carry its full CWI3 header.
+    const auto completeModels = itemModelTable();
+    write(oracle / "item-models.bin", completeModels.substr(0, completeModels.size() - 1));
+    const auto interrupted = assess(game, true);
+    SETUP_CHECK(!interrupted.find(Part::ItemModels)->present);
+    SETUP_CHECK(interrupted.find(Part::ItemModels)->detail.find("truncated") != std::string::npos);
+    const auto pending = ExtractionRun::plan(interrupted);
+    SETUP_CHECK(pending.size() == 1 && pending.front().part == Part::ItemModels);
 
     // Files that are there but wrong count as missing.
     write(oracle / "looks.bin", "XXXX");
@@ -543,12 +568,7 @@ void extractionRun() {
     ExtractionRun run(game, host);
     std::string why;
     SETUP_CHECK(run.start(assess(game, true), fake.dll, why));
-    SETUP_CHECK(host.launches == 1 && run.phase() == ExtractionRun::Phase::Launching && runPending(game));
-    SETUP_CHECK(run.instructions().find("Steam") != std::string::npos);
-    run.poll();
-    SETUP_CHECK(run.phase() == ExtractionRun::Phase::Launching);
-
-    host.running = true;
+    SETUP_CHECK(host.launches == 1 && host.launchedGame == game && runPending(game));
     run.poll();
     SETUP_CHECK(run.phase() == ExtractionRun::Phase::AtTitle);
     SETUP_CHECK(run.instructions().find("Start Game") != std::string::npos);
@@ -568,7 +588,7 @@ void extractionRun() {
         write(oracle / f, "x");
     write(oracle / "looks.bin", "CWL1....");
     append(log, "Oracle: written to Extract\\oracle (49 zones' spawn points)\n");
-    write(oracle / "item-models.bin", "CWI3....");
+    write(oracle / "item-models.bin", itemModelTable());
     append(log, "Item models: 712013 keys, 3000 grids written\n");
     write(oracle / "items.bin", "CIG1........");
     append(log, "Oracle: item generators written to Extract\\oracle\\items.bin\n");
@@ -619,12 +639,21 @@ void extractionRun() {
     SETUP_CHECK(!runPending(game) && sameTree(game / "Save", fake.pristine / "Save") && sameTree(game / "Mods", fake.pristine / "Mods"));
     SETUP_CHECK(!fs::exists(extract / "itemmodels.request"));
 
-    // Stopped before the game ever started.
+    // The process starts and exits between preparation and the first setup poll.
     ExtractionRun early(game, host);
     SETUP_CHECK(early.start(assess(game, true), fake.dll, why));
-    early.stop();
-    SETUP_CHECK(early.phase() == ExtractionRun::Phase::Done && !runPending(game));
+    host.running = false;
+    early.poll();
+    SETUP_CHECK(early.phase() == ExtractionRun::Phase::Done && !early.allCollected() && !runPending(game));
+    SETUP_CHECK(early.message().find("Item models") != std::string::npos);
     SETUP_CHECK(sameTree(game / "Mods", fake.pristine / "Mods"));
+
+    host.canLaunch = false;
+    ExtractionRun rejected(game, host);
+    SETUP_CHECK(!rejected.start(assess(game, true), fake.dll, why));
+    SETUP_CHECK(why == "Fixture launch failed. The game folder was put back.");
+    SETUP_CHECK(!rejected.active() && rejected.restored().ok && !runPending(game));
+    SETUP_CHECK(sameTree(game / "Mods", fake.pristine / "Mods") && sameTree(game / "Save", fake.pristine / "Save"));
 }
 } // namespace
 

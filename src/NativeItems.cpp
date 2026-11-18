@@ -301,6 +301,9 @@ bool ModelTable::parse(const std::vector<uint8_t> &bytes, std::string *why) {
     if (!in.fits(4))
         return fail(why, "item model table: truncated");
     const uint32_t gridCount = in.u32();
+    const size_t minGridBytes = v3 ? 12 : 8; // a shape and at least one model per grid
+    if (gridCount > (bytes.size() - in.at) / minGridBytes)
+        return fail(why, "item model table: truncated grids");
     grids.reserve(gridCount);
     for (uint32_t i = 0; i < gridCount; i++) {
         Grid g;

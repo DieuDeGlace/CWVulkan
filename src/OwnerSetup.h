@@ -98,8 +98,8 @@ struct Host {
     virtual ~Host() = default;
     // True when this installation's cubeworld.exe is running (or cannot be ruled out).
     virtual bool gameRunning(const fs::path &game) = 0;
-    // Starts Cube World through Steam (steam://run/1128000).
-    virtual bool launchGame() = 0;
+    // Creates the game process from the selected, Steam-verified installation.
+    virtual bool launchGame(const fs::path &game, std::string &why) = 0;
     // Asks the running game to close its window, as the owner would; false if none was found.
     virtual bool askGameToClose(const fs::path &game) = 0;
     virtual uint64_t nowMs() = 0;
@@ -163,7 +163,6 @@ class ExtractionRun {
   public:
     enum class Phase {
         Idle,       // nothing started
-        Launching,  // the game was started through Steam; waiting for its process
         AtTitle,    // the game runs; waiting for a world to be loaded
         Collecting, // in a world; the extractor is writing
         Collected,  // everything asked for is written: the owner can quit
@@ -204,8 +203,8 @@ class ExtractionRun {
     Phase phase_ = Phase::Idle;
     std::vector<Target> targets_;
     LogWatcher log_;
-    uint64_t started_ = 0, seenGame_ = 0, closeAsked_ = 0, restoreStarted_ = 0;
-    bool sweepStopped_ = false, stopRequested_ = false;
+    uint64_t restoreStarted_ = 0;
+    bool sweepStopped_ = false;
     std::string message_;
     RestoreResult restored_;
 };

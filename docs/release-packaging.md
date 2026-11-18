@@ -39,6 +39,13 @@ Setup reports missing dependencies and guides the game/extraction steps. Packagi
 an extractor DLL cannot remove the requirement to obtain content from the owner's
 installation. Back up saves before the first real extraction run.
 
+Setup launches the selected game folder with Steam running. Leave the game
+open until setup reports that its requested data has been collected. If setup
+closes while extraction is still active, quit Cube World and open the wizard
+again. The command-line recovery is `--setup-restore --game PATH` from
+CubeVulkanDataCheck. Setup preserves collected files and will offer to extract
+an incomplete item-model table again.
+
 No game assets, saves, exports, Steam DLL, loader binary, PDB or build library is
 bundled. The package includes only the extractor DLL compiled from this project's
 source. Retain the matching source asset when distributing GPL executables.

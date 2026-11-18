@@ -2482,9 +2482,13 @@ static void itemModels() {
         if (m && !idOf.count(m))
             idOf[m] = (int)(p - begin);
     }
+    constexpr const char *path = "Extract\\oracle\\item-models.bin";
+    constexpr const char *temporary = "Extract\\oracle\\item-models.bin.tmp";
     FILE *f = nullptr;
-    if (fopen_s(&f, "Extract\\oracle\\item-models.bin", "wb") != 0 || !f)
+    if (fopen_s(&f, temporary, "wb") != 0 || !f) {
+        log("Could not open the item model export.");
         return;
+    }
     uint8_t item[0xa0];
     auto lookup = [&](int cat, uint32_t id, int mat, int rarity, uint32_t mod) {
         memset(item, 0, sizeof item);
@@ -2563,9 +2567,14 @@ static void itemModels() {
         fwrite(&id, 2, 1, f);
         fwrite(&g, 4, 1, f);
     }
-    const size_t keys = keyed.size(), distinct = grids.size();
-    fclose(f);
-    extract::log("Item models: " + std::to_string(keys) + " keys, " + std::to_string(distinct) + " grids written");
+    const bool written = ferror(f) == 0;
+    const bool closed = fclose(f) == 0;
+    if (!written || !closed || !MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileA(temporary);
+        log("Could not publish the complete item model export.");
+        return;
+    }
+    log("Item models: " + std::to_string(keyed.size()) + " keys, " + std::to_string(grids.size()) + " grids written");
 }
 
 // Called each tick: starts a recording when Extract\anim.request appears.

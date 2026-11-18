@@ -62,7 +62,7 @@ void showButtons() {
     const bool dll = dataCheck::gameBuild(extractorDll(), build, why);
     enable(EXTRACT, !running && !pending && s.status.supportedBuild && s.status.modLoader && s.steamOk && dll &&
                         s.data.anythingToExtract());
-    enable(CLOSE_GAME, running && s.run->phase() != ExtractionRun::Phase::Launching);
+    enable(CLOSE_GAME, running);
     enable(STOP, running);
     enable(RECHECK, !running);
     enable(PLAY, !running && !pending && s.status.found && s.steamOk && s.data.readyToPlay());

@@ -1833,8 +1833,11 @@ See [Alpha generation](alpha-generation.md) and the
   with focused checks for each change.
 - [ ] Two-account Steam session and an original Steam-game peer: join/leave,
   interactions, combat, loot, mission state, chat and reconnects.
-- [ ] Real first-run setup and interrupted extraction/recovery on a game install,
-  then repeat on a fresh machine without development tools or prior exports.
+- [ ] Repeat first-run setup and interrupted extraction recovery on a fresh
+  machine without development tools or prior exports. The same-PC command-line
+  setup collected all default targets from an empty export folder and recovered
+  an interrupted item-model extraction. Exercise the graphical wizard and
+  captured-world F11 sweep as well.
 - [ ] Extended gameplay/save-load sessions across classes, gear changes, death,
   respawn modes, travel and world transitions. Unit saves are not this whole check.
 - [ ] Wider rendering comparisons: waterfalls, wet-ground film, underwater,

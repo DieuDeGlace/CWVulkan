@@ -17,6 +17,8 @@ class SteamSession {
     bool start(const std::filesystem::path &gameDir, std::string &error);
     bool check(std::string &error) const;
     void pump();
+    // Starts the supported original game in the already verified extraction folder.
+    static bool launchOriginal(const std::filesystem::path &gameDir, std::string &error);
     // Steam Cloud (the game's own cloud space, ISteamRemoteStorage): files sync to
     // the account and follow it to other PCs. False when the cloud is off or full.
     bool cloudReady() const;

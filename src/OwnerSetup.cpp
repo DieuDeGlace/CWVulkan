@@ -3,13 +3,14 @@
 #include "OwnerSetup.h"
 #include "Assets.h"
 #include "Config.h"
+#include "NativeItems.h"
 #include "ProceduralItemData.h"
+#include "SteamSession.h"
 #include "CubModel.h"
 #include "alphagen/PlantModels.h"
 #include "Extracted.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
 #include <windows.h>
-#include <shellapi.h>
 #include <tlhelp32.h>
 #include <algorithm>
 #include <cstdio>
@@ -156,9 +157,16 @@ bool partPresent(const fs::path &game, Part part, std::string &detail) {
         return gaps.empty();
     }
     case Part::ItemModels: {
-        const bool ok = startsWith(oracle / "item-models.bin", "CWI3");
-        detail = ok ? "present" : "not written yet";
-        return ok;
+        const fs::path file = oracle / "item-models.bin";
+        if (!startsWith(file, "CWI3")) {
+            detail = "not written yet";
+            return false;
+        }
+        nativeitems::ModelTable models;
+        if (!models.load(file, &detail))
+            return false;
+        detail = "present";
+        return true;
     }
     case Part::SpecialItems: {
         const bool ok = startsWith(oracle / "items.bin", "CIG1");
@@ -352,9 +360,8 @@ struct SystemHost : Host {
         bool unknown = false;
         return !gameProcesses(game, unknown).empty() || unknown;
     }
-    bool launchGame() override {
-        const auto result = (INT_PTR)ShellExecuteW(nullptr, L"open", L"steam://run/1128000", nullptr, nullptr, SW_SHOWNORMAL);
-        return result > 32;
+    bool launchGame(const fs::path &game, std::string &why) override {
+        return SteamSession::launchOriginal(game, why);
     }
     bool askGameToClose(const fs::path &game) override {
         bool unknown = false;
@@ -789,20 +796,21 @@ bool ExtractionRun::start(const Completeness &data, const fs::path &extractorDll
     }
     if (!prepare(game_, options, host_, why))
         return false;
-    appendLine(journalFile(game_), "begin launch");
-    if (!host_.launchGame()) {
+    const bool launchRecorded = appendLine(journalFile(game_), "begin launch");
+    if (!launchRecorded || !host_.launchGame(game_, why)) {
+        if (!launchRecorded)
+            why = "Could not record the game launch in the recovery journal.";
         restored_ = restore(game_, host_);
-        why = "Steam did not start Cube World." + std::string(restored_.ok ? " The game folder was put back." : " " + restored_.why);
+        why += restored_.ok ? " The game folder was put back." : " " + restored_.why;
         phase_ = restored_.ok ? Phase::Idle : Phase::Failed;
         return false;
     }
     log_ = LogWatcher(game_ / "Mods" / "ZoneExtractor.log");
-    started_ = host_.nowMs();
-    seenGame_ = closeAsked_ = restoreStarted_ = 0;
-    sweepStopped_ = stopRequested_ = false;
+    restoreStarted_ = 0;
+    sweepStopped_ = false;
     message_.clear();
     restored_ = {};
-    phase_ = Phase::Launching;
+    phase_ = Phase::AtTitle;
     return true;
 }
 
@@ -832,19 +840,11 @@ bool ExtractionRun::allCollected() const {
 void ExtractionRun::poll() {
     if (!active())
         return;
-    const uint64_t now = host_.nowMs();
     if (phase_ == Phase::Restoring) {
         finish(message_);
         return;
     }
     const bool running = host_.gameRunning(game_);
-    if (phase_ == Phase::Launching) {
-        if (running)
-            phase_ = Phase::AtTitle, seenGame_ = now;
-        else if (stopRequested_)
-            finish("Stopped before the game started.");
-        return;
-    }
     log_.poll();
     const std::string &log = log_.all();
     if (phase_ == Phase::AtTitle && log.find("Session: seed") != std::string::npos)
@@ -875,11 +875,9 @@ void ExtractionRun::poll() {
 void ExtractionRun::stop() {
     if (!active())
         return;
-    stopRequested_ = true;
-    if (host_.gameRunning(game_)) {
+    if (host_.gameRunning(game_))
         host_.askGameToClose(game_);
-        closeAsked_ = host_.nowMs();
-    } else
+    else
         poll();
 }
 
@@ -914,10 +912,6 @@ std::string ExtractionRun::instructions() const {
     switch (phase_) {
     case Phase::Idle:
         return "";
-    case Phase::Launching:
-        out << "Cube World is starting through Steam, without your mods and ReShade.\n"
-               "If it has not opened after a minute, start it from your Steam library yourself.";
-        break;
     case Phase::AtTitle:
         out << "In Cube World:\n"
                "  1. Click Start Game.\n"
@@ -1225,7 +1219,7 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
         if (!t.collect.request.empty())
             out << " Extract\\" << t.collect.request, anyRequest = true;
     out << (anyRequest ? "" : " none") << ".\n"
-        << "  5. Start Cube World through Steam. In the game: Start Game, pick or create any character.\n";
+        << "  5. Open Cube World from this folder with Steam running. In the game: Start Game, pick or create any character.\n";
     for (const auto &t : targets)
         if (t.collect.sweepKey)
             out << "     Then press F11 once for the sweep around home, and wait until it is done.\n";

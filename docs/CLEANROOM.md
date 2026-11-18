@@ -1,5 +1,24 @@
 # Clean-room process
 
+## First-run extraction and interrupted model-table recovery - 2026-11-17
+
+Setup now starts the exact folder it prepares after Steam verifies ownership.
+It can restore the folder if the game exits before the first status poll.
+Setup reads the complete CWI3 file through the engine's item-model reader.
+The extractor publishes the finished table in one rename.
+
+A licensed first run in a disposable copy with no exports collected all five
+planned data groups and also recorded 69 loaded zones. A separate run targeted
+a table with a truncated last key. The interrupted setup controller left the
+journal in place while Cube World continued collecting. After the game closed,
+setup restored the saves and mods. The replacement item-model table matched
+the first export byte for byte. The installed files passed the hash checks.
+
+This covers the command-line setup on this PC. The graphical wizard on a fresh
+machine and the captured-world F11 sweep still need acceptance. The clean-room
+implementation used project code and owned runtime evidence. The full owner-data
+and Vulkan suites passed.
+
 ## First entry for an imported Alpha character - 2026-11-17
 
 A new Alpha profile clears imported geographic state. Direct play and the

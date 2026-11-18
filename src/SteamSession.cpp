@@ -20,6 +20,14 @@ struct EnvironmentValue {
     void set(const wchar_t *value) { SetEnvironmentVariableW(name, value); }
     ~EnvironmentValue() { SetEnvironmentVariableW(name, existed ? previous.c_str() : nullptr); }
 };
+// The context identifies the app to the running Steam client. It grants no licence.
+struct AppEnvironment {
+    EnvironmentValue appId{L"SteamAppId"}, gameId{L"SteamGameId"};
+    AppEnvironment() {
+        appId.set(L"1128000");
+        gameId.set(L"1128000");
+    }
+};
 // The Steam SDK's CCallbackBase, declared exactly as in steam_api_common.h so its
 // method table matches what the Steam runtime calls (no virtual destructor).
 class CallbackBase {
@@ -34,9 +42,7 @@ constexpr int P2P_SESSION_REQUEST = 1202; // k_iSteamNetworkingCallbacks + 2
 } // namespace
 
 struct SteamSession::State {
-    // App context identifies the game; it does not grant a license. The API
-    // checks the active Steam account below. These changes are process-local.
-    EnvironmentValue appId{L"SteamAppId"}, gameId{L"SteamGameId"};
+    AppEnvironment app;
     HMODULE module = nullptr;
     bool initialized = false;
     bool (*init)() = nullptr;
@@ -113,6 +119,32 @@ struct SteamSession::State {
 SteamSession::SteamSession() = default;
 SteamSession::~SteamSession() = default;
 
+bool SteamSession::launchOriginal(const std::filesystem::path &gameDir, std::string &error) {
+    error.clear();
+    std::error_code ec;
+    const auto image = std::filesystem::absolute(gameDir / L"cubeworld.exe", ec);
+    if (ec) {
+        error = "Cannot resolve the Cube World executable: " + ec.message() + ".";
+        return false;
+    }
+    const auto folder = image.parent_path();
+    std::wstring command = L"\"" + image.wstring() + L"\"";
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    // Only the created process inherits this context. Setup itself does not open a Steam session.
+    const AppEnvironment app;
+    if (!CreateProcessW(image.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                        folder.c_str(), &startup, &process)) {
+        error = "Could not start Cube World from the selected folder (Windows error " +
+                std::to_string(GetLastError()) + ").";
+        return false;
+    }
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return true;
+}
+
 bool SteamSession::start(const std::filesystem::path &gameDir, std::string &error) {
     state.reset();
     error.clear();
@@ -123,8 +155,6 @@ bool SteamSession::start(const std::filesystem::path &gameDir, std::string &erro
         return false;
     }
     auto s = std::make_unique<State>();
-    s->appId.set(L"1128000");
-    s->gameId.set(L"1128000");
     s->module = LoadLibraryExW(runtime.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!s->module) {
         error = "Cannot load the Steam runtime from the Cube World installation (Windows error " +
