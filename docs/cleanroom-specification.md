@@ -216,7 +216,17 @@ input, observes eight births and checks the first neutral expiry and area
 on consecutive authority steps over breakable terrain.
 [Creation and caster power](specs/steam-water-bubble-caster-power-20261118.md).
 [Full lifetime and area timing](specs/steam-water-bubble-lifetime-20261118.md).
-The original Bomb terrain comparison remains open.
+The original Bomb's block record retains signed absolute XYZ, all six old
+block bytes, the six-byte empty replacement and the four-byte day. Zone
+histories retain duplicates. Loading applies replacements in forward order.
+Undo uses the same terrain setter in reverse order. At or below sea level
+that setter converts ordinary empty space to water.
+[Original Steam terrain persistence contract](specs/steam-bomb-block-persistence-20261118.md).
+
+CubeVulkan read a copy of an original Steam world and wrote its complete
+version-44 state payload byte for byte. It contained 935 terrain edits across
+seven zones, including 496 repeated records. Each retained its original block,
+replacement and day. The save does not identify the action that made an edit. A live original Bomb terrain roll remains open.
 
 When the host creates a pet or changes its equipped race, pet setup seeds the
 same thread's stream from the pet's unsigned race. Appearance and gear leave

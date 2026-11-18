@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Bomb terrain history and save reload - 2026-11-18
+
+CubeVulkan read a copy of an original Steam world and wrote its complete
+version-44 state payload byte for byte. It contained 935 terrain edits across
+seven zones, including 496 repeated records. Each retained its original block,
+replacement and day. The save does not identify the action that made an edit.
+
+The engine test uses a Bomb beside the boundary between zone X = -1 and
+zone X = 0. Both eligible terrain flags clear, both zone histories preserve
+their event order and the blast survives a database save and reload. The
+terrain outside the blast remains intact. Undo now uses the normal block
+setter in reverse history order, including sea-level water replacement and
+restoration above the current column. [Original Steam terrain persistence contract](specs/steam-bomb-block-persistence-20261118.md).
+
 ## Water Bubbles power and lifetime - 2026-11-18
 
 Water Bubbles now includes both equipped weapons in its spell power and

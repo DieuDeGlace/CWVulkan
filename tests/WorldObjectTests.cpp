@@ -296,17 +296,20 @@ void sourceSummaryValues(const auto &check) {
 void stockBombIntegration(const std::filesystem::path &root, const auto &check) {
     using namespace worldgen::creature;
     writeFixture(root, 1, 1, false, 0x01);
+    writeFixture(root, 1, 1, false, 0x10, -1);
     ExtractedWorld terrain;
     std::string why;
-    if (!terrain.open(root, why) || !terrain.loadSourceZone(0, 0)) {
-        check(false, "stock Bomb fixture loads a breakable floor");
+    if (!terrain.open(root, why) || !terrain.loadSourceZone(-1, 0) || !terrain.loadSourceZone(0, 0)) {
+        check(false, "stock Bomb fixture loads both sides of a breakable zone boundary");
         return;
     }
     nativesaves::WorldState saved;
     SpawnedCreatures authority;
     authority.setStoredZones(terrain, &saved, false);
     authority.setNativePlayer(true);
-    const std::array<int64_t, 3> position{32 * BLOCK + BLOCK / 2, 32 * BLOCK + BLOCK / 2, 2 * BLOCK};
+    constexpr int32_t blastDay = 0x01020304;
+    authority.setClock(blastDay, 36000000.f);
+    const std::array<int64_t, 3> position{BLOCK / 2, 32 * BLOCK + BLOCK / 2, 2 * BLOCK};
     authority.setPlayer(terrain, terrain.toLocal(position.data()), 0, {}, 100, 1, true);
     put(authority.localPlayer()->record, FLAGS, uint32_t(0x02000000)); // Keep the colocated setup from separating.
 
@@ -347,12 +350,63 @@ void stockBombIntegration(const std::filesystem::path &root, const auto &check) 
         const auto request = soundrules::readRequest(sound);
         return request.number == 1 && request.pitch >= .5f && request.pitch <= .9f;
     });
-    check(centeredBursts() == 1 && !events.blockChanges.empty() && terrain.gameBlock(32, 32, 1)[4] == 0 && terrainSounds == 1,
+    check(centeredBursts() == 1 && !events.blockChanges.empty() && terrain.gameBlock(0, 32, 1)[4] == 0 &&
+              terrain.gameBlock(-1, 32, 1)[4] == 0 && terrainSounds == 1,
           "the next authority pass emits one Bomb area, clears breakable terrain and rolls its terrain sound");
     const auto changed = events.blockChanges.size();
     authority.simulate(terrain, 16);
     check(centeredBursts() == 1 && authority.events().blockChanges.size() == changed,
           "a later step retains the Bomb events without repeating the area");
+
+    authority.recordAllZones();
+    const auto file = root / "bomb-world.db";
+    nativesaves::WorldState reload;
+    if (!nativesaves::writeWorldFile(file, saved, &why) || !nativesaves::readWorldFile(file, reload, &why)) {
+        check(false, "Bomb block histories round-trip through the world database");
+        return;
+    }
+    const ExtractedWorld::GameBlock empty{255, 255, 255, 0, 0, 0};
+    // The positive step after the blast revisits the outstanding event list.
+    for (const int zx : {-1, 0}) {
+        const auto zone = reload.zones.find({zx, 0});
+        if (zone == reload.zones.end()) {
+            check(false, "both affected zones are present in the world database");
+            continue;
+        }
+        const auto &stored = zone->second.blockChanges;
+        size_t expectedCount = 0;
+        bool exact = true;
+        for (const auto &event : events.blockChanges) {
+            const int x = get<int32_t>(event.data(), 0);
+            if (zonestates::zoneOfBlock(x, get<int32_t>(event.data(), 4)) != nativesaves::Cell{zx, 0})
+                continue;
+            const ExtractedWorld::GameBlock before{50, 60, 70, 0, 1, uint8_t(zx == 0 ? 0x01 : 0x10)};
+            const bool present = expectedCount < stored.size();
+            exact &= present && stored[expectedCount].was() == before && stored[expectedCount].now() == empty &&
+                     get<int32_t>(event.data(), 0x18) == blastDay &&
+                     std::equal(stored[expectedCount].bytes.begin(), stored[expectedCount].bytes.end(), event.begin());
+            ++expectedCount;
+        }
+        check(expectedCount > 0 && exact && stored.size() == 2 * expectedCount &&
+                  std::equal(stored.begin(), stored.begin() + expectedCount, stored.begin() + expectedCount,
+                             [](const auto &a, const auto &b) { return a.bytes == b.bytes; }),
+              "saved Bomb edits preserve each zone's event order, block bytes, day and repeated notices");
+    }
+    ExtractedWorld reopened;
+    SpawnedCreatures restored;
+    if (!reopened.open(root, why)) {
+        check(false, "fresh terrain opens for Bomb save reload");
+        return;
+    }
+    restored.setStoredZones(reopened, &reload, false);
+    cwnet::ZoneAnswer west, east;
+    check(reopened.loadSourceZone(-1, 0) && reopened.loadSourceZone(0, 0) &&
+              restored.zoneAnswer(reopened, {-1, 0}, west) && restored.zoneAnswer(reopened, {0, 0}, east) &&
+              !west.blockChanges.empty() && !east.blockChanges.empty() &&
+              reopened.gameBlock(-1, 32, 1) == empty && reopened.gameBlock(0, 32, 1) == empty &&
+              reopened.gameBlock(12, 32, 1)[5] == 0x01 && reopened.gameBlock(-12, 32, 1)[5] == 0x10,
+          "both sides of the blast reload cleared while terrain beyond the radius survives");
+
 }
 
 void stockWaterBubblesIntegration(const std::filesystem::path &root, const auto &check) {

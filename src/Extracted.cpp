@@ -1034,15 +1034,7 @@ void ExtractedWorld::undoBlockChanges(int ax, int ay) {
         return;
     for (auto change = changes.rbegin(); change != changes.rend(); ++change) {
         const std::array<int32_t, 3> at = change->block();
-        const int64_t lx = at[0] - (int64_t)ax * 64, ly = at[1] - (int64_t)ay * 64;
-        if (lx < 0 || lx >= 64 || ly < 0 || ly >= 64)
-            continue;
-        Column &c = fresh->columns[lx * 64 + ly];
-        const int64_t i = (int64_t)at[2] - c.base;
-        if (c.blocks.empty() || i < 0 || i >= (int64_t)c.blocks.size())
-            continue; // (outside the column: it holds what the change found there anyway)
-        const std::array<uint8_t, 6> was = change->was();
-        c.blocks[(size_t)i] = {was[0], was[1], was[2], was[3], was[4], was[5]};
+        writeGameBlock(*fresh, ax, ay, at[0], at[1], at[2], change->was());
     }
 }
 

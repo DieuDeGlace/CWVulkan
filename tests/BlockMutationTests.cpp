@@ -120,6 +120,13 @@ int blockMutationTests() {
             check(world.gameBlock(0, 0, 1) == original, "reset inside edit scope sees and reverses current physical state");
         }
         check(world.gameBlock(0, 0, 1) == original, "outer publication cannot overwrite nested reset");
+        const ExtractedWorld::GameBlock water{255, 255, 255, 0, 2, 0};
+        world.rememberBlockChange(zonestates::blockChange(1, 0, 0, empty, original));
+        world.rememberBlockChange(zonestates::blockChange(1, 0, 0, original, empty));
+        world.rememberBlockChange(zonestates::blockChange(1, 0, 5, original, empty));
+        world.undoBlockChanges(0, 0);
+        check(world.gameBlock(1, 0, 0) == water && world.gameBlock(1, 0, 5) == original,
+              "reverse history uses normal sea-level replacement and can restore prior blocks above the current column");
         world.takeChangedZones();
 
         float height = 0;

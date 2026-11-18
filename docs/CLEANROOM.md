@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Bomb terrain history and save reload - 2026-11-18
+
+An isolated original-only author traced the block eligibility test, the
+28-byte record, zone storage, reload and reverse undo. The verification role
+read the complete held contract and compared an original save snapshot
+through the compiled engine. The snapshot and live recording remain private.
+The save comparison verifies the record format. Identifying a specific
+original Bomb placement requires separate gameplay evidence. [Original Steam terrain persistence contract](specs/steam-bomb-block-persistence-20261118.md).
+
 ## Water Bubbles creation and neutral expiry - 2026-11-18
 
 Two separately held original-only contracts establish the equipped-weapon
