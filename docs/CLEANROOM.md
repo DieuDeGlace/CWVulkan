@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Water Bubble damage and healing - 2026-11-18
+
+An isolated source author traced natural expiry, target selection, damage,
+healing, peer receipt and combat numbers in the original Steam image. The
+implementation team admitted the whole held contract before comparing its
+results with engine world and packet tests. The original recording establishes
+aggregate rolls at the shared area routine. Recipient-level observation in
+the original game remains open. [Steam Water Bubble target outcomes](specs/steam-water-bubble-target-outcomes-20261118.md).
+
 ## Bomb terrain history and save reload - 2026-11-18
 
 An isolated original-only author traced the block eligibility test, the

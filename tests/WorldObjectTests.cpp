@@ -9,6 +9,7 @@
 #include "worldgen/Generator.h"
 #include "worldgen/ZoneCreatures.h"
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -447,6 +448,7 @@ void stockWaterBubblesIntegration(const std::filesystem::path &root, const auto 
     std::set<int64_t> births;
     int64_t firstId = 0;
     int firstBirthMs = 0;
+    float firstPower = 0.f;
     int elapsed = 0;
     bool ownedAtBirth = true;
     while (elapsed < 2000) {
@@ -461,6 +463,7 @@ void stockWaterBubblesIntegration(const std::filesystem::path &root, const auto 
             if (births.size() == 1) {
                 firstId = id;
                 firstBirthMs = elapsed;
+                firstPower = get<float>(record, BLOCK_POWER);
             }
             ownedAtBirth &= get<int64_t>(record, OWNER) == owner && get<float>(record, HEALTH) == 1.f;
         });
@@ -478,8 +481,51 @@ void stockWaterBubblesIntegration(const std::filesystem::path &root, const auto 
     check(first && get<float>(first, HEALTH) == 0.f && get<float>(first, ABILITY + 4) == 0.f &&
               std::abs(elapsed - firstBirthMs - 9000) <= stepMs && waterPops() == 0,
           "the first bubble expires after nine seconds of neutral authority upkeep, before the area pass");
+    if (!first)
+        return;
+    const float remaining = get<float>(first, 0x188);
+    check(std::bit_cast<uint32_t>(remaining) == 0x3dcab6c7 && firstPower > 1.f &&
+              get<float>(first, BLOCK_POWER) == firstPower,
+          "neutral 10 ms visits retain the creation power and the residual lifetime after both drains");
+    std::array<int64_t, 3> center;
+    std::memcpy(center.data(), first + POSITION, sizeof center);
+    constexpr int64_t ally = 301, enemy = 302;
+    const auto addTarget = [&](int64_t id, uint8_t kind) {
+        bool made = false;
+        auto *record = authority.networkCreature(id, made);
+        if (!made || !record)
+            return false;
+        record[HOSTILITY] = kind;
+        put(record, HEALTH, 10.f);
+        std::memcpy(record + POSITION, center.data(), sizeof center);
+        return true;
+    };
+    if (!addTarget(ally, 3) || !addTarget(enemy, 1)) {
+        check(false, "the first bubble admits a wounded ally and an unarmored opponent");
+        return;
+    }
+    const auto &numbers = authority.events().damageNumbers;
+    const size_t beforeArea = numbers.size();
     authority.simulate(terrain, stepMs);
     check(waterPops() == 1, "the next authority step publishes the first water area");
+    std::vector<cwnet::DamageRecord> heals, hits;
+    for (size_t i = beforeArea; i < numbers.size(); ++i) {
+        const auto &number = numbers[i];
+        const int64_t target = get<int64_t>(number.data(), 8);
+        if (target == ally) heals.push_back(number);
+        if (target == enemy) hits.push_back(number);
+    }
+    const auto magnitude = [&](const cwnet::DamageRecord &n) {
+        return (n[0x14] ? firstPower + firstPower : firstPower) * remaining;
+    };
+    check(heals.size() == 2 && heals[0] == heals[1] && get<int64_t>(heals[0].data(), 0) == owner &&
+              get<float>(heals[0].data(), 0x10) == -magnitude(heals[0]) &&
+              get<float>(authority.record(ally), HEALTH) == 10.f + magnitude(heals[0]),
+          "the first natural pop publishes two caster-attributed heal notices and heals its ally once");
+    check(hits.size() == 1 && get<int64_t>(hits[0].data(), 0) == owner &&
+              get<float>(hits[0].data(), 0x10) == magnitude(hits[0]) && hits[0][0x44] == 1 &&
+              get<float>(authority.record(enemy), HEALTH) == 10.f - magnitude(hits[0]),
+          "the same pop deals the rolled damage to an unarmored opponent through the caster's hit");
     for (int settle = 0; settle < 2000; settle += stepMs)
         authority.simulate(terrain, stepMs);
     check(waterPops() == 8 && authority.events().blockChanges.empty() && terrain.gameBlock(32, 32, 1)[5] == 1,

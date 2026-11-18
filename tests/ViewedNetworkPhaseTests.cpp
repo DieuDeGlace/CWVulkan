@@ -1,9 +1,12 @@
+#include "CombatText.h"
 #include "Extracted.h"
 #include "Multiplayer.h"
 #include "NetWorlds.h"
 #include "Spawned.h"
 #include "net/ClientGame.h"
+#include "worldgen/Residents.h"
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -151,6 +154,86 @@ void queueAndSendOrder(const auto &check) {
     check(mirror.visits == std::vector<std::string>{"t6", "t7"} && client.link().host() == peer,
           "one snapshot applies pre-transition state then rechecks each later sender against the newly selected peer");
 }
+void guestBubbleHealing(const auto &check) {
+    using namespace cwnet;
+    using namespace worldgen::creature;
+    constexpr int64_t caster = 777, recipient = 1, bubble = 101;
+    const auto write = [](uint8_t *record, size_t offset, auto value) {
+        std::memcpy(record + offset, &value, sizeof value);
+    };
+    ExtractedWorld blocks;
+    blocks.openGenerated(0, 0);
+    SpawnedCreatures host;
+    bool created = false;
+    auto *actor = host.networkCreature(caster, created);
+    actor[HOSTILITY] = 0;
+    write(actor, POSITION, int64_t(100) * 65536);
+    write(actor, HEALTH, 100.f);
+    actor = host.networkCreature(recipient, created);
+    actor[HOSTILITY] = 0;
+    write(actor, HEALTH, 10.f);
+    actor = host.networkCreature(bubble, created);
+    actor[HOSTILITY] = 7;
+    write(actor, RACE, int32_t(0x11d));
+    write(actor, OWNER, caster);
+    write(actor, HEALTH, 0.f);
+    // Unequipped neutral caster with creation roll zero, at expiry on the 563rd 16 ms visit.
+    write(actor, BLOCK_POWER, 3.75f);
+    write(actor, 0x188, 0.09918756783008575f);
+
+    host.simulate(blocks, 10);
+    const auto &notices = host.events().damageNumbers;
+    if (notices.size() != 2) {
+        check(false, "a dedicated authority emits the guest's two bubble healing notices");
+        return;
+    }
+    const bool critical = notices[0][0x14] != 0;
+    const float amount = critical ? 0.7439067363739014f : 0.3719533681869507f;
+    float hostHealth;
+    std::memcpy(&hostHealth, host.record(recipient) + HEALTH, sizeof hostHealth);
+    check(notices[0] == notices[1] && field<int64_t>(notices[0], damage::ATTACKER) == caster &&
+              field<int64_t>(notices[0], 8) == recipient && field<float>(notices[0], 0x10) == -amount &&
+              hostHealth == 10.f, "the dedicated authority leaves the guest's HP to its receiving client");
+
+    SpawnedCreatures guest;
+    guest.setNativePlayer(true);
+    guest.setRemoteClient(true);
+    MirrorSide mirror(guest, blocks);
+    LoopbackNetwork network;
+    constexpr PeerId peer = 1;
+    auto endpoint = network.endpoint(peer);
+    ClientGame client(*endpoint, mirror);
+    client.link().goHome(1000);
+    endpoint->send(peer, Channel::ToClient, encode(YourId{recipient}, Direction::ToClient));
+    client.receive(1000);
+    guest.setPlayer(blocks, {}, 0.f, {}, 10.f, 1, true);
+    guest.setPlayerHealth(50.f);
+    std::vector<DamageRecord> shown;
+    guest.setHitVisualObserver([&](const DamageRecord &notice) { shown.push_back(notice); });
+    const auto packet = encode(WorldUpdate{host.events()}, Direction::ToClient);
+    endpoint->send(peer, Channel::ToClient, packet);
+    client.receive(1001);
+    check(guest.playerHealth() == 50.f && shown.empty(), "receipt queues the bubble batch until event consumption");
+    client.consumeWorldUpdates();
+    const float healed = (50.f + amount) + amount; // Two separately rounded HP writes.
+    check(guest.playerHealth() == healed && shown == notices && mirror.hitsTaken == 2,
+          "the guest applies and presents each of the two healing records in the compressed batch");
+    for (const auto &notice : shown) {
+        const auto labels = combattext::visit(notice, [&](int64_t id) { return guest.creature(id); }, guest.playerRecord());
+        check(labels.size() == 1 && labels[0].text == (critical ? L"0.7" : L"0.3") &&
+                  labels[0].colour == glm::vec4(0.4f, 1.f, 0.5f, 1.f) && labels[0].fontSize == (critical ? 60.f : 20.f),
+              "the displayed heal uses the recorded magnitude and critical size");
+    }
+    client.consumeWorldUpdates();
+    check(guest.playerHealth() == healed && shown == notices && mirror.hitsTaken == 2 &&
+              guest.events().damageNumbers.empty(), "empty consumption neither replays nor echoes guest healing");
+    guest.setPlayerHealth(guest.playerMaxHealth() - 0.125f);
+    endpoint->send(peer, Channel::ToClient, packet);
+    client.receive(1002);
+    client.consumeWorldUpdates();
+    check(guest.playerHealth() == guest.playerMaxHealth() && mirror.hitsTaken == 4,
+          "each delivered healing record respects the guest's maximum HP");
+}
 } // namespace
 int viewedNetworkPhaseTests() {
     int failures = 0;
@@ -159,6 +242,7 @@ int viewedNetworkPhaseTests() {
     };
     sessionPhases(check);
     queueAndSendOrder(check);
+    guestBubbleHealing(check);
     std::printf("Viewed network dispatch phases: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

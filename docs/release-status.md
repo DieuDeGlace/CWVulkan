@@ -1,5 +1,18 @@
 # Source review checkpoint — 2026-11-08
 
+## Water Bubble damage and healing - 2026-11-18
+
+A Water Mage cast in the offline world test creates eight bubbles. The first
+natural pop heals a wounded allied NPC once and damages an unarmored enemy.
+Both effects credit the caster. The host emits two healing records. A guest
+receiving both applies each separately up to its maximum HP, with a green
+combat number for each qualifying record. The in-memory multiplayer test
+passes these records through the compressed world-update packet.
+
+The saved Steam recording contains 8 critical and 48 ordinary rolls at the
+shared area routine. It records neither actor IDs nor recipient HP per roll.
+The original per-target rules come from the isolated static contract. [Steam Water Bubble target outcomes](specs/steam-water-bubble-target-outcomes-20261118.md).
+
 ## Bomb terrain history and save reload - 2026-11-18
 
 CubeVulkan read a copy of an original Steam world and wrote its complete

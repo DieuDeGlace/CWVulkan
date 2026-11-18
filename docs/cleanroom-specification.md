@@ -216,6 +216,16 @@ input, observes eight births and checks the first neutral expiry and area
 on consecutive authority steps over breakable terrain.
 [Creation and caster power](specs/steam-water-bubble-caster-power-20261118.md).
 [Full lifetime and area timing](specs/steam-water-bubble-lifetime-20261118.md).
+
+At first death, each admitted target draws once. A roll divisible by four
+doubles the stored creation strength before multiplication by the remaining
+resource. The caster's relation to the target selects ordinary combat or
+healing. A friendly recipient can generate two consecutive full negative
+amounts even when the first application reaches maximum HP. The authority
+applies the heal once to an eligible NPC. A dedicated host leaves player HP
+to the recipient. The receiving guest applies each incoming record to its
+local player separately and caps each write. A spell's rolled magnitude,
+HP change and displayed number can therefore differ. [Steam Water Bubble target outcomes](specs/steam-water-bubble-target-outcomes-20261118.md).
 The original Bomb's block record retains signed absolute XYZ, all six old
 block bytes, the six-byte empty replacement and the four-byte day. Zone
 histories retain duplicates. Loading applies replacements in forward order.
