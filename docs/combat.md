@@ -58,6 +58,17 @@ How the supported Steam build (timestamp 5d93ab0d) turns an attack into lost hea
 
 CubeVulkan uses the game's own stat values from the snapshots and creature records, not this formula.
 
+## Offline hit comparison (2026-11-18)
+
+Run `tools/CheckHits.py <game folder> [since-ms]` on an existing
+`Extract/hits.txt`. Direct swings use their own move's attack statistic
+and charge rules. A physical hit with ability zero can come from an
+in-flight projectile. If the actor's current action is 27, the checker
+compares the stored amount with a possible boomerang launch at the
+recorded attack power. The hit probe omits the launch identity. An
+optional `combat-log.txt` supplies later HP samples, reported separately
+from immediate losses. [Steam hit producer contract](specs/steam-direct-hit-roll-provenance-20261118.md).
+
 ## Validation (2026-10-22)
 
 ZoneExtractor's hit probe hooks the hit routine and logs each call to `Extract\hits.txt`:
@@ -157,7 +168,7 @@ then ×2 for appearance flag 0x200, ×1.2 for 0x20000, ×4 for elites (0x40000),
 - Stuns stop monsters and the player.
 - Mana per hit uses the rule when a capture records mana generation. The extractor now writes `managen=`; older captures keep the logged +0.2.
 
-## Not modelled yet
+## Limits of the October capture-based combat path
 
 - **The player's class bonus:** the local player's damage times `1 + 0x510f0(attacker)` when 0x65750 returns 6.
 - **Ability 22's extra factor.**

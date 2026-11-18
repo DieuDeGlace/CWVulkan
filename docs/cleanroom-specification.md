@@ -244,6 +244,13 @@ authority HP settles in single precision with a lower bound of zero.
 Production, immediate HP settlement and later guest state are separate
 observations. [Steam ordinary hit and HP contract](specs/steam-ordinary-hit-hp-comparison-20261118.md).
 
+A direct swing passes its move number. Projectile contact instead passes
+ability zero and the projectile's category. Its damage was stored at
+launch and can double on a critical roll against this target. Two
+source-less physical hazards also pass zero for ability and category.
+The actor's action at contact alone cannot identify the producing throw.
+Resolved hit messages carry the signed amount, IDs and outcome. [Steam hit producer contract](specs/steam-direct-hit-roll-provenance-20261118.md).
+
 The authority sends hit records to every peer. Pulses and sounds use a
 256-block spherical range around the peer, and sounds skip their owner.
 Non-player visibility uses 270 blocks. Threat from healing first updates

@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Direct swings and projectile contact - 2026-11-18
+
+All 158 saved direct swings fit the documented damage roll for their move.
+The other 198 physical records carried resolver ability zero while their
+attacker was performing action 27. These records fit a boomerang launch
+using the observed attack power. A compiled offline replay exercised the
+throw, projectile contact and ordinary resolver and reproduced the three
+distinct contact damage amounts at the recording's precision. The chosen
+draws demonstrate compatibility. The original capture omits the launch ID
+and random draw. [Steam hit producer contract](specs/steam-direct-hit-roll-provenance-20261118.md).
+
 ## Original hit and HP comparison - 2026-11-18
 
 The offline checker now reads the original hit probe when only hits.txt

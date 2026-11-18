@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Direct swings and projectile contact - 2026-11-18
+
+The source-side author identified the stock direct-strike, projectile,
+and environmental routes from the supported Steam image. The clean team
+read and froze the complete contract. Independent offline comparison used
+the original hit log and a controlled throw in the compiled engine. The
+checker reports boomerang compatibility separately from direct-move roll
+checks because an actor can change action or power during flight. [Steam hit producer contract](specs/steam-direct-hit-roll-provenance-20261118.md).
+
 ## Original hit and HP comparison - 2026-11-18
 
 The original-side author traced ordinary hit production, HP settlement

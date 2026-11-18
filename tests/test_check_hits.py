@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from tools.CheckHits import compare
+from tools.CheckHits import compare, roll_check
 
 
 def hit(time, before, after, *, category=0, combo=-10, applied=1):
@@ -41,6 +41,31 @@ class HitComparisonTests(unittest.TestCase):
         row = " target=player id=-4 hp=20.00->14.00 | player ability=0\n"
         self.assertEqual(self.compare([hit(100, 20, 20)], "t=120" + row + "t=499" + row)["ambiguous"], 1)
         self.assertEqual(self.compare([hit(100, 20, 20, category=2)], "t=500" + row)["nearby_consistent"], 0)
+
+    def test_direct_move_uses_its_own_power_and_charge_rules(self):
+        source = {"ability": "96", "spell": "20", "attack": "3"}
+        head = {"ability": "96", "type": "0", "critical": "1", "charge": "1", "flag": "1"}
+        self.assertEqual(roll_check(head, source, 50), ("direct", True))
+        self.assertEqual(roll_check(head, source, 51), ("direct", False))
+        source["ability"] = head["ability"] = "12"
+        head["charge"] = "0"
+        self.assertEqual(roll_check(head, source, 0), ("direct", True))
+        self.assertEqual(roll_check(head, source, 1), ("direct", False))
+        head["type"] = "2"
+        self.assertIsNone(roll_check(head, source, 0))
+
+    def test_projectile_damage_is_only_a_candidate_at_contact(self):
+        source = {"ability": "27", "attack": "20", "chargefield": "0.0000"}
+        head = {"ability": "0", "type": "0", "critical": "0", "charge": "0.1000", "flag": "1"}
+        # At launch: half of 20 times (0.1 + 0.5 squared), before variation.
+        self.assertEqual(roll_check(head, source, 3.5), ("boomerang_candidate", True))
+        self.assertEqual(roll_check(head, source, 9), ("boomerang_candidate", False))
+        head["flag"] = "0"
+        self.assertIsNone(roll_check(head, source, 10))
+        head["charge"] = "0"
+        self.assertEqual(roll_check(head, source, 10), ("boomerang_candidate", True))
+        source["ability"] = "0"
+        self.assertIsNone(roll_check(head, source, 10))
 
     def test_empty_selected_range(self):
         self.assertFalse(self.compare([hit(10, 20, 14)], since=11))
