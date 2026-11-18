@@ -1,5 +1,39 @@
 # Clean-room process
 
+## Original Steam gameplay and local reconnect - 2026-11-17
+
+The original Steam client entered a playable world with a Collie in the copied
+character's equipment. The recorder observed the eagle-flight creation
+blocker, then the linked pet on the authority worker after landing.
+All six complete Collie setup sequences matched through the appearance
+draws, the equipment tail and the first following draw. The exact engine
+CRT replay compared 2,050 authority draws after 158 seeds with zero
+differences. The focused engine facade and dead-creature tests passed.
+
+The second copied game stayed on the title screen through its recording
+window. No Water Mage cast was established. The original Water Bubbles
+and Bomb area traces remain open.
+
+Closing a joined guest used the live return-home transition after its
+frame-owned mirror data had been destroyed. Both baseline runs reached a
+Windows heap error after the normal shutdown log. Teardown now sends the
+ordinary Leave notification directly. The live host-switch path still
+resets the mirror and joins the destination.
+
+The rebuilt licensed engine served two Native clients over localhost UDP.
+Each received the other's avatar. The joined guest exited with status zero,
+and the remaining guest saw its avatar disappear. The dedicated server then
+accepted a third connection. Both clients returned to their own worlds before
+reciprocal avatars could be verified after rejoin. The harness stopped its
+remaining processes at the deadline. The copied profiles matched by hash.
+The focused protocol case checks the Leave packet and callback counts.
+Longer reconnect acceptance, two Steam accounts and an original network peer
+remain open.
+
+Both original sessions used disposable saves. Installed and copied profile
+hashes matched after restoration. The implementation role used the existing
+held contracts and runtime observations.
+
 ## First-run extraction and interrupted model-table recovery - 2026-11-17
 
 Setup now starts the exact folder it prepares after Steam verifies ownership.

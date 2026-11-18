@@ -204,6 +204,13 @@ void GuestLink::send(PeerId to, const Packet &packet) {
     transport.send(to, Channel::ToHost, encode(packet, Direction::ToHost));
 }
 
+void GuestLink::notifyDeparture() {
+    if (hasHost()) {
+        send(currentHost, Leave{});
+        invitedBy.erase(currentHost);
+    }
+}
+
 void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
     drainTime.reset();
     ++connectionVersion;
@@ -211,10 +218,7 @@ void GuestLink::connectTo(PeerId host, uint32_t nowMs) {
     if (requireWorldHandshake)
         myId = 0;
     // 1. Leave the current host.
-    if (transport.valid(currentHost)) {
-        send(currentHost, Leave{});
-        invitedBy.erase(currentHost);
-    }
+    notifyDeparture();
     // 2. Reset what was sent and heard; the next update is a full one.
     lastSent.reset();
     currentHost = 0;

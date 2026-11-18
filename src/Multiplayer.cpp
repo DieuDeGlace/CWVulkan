@@ -34,7 +34,7 @@ Multiplayer::~Multiplayer() {
     if (hostGame)
         hostGame->link().dropAll();
     if (client && client->link().isGuestElsewhere())
-        client->link().goHome(clockNow());
+        client->link().notifyDeparture(); // session state borrowed by mirror callbacks has already unwound
 }
 
 bool Multiplayer::start(const Setup &setup, std::string &error) {

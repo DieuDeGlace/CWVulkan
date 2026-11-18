@@ -204,6 +204,8 @@ class GuestLink {
     // friend, leaving (to one's own host) and the timeouts all come through here.
     void connectTo(PeerId host, uint32_t nowMs);
     void goHome(uint32_t nowMs) { connectTo(transport.self(), nowMs); }
+    // Send the current peer a Leave during teardown without resetting the mirror or joining home.
+    void notifyDeparture();
 
     PeerId host() const { return currentHost; }
     bool hasHost() const { return transport.valid(currentHost); }

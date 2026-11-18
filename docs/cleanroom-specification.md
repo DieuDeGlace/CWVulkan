@@ -190,7 +190,11 @@ encounter remains unconfirmed.
 The engine World fixture uses a Bomb item, advances the fuse and checks that
 the next step emits the first area burst, changes breakable terrain and
 queues the rolled terrain sound. A later step keeps the events without
-emitting another first-visit burst. The live Steam effect comparison is open.
+emitting another first-visit burst.
+
+The second copied game stayed on the title screen through its recording
+window. No Water Mage cast was established. The original Water Bubbles
+and Bomb area traces remain open.
 
 When the host creates a pet or changes its equipped race, pet setup seeds the
 same thread's stream from the pet's unsigned race. Appearance and gear leave
@@ -226,8 +230,12 @@ on the title and character-select screens.
 
 CubeVulkan supplies the configured World name gate independently of the
 clock mode. The authority World fixture checks the unnamed scan, eagle
-flight and pet creation after the action clears. Original post-flight pet
-creation and a live death-area stream remain open.
+flight and pet creation after the action clears. In an ordinary original
+Steam gameplay session, the linked Collie appeared after landing.
+All six recorded complete Collie setup sequences matched the held and engine
+expectations, including the final equipment draw 19749 and following draw
+16204. The compiled engine CRT replay also matched all 2,050 captured
+post-seed authority draws in that session.
 
 The stock client starts in its graphical frontend for the traced launch
 operands. Use Continue on the visible title menu when the saved slot is valid,

@@ -611,6 +611,28 @@ void generationHandshake() {
     NET_CHECK(local.connection(GUEST_MACHINE) && local.connection(GUEST_MACHINE)->worldAccepted && guest.worldAccepted());
 }
 
+void guestDeparture() {
+    LoopbackNetwork network;
+    auto hostEnd = network.endpoint(HOST_MACHINE), guestEnd = network.endpoint(GUEST_MACHINE);
+    TestWorld hostWorld;
+    HostLink host(*hostEnd, hostWorld.links());
+    int resets = 0, hostDrops = 0, connects = 0;
+    GuestLink guest(*guestEnd, {[&] { ++resets; }, [&] { ++hostDrops; }, [&] { ++connects; }});
+    guest.notifyDeparture();
+    NET_CHECK(network.waiting(HOST_MACHINE, Channel::ToHost) == 0);
+    guest.connectTo(HOST_MACHINE, 0);
+    HostLink::Inbox inbox;
+    host.receive(inbox);
+    NET_CHECK(host.connection(GUEST_MACHINE) && resets == 1 && hostDrops == 1 && connects == 1);
+
+    guest.notifyDeparture();
+    inbox = {};
+    host.receive(inbox);
+    NET_CHECK(inbox.left.size() == 1 && inbox.left.front() == GUEST_MACHINE && !host.connection(GUEST_MACHINE));
+    NET_CHECK(resets == 1 && hostDrops == 1 && connects == 1);
+    NET_CHECK(network.waiting(GUEST_MACHINE, Channel::ToHost) == 0);
+}
+
 void sessionTimers() {
     LoopbackNetwork network;
     auto hostEnd = network.endpoint(HOST_MACHINE), guestEnd = network.endpoint(GUEST_MACHINE);
@@ -1199,6 +1221,7 @@ int netTests() {
     creatureDelta();
     loopbackSession();
     generationHandshake();
+    guestDeparture();
     sessionTimers();
     singlePlayer();
     clearLocalHostMessages();

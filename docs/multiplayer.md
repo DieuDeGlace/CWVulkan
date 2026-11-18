@@ -175,6 +175,24 @@ no client:
 * `frontend::FriendsMenu` (`src/Frontend.h`) is what the J menu draws from. Anything that fills
   it in can supply the rows.
 
+## Licensed local reconnect test
+
+Closing a joined guest used the live return-home transition after its
+frame-owned mirror data had been destroyed. Both baseline runs reached a
+Windows heap error after the normal shutdown log. Teardown now sends the
+ordinary Leave notification directly. The live host-switch path still
+resets the mirror and joins the destination.
+
+The rebuilt licensed engine served two Native clients over localhost UDP.
+Each received the other's avatar. The joined guest exited with status zero,
+and the remaining guest saw its avatar disappear. The dedicated server then
+accepted a third connection. Both clients returned to their own worlds before
+reciprocal avatars could be verified after rejoin. The harness stopped its
+remaining processes at the deadline. The copied profiles matched by hash.
+The focused protocol case checks the Leave packet and callback counts.
+Longer reconnect acceptance, two Steam accounts and an original network peer
+remain open.
+
 ## Not done yet
 
 * No session with a real second Steam account has been tried. The Steam path is built to the
