@@ -7304,6 +7304,8 @@ static void tick(cube::Game *g) {
         if (!requested) {
             requested = true;
             uicapture::requestFrames();
+        } else {
+            uicapture::pollRequest();
         }
         return;
     }

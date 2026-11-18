@@ -48,6 +48,12 @@ compiler commands and header dependencies. The [historical SDK audit](sdk-licens
 still grants no additional rights to legacy SDK material. This target no longer
 includes those headers; live supported-game qualification is a separate gate.
 
+An isolated `--setup-capture --title-only` session writes six frames to
+`Extract/ui` when the game starts. Create an empty `Extract/ui.request` during
+the same session to capture six more frames. The extractor consumes the
+request after the current batch finishes. Use `--setup-restore` after quitting
+to recover the copied saves and mods.
+
 A final public release waits for the [remaining readiness checks](roadmap.md).
 In particular, a local package/PE check does not validate the real first-run wizard,
 an original-game network peer or a fresh machine.

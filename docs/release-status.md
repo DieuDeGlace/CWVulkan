@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Repeat frame capture and Native save reload - 2026-11-17
+
+Isolated capture now consumes the normal frame request after its startup
+batch completes. In the supported original game the previous extractor
+saved six frames and left a repeat request pending. The rebuilt extractor
+saved six startup frames and six more on request in the same run. The first
+batch stayed byte identical and the copied profile was restored.
+
+Two licensed sessions on the published Native runtime saved gold totals of
+five and ten in succession from the same disposable character. Position and
+equipment records stayed byte identical. This covers one saved character
+and a local host across a reload. The original gameplay trace after landing
+and broader save and multiplayer acceptance are still open.
+
 ## Stock death-area capture routes - 2026-11-17
 
 Independent static evidence establishes the Bomb quick item and the Water
