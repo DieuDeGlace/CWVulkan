@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Water Bubble guard and shield receipt - 2026-11-18
+
+The original-side author traced guard precedence, shield overflow and the
+guest-to-host return of shield state on the supported offline Steam image.
+The held contract includes timed guard boundaries and the order of repeated
+status and hit records. The clean implementation tests exercise those world
+and packet paths with controlled player state. This evidence does not
+identify a defended recipient in a live original recording. [Steam guard and shield receipt](specs/steam-bubble-defense-receipt-20261118.md).
+
 ## Multiplayer and combat range boundaries - 2026-11-18
 
 An isolated original-only author traced the range predicate, visibility,

@@ -227,6 +227,14 @@ to the recipient. The receiving guest applies each incoming record to its
 local player separately and caps each write. A spell's rolled magnitude,
 HP change and displayed number can therefore differ. [Steam Water Bubble target outcomes](specs/steam-water-bubble-target-outcomes-20261118.md).
 
+A successful guard takes precedence over shields and emits one block record.
+Otherwise a positive combined shield pool produces an absorb record, followed
+by an ordinary hit only when damage exceeds the original sum. Guest receipt
+first applies incoming statuses, then visits each hit. Each current type-6
+shield loses the full absorb-record amount. The recipient sends its resulting
+shields in list order as packet 12. It ignores its own status echoes from
+packet 7. [Steam guard and shield receipt](specs/steam-bubble-defense-receipt-20261118.md).
+
 The authority sends hit records to every peer. Pulses and sounds use a
 256-block spherical range around the peer, and sounds skip their owner.
 Non-player visibility uses 270 blocks. Threat from healing first updates

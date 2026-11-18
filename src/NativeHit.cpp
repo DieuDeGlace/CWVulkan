@@ -111,7 +111,6 @@ constexpr uint8_t MOVE_ON_GROUND = 1u << 0;
 constexpr uint8_t MOVE_IMMUNE = 1u << 5;
 
 // Ability ids.
-constexpr int ABILITY_GUARD = 9;
 constexpr int ABILITY_BASH_SOUND = 0x0b;
 constexpr int ABILITY_POISON = 0x12;
 constexpr int ABILITY_MANA_CHARGE = 0x1d;
@@ -123,7 +122,6 @@ constexpr int ABILITY_GROUND_ONLY_1 = 0x4b;
 constexpr int ABILITY_GROUND_ONLY_2 = 0x64;
 constexpr int ABILITY_STAGGERED = 0x58;
 constexpr int ABILITY_GUARD_STANCE = 0x5f;
-constexpr int ABILITY_GUARD_6E = 0x6e;
 constexpr int ABILITY_SHELTERED = 0x7d;
 constexpr int ABILITY_COUNTER_BLOCK = 0x82;
 constexpr int ABILITY_PIERCE = 0x8c;
@@ -233,53 +231,6 @@ std::vector<const uint8_t *> weaponsInUse(const Creature *c) {
         break;
     }
     return out;
-}
-
-// 0x10ad90 for weapons only; anything else holds nothing.
-float blockItem(const Creature *c, const uint8_t *item) {
-    return isWeapon(item) ? nativerules::weaponDamage(item, c->record) : 0.0f;
-}
-
-// 0x50370: how much the creature's block holds.
-float blockValue(const Creature *c) {
-    const uint8_t *a = weaponA(c), *b = weaponB(c);
-    float value = 5.0f;
-    if (usableWeapon(c, a) && subtype(a) == 13) { // a shield
-        const float factor = isClass(c, 1, 1) ? 6.0f : 4.0f;
-        value = blockItem(c, b) * factor + 5.0f;
-    } else {
-        if (usableWeapon(c, a))
-            value = blockItem(c, a) + value;
-        if (usableWeapon(c, b))
-            value = value + blockItem(c, b);
-    }
-    if (hasLook(c, 1u << 9))
-        value = value + value;
-    if (hasLook(c, 1u << 17))
-        value *= 1.2f;
-    if (hasLook(c, LOOK_BOSS))
-        value *= 4.0f;
-    if (hasLook(c, 1u << 26))
-        value *= 1.1f;
-    return value;
-}
-
-// 0x5ed30: whether the creature is holding a guard.
-bool guarding(const Creature *c) {
-    if (read<float>(c->record, GUARD_LOCK) > 0.0f)
-        return false;
-    switch (ability(c)) {
-    case ABILITY_GUARD:
-    case ABILITY_GUARD_6E:
-        return true;
-    case ABILITY_GUARD_STANCE:
-        return (float)nativerules::abilityDuration(c->record, hasBuffOf(c)) > read<float>(c->record, ABILITY_TIME);
-    case 0x3c:
-    case 0x40:
-        return isClass(c, 1, 1);
-    default:
-        return false;
-    }
 }
 
 // 0x5f8d0: what mana gains are multiplied by.
@@ -540,7 +491,7 @@ bool hittable(const Creature *target, int hitAbility) {
 
 // §2.7: whether the target blocks this strike.
 bool blocks(const Creature *target) {
-    if (guarding(target) && read<float>(target->record, BLOCK_POWER) > 0.0f)
+    if (nativerules::isGuarding(target->record, hasBuffOf(target)) && read<float>(target->record, BLOCK_POWER) > 0.0f)
         return true;
     const int a = ability(target);
     if (a != ABILITY_SHIELD_BLOCK_1 && a != ABILITY_SHIELD_BLOCK_2 && a != ABILITY_COUNTER_BLOCK)
@@ -555,7 +506,7 @@ bool blocks(const Creature *target) {
 // §2.7 on a block: the target's mana and block power pay for it. Returns nothing; the
 // caller then reports it.
 void payForBlock(World &world, Creature *target, float damage) {
-    float cost = damage / blockValue(target);
+    float cost = damage / nativerules::blockValue(target->record);
     const int a = ability(target);
     if (a == ABILITY_SHIELD_BLOCK_1 || a == ABILITY_SHIELD_BLOCK_2 || a == ABILITY_COUNTER_BLOCK)
         cost = 0.0f;
@@ -566,7 +517,7 @@ void payForBlock(World &world, Creature *target, float damage) {
     if (!world.client) {
         const float gain = std::max((1.0f - cost) * 0.5f, 0.0f);
         const float factor = manaFactor(target);
-        if (guarding(target)) {
+        if (nativerules::isGuarding(target->record, hasBuffOf(target))) {
             write(t, MANA, read<float>(t, MANA) + factor * gain);
             if (a != ABILITY_GUARD_STANCE)
                 write(t, MANA_RESERVE, read<float>(t, MANA_RESERVE) + factor * gain);

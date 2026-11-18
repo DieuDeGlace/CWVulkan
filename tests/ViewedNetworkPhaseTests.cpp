@@ -1,6 +1,7 @@
 #include "CombatText.h"
 #include "Extracted.h"
 #include "Multiplayer.h"
+#include "NativeBuffs.h"
 #include "NetWorlds.h"
 #include "Spawned.h"
 #include "net/ClientGame.h"
@@ -154,32 +155,33 @@ void queueAndSendOrder(const auto &check) {
     check(mirror.visits == std::vector<std::string>{"t6", "t7"} && client.link().host() == peer,
           "one snapshot applies pre-transition state then rechecks each later sender against the newly selected peer");
 }
+template <class T> void setActorField(uint8_t *record, size_t offset, T value) {
+    std::memcpy(record + offset, &value, sizeof value);
+}
+
 void guestBubbleHealing(const auto &check) {
     using namespace cwnet;
     using namespace worldgen::creature;
     constexpr int64_t caster = 777, recipient = 1, bubble = 101;
-    const auto write = [](uint8_t *record, size_t offset, auto value) {
-        std::memcpy(record + offset, &value, sizeof value);
-    };
     ExtractedWorld blocks;
     blocks.openGenerated(0, 0);
     SpawnedCreatures host;
     bool created = false;
     auto *actor = host.networkCreature(caster, created);
     actor[HOSTILITY] = 0;
-    write(actor, POSITION, int64_t(100) * 65536);
-    write(actor, HEALTH, 100.f);
+    setActorField(actor, POSITION, int64_t(100) * 65536);
+    setActorField(actor, HEALTH, 100.f);
     actor = host.networkCreature(recipient, created);
     actor[HOSTILITY] = 0;
-    write(actor, HEALTH, 10.f);
+    setActorField(actor, HEALTH, 10.f);
     actor = host.networkCreature(bubble, created);
     actor[HOSTILITY] = 7;
-    write(actor, RACE, int32_t(0x11d));
-    write(actor, OWNER, caster);
-    write(actor, HEALTH, 0.f);
+    setActorField(actor, RACE, int32_t(0x11d));
+    setActorField(actor, OWNER, caster);
+    setActorField(actor, HEALTH, 0.f);
     // Unequipped neutral caster with creation roll zero, at expiry on the 563rd 16 ms visit.
-    write(actor, BLOCK_POWER, 3.75f);
-    write(actor, 0x188, 0.09918756783008575f);
+    setActorField(actor, BLOCK_POWER, 3.75f);
+    setActorField(actor, 0x188, 0.09918756783008575f);
 
     host.simulate(blocks, 10);
     const auto &notices = host.events().damageNumbers;
@@ -234,6 +236,132 @@ void guestBubbleHealing(const auto &check) {
     check(guest.playerHealth() == guest.playerMaxHealth() && mirror.hitsTaken == 4,
           "each delivered healing record respects the guest's maximum HP");
 }
+enum class BubbleDefense { Guard, FullShield, BrokenShield };
+
+void guestBubbleDefense(BubbleDefense defense, const auto &check) {
+    using namespace cwnet;
+    using namespace worldgen::creature;
+    constexpr int64_t caster = 71, recipient = 1, bubble = 101;
+    const bool guarding = defense == BubbleDefense::Guard;
+    const bool broken = defense == BubbleDefense::BrokenShield;
+    const float secondPool = broken ? 0.75f : 8.f;
+    const auto firstShield = nativebuffs::make(6, 0.25f, 2000.f, 17);
+    const auto secondShield = nativebuffs::make(6, secondPool, 3000.f, 19);
+
+    ExtractedWorld blocks;
+    blocks.openGenerated(0, 0);
+    SpawnedCreatures host;
+    bool created = false;
+    auto *actor = host.networkCreature(caster, created);
+    actor[HOSTILITY] = 1;
+    actor[CLASS] = 3;
+    actor[SPEC] = 1;
+    setActorField(actor, POSITION, int64_t(100) * 65536);
+    actor = host.networkCreature(recipient, created);
+    actor[HOSTILITY] = 0;
+    actor[ABILITY] = guarding ? 9 : 0;
+    setActorField(actor, POSITION, int64_t(65536));
+    setActorField(actor, HEALTH, 20.f);
+    setActorField(actor, BLOCK_POWER, 1.f);
+    host.giveBuffNotice(nativebuffs::notice(17, recipient, firstShield, 0));
+    host.giveBuffNotice(nativebuffs::notice(19, recipient, secondShield, 0));
+    actor = host.networkCreature(bubble, created);
+    actor[HOSTILITY] = 7;
+    setActorField(actor, RACE, int32_t(0x11d));
+    setActorField(actor, OWNER, caster);
+    setActorField(actor, HEALTH, 0.f);
+    setActorField(actor, BLOCK_POWER, 16.f);
+    setActorField(actor, 0x188, 0.125f);
+    host.simulate(blocks, 0);
+    const auto &events = host.events();
+    const auto &hits = events.damageNumbers;
+    if (hits.size() != (broken ? 2u : 1u)) {
+        check(false, "bubble defense produces a special record and only a positive excess produces an ordinary hit");
+        return;
+    }
+    const float incoming = field<float>(hits.front(), 0x10);
+    const float residual = broken ? incoming - 1.f : 0.f;
+    check((incoming == 2.f || incoming == 4.f) && hits.front()[0x45] == (guarding ? 1 : 5) &&
+              !hits.front()[0x14] && !hits.front()[0x44] && field<int64_t>(hits.front(), 0) == caster &&
+              field<int64_t>(hits.front(), 8) == recipient && field<float>(hits.front(), 0x38) == 5.f &&
+              field<float>(hits.front(), 0x40) == 1.25f,
+          "block and absorb records carry the full incoming amount, half impulse and cleared critical and spirit bytes");
+    if (broken)
+        check(hits.back()[0x45] == 0 && hits.back()[0x44] == 1 && hits.back()[0x14] == (incoming == 4.f) &&
+                  field<float>(hits.back(), 0x10) == residual && field<float>(hits.back(), 0x38) == 10.f,
+              "the ordinary residual follows absorption and retains the original critical flag and full impulse");
+    check(events.buffs.empty(), "a dedicated host leaves the player's shield wear notices to the recipient");
+
+    SpawnedCreatures guest;
+    guest.setNativePlayer(true);
+    guest.setRemoteClient(true);
+    MirrorSide mirror(guest, blocks);
+    LoopbackNetwork network;
+    auto endpoint = network.endpoint(1);
+    ClientGame client(*endpoint, mirror);
+    const auto deliver = [&](const Packet &packet) {
+        endpoint->send(endpoint->self(), Channel::ToClient, encode(packet, Direction::ToClient));
+    };
+    client.link().goHome(1000);
+    deliver(YourId{recipient});
+    client.receive(1000);
+    guest.setPlayer(blocks, {}, 0.f, {}, 20.f, 1, true);
+    guest.setPlayerHealth(20.f);
+    auto &player = *guest.localPlayer();
+    player.record[ABILITY] = guarding ? 9 : 0;
+    setActorField(player.record, BLOCK_POWER, 1.f);
+    client.send(1000);
+    deliver(WorldUpdate{events});
+    // Both compressed messages reach the same Game frame. Buffs run before hits across that batch.
+    WorldEvents granted;
+    granted.buffs = {nativebuffs::notice(17, recipient, firstShield, 0), nativebuffs::notice(19, recipient, secondShield, 0)};
+    deliver(WorldUpdate{granted});
+    client.receive(1035);
+    client.consumeWorldUpdates();
+    if (player.buffs.size() != 2) {
+        check(false, "the recipient installs both distinct-source shields");
+        return;
+    }
+    check(guest.playerHealth() == 20.f - residual && mirror.hitsTaken == hits.size(),
+          "only the ordinary residual reduces guest HP");
+    const auto &changed = guest.events().buffs;
+    if (guarding) {
+        float power;
+        std::memcpy(&power, player.record + BLOCK_POWER, sizeof power);
+        check(power == 1.f - incoming / 5.f && player.buffs[0] == firstShield && player.buffs[1] == secondShield &&
+                  changed.empty(), "a successful guard spends block power before either shield can absorb the hit");
+        return;
+    }
+    const auto spentFirst = nativebuffs::make(6, 0.f, 0.f, 17);
+    const auto spentSecond = nativebuffs::make(6, broken ? 0.f : secondPool - incoming, broken ? 0.f : 3000.f, 19);
+    const std::vector<BuffRecord> expected{nativebuffs::notice(recipient, recipient, spentFirst, 0),
+                                           nativebuffs::notice(recipient, recipient, spentSecond, 0)};
+    check(player.buffs[0] == spentFirst && player.buffs[1] == spentSecond && changed == expected,
+          "each shield loses the full amount, keeps its original source, and reports the recipient as sender");
+    client.collectOwnEvents();
+    client.send(1070);
+    Received message;
+    GuestEvents returned;
+    while (endpoint->receive(Channel::ToHost, message)) {
+        const auto packet = decode(message.bytes, Direction::ToHost);
+        if (const auto *notice = std::get_if<BuffNotice>(&packet))
+            returned.buffs.push_back(notice->record);
+    }
+    check(returned.buffs == expected, "the guest returns both shield updates in separate packet-12 messages");
+    const auto hitsBeforeRelay = mirror.hitsTaken;
+    host.events() = {};
+    guest.events() = {};
+    host.applyGuestEvents(blocks, returned);
+    check(host.events().buffs == expected, "the host relays the returned shield updates in order");
+    deliver(WorldUpdate{host.events()});
+    client.receive(1105);
+    client.consumeWorldUpdates();
+    client.collectOwnEvents();
+    check(guest.playerHealth() == 20.f - residual && guest.events().buffs.empty() && client.link().outbox.buffs.empty() &&
+              player.buffs[0] == spentFirst && player.buffs[1] == spentSecond && mirror.hitsTaken == hitsBeforeRelay,
+          "the returning self notices produce no new hit or outgoing shield update");
+}
+
 } // namespace
 int viewedNetworkPhaseTests() {
     int failures = 0;
@@ -243,6 +371,8 @@ int viewedNetworkPhaseTests() {
     sessionPhases(check);
     queueAndSendOrder(check);
     guestBubbleHealing(check);
+    for (auto defense : {BubbleDefense::Guard, BubbleDefense::FullShield, BubbleDefense::BrokenShield})
+        guestBubbleDefense(defense, check);
     std::printf("Viewed network dispatch phases: %s\n", failures ? "FAIL" : "PASS");
     return failures;
 }

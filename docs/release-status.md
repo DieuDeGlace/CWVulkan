@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Water Bubble guard and shield receipt - 2026-11-18
+
+A guarding player can block a Water Bubble with two shields active. When
+the guard is down, the host uses the sum of those shields to determine
+overflow. The receiving player deducts the full incoming amount from each
+shield and loses HP only to the ordinary residual. The offline test follows
+the resulting shield updates from the recipient back to the host and through
+the host's echo. Each shield retains the identity of its original giver.
+
+Host and guest now use the same guard predicate and block-strength calculation.
+The guest also avoids one temporary allocation per shield hit in a measured
+two-shield case. The emitted notices and resulting values matched the earlier
+implementation across 2,048 repetitions per test case. [Steam guard and shield receipt](specs/steam-bubble-defense-receipt-20261118.md).
+
 ## Multiplayer and combat range boundaries - 2026-11-18
 
 The host now squares its radius at Steam's float precision. Its former

@@ -27,7 +27,6 @@ Result apply(nativeai::Creature &player, const nativehit::Number &number) {
         return result;
     const float damage = read<float>(number.data(), 0x10);
     const uint8_t kind = number[0x45], ability = record[worldgen::creature::ABILITY];
-    const auto stats = nativebuffs::forStats(player);
     if (kind == 1) { // a block changes ordinary velocity, even for zero damage
         std::memcpy(record + VELOCITY, number.data() + 0x38, 12);
         if (damage > 0)
@@ -39,6 +38,7 @@ Result apply(nativeai::Creature &player, const nativehit::Number &number) {
             cost *= .5f;
         const float gain = std::max((1.0f - cost) * .5f, 0.0f);
         if (nativerules::isGuarding(record, [&](int type) { return nativebuffs::find(player, (uint8_t)type) != nullptr; })) {
+            const auto stats = nativebuffs::forStats(player);
             const float amount = nativerules::manaFactor(stats.data(), stats.size()) * gain;
             write(record, MANA, read<float>(record, MANA) + amount);
             if (ability != 0x5f)
@@ -77,6 +77,7 @@ Result apply(nativeai::Creature &player, const nativehit::Number &number) {
             sound.owner = read<int64_t>(record, worldgen::creature::ID);
             result.sounds.push_back(soundrules::makeRequest(sound));
         }
+        const auto stats = nativebuffs::forStats(player);
         write(record, HEALTH, std::min(health, nativerules::maxHealth(record, stats.data(), stats.size())));
     }
     return result;
