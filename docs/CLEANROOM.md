@@ -1,5 +1,17 @@
 # Clean-room process
 
+## Water Bubbles creation and neutral expiry - 2026-11-18
+
+Two separately held original-only contracts establish the equipped-weapon
+selector, the three creation return addresses and both lifetime decrements.
+The full upkeep trace supersedes the earlier eighteen-second estimate. The
+verification role used the return addresses to recover sixteen complete
+creation sequences from the existing private recording. Each group contains
+eight. The earlier comparison used the addresses of the calls themselves.
+The recorded area rolls do not contain individual source or target identities.
+[Creation and caster power](specs/steam-water-bubble-caster-power-20261118.md).
+[Full lifetime and area timing](specs/steam-water-bubble-lifetime-20261118.md).
+
 ## Water Mage recording and evidence limits - 2026-11-18
 
 The verification role compared a disposable Water Mage session with the

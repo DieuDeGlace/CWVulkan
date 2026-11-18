@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -352,6 +353,83 @@ void stockBombIntegration(const std::filesystem::path &root, const auto &check) 
     authority.simulate(terrain, 16);
     check(centeredBursts() == 1 && authority.events().blockChanges.size() == changed,
           "a later step retains the Bomb events without repeating the area");
+}
+
+void stockWaterBubblesIntegration(const std::filesystem::path &root, const auto &check) {
+    using namespace worldgen::creature;
+    writeFixture(root, 1, 1, false, 0x01);
+    ExtractedWorld terrain;
+    std::string why;
+    if (!terrain.open(root, why) || !terrain.loadSourceZone(0, 0)) {
+        check(false, "Water Mage fixture loads a breakable floor");
+        return;
+    }
+    nativesaves::WorldState saved;
+    SpawnedCreatures authority;
+    authority.setStoredZones(terrain, &saved, false);
+    authority.setNativePlayer(true);
+    const std::array<int64_t, 3> position{32 * BLOCK + BLOCK / 2, 32 * BLOCK + BLOCK / 2, 2 * BLOCK};
+    authority.setPlayer(terrain, terrain.toLocal(position.data()), 0, {}, 100, 1, true);
+    auto *mage = authority.localPlayer()->record;
+    mage[CLASS] = 3;
+    mage[SPEC] = 1;
+    const int64_t owner = get<int64_t>(mage, ID);
+    nativecontrol::Input input;
+    input.ultimate = true;
+    constexpr int stepMs = 10;
+    authority.control(input, stepMs);
+    float cooldown = 0;
+    check(mage[ABILITY] == 0x90 && authority.specialSkill(cooldown) == 0x90 && cooldown == 40000.f,
+          "one Water Mage ultimate press starts Water Bubbles with a forty-second cooldown");
+    input.ultimate = false;
+    authority.control(input, stepMs);
+
+    const auto waterPops = [&] {
+        const auto &particles = authority.events().particles;
+        return std::count_if(particles.begin(), particles.end(), [](const auto &burst) {
+            return get<int32_t>(burst.data(), 0x38) == 0x14 && get<int32_t>(burst.data(), 0x3c) == 2;
+        });
+    };
+    std::set<int64_t> births;
+    int64_t firstId = 0;
+    int firstBirthMs = 0;
+    int elapsed = 0;
+    bool ownedAtBirth = true;
+    while (elapsed < 2000) {
+        elapsed += stepMs;
+        authority.simulate(terrain, stepMs);
+        authority.forEachWorldCreature([&](const uint8_t *record) {
+            if (record[HOSTILITY] != 7 || get<int32_t>(record, RACE) != 0x11d)
+                return;
+            const int64_t id = get<int64_t>(record, ID);
+            if (!births.insert(id).second)
+                return;
+            if (births.size() == 1) {
+                firstId = id;
+                firstBirthMs = elapsed;
+            }
+            ownedAtBirth &= get<int64_t>(record, OWNER) == owner && get<float>(record, HEALTH) == 1.f;
+        });
+    }
+    check(births.size() == 8 && ownedAtBirth, "the cast creates eight distinct living bubbles owned by the mage");
+    if (births.empty())
+        return;
+
+    const auto *first = authority.record(firstId);
+    while (first && get<float>(first, HEALTH) > 0.f && elapsed < firstBirthMs + 10000) {
+        elapsed += stepMs;
+        authority.simulate(terrain, stepMs);
+        first = authority.record(firstId);
+    }
+    check(first && get<float>(first, HEALTH) == 0.f && get<float>(first, ABILITY + 4) == 0.f &&
+              std::abs(elapsed - firstBirthMs - 9000) <= stepMs && waterPops() == 0,
+          "the first bubble expires after nine seconds of neutral authority upkeep, before the area pass");
+    authority.simulate(terrain, stepMs);
+    check(waterPops() == 1, "the next authority step publishes the first water area");
+    for (int settle = 0; settle < 2000; settle += stepMs)
+        authority.simulate(terrain, stepMs);
+    check(waterPops() == 8 && authority.events().blockChanges.empty() && terrain.gameBlock(32, 32, 1)[5] == 1,
+          "all eight bubbles pop while the breakable floor stays intact");
 }
 
 void hostPreludeStreamIntegration(const auto &check) {
@@ -1201,6 +1279,7 @@ int worldObjectTests() {
         selectedMovementIntegration(root, check);
         capturedGateFootprint(root, check);
         stockBombIntegration(root, check);
+        stockWaterBubblesIntegration(root, check);
         std::filesystem::remove_all(root);
     }
     sourceSummaryValues(check);

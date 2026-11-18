@@ -145,21 +145,20 @@ void waterBubble(World &w, const nativeai::Creature *caster) {
     set<int64_t>(r, 0x1a0, idOf(caster));
     set<int32_t>(r, 0x144, get<int32_t>(from, 0x144));
     raceDefaults(r, BUBBLE_RACE);
-    // Its power (+0x184): the caster's power value, by 75% to 125%.
-    // spec: open question: that is 0x65c70 with selector 1, whose contributing entries the
-    // spec leaves open; this uses selector 0's, the caster's spell power.
-    const float powerScale = 0.75f + 0.5f * ((float)w.rand() / RAND_MAX_F);
-    const std::vector<nativerules::Buff> stats = nativebuffs::forStats(*caster);
-    set<float>(r, 0x184, nativerules::spellPower(from, stats.data(), stats.size()) * powerScale);
+    // Water Bubbles takes spell power from both equipped weapons.
+    const float powerScale = 0.75f + (float(w.rand()) * 0.5f) / RAND_MAX_F;
+    const auto stats = nativebuffs::forStats(*caster);
+    const float power = nativerules::spellPower(from, stats.data(), stats.size(), nativerules::Weapons::Both);
+    set<float>(r, 0x184, power * powerScale);
     // Its size: 75% to 150% of the race's.
-    const float sizeScale = 0.75f + 0.75f * ((float)w.rand() / RAND_MAX_F);
+    const float sizeScale = 0.75f + (float(w.rand()) * 0.75f) / RAND_MAX_F;
     for (size_t axis = 0; axis < 3; axis++)
         set<float>(r, 0x84 + 4 * axis, get<float>(r, 0x84 + 4 * axis) * sizeScale);
     addFlags(r, SUMMONED);
     set<float>(r, 0x180, 1.0f);     // health
     set<float>(r, 0x188, 1.0f);     // mana
     set<uint32_t>(r, 0xbcc, 0x200); // its AI
-    playSound(w, r, BUBBLE_SOUND, 0.8f + 0.1f * ((float)w.rand() / RAND_MAX_F), 1.0f);
+    playSound(w, r, BUBBLE_SOUND, 0.8f + (float(w.rand()) * 0.1f) / RAND_MAX_F, 1.0f);
     addToWorld(w, bubble);
 }
 

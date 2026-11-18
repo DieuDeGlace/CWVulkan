@@ -185,9 +185,10 @@ deflected using the next two draws, and the following pet setup.
 [Held authority prelude contract](specs/steam-host-pre-pet-prelude-stream-20261117.md).
 
 A stocked Bomb reaches the destructive actor path through Use Quick Item.
-The native actor loses its health over about four seconds. The Water Mage's
-Water Bubbles ultimate instead spawns bubbles that naturally pop after about
-eighteen seconds each. The next authority area pass admits either kind at
+The Bomb loses its health over about four seconds. A neutral Water Bubble
+expires after about nine seconds of authority simulation. Its specific
+upkeep and ordinary idle resource drain both reduce its lifetime. The
+specific upkeep tests the threshold before the second drain. The next authority area pass admits either kind at
 zero death clock. The independent contract identifies the separate block and
 target draw sites and the conditions for observing them. A stock Barrel
 encounter remains unconfirmed.
@@ -199,13 +200,22 @@ queues the rolled terrain sound. A later step keeps the events without
 emitting another first-visit burst.
 
 The original Steam authority sampled the Water Mage's Water Bubbles action
-18 times during play. The samples identify the active action. Cast and
-bubble counts remain unknown. The same recording contains 56 target rolls
+18 times during play. The creation calls returned in power, size and sound
+order for 16 bubbles in two groups of eight. The first creation in each group
+preceded the next shared area-target roll by 8,985 and 9,015 ms respectively.
+The same recording contains 56 target rolls
 from the area pass shared by Water Bubbles, Bombs and Barrels. It records
 no source actor ID per roll, so individual bubble lifetimes, damage and
 healing remain unverified in the original. CubeVulkan reproduced all 1,163
 recorded post-seed authority draws across 78 seeds. The recorder retained
 1,523 events and reported zero overflow losses.
+Each new bubble takes spell power from both equipped weapon slots. Power,
+size and spawn-sound pitch scale each draw by multiplication followed by
+division in binary32. The integrated World fixture drives the ultimate
+input, observes eight births and checks the first neutral expiry and area
+on consecutive authority steps over breakable terrain.
+[Creation and caster power](specs/steam-water-bubble-caster-power-20261118.md).
+[Full lifetime and area timing](specs/steam-water-bubble-lifetime-20261118.md).
 The original Bomb terrain comparison remains open.
 
 When the host creates a pet or changes its equipped race, pet setup seeds the

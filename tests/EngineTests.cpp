@@ -2,6 +2,7 @@
 #include "GameMath.h"
 #include "AlphaLook.h"
 #include <array>
+#include <bit>
 #include <charconv>
 #include <deque>
 #include <set>
@@ -7607,7 +7608,12 @@ void waterBubbles() {
     World s;
     nativeai::Creature *caster = s.add(1, 0, -2.0);
     put<int32_t>(caster, 0x144, 9);
-    s.draws = {0, 0, 0, 32767, 32767, 32767};
+    caster->record[0x14c] = 3;
+    caster->record[0x638] = 3;
+    put<int32_t>(caster, 0x63c, 5); // A weapon excluded by the Mage's ordinary attack selection.
+    put<int32_t>(caster, 0x644, get<int32_t>(caster, 0x150));
+    put<int32_t>(caster, 0x648, get<int32_t>(caster, 0x154));
+    s.draws = {0, 0, 0, 32767, 32767, 32767, 15889, 2173, 5687};
     const nativeai::Interaction in = nativeinteract::fresh(nativeinteract::WATER_BUBBLE);
     s.handle(caster, in);
     CHECK(s.drawn == 3);
@@ -7620,10 +7626,18 @@ void waterBubbles() {
     CHECK(get<float>(small, 0x180) == 1.0f && get<float>(small, 0x188) == 1.0f && get<uint32_t>(small, 0xbcc) == 0x200);
     CHECK(get<uint32_t>(small, 0x80) & 0x800);
     // Power 0.75 to 1.25 of the caster's, size 0.75 to 1.5 of the race's.
-    CHECK(std::abs(get<float>(big, 0x184) / get<float>(small, 0x184) - 1.25f / 0.75f) < 1e-5f);
+    CHECK(get<float>(small, 0x184) == 6.75f && get<float>(big, 0x184) == 11.25f);
+    s.handle(caster, in);
+    const auto *middle = s.w.creatures.back();
+    CHECK(s.drawn == 9);
+    const float sizeFactor = std::bit_cast<float>(uint32_t(0x3f4cbb99)); // draw 2173
+    for (size_t axis = 0; axis < 3; ++axis) {
+        const float base = get<float>(small, 0x84 + 4 * axis) / 0.75f;
+        CHECK(get<float>(middle, 0x84 + 4 * axis) == base * sizeFactor);
+    }
     for (size_t axis = 0; axis < 3; axis++)
         CHECK(std::abs(get<float>(big, 0x84 + 4 * axis) - 2.0f * get<float>(small, 0x84 + 4 * axis)) < 1e-5f);
-    CHECK(s.w.sounds.size() == 2);
+    CHECK(s.w.sounds.size() == 3);
     int32_t sound;
     float pitch;
     std::memcpy(&sound, &s.w.sounds[0][0x18], 4), std::memcpy(&pitch, &s.w.sounds[0][0x1c], 4);

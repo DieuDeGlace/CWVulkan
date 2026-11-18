@@ -1,10 +1,23 @@
 # Source review checkpoint — 2026-11-08
 
+## Water Bubbles power and lifetime - 2026-11-18
+
+Water Bubbles now includes both equipped weapons in its spell power and
+preserves Steam's floating-point order for the three creation rolls.
+One Ultimate Skill press in the engine test creates eight owned bubbles.
+The first expires after about nine seconds, and the following authority
+step publishes its water area. All eight pop and the breakable floor survives.
+
+The original Steam trace contains 16 complete creation sequences. In the
+two groups of eight, the first creation preceded the next shared area-target
+roll by 8,985 ms and 9,015 ms. Damage amounts and individual source-to-target
+attribution remain open.
+
 ## Original Steam Water Mage comparison - 2026-11-18
 
 The original Steam authority sampled the Water Mage's Water Bubbles action
-18 times during play. The samples identify the active action. Cast and
-bubble counts remain unknown. The same recording contains 56 target rolls
+18 times during play. The action samples established the skill in use.
+The creation analysis above subsequently established the bubble count. The same recording contains 56 target rolls
 from the area pass shared by Water Bubbles, Bombs and Barrels. It records
 no source actor ID per roll, so individual bubble lifetimes, damage and
 healing remain unverified in the original. CubeVulkan reproduced all 1,163
@@ -48,8 +61,8 @@ CRT replay compared 2,050 authority draws after 158 seeds with zero
 differences. The focused engine facade and dead-creature tests passed.
 
 The second copied game stayed on the title screen through its recording
-window. No Water Mage cast was established. The original Water Bubbles
-and Bomb area traces remain open.
+window. That attempt ended before a Water Mage cast. A later disposable
+session reached the Water Bubbles action and shared area rolls.
 
 Closing a joined guest used the live return-home transition after its
 frame-owned mirror data had been destroyed. Both baseline runs reached a
