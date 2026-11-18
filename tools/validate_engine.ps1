@@ -56,6 +56,9 @@ try {
         $cascadePassed = @(Select-String -LiteralPath $cameraLog -Pattern '^Shadow cascade (alpha|steam) PASS$')
         if ($cascadePassed.Count -ne 2) { throw "Expected both shadow cascade results; read $cameraLog" }
         Write-Output "Shadow cascade image checks passed: $($cascadePassed.Count); $cameraLog"
+        $receiverPassed = @(Select-String -LiteralPath $cameraLog -Pattern '^Shadow receiver (alpha|steam) PASS$')
+        if ($receiverPassed.Count -ne 2) { throw "Missing shadow receiver coverage. See $cameraLog" }
+        Write-Output "Shadow receiver image checks passed: $($receiverPassed.Count); $cameraLog"
         $guiLog = Join-Path $LogDirectory 'gui-item-images.log'
         & $testProgram guirender *> $guiLog
         if ($LASTEXITCODE -ne 0) { throw "GUI item image tests failed; read $guiLog" }

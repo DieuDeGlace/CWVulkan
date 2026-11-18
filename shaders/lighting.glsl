@@ -3,6 +3,13 @@
 layout(set = 0, binding = 1) uniform sampler2DShadow farShadow;
 layout(set = 0, binding = 2) uniform sampler2DShadow nearShadow;
 
+const float SHADOW_FILTER_MARGIN_TEXELS = 2.;
+
+vec3 shadowPoint(mat4 transform, vec4 region, vec3 w, vec3 n) {
+    float worldTexel = region.x * 2 * region.z;
+    return (transform * vec4(w + n * worldTexel * .75, 1)).xyz;
+}
+
 // Sun visibility (1 = lit) from one map. region = (texel, bias, radius, 1/span).
 // CubeVulkan's own shadows (neither game has any: docs/specs/shadows.md §1), tuned by the
 // audit of shadows.md §4:
@@ -12,21 +19,12 @@ layout(set = 0, binding = 2) uniform sampler2DShadow nearShadow;
 //   tops), and its slope part is capped at two texels (no peter-panning at grazing light);
 // * a 3 x 3 grid of bilinear compare taps softens the edge over about a quarter of a block,
 //   nearer the soft baked shade of the vanilla look (§2) than a one-texel stair step.
-float shadowVisibility(sampler2DShadow map, mat4 transform, vec4 region, vec3 w, vec3 n,
-                       float facing) {
-    // Faces turned from the light get none of its direct term anyway (alpha-rendering.md §5
-    // step 6); fade the shadow test out only in the last few degrees so faces near sunrise do
-    // not flip between lit and shaded.
-    float exposure = smoothstep(0., .1, facing);
-    float worldTexel = region.x * 2 * region.z; // a texel's width in blocks
-    vec3 p = (transform * vec4(w + n * worldTexel * .75, 1)).xyz;
+float shadowVisibility(sampler2DShadow map, vec4 region, vec3 p, float facing, float exposure) {
     vec2 uv = p.xy * .5 + .5;
-    if (exposure <= 0)
-        return 0;
-    if (any(lessThan(uv, vec2(2 * region.x))) || any(greaterThan(uv, vec2(1 - 2 * region.x))) ||
-        p.z < 0 || p.z > 1)
+    float margin = SHADOW_FILTER_MARGIN_TEXELS * region.x;
+    if (any(lessThan(uv, vec2(margin))) || any(greaterThan(uv, vec2(1 - margin))) || p.z < 0 || p.z > 1)
         return exposure; // Outside the map: lit (the distance fade ends shadows first).
-    float depthTexel = worldTexel * region.w; // a texel's width in depth units
+    float depthTexel = region.x * 2 * region.z * region.w; // a texel's width in depth units
     float slope = sqrt(clamp(1 - facing * facing, 0, 1)) / max(abs(facing), .1);
     float bias = max(region.y, .5 * depthTexel) + depthTexel * min(slope * .5, 2.);
     float sum = 0;
@@ -36,19 +34,33 @@ float shadowVisibility(sampler2DShadow map, mat4 transform, vec4 region, vec3 w,
     return sum / 9 * exposure;
 }
 
-// Sun visibility from the two cascades: the near map close to the player, blended into the
-// far map towards the near map's edge. `ground` is the horizontal distance to the player.
+// Blend towards the far map at both the ground radius and the usable light-space edge.
+// A point on a slope can reach the light-space edge well inside the ground radius.
 float cascadeVisibility(vec3 w, vec3 n, float sunFacing, float ground) {
-    float nearRadius = f.shadowNear.z, blendStart = nearRadius * .8;
+    // Fade the test out near grazing angles before sampling either cascade.
+    float exposure = smoothstep(0., .1, sunFacing);
+    if (exposure <= 0)
+        return 0;
+
+    float nearRadius = f.shadowNear.z;
     vec4 nearRegion = vec4(f.shadowNear.x, f.shadowNear.y, nearRadius, f.shadowFar.w);
-    if (f.shadowNear.w > .5 && ground < blendStart)
-        return shadowVisibility(nearShadow, f.lightNear, nearRegion, w, n, sunFacing);
-    float lit = shadowVisibility(farShadow, f.lightFar, f.shadowFar, w, n, sunFacing);
+    vec3 nearPoint = vec3(0);
+    float blend = 1.;
     if (f.shadowNear.w > .5 && ground < nearRadius) {
-        float nearLit = shadowVisibility(nearShadow, f.lightNear, nearRegion, w, n, sunFacing);
-        lit = mix(nearLit, lit, smoothstep(blendStart, nearRadius, ground));
+        nearPoint = shadowPoint(f.lightNear, nearRegion, w, n);
+        float extent = max(abs(nearPoint.x), abs(nearPoint.y));
+        float edge = 1 - 2 * SHADOW_FILTER_MARGIN_TEXELS * nearRegion.x;
+        blend = max(smoothstep(nearRadius * .8, nearRadius, ground), smoothstep(.8, edge, extent));
+        if (blend <= 0)
+            return shadowVisibility(nearShadow, nearRegion, nearPoint, sunFacing, exposure);
     }
-    return lit;
+
+    vec3 farPoint = shadowPoint(f.lightFar, f.shadowFar, w, n);
+    float farLit = shadowVisibility(farShadow, f.shadowFar, farPoint, sunFacing, exposure);
+    if (blend >= 1)
+        return farLit;
+    float nearLit = shadowVisibility(nearShadow, nearRegion, nearPoint, sunFacing, exposure);
+    return mix(nearLit, farLit, blend);
 }
 
 // The share of direct sunlight that reaches w (1 = all of it) once the shadow strength and

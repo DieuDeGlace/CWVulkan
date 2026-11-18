@@ -81,9 +81,12 @@ bool revealedSkyHistory(Renderer &renderer, GLFWwindow *window, const std::files
     return (*old)[4] != (*reset)[4] && (*reset)[0] != (*sky)[0] && (*reset)[8] != (*sky)[8] &&
            (*accumulated)[4] == (*reset)[4];
 }
-// The roof is small enough to use scenery culling. Its projected shadow
-// falls ten blocks inward from the near cascade's receiver radius.
-bool shadowAcrossCascade(Renderer &renderer, RenderStyle style, const std::filesystem::path &root) {
+struct ShadowChecks {
+    bool caster;
+    bool receiver;
+};
+
+ShadowChecks shadowAcrossCascade(Renderer &renderer, RenderStyle style, const std::filesystem::path &root) {
     const char *name = style == RenderStyle::Alpha ? "alpha" : "steam";
     renderer.settings.smaa = renderer.settings.taa = renderer.settings.shadows = false;
     const Lighting light = lightingAt(10.f, {});
@@ -91,6 +94,7 @@ bool shadowAcrossCascade(Renderer &renderer, RenderStyle style, const std::files
     const glm::vec3 direction = style == RenderStyle::Alpha
         ? alpha::shadowLight(light.timeMs, settings.sunShadowStrength, settings.moon).direction : light.lightDir;
     const glm::vec2 towardsLight = glm::normalize(glm::vec2(direction));
+    // A small roof uses scenery culling and projects ten blocks inside the near radius.
     constexpr float shadowInset = 10.f;
     const glm::vec3 spot(towardsLight * (settings.nearRadius - shadowInset), 0.f);
     const glm::vec3 roof(towardsLight * settings.nearRadius,
@@ -114,10 +118,10 @@ bool shadowAcrossCascade(Renderer &renderer, RenderStyle style, const std::files
     Camera camera;
     camera.eye = spot + glm::vec3(towardsLight.y * 2.f, -towardsLight.x * 2.f, 7.f);
     camera.target = spot;
-    const auto sample = [&](const char *label, float focusAlong) -> std::optional<int> {
+    const auto sample = [&](const char *label, glm::vec3 focus, const std::vector<DrawItem> &items) -> std::optional<int> {
         const auto path = root / (std::string("cascade-") + name + "-" + label + ".png");
         renderer.capture(path.string());
-        renderer.frame(camera, light, glm::vec3(towardsLight * focusAlong, 0.f), 0, geometry, {});
+        renderer.frame(camera, light, focus, 0, items, {});
         int w = 0, h = 0, channels = 0;
         auto *pixels = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
         std::optional<int> result;
@@ -128,16 +132,32 @@ bool shadowAcrossCascade(Renderer &renderer, RenderStyle style, const std::files
         stbi_image_free(pixels);
         return result;
     };
-    const auto lit = sample("lit", .08f);
+    const glm::vec3 insideFocus(towardsLight * .08f, 0.f), outsideFocus = -insideFocus;
+    const auto lit = sample("lit", insideFocus, geometry);
     renderer.settings.shadows = true;
-    const auto fromInside = sample("inside", .08f);
-    const auto fromOutside = sample("outside", -.08f);
+    const auto fromInside = sample("inside", insideFocus, geometry);
+    const auto fromOutside = sample("outside", outsideFocus, geometry);
     renderer.settings.cascades = false;
-    const auto farMap = sample("far", -.08f);
+    const auto farMap = sample("far", outsideFocus, geometry);
     if (!lit || !fromInside || !fromOutside || !farMap)
-        return false;
+        return {};
     const int darkness = *lit - *fromInside;
-    return darkness > 24 && *lit - *farMap > 24 && (*lit - *fromOutside) * 5 > darkness * 4;
+    const bool caster = darkness > 24 && *lit - *farMap > 24 && (*lit - *fromOutside) * 5 > darkness * 4;
+
+    // At zero horizontal distance, elevation alone can put the ground beyond the near map.
+    camera.eye -= spot;
+    camera.target -= spot;
+    const std::vector<DrawItem> lowerGround{plane(glm::vec3(0), 4.f, false), plane(direction * 5.f, .65f, true)};
+    const float edgeHeight = settings.nearRadius / glm::length(glm::vec2(direction));
+    const glm::vec3 highFocus(0.f, 0.f, edgeHeight * 1.05f);
+    const auto farOnSlope = sample("receiver-far", highFocus, lowerGround);
+    renderer.settings.shadows = false;
+    const auto litOnSlope = sample("receiver-lit", highFocus, lowerGround);
+    renderer.settings.shadows = renderer.settings.cascades = true;
+    const auto outsideMap = sample("receiver-edge", highFocus, lowerGround);
+    const bool receiver = litOnSlope && farOnSlope && outsideMap && *litOnSlope - *farOnSlope > 24 &&
+                          std::abs(*outsideMap - *farOnSlope) <= 3;
+    return {caster, receiver};
 }
 } // namespace
 
@@ -272,9 +292,10 @@ int cameraRenderTests() {
             std::cout << "Temporal resolve revealed sky " << (history ? "PASS" : "FAIL") << '\n';
             failures += !history;
         }
-        const bool shadow = shadowAcrossCascade(renderer, style, root);
-        std::cout << "Shadow cascade " << name << (shadow ? " PASS" : " FAIL") << '\n';
-        failures += !shadow;
+        const auto shadow = shadowAcrossCascade(renderer, style, root);
+        std::cout << "Shadow cascade " << name << (shadow.caster ? " PASS" : " FAIL") << '\n';
+        std::cout << "Shadow receiver " << name << (shadow.receiver ? " PASS" : " FAIL") << '\n';
+        failures += !shadow.caster + !shadow.receiver;
         renderer.shutdown();
         culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
         std::cout << "Camera orientation " << name << (orientation ? " PASS" : " FAIL") << " coincident target/pole\n";

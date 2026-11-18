@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Shadow coverage on steep terrain - 2026-11-17
+
+Receivers now blend into the far cascade when their projected positions
+approach the near map's filter margin. In a ten-frame height-and-clock sweep,
+the largest brightness step fell from about 50 RGB counts to at most one in
+both looks. The 96 shadow-off and far-only control images matched byte for
+byte. The level-ground blend samples differed by at most one channel count.
+Both Vulkan receiver regressions and the full owner-data suite passed.
+[Shadow settings and evidence](specs/shadows.md#4-cubevulkan-today-shadow-maps-an-addition).
+
 ## Hidden run fatal errors - 2026-11-17
 
 Hidden landmark captures reached a fatal Steam message and waited for the

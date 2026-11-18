@@ -101,8 +101,12 @@ its receiver radius.
 `shaders/lighting.glsl` samples a 3 × 3 grid of bilinear depth comparisons.
 It offsets the lookup by 0.75 texel along the face normal, floors the basic
 depth bias at half a texel, and caps the additional slope bias at two texels.
-The near and far results blend over the last 20% of the near radius. The
-Alpha and Steam shader paths attenuate the direct light while preserving
+The near and far results blend over the last 20% of the near radius or
+the outer part of the usable near projection, whichever brings the receiver
+closer to the far cascade. The near weight reaches zero before the depth
+filter crosses the texture margin. This also covers high or low ground whose
+horizontal distance fits comfortably inside the near radius. The Alpha and
+Steam shader paths attenuate the direct light while preserving
 the existing baked or indirect contribution. `[Shadows] Enabled` controls
 the enhancement.
 
@@ -111,8 +115,11 @@ with either look. Repeated frames and a subtexel focus move had identical
 pixels. The casting-prop crossover fixture also kept a continuous shadow
 while its centre passed the near radius. With the shipped TAA and SMAA
 settings, the sampled shadow interior held the same brightness across ten
-frames of small camera motion in each look. Light-step transitions, the
-receiver blend ring and moving foliage still need broader motion checks.
+frames of small camera motion in each look. A second fixture moves below the edge of the near map across a
+two-minute light step. Its largest sampled brightness change fell from about
+50 RGB counts to at most one in each look. The narrow caster test exercised
+the blend on level and lower ground. Foliage and loaded scene motion still
+need broader coverage.
 
 ## 5. CubeVulkan today: TAA and SMAA (additions)
 
