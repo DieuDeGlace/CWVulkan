@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Weapon spirits in ordinary combat - 2026-11-18
+
+Combat reuses the clean engine's existing weapon-selection rules. The
+previously held Steam ordinary-hit contract establishes the order of
+elemental bonuses and separate source healing. The 32-slot bound comes
+from the engine's item record layout. A controlled comparison covers
+valid empty, one-slot and full weapons across 161 actions, player and
+nonplayer actors and four equipment combinations. [Steam ordinary hit and HP contract](specs/steam-ordinary-hit-hp-comparison-20261118.md).
+
 ## Direct swings and projectile contact - 2026-11-18
 
 The source-side author identified the stock direct-strike, projectile,

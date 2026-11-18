@@ -193,46 +193,6 @@ bool isTwoHanded(const uint8_t *item) {
     return isWeapon(item) && s <= 23 && ((0x878de0u >> s) & 1);
 }
 
-// A weapon the creature may use (stat-rules.md §0.5).
-bool usableWeapon(const Creature *c, const uint8_t *item) {
-    return isWeapon(item) && nativerules::mayUse(c->record, item);
-}
-
-// 0x4fd40: the weapons the creature's current ability strikes with.
-std::vector<const uint8_t *> weaponsInUse(const Creature *c) {
-    const uint8_t *a = weaponA(c), *b = weaponB(c);
-    auto isBow = [&](const uint8_t *w) { return usableWeapon(c, w) && (subtype(w) == 6 || subtype(w) == 7); };
-    if (isBow(b))
-        return {b};
-    if (isBow(a))
-        return {a};
-    std::vector<const uint8_t *> out;
-    switch (ability(c)) {
-    case 3: case 5: case 8: case 9: case 0x0b: case 0x13: case 0x28: case 0x2a:
-        if (usableWeapon(c, a))
-            out.push_back(a);
-        break;
-    case 0x0c: case 0x0d: case 0x11: case 0x12: case 0x15: case 0x37:
-    case 0x5f: case 0x64: case 0x6c: case 0x8c: case 0x94: case 0x9e:
-        if (usableWeapon(c, a))
-            out.push_back(a);
-        if (usableWeapon(c, b))
-            out.push_back(b);
-        break;
-    case 0x29: case 0x2b:
-        if (usableWeapon(c, b))
-            out.push_back(b);
-        break;
-    default:
-        if (usableWeapon(c, b))
-            out.push_back(b);
-        if (usableWeapon(c, a) && subtype(a) == 12)
-            out.push_back(a);
-        break;
-    }
-    return out;
-}
-
 // 0x5f8d0: what mana gains are multiplied by.
 float manaFactor(const Creature *c) {
     const nativebuffs::Buff *b = nativebuffs::find(*c, BUFF_MANA_FACTOR);
@@ -547,15 +507,20 @@ void spiritColour(int material, float s, float out[4]) {
     out[3] = (s + 1.0f) * glow;
 }
 
-// The spirit materials (0x80 and up) of a weapon's entries, in order.
-std::vector<int> spiritsOf(const uint8_t *weapon) {
-    std::vector<int> out;
-    for (int i = 0; i < weapon[ITEM_ENTRY_COUNT]; i++) {
-        const int material = weapon[ITEM_ENTRIES + ITEM_ENTRY_SIZE * i];
-        if (material >= 0x80)
-            out.push_back(material);
+// Visit the spirit materials of both selected weapons in slot and item order.
+template<class Visit>
+void forEachSpirit(const std::array<const uint8_t *, 2> &weapons, Visit visit) {
+    for (const uint8_t *weapon : weapons) {
+        if (!weapon)
+            continue;
+        constexpr int capacity = 32; // four-byte attributes in the 0xa0-byte item record
+        const int count = std::min<int>(weapon[ITEM_ENTRY_COUNT], capacity);
+        for (int i = 0; i < count; ++i) {
+            const auto material = weapon[ITEM_ENTRIES + ITEM_ENTRY_SIZE * i];
+            if (material >= 0x80)
+                visit(material);
+        }
     }
-    return out;
 }
 
 // §2.9: the attacker's weapon spirits glow on the target.
@@ -568,52 +533,50 @@ void spiritParticles(World &world, const Creature *target, const Creature *attac
         vx *= inverse, vy *= inverse;
     }
     vx *= 4.0f, vy *= 4.0f;
-    for (const uint8_t *weapon : weaponsInUse(attacker))
-        for (int material : spiritsOf(weapon)) {
-            Burst b;
-            b.velocity[0] = vx, b.velocity[1] = vy, b.velocity[2] = 5.0f;
-            if (spirit)
-                for (float &v : b.velocity)
-                    v = v + v;
-            spiritColour(material, r * 0.5f, b.colour);
-            b.size = 0.1f;
-            b.count = (int32_t)(r * 3.0f + 1.0f) + (spirit ? 10 : 0);
-            b.style = 2;
-            b.spread = 3.0f;
-            addParticles(world, target->record + POSITION, b);
-        }
+    forEachSpirit(nativerules::selectedWeapons(attacker->record), [&](int material) {
+        Burst b;
+        b.velocity[0] = vx, b.velocity[1] = vy, b.velocity[2] = 5.0f;
+        if (spirit)
+            for (float &v : b.velocity)
+                v = v + v;
+        spiritColour(material, r * 0.5f, b.colour);
+        b.size = 0.1f;
+        b.count = (int32_t)(r * 3.0f + 1.0f) + (spirit ? 10 : 0);
+        b.style = 2;
+        b.spread = 3.0f;
+        addParticles(world, target->record + POSITION, b);
+    });
 }
 
 // §2.9: the spirits' extra damage, the target's ice and the attacker's wind timers, and
 // the attacker's spirit heal. Returns the damage.
 float spiritEffects(World &world, Creature *target, Creature *attacker, float damage, float r) {
-    const std::vector<const uint8_t *> weapons = weaponsInUse(attacker);
-    if (weapons.empty())
+    const auto weapons = nativerules::selectedWeapons(attacker->record);
+    if (!weapons[0])
         return damage;
-    const float share = 0.1f / (float)weapons.size();
+    const float share = weapons[1] ? 0.05f : 0.1f;
     float heal = 0.0f;
-    for (const uint8_t *weapon : weapons)
-        for (int material : spiritsOf(weapon)) {
-            switch (material) {
-            case 0x80: // fire
-                damage += share * r;
-                break;
-            case 0x81: { // life
-                const float t = share * r;
-                heal += t + t;
-                damage += t * 0.5f;
-                break;
-            }
-            case 0x82: // ice
-                damage += share * 0.25f * r;
-                write(target->record, ICE_TIMER, read<float>(target->record, ICE_TIMER) + r * 500.0f);
-                break;
-            case 0x83: // wind
-                damage += share * 0.25f * r;
-                write(attacker->record, WIND_TIMER, read<float>(attacker->record, WIND_TIMER) + r * 500.0f);
-                break;
-            }
+    forEachSpirit(weapons, [&](int material) {
+        switch (material) {
+        case 0x80: // fire
+            damage += share * r;
+            break;
+        case 0x81: { // life
+            const float t = share * r;
+            heal += t + t;
+            damage += t * 0.5f;
+            break;
         }
+        case 0x82: // ice
+            damage += share * 0.25f * r;
+            write(target->record, ICE_TIMER, read<float>(target->record, ICE_TIMER) + r * 500.0f);
+            break;
+        case 0x83: // wind
+            damage += share * 0.25f * r;
+            write(attacker->record, WIND_TIMER, read<float>(attacker->record, WIND_TIMER) + r * 500.0f);
+            break;
+        }
+    });
     if (read<float>(target->record, ICE_TIMER) > SPIRIT_TIMER_CAP)
         write(target->record, ICE_TIMER, SPIRIT_TIMER_CAP);
     if (read<float>(attacker->record, WIND_TIMER) > SPIRIT_TIMER_CAP)
@@ -625,8 +588,8 @@ float spiritEffects(World &world, Creature *target, Creature *attacker, float da
 
 // §2.10: the sound of a physical strike landing.
 void impactSound(World &world, const Creature *target, const Creature *attacker, bool critical) {
-    const std::vector<const uint8_t *> weapons = weaponsInUse(attacker);
-    int kind = weapons.empty() ? -1 : subtype(weapons.front());
+    const uint8_t *first = nativerules::selectedWeapons(attacker->record)[0];
+    int kind = first ? subtype(first) : -1;
     if (ability(attacker) == ABILITY_UNARMED_SOUND)
         kind = 0x11;
     float pitch = randomized(world, 0.2f, 0.9f);

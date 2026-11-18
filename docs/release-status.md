@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Weapon spirits in ordinary combat - 2026-11-18
+
+Combat shares the stat system's weapon selection and visits the spirit
+materials directly within each item's 32 attribute slots. The two-hand
+regression checks damage and healing with the last slot of one hand and
+the first slot of the other. Across 3,864 controlled hits, both builds
+produced matching actor state, random draw counts, damage numbers, sounds,
+particles, buff notices and threat notices. For the 1,288 hits with full
+attribute lists, measured heap allocations fell from 34,901 to 14,747.
+
 ## Direct swings and projectile contact - 2026-11-18
 
 All 158 saved direct swings fit the documented damage roll for their move.

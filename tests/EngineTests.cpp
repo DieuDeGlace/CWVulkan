@@ -1316,6 +1316,28 @@ static void nativeHitPaths() {
     CHECK(!nativehit::hit(w, &target, &attacker, h));
     CHECK(w.numbers.size() == 1 && w.numbers[0][0x45] == 1 && getf(target.record, 0x180) == 90.0f);
     CHECK(getf(target.record, 0x184) == -1.0f && draws == 1);
+
+    // A two-hand move counts the 32nd spirit in one hand and the first in the other.
+    w.numbers.clear();
+    w.particles.clear();
+    target.record[0x68] = 0;
+    attacker.record[0x68] = 0x0d;
+    put(attacker.record, 0x70, int32_t(30));
+    uint8_t *left = attacker.record + 0x638;
+    uint8_t *right = attacker.record + 0x6d8;
+    left[0] = right[0] = 3;
+    left[0x9d] = 32;
+    left[0x20 + 31 * 4] = 0x80; // fire
+    right[0x9d] = 1;
+    right[0x20] = 0x81; // life
+    h.ability = 0x0d;
+    h.flag = 1;
+    CHECK(nativehit::hit(w, &target, &attacker, h));
+    CHECK(w.particles.size() == 2 && w.numbers.size() == 2);
+    if (w.numbers.size() == 2) {
+        CHECK(getf(w.numbers[0].data(), 0x10) == -.1f);
+        CHECK(std::abs(getf(w.numbers[1].data(), 0x10) - 10.075f) < .00001f);
+    }
 }
 
 // Blocking, as the game's hit routine and block factor (0x50370) work it out.
