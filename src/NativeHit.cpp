@@ -5,6 +5,7 @@
 // numbers, sounds and particles. apply() (0x29dcf0) carries a damage number out on its
 // target: aggro, knock-back, stun, health, the shield's wear and death.
 #include "NativeHit.h"
+#include "FixedRange.h"
 
 #include "NativeBuffs.h"
 #include "NativeRules.h"
@@ -485,17 +486,6 @@ void publish(World &world, const DamageNumber &n) {
 // ---------------------------------------------------------------------------------------
 // Aggro (0x2c3200 and the distance test 0xf3e20)
 
-// Whether two positions are within `range` blocks of each other.
-bool within(const uint8_t *p, const uint8_t *q, float range) {
-    constexpr double DOTS = 1.0 / 65536.0;
-    double d[3];
-    for (int i = 0; i < 3; i++)
-        d[i] = (double)(read<int64_t>(p, POSITION + 8 * i) - read<int64_t>(q, POSITION + 8 * i)) * DOTS;
-    if (std::fabs(d[0]) > range || std::fabs(d[1]) > range)
-        return false;
-    return !(d[0] * d[0] + d[1] * d[1] + d[2] * d[2] > (double)(range * range));
-}
-
 void aggroNote(World &world, int64_t from, int64_t to, float anger) {
     std::array<uint8_t, 0x18> note{};
     write(note.data(), 0, from);
@@ -513,7 +503,7 @@ void spreadAggro(World &world, Creature *foe, Creature *holder) {
     aggroNote(world, foeId, idOf(holder), holder->aggro[foeId]);
     for (Creature *c : world.creatures) {
         if (!c || c == foe || c == holder || !nativerules::hostile(c->record, foe->record) ||
-            !within(c->record, holder->record, 8.0f))
+            gamemath::outsideFixedRange(c->record + POSITION, holder->record + POSITION, 8.0f))
             continue;
         float &anger = c->aggro[foeId];
         if (anger == 0.0f) {

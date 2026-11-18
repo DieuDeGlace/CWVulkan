@@ -226,6 +226,15 @@ applies the heal once to an eligible NPC. A dedicated host leaves player HP
 to the recipient. The receiving guest applies each incoming record to its
 local player separately and caps each write. A spell's rolled magnitude,
 HP change and displayed number can therefore differ. [Steam Water Bubble target outcomes](specs/steam-water-bubble-target-outcomes-20261118.md).
+
+The authority sends hit records to every peer. Pulses and sounds use a
+256-block spherical range around the peer, and sounds skip their owner.
+Non-player visibility uses 270 blocks. Threat from healing first updates
+opponents already tracking the recipient, including on overheal. It can
+then spread to eligible actors within eight blocks of each such opponent.
+Each range comparison subtracts the signed fixed positions with 64-bit
+wrap, evaluates squared displacement in double precision and compares
+against a radius squared in single precision. Equality passes. [Steam authority spatial range](specs/steam-authority-spatial-range-20261118.md).
 The original Bomb's block record retains signed absolute XYZ, all six old
 block bytes, the six-byte empty replacement and the four-byte day. Zone
 histories retain duplicates. Loading applies replacements in forward order.

@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Multiplayer and combat range boundaries - 2026-11-18
+
+An isolated original-only author traced the range predicate, visibility,
+particle and sound forwarding, and combat threat propagation. An offline
+regression reproduced the host's fractional-radius discrepancy on the
+previous implementation. The held numerical examples also cover an exact
+270-block boundary, a one-unit offset near a large origin and signed wrap.
+The packet and rendering checks ran on the corrected build. [Steam authority spatial range](specs/steam-authority-spatial-range-20261118.md).
+
 ## Water Bubble damage and healing - 2026-11-18
 
 An isolated source author traced natural expiry, target selection, damage,

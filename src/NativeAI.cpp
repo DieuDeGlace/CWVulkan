@@ -1,6 +1,7 @@
 // The game's creature AI, written from docs/specs/creature-ai.md. Section numbers (§) below
 // are that spec's; the game's routines are cited by RVA for reference only.
 #include "NativeAI.h"
+#include "FixedRange.h"
 
 #include "worldgen/StructureTables.h"
 #include "NativeBuffs.h"
@@ -218,7 +219,8 @@ int32_t slotSubtype(const Creature *c, size_t slot) { return get<int32_t>(c->rec
 
 // The offset from one place to another, in blocks.
 Vec blocksBetween(const Dots &from, const Dots &to) {
-    return {(float)(to[0] - from[0]) * DOT, (float)(to[1] - from[1]) * DOT, (float)(to[2] - from[2]) * DOT};
+    return {gamemath::fixedBlocksBetween(to[0], from[0]), gamemath::fixedBlocksBetween(to[1], from[1]),
+            gamemath::fixedBlocksBetween(to[2], from[2])};
 }
 float lengthSquared(const Vec &v) { return v[0] * v[0] + v[1] * v[1] + v[2] * v[2]; }
 
@@ -253,15 +255,6 @@ void copyItem(uint8_t *to, const uint8_t *from) {
 
 Block blockAt(World &w, int x, int y, int z) { return w.block(x, y, z); }
 Block blockAtDots(World &w, const Dots &p) { return w.block(blockOf(p[0]), blockOf(p[1]), blockOf(p[2])); }
-
-// 0xf3e20: whether two places are farther apart than `d` blocks (in double).
-bool fartherThan(const Dots &p, const Dots &q, float d) {
-    const double k = 1.0 / 65536.0;
-    const double dx = (double)(p[0] - q[0]) * k, dy = (double)(p[1] - q[1]) * k, dz = (double)(p[2] - q[2]) * k;
-    if (std::fabs(dx) > d || std::fabs(dy) > d)
-        return true;
-    return dx * dx + dy * dy + dz * dz > (double)(d * d);
-}
 
 // The grid walk shared by the block ray 0x2d1d20 and the AI's own ray 0x12b10: how far from
 // `start` along the unit direction `u` it gets through blocks `passes` lets through, at most
@@ -901,7 +894,7 @@ void Brain::aggroNotice(Creature *a, Creature *x) {
     note(idOf(x), x->aggro[idOf(a)]);
     for (Creature *c : w.creatures) {
         if (!c || c == a || c == x || !nativerules::hostile(c->record, a->record) ||
-            fartherThan(positionOf(c), positionOf(x), 8.0f))
+            gamemath::outsideFixedRange(positionOf(c).data(), positionOf(x).data(), 8.0f))
             continue;
         float &anger = c->aggro[idOf(a)];
         if (anger == 0.0f) {
@@ -2389,7 +2382,7 @@ bool canUse(Creature *c, int ability) {
 
 bool canSee(World &world, const int64_t *from, const int64_t *to, bool glass, float range) {
     const Dots a = {from[0], from[1], from[2]}, b = {to[0], to[1], to[2]};
-    if (fartherThan(a, b, range))
+    if (gamemath::outsideFixedRange(a.data(), b.data(), range))
         return false;
     const Vec d = blocksBetween(a, b);
     const float s = (d[0] * d[0] + d[1] * d[1]) + d[2] * d[2];

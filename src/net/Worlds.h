@@ -37,7 +37,7 @@ struct CreatureView {
 
     uint8_t hostility() const { return record[creature::HOSTILITY]; }
     uint32_t flags() const;
-    const int64_t *position() const { return reinterpret_cast<const int64_t *>(record + creature::POSITION); }
+    const uint8_t *position() const { return record + creature::POSITION; }
 };
 
 // A zone's state as the host answers a zone request (netcode-roles.md §4.2).

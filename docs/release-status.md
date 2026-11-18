@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Multiplayer and combat range boundaries - 2026-11-18
+
+The host now squares its radius at Steam's float precision. Its former
+calculation rejected a point on one rounded spherical boundary. The shared
+calculation also defines how fixed coordinates wrap before subtraction
+results are converted to double. Creature visibility, effect forwarding,
+combat threat, AI and homing effects use the same comparison. The stock
+270-, 256- and 8-block limits are preserved. The compiled host matched an
+independent integer comparison on 25,170 position pairs. [Steam authority spatial range](specs/steam-authority-spatial-range-20261118.md).
+
 ## Water Bubble damage and healing - 2026-11-18
 
 A Water Mage cast in the offline world test creates eight bubbles. The first

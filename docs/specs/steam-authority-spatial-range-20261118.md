@@ -1,0 +1,39 @@
+# Steam authority spatial range
+
+**FINAL / STABLE / HELD** · 2026-11-18
+
+Source is the original unpacked x64 Steam image cubeworld.original.exe.unpacked.exe, SHA-256 7AF18CB28C8BF848F355287428C6390B2EA2A682CA466190F5EB9859C5D6F244, and its offline native exports. Addresses are RVAs. Numeric examples below are deductions from those operations.
+
+## Fixed-position comparison at 0xF3E20
+
+The routine returns a one-byte **outside** result. Zero accepts the pair. Its first two inputs are positions containing signed 64-bit X, Y and Z at byte offsets 0, 8 and 16. One world unit is 65,536 raw coordinate units. The third input is a binary32 radius in world units.
+
+1. Subtract the second position’s X from the first position’s X at 64-bit integer width. The low 64 bits are interpreted as a signed two’s-complement difference, including when the mathematical subtraction overflows. Convert that signed difference to binary64, multiply by the binary64 constant 2⁻¹⁶ and clear the result’s sign bit. Return outside immediately if this absolute X displacement is strictly greater than the radius widened from binary32 to binary64. Perform the same test for Y only if X passes.
+2. After both axis tests pass, form the wrapped Z difference and evaluate the full three-dimensional distance. Each signed raw difference is converted to binary64 and scaled by 2⁻¹⁶ before squaring. The native routine forms the binary64 squares of Z, Y and X. It adds the Y and X squares first, rounds the sum in binary64, then adds the Z square and rounds again. There is no separate Z-axis early exit, square root or fused multiply-add.
+3. The radius is squared in **binary32** and the rounded product is widened to binary64. The final comparison sets the outside byte only when the rounded distance sum is strictly greater than that threshold. The sphere includes equality. All three scoped callers use finite, positive, exactly represented radii whose squares are also exact.
+
+All differences originate in the integer coordinate domain. Converting two absolute world positions to floating point before subtraction can lose an observable displacement. Integer squaring or addition would give different overflow and rounding behavior. The scales and comparisons above are those at 0xF3E3F–0xF3EE6. The binary64 scale is stored at 0x43EF58. For normal round-to-nearest operation the signed-to-binary64 conversions and the individual additions and multiplies use IEEE round-to-nearest, ties-to-even. The routine does not set the floating-point mode. Under ordinary nontrapping comparison, a NaN radius produces a zero outside byte, positive infinity accepts all integer input positions, and a strictly negative radius rejects even coincident positions at the first axis test. Either signed zero radius accepts coincident positions only.
+
+## Callers and range boundaries
+
+| Host operation | First position | Second position | Inclusive radius |
+| --- | --- | --- | ---: |
+| Creature visibility, 0xF5B97 | Candidate actor at +0x10 | Peer actor at +0x10 | 270 |
+| Particle forwarding, 0xF34CB | Particle event’s position | Peer actor at +0x10 | 256 |
+| Sound forwarding, 0xF3574 | Sound event’s position | Peer actor at +0x10 | 256 |
+| Threat propagation, 0x2C333D | Other candidate actor at +0x10 | Actor whose threat is being announced, at +0x10 | 8 |
+
+**Creature visibility.** The per-peer pass at 0xF5520 first resolves the peer’s actor and walks the authority’s creature list. It skips the peer’s own ID. Other affiliation-0 creatures bypass the distance gate. All other affiliations must satisfy the 270-unit range, regardless of flags or earlier visibility. The independent admission rule for previously unseen IDs then applies. The first otherwise eligible new ID may enter. After that, additional new IDs in that pass require at least one actor +0x80 flag in mask 0x2800. Accepting even a flagged new ID consumes the first admission. An already known ID does not consume it. The result of the range helper alone therefore determines neither the full visibility set nor the number of creature records.
+
+**Particle and sound forwarding.** At 0xF33B0, each peer must have a resolved actor before these two event lists are considered. Each particle in range is appended to that peer’s particle list. Each sound in range is appended only if the 64-bit value at sound payload +0x28 differs from the peer actor ID. Both lists preserve the order of their passing records. For a Water Bubbles burst this uses the recorded event position, which can be the bubble for the death effect and the struck actor for the damage resolver’s sound. There is no sound-style ID exclusion in the particle branch. The same host routine copies the hit list to the peer before resolving the peer actor or testing either 256-unit range. Thus receiving combat records and receiving their associated effects have different spatial requirements.
+
+**Threat from a friendly heal.** In authoritative negative-hit application at 0x29DCF0, after adding HP and applying its maximum, the routine searches the world actor list for opponents of the healer by the relation at 0x50550. Each opponent already holding the healed actor’s ID in its threat table is eligible for an adjustment to its threat toward the healer. Finding the ID is enough even if its stored threat is zero. The adjustment uses 0.1 times the full magnitude of the signed submitted heal, including overheal. This first pass has no range gate. For each such opponent, 0x29E46B invokes the propagation routine with the healer and that opponent.
+
+0x2C3200 requires positive HP on the actor whose threat is being announced. It first queues a record giving the source actor’s ID, that actor’s ID and the current threat value from its +0xB88 table under the source ID. It then walks the world’s creature list. A candidate must be non-null, distinct from both actors, hostile to the source according to 0x50550, and inside or on the 8-unit sphere **around the announced actor**. In the healing case the center is the opponent that already held an entry for the healed actor. There is no additional range test against the healer or heal recipient. If the candidate’s threat toward the source is absent or exactly zero, it is set to 0.5 and a record for that candidate is appended. Existing nonzero values remain. This inner scan has no separate candidate HP test and does not recursively seed a second ring. The ordinary nonnegative combat path also calls 0x2C3200 at 0x29DFF5 with the attacker as source and the defender as center.
+
+## Numeric discriminators
+
+- **Practical visibility boundary.** For peer position (0,0,0) and candidate raw position (17694720, 1, 0), both horizontal axis tests pass at radius 270. The squared sum is exactly 72,900 plus 2⁻³² in binary64, so Steam returns outside. A binary32 distance sum would round to 72,900 and accept. Changing the candidate’s Y to zero makes the original accept on the boundary.
+- **Origin precision.** Set peer raw X to 2⁶² and candidate raw X to 2⁶² plus 17,694,721. Set Y and Z equal. Steam subtracts the integers first and rejects the resulting 270 plus 2⁻¹⁶ world units. Converting the absolute coordinates to binary64 first loses the extra raw unit and gives 270.
+- **Signed overflow.** If the first raw X is −2⁶³ and the second is 2⁶³−1, the stored difference is +1 raw unit. With Y and Z equal and radius 8 the original accepts. The comparison does not saturate the difference.
+- **Precision of the squared radius.** For first raw position (196608, 131072, 0), second position (0,0,0), and radius with binary32 bits 0x4066C15A, the world displacement is (3,2,0). The radius is exactly 3.605551242828369140625. Its square rounded in binary32 is 13, so the native routine accepts. Squaring the widened radius in binary64 would yield approximately 12.999999764661197 and reject. This example exercises the general routine with a radius different from the three caller constants.

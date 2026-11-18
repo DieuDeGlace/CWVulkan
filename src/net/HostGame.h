@@ -30,8 +30,8 @@ class HostGame {
   public:
     static constexpr uint32_t TICK_MS = 32;       // a tick at most this often
     static constexpr uint32_t MAX_STEP_MS = 1000; // a tick never runs the world longer
-    static constexpr double VIEW_BLOCKS = 270.0;  // non-players farther than this are not sent (0x42e7dc)
-    static constexpr double EVENT_BLOCKS = 256.0; // sounds and particles farther than this are not sent (0x42e5c4)
+    static constexpr float VIEW_BLOCKS = 270.f;  // non-players farther than this are not sent (0x42e7dc)
+    static constexpr float EVENT_BLOCKS = 256.f; // sounds and particles farther than this are not sent (0x42e5c4)
 
     HostGame(Transport &transport, HostWorld &world);
 
@@ -50,7 +50,7 @@ class HostGame {
 
     // The test of 0xf3e20: whether two positions (1/65536 block) are farther apart than `blocks`,
     // in double precision: |dx| or |dy| over it, or the 3-D distance over it.
-    static bool tooFar(const int64_t a[3], const int64_t b[3], double blocks);
+    static bool tooFar(const void *a, const void *b, float blocks);
 
   private:
     Transport &transport;

@@ -1,4 +1,5 @@
 #include "net/HostGame.h"
+#include "FixedRange.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,7 +14,6 @@ namespace {
 constexpr int32_t DEATH_SOUND = 0x1b, MISSION_SOUND = 0x1f;
 constexpr size_t SOUND_ID = 0x18; // i32 in a sound request
 
-const int64_t *eventPosition(const uint8_t *record) { return reinterpret_cast<const int64_t *>(record); }
 } // namespace
 
 uint32_t CreatureView::flags() const {
@@ -27,10 +27,8 @@ HostGame::HostGame(Transport &transport, HostWorld &world)
       hostLink(transport, HostLink::World{[&world](int64_t id) { return world.hasCreature(id); },
                                           [&world](int64_t id) { world.removeCreature(id); }}) {}
 
-bool HostGame::tooFar(const int64_t a[3], const int64_t b[3], double blocks) {
-    constexpr double BLOCK = 1.0 / 65536.0;
-    const double dx = (double)(a[0] - b[0]) * BLOCK, dy = (double)(a[1] - b[1]) * BLOCK, dz = (double)(a[2] - b[2]) * BLOCK;
-    return std::fabs(dx) > blocks || std::fabs(dy) > blocks || dx * dx + dy * dy + dz * dz > blocks * blocks;
+bool HostGame::tooFar(const void *a, const void *b, float blocks) {
+    return gamemath::outsideFixedRange(a, b, blocks);
 }
 
 bool HostGame::frame(uint32_t nowMs) {
@@ -160,10 +158,10 @@ void HostGame::distribute(HostLink::Connection &guest) {
         // Particles and sounds near the guest only; never the sounds its own creature made (it
         // played them already).
         for (const ParticleRecord &p : e.particles)
-            if (!tooFar(eventPosition(p.data()), self->position(), EVENT_BLOCKS))
+            if (!tooFar(p.data(), self->position(), EVENT_BLOCKS))
                 to.particles.push_back(p);
         for (const SoundRecord &s : e.sounds) {
-            const bool sent = !tooFar(eventPosition(s.data()), self->position(), EVENT_BLOCKS) &&
+            const bool sent = !tooFar(s.data(), self->position(), EVENT_BLOCKS) &&
                               field<int64_t>(s, sound::OWNER) != guest.creatureId;
             const int32_t id = field<int32_t>(s, SOUND_ID);
             if (log && (id == DEATH_SOUND || id == MISSION_SOUND))

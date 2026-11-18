@@ -6,6 +6,7 @@
 #include "NativeEffects.h"
 
 #include "GameMath.h"
+#include "FixedRange.h"
 #include "NativeBuffs.h"
 #include "worldgen/Residents.h"
 #include "NativeRules.h"
@@ -97,13 +98,6 @@ float fromRand(int r) { return (float)r; }
 
 // Whether the n-ms boundary was crossed during this step (§0.6), `age` already advanced.
 bool crossed(float age, float dt, int n) { return (int)(age - dt) / n != (int)age / n; }
-
-// 0xf3e20 (creature-hit.md §4.2): whether q is farther than d blocks from p.
-bool farther(const int64_t *p, const int64_t *q, float d) {
-    const double dx = (double)(p[0] - q[0]) * (1.0 / 65536.0), dy = (double)(p[1] - q[1]) * (1.0 / 65536.0),
-                 dz = (double)(p[2] - q[2]) * (1.0 / 65536.0);
-    return std::fabs(dx) > d || std::fabs(dy) > d || dx * dx + dy * dy + dz * dz > (double)(d * d);
-}
 
 // The creature's view the stat rules want.
 float f32(const Creature *c, size_t offset) { return read<float>(c->record, offset); }
@@ -661,7 +655,7 @@ struct Visit {
                 s.velocity[0] = s.velocity[1] = s.velocity[2] = 0.0f;
             return false;
         }
-        const bool arrived = isHoming(s.kind) && !farther(s.position, s.target, HOMING_REACH) && s.age >= HOMING_START;
+        const bool arrived = isHoming(s.kind) && !gamemath::outsideFixedRange(s.position, s.target, HOMING_REACH) && s.age >= HOMING_START;
         return touched || blocked || arrived;
     }
 

@@ -1315,8 +1315,32 @@ void mirrorInterpolation() {
     NET_CHECK(timer() == 5);
 }
 
+namespace {
+void authorityRangeBoundaries() {
+    constexpr int64_t block = 65536;
+    const int64_t origin[3]{};
+    int64_t point[3]{270 * block, 0, 0};
+    NET_CHECK(!HostGame::tooFar(point, origin, 270.f));
+    point[1] = 1;
+    NET_CHECK(HostGame::tooFar(point, origin, 270.f));
+    const int64_t largeOrigin[3]{int64_t{1} << 62, 0, 0};
+    const int64_t beyond[3]{largeOrigin[0] + 270 * block + 1, 0, 0};
+    NET_CHECK(HostGame::tooFar(beyond, largeOrigin, 270.f));
+    const int64_t low[3]{std::numeric_limits<int64_t>::min(), 0, 0};
+    const int64_t high[3]{std::numeric_limits<int64_t>::max(), 0, 0};
+    NET_CHECK(!HostGame::tooFar(low, high, 8.f));
+    const int64_t diagonal[3]{3 * block, 2 * block, 0};
+    std::array<uint8_t, 25> packed{};
+    std::memcpy(packed.data() + 1, diagonal, sizeof diagonal);
+    NET_CHECK(!HostGame::tooFar(packed.data() + 1, origin, 3.605551242828369140625f));
+    // This float radius squares to exactly 13 in binary32, just below 13 in binary64.
+    NET_CHECK(!HostGame::tooFar(diagonal, origin, 3.605551242828369140625f));
+}
+} // namespace
+
 int netTests() {
     failures = 0;
+    authorityRangeBoundaries();
     everyPacket();
     readerRule();
     creatureDelta();
