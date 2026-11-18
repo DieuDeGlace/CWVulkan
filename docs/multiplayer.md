@@ -218,8 +218,15 @@ The host validates the selected ground slot and broadcasts a pickup notice.
 Each client resolves the picker. The recipient applies the bag item or currency,
 and other clients can show who picked it up. Platinum goes to the recipient's
 current region. Persistent shared drops use each character's collected positions.
-The fixture verifies receipt delivery on local UDP. Save timing and original-peer
-play remain open. [Original Steam contract](specs/steam-remote-guest-item-pickup-20261118.md)
+The fixture verifies receipt delivery on local UDP. [Original Steam contract](specs/steam-remote-guest-item-pickup-20261118.md)
+
+A dedicated host laid five ordinary gold coins beside a remote Native Warrior.
+It received five pickups from actor 1. The guest's saved balance rose from
+10 to 15. That save rejoined a fresh server and collected a second batch,
+finishing at 20 with the same equipment. A second guest saw the recipient
+from nearby and retained its own 10 gold. All five processes across the
+two runs exited normally. This verifies the CubeVulkan localhost route for
+gold. Original-peer play and the other item categories remain open.
 
 ## Not done yet
 

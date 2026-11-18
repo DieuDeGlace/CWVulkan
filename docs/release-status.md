@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Remote gold pickup and saved balance - 2026-11-18
+
+A dedicated host laid five ordinary gold coins beside a remote Native Warrior.
+It received five pickups from actor 1. The guest's saved balance rose from
+10 to 15. That save rejoined a fresh server and collected a second batch,
+finishing at 20 with the same equipment. A second guest saw the recipient
+from nearby and retained its own 10 gold. All five processes across the
+two runs exited normally. This verifies the CubeVulkan localhost route for
+gold. Original-peer play and the other item categories remain open.
+
 ## Local UDP reconnect and guest pickups - 2026-11-18
 
 A late send to a closed UDP port can surface a Winsock port-unreachable

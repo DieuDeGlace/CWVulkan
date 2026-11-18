@@ -1,5 +1,13 @@
 # Clean-room process
 
+## Remote gold pickup comparison - 2026-11-18
+
+The existing held guest pickup contract governed the local multiplayer check.
+The verification role compared the dedicated host's pickup IDs with the
+remote characters' saved balances across two sessions. The author received
+no implementation or runtime evidence. The new evidence covers gold on
+CubeVulkan's UDP transport. Original Steam peer acceptance remains open.
+
 ## Local UDP reconnect and guest pickups - 2026-11-18
 
 The independent original-side author traced the normal ground-item request,

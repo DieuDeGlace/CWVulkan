@@ -109,8 +109,9 @@ filled in by guessing.
 
 For ordinary ground pickups in multiplayer, the host validates the slot and
 broadcasts the picker's ID and item. The receiving player's client applies the
-award. A shared drop's duplicate check belongs to the recipient. Save timing
-and two-account play remain open. [Guest pickups](specs/steam-remote-guest-item-pickup-20261118.md)
+award. A shared drop's duplicate check belongs to the recipient. A licensed
+UDP gold pickup survived character reload. Original Steam save timing and
+two-account play remain open. [Guest pickups](specs/steam-remote-guest-item-pickup-20261118.md)
 
 ### B2. Extensions and preserved looks
 
