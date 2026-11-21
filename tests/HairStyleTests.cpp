@@ -69,6 +69,37 @@ int hairStyleTests() {
           "pressing the secondary palette commits its color");
     const auto beforeMiss = editor.committed;
     check(!editor.press({-1, -1}, {20, 20}) && editor.committed == beforeMiss, "an outside press leaves the style unchanged");
+    const auto wide = frontend::hairPanels({1300, 800}, 640, 40, true);
+    check(wide.scale == 1 && wide.primary == glm::vec2(20, 450) && wide.secondary == glm::vec2(330, 450),
+          "both full-size panels fit at exact footer clearance");
+    const auto overlap = frontend::hairPanels({1300, 800}, 639, 40, true);
+    check(overlap.primary.y == wide.primary.y - 60, "footer overlap reserves 80 units instead of 20");
+    const auto compact = frontend::hairPanels({800, 600}, 250, 40, true);
+    check(std::abs(compact.scale - 360.f / 610) < 1e-6f &&
+          std::abs(compact.secondary.x - (20 + 310 * compact.scale)) < 1e-4f &&
+          std::abs(compact.primary.y + 330 * compact.scale - 520) < 1e-4f,
+          "narrow-screen panels leave room for the character name and submit controls");
+    const auto shortWindow = frontend::hairPanels({1600, 250}, 700, 40, true);
+    check(std::abs(shortWindow.primary.y - 70) < 1e-4f && shortWindow.scale < wide.scale,
+          "short window respects the back button");
+    const auto themed = frontend::hairPanels({1300,800}, 640, 40, true, {280,300});
+    check(themed.primary == glm::vec2(20, 480) && themed.secondary.x == 310,
+          "panel placement follows the measured template content");
+    const auto tiny = frontend::hairPanels({30, 15}, 0, 40, true);
+    check(tiny.scale == .01f, "tiny viewport retains an invertible pointer transform");
+    const auto legacy = frontend::hairPanels({800,600}, 250, 40, false);
+    check(legacy.scale == 1 && legacy.primary == glm::vec2(0,270) && legacy.secondary == glm::vec2(490,20),
+          "existing panel layout");
+    const glm::vec2 middle = frontend::tipsGrid(true) + glm::vec2(3.5f, 4.5f) * frontend::HAIR_CELL;
+    const auto pointer = compact.secondary + middle * compact.scale;
+    editor.reset({});
+    check(editor.press((pointer - compact.secondary) / compact.scale, {20,20}, true) && editor.committed.dual &&
+          editor.committed.second == glm::u8vec3(frontend::hairCellColour(3,4) * 255.f),
+          "scaled painted tips cell commits the indicated colour directly from off");
+    check(frontend::secondHairCellAt(frontend::HAIR_GRID, column, row, true) && column == 0 && row == 0 &&
+          !frontend::secondHairCellAt(frontend::HAIR_GRID + glm::vec2(16*17,0), column, row, true),
+          "paired palette uses the primary grid's inclusive and exclusive edges");
+    check(!editor.press({20, 178}, {20,20}, true), "the former tips origin cannot select a paired swatch");
     SaveGame saved, parsed;
     saved.hairStyle = imported;
     check(parsed.parse(saved.text()) && parsed.hairStyle == saved.hairStyle, "appearance metadata round trip");

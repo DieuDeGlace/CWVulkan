@@ -210,7 +210,7 @@ namespace {
 
 // --- Constants of the screens ----------------------------------------------------------------
 
-const glm::vec4 WHITE(1), HOVERED(0.2f, 1, 1, 1), ARROW_HOVERED(0, 1, 1, 1), BLACK(0, 0, 0, 1);
+const glm::vec4 WHITE(1), HOVERED(0.2f, 1, 1, 1), ARROW_HOVERED(0, 1, 1, 1);
 const glm::vec4 NAME_COLOUR(0.25f, 1, 1, 1), SPECIALIZATION_COLOUR(0.5f, 0.5f, 1, 1);
 const glm::vec4 UNASSIGNED_COLOUR(0.2f, 1, 0.2f, 1), WAITING_COLOUR(1, 0.35f, 0.35f, 1);
 constexpr int ALIGN_LEFT = 0, ALIGN_CENTRE = 1, ALIGN_RIGHT = 2, ALIGN_BOTH = 5;
@@ -275,12 +275,6 @@ Hud::ScreenItem text(const std::wstring &value, glm::vec2 at, float size, float 
     auto item = text(std::string{}, at, size, outline, colour, align);
     item.text = value;
     return item;
-}
-Hud::ScreenItem square(glm::vec2 at, glm::vec2 size, glm::vec4 colour) {
-    Hud::ScreenItem q;
-    q.kind = Hud::ScreenItem::Square;
-    q.at = at, q.size = size, q.color = colour;
-    return q;
 }
 Hud::ScreenItem widget(const std::string &name, glm::vec2 at, glm::vec2 size, const std::string &label = "",
                        glm::vec4 tint = WHITE) {
@@ -500,6 +494,8 @@ class Session {
     // Character creation.
     Look look;
     HairEditor hairEditor;
+    glm::vec2 hairPanelContent{LOOK_PANEL_SIZE}, creationEditSize{300, 30};
+    float creationBackHeight = BACK_SIZE.y;
     hair::Style appliedHairStyle;
     std::u16string initialName; // initial/test caption; live input belongs to the retained scene editor
 
@@ -548,7 +544,7 @@ class Session {
     void stageDefaultPlayer();
     void applyLook();
     void applyHairStyle();
-    void secondHairItems(Hud::Screen &out);
+    void secondHairItems(Hud::Screen &out, const HairPanels &panels);
     void startCreation();
     void confirmCreation();
     nativesaves::Cell startCell(std::array<int64_t, 3> &position) const;
@@ -624,7 +620,11 @@ class Session {
         item.branch = uiroot::Branch::Root;
         return item;
     }
-    glm::vec2 lookPanelAt() const { return {0, window.y - LOOK_PANEL_SIZE.y}; }
+    HairPanels creationPanelLayout() const {
+        const float nameLeft = (window.x - creationEditSize.x) * .5f;
+        return hairPanels(window, std::min(nameLeft, window.x - CREATE_SIZE.x), creationBackHeight,
+                          s.pairedHairPanels, hairPanelContent);
+    }
     glm::vec2 centred(glm::vec2 widgetSize) const { return (window - widgetSize) * 0.5f; }
     glm::vec2 templateSize(const std::string &n, glm::vec2 fallback) {
         const glm::vec2 v = hud.templateSize(n);
@@ -1121,6 +1121,17 @@ void Session::startCreation() {
     hud.setFrontendCaption("creation-name",u"");
     look.reset();
     hairEditor.reset(s.newHairStyle);
+    creationEditSize = templateSize("edit", {300,30});
+    if (s.pairedHairPanels) {
+        auto primary = widget("blackwidget", {}, LOOK_PANEL_SIZE);
+        primary.instance = "character-style";
+        const auto content = hud.templateContentSize(primary);
+        if (content.x > 0 && content.y > 0)
+            hairPanelContent = content;
+        const auto back = hud.templateSize("button", BACK_SIZE);
+        if (back.y > 0)
+            creationBackHeight = back.y;
+    }
     const auto home = [&] {
         charactercreation::Placement placement;
         placement.home = startCell(placement.position);
@@ -1591,12 +1602,14 @@ void Session::handleClick(bool inGame) {
         return;
     }
     if (creationShown) {
-        if (pointerDown && hairEditor.press(mouse - secondHairPanelAt(window), templateSize("leftbutton", {20, 20}))) {
+        const auto panels = creationPanelLayout();
+        if (pointerDown && hairEditor.press((mouse - panels.secondary) / panels.scale,
+                                           templateSize("leftbutton", {20, 20}), s.pairedHairPanels)) {
             applyHairStyle();
             playSound(SOUND_MENU_SELECT);
             return;
         }
-        const glm::vec2 m = mouse - lookPanelAt();
+        const glm::vec2 m = (mouse - panels.primary) / panels.scale;
         const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
         for (int row = 0; row < LOOK_ROWS; row++) {
             const float y = LOOK_ROW_Y[row];
@@ -1864,51 +1877,56 @@ void Session::characterItems(Hud::Screen &out) {
     out.back().press=[this]{nativeBackPressed=true;back();};
 }
 
-void Session::secondHairItems(Hud::Screen &out) {
-    const glm::vec2 panel = secondHairPanelAt(window), point = mouse - panel;
+void Session::secondHairItems(Hud::Screen &out, const HairPanels &panels) {
+    const size_t first = out.size();
+    const glm::vec2 point = (mouse - panels.secondary) / panels.scale;
+    const bool paired = s.pairedHairPanels;
     std::optional<glm::u8vec3> hovered;
     int column, row;
-    if (!optionsOpen && secondHairCellAt(point, column, row))
+    if (!optionsOpen && secondHairCellAt(point, column, row, paired))
         hovered = glm::u8vec3(hairCellColour(column, row) * 255.0f);
     hairEditor.hover(hovered);
     applyHairStyle();
-    out.push_back(widget("blackwidget", panel, LOOK_PANEL_SIZE));
-    out.push_back(text("Dual-tone hair", panel + glm::vec2(15, 25), 12, 3, {1, .8f, .5f, 1}, ALIGN_LEFT));
+    out.push_back(widget("blackwidget", {}, LOOK_PANEL_SIZE));
+    out.push_back(text("Dual-tone hair", glm::vec2(15, paired ? 27 : 25), 12, 3, {1, .8f, .5f, 1}, ALIGN_LEFT));
     const auto &style = hairEditor.committed;
     const std::array<std::string, 3> values{style.dual ? "On" : "Off", std::to_string((int)std::lround(style.start * 100)) + "%",
                                             std::to_string((int)std::lround(style.blend * 100)) + "%"};
     const char *labels[] = {"Enabled", "Start", "Blend"};
     const auto arrow = templateSize("leftbutton", {20, 20});
     for (int i = 0; i < 3; ++i) {
-        const float y = 55.0f + 30.0f * i;
-        out.push_back(text(labels[i], panel + glm::vec2(15, y), 12, 3, WHITE, ALIGN_LEFT));
-        out.push_back(text(values[(size_t)i], panel + glm::vec2(LOOK_VALUE_X, y), 12, 3, WHITE, ALIGN_CENTRE));
+        const float y = tipsRowY(i, paired);
+        out.push_back(text(labels[i], glm::vec2(15, y), 12, 3, WHITE, ALIGN_LEFT));
+        out.push_back(text(values[(size_t)i], glm::vec2(LOOK_VALUE_X, y), 12, 3, WHITE, ALIGN_CENTRE));
         const glm::vec2 left{SECOND_HAIR_LEFT_ARROW_X, y - arrow.y * .5f - 5}, right{SECOND_HAIR_RIGHT_ARROW_X, y - arrow.y * .5f - 5};
-        out.push_back(widget("leftbutton", panel + left, {}, "", inside(point, left, arrow) ? ARROW_HOVERED : WHITE));
-        out.push_back(widget("rightbutton", panel + right, {}, "", inside(point, right, arrow) ? ARROW_HOVERED : WHITE));
+        out.push_back(widget("leftbutton", left, {}, "", inside(point, left, arrow) ? ARROW_HOVERED : WHITE));
+        out.push_back(widget("rightbutton", right, {}, "", inside(point, right, arrow) ? ARROW_HOVERED : WHITE));
     }
-    out.push_back(text("Second color", panel + glm::vec2(LOOK_PANEL_SIZE.x * .5f, 155), 12, 3, WHITE, ALIGN_CENTRE));
+    out.push_back(text("Second color", glm::vec2(hairPanelContent.x * .5f, paired ? HAIR_TITLE_Y : 155.f), 12, 3, WHITE, ALIGN_CENTRE));
     for (int r = 0; r < HAIR_ROWS; ++r)
         for (int c = 0; c < HAIR_COLUMNS; ++c) {
             const auto color = hairCellColour(c, r);
-            const auto at = panel + SECOND_HAIR_GRID + glm::vec2(c, r) * HAIR_CELL;
+            const auto at = tipsGrid(paired) + glm::vec2(c, r) * HAIR_CELL;
             const bool selected = glm::u8vec3(color * 255.0f) == style.second;
-            out.push_back(square(at, glm::vec2(HAIR_CELL), selected ? WHITE : BLACK));
-            out.push_back(square(at + glm::vec2(1), glm::vec2(HAIR_CELL - 2), glm::vec4(color, 1)));
-            navigationPoint(at + glm::vec2(HAIR_CELL * .5f));
+            appendHairSwatch(out, at, color, selected);
+            navigationPoint(panels.secondary + (at + glm::vec2(HAIR_CELL * .5f)) * panels.scale);
         }
-    out.push_back(text("0% blend = sharp split", panel + glm::vec2(15, 315), 12, 3, WHITE, ALIGN_LEFT));
+    if (!paired)
+        out.push_back(text("0% blend = sharp split", glm::vec2(15, 315), 12, 3, WHITE, ALIGN_LEFT));
+    panels.place(out, first, panels.secondary);
 }
 
 void Session::creationItems(Hud::Screen &out) {
-    secondHairItems(out);
-    const glm::vec2 panel = lookPanelAt(), m = mouse - panel;
-    out.push_back(widget("blackwidget", panel, LOOK_PANEL_SIZE)); // native outer look-panel source
+    const auto panels = creationPanelLayout();
+    secondHairItems(out, panels);
+    const size_t first = out.size();
+    const glm::vec2 m = (mouse - panels.primary) / panels.scale;
+    out.push_back(widget("blackwidget", {}, LOOK_PANEL_SIZE)); // native outer look-panel source
     out.back().instance = "character-style";
     // Publishing navigation/layout must not rebuild equipment. The owner callback
     // runs only when the actual widget draw is admitted by the scene traversal.
-    out.back().drawModels = [this](const Hud::ScreenItem::ModelContext &) {
-        if (look.drawPalette(mouse - lookPanelAt()))
+    out.back().drawModels = [this, panels](const Hud::ScreenItem::ModelContext &) {
+        if (look.drawPalette((mouse - panels.primary) / panels.scale))
             applyLook();
         return std::vector<guiitem::Request>{};
     };
@@ -1916,23 +1934,23 @@ void Session::creationItems(Hud::Screen &out) {
     const glm::vec2 arrow = templateSize("leftbutton", {20, 20});
     for (int row = 0; row < LOOK_ROWS; row++) {
         const float y = LOOK_ROW_Y[row];
-        out.push_back(text(LABELS[row], panel + glm::vec2(15, y), 12, 3, WHITE, ALIGN_LEFT));
-        out.push_back(text(look.value(row), panel + glm::vec2(LOOK_VALUE_X, y), 12, 3, WHITE, ALIGN_CENTRE));
+        out.push_back(text(LABELS[row], glm::vec2(15, y), 12, 3, WHITE, ALIGN_LEFT));
+        out.push_back(text(look.value(row), glm::vec2(LOOK_VALUE_X, y), 12, 3, WHITE, ALIGN_CENTRE));
         const glm::vec2 left{LOOK_LEFT_ARROW_X, y - arrow.y * 0.5f - 5}, right{LOOK_RIGHT_ARROW_X, y - arrow.y * 0.5f - 5};
-        out.push_back(widget("leftbutton", panel + left, glm::vec2(0), "", inside(m, left, arrow) ? ARROW_HOVERED : WHITE));
-        out.push_back(widget("rightbutton", panel + right, glm::vec2(0), "", inside(m, right, arrow) ? ARROW_HOVERED : WHITE));
+        out.push_back(widget("leftbutton", left, glm::vec2(0), "", inside(m, left, arrow) ? ARROW_HOVERED : WHITE));
+        out.push_back(widget("rightbutton", right, glm::vec2(0), "", inside(m, right, arrow) ? ARROW_HOVERED : WHITE));
     }
-    out.push_back(text("Hair color", panel + glm::vec2(LOOK_PANEL_SIZE.x * 0.5f, HAIR_TITLE_Y), 12, 3, WHITE, ALIGN_CENTRE));
+    out.push_back(text("Hair color", glm::vec2(hairPanelContent.x * 0.5f, HAIR_TITLE_Y), 12, 3, WHITE, ALIGN_CENTRE));
     for (int r = 0; r < HAIR_ROWS; r++)
         for (int c = 0; c < HAIR_COLUMNS; c++) {
-            const glm::vec2 at = panel + HAIR_GRID + glm::vec2((float)c, (float)r) * HAIR_CELL;
-            out.push_back(square(at, glm::vec2(HAIR_CELL), BLACK));
-            out.push_back(square(at + glm::vec2(1), glm::vec2(HAIR_CELL - 2), glm::vec4(hairCellColour(c, r), 1)));
+            const glm::vec2 at = HAIR_GRID + glm::vec2((float)c, (float)r) * HAIR_CELL;
+            appendHairSwatch(out, at, hairCellColour(c, r), false);
         }
+    panels.place(out, first, panels.primary);
     // The name field and Create Character (where negative y counts from the bottom: open
     // question 4).
     const auto currentName=hud.frontendCaption("creation-name").value_or(initialName);
-    const glm::vec2 edit = templateSize("edit", {300, 30});
+    const glm::vec2 edit = creationEditSize;
     const glm::vec2 editAt{window.x * 0.5f - edit.x * 0.5f, window.y - NAME_FIELD_FROM_BOTTOM - edit.y};
     out.push_back(widget("edit",editAt,{300,30}));
     out.back().instance="creation-name";

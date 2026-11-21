@@ -1,5 +1,15 @@
 # Clean-room process
 
+## Paired hair controls - 2026-11-21
+
+Two isolated, code-free handoffs cover the user-authored layout and
+palette interaction. The layout reports measured content, strict footer
+overlap and local control positions. The mode addendum establishes
+hover gating, persistent tip selection and the white selected border.
+The additions leave single-colour Frogman marking behaviour unresolved.
+[Panel layout](specs/owned-addon-dual-hair-layout-20261121.md).
+[Tips selection](specs/owned-addon-hair-mode-20261121.md).
+
 ## Revised water appearance - 2026-11-21
 
 The isolated author described the later user-owned water additions and

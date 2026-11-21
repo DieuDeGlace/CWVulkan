@@ -281,13 +281,13 @@ void HairEditor::choose(glm::u8vec3 color) {
     committed.second = color;
     preview = committed;
 }
-bool HairEditor::press(glm::vec2 panelPoint, glm::vec2 arrowSize) {
+bool HairEditor::press(glm::vec2 panelPoint, glm::vec2 arrowSize, bool paired) {
     auto hits = [&](glm::vec2 at) {
         const auto p = panelPoint - at;
         return p.x >= 0 && p.y >= 0 && p.x < arrowSize.x && p.y < arrowSize.y;
     };
     for (int row = 0; row < 3; ++row) {
-        const float y = 55.0f + 30.0f * row - arrowSize.y * .5f - 5;
+        const float y = tipsRowY(row, paired) - arrowSize.y * .5f - 5;
         const int direction = hits({SECOND_HAIR_LEFT_ARROW_X, y}) ? -1 : hits({SECOND_HAIR_RIGHT_ARROW_X, y}) ? 1 : 0;
         if (direction) {
             arrow(row, direction);
@@ -295,16 +295,51 @@ bool HairEditor::press(glm::vec2 panelPoint, glm::vec2 arrowSize) {
         }
     }
     int column, row;
-    if (!secondHairCellAt(panelPoint, column, row))
+    if (!secondHairCellAt(panelPoint, column, row, paired))
         return false;
     choose(glm::u8vec3(hairCellColour(column, row) * 255.0f));
     return true;
 }
-glm::vec2 secondHairPanelAt(glm::vec2 window) {
-    return {std::max(0.0f, window.x - LOOK_PANEL_SIZE.x - 10), 20};
+void appendHairSwatch(Hud::Screen &items, glm::vec2 at, glm::vec3 colour, bool selected) {
+    auto &border = items.emplace_back();
+    border.kind = Hud::ScreenItem::Square;
+    border.at = at;
+    border.size = glm::vec2(HAIR_CELL);
+    border.color = glm::vec4(glm::vec3(selected ? 1.f : 0.f), 1.f);
+    auto &fill = items.emplace_back();
+    fill.kind = Hud::ScreenItem::Square;
+    fill.at = at + glm::vec2(1);
+    fill.size = glm::vec2(HAIR_CELL - 2);
+    fill.color = glm::vec4(colour, 1);
 }
-bool secondHairCellAt(glm::vec2 point, int &column, int &row) {
-    return hairCellAt(point - SECOND_HAIR_GRID + HAIR_GRID, column, row);
+// Panel geometry is authored in local interface units. Apply one transform to
+// all painted controls; hit testing applies its inverse to the pointer.
+void HairPanels::place(Hud::Screen &out, size_t first, glm::vec2 origin) const {
+    for (size_t i = first; i < out.size(); ++i) {
+        auto &item = out[i];
+        item.at = origin + item.at * scale;
+        if (item.kind == Hud::ScreenItem::Template) {
+            item.templateScale = scale;
+        } else if (scale != 1.f) {
+            item.size *= scale;
+            item.fontSize *= scale;
+            item.outline *= scale;
+        }
+    }
+}
+HairPanels hairPanels(glm::vec2 window, float footerLeft, float backHeight, bool paired, glm::vec2 content) {
+    if (!paired)
+        return {{0, window.y - LOOK_PANEL_SIZE.y}, {std::max(0.f, window.x - LOOK_PANEL_SIZE.x - 10), 20}, 1};
+    const float pairWidth = 2 * content.x + 10;
+    const float widthFit = std::min(1.f, (window.x * .5f - 40) / pairWidth);
+    const float footer = 20 + widthFit * pairWidth + 10 > footerLeft ? 80.f : 20.f;
+    const float heightFit = (window.y - 30 - backHeight - footer) / content.y;
+    const float fit = std::max(.01f, std::min(widthFit, heightFit));
+    const float top = window.y - footer - fit * content.y;
+    return {{20, top}, {20 + fit * (content.x + 10), top}, fit};
+}
+bool secondHairCellAt(glm::vec2 point, int &column, int &row, bool paired) {
+    return hairCellAt(point - tipsGrid(paired) + HAIR_GRID, column, row);
 }
 
 void Look::reset() {

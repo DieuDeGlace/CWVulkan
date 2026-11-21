@@ -138,6 +138,23 @@ int guiRenderTests() {
     auto awayFromCache = icon;
     awayFromCache.at.screen = {105, 105};
     check("cached-surface-keeps-world-depth-attachment", background, {awayFromCache}, {}, {40, 40}, {64, 0, 127}, 2, 255, cacheHit);
+    // Crop the production panel's first selected cell into this 128-pixel target.
+    // At two physical pixels per interface unit even the fitted outline is measurable.
+    {
+        Hud paletteHud;
+        paletteHud.setGuiScale(2);
+        const auto panels = frontend::hairPanels({800,600}, 250, 40, true);
+        const glm::vec2 local = frontend::tipsGrid(true);
+        const glm::vec2 crop = panels.secondary + local * panels.scale - glm::vec2(16);
+        Hud::Screen screen;
+        frontend::appendHairSwatch(screen, local, {1,0,0}, true);
+        panels.place(screen, 0, panels.secondary - crop);
+        auto pixels = background;
+        paletteHud.drawScreen(screen, pixels);
+        check("paired-hair-swatch-border", pixels, {}, {}, {32,36}, {255,255,255}, 0);
+        check("paired-hair-swatch-fill", pixels, {}, {}, {40,40}, {255,0,0}, 0);
+        check("paired-hair-swatch-outside", pixels, {}, {}, {53,36}, {0,0,255}, 0);
+    }
     auto fractional = background;
     for (auto &vertex : fractional) {
         vertex.r = .75f;
@@ -620,6 +637,21 @@ int guiRenderTests() {
         if (!editHud.load(assets.gameDir(),error)) ++failures;
         else for (const float scale : {1.f,1.5f}) {
             editHud.setGuiScale(scale);
+            Hud::ScreenItem panel;
+            panel.kind = Hud::ScreenItem::Template;
+            panel.name = "blackwidget";
+            panel.instance = "paired-hair-measure";
+            panel.size = frontend::LOOK_PANEL_SIZE;
+            const auto original = editHud.templateViewSize(panel);
+            panel.templateScale = .6f;
+            const auto fitted = editHud.templateViewSize(panel);
+            panel.templateScale = 1.f;
+            const auto restored = editHud.templateViewSize(panel);
+            if (original.x <= 0 || glm::length(fitted - original * .6f) > .1f ||
+                glm::length(restored - original) > .1f) {
+                std::cerr << "FAIL paired hair template scale at GUI factor " << scale << '\n';
+                ++failures;
+            }
             editHud.layout(renderer,{128,128});
             editHud.setInterfaceState({{false,false,true,false,false},false,false});
             Hud::ScreenItem backdrop;

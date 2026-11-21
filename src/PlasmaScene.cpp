@@ -538,7 +538,10 @@ SceneNode *Scene::instance(const SceneNode &from, SceneNode *parent) {
 glm::mat4 Scene::transformation(const SceneNode &n) const {
     if (&n == &rootNode)
         return glm::scale(glm::mat4(1), glm::vec3(rootScale, rootScale, 1));
-    return n.local ? *n.local : n.transform.local();
+    auto local = n.local ? *n.local : n.transform.local();
+    if (n.presentationScale != 1.f)
+        local = glm::scale(local, glm::vec3(n.presentationScale, n.presentationScale, 1));
+    return local;
 }
 
 glm::mat4 Scene::matrix(const SceneNode &n) const {

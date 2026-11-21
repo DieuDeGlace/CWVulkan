@@ -1080,6 +1080,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
         }
     }
+    front.pairedHairPanels = config.flag("DualHair", "PairedPanels", false);
     front.newHairStyle = hair::fromConfig(config, "_NewCharacter");
     front.importedHairStyle = [&](const std::string &name) { return hair::fromConfig(config, name); };
     front.sprites = &sprites, front.options = &gameOptions, front.controls = &gameControls;

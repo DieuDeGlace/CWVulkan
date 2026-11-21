@@ -34,6 +34,15 @@ range still applies.
 [Surface appearance](specs/owned-addon-water-later-look-20261121.md).
 [Wave offsets](specs/owned-addon-water-wave-offsets-20261121.md).
 
+The optional paired character creator fits two measured style panels
+between the left margin and the character preview. Their hit tests
+invert the same transform used by their artwork. A valid tips swatch
+enables and commits its colour. Hover previews apply while dual tone
+is enabled. At the outer edge of the palette, right and bottom are
+excluded.
+[Panel layout](specs/owned-addon-dual-hair-layout-20261121.md).
+[Tips selection](specs/owned-addon-hair-mode-20261121.md).
+
 ## Part A. Interoperability facts
 
 These are the facts the engine needs to read the player's files, talk to other copies of the game

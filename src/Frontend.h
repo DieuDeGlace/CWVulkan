@@ -265,6 +265,15 @@ int haircutsOf(int32_t race);
 
 // Engine appearance extension; the native look record still carries only its primary color.
 constexpr glm::vec2 SECOND_HAIR_GRID{13, 170};
+inline glm::vec2 tipsGrid(bool paired) { return paired ? HAIR_GRID : SECOND_HAIR_GRID; }
+inline float tipsRowY(int row, bool paired) { return (paired ? 57.f : 55.f) + 30.f * row; }
+struct HairPanels {
+    glm::vec2 primary, secondary;
+    float scale;
+    void place(Hud::Screen &items, size_t first, glm::vec2 origin) const;
+};
+void appendHairSwatch(Hud::Screen &items, glm::vec2 at, glm::vec3 colour, bool selected);
+HairPanels hairPanels(glm::vec2 window, float footerLeft, float backHeight, bool paired, glm::vec2 content = LOOK_PANEL_SIZE);
 constexpr float SECOND_HAIR_LEFT_ARROW_X = 105, SECOND_HAIR_RIGHT_ARROW_X = 255;
 struct HairEditor {
     hair::Style committed, preview;
@@ -272,10 +281,9 @@ struct HairEditor {
     void arrow(int row, int direction); // enable, gradient start, gradient blend
     void hover(std::optional<glm::u8vec3> color);
     void choose(glm::u8vec3 color);
-    bool press(glm::vec2 panelPoint, glm::vec2 arrowSize);
+    bool press(glm::vec2 panelPoint, glm::vec2 arrowSize, bool paired = false);
 };
-glm::vec2 secondHairPanelAt(glm::vec2 window);
-bool secondHairCellAt(glm::vec2 point, int &column, int &row);
+bool secondHairCellAt(glm::vec2 point, int &column, int &row, bool paired = false);
 
 // The starting kit (0x913b0): equipment, fresh inventory/counters and templates.
 // Seed is the current Entity+968 low word; region is its surviving150/154 pair.
@@ -392,6 +400,7 @@ struct Services {
     gameoptions::Options *options = nullptr;
     gameoptions::Controls *controls = nullptr;
     hair::Style newHairStyle;
+    bool pairedHairPanels = false;
     std::function<hair::Style(const std::string &)> importedHairStyle;
     DayNightSettings dayNight;
     float minutesPerSecond = 1; // [Time] Mode=Custom only

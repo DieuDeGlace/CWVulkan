@@ -506,6 +506,7 @@ class Hud {
         using TextDraw=std::function<glm::vec2(const std::wstring &,glm::vec2,glm::vec4)>;
         std::function<void(const TextDraw &)> drawTexts;
         float fontSize = 12, outline = 3;
+        float templateScale = 1; // scales the retained artwork independently of its requested content size
         glm::vec4 color{1}, outlineColor{0, 0, 0, 1}; // a template's tint is `color`
         int align = 0;            // 0 left, 1 centred, 2 right, 5 centred both ways
         std::string name;         // the template, or the icon's key

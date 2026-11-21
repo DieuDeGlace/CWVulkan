@@ -1,5 +1,19 @@
 # Source review checkpoint — 2026-11-08
 
+## Paired character-creation controls - 2026-11-21
+
+Set `PairedPanels=1` under `[DualHair]` to fit the primary and tips panels
+side by side on the left of the character. The panels make room for the
+name and Create controls. Both palettes use the same local rows, and the
+pointer and navigation positions follow the displayed scale. The default
+retains the previous creation layout.
+
+CPU checks cover narrow and short windows, measured widget sizes, footer
+clearance and a click that enables tips colour. Offscreen Vulkan checks
+cover the selected swatch border, fill and surrounding background.
+Owner UI data also verified fitted and restored widget sizes at two GUI
+scales.
+
 ## Revised water appearance - 2026-11-21
 
 Set `Style=Revised` under `[Water]` and restart to use the later water

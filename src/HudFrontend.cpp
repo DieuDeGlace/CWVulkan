@@ -130,6 +130,7 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
     if (first || instance.requested != item.size) {
         // Constructor requests precede the global scale and the Button's keyed poses.
         // Later draws preserve that evaluated frame instead of requesting the size again.
+        node.presentationScale = 1;
         scene->setScale(1);
         if (node.widget && item.size.x > 0 && item.size.y > 0)
             scene->resizeTo(node, item.size);
@@ -154,6 +155,7 @@ Hud::TemplateInstance *Hud::prepareTemplate(const ScreenItem &item, size_t index
         }
         // Keep authored child visibility; clip/blur traversal owns composition.
     }
+    node.presentationScale = item.templateScale;
     instance.press=item.press;
     instance.release=item.release;
     instance.motion=item.motion;

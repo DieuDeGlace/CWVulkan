@@ -165,6 +165,7 @@ struct SceneNode {
     int shape = -1;                     // the document's shape (shared)
     uint32_t flags = 0;                 // node flags (plx::NODE_...)
     Transformation transform;
+    float presentationScale = 1; // uniform fit of an optional frontend panel or control
     std::optional<glm::mat4> local;     // replaces the transformation's matrix (an icon fitted to its place)
     bool placementChanged = false;      // point-placement recompute indication, consumed by the chat step adapter
     bool visible = true, clips = false; // the display's values
