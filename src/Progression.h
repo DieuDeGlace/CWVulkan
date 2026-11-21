@@ -67,6 +67,15 @@ inline int killXp(int stars, int enemy, int player, bool boss = false, bool name
     if (mini) xp *= 2;
     return int(xp);
 }
+// The highest level and the most XP one kill gives (the user's later add-on).
+constexpr int MAX_LEVEL = 1000000, MAX_AWARD = 1000000;
+// The bits of a creature's appearance flags (+0x80) that make it a boss, a named boss or a mini-boss
+// (docs/specs/steam-boss-flag-bits-20261121.md: 0x40000 boss, 0x200 named leader, 0x20000 elite).
+constexpr uint32_t BOSS_FLAG = 0x40000, NAMED_FLAG = 0x200, MINI_FLAG = 0x20000;
+inline int killXpFor(int stars, int enemy, int player, uint32_t flags) {
+    const int xp = killXp(stars, enemy, player, flags & BOSS_FLAG, flags & NAMED_FLAG, flags & MINI_FLAG);
+    return std::clamp(xp, 1, MAX_AWARD);
+}
 // What each level adds to the player's own stats.
 struct LevelBonus {
     float hp = 0, armor = 0, attack = 0, critical = 0;

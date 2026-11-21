@@ -37,6 +37,7 @@
 #include "GameNames.h"
 #include "worldgen/Generator.h"
 #include "worldgen/AlphaRelief.h"
+#include "VillagerQuests.h"
 #include "alphagen/Random.h"
 #include "worldgen/Gear.h"
 #include "worldgen/Looks.h"
@@ -8323,6 +8324,117 @@ static void shadowStepTests() {
     CHECK(night.lightDir == nightLate.lightDir && night.shadowStrength == nightLate.shadowStrength);
 }
 
+// Villager requests (VillagerQuests.h, the user's add-on): givers, targets, progress and directions.
+static void villagerQuestTests() {
+    using namespace villagerquests;
+    // A village centre in the Steam world, and a block outside every village.
+    worldgen::Int2 village{}, wild{};
+    bool foundVillage = false, foundWild = false;
+    for (int32_t cx = -40; cx <= 40 && !(foundVillage && foundWild); ++cx)
+        for (int32_t cy = -40; cy <= 40 && !(foundVillage && foundWild); ++cy) {
+            const bool big = worldgen::bigCell(cx, cy);
+            const worldgen::Int2 point = worldgen::cellPoint(cx, cy, big);
+            if (!foundVillage && worldgen::placeKind(cx, cy, big) == 5 && inVillage(point.x, point.y))
+                village = point, foundVillage = true;
+            if (!foundWild && !nearVillage(point.x + 300, point.y, TOWN_MARGIN + 600))
+                wild = {point.x + 300, point.y}, foundWild = true;
+        }
+    CHECK(foundVillage && foundWild);
+    Creature giver;
+    giver.id = 3 * 1001, giver.hostility = 3, giver.classType = 138, giver.health = 100;
+    giver.at = glm::dvec3(village.x, village.y, 50);
+    CHECK(canOffer(giver, {giver}));
+    Creature keeper = giver;
+    keeper.id = 77, keeper.classType = 128, keeper.at.x += 5;
+    CHECK(!canOffer(giver, {giver, keeper}));          // a shopkeeper within 10 blocks
+    keeper.at.x += 10;
+    CHECK(canOffer(giver, {giver, keeper}));
+    Creature petrified = giver;
+    petrified.flags = 0x400000;
+    CHECK(!canOffer(petrified, {petrified}));
+    Creature master = giver;
+    master.flags = 0x40;
+    CHECK(!canOffer(master, {master}));
+    Creature guard = giver;
+    guard.classType = 1;
+    CHECK(!canOffer(guard, {guard}));
+    // Targets: enemies outside the villages, the nearest group's race, up to five.
+    std::vector<Creature> everyone{giver};
+    const auto enemy = [&](int64_t id, int race, double dx, double dy) {
+        Creature c;
+        c.id = id, c.hostility = 1, c.race = race, c.health = 50;
+        c.at = glm::dvec3(village.x, village.y, 50) + glm::dvec3(dx, dy, 0);
+        return c;
+    };
+    // A point beside the village, outside every village by the margin, keeps the group in range.
+    double wx = 0, wy = 0;
+    bool beside = false;
+    for (int ring = 150; ring <= 600 && !beside; ring += 25)
+        for (int k = 0; k < 16 && !beside; ++k) {
+            const double a = k * 6.283185307179586 / 16, dx = std::cos(a) * ring, dy = std::sin(a) * ring;
+            if (!nearVillage(int32_t(std::floor(village.x + dx)), int32_t(std::floor(village.y + dy)), TOWN_MARGIN + 30))
+                wx = dx, wy = dy, beside = true;
+        }
+    CHECK(beside);
+    if (beside) {
+        for (int i = 0; i < 7; ++i)
+            everyone.push_back(enemy(100 + i, 17, wx + i * 3, wy));
+        everyone.push_back(enemy(200, 23, wx + 50, wy)); // another race nearby
+        Request request;
+        CHECK(offers(giver, everyone, {}, "w"));
+        CHECK(selectTargets(giver, everyone, {}, "w", request));
+        CHECK(request.race == 17 && request.needed() == 5 && request.targets[0] == 100 && request.targets[4] == 104);
+        // A second giver cannot take the same creatures while the first request is open.
+        Request other;
+        request.world = "w";
+        CHECK(selectTargets(giver, everyone, {request}, "w", other) && other.targets[0] == 105);
+        CHECK(request.recordKill(102) && !request.recordKill(102) && !request.recordKill(999));
+        CHECK(request.progress() == 1 && !request.ready());
+        for (int64_t id = 100; id <= 104; ++id)
+            request.recordKill(id);
+        CHECK(request.ready());
+    }
+    Creature inTown = enemy(300, 5, 3, 3); // enemies in the village are never targets
+    Request none;
+    CHECK(!selectTargets(giver, {giver, inTown}, {}, "w", none));
+    CHECK(!offers(giver, {giver, inTown}, {}, "w"));
+    { // A request survives a save and a reload with every field.
+        SaveGame saved;
+        Request r;
+        r.world = "steam world", r.giver = -12345678901, r.race = 17, r.giverAt = {1, -2, 3}, r.targetAt = {-400, 500, 60};
+        r.targets = {11, -22, 33, 0, 0}, r.defeated = 5, r.rewarded = true;
+        saved.requests.push_back(r);
+        const auto file = std::filesystem::temp_directory_path() / "cubevulkan-request-roundtrip.sav";
+        SaveGame loaded;
+        CHECK(saved.save(file) && loaded.load(file));
+        CHECK(loaded.requests.size() == 1);
+        if (!loaded.requests.empty()) {
+            const Request &l = loaded.requests[0];
+            CHECK(l.world == r.world && l.giver == r.giver && l.race == r.race && l.giverAt == r.giverAt && l.targetAt == r.targetAt &&
+                  l.targets == r.targets && l.defeated == r.defeated && l.rewarded && l.needed() == 3);
+        }
+        std::filesystem::remove(file);
+    }
+    CHECK(direction({0, 0, 0}, {5, 5, 0}) == "nearby");
+    CHECK(direction({0, 0, 0}, {100, 0, 0}) == "100 blocks east");
+    CHECK(direction({0, 0, 0}, {0, 100, 0}) == "100 blocks north");
+    CHECK(direction({0, 0, 0}, {-70, -70, 0}) == "98 blocks southwest");
+}
+
+// Kill XP for bosses (Progression.h killXpFor; PyroProgression's x10 / x5 / x2 on the appearance bits of
+// docs/specs/steam-boss-flag-bits-20261121.md) and the award cap.
+static void killXpTests() {
+    const int plain = progression::killXpFor(2, 10, 10, 0);
+    CHECK(plain == progression::killXp(2, 10, 10));
+    CHECK(progression::killXpFor(2, 10, 10, progression::BOSS_FLAG) == progression::killXp(2, 10, 10, true));
+    CHECK(progression::killXpFor(2, 10, 10, progression::NAMED_FLAG) == progression::killXp(2, 10, 10, false, true));
+    CHECK(progression::killXpFor(2, 10, 10, progression::MINI_FLAG) == progression::killXp(2, 10, 10, false, false, true));
+    CHECK(progression::killXpFor(2, 10, 10, progression::BOSS_FLAG | progression::NAMED_FLAG) == plain * 50);
+    CHECK(progression::killXpFor(0, 1, 1000, 0) == 1);                      // at least one
+    CHECK(progression::killXpFor(4, 1000000, 1, 0x60200) <= progression::MAX_AWARD); // never past the cap
+    CHECK(progression::killXpFor(2, 10, 10, 0x2000 | 0x1000) == plain);      // other bits change nothing
+}
+
 // Land names on the map at wider biome sizes (MapModel.cpp 6.2, the user's later add-on): every land
 // whose (scaled) centre lies inside a map region is named; at scale 1 the game's single test stands.
 static void mapLandTests() {
@@ -10125,6 +10237,14 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "villagerquests") {
+        villagerQuestTests();
+        return failures ? 1 : 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "killxp") {
+        killXpTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "maplands") {
         mapLandTests();
         return failures ? 1 : 0;
@@ -11564,6 +11684,8 @@ int main(int argc, char **argv) {
     alphaReliefTests();
     leafCornerTests();
     mapLandTests();
+    killXpTests();
+    villagerQuestTests();
     speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();

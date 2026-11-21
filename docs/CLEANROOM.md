@@ -1,5 +1,16 @@
 # Clean-room process
 
+## Villager requests on the game's creatures, and boss XP - 2026-11-21
+
+The user's villager requests (`[Quests] CubeVulkanQuests`, off by default) now work in the
+game's own world, at parity with their later add-on: villagers outside shops offer to
+have a group of enemies outside the village defeated, the HUD shows how many remain and
+which way, and the villager rewards gold, a blue weapon or armour and XP. Two isolated
+contracts name the resident classes and the boss appearance bits; PyroProgression's
+boss, named-boss and mini-boss XP now uses those bits.
+[Resident classes](specs/steam-resident-class-roles-20261121.md) and
+[boss bits](specs/steam-boss-flag-bits-20261121.md).
+
 ## Leaf corners, river lilies and map land names - 2026-11-21
 
 Three of the user's add-ons now match their later work. Swaying terrain leaves keep

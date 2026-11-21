@@ -142,6 +142,7 @@ bool SaveGame::parseFields(const std::string &text) {
     created = Created{};
     hairStyle.reset();
     quests.clear();
+    requests.clear();
     killed.clear();
     usedCells.clear();
     discoveredPlaces.clear();
@@ -287,6 +288,21 @@ bool SaveGame::parseFields(const std::string &text) {
                 q.need < 0 || q.done < 0 || quests.size() >= 100000) return false;
             std::getline(s >> std::ws, q.zone);
             quests.push_back(q);
+        } else if (key == "request") {
+            // request <world> <giver> <race> <giver xyz> <target xyz> <defeated> <rewarded> <targets...>
+            villagerquests::Request r;
+            int defeated = 0, rewarded = 0;
+            if (!(s >> std::quoted(r.world) >> r.giver >> r.race) || requests.size() >= 100000)
+                return false;
+            for (auto &v : r.giverAt) s >> v;
+            for (auto &v : r.targetAt) s >> v;
+            if (!(s >> defeated >> rewarded) || defeated < 0 || defeated > 255)
+                return false;
+            r.defeated = uint8_t(defeated), r.rewarded = rewarded != 0;
+            long long id;
+            for (size_t i = 0; i < r.targets.size() && s >> id; ++i)
+                r.targets[i] = id;
+            requests.push_back(r);
         } else if (key == "name") {
             std::getline(s, created.name);
             if (!created.name.empty() && (created.name[0] == ' ' || created.name[0] == '\t'))
@@ -372,6 +388,15 @@ std::string SaveGame::text() const {
     // quest <giver> <state> <need> <done> <target> <zone...>
     for (auto &q : quests)
         out << "quest " << q.giver << ' ' << q.state << ' ' << q.need << ' ' << q.done << ' ' << std::quoted(q.target) << ' ' << q.zone << '\n';
+    for (const auto &r : requests) {
+        out << "request " << std::quoted(r.world) << ' ' << r.giver << ' ' << r.race;
+        for (int v : r.giverAt) out << ' ' << v;
+        for (int v : r.targetAt) out << ' ' << v;
+        out << ' ' << int(r.defeated) << ' ' << int(r.rewarded);
+        for (int64_t id : r.targets)
+            if (id) out << ' ' << id;
+        out << '\n';
+    }
     if (!created.name.empty()) {
         // created <class> <specialization> <race> <gender> <head> <hair> <hand> <foot> <r> <g> <b>
         out << "created " << created.classType << ' ' << created.specialization << ' ' << std::quoted(created.race) << ' '

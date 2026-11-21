@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include "InventorySlots.h"
 #include "HairStyle.h"
+#include "VillagerQuests.h"
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -113,6 +114,8 @@ struct SaveGame {
         std::string target, zone;
     };
     std::vector<Quest> quests;
+    // Villagers' requests in the game's world (VillagerQuests.h; [Quests] CubeVulkanQuests).
+    std::vector<villagerquests::Request> requests;
     // Creatures killed in CubeVulkan in `world` (the game's creature ids). As in the
     // game, death is permanent and belongs to the world, not the character: every
     // character's save lists the kills it knew of, and loading joins them (worldKills).

@@ -2613,7 +2613,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
     };
     // `coinsDropped`: the game's drop laid the coins already (0x2a6860, the generated world).
-    auto creditKill = [&](int stars, int enemy, const std::string &nameId, glm::vec3 at, bool coinsDropped = false) {
+    // `flags`: the creature's appearance flags, for the boss, named and mini-boss XP.
+    auto creditKill = [&](int stars, int enemy, const std::string &nameId, glm::vec3 at, bool coinsDropped = false, uint32_t flags = 0) {
         if (!nameId.empty())
             questKilled(nameId);
         // The recorded monsters' coins: stars + 1, one gold each (measured). Pyro mode keeps its
@@ -2623,7 +2624,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             layCoins(at, coins, mode == progression::Mode::Pyro ? std::max(1, enemy / coins) : 1, 0);
         }
         if (mode == progression::Mode::Pyro) {
-            int gain = std::max(1, progression::killXp(stars, enemy, playerLevel));
+            int gain = progression::killXpFor(stars, enemy, playerLevel, flags);
             playerXp += gain;
             texts.push_back({at + glm::vec3(0, 0, 2.8f), "+" + std::to_string(gain) + " XP", PURPLE});
             logLine("Gained " + std::to_string(gain) + " XP (enemy level " + std::to_string(enemy) + ", " + std::to_string(stars) + " stars)");
@@ -2631,11 +2632,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             // The creatures' levels follow the player's: they keep their share of their health.
             auto healthHold = spawnedReady ? session.lockHost() : std::unique_lock<std::recursive_mutex>{};
             (spawnedReady ? hostWorld : spawned).keepHealthShares([&] {
-                while (playerXp >= progression::xpToNext(playerLevel)) {
+                while (playerLevel < progression::MAX_LEVEL && playerXp >= progression::xpToNext(playerLevel)) {
                     playerXp -= progression::xpToNext(playerLevel);
                     playerLevel++;
                     levelled = true;
                 }
+                if (playerLevel >= progression::MAX_LEVEL)
+                    playerXp = 0; // (no more levels to gain)
             });
             if (levelled) {
                 applyGear();
@@ -3119,6 +3122,99 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             return 0;
         }
     };
+    // The user's villager requests in the game's world ([Quests] CubeVulkanQuests, VillagerQuests.h): an
+    // offer, a reminder or the reward, said in the add-on's colour; empty when the villager has none.
+    static const std::map<int, const char *> requestRaceKeys = [] {
+#include "RaceKeys.inc"
+        return std::map<int, const char *>(std::begin(RACE_KEYS), std::end(RACE_KEYS));
+    }();
+    const glm::vec4 REQUEST_COLOUR(1.0f, 0.84f, 0.40f, 1.0f);
+    auto requestWorld = [&] { return extractedWorld.sourceIdentity(); };
+    auto requestObjective = [&](const villagerquests::Request &r) {
+        const auto key = requestRaceKeys.find(r.race);
+        std::string name = key != requestRaceKeys.end() ? speech.name(key->second, r.needed() != 1) : "";
+        if (name.empty())
+            name = r.needed() != 1 ? "enemies" : "enemy";
+        return "Defeat " + std::to_string(r.needed()) + " " + name;
+    };
+    auto requestPage = [&](const std::string &line) {
+        TalkPlay::Page page;
+        page.text = line;
+        size_t start = 0;
+        while (start < line.size()) {
+            const size_t end = std::min(line.find(' ', start), line.size());
+            if (end > start)
+                page.words.push_back({dialoguewords::wide(line.substr(start, end - start)), REQUEST_COLOUR});
+            start = end + 1;
+        }
+        return page;
+    };
+    auto requestPages = [&](int64_t who) -> std::vector<TalkPlay::Page> {
+        const uint8_t *record = inventedQuests && spawnedReady ? spawned.record(who) : nullptr;
+        if (!record)
+            return {};
+        const std::string world = requestWorld();
+        std::vector<villagerquests::Creature> everyone;
+        spawned.forEach([&](const uint8_t *r) { everyone.push_back(villagerquests::fromRecord(r)); });
+        const villagerquests::Creature giver = villagerquests::fromRecord(record);
+        auto &requests = saveGame.requests;
+        const auto found = std::find_if(requests.begin(), requests.end(),
+                                        [&](const villagerquests::Request &r) { return r.giver == who && r.world == world; });
+        if (found == requests.end()) {
+            villagerquests::Request request;
+            if (!villagerquests::offers(giver, everyone, requests, world) ||
+                !villagerquests::selectTargets(giver, everyone, requests, world, request))
+                return {};
+            request.world = world, request.giver = who, request.giverAt = villagerquests::blocks(giver.at);
+            requests.push_back(request);
+            logLine("Request taken: " + requestObjective(request));
+            return {requestPage("Could you help our village? " + requestObjective(request) + ". I saw them " +
+                                villagerquests::direction(request.giverAt, request.targetAt) + ".")};
+        }
+        villagerquests::Request &request = *found;
+        if (request.rewarded)
+            return {};
+        for (int64_t id : request.targets) // the targets that died while the player was away count too
+            if (id && std::find(saveGame.killed.begin(), saveGame.killed.end(), id) != saveGame.killed.end())
+                request.recordKill(id);
+        if (!request.ready())
+            return {requestPage(requestObjective(request) + ". The group was " +
+                                villagerquests::direction(villagerquests::blocks(giver.at), request.targetAt) + ".")};
+        // The reward: gold, a blue weapon or armour for the player's class from the target's region, and XP.
+        const int gold = villagerquests::GOLD_PER_TARGET * request.needed() * (mode == progression::Mode::Pyro ? std::max(1, playerLevel) : 1);
+        if (nativeInventory) {
+            playerGold = gamemath::add32(playerGold, gold);
+            std::mt19937 rng(uint32_t(uint64_t(who) ^ (uint64_t(who) >> 32)));
+            nativedrop::World draws;
+            draws.rand = [&rng] { return int(rng() % 32768u); };
+            std::array<uint8_t, 0xa0> item{};
+            const int playerClass = spawned.playerRecord() ? spawned.playerRecord()[worldgen::creature::CLASS] : -1;
+            if (rng() % 2)
+                nativedrop::weapon(draws, item.data(), 2, playerClass);
+            else
+                nativedrop::armour(draws, item.data(), 2, playerClass, false);
+            const worldgen::Int2 land = worldgen::regionAt(request.targetAt[0], request.targetAt[1]);
+            const int32_t region[2] = {land.x, land.y};
+            std::memcpy(item.data() + nativesaves::item::REGION, region, sizeof region);
+            nativeInventory->inventory.add(item, 1);
+            spawned.setPlayerCurrency(playerGold, nativeInventory->inventory.fieldAb0);
+            refreshBagAndThumb(true);
+        }
+        if (mode == progression::Mode::Pyro)
+            playerXp += progression::killXp(3, playerLevel, playerLevel) * request.needed();
+        request.rewarded = true;
+        logLine("Request rewarded: " + std::to_string(gold) + " gold and a piece of gear");
+        return {requestPage("Good work! Thank you. Here are " + std::to_string(gold) + " gold and a piece of gear.")};
+    };
+    // A defeated creature counts for every open request that wants it.
+    auto requestKill = [&](int64_t id) {
+        const std::string world = requestWorld();
+        for (auto &request : saveGame.requests)
+            if (request.world == world && request.recordKill(id) && request.ready()) {
+                texts.push_back({player.position + glm::vec3(0, 0, 3.4f), "Request complete. Return to the villager.", REQUEST_COLOUR, 0, true});
+                logLine("Request complete: " + requestObjective(request));
+            }
+    };
     // True only for a fresh native Talk. The Use caller then queues the activation.
     auto startTalk = [&](const Speaker &k) {
         const auto *c = personOf(k);
@@ -3130,6 +3226,11 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             return false;
         answers.clear(); // a newly addressed conversation replaces its offered answers
         if (k.native) {
+            if (auto pages = requestPages(who); !pages.empty()) {
+                const auto speaker = npcspeech::actor(spawned.record(who));
+                npcSpeech.attach(who, spawned.playerId(), std::move(pages), speaker.drawn);
+                return true;
+            }
             TalkScript script;
             if (!conversationFor(k, who, script))
                 return true; // A fresh Talk still activates without a script.
@@ -8027,11 +8128,19 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 // Credited by its kill credit (packet 7 list 10), which names everyone it was
                 // angry at (creature-hit.md §3.6).
                 const bool mine = creditedKills.erase(d.id) > 0;
+                if (inventedQuests) { // villager requests: a kill by any player counts
+                    const uint8_t *killer = d.killer ? spawned.record(d.killer) : nullptr;
+                    if (mine || (d.killer && d.killer == spawned.playerId()) || (killer && killer[worldgen::creature::HOSTILITY] == 0))
+                        requestKill(d.id);
+                }
                 logLine("Creatures: race " + std::to_string(d.race) + " (level " + std::to_string(d.level) + ") died" +
                         (mine ? " by the player" : ""));
                 if (mine) {
                     const int enemy = mode == progression::Mode::Pyro ? creatureLevel(d.record.data()) : d.level;
-                    creditKill(d.level, enemy, "", d.at, true);
+                    uint32_t flags = 0;
+                    if (d.record.size() >= worldgen::creature::FLAGS + sizeof flags)
+                        std::memcpy(&flags, d.record.data() + worldgen::creature::FLAGS, sizeof flags);
+                    creditKill(d.level, enemy, "", d.at, true, flags);
                     if (mode == progression::Mode::Pyro && coinsOf[d.id] > 0) // (PyroProgression's coins share the level)
                         for (Loot &l : loot)
                             if (l.droppedBy == d.id && l.item.category == grounditems::type::COIN)
@@ -9273,6 +9382,21 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hs.quest.push_back(q.state == 0 ? speech.say("objective_defeat_enemies_in_zone", context, fixed) + " " +
                                                       std::to_string(q.done) + "/" + std::to_string(q.need)
                                                 : speech.say("solved_defeat_enemies_in_zone", context, fixed) + " Return for your reward.");
+            }
+            if (inventedQuests) { // the villagers' requests: what is left, and which way
+                const std::array<int32_t, 3> here{
+                    int32_t(std::floor((double(player.position.x) * 65536 + double(extractedWorld.originDotsX())) / 65536)),
+                    int32_t(std::floor((double(player.position.y) * 65536 + double(extractedWorld.originDotsY())) / 65536)), 0};
+                const std::string world = requestWorld();
+                for (const auto &r : saveGame.requests) {
+                    if (r.world != world || r.rewarded)
+                        continue;
+                    if (hs.quest.empty())
+                        hs.quest.push_back("QUESTS");
+                    hs.quest.push_back(r.ready() ? "Return to the villager (" + villagerquests::direction(here, r.giverAt) + ")"
+                                                 : requestObjective(r) + " (" + std::to_string(r.progress()) + "/" + std::to_string(r.needed()) +
+                                                       ", " + villagerquests::direction(here, r.targetAt) + ")");
+                }
             }
             for (auto it = texts.begin(); it != texts.end();) {
                 it->age += dt;
