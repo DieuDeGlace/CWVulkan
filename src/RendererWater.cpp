@@ -6,7 +6,7 @@
 namespace {
 // std140 layout, shared with omega_water.frag. No game data is stored here.
 struct WaterUniforms {
-    glm::vec4 optics, body, absorption, screen, fog, sky;
+    glm::vec4 optics, body, absorption, screen, fog, sky, waves;
 };
 } // namespace
 
@@ -58,7 +58,7 @@ bool Renderer::createWaterResources(uint32_t scenePushBytes, std::string &error)
 }
 
 bool Renderer::createWaterTargets() {
-    const bool shared = settings.water.style == waterlook::Style::Omega;
+    const bool shared = settings.water.style != waterlook::Style::Native;
     const uint32_t width = shared ? extent.width : 1, height = shared ? extent.height : 1;
     const auto usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     waterColour = createImage(width, height, swapFormat, usage, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -111,13 +111,17 @@ void Renderer::updateWaterUniforms(float nearPlane, float farPlane, float sunlig
     const float brightness = .2f + .8f * std::clamp(sunlight, 0.f, 1.f);
     // Seen from below, a long path through the surface tends toward the same
     // cobalt haze as the submerged scene, rather than the shallow surface blue.
-    const auto scattering = submerged ? glm::vec4(fog, 1.f) : glm::vec4(.015f, .27f, .72f, brightness);
+    const bool revised = settings.water.style == waterlook::Style::Revised;
+    const glm::vec3 deep = revised ? glm::vec3(0, .33f, .76f) : glm::vec3(.015f, .27f, .72f);
+    const auto scattering = submerged ? glm::vec4(fog, 1.f) : glm::vec4(deep, brightness);
+    const glm::vec2 offsets = revised ? waterlook::waveOffsets(worldProbe.origin, time) : glm::vec2(0);
     const WaterUniforms data{{nearPlane, farPlane, (float)settings.water.reflectionSteps, settings.water.reflections ? .85f : 0.f},
                              scattering,
-                             {.38f, .23f, .06f, 0},
+                             revised ? glm::vec4(.60f, .45f, 1.f, 0) : glm::vec4(.38f, .23f, .06f, 0),
                              {1.f / extent.width, 1.f / extent.height, submerged ? 1.f : 0.f, (float)time},
                              {fog, std::max(fogRange, .001f)},
-                             {glm::vec3(.12f, .35f, .62f) * brightness, 1}};
+                             {glm::vec3(.12f, .35f, .62f) * brightness, 1},
+                             {offsets, revised ? 1.f : 0.f, settings.style == RenderStyle::Alpha ? 1.f : 0.f}};
     std::memcpy(waterFrames[frameIndex].uniforms.mapped, &data, sizeof data);
 }
 

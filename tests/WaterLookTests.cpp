@@ -57,7 +57,22 @@ int waterLookTests() {
     config.set("Water", "Style", "NATIVE");
     settings.read(config);
     WATER_CHECK(settings.style == waterlook::Style::Native);
+    config.set("Water", "Style", "ReViSeD");
+    settings.read(config);
+    WATER_CHECK(settings.style == waterlook::Style::Revised && settings.visibility() == 48.f);
+    settings.underwaterVisibility = 24.f;
+    WATER_CHECK(settings.visibility() == 24.f);
+    const auto offsets = waterlook::waveOffsets({}, 1.);
+    WATER_CHECK(glm::length(offsets - glm::vec2(.8f, -.65f)) < 1e-6f);
+    const glm::dvec2 origin(-123456789, 234567891), shift(256, -64);
+    const auto initial = waterlook::waveOffsets(origin, 935000.125);
+    const auto moved = waterlook::waveOffsets(origin + shift, 935000.125);
+    constexpr double turn = 6.283185307179586;
+    WATER_CHECK(std::abs(std::remainder(moved.x - initial.x - .65 * shift.x - .31 * shift.y, turn)) < 1e-5);
+    WATER_CHECK(std::abs(std::remainder(moved.y - initial.y + .27 * shift.x - .72 * shift.y, turn)) < 1e-5);
     for (float light : {0.f, .25f, 1.f}) {
+        const auto revised = waterlook::submerged(light, waterlook::Style::Revised);
+        WATER_CHECK(glm::length(revised.fog - glm::vec3(0,.42f,.79f) * (.2f+.8f*light)) < 1e-6f);
         const auto palette = waterlook::submerged(light);
         WATER_CHECK(palette.fog.b > palette.fog.g && palette.material.g > palette.material.r);
         for (auto colour : {palette.horizon, palette.zenith, palette.fog}) {
@@ -109,25 +124,31 @@ int waterShaderTests() {
         WorldProbe probe;
         probe.water = [](glm::vec3 point) { return point.z < 0; };
         renderer.setWorldProbe(probe);
-        Mesh floor, alternateFloor, bank, water;
+        Mesh floor, alternateFloor, stripedFloor, bank, water;
         quad(floor, {{{-8, -4, -2}, {8, -4, -2}, {-8, 14, -2}, {8, 14, -2}}}, {120, 180, 40}, 4);
         quad(alternateFloor, {{{-8, -4, -2}, {8, -4, -2}, {-8, 14, -2}, {8, 14, -2}}}, {40, 70, 160}, 4);
         quad(bank, {{{-3, 8, 0}, {3, 8, 0}, {-3, 8, 5}, {3, 8, 5}}}, {220, 35, 20}, 3);
         quad(water, {{{-8, -4, 0}, {8, -4, 0}, {-8, 12, 0}, {8, 12, 0}}}, {40, 100, 180}, 4, WATER_SURFACE);
+        for (int i = -16; i < 16; ++i) {
+            const float x = i * .5f;
+            const glm::u8vec3 colour = i % 2 ? glm::u8vec3(230,210,170) : glm::u8vec3(20,35,50);
+            quad(stripedFloor, {{{x,-4,-.4f},{x+.5f,-4,-.4f},{x,14,-.4f},{x+.5f,14,-.4f}}}, colour, 4);
+        }
         if (look.packedVertices)
-            for (auto *mesh : {&floor, &alternateFloor, &bank, &water})
+            for (auto *mesh : {&floor, &alternateFloor, &stripedFloor, &bank, &water})
                 for (auto &vertex : mesh->vertices) {
                     vertex.r /= 2;
                     vertex.g /= 2;
                     vertex.b /= 2;
                     vertex.flags |= STEAM_VERTEX;
                 }
-        DrawItem floorDraw, alternateFloorDraw, bankDraw, waterDraw;
+        DrawItem floorDraw, alternateFloorDraw, stripedDraw, bankDraw, waterDraw;
         floorDraw.mesh = renderer.upload(floor);
+        stripedDraw.mesh = renderer.upload(stripedFloor);
         alternateFloorDraw.mesh = renderer.upload(alternateFloor);
         bankDraw.mesh = renderer.upload(bank);
         waterDraw.mesh = renderer.upload(water);
-        floorDraw.kind = alternateFloorDraw.kind = bankDraw.kind = waterDraw.kind = DrawKind::Terrain;
+        floorDraw.kind = stripedDraw.kind = alternateFloorDraw.kind = bankDraw.kind = waterDraw.kind = DrawKind::Terrain;
         const uint8_t white[] = {255, 255, 255, 255};
         WATER_CHECK(renderer.setOverlayAtlas(1, 1, white));
         bool showOverlay = false;
@@ -188,6 +209,43 @@ int waterShaderTests() {
                 for (int x = 80; x < 176; ++x)
                     transmittedPixels += std::abs(changedFloor.channel(x, y, 1) - noReflection.channel(x, y, 1)) > 10;
         WATER_CHECK(transmittedPixels > 100);
+        renderer.settings.water.style = waterlook::Style::Revised;
+        const auto revised = capture("revised-floor", {floorDraw, bankDraw}, true);
+        const auto revisedOff = capture("revised-reflection-switch", {floorDraw, bankDraw}, false);
+        const auto revisedFloor = capture("revised-alternate-floor", {alternateFloorDraw, bankDraw}, false);
+        const auto stripes = capture("revised-stripes", {stripedDraw}, false);
+        const auto later = capture("revised-later", {stripedDraw}, false, 7.25);
+        WATER_CHECK(!revised.pixels.empty() && revised.pixels == revisedOff.pixels);
+        auto changedPixels = [](const Picture &a, const Picture &b, int threshold) {
+            int count = 0;
+            if (a.pixels.empty() || a.width != b.width || a.height != b.height) return count;
+            for (int y = 100; y < 175; ++y)
+                for (int x = 80; x < 176; ++x)
+                    for (int channel = 0; channel < 3; ++channel)
+                        if (std::abs(a.channel(x,y,channel) - b.channel(x,y,channel)) > threshold) {
+                            ++count;
+                            break;
+                        }
+            return count;
+        };
+        const int bodyChange = changedPixels(revised, noReflection, 4);
+        const int floorChange = changedPixels(revised, revisedFloor, 4);
+        const int waveChange = changedPixels(stripes, later, 0);
+        std::printf("Revised water %s: style %d, transmitted %d, animated %d pixels\n",
+                    prefix.c_str(), bodyChange, floorChange, waveChange);
+        WATER_CHECK(bodyChange > 100 && floorChange > 100 && waveChange > 2);
+        if (look.style == RenderStyle::Steam) {
+            const auto savedSun = lighting.sunDir;
+            lighting.sunDir = {0,0,-1};
+            const auto below = capture("revised-sun-below", {floorDraw}, false);
+            lighting.sunDir = glm::normalize(glm::vec3(0,11,6));
+            const auto aligned = capture("revised-sun-aligned", {floorDraw}, false);
+            const int glintPixels = changedPixels(aligned, below, 10);
+            std::printf("Revised water %s sun-glint pixels %d\n", prefix.c_str(), glintPixels);
+            WATER_CHECK(glintPixels > 10);
+            lighting.sunDir = savedSun;
+        }
+        renderer.settings.water.style = waterlook::Style::Omega;
         camera.eye = {0, -6, -1};
         camera.target = {0, 5, -1};
         for (int frame = 0; frame < 20; ++frame)
@@ -212,6 +270,17 @@ int waterShaderTests() {
             for (int channel = 0; channel < 3; ++channel)
                 WATER_CHECK(submerged.channel(20, 20, channel) == 255);
         }
+        renderer.settings.water.style = waterlook::Style::Revised;
+        for (int frame = 0; frame < 30; ++frame)
+            renderer.frame(camera, lighting, {}, 7.0 + frame * .1, {floorDraw}, {waterDraw});
+        const auto blue = capture("revised-submerged", {floorDraw}, false, 10.);
+        if (!blue.pixels.empty() && !submerged.pixels.empty()) {
+            const int red = blue.channel(128, 45, 0), green = blue.channel(128, 45, 1), b = blue.channel(128, 45, 2);
+            std::printf("Revised underwater %s: %d,%d,%d\n", prefix.c_str(), red, green, b);
+            WATER_CHECK(green > submerged.channel(128, 45, 1) + 25 && b > green && green > red);
+            WATER_CHECK(blue.channel(20, 20, 0) == 255 && blue.channel(20, 20, 2) == 255);
+        }
+        renderer.settings.water.style = waterlook::Style::Omega;
         renderer.settings.taa = renderer.settings.smaa = true;
         glfwSetWindowSize(window, 320, 240);
         for (int frame = 0; frame < 8; ++frame) {

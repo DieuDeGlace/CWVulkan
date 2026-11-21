@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## Revised water appearance - 2026-11-21
+
+Set `Style=Revised` under `[Water]` and restart to use the later water
+look in either lighting style. Five waves tilt the water surface normal
+and fade to flat between 40 and 120 blocks. The sun glints on those waves.
+Underwater, the blue-green haze has a 48-block ceiling. Omega remains the
+default and keeps its screen-space bank reflections.
+
+Offscreen tests compared the transmitted bed colour, moving wave patterns
+and submerged palettes in Alpha, Steam and packed Steam terrain. Additional
+Steam views compared the sunlight glint above and below the horizon.
+
 ## Optional moving clouds - 2026-11-21
 
 Set `AnimatedClouds=1` under `[Motion]` for eastward drift of 1.2 blocks

@@ -25,6 +25,15 @@ culling and rendering use the displaced anchor. Each cell samples climate
 and height at its original coordinates.
 [Add-on cloud behavior](specs/owned-addon-cloud-movement-20261121.md).
 
+The optional Revised water look uses the frame's local position together
+with two signed, wrapped phases computed from the world origin and elapsed
+seconds in double precision. This keeps wave travel continuous when the
+view rebases. Its five slopes, depth attenuation, sun glint and 48-block
+submerged palette belong to the add-on. A shorter configured underwater
+range still applies.
+[Surface appearance](specs/owned-addon-water-later-look-20261121.md).
+[Wave offsets](specs/owned-addon-water-wave-offsets-20261121.md).
+
 ## Part A. Interoperability facts
 
 These are the facts the engine needs to read the player's files, talk to other copies of the game

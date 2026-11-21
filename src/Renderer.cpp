@@ -1101,8 +1101,8 @@ void Renderer::prepareScene(const Camera &camera, const Lighting &lighting, doub
     const bool menuSky = lighting.menuSky[5].w > 0;
     const bool submerged = !menuSky && worldProbe.water && worldProbe.water(camera.eye);
     next.material = steamlighting::material(submerged);
-    if (submerged && settings.water.style == waterlook::Style::Omega)
-        next.material = glm::vec4(waterlook::submerged(alpha::sunlight(double(lighting.timeMs))).material, next.material.a);
+    if (submerged && settings.water.style != waterlook::Style::Native)
+        next.material = glm::vec4(waterlook::submerged(alpha::sunlight(double(lighting.timeMs)), settings.water.style).material, next.material.a);
     if (settings.style == RenderStyle::Steam && !menuSky && worldProbe.sceneZone) {
         scenerange::Frame range;
         range.camera = next.visibility.eye;
@@ -1252,7 +1252,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // The original menu's captured scene keeps the look it was captured with.
     const bool menuSky = lighting.menuSky[5].w > 0;
     const bool alphaLook = settings.style == RenderStyle::Alpha && !menuSky;
-    const bool sharedWater = settings.water.style == waterlook::Style::Omega && !menuSky;
+    const bool sharedWater = settings.water.style != waterlook::Style::Native && !menuSky;
     const double dayMs = alphaLook ? std::fmod(std::max(0.0, (double)lighting.hour), 24.0) * 3600000.0
                                   : (double)lighting.timeMs;
     const float S = alpha::sunlight(dayMs);
@@ -1323,7 +1323,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         alpha::ZoneFactors zone = worldProbe.zone ? worldProbe.zone(camera.eye) : alpha::ZoneFactors{};
         alpha::Palette palette = alpha::palette(alpha::paletteDaylight(dayMs), zone, underwater);
         if (sharedWater && underwater) {
-            const auto submerged = waterlook::submerged(S);
+            const auto submerged = waterlook::submerged(S, settings.water.style);
             palette.sky1 = submerged.horizon;
             palette.sky2 = submerged.zenith;
             palette.fog = submerged.fog;
@@ -1336,8 +1336,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.alphaAmbient = glm::vec4(palette.ambient, 1);
         u.alphaMaterial = alpha::material(S, underwater);
         if (sharedWater && underwater)
-            u.alphaMaterial = glm::vec4(waterlook::submerged(S).material, u.alphaMaterial.a);
-        u.alphaSun = glm::vec4(D, 1 / (sharedWater && underwater ? std::min(fogF, settings.water.underwaterVisibility) : fogF));
+            u.alphaMaterial = glm::vec4(waterlook::submerged(S, settings.water.style).material, u.alphaMaterial.a);
+        u.alphaSun = glm::vec4(D, 1 / (sharedWater && underwater ? std::min(fogF, settings.water.visibility()) : fogF));
         mapFog = palette.fog;
         u.sunColour = alpha::sunSpriteColour(S);
         // CubeVulkan's moon (src/AlphaMoon.h): opposite the sun, at night.
@@ -1372,7 +1372,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         steamsky::Palette target = steamsky::palette(steamlighting::dayCoordinate(lighting.timeMs), environment.region, underwater,
                                                      {lighting.farFlight, lighting.effect13RemainingMs});
         if (sharedWater && underwater) {
-            const auto submerged = waterlook::submerged(S);
+            const auto submerged = waterlook::submerged(S, settings.water.style);
             target.sky1 = glm::vec4(waterlook::steamShaderColour(submerged.horizon), 1);
             target.sky2 = glm::vec4(waterlook::steamShaderColour(submerged.zenith), 1);
             target.fog = glm::vec4(waterlook::steamShaderColour(submerged.fog), 1);
@@ -1481,7 +1481,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.bounceFront = alphaLook ? u.alphaFront : u.front;
     }
     u.alphaView.w = sharedWater && underwater ? 1.f : 0.f; // shared world-fragment tint, never interface pixels
-    u.fog = glm::vec4(mapFog, sharedWater && underwater ? std::min(sceneDistance, settings.water.underwaterVisibility) : sceneDistance);
+    u.fog = glm::vec4(mapFog, sharedWater && underwater ? std::min(sceneDistance, settings.water.visibility()) : sceneDistance);
     if (!alphaLook && !menuSky)
         steamFog.setDistance(underwater ? std::min(u.fog.w, 150.f) : u.fog.w);
     u.steamSky[5].w = steamFog.value(); // the actual bound reciprocal, not a fresh shader inversion

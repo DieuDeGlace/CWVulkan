@@ -1,5 +1,18 @@
 # Clean-room process
 
+## Revised water appearance - 2026-11-21
+
+The isolated author described the later user-owned water additions and
+separately traced their supplied phase offsets to the earlier additions.
+Both complete handoffs were receipted before use. The clean renderer
+uses its own scene-depth reconstruction, solar shadow sampling, fog
+compositing and opaque surface output. The later additions establish
+sun glints. They leave the fate of the earlier scene reflection
+unresolved. CubeVulkan selects glints alone in Revised and retains the
+reflection control in Omega.
+[Surface appearance](specs/owned-addon-water-later-look-20261121.md).
+[Wave offsets](specs/owned-addon-water-wave-offsets-20261121.md).
+
 ## Moving cloud layer - 2026-11-21
 
 The isolated author read just the individually assigned additions in the

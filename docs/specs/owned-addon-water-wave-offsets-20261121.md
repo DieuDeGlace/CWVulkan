@@ -1,0 +1,23 @@
+# User-authored water wave offsets
+
+FINAL / STABLE / HELD. Sources are the zero-context water additions in commits 8b8392d, ea53e72 and f43b42f. The first commit establishes how the renderer supplies the phases. The last establishes how the later water shader consumes them.
+
+## World coordinates and clock
+
+At the start of the water pass, the renderer samples elapsed seconds from a monotonic clock's own epoch in double precision. A second of this clock advances the first phase by 0.80 radians and decreases the second by 0.65 radians. Its epoch has no specified in-game date or time. The renderer obtains the horizontal reference coordinates, in blocks, by negating the X and Y draw-origin offsets after conversion to double. Each spatial phase is a projection of that reference point. The first uses 0.65 radians per X block and 0.31 per Y block. The second uses -0.27 per X block and 0.72 per Y block.
+
+For each projection the renderer adds the signed elapsed-time contribution, takes the signed nearest-multiple remainder over a full turn of two pi radians, then converts the result to a single-precision shader input. The remainder lies between minus pi and plus pi before that final conversion. A direct check is that a zero reference and one second after the clock epoch produce offsets of +0.80 and -0.65 radians. Evidence is in the 8b8392d Vulkan renderer additions.
+
+The water draw translates each zone in X and Y by its block origin plus the signed draw-origin offset, then supplies that transform to the vertex shader. The added vertex path expands packed vertex coordinates by 255 and passes the transformed three-dimensional position to the pixel stage. The shader projects its rebased horizontal position onto the same two directions and adds the two supplied offsets. The draw-origin contribution in the fragment and the opposite contribution in the uniforms cancel. At unchanged time, a fixed water point retains the same phases across a change of render origin, up to floating-point precision. The shader's fragment coordinates and the two CPU offsets must refer to the same rebase. Evidence is in the 8b8392d renderer and water vertex/pixel shader additions and in the f43b42f water pixel shader additions.
+
+The other two components sent with the phases are brightness and the submerged flag. The renderer computes brightness as 0.20 plus 0.80 times the sunlight value sampled at the world's current game time. The brightness clock therefore differs from the monotonic seconds supplying wave travel. A sunlight input of zero gives brightness 0.20 and an input of one gives 1.00. The flag is one for a submerged camera and zero otherwise. The 8b8392d renderer additions derive that flag by comparing the camera block's type with water. The supplied water pixel shader tests a threshold of 0.5. The additions establish the sunlight input to brightness but do not give its entire time-of-day curve.
+
+## Direction of travel
+
+The first revision tilts an eligible top face using the sine of each complete phase, with a horizontal perturbation factor of 0.018. The later revision obtains slopes from cosines of integer combinations of the same phases and tilts the normal against the summed slope. Those cosines are consistent with differentiating positive sine height waves. For a component with column and row multipliers, its angular rate is 0.80 times its first multiplier minus 0.65 times its second, in radians per second. The five later pairs (1,0), (0,1), (2,1), (1,-2) and (3,2) therefore advance at +0.80, -0.65, +0.95, +2.10 and +1.10 radians per second, respectively, at a fixed water point.
+
+As an inference from these measured signs, a crest of the first component moves opposite the spatial direction (0.65, 0.31). A crest of the second moves along (-0.27, 0.72). These are directions of constant-phase travel. The angular rates are per second, and conversion to travel speed in blocks per second depends on the magnitude of the matching spatial direction. Integer phase multipliers preserve continuity across the full-turn wrap. Evidence is in 8b8392d and f43b42f.
+
+## Scene reflection boundary
+
+The 8b8392d additions explicitly mix a sampled scene reflection and a fallback into the above-water color with an angle-dependent weight. They also supply a separate sunlight highlight. The f43b42f additions explicitly compute a wave-normal sun glint gated by solar visibility. The two added lines in ea53e72 do not establish the fate of the earlier reflection pass. The authorized additions alone cannot establish whether the optional scene-reflection path survives in the later revision. Resolving its removal would require evidence beyond additions alone.

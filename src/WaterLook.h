@@ -4,18 +4,21 @@
 #include <glm/glm.hpp>
 class Config;
 namespace waterlook {
-enum class Style { Omega, Native };
+enum class Style { Omega, Native, Revised };
 struct Settings {
     Style style = Style::Omega;
     bool reflections = true;
     int reflectionSteps = 24;
     float underwaterVisibility = 80;
     void read(const Config &);
+    float visibility() const;
 };
 struct Submerged {
     glm::vec3 horizon, zenith, fog, material;
 };
-Submerged submerged(float sunlight);
+Submerged submerged(float sunlight, Style style = Style::Omega);
+// Shader coordinates are relative to this absolute block origin.
+glm::vec2 waveOffsets(glm::dvec2 origin, double seconds);
 // Preserve the chosen displayed haze across the native Steam grading stage.
 glm::vec3 steamShaderColour(glm::vec3 displayColour);
 glm::vec3 steamDisplayColour(glm::vec3 shaderColour);
