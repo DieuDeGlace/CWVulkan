@@ -38,6 +38,7 @@
 #include "worldgen/Generator.h"
 #include "worldgen/AlphaRelief.h"
 #include "VillagerQuests.h"
+#include "TravelParties.h"
 #include "alphagen/Random.h"
 #include "worldgen/Gear.h"
 #include "worldgen/Looks.h"
@@ -8324,6 +8325,43 @@ static void shadowStepTests() {
     CHECK(night.lightDir == nightLate.lightDir && night.shadowStrength == nightLate.shadowStrength);
 }
 
+// Travelling parties (TravelParties.h, the user's add-on): villages, routes and waypoints.
+static void travelPartyTests() {
+    using namespace travelparties;
+    // Villages around the origin: each big place once, all of kind 5.
+    const auto villages = villagesAround(0, 0);
+    CHECK(villages.size() >= 2);
+    std::set<std::pair<int32_t, int32_t>> centres;
+    for (const auto &v : villages)
+        centres.insert({v.centre.x, v.centre.y});
+    CHECK(centres.size() == villages.size());
+    Village origin, destination;
+    CHECK(chooseRoute(villages, {0, 0}, false, origin, destination));
+    const auto distance = [](const Village &v) { return std::hypot(double(v.centre.x), double(v.centre.y)); };
+    CHECK(distance(origin) <= distance(destination));
+    for (const auto &v : villages) // the origin is the nearest
+        CHECK(distance(origin) <= distance(v));
+    Village other;
+    CHECK(chooseRoute(villages, {0, 0}, true, origin, other));
+    CHECK(!chooseRoute({villages[0]}, {0, 0}, false, origin, destination));
+    CHECK(nearVillage(origin.centre.x, origin.centre.y, 0));
+    // Waypoints: straight on flat ground, around a wall, nothing when every way is too steep.
+    const auto flat = [](double, double) { return 10.0; };
+    glm::dvec2 next;
+    CHECK(nextWaypoint({0, 0}, {100, 0}, false, 0, flat, next) && std::abs(next.x - 22) < 1e-9 && std::abs(next.y) < 1e-9);
+    CHECK(nextWaypoint({0, 0}, {5, 0}, false, 0, flat, next) && std::abs(next.x - 5) < 1e-9); // no further than the goal
+    const auto wall = [](double x, double y) { return x > 15 && std::abs(y) < 10 ? 60.0 : 10.0; };
+    CHECK(nextWaypoint({0, 0}, {100, 0}, false, 0, wall, next) && std::abs(next.y) >= 10);
+    const auto cliff = [](double x, double) { return x > 5 ? 200.0 : 10.0; };
+    CHECK(!nextWaypoint({0, 0}, {100, 0}, false, 0, cliff, next));
+    const auto sea = [](double x, double) { return x > 5 ? -3.0 : 10.0; };
+    CHECK(!nextWaypoint({0, 0}, {100, 0}, false, 0, sea, next));
+    // A hostile party never steps into a village.
+    const glm::dvec2 c(origin.centre.x, origin.centre.y);
+    CHECK(!nextWaypoint(c + glm::dvec2(origin.radius + 70, 0), c, true, 0, flat, next) ||
+          !nearVillage(next.x, next.y, HOSTILE_VILLAGE_MARGIN));
+}
+
 // Villager requests (VillagerQuests.h, the user's add-on): givers, targets, progress and directions.
 static void villagerQuestTests() {
     using namespace villagerquests;
@@ -10237,6 +10275,10 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "travelparties") {
+        travelPartyTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "villagerquests") {
         villagerQuestTests();
         return failures ? 1 : 0;
@@ -11686,6 +11728,7 @@ int main(int argc, char **argv) {
     mapLandTests();
     killXpTests();
     villagerQuestTests();
+    travelPartyTests();
     speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();

@@ -182,6 +182,7 @@ add_library(engine STATIC
     src/TalkScripts.cpp
     src/TalkGen.cpp
     src/VillagerQuests.cpp
+    src/TravelParties.cpp
     src/worldgen/Noise.cpp
     src/worldgen/Regions.cpp
     src/worldgen/Places.cpp

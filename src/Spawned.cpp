@@ -531,6 +531,14 @@ void SpawnedCreatures::remove(int64_t id) {
             }
 }
 
+void SpawnedCreatures::setGroup(const std::vector<int64_t> &ids) {
+    const std::set<int64_t> group(ids.begin(), ids.end());
+    for (auto &[k, list] : zones)
+        for (Creature &cr : list)
+            if (group.count(get<int64_t>(cr.record, worldgen::creature::ID)))
+                cr.side.group = group;
+}
+
 void SpawnedCreatures::retireDistantResidents() {
     std::vector<const uint8_t *> actors;
     forEachWorldCreature([&](const uint8_t *record) { actors.push_back(record); });

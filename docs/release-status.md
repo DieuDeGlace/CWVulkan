@@ -1,5 +1,12 @@
 # Source review checkpoint — 2026-11-08
 
+## Travelling parties - 2026-11-21
+
+`[Creatures] TravelParties` (off by default) brings the user's travelling parties: groups of
+two to four of a faction walk from one village to the next and back. Half are hostile and
+keep out of villages. Parties leave the world when no player is near, walk on unseen, and
+return when a player comes within 100 to 220 blocks.
+
 ## Villager request markers - 2026-11-21
 
 With `[Quests] CubeVulkanQuests` on, the map shows where each open request's group was

@@ -70,6 +70,7 @@
 #include "NativeInteract.h"
 #include "WorldMap.h"
 #include "OverworldEvents.h"
+#include "TravelParties.h"
 #include "Mods.h"
 #include "Missions.h"
 #include "Lore.h"
@@ -2508,6 +2509,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // gives them (its objective_/solved_ lines are unused; docs/dialogue.md). Off
     // unless [Quests] CubeVulkanQuests=1.
     const bool inventedQuests = config.flag("Quests", "CubeVulkanQuests", false);
+    // Travelling parties between villages ([Creatures] TravelParties, the user's add-on; off by default).
+    const bool travelPartiesOn = config.flag("Creatures", "TravelParties", false);
+    travelparties::Manager travelParties;
     std::vector<SaveGame::Quest> &quests = saveGame.quests;
     // Proper names. The game makes its own in code (Lalan, Telgor, Ikolon, Ardara);
     // these are CubeVulkan's, in that style, fixed for each person or place.
@@ -8186,6 +8190,22 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     rebuildInventoryViews();
                 }
                 logLine("TAMED!");
+            }
+            if (travelPartiesOn && spawnedReady && !session.guestElsewhere()) {
+                auto partiesHold = session.lockHost();
+                std::vector<glm::dvec3> players;
+                hostWorld.forEachWorldCreature([&](const uint8_t *r) {
+                    if (r[worldgen::creature::HOSTILITY] != 0)
+                        return;
+                    int64_t at[3];
+                    std::memcpy(at, r + worldgen::creature::POSITION, sizeof at);
+                    players.push_back(glm::dvec3(at[0], at[1], at[2]) / 65536.0);
+                });
+                if (players.empty())
+                    players.push_back(glm::dvec3((double(player.position.x) * 65536 + double(extractedWorld.originDotsX())) / 65536,
+                                                 (double(player.position.y) * 65536 + double(extractedWorld.originDotsY())) / 65536,
+                                                 player.position.z));
+                travelParties.update(hostWorld, players, !mapOpen && !inventoryOpen, frameMs);
             }
             if (events.enabled()) {
                 auto eventsHold = session.lockHost();

@@ -478,6 +478,8 @@ class SpawnedCreatures {
         return nativePlayer && hasPlayer && id == localId ? player.record.data() : record(id);
     }
     void remove(int64_t id);
+    // Puts these creatures in one group (+0xc08): the game's AI keeps each behind the first living one.
+    void setGroup(const std::vector<int64_t> &ids);
     // Every near creature's record.
     void forEach(const std::function<void(const uint8_t *)> &f) const;
     // All registered creatures, including the player, in retained insertion order.
