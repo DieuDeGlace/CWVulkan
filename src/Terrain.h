@@ -79,6 +79,8 @@ struct TerrainSettings {
     bool lilies = true;
     double lilyPatchDensity = .75, lilyFlowerPercent = 25;
     int lilyMaxPadsPerZone = 28, lilyMaximumDepth = 10;
+    // The user's later add-on: pads only on rivers (river weight above 0.5) above the sea's surface.
+    bool lilyRiversOnly = true;
     double sceneryDensity = 1;
 
     void read(const Config &config);

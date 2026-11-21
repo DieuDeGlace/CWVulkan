@@ -2046,7 +2046,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             const auto rgb = implicitColour.value_or(glm::vec3(c.r, c.g, c.b) / 255.f);
             return alphalight::shadeCorner(sample, rgb);
         };
-        meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset);
+        meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset, VoxelLayout::Classic, {}, true);
     } else if (nativeEncoding) {
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = steamvoxel::CORNERS[face][k];
@@ -2066,9 +2066,9 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             return lava && effectiveBlock(x, y, z).type == LAVA_TYPE ? *lava : opaque;
         };
         meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset,
-                  VoxelLayout::SteamTerrain, group);
+                  VoxelLayout::SteamTerrain, group, true);
     } else
-        meshVoxels({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, opaque, 1.f, offset);
+        meshVoxels({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, opaque, 1.f, offset, true);
     profile.mark(meshprofile::Solid);
     // Water geometry from water-rendering.md A.1/B.1: exposed full block
     // faces, including sides/bottoms, and a coplanar film over exposed wet ground.

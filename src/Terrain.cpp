@@ -38,6 +38,7 @@ void TerrainSettings::read(const Config &c) {
     lilyFlowerPercent = c.number("WaterLilies", "FlowerPercent", lilyFlowerPercent, 0, 100);
     lilyMaxPadsPerZone = (int)c.number("WaterLilies", "MaxPadsPerChunk", lilyMaxPadsPerZone, 0, 256);
     lilyMaximumDepth = (int)c.number("WaterLilies", "MaximumDepth", lilyMaximumDepth, 1, 40);
+    lilyRiversOnly = c.flag("WaterLilies", "RiversOnly", lilyRiversOnly);
 }
 
 namespace {

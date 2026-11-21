@@ -8323,6 +8323,69 @@ static void shadowStepTests() {
     CHECK(night.lightDir == nightLate.lightDir && night.shadowStrength == nightLate.shadowStrength);
 }
 
+// Land names on the map at wider biome sizes (MapModel.cpp 6.2, the user's later add-on): every land
+// whose (scaled) centre lies inside a map region is named; at scale 1 the game's single test stands.
+static void mapLandTests() {
+    const double previous = worldgen::worldScale();
+    int level = 0;
+    // A coarse zoom, where one region spans more than one land at scale 1.5.
+    while (level < 12 && worldgen::mapRegion(0, 0, level).unit < 1024)
+        ++level;
+    int named = 0, beyondOrigin = 0;
+    bool exact = true;
+    worldgen::setWorldScale(1.5);
+    for (int32_t rx = -3; rx <= 3; ++rx)
+        for (int32_t ry = -3; ry <= 3; ++ry) {
+            const worldgen::MapRegion m = worldgen::mapRegion(rx, ry, level);
+            const int64_t side = int64_t(16) * m.unit, x0 = side * rx, y0 = side * ry;
+            std::set<std::pair<int32_t, int32_t>> expected, got;
+            const double span = 8192.0 * 1.5;
+            for (int32_t lx = int32_t(std::floor(x0 / span)) - 1; lx <= int32_t(std::floor((x0 + side) / span)) + 1; ++lx)
+                for (int32_t ly = int32_t(std::floor(y0 / span)) - 1; ly <= int32_t(std::floor((y0 + side) / span)) + 1; ++ly) {
+                    const worldgen::Int2 c = worldgen::regionCentre(lx, ly);
+                    const int64_t cx = int64_t(std::floor(c.x * 1.5)), cy = int64_t(std::floor(c.y * 1.5));
+                    if (cx >= x0 && cx < x0 + side && cy >= y0 && cy < y0 + side)
+                        expected.insert({lx, ly});
+                }
+            for (const auto &k : m.markers)
+                if (k.list == 2)
+                    got.insert({k.px, k.py});
+            exact = exact && got == expected;
+            named += int(got.size());
+            const std::pair<int32_t, int32_t> origin{int32_t(std::floor(x0 / span)), int32_t(std::floor(y0 / span))};
+            for (const auto &land : got)
+                beyondOrigin += land != origin;
+        }
+    worldgen::setWorldScale(previous);
+    CHECK(level < 12);
+    CHECK(exact);              // every land centred in a region is named, and only those
+    CHECK(beyondOrigin > 0);   // some of them are not the land under the region's origin
+    std::printf("Map lands at scale 1.5: %d named, %d beyond the origin's land\n", named, beyondOrigin);
+}
+
+// Terrain leaf corners (Mesher.h pinLeafCorners, the user's add-on): a swaying leaf corner stays still
+// where it touches wood, so swaying leaves never open a gap at a branch.
+static void leafCornerTests() {
+    // Wood at x = 0, a leaf at x = 1, nothing else.
+    const auto solid = [](int x, int y, int z) { return y == 0 && z == 0 && (x == 0 || x == 1); };
+    const auto colour = [](int x, int, int) { return VoxelColor{100, 100, 100, uint8_t(x == 1 ? SWAY : 0)}; };
+    const auto shade = [](int, int, int, int, int, VoxelColor c) { return CornerShade{c.r, c.g, c.b, 255}; };
+    Mesh pinned, free;
+    meshFaces({0, 0, 0}, {2, 1, 1}, solid, colour, shade, pinned, 1.f, glm::vec3(0), VoxelLayout::Classic, {}, true);
+    meshFaces({0, 0, 0}, {2, 1, 1}, solid, colour, shade, free, 1.f, glm::vec3(0));
+    int swayAtWood = 0, swayAway = 0, stillAway = 0, unpinnedSway = 0;
+    for (const Vertex &v : pinned.vertices) {
+        if (v.x == 1.0f && (v.flags & SWAY)) ++swayAtWood;
+        if (v.x == 2.0f) ((v.flags & SWAY) ? ++swayAway : ++stillAway);
+    }
+    for (const Vertex &v : free.vertices)
+        if (v.x == 1.0f && (v.flags & SWAY)) ++unpinnedSway;
+    CHECK(swayAtWood == 0);              // every leaf corner on the wood's face is held still
+    CHECK(swayAway > 0 && stillAway == 0); // the far corners still sway
+    CHECK(unpinnedSway > 0);             // without the option nothing changes
+    CHECK(pinned.vertices.size() == free.vertices.size());
+}
+
 // CubeVulkan's Alpha terrain (worldgen/AlphaRelief.h): Steam terrain with Alpha's hills added, flat on
 // places and below the shore, rising at most 1.1 blocks per block from a flat edge.
 static void alphaReliefTests() {
@@ -10062,6 +10125,14 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "maplands") {
+        mapLandTests();
+        return failures ? 1 : 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "leafcorners") {
+        leafCornerTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "alpharelief") {
         alphaReliefTests();
         return failures ? 1 : 0;
@@ -11491,6 +11562,8 @@ int main(int argc, char **argv) {
     hudQuickTests();
     shadowStepTests();
     alphaReliefTests();
+    leafCornerTests();
+    mapLandTests();
     speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();

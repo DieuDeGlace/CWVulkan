@@ -877,16 +877,25 @@ private:
         // the game's.)
         if (u >= 128) {
             const double scale = worldScale();
-            const int32_t lx = (int32_t)std::floor((double)x0 / (8192.0 * scale)), ly = (int32_t)std::floor((double)y0 / (8192.0 * scale));
-            Int2 centre = regionCentre(lx, ly);
-            if (scale != 1.0)
-                centre = {(int32_t)std::floor(centre.x * scale), (int32_t)std::floor(centre.y * scale)};
-            if (inside(centre.x, centre.y)) {
-                MapRegion::Marker k;
-                k.list = 2, k.type = regionBiome(lx, ly), k.x = centre.x, k.y = centre.y, k.z = groundAt(centre.x, centre.y);
-                k.px = lx, k.py = ly;
-                lands.push_back(k);
-            }
+            const double span = 8192.0 * scale;
+            const int32_t lx0 = (int32_t)std::floor((double)x0 / span), ly0 = (int32_t)std::floor((double)y0 / span);
+            // At scale 1 one land cell holds the region's origin (the game's test). Wider lands can put
+            // that land's centre outside the region while a neighbour's centre lies inside: then every
+            // land cell the region overlaps is named (the user's later add-on).
+            const int32_t lx1 = scale == 1.0 ? lx0 : (int32_t)std::floor((double)x1 / span);
+            const int32_t ly1 = scale == 1.0 ? ly0 : (int32_t)std::floor((double)y1 / span);
+            for (int32_t lx = scale == 1.0 ? lx0 : lx0 - 1; lx <= lx1; ++lx)
+                for (int32_t ly = scale == 1.0 ? ly0 : ly0 - 1; ly <= ly1; ++ly) {
+                    Int2 centre = regionCentre(lx, ly);
+                    if (scale != 1.0)
+                        centre = {(int32_t)std::floor(centre.x * scale), (int32_t)std::floor(centre.y * scale)};
+                    if (!inside(centre.x, centre.y))
+                        continue;
+                    MapRegion::Marker k;
+                    k.list = 2, k.type = regionBiome(lx, ly), k.x = centre.x, k.y = centre.y, k.z = groundAt(centre.x, centre.y);
+                    k.px = lx, k.py = ly;
+                    lands.push_back(k);
+                }
         }
         // 6.3 The flight point of the 2048-block square.
         if (u <= 256) {

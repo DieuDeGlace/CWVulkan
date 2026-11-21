@@ -1,5 +1,14 @@
 # Source review checkpoint — 2026-11-08
 
+## Leaf corners, river lilies and map land names - 2026-11-21
+
+Three of the user's add-ons now match their later work. Swaying terrain leaves keep
+their corners still where they touch wood or ground, so no gap opens at a branch.
+Water lilies grow only on rivers above sea level (`[WaterLilies] RiversOnly`, on by
+default). At biome sizes above 1 the map names every land whose centre lies in a map
+region; at 1 the game's rule stands. Full required owner-data CPU without skips, every
+offscreen image group and the extractor SDK audit passed.
+
 ## Alpha terrain: the Steam world with Alpha's hills - 2026-11-20
 
 `World.Source=Alpha` now keeps the whole Steam world and adds Alpha's hills to its ground

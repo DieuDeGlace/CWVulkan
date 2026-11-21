@@ -846,6 +846,13 @@ void World::update(glm::vec3 focus) {
                 if (!extracted->waterAt(surface.x, surface.y, surface.z - .01f) ||
                     extracted->biomeAt(surface.x, surface.y) == OCEAN || zoneFactors(surface).warmth <= .2f)
                     return false;
+                if (settings.lilyRiversOnly) {
+                    // Rivers only, above the sea's surface (the user's later add-on).
+                    const auto x = int32_t(std::floor(surface.x)) + extracted->originZoneX() * ZONE;
+                    const auto y = int32_t(std::floor(surface.y)) + extracted->originZoneY() * ZONE;
+                    if (surface.z - ExtractedWorld::Z_OFFSET <= 1.f || !(worldgen::columnValues(x, y).river > .5f))
+                        return false;
+                }
                 for (int depth = 1; depth <= settings.lilyMaximumDepth; depth++)
                     if (extracted->solidAt(surface.x, surface.y, surface.z - depth - .01f))
                         return true;

@@ -88,9 +88,25 @@ inline void appendFaceIndices(Mesh &mesh, uint32_t base, const CornerShade (&cor
 // colour. `shade(x, y, z, face, corner, colour)` gives each face corner's final colour and
 // fourth byte (ambient occlusion or baked light; higher is brighter): `corner` indexes
 // FACE_CORNERS[face]. Vertices are `offset + p * scale`.
+// `pinLeafCorners` (terrain): a swaying (leaf) corner stays still where any of the eight voxels around
+// it is solid and not a leaf (trunk, branch, ground) or lies outside [lo, hi), so leaves never open a
+// gap where they meet wood.
 template <class Solid, class Color, class Shade>
 void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade &&shade, Mesh &output, float scale = 1,
-               glm::vec3 offset = glm::vec3(0), VoxelLayout layout = VoxelLayout::Classic, const MeshSelector &select = {}) {
+               glm::vec3 offset = glm::vec3(0), VoxelLayout layout = VoxelLayout::Classic, const MeshSelector &select = {},
+               bool pinLeafCorners = false) {
+    const auto pinned = [&](glm::ivec3 corner) {
+        for (int i = -1; i <= 0; ++i)
+            for (int j = -1; j <= 0; ++j)
+                for (int k = -1; k <= 0; ++k) {
+                    const glm::ivec3 v = corner + glm::ivec3(i, j, k);
+                    if (!solid(v.x, v.y, v.z))
+                        continue;
+                    if (glm::any(glm::lessThan(v, lo)) || glm::any(glm::greaterThanEqual(v, hi)) || !(color(v.x, v.y, v.z).flags & SWAY))
+                        return true;
+                }
+        return false;
+    };
     const auto emit = [&](int x, int y, int z) {
         if (!solid(x, y, z))
             return;
@@ -115,7 +131,10 @@ void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade
                 const glm::ivec3 source(x + corner[0], y + corner[1], z + corner[2]);
                 const glm::vec3 p = mesh.localOrigin ? glm::vec3(source - *mesh.localOrigin) * scale : offset + glm::vec3(source) * scale;
                 const CornerShade &s = corners[k];
-                mesh.vertices.push_back({p.x, p.y, p.z, s.r, s.g, s.b, s.a, (uint8_t)f, c.flags, 0, 0});
+                uint8_t flags = c.flags;
+                if (pinLeafCorners && (flags & SWAY) && pinned(source))
+                    flags &= uint8_t(~SWAY);
+                mesh.vertices.push_back({p.x, p.y, p.z, s.r, s.g, s.b, s.a, (uint8_t)f, flags, 0, 0});
                 mesh.min = glm::min(mesh.min, p);
                 mesh.max = glm::max(mesh.max, p);
             }
@@ -139,7 +158,7 @@ void meshFaces(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Shade
 // voxels beside it and the one diagonal to it, in the layer in front of the face.
 template <class Solid, class Color>
 void meshVoxels(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Mesh &mesh,
-                float scale = 1, glm::vec3 offset = glm::vec3(0)) {
+                float scale = 1, glm::vec3 offset = glm::vec3(0), bool pinLeafCorners = false) {
     auto occlusion = [&](int x, int y, int z, int f, int k, VoxelColor c) {
         const int *n = FACE_NORMALS[f];
         int nx = x + n[0], ny = y + n[1], nz = z + n[2];
@@ -156,5 +175,5 @@ void meshVoxels(glm::ivec3 lo, glm::ivec3 hi, Solid &&solid, Color &&color, Mesh
         int level = s1 && s2 ? 0 : 3 - (s1 + s2 + sc);
         return CornerShade{c.r, c.g, c.b, (uint8_t)(level * 85)};
     };
-    meshFaces(lo, hi, solid, color, occlusion, mesh, scale, offset);
+    meshFaces(lo, hi, solid, color, occlusion, mesh, scale, offset, VoxelLayout::Classic, {}, pinLeafCorners);
 }
