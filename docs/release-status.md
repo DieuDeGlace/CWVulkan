@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Alpha terrain: the Steam world with Alpha's hills - 2026-11-20
+
+`World.Source=Alpha` now keeps the whole Steam world and adds Alpha's hills to its ground
+height. Roads, places, landmarks, river, lava and swamp beds and the shore keep their Steam
+ground, and the hills climb away from them at no more than 1.1 blocks per block. Raised
+sides show stone, steep grassy slopes turn to rock, trees the hills would bury or crowd are
+left out, and reeds need water nearby. The plain Steam world is byte-identical: the terrain,
+block, structure and cell oracles still match exactly. Full required owner-data CPU without
+skips, every offscreen image group and the extractor SDK audit passed.
+
 ## Guest mission learning - 2026-11-20
 
 Speech pages now mark places on the map and credit lore for the local player

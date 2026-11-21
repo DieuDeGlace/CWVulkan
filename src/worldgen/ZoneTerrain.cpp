@@ -1,6 +1,8 @@
 // A zone's terrain, written from docs/specs/worldgen-terrain-zone.md (sections cited as §n).
 #include "worldgen/ZoneTerrain.h"
+#include <algorithm>
 #include <cstring>
+#include <optional>
 
 #include "worldgen/Height.h"
 
@@ -234,6 +236,7 @@ private:
                 f.place = c.place;
                 f.base = c.base;
                 f.height = c.height;
+                f.relief = c.relief;
                 f.lake = c.lake;
                 f.river = c.river;
                 f.colours = colourInputs(c);
@@ -255,7 +258,11 @@ private:
         } else {
             // 2. The ground's top block, snow, and a rock span.
             const NeighbourHeights nb = neighbours.around(lx, ly);
-            zone.store(x, y, fz, blockAt(x, y, fz, h, nb, f.colours, zone.sand));
+            const auto raisedTop = f.relief != 0.0f ? reliefTop(x, y, fz, h, nb, f.colours) : std::nullopt;
+            zone.store(x, y, fz, raisedTop ? *raisedTop : blockAt(x, y, fz, h, nb, f.colours, zone.sand));
+            if (f.relief != 0.0f)
+                for (int depth = reliefStoneDepth(h, nb); depth > 0; --depth)
+                    zone.store(x, y, fz - depth, reliefStone(x, y, fz - depth, f.colours));
             if (!(f.colours.vegetation > 0.5f) && !(f.colours.roads > 0.5f) && h > 0.0f &&
                 snowAt(x, y, f.colours.warmth, nb)) {
                 zone.store(x, y, fz + 1, SNOW_BLOCK);
@@ -295,7 +302,7 @@ private:
         const float h = f.height;
         const HeightInputs in{f.base, f.colours.highlands, f.river, f.colours.lava, f.colours.swamp, f.colours.roads,
                               f.colours.vegetation};
-        const float low = finalHeight(x, y, in, f.place, heightmode::LOW);
+        const float low = finalHeight(x, y, in, f.place, heightmode::LOW) + f.relief;
         const float top = (noiseAt(x, y, 0.01, 7474, 0.01, 98984) + 1.0f) * 20.0f + low;
         const int32_t bottom = floorToInt(low);
         const Block old = zone.read(x, y, fz);

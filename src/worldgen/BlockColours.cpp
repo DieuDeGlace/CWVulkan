@@ -293,6 +293,39 @@ BlockProps blockAt(int32_t x, int32_t y, int32_t z, float h, const NeighbourHeig
     return p;
 }
 
+// --- CubeVulkan's Alpha terrain (AlphaRelief.h) ---
+
+int reliefStoneDepth(float h, const NeighbourHeights &nb) {
+    const float lowest = minOf(minOf(nb.west, nb.east), minOf(nb.south, nb.north));
+    const int depth = floorToInt(h) - floorToInt(lowest) - 1; // the top block keeps its cover
+    return depth > 0 ? depth : 0;
+}
+
+BlockProps reliefStone(int32_t x, int32_t y, int32_t z, const ColourInputs &c) {
+    return rockColour(x, y, z, c.warmth, c.lavaRegion, c.forestRegion);
+}
+
+std::optional<BlockProps> reliefTop(int32_t x, int32_t y, int32_t z, float h, const NeighbourHeights &nb, const ColourInputs &c) {
+    if (c.lava > 0.5f || c.swamp > 0.5f || c.vegetation > 0.5f || c.roads > 0.5f || c.dryness > 0.5f || lowShore(x, y, h))
+        return std::nullopt;
+    BlockProps cover = surfaceColour(x, y, z, c);
+    // Blend into rock by the finished grade: grass to a slope of 0.8, rock from 2.2.
+    const float dx = (nb.east - nb.west) * 0.5f, dy = (nb.north - nb.south) * 0.5f;
+    constexpr float GRASS_SLOPE2 = 0.8f * 0.8f, ROCK_SLOPE2 = 2.2f * 2.2f;
+    float t = (dx * dx + dy * dy - GRASS_SLOPE2) / (ROCK_SLOPE2 - GRASS_SLOPE2);
+    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    const float stone = t * t * (3.0f - 2.0f * t);
+    if (stone > 0.0f) {
+        const BlockProps rock = reliefStone(x, y, z, c);
+        cover.r = cover.r + (rock.r - cover.r) * stone;
+        cover.g = cover.g + (rock.g - cover.g) * stone;
+        cover.b = cover.b + (rock.b - cover.b) * stone;
+        if (stone > 0.5f)
+            cover.type = rock.type;
+    }
+    return cover;
+}
+
 // --- §4.6, §4.7, §4.9 ---
 
 bool snowAt(int32_t x, int32_t y, float warm, const NeighbourHeights &nb) {

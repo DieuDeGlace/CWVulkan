@@ -36,6 +36,13 @@ float lavaRegion(const Neighbourhood &n, int kind, float weight);      // 0x2b97
 float forestRegion(const Neighbourhood &n, int kind, float weight);    // 0x2d9f30
 float dryness(const Neighbourhood &n);                                 // 0x2b5960
 float roads(int32_t x, int32_t y, int kind, float weight);             // 0x2d4730: 1 on a road
+// CubeVulkan's Alpha relief (AlphaRelief.h), not the game's: the blocks from a point, moved by the roads'
+// own warp, to the nearest road's centre line; and the channel noises behind river, lava and swamp, five
+// times their magnitude (0 on a centre line; fill() of a fifth of it is the channel's profile).
+float roadDistance(int32_t x, int32_t y, float placeWeight);
+float riverRidge(int32_t x, int32_t y, float wet);
+float lavaRidge(int32_t x, int32_t y);
+float swampRidge(int32_t x, int32_t y);
 float river(int32_t x, int32_t y, float roads, float lavaRegion, float forestRegion, float wet, const Place &p); // 0x2e5f80
 float lava(int32_t x, int32_t y, float roads, float lavaRegion, float lake, const Place &p);                    // 0x2b92f0
 float swamp(int32_t x, int32_t y, float roads, float forestRegion, float lake, const Place &p);                 // 0x2d01a0
@@ -62,6 +69,7 @@ struct ColumnValues {
     float lake = 0, base = 0, roads = 0, lavaRegion = 0, forestRegion = 0, wet = 0;
     float river = 0, lava = 0, swamp = 0, highlands = 0, dryRegion = 0, dryness = 0, vegetation = 0;
     float height = 0;
+    float relief = 0; // CubeVulkan's Alpha hills, already included in height (AlphaRelief.h); 0 for the Steam world
     HeightInputs heightInputs() const { return {base, highlands, river, lava, swamp, roads, vegetation}; }
 };
 ColumnValues columnValues(int32_t x, int32_t y, const Place &place, int mode = 0);

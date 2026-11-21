@@ -2,6 +2,7 @@
 // docs/specs/worldgen-structures-contents.md (sections cited as Cn).
 #include "worldgen/ZoneContents.h"
 
+#include "worldgen/AlphaRelief.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/Height.h"
 #include "worldgen/Options.h"
@@ -104,6 +105,36 @@ void findSpots(ZoneBuild &zone) {
 
 // --- C2 ------------------------------------------------------------------------------------------
 
+// CubeVulkan's Alpha terrain (AlphaRelief.h) can lift a reed bank away from its water, so reeds and
+// river grass need water within four blocks there, from two below to one above the plant. Beyond the
+// zone it samples the world's surface water (rivers to their level, the sea below 1).
+bool reedWater(const ZoneBuild &zone, int32_t x, int32_t y, int32_t z) {
+    if (!alphaRelief())
+        return true;
+    constexpr int REACH = 4;
+    for (int32_t dx = -REACH; dx <= REACH; ++dx)
+        for (int32_t dy = -REACH; dy <= REACH; ++dy) {
+            if (dx * dx + dy * dy > REACH * REACH)
+                continue;
+            const int32_t px = x + dx, py = y + dy;
+            if (px >= zone.x0 && px < zone.x0 + ZONE_SIZE && py >= zone.y0 && py < zone.y0 + ZONE_SIZE) {
+                for (int32_t level = z - 2; level <= z + 1; ++level)
+                    if (zone.read(px, py, level).type == blocktype::WATER)
+                        return true;
+                continue;
+            }
+            const ColumnValues c = columnValues(px, py);
+            const int32_t ground = floorToInt(c.height);
+            int32_t waterEnd = 1; // the sea's surface is block zero
+            if (c.river > 0.5f && c.height > -5.0f)
+                waterEnd = std::max(1, floorToInt(waterLevel(c.base, c.place)) - 1);
+            const int32_t waterStart = waterEnd > 1 ? ground : ground + 1;
+            if (std::max(z - 2, waterStart) <= std::min(z + 1, waterEnd - 1))
+                return true;
+        }
+    return false;
+}
+
 void plants(ZoneBuild &zone) {
     Model m; // one record, reused: what a plant does not set stays from the last one
     m.groundCover = true;
@@ -155,7 +186,7 @@ void plants(ZoneBuild &zone) {
                     continue;
                 // 4. Reeds.
                 if (b1.type == 0 && t == 3 && zone.draw() % 2 != 0 && f.colours.warmth > 0.2f) {
-                    if (!(absOf(noiseAt(X, Y, 0.05, 9843, 0.05, 8437)) > 0.5f))
+                    if (!(absOf(noiseAt(X, Y, 0.05, 9843, 0.05, 8437)) > 0.5f) || !reedWater(zone, X, Y, z))
                         continue;
                     plain(4);
                     m.yaw = turnAny(zone);
@@ -275,7 +306,7 @@ void plants(ZoneBuild &zone) {
                 m.yaw = turn90(zone);
                 m.size = 0.075f;
                 int32_t type;
-                if (f.river > 0.43f) {
+                if (f.river > 0.43f && reedWater(zone, X, Y, z)) {
                     m.yaw = turnAny(zone);
                     m.size = 0.09f, m.flags = 4;
                     type = 0x23;

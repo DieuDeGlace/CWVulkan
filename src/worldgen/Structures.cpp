@@ -1,5 +1,6 @@
 // The zone generator's part B, written from docs/specs/worldgen-structures.md §2, §5 and §7.
 #include "worldgen/Structures.h"
+#include "worldgen/AlphaRelief.h"
 
 #include "worldgen/BlockColours.h"
 #include "worldgen/Buildings.h"
@@ -54,6 +55,10 @@ void naturalStructure(ZoneBuild &zone, int32_t cx, int32_t cy, int type) {
     if (!(p.x + r >= zone.x0 && p.y + r >= zone.y0 && p.x - r < zone.x0 + ZONE_SIZE && p.y - r < zone.y0 + ZONE_SIZE))
         return;
     zone.seed(random(cellKey(cx, cy)) % STRUCTURE_SEEDS);
+    // CubeVulkan's Alpha terrain leaves out trees its hills would bury or crowd (after the seed, as the
+    // game seeds every cell that gets here, built or not).
+    if (const AlphaRelief *relief = alphaRelief(); relief && !relief->treeFits(cx, cy, type))
+        return;
     const int32_t z = trunc32(h + 1.0f);
     const float zf = h + 1.0f;
     auto rocky = [&] { return zone.columnValuesAt(p.x, p.y).colours.highlands > 0.5f; };

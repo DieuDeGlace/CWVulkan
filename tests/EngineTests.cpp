@@ -36,6 +36,8 @@
 #include "ItemNames.h"
 #include "GameNames.h"
 #include "worldgen/Generator.h"
+#include "worldgen/AlphaRelief.h"
+#include "alphagen/Random.h"
 #include "worldgen/Gear.h"
 #include "worldgen/Looks.h"
 #include "worldgen/MapModel.h"
@@ -8321,6 +8323,66 @@ static void shadowStepTests() {
     CHECK(night.lightDir == nightLate.lightDir && night.shadowStrength == nightLate.shadowStrength);
 }
 
+// CubeVulkan's Alpha terrain (worldgen/AlphaRelief.h): Steam terrain with Alpha's hills added, flat on
+// places and below the shore, rising at most 1.1 blocks per block from a flat edge.
+static void alphaReliefTests() {
+    using worldgen::AlphaRelief;
+    // The floor lattice equals Alpha's noise on positive coordinates and has no seam below zero.
+    for (double x : {1000.25, 2048.5, 77777.75})
+        CHECK(AlphaRelief::latticeNoise(x, x * 0.5 + 3.0) == alphagen::noise(x, x * 0.5 + 3.0));
+    for (double line : {-5.0, -1234.0, -98765.0})
+        CHECK(std::abs(AlphaRelief::latticeNoise(line - 1e-4, 7.5) - AlphaRelief::latticeNoise(line + 1e-4, 7.5)) < 1e-3f);
+    // The cap: level at the edge, continuous at the end of its ramp, never steeper than 1.1 per block.
+    CHECK(AlphaRelief::liftCap(0) == 0 && AlphaRelief::liftCap(-5) == 0);
+    CHECK(std::abs(AlphaRelief::liftCap(47.999f) - AlphaRelief::liftCap(48.001f)) < 0.01f);
+    bool bounded = true;
+    for (float d = 0; d < 400; d += 0.5f)
+        bounded = bounded && AlphaRelief::liftCap(d + 0.5f) - AlphaRelief::liftCap(d) <= 0.55f + 1e-4f;
+    CHECK(bounded);
+    CHECK(AlphaRelief::smoothMin(10, 30, 24) <= 10 && AlphaRelief::smoothMin(10, 10, 24) < 10);
+    const AlphaRelief relief(123);
+    bool inRange = true, deterministic = true;
+    for (int32_t i = 0; i < 64; ++i) {
+        const int32_t x = i * 977 - 30000, y = i * 1543 + 1200;
+        const float r = relief.relief(x, y);
+        inRange = inRange && r >= -48 && r <= 160;
+        deterministic = deterministic && r == relief.relief(x, y);
+        const float s = AlphaRelief::strength(worldgen::neighbourhood(x, y));
+        inRange = inRange && s >= 0.6f - 1e-5f && s <= 1.25f + 1e-5f;
+    }
+    CHECK(inRange && deterministic);
+    // A place's landmark point and its flat core keep the Steam height.
+    int places = 0;
+    for (int32_t cx = -6; cx <= 6 && places < 4; ++cx)
+        for (int32_t cy = -6; cy <= 6 && places < 4; ++cy) {
+            const bool big = worldgen::bigCell(cx, cy);
+            if (!worldgen::placeKind(cx, cy, big))
+                continue;
+            const worldgen::Int2 at = worldgen::cellPoint(cx, cy, big);
+            CHECK(relief.placeDistance(at.x, at.y) == 0);
+            CHECK(relief.offset(at.x, at.y, worldgen::columnValues(at.x, at.y)) == 0);
+            ++places;
+        }
+    CHECK(places > 0);
+    // Below the shore clearance nothing is added; elsewhere the result is repeatable and in range.
+    int below = 0, raised = 0;
+    for (int32_t i = 0; i < 400; ++i) {
+        const int32_t x = i * 211 - 41000, y = i * 389 + 5000;
+        const auto c = worldgen::columnValues(x, y);
+        const float o = relief.offset(x, y, c);
+        CHECK(o == relief.offset(x, y, c));
+        CHECK(o <= 200.0f && c.height + o >= std::min(c.height, 20.0f) - 1e-3f);
+        if (c.height <= 20.0f) {
+            CHECK(o == 0.0f);
+            ++below;
+        } else if (o != 0.0f) {
+            ++raised;
+        }
+    }
+    CHECK(raised > 0);
+    std::printf("Alpha relief: %d places flat, %d shore columns kept, %d of 400 columns raised or lowered\n", places, below, raised);
+}
+
 // The dictionary grammar's choices (Speech.cpp; steam-dictionary-alternative-selection-20261116):
 // any tag of an alternative suffices, the first passing alternative wins, a seed-zero name takes
 // the first unconditioned alternative and skips optional groups, and a macro call without a
@@ -10000,6 +10062,10 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "alpharelief") {
+        alphaReliefTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "shadowstep") {
         shadowStepTests();
         return failures ? 1 : 0;
@@ -11424,6 +11490,7 @@ int main(int argc, char **argv) {
     hudAuraTests();
     hudQuickTests();
     shadowStepTests();
+    alphaReliefTests();
     speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();

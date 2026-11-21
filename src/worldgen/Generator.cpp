@@ -4,6 +4,7 @@
 
 #include "worldgen/BlockColours.h"
 #include "worldgen/AlphaTerrain.h"
+#include "worldgen/AlphaRelief.h"
 #include <bit>
 #include <stdexcept>
 #include <future>
@@ -85,9 +86,18 @@ void setAlphaTerrain(std::shared_ptr<AlphaTerrain> terrain) {
 bool usingAlphaTerrain() {
     return bool(settings.alpha);
 }
+void setTerrainRelief(std::shared_ptr<const AlphaRelief> relief) {
+    setAlphaRelief(std::move(relief));
+    settingsVersion++;
+}
+bool customTerrain() {
+    return settings.alpha || alphaRelief();
+}
 std::string terrainIdentity() {
     if (settings.alpha)
         return settings.alpha->identity(worldScale());
+    if (const AlphaRelief *relief = alphaRelief())
+        return relief->identity(worldScale());
     return "steam-v1-seed-" + std::to_string(settings.world.seed) + "-scale-bits-" + std::to_string(std::bit_cast<uint64_t>(worldScale()));
 }
 bool terrainZoneAvailable(int32_t zx, int32_t zy) {

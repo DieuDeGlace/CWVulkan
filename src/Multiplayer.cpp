@@ -39,7 +39,7 @@ Multiplayer::~Multiplayer() {
 
 bool Multiplayer::start(const Setup &setup, std::string &error) {
     worldIdentity = setup.blocks ? setup.blocks->sourceIdentity() : std::string{};
-    worldIdentityRequired = setup.blocks && setup.blocks->generated() && worldgen::usingAlphaTerrain();
+    worldIdentityRequired = setup.blocks && setup.blocks->generated() && worldgen::customTerrain();
     worldDescriptor = {"cwv.world-generation.v1", {1, uint8_t(worldIdentityRequired)}};
     worldDescriptor.payload.insert(worldDescriptor.payload.end(), worldIdentity.begin(), worldIdentity.end());
     sentWorldIdentities.clear();

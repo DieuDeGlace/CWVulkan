@@ -37,6 +37,12 @@ struct MapRegion;
 
 void setAlphaTerrain(std::shared_ptr<AlphaTerrain>);
 bool usingAlphaTerrain();
+// CubeVulkan's Alpha terrain: the Steam world with Alpha's hills (AlphaRelief.h); null for none.
+class AlphaRelief;
+void setTerrainRelief(std::shared_ptr<const AlphaRelief>);
+// Whether the generated world differs from the game's (Alpha columns or Alpha hills): saves and peers
+// then need a matching terrain identity.
+bool customTerrain();
 std::string terrainIdentity();
 bool terrainZoneAvailable(int32_t zx, int32_t zy);
 std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y);

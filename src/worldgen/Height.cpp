@@ -4,10 +4,12 @@
 #include "worldgen/Height.h"
 
 #include "NativeCrt.h"
+#include "worldgen/AlphaRelief.h"
 #include "worldgen/Noise.h"
 
 #include <array>
 #include <cmath>
+#include <limits>
 
 namespace worldgen {
 namespace {
@@ -105,8 +107,8 @@ int centreBiome(const Place &p) { return biomeAt(p.point.x, p.point.y); }
 
 // --- Roads (§4) ---
 
-// The road's nearness along the link from landmark a to landmark b, for the point (dots).
-float segment(int64_t px, int64_t py, Int2 a, Int2 b) {
+// The squared distance in blocks from the point (dots) to the link from landmark a to landmark b.
+float segmentDist2(int64_t px, int64_t py, Int2 a, Int2 b) {
     const float vx = (float)(px - (int64_t)a.x * 65536) * DOT;
     const float vy = (float)(py - (int64_t)a.y * 65536) * DOT;
     const float ex = (float)(b.x - a.x), ey = (float)(b.y - a.y);
@@ -127,6 +129,12 @@ float segment(int64_t px, int64_t py, Int2 a, Int2 b) {
             d2 = ax * ax + ay * ay;
         }
     }
+    return d2;
+}
+
+// The road's nearness along the link from landmark a to landmark b, for the point (dots).
+float segment(int64_t px, int64_t py, Int2 a, Int2 b) {
+    const float d2 = segmentDist2(px, py, a, b);
     float f = 1.0f - minOf(1.0f, d2 / (250.0f * 250.0f));
     f = f * f;
     f = f * f;
@@ -382,21 +390,50 @@ float dryness(const Neighbourhood &n) {
 
 // --- §4 ---
 
-float roads(int32_t x, int32_t y, int kind, float w) {
-    // 1. The point moved along the roads' own warp (less inside a place).
+namespace {
+// 1. The point moved along the roads' own warp (less inside a place), in dots.
+struct RoadPoint {
+    int64_t px, py;
+};
+RoadPoint roadPoint(int32_t x, int32_t y, float w) {
     const float a = noiseAt(x, y, 0.0025, 2346, 0.005, 64565) * 128.0f;
     const float a2 = noiseAt(x, y, 0.005, 4234, 0.01, 5434545) * 32.0f;
     const float b = noiseAt(x, y, 0.005, 23432, 0.0025, 2342344) * 128.0f;
     const float b2 = noiseAt(x, y, 0.01, 54356, 0.005, 7677);
     const float keep = 1.0f - w;
-    const int64_t px = trunc64((a + a2) * keep * 65536.0f) + (int64_t)x * 65536;
-    const int64_t py = trunc64((b + b2 * 32.0f) * keep * 65536.0f) + (int64_t)y * 65536;
-    // 2. Its place cell (the dots divided truncating toward zero).
-    const int32_t cx0 = floorDiv((int32_t)(px / 65536), PLACE_SHIFT);
-    const int32_t cy0 = floorDiv((int32_t)(py / 65536), PLACE_SHIFT);
+    return {trunc64((a + a2) * keep * 65536.0f) + (int64_t)x * 65536, trunc64((b + b2 * 32.0f) * keep * 65536.0f) + (int64_t)y * 65536};
+}
+// 2. Its place cell (the dots divided truncating toward zero), and the roads of the 3 x 3 cells around it.
+const RoadNeighbourhood &roadsAround(const RoadPoint &p) {
+    return roadNeighbourhood(floorDiv((int32_t)(p.px / 65536), PLACE_SHIFT), floorDiv((int32_t)(p.py / 65536), PLACE_SHIFT));
+}
+} // namespace
+
+float roadDistance(int32_t x, int32_t y, float w) {
+    const RoadPoint p = roadPoint(x, y, w);
+    float nearest = std::numeric_limits<float>::max();
+    for (const auto &cell : roadsAround(p))
+        for (size_t i = 0; i < cell.count; ++i)
+            nearest = minOf(nearest, segmentDist2(p.px, p.py, cell.point, cell.ends[i]));
+    return std::sqrt(nearest);
+}
+
+float riverRidge(int32_t x, int32_t y, float wet) {
+    float v = channel(x, y, RIVER);
+    if (wet > 9.999999747378752e-06f)
+        v = v * (1.0f - (1.0f - channel(x, y, RIVER_WIDTH)) * wet);
+    return v * 5.0f;
+}
+float lavaRidge(int32_t x, int32_t y) { return channel(x, y, LAVA_FLOW) * 5.0f; }
+float swampRidge(int32_t x, int32_t y) { return channel(x, y, SWAMP) * 5.0f; }
+
+float roads(int32_t x, int32_t y, int kind, float w) {
+    const float keep = 1.0f - w;
+    const RoadPoint p = roadPoint(x, y, w);
+    const int64_t px = p.px, py = p.py;
     // 3. Every road between the landmarks of the 3 x 3 cells around it.
     float road = 1.0f;
-    for (const auto &cell : roadNeighbourhood(cx0, cy0)) {
+    for (const auto &cell : roadsAround(p)) {
         float product = 1.0f;
         for (size_t i = 0; i < cell.count; ++i)
             product = product * segment(px, py, cell.point, cell.ends[i]);
@@ -756,6 +793,17 @@ ColumnValues columnValues(int32_t x, int32_t y, const Place &place, int mode) {
     c.dryness = dryness(c.regions);
     c.vegetation = vegetation(x, y, c.dryness, c.dryRegion);
     c.height = finalHeight(x, y, c.heightInputs(), place, mode);
+    // CubeVulkan's Alpha terrain adds its hills to the Steam height. What the relief measures (cells,
+    // places, landmarks) is the Steam world's: heights asked for while it measures are the Steam ones.
+    if (const AlphaRelief *relief = alphaRelief()) {
+        thread_local bool measuring = false;
+        if (!measuring) {
+            measuring = true;
+            c.relief = relief->offset(x, y, c);
+            c.height = c.height + c.relief;
+            measuring = false;
+        }
+    }
     return c;
 }
 

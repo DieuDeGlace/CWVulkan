@@ -2,6 +2,7 @@
 // (sections cited as §n; "zone §n" is worldgen-terrain-zone.md).
 #include "worldgen/MapModel.h"
 
+#include "worldgen/AlphaRelief.h"
 #include "worldgen/BlockColours.h"
 #include "worldgen/BuildingRules.h"
 #include "worldgen/Generator.h"
@@ -369,6 +370,17 @@ private:
     Colour landColour(const Column &c, const Around &ar, int32_t zb) const {
         const int32_t X = c.X, Y = c.Y;
         const float h0 = c.h0;
+        if (c.v.relief != 0.0f) {
+            // CubeVulkan's Alpha terrain, with the neighbours (a map unit apart) as one block apart.
+            const auto perBlock = [&](float n) { return h0 + (n - h0) / float(u); };
+            const NeighbourHeights nb{perBlock(ar.nb.west), perBlock(ar.nb.east), perBlock(ar.nb.south), perBlock(ar.nb.north)};
+            const int32_t depth = floorToInt(h0) - zb;
+            if (depth > 0 && depth <= reliefStoneDepth(h0, ar.nb))
+                return colourOf(reliefStone(X, Y, zb, c.ci));
+            if (depth <= 0)
+                if (const auto top = reliefTop(X, Y, zb, h0, nb, c.ci))
+                    return colourOf(*top);
+        }
         Colour col = colourOf(blockAt(X, Y, zb, h0, ar.nb, c.ci, sand));
         if (!(c.ci.highlands > 0.5f) || u >= 128)
             return col;
@@ -407,7 +419,8 @@ private:
         const int T = here.type;
         if (T == 0 || !inReach(T, dx, dy))
             return;
-        if (T >= 1 && T <= 8)
+        const AlphaRelief *relief = alphaRelief(); // CubeVulkan's Alpha terrain leaves out buried or crowded trees
+        if (T >= 1 && T <= 8 && (!relief || relief->treeFits(cx, cy, T)))
             tree(c, i, j, cx, cy, T, z0);
         if (u >= 256)
             return;

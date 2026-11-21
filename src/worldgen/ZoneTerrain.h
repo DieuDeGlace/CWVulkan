@@ -34,6 +34,7 @@ using StructureAnchor = std::function<Int2(Int2 placeCell, int kind, bool big)>;
 struct ColumnField {
     Place place;
     float base = 0, height = 0, lake = 0, river = 0;
+    float relief = 0; // CubeVulkan's Alpha hills included in height (AlphaRelief.h)
     ColourInputs colours; // highlands, warmth, dryness, vegetation, roads, lavaRegion, forestRegion, kind27, lava, swamp
 };
 

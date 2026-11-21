@@ -1,5 +1,25 @@
 # Alpha terrain generation
 
+## The Steam world with Alpha's hills, 2026-11-20
+
+At the user's request, `[World] Source=Alpha` now follows their later add-on design: the
+whole Steam world (seed 123), with its terrain, rivers, roads, trees, places, materials and
+biome palettes, and Alpha's hills added to its ground height (`src/worldgen/AlphaRelief.*`).
+The hills are Alpha's broad-hill and roughness terms (landscape seed `[World] Seed`, default
+1570745101), scaled by 1.25 toward mountains and 0.6 toward savannahs. Roads, places (to 81%
+of their radius, water and lava rings to the whole), landmarks (rocks, the big tree, hills and
+buildings) and river, lava and swamp beds keep their Steam ground; the hills climb away from
+each at no more than 1.1 blocks per block, and nothing is added below a height of 20 so the
+shore and the sea stay as they are. Raised sides show stone, steep grassy slopes blend into
+rock, trees the hills would bury or crowd are left out (also on the map), and reeds need water
+nearby. Dungeons, towns and every Steam structure stand as generated.
+
+Its saves use the identity `steam-alpha-relief-v1-...`; earlier Alpha composition folders are
+kept and not migrated. Peers must use the same terrain. With the relief off (`Source=Game`)
+the Steam world is byte-identical to before: the terrain, block and structure oracles still
+match exactly. The earlier Alpha column composition below is history; its code is no longer
+selected by any setting.
+
 ## Terrain review, 2026-11-17
 
 The in-engine cross sections retained the volcano's 269-block and forest

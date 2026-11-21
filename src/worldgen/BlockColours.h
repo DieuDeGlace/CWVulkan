@@ -7,6 +7,7 @@
 #include "worldgen/Regions.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace worldgen {
 
@@ -89,6 +90,14 @@ struct NeighbourHeights {
 // The block at height z of a column of height h (0x2d8e00).
 BlockProps blockAt(int32_t x, int32_t y, int32_t z, float h, const NeighbourHeights &nb, const ColourInputs &c,
                    const SandOffsets &sand);
+
+// CubeVulkan's Alpha terrain (AlphaRelief.h), on columns its hills raise or lower: the stone below the
+// top block down to the lowest neighbour, and the top of a grassy column blended into rock on steep
+// slopes (none where the Steam rules give something else: channels, roads, vegetation, low shores, dry
+// ground). Neighbour heights are one block apart.
+int reliefStoneDepth(float h, const NeighbourHeights &nb);
+BlockProps reliefStone(int32_t x, int32_t y, int32_t z, const ColourInputs &c);
+std::optional<BlockProps> reliefTop(int32_t x, int32_t y, int32_t z, float h, const NeighbourHeights &nb, const ColourInputs &c);
 
 // Whether snow lies on a column (0x2b4320), and the snow block (0x2d3d90).
 bool snowAt(int32_t x, int32_t y, float warmth, const NeighbourHeights &nb);

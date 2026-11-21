@@ -1,5 +1,13 @@
 # Clean-room process
 
+## Alpha terrain: the Steam world with Alpha's hills - 2026-11-20
+
+At the user's request Alpha terrain now follows their later add-on design instead of
+replacing land with Alpha columns. It is their own work, ported from the files and added
+lines their Infinite-Cubes Vulkan history credits to them; the clean-room Steam world is
+unchanged. Channel beds are measured with CubeVulkan's own spec-derived river, lava and
+swamp noises rather than the add-on's restatement of them.
+
 ## Guest mission learning - 2026-11-20
 
 The isolated author traced every writer of the marked-mission set, the guest's

@@ -54,6 +54,7 @@
 #include "Extracted.h"
 #include "worldgen/Generator.h"
 #include "worldgen/AlphaTerrain.h"
+#include "worldgen/AlphaRelief.h"
 #include "worldgen/Height.h"
 #include "worldgen/Noise.h"
 #include "worldgen/Places.h"
@@ -638,8 +639,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     const std::string worldSource = config.text("World", "Source", "Alpha");
     const bool alphaGeneration = worldSource == "Alpha";
     const uint32_t alphaSeed = uint32_t(int64_t(config.number("World", "Seed", 1570745101, -2147483648.0, 4294967295.0)));
+    // Alpha terrain is the Steam world with Alpha's hills added (worldgen/AlphaRelief.h).
     const std::string terrainSaveProfile = alphaGeneration
-        ? worldgen::AlphaTerrain(alphaSeed).identity(config.number("World", "Scale", 1, 1, 4)) : std::string{};
+        ? worldgen::AlphaRelief(worldgen::STEAM_STARTUP_SEED, alphaSeed).identity(config.number("World", "Scale", 1, 1, 4))
+        : std::string{};
 
     const bool explicitCharacter = !wantedCharacter.empty();
     // Which recorded character to play: --character, else [Game] Character=, else
@@ -862,26 +865,13 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     if (config.flag("Events", "Enabled", false) && config.flag("Events", "ReplaceTravelLocations", true))
         OverworldEvents::replaceTravelLocations(gameWorldSeed, gameWorldName);
     worldgen::setAlphaTerrain({});
+    worldgen::setTerrainRelief({});
     if (worldSource == "Game" || alphaGeneration) {
-        if (alphaGeneration)
-            worldgen::setWorldSeed(0); // Existing Alpha composition profile, independent of its landscape seed.
-        else
-            worldgen::setWorldSeed();
+        worldgen::setWorldSeed();
         worldgen::setWorldScale(config.number("World", "Scale", 1, 1, 4));
         if (alphaGeneration) {
-            std::string why;
-            auto palms = alphagen::loadTreeModels(assets.gameDir() / "sprites", why);
-            if (!palms) {
-                fatal("Alpha terrain needs the owner's palm leaf models: " + why);
-                return 1;
-            }
-            auto plants = alphagen::loadPlantModels(assets.gameDir() / "Extract", assets.gameDir() / "sprites", why);
-            if (!plants) {
-                fatal("Alpha ground cover is unavailable: " + why);
-                return 1;
-            }
-            logLine("World: Alpha ground cover resolved from the owner's environment model table");
-            worldgen::setAlphaTerrain(std::make_shared<worldgen::AlphaTerrain>(alphaSeed, std::move(palms), 0, std::move(plants)));
+            worldgen::setTerrainRelief(std::make_shared<worldgen::AlphaRelief>(worldgen::STEAM_STARTUP_SEED, alphaSeed));
+            logLine("World: the Steam world with Alpha's hills (landscape seed " + std::to_string(alphaSeed) + ")");
             if (worldgen::terrainIdentity() != terrainSaveProfile) {
                 fatal("The world generation settings do not match the selected save profile.");
                 return 1;
@@ -894,7 +884,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         // Start on dry land near the world's origin, where the game's starting region is.
         int homeX = 0, homeY = 0;
-        for (int ring = 0; !alphaGeneration && ring < 64 && worldgen::groundHeight(homeX, homeY) < 4; ring++)
+        for (int ring = 0; ring < 64 && worldgen::groundHeight(homeX, homeY) < 4; ring++)
             for (int i = 0; i < 16 && worldgen::groundHeight(homeX, homeY) < 4; i++) {
                 double a = i * 6.283185307179586 / 16;
                 homeX = (int)std::lround(std::cos(a) * ring * 64), homeY = (int)std::lround(std::sin(a) * ring * 64);
@@ -1199,7 +1189,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             auto raw = std::make_shared<nativesaves::Character>();
             had = saves.load(saveGame, saveFrame, savedWorldName, itemSprite, raw.get());
             if (had && chosen->native && nativePlayer) {
-                if (alphaGeneration && useExtracted &&
+                if (worldgen::usingAlphaTerrain() && useExtracted &&
                     nativeprogress::placeImportedAlphaCharacter(*raw, saveFrame, extractedWorld.home())) {
                     saveGame.hasPosition = true;
                     saveGame.position = extractedWorld.home();
