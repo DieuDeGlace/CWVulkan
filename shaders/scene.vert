@@ -15,11 +15,13 @@ layout(location = 5) out vec4 vClip;
 layout(location = 6) out vec3 vView;
 layout(location = 7) out vec3 vViewNormal;
 layout(location = 8) out vec3 vViewLight;
+layout(location = 9) out vec4 vBounceAlbedo;
 void main() {
     uint flags = inNormalFlags.y | uint(pc.params.x);
     vec4 palette = inColor;
     if ((flags & STEAM_VERTEX) != 0u)
         palette.rgb *= 2;
+    vBounceAlbedo = vec4(palette.rgb * pc.material.rgb, palette.a * pc.look.x);
     if ((flags & 8u) != 0u) {
         gl_Position = pc.model * vec4(inPosition, 1);
         vWorld = vec3(0);

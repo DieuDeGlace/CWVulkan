@@ -6,6 +6,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "common.glsl"
 #include "lighting.glsl"
+#include "sun_bounce.glsl"
 #include "alpha.glsl"
 layout(location = 0) in vec3 vWorld;
 layout(location = 1) in vec3 vNormal;
@@ -14,6 +15,7 @@ layout(location = 3) in vec3 vShaded;
 layout(location = 4) in vec4 vFog;
 layout(location = 5) flat in uint vFlags;
 layout(location = 6) in vec2 vViewNormal;
+layout(location = 8) in vec4 vBounceAlbedo;
 layout(location = 0) out vec4 outColor;
 
 const float PI = 3.14159265;
@@ -28,6 +30,7 @@ void main() {
     // so a place the baked sky light dims is not darkened twice (shadows.md §4).
     lit = 1 - (1 - lit) * saturate(vLit.a * pc.look.x);
     vec3 c = mix(vShaded, vLit.rgb, lit);
+    c = addSunBounce(c, vWorld, vNormal, vBounceAlbedo, vFlags);
 
     float Y = vFog.y;
     vec3 sky = alphaSkyAt(Y);

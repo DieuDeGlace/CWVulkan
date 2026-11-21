@@ -19,6 +19,8 @@
 #include "scene_vert.h"
 #include "scene_frag.h"
 #include "shadow_vert.h"
+#include "rsm_vert.h"
+#include "rsm_frag.h"
 #include "water_frag.h"
 #include "omega_water_frag.h"
 #include "sky_vert.h"
@@ -149,6 +151,7 @@ void RenderSettings::read(const Config &c) {
     edgeHistoryWeight = (float)c.number("AntiAliasing", "EdgeHistoryPercent", edgeHistoryWeight * 100, 0, 95) / 100;
     resolveBlur = (float)c.number("AntiAliasing", "BlurPercent", resolveBlur * 100, 0, 50) / 100;
     jitterScale = (float)c.number("AntiAliasing", "JitterPercent", jitterScale * 100, 0, 100) / 100;
+    bouncedSunlight = c.flag("Render", "BouncedSunlight", bouncedSunlight);
     shadows = c.flag("Shadows", "Enabled", shadows);
     sunShadowStrength = (float)c.number("Shadows", "StrengthPercent", sunShadowStrength * 100, 0, 100) / 100;
     resolution = (uint32_t)c.number("Shadows", "Resolution", resolution, 512, 8192);
@@ -460,6 +463,8 @@ VkShaderModule Renderer::shaderModule(const uint32_t *code, size_t bytes) const 
 bool Renderer::createPipelines(std::string &error) {
     VkShaderModule sceneV = shaderModule(spv_scene_vert, sizeof(spv_scene_vert)),
                    sceneF = shaderModule(spv_scene_frag, sizeof(spv_scene_frag)),
+                   rsmV = shaderModule(spv_rsm_vert, sizeof(spv_rsm_vert)),
+                   rsmF = shaderModule(spv_rsm_frag, sizeof(spv_rsm_frag)),
                    shadowV = shaderModule(spv_shadow_vert, sizeof(spv_shadow_vert)),
                    waterF = shaderModule(spv_water_frag, sizeof(spv_water_frag)),
                    omegaWaterF = shaderModule(spv_omega_water_frag, sizeof(spv_omega_water_frag)),
@@ -547,6 +552,7 @@ bool Renderer::createPipelines(std::string &error) {
          VK_FRONT_FACE_COUNTER_CLOCKWISE, nullptr, 0xf, waterLayout},
         {sceneV, waterF, true, true, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &waterDepthPipeline, VK_FRONT_FACE_COUNTER_CLOCKWISE,
          nullptr, 0},
+        {rsmV, rsmF, true, true, false, false, false, VK_COMPARE_OP_LESS, &sunMapPipeline},
         {shadowV, VK_NULL_HANDLE, true, true, false, false, true, VK_COMPARE_OP_LESS, &shadowPipeline},
         {skyV, skyF, false, false, false, false, false, VK_COMPARE_OP_LESS_OR_EQUAL, &skyPipeline},
         {alphaV, alphaF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaScenePipeline},
@@ -599,7 +605,7 @@ bool Renderer::createPipelines(std::string &error) {
         blend.pAttachments = &attachment;
         VkPipelineRenderingCreateInfo rendering{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
         rendering.colorAttachmentCount = d.shadow ? 0 : 1;
-        const VkFormat colourFormat = d.clipLayer ? VK_FORMAT_R8G8B8A8_UNORM : swapFormat;
+        const VkFormat colourFormat = (d.clipLayer || d.out == &sunMapPipeline) ? VK_FORMAT_R8G8B8A8_UNORM : swapFormat;
         rendering.pColorAttachmentFormats = &colourFormat;
         rendering.depthAttachmentFormat = d.clipLayer ? VK_FORMAT_UNDEFINED : DEPTH_FORMAT;
         VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, &rendering};
@@ -619,7 +625,7 @@ bool Renderer::createPipelines(std::string &error) {
             return false;
         }
     }
-    for (auto m : {sceneV, sceneF, shadowV, waterF, omegaWaterF, skyV, skyF, alphaV, alphaF, alphaWaterF, alphaSkyF, spriteV, spriteF,
+    for (auto m : {sceneV, sceneF, rsmV, rsmF, shadowV, waterF, omegaWaterF, skyV, skyF, alphaV, alphaF, alphaWaterF, alphaSkyF, spriteV, spriteF,
                    alphaCloudF, steamCloudF, steamStarF, beamV, beamF})
         vkDestroyShaderModule(device, m, nullptr);
     return true;
@@ -825,9 +831,11 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
         {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
         {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
         {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
+        {4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
     };
     VkDescriptorSetLayoutCreateInfo sli{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    sli.bindingCount = 4;
+    sli.bindingCount = (uint32_t)std::size(bindings);
     sli.pBindings = bindings;
     vkCreateDescriptorSetLayout(device, &sli, nullptr, &setLayout);
     VkPushConstantRange push{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -839,7 +847,7 @@ bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) 
     pli.pPushConstantRanges = &push;
     vkCreatePipelineLayout(device, &pli, nullptr, &layout);
     VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, FRAMES},
-                                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * FRAMES},
+                                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 * FRAMES},
                                     {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, FRAMES}};
     VkDescriptorPoolCreateInfo dpi{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     dpi.maxSets = FRAMES;
@@ -1459,6 +1467,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         u.steamSun = glm::vec4(glm::normalize(steamlighting::sunDirection(lighting.timeMs)), native.ambient.a);
         u.steamMaterial = sceneFrame->material;
     }
+    const glm::vec3 bounceDirection = alphaLook ? D : (menuSky ? glm::vec3(0) : glm::vec3(u.steamSun));
+    const bool bounceOn = prepareSunBounce(fr, settings.bouncedSunlight && !menuSky && bounceDirection.z > .08f && !opaque.empty());
+    u.bounceSun = glm::vec4(bounceDirection, bounceOn ? glm::smoothstep(.08f, .33f, bounceDirection.z) : 0.f);
+    if (bounceOn) {
+        u.sunMap = lightMatrix(bounceDirection, focus, 70.f, SUN_MAP_SIZE);
+        u.sunMapInverse = glm::inverse(u.sunMap);
+        u.bounceFront = alphaLook ? u.alphaFront : u.front;
+    }
     u.alphaView.w = sharedWater && underwater ? 1.f : 0.f; // shared world-fragment tint, never interface pixels
     u.fog = glm::vec4(mapFog, sharedWater && underwater ? std::min(sceneDistance, settings.water.underwaterVisibility) : sceneDistance);
     if (!alphaLook && !menuSky)
@@ -1803,6 +1819,21 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         shadowPass(shadowFar, settings.resolution, u.lightFar, 0);
         shadowPass(shadowNear, settings.cascades ? settings.nearResolution : 16, u.lightNear, 1);
         shadowsInitialized = true;
+    }
+
+    if (bounceOn) {
+        beginSunBounce(cmd, fr.set);
+        const Frustum sunlight(u.sunMap);
+        for (const auto &item : opaque) {
+            if (item.kind != DrawKind::Terrain || !meshes[item.mesh].indexCount)
+                continue;
+            glm::vec3 center;
+            float radius;
+            sphereOf(item, center, radius);
+            if (sunlight.sphere(center, radius))
+                bindAndDraw(item, 0, false);
+        }
+        endSunBounce(cmd);
     }
 
     // --- The clouds of this frame (docs/specs/sky-and-clouds.md §A.5, §B.7) ---
@@ -2385,6 +2416,7 @@ void Renderer::shutdown() {
                    menuBackgroundPipeline,
                    waterPipeline,
                    waterDepthPipeline,
+                   sunMapPipeline,
                    shadowPipeline,
                    skyPipeline,
                    alphaScenePipeline,
@@ -2413,6 +2445,8 @@ void Renderer::shutdown() {
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
     vkDestroySampler(device, shadowSampler, nullptr);
+    destroyImage(sunDepth);
+    destroyImage(sunReflectance);
     destroyImage(shadowFar);
     destroyImage(shadowNear);
     destroyImage(overlayImage);

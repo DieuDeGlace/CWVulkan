@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "common.glsl"
 #include "lighting.glsl"
+#include "sun_bounce.glsl"
 #include "steam_fragment.glsl"
 layout(location = 0) in vec3 vWorld;
 layout(location = 1) in vec3 vNormal;
@@ -11,6 +12,7 @@ layout(location = 4) in vec3 vIndirect;
 layout(location = 5) in vec4 vClip;
 layout(location = 6) in vec3 vView;
 layout(location = 7) in vec3 vViewNormal;
+layout(location = 9) in vec4 vBounceAlbedo;
 layout(location = 0) out vec4 outColor;
 void main() {
     if ((vFlags & 8u) != 0u) {
@@ -19,6 +21,7 @@ void main() {
     }
     if ((vFlags & (STEAM_VERTEX | STEAM_WORLD)) == (STEAM_VERTEX | STEAM_WORLD)) {
         vec3 colour = mix(vIndirect, vColor.rgb, sunShare(vWorld, normalize(vNormal)));
+        colour = addSunBounce(colour, vWorld, vNormal, vBounceAlbedo, vFlags);
         outColor = vec4(submergedSceneColour(steamWorldPixel(colour, vClip.xy / vClip.w, vView, vViewNormal.xy)), pc.params.w);
         return;
     }
@@ -31,5 +34,6 @@ void main() {
     float ao = mix(.78, 1, vColor.a);
     Shade s = shade(vWorld, normalize(vNormal), true, pc.look.x);
     vec3 color = vanillaBoost(clamp(albedo * s.light * ao + s.add, 0, 1));
+    color = addSunBounce(color, vWorld, vNormal, vBounceAlbedo, vFlags);
     outColor = vec4(submergedSceneColour(vanillaGrade(applyFog(color, vWorld))), pc.params.w);
 }

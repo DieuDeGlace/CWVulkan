@@ -59,6 +59,9 @@ try {
         $receiverPassed = @(Select-String -LiteralPath $cameraLog -Pattern '^Shadow receiver (alpha|steam) PASS$')
         if ($receiverPassed.Count -ne 2) { throw "Missing shadow receiver coverage. See $cameraLog" }
         Write-Output "Shadow receiver image checks passed: $($receiverPassed.Count); $cameraLog"
+        $bouncePassed = @(Select-String -LiteralPath $cameraLog -Pattern '^Bounced sunlight (alpha|steam) PASS$')
+        if ($bouncePassed.Count -ne 2) { throw "Missing bounced-sunlight results. See $cameraLog" }
+        Write-Output "Bounced sunlight image checks passed: $($bouncePassed.Count); $cameraLog"
         $guiLog = Join-Path $LogDirectory 'gui-item-images.log'
         & $testProgram guirender *> $guiLog
         if ($LASTEXITCODE -ne 0) { throw "GUI item image tests failed; read $guiLog" }

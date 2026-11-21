@@ -311,17 +311,18 @@ constexpr glm::vec2 OPTIONS_SIZE{450, 560};
 constexpr glm::vec2 CONTROLS_SIZE{500, 600};
 enum OptionRow {
     OPT_MODE, OPT_RESOLUTION, OPT_REFRESH, OPT_VSYNC, OPT_RENDER_DISTANCE, OPT_CPU, OPT_SOUND, OPT_MUSIC, OPT_LOOP,
-    OPT_CAMERA_SPEED, OPT_CAMERA_SMOOTHNESS, OPT_INVERT_Y, OPT_FPS, OPT_LANGUAGE, OPT_RARITY, OPTION_ROWS
+    OPT_CAMERA_SPEED, OPT_CAMERA_SMOOTHNESS, OPT_INVERT_Y, OPT_FPS, OPT_LANGUAGE, OPT_RARITY, OPT_BOUNCED_SUNLIGHT, OPTION_ROWS
 };
 struct DisplayMode {
     int width = 0, height = 0;
     std::vector<int> rates;
 };
 struct OptionsScreen {
+    bool bouncedSunlight = false;
     gameoptions::Options values;
     std::vector<DisplayMode> modes;
     int mode = 0;
-    void open(const gameoptions::Options &current, std::vector<DisplayMode> available);
+    void open(const gameoptions::Options &current, std::vector<DisplayMode> available, bool bounce = false);
     void arrow(int row, int direction);
     static const char *label(int row);
     static float rowY(int row) { return 26.0f + 30.0f * (float)row; }

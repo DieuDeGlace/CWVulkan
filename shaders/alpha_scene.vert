@@ -46,7 +46,9 @@ const float MOON_GREY = .55;
 // The cloud pass's fog distance is 1.5 times the world's.
 const float CLOUD_FOG_REACH = 1.5;
 
+layout(location = 8) out vec4 vBounceAlbedo;
 void main() {
+    vBounceAlbedo = inColor;
     uint flags = inNormalFlags.y | uint(pc.params.x);
     if ((flags & 8u) != 0u) { // captured menu geometry: colours already final
         gl_Position = pc.model * vec4(inPosition, 1);
@@ -107,6 +109,7 @@ void main() {
     vec3 moonShaded = moonCasts ? moonFill : moonLit;
 
     vec3 colour = inColor.rgb * (f.alphaMaterial.rgb * pc.material.rgb);
+    vBounceAlbedo = vec4(colour, baked);
     // By moonlight colours fade towards grey, as they do to the eye at night, so the
     // moonlit world reads blue rather than as a dim day.
     vec3 moonColour = mix(colour, vec3(dot(colour, LUMA)), MOON_GREY);

@@ -12,6 +12,12 @@ An appendix summarises the process. The authoritative process texts are [CLEANRO
 and [CLEANROOM_AUTHOR.md](CLEANROOM_AUTHOR.md); where this document and those files differ, the
 files win. These rules preserve source separation; they are not a statement of legal clearance.
 
+Bounced sunlight is an optional engine enhancement. It samples a 512 by 512
+sun-facing terrain map with twelve taps. The camera fade ends at 50 blocks.
+The stock cloud grid stays anchored as the day advances. Camera submersion
+caps its fog range at 150 blocks, and the pass has its own draw gate.
+[Steam cloud motion and fog](specs/steam-cloud-movement-20261121.md).
+
 ## Part A. Interoperability facts
 
 These are the facts the engine needs to read the player's files, talk to other copies of the game

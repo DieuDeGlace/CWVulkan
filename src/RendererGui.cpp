@@ -48,7 +48,7 @@ bool Renderer::prepareGui(size_t count) {
         if (!frame.uniforms.mapped)
             return false;
         VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, capacity},
-                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * capacity},
+                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 * capacity},
                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, capacity}};
         VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
         poolInfo.maxSets = capacity;
@@ -71,10 +71,11 @@ bool Renderer::prepareGui(size_t count) {
     if (made || frame.farView != shadowFar.view || frame.nearView != shadowNear.view) {
         const VkDescriptorImageInfo farInfo{shadowSampler, shadowFar.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         const VkDescriptorImageInfo nearInfo{shadowSampler, shadowNear.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        const VkDescriptorImageInfo unusedBounce{pointSampler, shadowFar.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         const VkDescriptorBufferInfo points{guiZeroPoints.buffer, 0, 16 * sizeof(rendergpu::NativeGpuPoint)};
         std::vector<VkDescriptorBufferInfo> uniforms(frame.sets.size());
         std::vector<VkWriteDescriptorSet> writes;
-        writes.reserve(frame.sets.size() * 4);
+        writes.reserve(frame.sets.size() * 6);
         for (size_t i = 0; i < frame.sets.size(); i++) {
             auto append = [&](uint32_t binding, VkDescriptorType type, const VkDescriptorBufferInfo *buffer,
                               const VkDescriptorImageInfo *image) {
@@ -94,6 +95,8 @@ bool Renderer::prepareGui(size_t count) {
             }
             append(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nullptr, &farInfo);
             append(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nullptr, &nearInfo);
+            append(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nullptr, &unusedBounce);
+            append(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nullptr, &unusedBounce);
         }
         vkUpdateDescriptorSets(device, (uint32_t)writes.size(), writes.data(), 0, nullptr);
         frame.farView = shadowFar.view;
@@ -178,6 +181,7 @@ void Renderer::recordGui(VkCommandBuffer cmd, uint32_t imageIndex) {
                     uniforms.steamSky[colour] = glm::vec4(1);
             uniforms.fog.w = 10000;
             uniforms.steamSky[5].w = 1.f / 10000;
+            uniforms.bounceSun.w = 0;
             uniforms.lightDir.w = 0; // optional world shadows do not shade the native GUI
             uniforms.wind.w = 0;
             uniforms.alphaView.w = 0; // project underwater grading is for the world, not UI

@@ -1,5 +1,13 @@
 # Clean-room process
 
+## Bounced sunlight and Steam cloud motion - 2026-11-21
+
+The reflective pass uses the project's own add-on shaders. The implementation
+used the clean renderer's geometry and palette conventions. The isolated
+Steam researcher separately traced the ordinary cloud grid, underwater
+visibility and fog. A full readback and checksum preceded admission.
+[Steam cloud motion and fog](specs/steam-cloud-movement-20261121.md).
+
 ## Alpha composition purge - 2026-11-21
 
 At the user's request the old Alpha column composition is removed: worldgen/AlphaTerrain, the

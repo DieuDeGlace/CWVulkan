@@ -31,6 +31,7 @@
 #include "worldgen/Looks.h"
 #include "worldgen/Regions.h"
 
+#include <windows.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -1146,13 +1147,22 @@ void Session::startCreation() {
 }
 
 void Session::openOptions() {
-    options.open(s.options ? *s.options : gameoptions::Options{}, displayModes());
+    options.open(s.options ? *s.options : gameoptions::Options{}, displayModes(), s.renderer && s.renderer->settings.bouncedSunlight);
     optionsOpen = true;
 }
 
 // Apply (frontend-options.md §1.1): the screen's copy becomes the game's, options.cfg is
 // rewritten and the music volume follows at once.
 void Session::applyOptions() {
+    if (s.renderer && options.bouncedSunlight != s.renderer->settings.bouncedSunlight) {
+        s.renderer->settings.bouncedSunlight = options.bouncedSunlight;
+        s.renderer->cutHistory();
+        if (!req.readOnly) {
+            const auto file = std::filesystem::absolute(s.root / "Menu.ini");
+            if (!WritePrivateProfileStringW(L"Render", L"BouncedSunlight", options.bouncedSunlight ? L"1" : L"0", file.c_str()) && s.log)
+                s.log("Global Illumination changed for this session. Could not write " + file.string());
+        }
+    }
     if (s.options)
         *s.options = options.values;
     if (!req.readOnly)

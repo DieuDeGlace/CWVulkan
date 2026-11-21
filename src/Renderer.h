@@ -51,6 +51,7 @@ struct RenderSettings {
     // user's request; `[Shadows] Enabled=0` turns them off for the vanilla look. The near map
     // covers 25 blocks, twice as fine as the far one (shadows.md §4, cascades).
     bool shadows = true, cascades = true;
+    bool bouncedSunlight = false;
     float sunShadowStrength = .9f; // [Shadows] StrengthPercent, as the Alpha look's sun uses it
     uint32_t resolution = 4096, nearResolution = 2048;
     float radius = 120, nearRadius = 25;
@@ -322,6 +323,7 @@ class Renderer {
         VkSemaphore acquired = VK_NULL_HANDLE;
         Buffer uniforms, nativePoints;
         VkDeviceSize nativePointCapacity = 0;
+        VkImageView sunMapView = VK_NULL_HANDLE;
         VkDescriptorSet set = VK_NULL_HANDLE;
         std::vector<Buffer> staging;      // Freed when this frame's fence signals.
         std::vector<uint32_t> releases;   // Meshes released while this frame was in flight.
@@ -422,6 +424,13 @@ class Renderer {
     void updateWaterUniforms(float nearPlane, float farPlane, float sunlight, bool submerged,
                             glm::vec3 fog, float fogRange, double time);
     void snapshotWaterBackground(VkCommandBuffer cmd);
+    static constexpr uint32_t SUN_MAP_SIZE = 512;
+    Image sunReflectance, sunDepth;
+    VkPipeline sunMapPipeline = VK_NULL_HANDLE;
+    bool sunMapInitialized = false;
+    bool prepareSunBounce(Frame &frame, bool enabled);
+    void beginSunBounce(VkCommandBuffer cmd, VkDescriptorSet set);
+    void endSunBounce(VkCommandBuffer cmd);
     Image shadowFar, shadowNear;
     VkSampler shadowSampler = VK_NULL_HANDLE;
 

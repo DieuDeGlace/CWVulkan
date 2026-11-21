@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## Bounced sunlight - 2026-11-21
+
+Options now includes **Global Illumination**. Enabling it lets sunlit terrain
+reflect its colour onto nearby opaque surfaces in both the Steam and Alpha
+looks. Apply or OK changes the current scene and saves the choice in
+CubeVulkan's Menu.ini. A fresh profile defaults to off. The startup setting
+is `[Render] BouncedSunlight` in CubeVulkan.ini.
+
+The Vulkan image test places a grey wall beside a red or blue floor and
+checks the wall's colour with bouncing enabled and disabled. It also checks
+night and emissive receivers. These are controlled scenes.
+
 ## Alpha composition purge - 2026-11-21
 
 At the user's request the old Alpha column composition is removed: worldgen/AlphaTerrain, the

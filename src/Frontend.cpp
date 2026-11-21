@@ -483,8 +483,9 @@ std::array<int32_t, 2> startBlock(nativesaves::Cell home) { return homesearch::b
 
 // --- Options and controls --------------------------------------------------------------------
 
-void OptionsScreen::open(const gameoptions::Options &current, std::vector<DisplayMode> available) {
+void OptionsScreen::open(const gameoptions::Options &current, std::vector<DisplayMode> available, bool bounce) {
     values = current;
+    bouncedSunlight = bounce;
     modes = std::move(available);
     mode = modes.empty() ? 0 : (int)modes.size() - 1;
     for (size_t i = 0; i < modes.size(); i++)
@@ -496,7 +497,7 @@ const char *OptionsScreen::label(int row) {
     static const char *const LABELS[OPTION_ROWS] = {"Mode",         "Resolution",    "Refresh Rate",  "VSync",
                                                     "Render Distance", "CPU Usage",  "Sound FX Volume", "Music Volume",
                                                     "Loop Music",   "Camera Speed",  "Camera Smoothness", "Invert Y Axis",
-                                                    "FPS Limit",    "Language",      "Rarity"};
+                                                    "FPS Limit",    "Language",      "Rarity", "Global Illumination"};
     return row >= 0 && row < OPTION_ROWS ? LABELS[row] : "";
 }
 
@@ -521,6 +522,7 @@ std::string OptionsScreen::value(int row) const {
     case OPT_INVERT_Y: return o.invertY ? "Yes" : "No";
     case OPT_FPS: return o.fpsLimitText();
     case OPT_LANGUAGE: return std::to_string(o.language);
+    case OPT_BOUNCED_SUNLIGHT: return onOff(bouncedSunlight);
     case OPT_RARITY: return o.showRarity ? "as stars" : "color coded";
     default: return "";
     }
@@ -559,6 +561,7 @@ void OptionsScreen::arrow(int row, int direction) {
         o.refreshRate = rates[(size_t)i];
         break;
     }
+    case OPT_BOUNCED_SUNLIGHT: bouncedSunlight = !bouncedSunlight; break;
     case OPT_VSYNC: o.vsync = 1 - o.vsync; break;
     case OPT_RENDER_DISTANCE: step(o.renderDistance, 5, 5, 100); break;
     case OPT_CPU: o.cpuPerformance = left ? 0 : 1; break;

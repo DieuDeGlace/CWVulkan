@@ -15,6 +15,8 @@ struct FrameUniforms {
     glm::mat4 originView, originProjection;
     glm::vec4 homeToOrigin; // source-home position plus this offset is in native WORLD space
     glm::mat4 mapView;      // map WORLD remains a separate per-instance input
+    glm::mat4 sunMap, sunMapInverse;
+    glm::vec4 bounceSun, bounceFront;
 };
 struct NativeGpuPoint {
     glm::vec4 position, colour;

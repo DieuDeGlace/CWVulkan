@@ -92,7 +92,7 @@ set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADER_OUT ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${SHADER_OUT})
 set(SHADER_HEADERS)
-foreach(shader scene.vert scene.frag shadow.vert water.frag omega_water.frag sky.vert sky.frag overlay.vert overlay.frag
+foreach(shader scene.vert scene.frag shadow.vert rsm.vert rsm.frag water.frag omega_water.frag sky.vert sky.frag overlay.vert overlay.frag
         post.vert copy.frag taa.frag smaa_edge.vert smaa_edge.frag smaa_weight.vert smaa_weight.frag
         smaa_blend.vert smaa_blend.frag alpha_scene.vert alpha_scene.frag alpha_water.frag alpha_sky.frag
         alpha_sprite.vert alpha_sprite.frag alpha_cloud.frag steam_cloud.frag steam_star.frag map.vert map.frag
@@ -101,7 +101,7 @@ foreach(shader scene.vert scene.frag shadow.vert water.frag omega_water.frag sky
     set(out ${SHADER_OUT}/${symbol}.h)
     add_custom_command(OUTPUT ${out}
         COMMAND spirv_compile ${SHADER_DIR}/${shader} ${out} spv_${symbol} ${SHADER_DIR}
-        DEPENDS ${SHADER_DIR}/${shader} ${SHADER_DIR}/common.glsl ${SHADER_DIR}/lighting.glsl ${SHADER_DIR}/alpha.glsl ${SHADER_DIR}/steam_sky.glsl ${SHADER_DIR}/steam_vertex.glsl ${SHADER_DIR}/steam_fragment.glsl
+        DEPENDS ${SHADER_DIR}/${shader} ${SHADER_DIR}/common.glsl ${SHADER_DIR}/lighting.glsl ${SHADER_DIR}/sun_bounce.glsl ${SHADER_DIR}/alpha.glsl ${SHADER_DIR}/steam_sky.glsl ${SHADER_DIR}/steam_vertex.glsl ${SHADER_DIR}/steam_fragment.glsl
                 ${SHADER_DIR}/frame.glsl ${SHADER_DIR}/steam_colour.glsl ${SHADER_DIR}/steam_pixel.glsl ${SHADER_DIR}/steam_transform.glsl ${SHADER_DIR}/steam_water.glsl
                 ${SHADER_DIR}/smaa_common.glsl ${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa/SMAA.hlsl spirv_compile
         COMMENT "Compiling ${shader}")
@@ -309,6 +309,7 @@ add_library(engine STATIC
     src/RendererLayers.cpp
     src/RendererCachedLayers.cpp
     src/RendererWater.cpp
+    src/RendererSunBounce.cpp
     src/WaterLook.cpp
     src/RendererMap.cpp
     src/Audio.cpp

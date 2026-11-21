@@ -81,6 +81,69 @@ bool revealedSkyHistory(Renderer &renderer, GLFWwindow *window, const std::files
     return (*old)[4] != (*reset)[4] && (*reset)[0] != (*sky)[0] && (*reset)[8] != (*sky)[8] &&
            (*accumulated)[4] == (*reset)[4];
 }
+bool sunBounceImages(Renderer &renderer, RenderStyle style, const std::filesystem::path &root) {
+    const std::string name = style == RenderStyle::Steam ? "steam" : "alpha";
+    const auto quad = [&](std::array<glm::vec3, 4> vertices, glm::u8vec3 colour, uint8_t normal) {
+        Mesh mesh;
+        for (const auto p : vertices) {
+            mesh.vertices.push_back({p.x, p.y, p.z, colour.r, colour.g, colour.b, 255, normal, STEAM_VERTEX, 0, 0});
+            mesh.min = glm::min(mesh.min, p);
+            mesh.max = glm::max(mesh.max, p);
+        }
+        mesh.indices = {0, 1, 2, 0, 2, 3};
+        DrawItem item;
+        item.kind = DrawKind::Terrain;
+        item.mesh = renderer.upload(mesh);
+        return item;
+    };
+    const std::array<glm::vec3, 4> floor{{{-6,-10,0}, {6,-10,0}, {6,0,0}, {-6,0,0}}};
+    const auto red = quad(floor, {126,0,0}, 4), blue = quad(floor, {0,0,126}, 4);
+    const auto wall = quad({{{-6,0,0}, {6,0,0}, {6,0,5}, {-6,0,5}}}, {80,80,80}, 3);
+    renderer.settings.taa = renderer.settings.smaa = renderer.settings.shadows = false;
+    Camera camera;
+    camera.eye = {0,-5,1.4f};
+    camera.target = {0,0,1.4f};
+    const auto sample = [&](const char *tag, bool on, const DrawItem &ground, const DrawItem &receiver, float hour) {
+        renderer.settings.bouncedSunlight = on;
+        const auto path = root / ("bounce-" + name + "-" + tag + ".png");
+        renderer.capture(path.string());
+        renderer.frame(camera, lightingAt(hour, {}), {}, 0, {ground, receiver}, {});
+        int w = 0, h = 0, n = 0;
+        auto *pixels = stbi_load(path.string().c_str(), &w, &h, &n, 4);
+        glm::ivec3 sum(-1);
+        if (pixels && w >= 16 && h >= 16) {
+            sum = {};
+            for (int y = h/2-4; y < h/2+4; ++y)
+                for (int x = w/2-4; x < w/2+4; ++x) {
+                    const auto *p = pixels + 4 * (y*w+x);
+                    sum += glm::ivec3(p[0], p[1], p[2]);
+                }
+        }
+        stbi_image_free(pixels);
+        return sum;
+    };
+    const auto reference = sample("off", false, red, wall, 12);
+    const auto redLit = sample("red", true, red, wall, 12);
+    const auto blueLit = sample("blue", true, blue, wall, 12);
+    const auto disabled = sample("disabled", false, blue, wall, 12);
+    const auto night = sample("night", true, red, wall, 0);
+    const auto nightOff = sample("night-off", false, red, wall, 0);
+    auto glow = wall;
+    glow.flags |= GLOW;
+    const auto glowOn = sample("glow", true, red, glow, 12);
+    const auto glowOff = sample("glow-off", false, red, glow, 12);
+    camera.eye.y = -55;
+    const auto farOn = sample("distant", true, red, wall, 12);
+    const auto farOff = sample("distant-off", false, red, wall, 12);
+    // The Steam display grade mixes channels. The bounced colour must dominate its other two channels.
+    const auto redGain = redLit - reference, blueGain = blueLit - reference;
+    return reference.r > 0 && redGain.r >= 64 && redGain.r > 3 * std::max(redGain.g, redGain.b) &&
+           blueGain.b >= 64 && blueGain.b > 3 * std::max(blueGain.r, blueGain.g) &&
+           farOn.r > 0 && farOn == farOff && disabled == reference &&
+           night.r >= 0 && night == nightOff && glowOn.r > 0 && glowOn == glowOff;
+}
+
+
 struct ShadowChecks {
     bool caster;
     bool receiver;
@@ -296,6 +359,9 @@ int cameraRenderTests() {
         std::cout << "Shadow cascade " << name << (shadow.caster ? " PASS" : " FAIL") << '\n';
         std::cout << "Shadow receiver " << name << (shadow.receiver ? " PASS" : " FAIL") << '\n';
         failures += !shadow.caster + !shadow.receiver;
+        const bool bounce = sunBounceImages(renderer, style, root);
+        std::cout << "Bounced sunlight " << name << (bounce ? " PASS" : " FAIL") << '\n';
+        failures += !bounce;
         renderer.shutdown();
         culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
         std::cout << "Camera orientation " << name << (orientation ? " PASS" : " FAIL") << " coincident target/pole\n";

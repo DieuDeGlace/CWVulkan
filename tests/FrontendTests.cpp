@@ -405,6 +405,11 @@ void optionsFiles() {
     // The options screen's arrows.
     OptionsScreen s;
     s.open(gameoptions::Options{}, {{1280, 720, {60}}, {1920, 1080, {60, 144}}});
+    FRONT_CHECK(s.value(OPT_BOUNCED_SUNLIGHT) == "OFF");
+    s.arrow(OPT_BOUNCED_SUNLIGHT, 1);
+    FRONT_CHECK(s.value(OPT_BOUNCED_SUNLIGHT) == "ON");
+    s.open(gameoptions::Options{}, {{1280, 720, {60}}, {1920, 1080, {60, 144}}});
+    FRONT_CHECK(!s.bouncedSunlight); // a cancelled choice is discarded on reopen
     s.arrow(OPT_RENDER_DISTANCE, 1);
     for (int i = 0; i < 20; i++)
         s.arrow(OPT_MUSIC, 1);
