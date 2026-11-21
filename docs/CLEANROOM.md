@@ -1,5 +1,11 @@
 # Clean-room process
 
+## Aquatic encounters - 2026-11-21
+
+`[Creatures] AquaticEnemies` (off by default) brings the user's aquatic encounters: once per
+loaded zone near a player, a school of two or three fish, crabs or slimes in deep enough
+water, now and then a boss in water six blocks deep or more. The game's own AI moves them.
+
 ## Travelling parties - 2026-11-21
 
 `[Creatures] TravelParties` (off by default) brings the user's travelling parties: groups of

@@ -39,6 +39,7 @@
 #include "worldgen/AlphaRelief.h"
 #include "VillagerQuests.h"
 #include "TravelParties.h"
+#include "AquaticEncounters.h"
 #include "alphagen/Random.h"
 #include "worldgen/Gear.h"
 #include "worldgen/Looks.h"
@@ -8325,6 +8326,43 @@ static void shadowStepTests() {
     CHECK(night.lightDir == nightLate.lightDir && night.shadowStrength == nightLate.shadowStrength);
 }
 
+// Aquatic encounters (AquaticEncounters.h, the user's add-on): which zones get a school, of what, where.
+static void aquaticTests() {
+    using namespace aquatic;
+    // Deep sea everywhere (floor -20, surface 1), shallow ponds (floor 10, surface 12), dry land.
+    const WaterColumn deep = [](int32_t, int32_t, int32_t &f, int32_t &s) { f = -20, s = 1; return true; };
+    const WaterColumn pond = [](int32_t, int32_t, int32_t &f, int32_t &s) { f = 10, s = 12; return true; };
+    const WaterColumn dry = [](int32_t, int32_t, int32_t &, int32_t &) { return false; };
+    const auto sea = [](int32_t, int32_t) { return true; };
+    const auto land = [](int32_t, int32_t) { return false; };
+    int seaSchools = 0, pondSchools = 0, bosses = 0;
+    bool placesOk = true, rulesOk = true;
+    for (int32_t zx = -6; zx < 6; ++zx)
+        for (int32_t zy = -6; zy < 6; ++zy) {
+            CHECK(!plan(zx, zy, 123, dry, land));
+            if (const auto s = plan(zx, zy, 123, deep, sea)) {
+                ++seaSchools;
+                rulesOk = rulesOk && (((zx + zy) % 2 + 2) % 2 == 0);           // ocean zones of even parity
+                rulesOk = rulesOk && (s->boss ? s->members.size() == 1 && s->stars == 4 : s->members.size() >= 2 && s->members.size() <= 3);
+                rulesOk = rulesOk && s->hostility == (passiveFish(s->race) ? NEUTRAL : HOSTILE);
+                bosses += s->boss;
+                for (const auto &m : s->members)
+                    placesOk = placesOk && m.z >= -20 && m.z <= 1 && m.x >= zx * 64 && m.x < zx * 64 + 64 + 8 && m.y >= zy * 64 - 8 && m.y < zy * 64 + 64 + 8;
+            }
+            if (const auto s = plan(zx, zy, 123, pond, land)) {
+                ++pondSchools;
+                rulesOk = rulesOk && !s->boss; // too shallow for a boss
+                rulesOk = rulesOk && (((zx + zy + 123 % 3) % 3 + 3) % 3 == 0);
+                for (const auto &m : s->members)
+                    placesOk = placesOk && m.z >= 10 && m.z <= 12;
+            }
+        }
+    CHECK(seaSchools > 0 && pondSchools > 0 && bosses > 0);
+    CHECK(rulesOk && placesOk);
+    CHECK(waterHash(3, 4, 123) == waterHash(3, 4, 123) && waterHash(3, 4, 123) != waterHash(4, 3, 123));
+    std::printf("Aquatic: %d sea schools (%d bosses), %d pond schools in 144 zones\n", seaSchools, bosses, pondSchools);
+}
+
 // Travelling parties (TravelParties.h, the user's add-on): villages, routes and waypoints.
 static void travelPartyTests() {
     using namespace travelparties;
@@ -10275,6 +10313,10 @@ int main(int argc, char **argv) {
         hudQuickTests();
         return failures ? 1 : 0;
     }
+    if (argc == 2 && std::string(argv[1]) == "aquatic") {
+        aquaticTests();
+        return failures ? 1 : 0;
+    }
     if (argc == 2 && std::string(argv[1]) == "travelparties") {
         travelPartyTests();
         return failures ? 1 : 0;
@@ -11729,6 +11771,7 @@ int main(int argc, char **argv) {
     killXpTests();
     villagerQuestTests();
     travelPartyTests();
+    aquaticTests();
     speechGrammarTests();
     plasmaLibrary();
     useKeyTargets();

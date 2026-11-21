@@ -71,6 +71,7 @@
 #include "WorldMap.h"
 #include "OverworldEvents.h"
 #include "TravelParties.h"
+#include "AquaticEncounters.h"
 #include "Mods.h"
 #include "Missions.h"
 #include "Lore.h"
@@ -2512,6 +2513,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // Travelling parties between villages ([Creatures] TravelParties, the user's add-on; off by default).
     const bool travelPartiesOn = config.flag("Creatures", "TravelParties", false);
     travelparties::Manager travelParties;
+    // Schools of fish, crabs and slimes in deep water ([Creatures] AquaticEnemies, the user's add-on; off by default).
+    const bool aquaticOn = config.flag("Creatures", "AquaticEnemies", false);
+    aquatic::Manager aquaticEncounters;
     std::vector<SaveGame::Quest> &quests = saveGame.quests;
     // Proper names. The game makes its own in code (Lalan, Telgor, Ikolon, Ardara);
     // these are CubeVulkan's, in that style, fixed for each person or place.
@@ -8191,7 +8195,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 logLine("TAMED!");
             }
-            if (travelPartiesOn && spawnedReady && !session.guestElsewhere()) {
+            if ((travelPartiesOn || aquaticOn) && spawnedReady && !session.guestElsewhere()) {
                 auto partiesHold = session.lockHost();
                 std::vector<glm::dvec3> players;
                 hostWorld.forEachWorldCreature([&](const uint8_t *r) {
@@ -8205,7 +8209,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     players.push_back(glm::dvec3((double(player.position.x) * 65536 + double(extractedWorld.originDotsX())) / 65536,
                                                  (double(player.position.y) * 65536 + double(extractedWorld.originDotsY())) / 65536,
                                                  player.position.z));
-                travelParties.update(hostWorld, players, !mapOpen && !inventoryOpen, frameMs);
+                if (travelPartiesOn)
+                    travelParties.update(hostWorld, players, !mapOpen && !inventoryOpen, frameMs);
+                if (aquaticOn)
+                    aquaticEncounters.update(hostWorld, authorityTerrain(), players, gameWorldSeed, frameMs);
             }
             if (events.enabled()) {
                 auto eventsHold = session.lockHost();
