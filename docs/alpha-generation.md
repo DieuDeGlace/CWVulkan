@@ -1,5 +1,14 @@
 # Alpha terrain generation
 
+## Current terrain checks, 2026-11-21
+
+The historical mound at (9992, -10760) and volcano at (-674, 2631)
+retain their solid spans on the current native and Alpha terrain sources.
+Their crown heights are 281 and 269 blocks. Two full stored zones also
+confirmed that all native land stayed above water in the sampled Undead
+Lands and Savannah. The Undead Lands retained a majority of violet ground.
+[Sample coordinates, counts and transects](release-status.md#alpha-relief-on-the-current-steam-world---2026-11-21).
+
 ## The Steam world with Alpha's hills, 2026-11-20
 
 At the user's request, `[World] Source=Alpha` now follows their later add-on design: the

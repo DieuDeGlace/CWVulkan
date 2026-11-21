@@ -1,5 +1,19 @@
 # Clean-room process
 
+## Alpha terrain regression evidence - 2026-11-21
+
+A fixed-seed comparison exercises CubeVulkan's native and Alpha terrain
+sources on the same coordinates. The existing held Steam evidence establishes
+biome identity, channels and the separate Undead Lands palette. Heights and
+stored-block comparisons here come from CubeVulkan. No original frame was
+captured for this checkpoint.
+The archive identifies its mound by position and cell structure. A separate
+isolated read of the original English dictionary and native naming paths
+found no fixed landmark class named “Forest Mound.” Forest and Hill have
+separate place names.
+[Steam terrain reference](specs/steam-terrain-render-review-20261117.md).
+[Original place naming](specs/steam-forest-mound-identity-20261121.md).
+
 ## Paired hair controls - 2026-11-21
 
 Two isolated, code-free handoffs cover the user-authored layout and

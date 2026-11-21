@@ -176,6 +176,12 @@ relief and representative Undead Lands and Savannah columns. Its original
 Steam evidence covers the scoped location, channel, palette and frame paths.
 [Terrain measurements](alpha-generation.md), [held Steam trace](specs/steam-terrain-render-review-20261117.md).
 
+The archived wooded mound is a type-60 cell structure at (9992, -10760).
+Its stored crown and the archived volcano match across the native and
+Alpha providers on seeds 0 and 123. The same informal description could
+refer to another location in a player's world.
+[Steam place naming](specs/steam-forest-mound-identity-20261121.md).
+
 ### B3. Host random streams
 
 Each Steam execution thread owns its CRT stream. Host simulation, host services

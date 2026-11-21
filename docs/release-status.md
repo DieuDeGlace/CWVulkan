@@ -1,5 +1,44 @@
 # Source review checkpoint — 2026-11-08
 
+## Alpha relief on the current Steam world - 2026-11-21
+
+On seed 123, 243 columns in three Undead Lands regions were above sea
+level in both generators. In three Savannah regions, the same 234 of
+243 columns were above sea level in both. The open-cover palette had
+both red and blue above green at the same 107 Undead Lands samples.
+Savannah used 60% of the ordinary relief strength at every sampled column.
+At default biome scale the scan visited region rows and columns from -8
+through 8, taking the first three regions of each biome. Each grid was
+centred on the region centre with nine samples per axis at 64-block
+intervals. Each sample's nearest biome was checked.
+
+The stored terrain regression also builds a full 64-by-64 zone in each
+biome with both generators. It reads the top blocks, checks for newly
+flooded land and checks that the Undead Lands retain violet ground while
+the relief actually changes heights. In the inland Undead Lands zone,
+2,684 native and 2,692 Alpha top blocks had both red and blue above
+green. All 4,096 columns were land. In the Savannah zone, all 3,621
+original land columns stayed above water.
+
+At a mountain centred on (-1385, -13034) and a volcano centred on
+(-23528, -29360), both generators returned centre heights of 287.40 and
+261.66 blocks, respectively. Each east-west transect covered 2,801
+adjacent columns. The greatest adjacent changes in the *added* relief
+were 0.96 blocks at the mountain and 0.54 at the volcano. These two sites
+were selected for measurable relief in the surrounding land. The first
+mountain and volcano sampled had zero added relief across their transects.
+These comparisons use CubeVulkan's native terrain as the baseline.
+
+The earlier project fixture called “forest mound” is the wooded type-60
+structure at (9992, -10760). Its crown still reaches 281 blocks. The
+archived volcano at (-674, 2631) still reaches 269. Their native and
+Alpha solid spans matched exactly on the historical seed 0 and default
+seed 123. On the 2,049-point ground lines, the added relief changed by
+at most 0.75 and 0.54 blocks between neighbours. At 32-block map spacing
+the largest displayed height step was 64 blocks in both terrain sources
+at both sites. The project fixture name is an informal description.
+[Steam place naming](specs/steam-forest-mound-identity-20261121.md).
+
 ## Paired character-creation controls - 2026-11-21
 
 Set `PairedPanels=1` under `[DualHair]` to fit the primary and tips panels

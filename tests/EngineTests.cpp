@@ -37,6 +37,7 @@
 #include "GameNames.h"
 #include "worldgen/Generator.h"
 #include "worldgen/AlphaRelief.h"
+#include "worldgen/ZoneTerrain.h"
 #include "VillagerQuests.h"
 #include "TravelParties.h"
 #include "AquaticEncounters.h"
@@ -8573,6 +8574,85 @@ static void leafCornerTests() {
     CHECK(pinned.vertices.size() == free.vertices.size());
 }
 
+// Compare the stored terrain and its sea-water read path in two active relief zones.
+static void alphaBiomeSurfaceTests() {
+    using namespace worldgen;
+    const int32_t previousSeed = currentWorld().seed;
+    CHECK(!customTerrain());
+    if (customTerrain()) return;
+    setWorldSeed(STEAM_STARTUP_SEED);
+    const auto relief = std::make_shared<AlphaRelief>(STEAM_STARTUP_SEED);
+    struct Sample { Int2 point; int biome; };
+    for (const auto &[point, biome] : {Sample{{22661, -62322}, 10}, Sample{{51356, -29664}, 12}}) {
+        CHECK(biomeAt(point.x, point.y) == biome);
+        const int32_t zx = floorDiv(point.x, ZONE_SHIFT), zy = floorDiv(point.y, ZONE_SHIFT);
+        auto native = zoneTerrain(currentWorld(), zx, zy);
+        setTerrainRelief(relief);
+        auto alpha = zoneTerrain(currentWorld(), zx, zy);
+        int land = 0, flooded = 0, nativeViolet = 0, alphaViolet = 0, changed = 0;
+        for (int lx = 0; lx < ZONE_SIZE; ++lx) {
+            for (int ly = 0; ly < ZONE_SIZE; ++ly) {
+                const int i = ZoneTerrain::index(lx, ly);
+                const int32_t x = zx * ZONE_SIZE + lx, y = zy * ZONE_SIZE + ly;
+                const auto top = [&](const ZoneTerrain &zone) {
+                    const auto &column = zone.columns[i];
+                    int z = std::max(0, column.top() - 1);
+                    auto block = zone.read(x, y, z);
+                    while (z > 0 && block.type == blocktype::AIR)
+                        block = zone.read(x, y, --z);
+                    return block;
+                };
+                const auto before = top(native), after = top(alpha);
+                const bool wasLand = !isOpen(before);
+                land += wasLand;
+                flooded += wasLand && after.type == blocktype::WATER;
+                nativeViolet += wasLand && before.b > before.g && before.r > before.g;
+                alphaViolet += !isOpen(after) && after.b > after.g && after.r > after.g;
+                changed += std::abs(alpha.field[i].height - native.field[i].height) > .01f;
+            }
+        }
+        std::printf("Alpha biome %d stored terrain: land %d, new water %d, violet %d -> %d, height changed %d\n",
+                    biome, land, flooded, nativeViolet, alphaViolet, changed);
+        CHECK(land > 0 && flooded == 0 && changed > 0);
+        if (biome == 12) {
+            CHECK(land == ZONE_COLUMNS && nativeViolet > land / 2 && alphaViolet > land / 2);
+        } else {
+            CHECK(land < ZONE_COLUMNS && nativeViolet == 0 && alphaViolet == 0);
+            CHECK(std::abs(AlphaRelief::strength(neighbourhood(point.x, point.y)) - .6f) < 1e-5f);
+        }
+        setTerrainRelief(nullptr);
+    }
+    struct Landmark { Int2 point; int top; };
+    for (const auto &[point, expectedTop] : {Landmark{{9992, -10760}, 281}, Landmark{{-674, 2631}, 269}}) {
+        const auto solidSpans = [&] {
+            const int zx = floorDiv(point.x, ZONE_SHIFT), zy = floorDiv(point.y, ZONE_SHIFT);
+            const auto zone = generateZone(currentWorld(), zx, zy);
+            const auto &column = zone.terrain.columns[ZoneTerrain::index(point.x - zx * ZONE_SIZE, point.y - zy * ZONE_SIZE)];
+            std::vector<std::pair<int, int>> spans;
+            for (size_t i = 0; i < column.blocks.size(); ++i) {
+                const auto &block = column.blocks[i];
+                if (isOpen(block) || block.type == blocktype::WOOD || block.type == blocktype::LEAVES ||
+                    block.type == 11) continue; // terrain and structure surfaces in the archived probe
+                const int z = column.base + static_cast<int>(i);
+                if (spans.empty() || spans.back().second != z - 1)
+                    spans.emplace_back(z, z);
+                else
+                    spans.back().second = z;
+            }
+            return spans;
+        };
+        const auto native = solidSpans();
+        setTerrainRelief(relief);
+        const auto alpha = solidSpans();
+        CHECK(!native.empty() && native.back().second + 1 == expectedTop && alpha == native);
+        std::printf("Alpha landmark (%d,%d): native top %d, Alpha top %d, equal solid spans %d\n", point.x, point.y,
+                    native.empty() ? 0 : native.back().second + 1, alpha.empty() ? 0 : alpha.back().second + 1,
+                    int(alpha == native));
+        setTerrainRelief(nullptr);
+    }
+    setWorldSeed(previousSeed);
+}
+
 // CubeVulkan's Alpha terrain (worldgen/AlphaRelief.h): Steam terrain with Alpha's hills added, flat on
 // places and below the shore, rising at most 1.1 blocks per block from a flat edge.
 static void alphaReliefTests() {
@@ -10336,6 +10416,7 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && std::string(argv[1]) == "alpharelief") {
         alphaReliefTests();
+        alphaBiomeSurfaceTests();
         return failures ? 1 : 0;
     }
     if (argc == 2 && std::string(argv[1]) == "shadowstep") {
@@ -11763,6 +11844,7 @@ int main(int argc, char **argv) {
     hudQuickTests();
     shadowStepTests();
     alphaReliefTests();
+    alphaBiomeSurfaceTests();
     leafCornerTests();
     mapLandTests();
     killXpTests();
