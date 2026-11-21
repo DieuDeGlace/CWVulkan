@@ -1,5 +1,11 @@
 # Source review checkpoint — 2026-11-08
 
+## Villager request markers - 2026-11-21
+
+With `[Quests] CubeVulkanQuests` on, the map shows where each open request's group was
+seen and which villagers have a request to give or reward, and those villagers carry the
+giver sprite over their heads within 96 blocks, as in the user's later add-on.
+
 ## Villager requests on the game's creatures, and boss XP - 2026-11-21
 
 The user's villager requests (`[Quests] CubeVulkanQuests`, off by default) now work in the

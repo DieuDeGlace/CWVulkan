@@ -3215,6 +3215,29 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 logLine("Request complete: " + requestObjective(request));
             }
     };
+    // The villagers with a request to give or to reward, and where they stand (refreshed twice a second):
+    // their giver sprite shows on the map within 1024 blocks and over their heads within 96.
+    std::map<int64_t, std::array<int32_t, 3>> requestGivers;
+    double requestGiversAt = -1;
+    auto refreshRequestGivers = [&](double now, const std::array<int32_t, 3> &here) {
+        if (!inventedQuests || !spawnedReady || (requestGiversAt >= 0 && now - requestGiversAt < 0.5))
+            return;
+        requestGiversAt = now;
+        requestGivers.clear();
+        const std::string world = requestWorld();
+        std::vector<villagerquests::Creature> everyone;
+        spawned.forEach([&](const uint8_t *r) { everyone.push_back(villagerquests::fromRecord(r)); });
+        for (const auto &r : saveGame.requests)
+            if (r.world == world && !r.rewarded && r.ready())
+                requestGivers[r.giver] = r.giverAt;
+        constexpr double MAP_REACH = 1024;
+        for (const auto &c : everyone) {
+            const double dx = c.at.x - here[0], dy = c.at.y - here[1];
+            if (c.classType == 138 && dx * dx + dy * dy <= MAP_REACH * MAP_REACH &&
+                villagerquests::offers(c, everyone, saveGame.requests, world))
+                requestGivers[c.id] = villagerquests::blocks(c.at);
+        }
+    };
     // True only for a fresh native Talk. The Use caller then queues the activation.
     auto startTalk = [&](const Speaker &k) {
         const auto *c = personOf(k);
@@ -8928,6 +8951,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             v.scale = starSize.scale * 0.6f;
                             markers.push_back(v);
                         }
+                    // The villagers' requests: the location of each open request's group, and the givers.
+                    if (starSize.shown && inventedQuests) {
+                        const auto pinAt = [&](const std::array<int32_t, 3> &at, const char *sprite) {
+                            mapmarks::Marker v;
+                            if (!worldMap.project(view, glm::dvec3(at[0], at[1], at[2]), v.at))
+                                return;
+                            v.questSprite = sprite;
+                            v.scale = starSize.scale * 0.6f;
+                            markers.push_back(v);
+                        };
+                        const std::string world = requestWorld();
+                        for (const auto &r : saveGame.requests)
+                            if (r.world == world && !r.rewarded && !r.ready())
+                                pinAt(r.targetAt, "quest-event");
+                        for (const auto &[id, at] : requestGivers)
+                            pinAt(at, "quest-offer");
+                    }
                     return markers;
                 };
             }
@@ -9235,6 +9275,16 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                     hs.mapMarkers.push_back(q);
                                 }
                             }
+                        // A villager's request: the giver sprite over a giver within 96 blocks.
+                        if (inventedQuests && l.hostility == 3 && l.distance2 < 96.0f * 96.0f && requestGivers.count(l.id)) {
+                            Hud::State::MapMarker q;
+                            if (project(l.at + glm::vec3(0, 0, l.height * 0.5f - 0.25f), q.at)) {
+                                q.at.y -= 54.0f;
+                                q.questSprite = "quest-offer";
+                                q.scale = 0.5f;
+                                hs.mapMarkers.push_back(q);
+                            }
+                        }
                         if (!big && (!(l.hp < l.maxHp) || !(l.distance2 < 1600.0f) || l.hostility == 8))
                             continue;
                         const glm::vec3 top = l.at + glm::vec3(0, 0, l.height * 0.5f - 0.25f);
@@ -9388,6 +9438,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     int32_t(std::floor((double(player.position.x) * 65536 + double(extractedWorld.originDotsX())) / 65536)),
                     int32_t(std::floor((double(player.position.y) * 65536 + double(extractedWorld.originDotsY())) / 65536)), 0};
                 const std::string world = requestWorld();
+                refreshRequestGivers(time, here);
                 for (const auto &r : saveGame.requests) {
                     if (r.world != world || r.rewarded)
                         continue;
