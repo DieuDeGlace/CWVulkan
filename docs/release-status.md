@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Guest mission learning - 2026-11-20
+
+Speech pages now mark places on the map and credit lore for the local player
+whoever they are addressed to, as in the original, including speech with no
+listener. A page waits while its speaker is not in the world. Aim marking,
+the guest's local Talk with its queued activate and per-side completion
+already matched. Three new NPC speech checks failed on the previous code.
+Full required owner-data CPU without skips, offscreen image checks and the
+extractor SDK audit passed. Static evidence; no live peer.
+
 ## Guest terrain changes and saved-zone replay - 2026-11-18
 
 A guest now skips terrain locking on updates with no block changes. A

@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Guest mission learning - 2026-11-20
+
+The isolated author traced every writer of the marked-mission set, the guest's
+Talk exchange and per-side completion, then answered a follow-up on the speech
+consumers. A guest marks missions only in its own character: by aiming, from
+dialogue pages and from lore. Pages mark places and credit lore whoever the
+speech is addressed to, once the speaker resolves. [Steam guest mission learning](specs/steam-guest-mission-learning-20261120.md)
+and [its addendum](specs/steam-guest-mission-learning-addendum-20261120.md).
+
 ## Guest terrain changes and saved-zone replay - 2026-11-18
 
 The isolated author established how a guest handles replacement, removal,

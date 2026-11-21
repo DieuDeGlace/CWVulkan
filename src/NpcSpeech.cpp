@@ -84,7 +84,11 @@ void Playback::update(double elapsedMs, const Environment &environment) {
     });
     const int64_t fraction = (int64_t)(gamemath::blendFactor(step, .01f) * 65536.f);
     for (auto &bubble : content) {
-        if (bubble.elapsedMs == 0 && bubble.page < bubble.pages.size()) {
+        // The current page applies only while its speaker resolves in the world
+        // (steam-guest-mission-learning-addendum-20261120: bubble consumer gate 1).
+        const auto speaker = environment.find ? environment.find(bubble.speaker) : std::nullopt;
+        const bool speakerResolves = !environment.find || speaker.has_value();
+        if (speakerResolves && bubble.elapsedMs == 0 && bubble.page < bubble.pages.size()) {
             const auto &page = bubble.pages[bubble.page];
             const int model = modelFor(page);
             if (model) {
@@ -94,7 +98,6 @@ void Playback::update(double elapsedMs, const Environment &environment) {
             if (environment.effects) environment.effects(bubble.speaker, bubble.recipient, page, bubble.page + 1 == bubble.pages.size());
             if (model) advance(bubble);
         }
-        const auto speaker = environment.find ? environment.find(bubble.speaker) : std::nullopt;
         if (!speaker) continue; // retain the previous root placement/visibility
         Point target = speaker->drawn;
         target[2] = add(target[2], (int64_t)(-speaker->drop * 65536.f));

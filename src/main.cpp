@@ -8888,9 +8888,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 const auto screen = renderer.screenSize();
                 return npcspeech::project(point, *earlySpeechProjection, {(float)screen.width, (float)screen.height}, hud.interfaceScale());
             };
-            speechEnvironment.effects = [&](int64_t, int64_t recipient, const TalkPlay::Page &page, bool) {
-                if (recipient != spawned.playerId())
-                    return;
+            // A page marks places and credits lore for the local player whoever it is addressed to
+            // (steam-guest-mission-learning-addendum-20261120 (a), (b), (d)).
+            speechEnvironment.effects = [&](int64_t, int64_t, const TalkPlay::Page &page, bool) {
                 for (const auto &cell : page.loreCells)
                     creditLore(cell, true);
                 for (const auto &mark : page.marks)

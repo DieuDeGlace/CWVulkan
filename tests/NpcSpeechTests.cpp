@@ -242,6 +242,21 @@ int npcSpeechTests() {
               "a marker centres on body Z*0.5 + 1 - drop above the actor");
         check(std::abs(glm::length(glm::vec3(m[0])) - .8f / 16 * 2.f) < 1e-6f, "the heart's scale is 0.8 / header X times the multiplier");
     }
+    { // Page effects need a resolving speaker and ignore the listener (steam-guest-mission-learning-addendum-20261120).
+        Playback unaddressed;
+        effects = 0;
+        resolved = false;
+        unaddressed.attach(42, 0, {hi}, {});
+        unaddressed.update(0, environment);
+        check(effects == 0, "an unresolved speaker applies no page effects");
+        check(unaddressed.bubbles().size() == 1 && unaddressed.bubbles()[0].elapsedMs == 0,
+              "the page waits, unread, until its speaker resolves");
+        resolved = true;
+        unaddressed.update(0, environment);
+        check(effects == 1, "the page applies once its speaker resolves, with no listener");
+        unaddressed.update(0, environment);
+        check(effects == 2, "a page at read time zero applies again each visit, as before");
+    }
     std::cout << "NPC speech: " << (failures ? "FAIL\n" : "PASS\n");
     return failures;
 }
