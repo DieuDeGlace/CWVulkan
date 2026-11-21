@@ -17,6 +17,16 @@ namespace clouds {
 
 constexpr int32_t CELL_BLOCKS = 200;
 
+// User add-on clock in render seconds. The vanilla cloud layers have no motion.
+constexpr float MIN_MOVING_FOG = 900.f;
+struct Motion {
+    double start = -1, refreshed = -1, last = -1, drift = 0;
+    int32_t seed = 0;
+    bool update(bool enabled, double seconds, int32_t worldSeed); // true when the cached cells expire
+    int32_t column(double eyeX) const;
+    int32_t row(double eyeY, int32_t column) const;
+};
+
 // The cell a block coordinate falls in. Both games divide with C's integer division, which
 // rounds towards zero rather than down, so cell 0 spans blocks -199..199 and every other cell
 // 200 blocks.

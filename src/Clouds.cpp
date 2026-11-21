@@ -52,6 +52,31 @@ constexpr double DOTS = 65536;     // fixed-point units per block
 constexpr double FADE_START = 80, FADE_PER_BLOCK = .01, ALWAYS_OPAQUE = 180;
 } // namespace
 
+bool Motion::update(bool enabled, double seconds, int32_t worldSeed) {
+    if (!enabled) {
+        if (start < 0) return false;
+        *this = {};
+        return true;
+    }
+    const bool reset = start < 0 || seconds < last;
+    if (reset) start = seconds;
+    last = seconds;
+    drift = std::trunc((seconds - start) * 1.2 * DOTS) / DOTS;
+    if (reset || seed != worldSeed || seconds - refreshed > 2.) {
+        seed = worldSeed;
+        refreshed = seconds;
+        return true;
+    }
+    return false;
+}
+
+int32_t Motion::column(double eyeX) const {
+    return (int32_t)std::floor((eyeX - drift) / CELL_BLOCKS);
+}
+int32_t Motion::row(double eyeY, int32_t column) const {
+    return (int32_t)std::floor((eyeY - cellBase(column, 0).y) / CELL_BLOCKS);
+}
+
 int32_t cellOf(double blocks) { return (int32_t)std::trunc(blocks) / CELL_BLOCKS; }
 
 glm::dvec2 cellBase(int32_t cx, int32_t cy) {

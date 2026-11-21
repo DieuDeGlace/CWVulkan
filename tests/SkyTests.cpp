@@ -391,6 +391,13 @@ void steamCloudCells() {
             seaLevel = seaLevel && (!c || (c->base.z >= 170 && c->base.z <= 230));
         }
     SKY_CHECK(!anyDesert && seaLevel);
+    clouds::Motion motion;
+    SKY_CHECK(!motion.update(false, 9, 7) && motion.update(true, 10, 7));
+    SKY_CHECK(!motion.update(true, 12, 7) && near(motion.drift, 2.4, 1.0 / 65536.0));
+    SKY_CHECK(motion.update(true, 12.001, 7) && motion.column(1) == -1 && motion.row(-101, -1) == -1);
+    SKY_CHECK(motion.row(99, 1) == -1 && motion.row(100, 1) == 0 && motion.row(-100, -1) == 0);
+    SKY_CHECK(motion.update(true, 12.001, 8) && near(motion.drift, 2.4012, 1.0 / 65536.0));
+    SKY_CHECK(motion.update(true, 1, 7) && motion.drift == 0 && motion.update(false, 2, 7));
     // Reach and the fade near the camera.
     SKY_CHECK(clouds::steamReach(400) == 4 && clouds::steamReach(199) == 2);
     SKY_CHECK(clouds::steamOpacity(250) == 1 && clouds::steamOpacity(180) == 1 && near(clouds::steamOpacity(130), .5f));

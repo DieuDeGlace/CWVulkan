@@ -1,5 +1,18 @@
 # Clean-room process
 
+## Moving cloud layer - 2026-11-21
+
+The isolated author read just the individually assigned additions in the
+user's add-on commits and delivered a separate behavioral handoff. The
+clean side reused its own cloud generator and verified both GPU paths.
+The source establishes direction, speed, humidity eligibility, the moving
+lattice, cache expiry, fog minimum and underwater gating. The numeric
+culling margin, bounding sphere and dark-model threshold are inherited
+from CubeVulkan's Steam path. The source did not establish those three
+values or the fixed-point rounding rule.
+[Add-on cloud behavior](specs/owned-addon-cloud-movement-20261121.md).
+[Stock Steam behavior](specs/steam-cloud-movement-20261121.md).
+
 ## Bounced sunlight and Steam cloud motion - 2026-11-21
 
 The reflective pass uses the project's own add-on shaders. The implementation

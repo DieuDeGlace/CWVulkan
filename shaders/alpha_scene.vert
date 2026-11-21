@@ -75,6 +75,7 @@ void main() {
     bool cloud = pc.look.w > .5;
     vec3 toCamera = f.eye.xyz - world;
     float fogScale = cloud ? f.alphaSun.w / CLOUD_FOG_REACH : f.alphaSun.w;
+    if (cloud && pc.look.z > 0) fogScale = pc.look.z;
     float fogScale2 = fogScale * fogScale;
     vFog = vec4(screen.x, screen.y + f.alphaView.x, dot(toCamera, toCamera) * fogScale2,
                 dot(toCamera.xy, toCamera.xy) * fogScale2);

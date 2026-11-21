@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## Optional moving clouds - 2026-11-21
+
+Set `AnimatedClouds=1` under `[Motion]` for eastward drift of 1.2 blocks
+per second. It works with either lighting style. The moving layer uses
+the Steam-shaped grid, adds 0.2 to cell humidity, draws to a fog range
+of at least 900 blocks, and disappears when the camera is underwater.
+The default keeps each look's existing cloud layer.
+
+A fixed-camera Vulkan comparison tracked 38.4 blocks of movement over
+32 seconds under both looks. It also distinguished a stationary Steam
+cloud seen from underwater from the optional underwater suppression.
+
 ## Bounced sunlight - 2026-11-21
 
 Options now includes **Global Illumination**. Enabling it lets sunlit terrain

@@ -207,6 +207,8 @@ void World::loadSkyModels() {
         const glm::u8vec3 cloudShade(0, 100, 200);
         if (load("cloud02.cub", cloud))
             skyModels.cloud = renderer.upload(cloud.mesh(0, cloudShade));
+        if (renderer.settings.animatedClouds && load("cloud-dark.cub", dark))
+            skyModels.darkCloud = renderer.upload(dark.mesh(0, {10, 0, 20}));
         renderer.setSkyModels(skyModels);
         return;
     }

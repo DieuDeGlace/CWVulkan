@@ -18,6 +18,13 @@ The stock cloud grid stays anchored as the day advances. Camera submersion
 caps its fog range at 150 blocks, and the pass has its own draw gate.
 [Steam cloud motion and fog](specs/steam-cloud-movement-20261121.md).
 
+With the optional moving layer, cell lookup subtracts displacement from
+camera X. Each staggered column determines its own row using floor division.
+The cache refreshes after more than two seconds or a changed seed. Opacity,
+culling and rendering use the displaced anchor. Each cell samples climate
+and height at its original coordinates.
+[Add-on cloud behavior](specs/owned-addon-cloud-movement-20261121.md).
+
 ## Part A. Interoperability facts
 
 These are the facts the engine needs to read the player's files, talk to other copies of the game

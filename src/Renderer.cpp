@@ -5,6 +5,7 @@
 #include "Config.h"
 #include "RendererUniforms.h"
 #include "NativeKeyOrder.h"
+#include "worldgen/Generator.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -164,6 +165,7 @@ void RenderSettings::read(const Config &c) {
     cameraFade = c.flag("Shadows", "CameraFade", cameraFade);
     // (CubeVulkan's own key: the WorldMotion mod's Mods/WorldMotion.ini, which CubeVulkan
     // imports, turns its leaf sway on, but vanilla moves no block; vegetation-wind.md §7.)
+    animatedClouds = c.flag("Motion", "AnimatedClouds", animatedClouds);
     wind = c.flag("Motion", "LeafSway", wind);
     leafAmplitude = (float)c.number("Motion", "LeafAmplitudePercent", leafAmplitude * 100, 0, 100) / 100;
     leafRange = (float)c.number("Motion", "LeafRange", leafRange, 8, 512);
@@ -1054,7 +1056,10 @@ const std::optional<clouds::Cloud> &Renderer::cloudOfCell(int32_t cx, int32_t cy
         cloud = clouds::alphaCloud(cx, cy, world);
     } else {
         clouds::SteamWorld world;
-        world.dryness = [&](int32_t x, int32_t y) { return column(x, y).region.dryness; };
+        world.dryness = [&](int32_t x, int32_t y) {
+            const float humidity = column(x, y).region.dryness;
+            return settings.animatedClouds ? humidity + .2f : humidity;
+        };
         world.ground = [&](int32_t x, int32_t y) { return column(x, y).cloudGround; };
         world.forest = [&](int32_t x, int32_t y) { return column(x, y).region.forest; };
         cloud = clouds::steamCloud(cx, cy, world);
@@ -1212,9 +1217,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     float aspect = extent.height ? (float)extent.width / extent.height : camera.aspect;
     const glm::mat4 shake = glm::translate(glm::mat4(1), glm::vec3(-camera.viewShake.x, camera.viewShake.y, 0));
     glm::mat4 view = shake * sceneViewAt(camera, camera.eye, camera.target);
-    const float farPlane =
-        std::max(settings.fogDistance * ALPHA_CLOUD_REACH, settings.fogDistance + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) +
-        FAR_MARGIN;
+    const float cloudView = settings.animatedClouds ? std::max(settings.fogDistance, clouds::MIN_MOVING_FOG) : settings.fogDistance;
+    const float farPlane = std::max(settings.fogDistance * ALPHA_CLOUD_REACH,
+                                    cloudView + clouds::STEAM_CULL_BEYOND + clouds::STEAM_CULL_RADIUS) + FAR_MARGIN;
     const bool steamWorld = settings.style == RenderStyle::Steam;
     glm::mat4 proj =
         glm::perspectiveRH_ZO(camera.fieldOfViewRadians(settings.fov), aspect, steamWorld ? .05f : .1f, steamWorld ? 1920.f : farPlane);
@@ -1836,6 +1841,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         endSunBounce(cmd);
     }
 
+    const bool movingClouds = settings.animatedClouds && !menuSky;
+    if (cloudMotion.update(movingClouds, time, movingClouds ? worldgen::currentWorld().seed : 0))
+        cloudCells.clear();
+    const float movingFog = std::max(sceneDistance, clouds::MIN_MOVING_FOG);
     // --- The clouds of this frame (docs/specs/sky-and-clouds.md §A.5, §B.7) ---
     struct CloudDraw {
         uint32_t mesh;
@@ -1843,13 +1852,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         float opacity;
     };
     std::vector<CloudDraw> cloudDraws;
-    auto cloudMatrix = [&](const clouds::Cloud &c) {
-        const glm::vec3 base = glm::vec3(c.base - worldProbe.origin);
+    auto cloudMatrix = [&](const clouds::Cloud &c, glm::dvec3 position) {
+        const glm::vec3 base = glm::vec3(position - worldProbe.origin);
         glm::mat4 m = glm::translate(glm::mat4(1), base);
         m = glm::scale(m, glm::vec3(c.scale));
         return glm::rotate(m, glm::radians(c.turnDegrees), glm::vec3(0, 0, 1));
     };
-    if (alphaLook && skyModels.cloud && worldProbe.column && worldProbe.zone) {
+    if (!movingClouds && alphaLook && skyModels.cloud && worldProbe.column && worldProbe.zone) {
         const glm::dvec2 cloudEye = glm::dvec2(eyeGame);
         const int32_t centreX = clouds::cellOf(cloudEye.x), centreY = clouds::cellOf(cloudEye.y);
         // Alpha: a 13 x 13 grid, only while the player's column is moist and not on fire.
@@ -1858,33 +1867,43 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             for (int i = -clouds::ALPHA_REACH; i <= clouds::ALPHA_REACH; i++)
                 for (int j = -clouds::ALPHA_REACH; j <= clouds::ALPHA_REACH; j++)
                     if (const auto &c = cloudOfCell(centreX + i, centreY + j, true))
-                        cloudDraws.push_back({skyModels.cloud, cloudMatrix(*c), 1});
-    } else if (!alphaLook && !menuSky && skyModels.cloud && worldProbe.column) {
-        // The Steam cloud grid and its anchor range both follow the installed terrain range.
+                        cloudDraws.push_back({skyModels.cloud, cloudMatrix(*c, c->base), 1});
+    } else if ((!alphaLook || movingClouds) && !menuSky && !(movingClouds && underwater) && skyModels.cloud && worldProbe.column) {
+        // Stock clouds follow the installed terrain range. Moving clouds use their own horizon.
         // See docs/specs/steam-cloud-view-distance-fog-20261117.md.
         constexpr double blocksPerFixedUnit = 1.0 / 65536.0;
         const auto &fixedEye = sceneFrame->visibility.eye;
         const glm::dvec3 cloudEye = glm::dvec3(fixedEye[0], fixedEye[1], fixedEye[2]) * blocksPerFixedUnit;
-        const int32_t centreX = clouds::cellOf(cloudEye.x), centreY = clouds::cellOf(cloudEye.y);
-        const int reach = clouds::steamReach(sceneDistance);
-        const float cloudRange = sceneDistance + clouds::STEAM_CULL_BEYOND;
-        for (int i = -reach; i <= reach; i++)
+        const int32_t centreX = movingClouds ? cloudMotion.column(cloudEye.x) : clouds::cellOf(cloudEye.x);
+        const float cloudRange = (movingClouds ? movingFog : sceneDistance) + clouds::STEAM_CULL_BEYOND;
+        const int reach = movingClouds ? (int)std::ceil(cloudRange / clouds::CELL_BLOCKS) : clouds::steamReach(sceneDistance);
+        for (int i = -reach; i <= reach; i++) {
+            const int32_t column = centreX + i;
+            const int32_t centreY = movingClouds ? cloudMotion.row(cloudEye.y, column) : clouds::cellOf(cloudEye.y);
             for (int j = -reach; j <= reach; j++) {
-                const auto &c = cloudOfCell(centreX + i, centreY + j, false);
+                const int32_t row = centreY + j;
+                if (movingClouds) {
+                    const glm::dvec2 delta = clouds::cellBase(column, row) + glm::dvec2(cloudMotion.drift, 0) - glm::dvec2(cloudEye);
+                    if (glm::dot(delta, delta) > double(cloudRange) * cloudRange)
+                        continue;
+                }
+                const auto &c = cloudOfCell(column, row, false);
                 if (!c)
                     continue;
-                const scenevisibility::Sphere anchor{{int64_t(c->base.x / blocksPerFixedUnit),
-                                                       int64_t(c->base.y / blocksPerFixedUnit),
-                                                       int64_t(c->base.z / blocksPerFixedUnit)},
+                const auto position = c->base + glm::dvec3(cloudMotion.drift, 0, 0);
+                const scenevisibility::Sphere anchor{{int64_t(position.x / blocksPerFixedUnit),
+                                                       int64_t(position.y / blocksPerFixedUnit),
+                                                       int64_t(position.z / blocksPerFixedUnit)},
                                                       clouds::STEAM_CULL_RADIUS};
                 if (!sceneFrame->visibility.visible(anchor, cloudRange))
                     continue;
-                const float opacity = clouds::steamOpacity(glm::length(glm::vec3(c->base - cloudEye)));
+                const float opacity = clouds::steamOpacity(glm::length(glm::vec3(position - cloudEye)));
                 if (opacity < clouds::STEAM_HIDDEN_BELOW)
                     continue;
                 const uint32_t mesh = c->dark && skyModels.darkCloud ? skyModels.darkCloud : skyModels.cloud;
-                cloudDraws.push_back({mesh, cloudMatrix(*c), opacity});
+                cloudDraws.push_back({mesh, cloudMatrix(*c, position), opacity});
             }
+        }
     }
     // One sky model with its own look constants (see common.glsl's Push).
     auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look, uint32_t flags = 0, float depthOffset = 0) {
@@ -2100,7 +2119,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaCloudPipeline);
         for (const CloudDraw &c : cloudDraws)
             if (modelInView(c.mesh, c.model))
-                drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, 0, 1));
+                drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, movingClouds ? 1.f / movingFog : 0.f, 1));
     }
     // The sky fills what the world left empty (it is drawn at the far plane).
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaLook ? alphaSkyPipeline : skyPipeline);
@@ -2201,7 +2220,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         // Keep the direct light multiplier at one even in the zero-opacity depth draw.
         const auto drawCloud = [&](const CloudDraw &c, float opacity) {
             // Mode 10 uses the offset left by the ordered WORLD draws.
-            drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, opacity, 0), STEAM_WORLD | QUEUED_WORLD,
+            drawSkyModel(c.mesh, c.model, glm::vec4(1, movingClouds ? 1.f / movingFog : 0.f, opacity, 0), STEAM_WORLD | QUEUED_WORLD,
                          inheritedWorldDepthOffset);
         };
         for (const CloudDraw &c : cloudDraws)

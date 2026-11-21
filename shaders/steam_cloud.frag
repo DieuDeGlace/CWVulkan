@@ -11,7 +11,7 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     vec3 lit = vanillaBoost(sqrt(vColor.rgb));
-    float fogScale = f.steamSky[5].w;
+    float fogScale = pc.look.y > 0 ? pc.look.y : f.steamSky[5].w;
     float fog = clamp(dot(vView, vView) * (fogScale * fogScale), 0, 1);
     float unfogged = 1 - fog * fog * fog;
     float weight = 1 - unfogged * unfogged;

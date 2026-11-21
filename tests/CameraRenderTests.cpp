@@ -144,6 +144,50 @@ bool sunBounceImages(Renderer &renderer, RenderStyle style, const std::filesyste
 }
 
 
+bool alphaMovingCloud(Renderer &renderer, const std::filesystem::path &root) {
+    Mesh mesh;
+    for (glm::vec3 p : {glm::vec3(-2,0,-1), glm::vec3(2,0,-1), glm::vec3(0,0,3)}) {
+        mesh.vertices.push_back({p.x,p.y,p.z,190,100,150,255,4,0,0,0});
+        mesh.min = glm::min(mesh.min, p);
+        mesh.max = glm::max(mesh.max, p);
+    }
+    mesh.indices = {0,1,2};
+    const uint32_t model = renderer.upload(mesh);
+    WorldProbe probe;
+    probe.column = [](int32_t x, int32_t y) {
+        SkyColumn column;
+        column.region.dryness = x == 0 && y == 0 ? 1.f : 0.f;
+        return column;
+    };
+    renderer.setWorldProbe(probe);
+    renderer.settings.animatedClouds = true;
+    renderer.settings.fogDistance = 400;
+    Camera camera;
+    camera.eye = {0,-220,200};
+    camera.target = {0,0,200};
+    const auto sample = [&](const char *label, double time, uint32_t cloud) -> std::optional<glm::ivec3> {
+        renderer.setSkyModels({cloud,0,0});
+        const auto path = root / (std::string("alpha-moving-cloud-") + label + ".png");
+        renderer.capture(path.string());
+        renderer.frame(camera, lightingAt(12.f, {}), {}, time, {}, {});
+        int w=0,h=0,n=0;
+        auto *pixels = stbi_load(path.string().c_str(), &w, &h, &n, 4);
+        std::optional<glm::ivec3> colour;
+        if (pixels && w > 0 && h > 0) {
+            auto *p = pixels + 4 * ((h/2)*w + w/2);
+            colour = glm::ivec3(p[0],p[1],p[2]);
+        }
+        stbi_image_free(pixels);
+        return colour;
+    };
+    const auto start = sample("start",0,model), startSky = sample("sky",0,0);
+    const auto moved = sample("moved",32,model), movedSky = sample("moved-sky",32,0);
+    camera.eye.x = camera.target.x = 38.4f;
+    const auto tracked = sample("tracked",32,model), trackedSky = sample("tracked-sky",32,0);
+    return start && startSky && moved && movedSky && tracked && trackedSky &&
+           start != startSky && moved == movedSky && tracked != trackedSky;
+}
+
 struct ShadowChecks {
     bool caster;
     bool receiver;
@@ -362,6 +406,11 @@ int cameraRenderTests() {
         const bool bounce = sunBounceImages(renderer, style, root);
         std::cout << "Bounced sunlight " << name << (bounce ? " PASS" : " FAIL") << '\n';
         failures += !bounce;
+        if (style == RenderStyle::Alpha) {
+            const bool movingCloud = alphaMovingCloud(renderer, root);
+            std::cout << "Alpha moving cloud" << (movingCloud ? " PASS" : " FAIL") << '\n';
+            failures += !movingCloud;
+        }
         renderer.shutdown();
         culling = culling && !renderer.steamSphereVisible(behind, .5f, 160);
         std::cout << "Camera orientation " << name << (orientation ? " PASS" : " FAIL") << " coincident target/pole\n";

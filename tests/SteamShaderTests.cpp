@@ -961,6 +961,53 @@ int steamShaderTests() {
             ++failures;
         }
         std::cout << "Steam shader cloud retained depth" << (fixture && inherited && skippedOrCleared ? " PASS\n" : " FAIL\n");
+        // Keep the lighting clock fixed. Compare the centre with a sky-only frame
+        // at the same eye, material and render time to isolate cloud geometry.
+        cloudProbe.column = [](int32_t x, int32_t y) {
+            SkyColumn column;
+            column.region.dryness = std::abs(x) < 100 && y == 0 ? 1.f : 0.f;
+            return column;
+        };
+        bool underwater = false;
+        cloudProbe.water = [&](glm::vec3) { return underwater; };
+        renderer.setWorldProbe(cloudProbe);
+        const auto seesCloud = [&](const char *label, double seconds) -> std::optional<bool> {
+            const auto read = [&](uint32_t model, const char *suffix) {
+                renderer.setSkyModels({model, 0, 0});
+                const auto path = root / (std::string("cloud-motion-") + label + suffix + ".png");
+                renderer.capture(path.string());
+                renderer.frame(nearby, steady, {}, seconds, {}, {});
+                return centre(path);
+            };
+            const auto cloud = read(item.mesh, "-world");
+            const auto sky = read(0, "-sky");
+            if (!cloud || !sky) return {};
+            return *cloud != *sky;
+        };
+        const auto fixed = seesCloud("stock", 0);
+        const auto later = seesCloud("stock-later", 32);
+        renderer.settings.animatedClouds = true;
+        const auto start = seesCloud("moving-start", 32);
+        const auto moved = seesCloud("moving-old-position", 64);
+        nearby.eye.x = nearby.target.x = 38.4f;
+        const auto tracked = seesCloud("moving-new-position", 64);
+        renderer.settings.animatedClouds = false;
+        nearby.eye = {0,-120,200};
+        nearby.target = {0,0,200};
+        underwater = true; // An actual camera water query, well above sea level.
+        const auto submergedStock = seesCloud("stock-water", 65);
+        renderer.settings.animatedClouds = true;
+        const auto submergedMoving = seesCloud("moving-water", 65);
+        renderer.settings.animatedClouds = false;
+        const bool matches = fixed == true && later == true && start == true && moved == false &&
+            tracked == true && submergedStock == true && submergedMoving == false;
+        if (!matches) {
+            for (const auto result : {fixed, later, start, moved, tracked, submergedStock, submergedMoving})
+                std::cout << (result ? int(*result) : -1) << ' ';
+            std::cout << '\n';
+        }
+        std::cout << "Steam shader stationary and moving clouds" << (matches ? " PASS\n" : " FAIL\n");
+        failures += !matches;
         renderer.setSkyModels({});
         renderer.setWorldProbe({});
     }

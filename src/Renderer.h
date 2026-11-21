@@ -61,6 +61,7 @@ struct RenderSettings {
     // default (vanilla never moves a block, vegetation-wind.md §1). The game's own plant sway
     // is World's (VegetationWind.h) and always on.
     bool wind = false;
+    bool animatedClouds = false; // [Motion] AnimatedClouds
     float leafAmplitude = .16f, windSpeed = 1, leafRange = 96;
     // [Graphics]
     float fov = 60, fogDistance = 400, sceneryDistance = 110;
@@ -463,6 +464,7 @@ class Renderer {
     // worked out (they never change), the Steam palette as eased frame to frame, the column
     // the camera was last in, and the Steam star dome.
     SkyModels skyModels;
+    clouds::Motion cloudMotion;
     std::map<std::pair<int32_t, int32_t>, std::optional<clouds::Cloud>> cloudCells;
     steamsky::EasedPalette steamPalette;
     steamlighting::EasedColours steamLights;
