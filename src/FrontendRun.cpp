@@ -1065,7 +1065,7 @@ nativesaves::Cell Session::startCell(std::array<int64_t, 3> &position) const {
     } else
         log("Characters: start spot at cell " + std::to_string(cell[0]) + " " + std::to_string(cell[1]));
     const std::array<int32_t, 2> block = startBlock(cell);
-    if (s.extracted && s.extracted->generated() && !worldgen::usingAlphaTerrain() && s.startSpot.ground) {
+    if (s.extracted && s.extracted->generated() && s.startSpot.ground) {
         position = homesearch::position(cell, s.startSpot.ground(block[0], block[1]));
         return cell;
     }
@@ -3197,8 +3197,6 @@ void Session::enterWorld() {
         auto loadScope=s.extracted->lockSourceState();
         auto saved=std::make_shared<nativesaves::Character>();
         const bool found=s.store && s.store->isOpen() && s.store->load(outcome.slot,*saved);
-        if (found && s.extracted->generated() && worldgen::usingAlphaTerrain())
-            nativeprogress::placeImportedAlphaCharacter(*saved, frame, s.extracted->home());
         if (found && s.spawned->loadPlayerSave(saved))
             outcome.enteredCharacter=std::move(saved);
         else {

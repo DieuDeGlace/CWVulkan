@@ -14,7 +14,6 @@
 #include "SteamZoneDemand.h"
 #include "StaticObjectScene.h"
 #include "worldgen/BlockColours.h"
-#include "alphagen/Coordinates.h"
 #include "worldgen/Generator.h"
 #include "worldgen/Height.h"
 #include "worldgen/CellObjects.h"
@@ -27,9 +26,7 @@
 #include <thread>
 
 namespace {
-// Sky input bridge: the selected terrain supplies climate, base H and mountain
-// cover. Alpha's direct World queries are specified in alpha-sky-terrain-inputs.md;
-// the remaining Steam-only region fields retain the Steam layout's values.
+// Sky input bridge: the Steam generator supplies climate, base H and mountain cover.
 SkyColumn skyColumnAt(int32_t x, int32_t y) {
     const worldgen::ColumnValues c = worldgen::columnValues(x, y);
     const float warmth = worldgen::warmth(c.regions, c.place.kind, c.place.weight);
@@ -45,15 +42,6 @@ SkyColumn skyColumnAt(int32_t x, int32_t y) {
     s.region.forest = c.forestRegion;
     s.region.kind27 = worldgen::kind27Weight(c.place.kind, c.place.weight);
     s.cloudGround = worldgen::groundHeight(x, y, worldgen::heightmode::NO_VARIANT_SHAPES);
-    if (const auto field = worldgen::alphaTerrainSample(x, y)) {
-        s.zone = {field->warmth, field->moisture, field->sea, field->fire};
-        s.mountain = field->mountain;
-        s.region.warmth = field->warmth;
-        s.region.dryness = field->moisture;
-        s.region.ground = field->height;
-        s.region.lava = field->fire;
-        s.cloudGround = field->height;
-    }
     return s;
 }
 } // namespace
@@ -90,14 +78,6 @@ World::World(const Terrain &t, const Assets &a, Renderer &r, int view, Extracted
         probe.origin = glm::dvec3(extracted->originZoneX() * 64.0, extracted->originZoneY() * 64.0,
                                   -(double)ExtractedWorld::Z_OFFSET);
         probe.column = [](int32_t x, int32_t y) { return skyColumnAt(x, y); };
-        if (extracted->generated() && worldgen::usingAlphaTerrain()) {
-            // Hash Alpha cloud cells in absolute Alpha coordinates, including the
-            // intentionally cell-indexed moisture query; only drawing is rebased.
-            probe.alphaCloudOrigin = glm::dvec2(alphacoords::HOME);
-            probe.alphaCloudColumn = [](int32_t x, int32_t y) {
-                return skyColumnAt(x - alphacoords::HOME, y - alphacoords::HOME);
-            };
-        }
         probe.loadedLightZones = [this] { return extracted->loadedLightZones(); };
         probe.sceneZone = [this](int64_t x, int64_t y) -> std::optional<scenevisibility::Bounds> {
             const int64_t localX = x - extracted->originZoneX(), localY = y - extracted->originZoneY();
@@ -253,12 +233,6 @@ bool World::waterAt(glm::vec3 p) const {
 }
 
 alpha::ZoneFactors World::zoneFactors(glm::vec3 p) const {
-    if (extracted && extracted->generated() && worldgen::usingAlphaTerrain()) {
-        const auto x = int32_t(std::floor(p.x)) + extracted->originZoneX() * 64;
-        const auto y = int32_t(std::floor(p.y)) + extracted->originZoneY() * 64;
-        if (const auto field = worldgen::alphaTerrainSample(x, y))
-            return {field->warmth, field->moisture, field->sea, field->fire};
-    }
     // The factors change slowly: work them out again only when the camera crosses into
     // another 4 x 4 block cell.
     glm::ivec2 cell(glm::floor(glm::vec2(p) / 4.f));
@@ -385,14 +359,9 @@ void World::lightScenery(std::vector<Scenery> &scenery) const {
     auto base = [&](const Scenery &s) {
         if (!extracted || s.modelType < 0)
             return glm::ivec3(glm::floor(glm::vec3(s.x, s.y, s.z + .1f)));
-        auto position = s.modelPosition;
-        const int64_t sourceOrigin = worldgen::usingAlphaTerrain() ? alphacoords::HOME : 0;
-        // Apply the hybrid's integral XY frame before native fixed division.
-        position[0] = gamemath::addFixed(position[0], sourceOrigin * 65536);
-        position[1] = gamemath::addFixed(position[1], sourceOrigin * 65536);
-        const auto at = alphalight::environmentBlock(position);
-        return glm::ivec3(int64_t(at.x) - sourceOrigin - int64_t(extracted->originZoneX()) * 64,
-                          int64_t(at.y) - sourceOrigin - int64_t(extracted->originZoneY()) * 64, int64_t(at.z) + ExtractedWorld::Z_OFFSET);
+        const auto at = alphalight::environmentBlock(s.modelPosition);
+        return glm::ivec3(int64_t(at.x) - int64_t(extracted->originZoneX()) * 64,
+                          int64_t(at.y) - int64_t(extracted->originZoneY()) * 64, int64_t(at.z) + ExtractedWorld::Z_OFFSET);
     };
     glm::ivec3 lo(INT32_MAX), hi(INT32_MIN);
     for (const Scenery &s : scenery)
@@ -684,7 +653,7 @@ void World::updateSources(const scenerange::Player &player) {
         using Point = ClientSourceLoader::Key;
         sourceLoader = std::make_unique<ClientSourceLoader>(ClientSourceLoader::Access{
             [source = extracted](Point key) { return source->gameZoneLoaded(key[0], key[1]); },
-            [](Point key) { return worldgen::terrainZoneAvailable(key[0], key[1]); },
+            [](Point) { return true; },
             [source = extracted](Point key) { return source->loadSourceZone(key[0], key[1]); }}, view);
     } else {
         sourceLoader->setView(view);

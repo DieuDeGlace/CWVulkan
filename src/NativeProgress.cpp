@@ -53,13 +53,6 @@ std::array<int64_t, 3> gamePosition(glm::vec3 feet, const Frame &frame) {
             (int64_t)std::llround(((double)feet.z + RECORD_ABOVE_FEET - LOCAL_Z_OFFSET) * UNITS)};
 }
 
-bool placeImportedAlphaCharacter(Character &character, const Frame &frame, glm::vec3 homeFeet) {
-    if (character.position != std::array<int64_t, 3>{} || character.worldSeed != 0 || !character.worldName.empty())
-        return false;
-    character.position = gamePosition(homeFeet, frame);
-    return true;
-}
-
 // --- Sprites and looks -----------------------------------------------------------------------
 
 bool SpriteTable::load(const fs::path &extractDir) {

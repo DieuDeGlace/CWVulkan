@@ -53,7 +53,6 @@
 #include "Config.h"
 #include "Extracted.h"
 #include "worldgen/Generator.h"
-#include "worldgen/AlphaTerrain.h"
 #include "worldgen/AlphaRelief.h"
 #include "worldgen/Height.h"
 #include "worldgen/Noise.h"
@@ -866,7 +865,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     const int32_t gameWorldSeed = worldgen::STEAM_STARTUP_SEED;
     if (config.flag("Events", "Enabled", false) && config.flag("Events", "ReplaceTravelLocations", true))
         OverworldEvents::replaceTravelLocations(gameWorldSeed, gameWorldName);
-    worldgen::setAlphaTerrain({});
     worldgen::setTerrainRelief({});
     if (worldSource == "Game" || alphaGeneration) {
         worldgen::setWorldSeed();
@@ -1068,7 +1066,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     if (useExtracted) {
         frontend::StartSpotWorld &w = front.startSpot;
         w = homesearch::nativeWorld();
-        if (!extractedWorld.generated() || worldgen::usingAlphaTerrain()) {
+        if (!extractedWorld.generated()) {
             w.playable = [&extractedWorld](nativesaves::Cell cell) {
                 const std::array<int32_t, 2> b = frontend::startBlock(cell);
                 return extractedWorld.has((int)std::floor(b[0] / 64.0) - extractedWorld.originZoneX(),
@@ -1190,14 +1188,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         } else {
             auto raw = std::make_shared<nativesaves::Character>();
             had = saves.load(saveGame, saveFrame, savedWorldName, itemSprite, raw.get());
-            if (had && chosen->native && nativePlayer) {
-                if (worldgen::usingAlphaTerrain() && useExtracted &&
-                    nativeprogress::placeImportedAlphaCharacter(*raw, saveFrame, extractedWorld.home())) {
-                    saveGame.hasPosition = true;
-                    saveGame.position = extractedWorld.home();
-                }
+            if (had && chosen->native && nativePlayer)
                 loadedNativeCharacter = std::move(raw);
-            }
         }
         if (loadedNativeCharacter) saveGame.level = loadedNativeCharacter->level;
         logLine(std::string("Save: ") + (had ? (createdNativeCharacter ? "continuing created character " : "loaded character ") +
@@ -9101,9 +9093,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     return value < 0 ? "-" + text : text;
                 };
                 const worldgen::ColumnField field = worldgen::columnField(bx, by);
-                const auto alphaField = useExtracted && extractedWorld.generated() ? worldgen::alphaTerrainSample(bx, by) : std::nullopt;
-                const float warmth = alphaField ? alphaField->warmth : field.colours.warmth;
-                const float moisture = alphaField ? alphaField->moisture : field.colours.dryness;
+                const float warmth = field.colours.warmth;
+                const float moisture = field.colours.dryness;
                 char clock[64];
                 std::snprintf(clock, sizeof clock, "  TIME %d:%02d", (int)hour, (int)(hour * 60.0f) % 60);
                 // (the map's cursor while the map is open and the pointer is on it)

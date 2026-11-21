@@ -15,7 +15,7 @@ int sourceReadinessTests() {
             std::printf("FAIL source readiness: %s\n", message);
         }
     };
-    if (worldgen::modHooksSet() || worldgen::usingAlphaTerrain()) {
+    if (worldgen::modHooksSet()) {
         check(false, "fixture requires the independent Steam generator without another owner's hooks");
         return failures;
     }

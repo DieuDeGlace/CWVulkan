@@ -28,8 +28,6 @@ struct Frame {
 };
 glm::vec3 localFeet(const std::array<int64_t, 3> &position, const Frame &frame);
 std::array<int64_t, 3> gamePosition(glm::vec3 feet, const Frame &frame);
-// A new Alpha profile clears its imported geographic state before first play.
-bool placeImportedAlphaCharacter(nativesaves::Character &, const Frame &, glm::vec3 homeFeet);
 
 // The game's model list (Extract/sprites.txt: id, file, size), for the names of the models a
 // look picks.

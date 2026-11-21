@@ -90,11 +90,6 @@ void ExtractedWorld::openGenerated(int homeX, int homeY, const fs::path &spriteD
     float ground = std::floor(worldgen::groundHeight(homeX, homeY)) + 1;
     homeLocal = glm::vec3(float(homeX - (int64_t)originX * 64), float(homeY - (int64_t)originY * 64),
                           std::max(ground, 1.f) + Z_OFFSET);
-    if (worldgen::usingAlphaTerrain()) {
-        float actual;
-        if (surface(homeLocal.x, homeLocal.y, actual))
-            homeLocal.z = actual;
-    }
 }
 
 // Sprite tables written by the extractor next to the seed folders.
@@ -184,8 +179,6 @@ std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::generateZone(int ax, int a
     for (size_t i = 0; i < columns.size(); i++) {
         Column &c = zone->columns[i];
         c.base = columns[i].base;
-        c.fullColour = columns[i].fullColour;
-        c.sourceShift = columns[i].sourceShift;
         c.blocks.reserve(columns[i].blocks.size());
         for (const worldgen::Block &b : columns[i].blocks)
             c.blocks.push_back({b.r, b.g, b.b, b.glow, b.type, b.flags});
@@ -289,8 +282,6 @@ std::vector<worldgen::TerrainColumn> ExtractedWorld::readStoredZoneColumns(const
 }
 
 std::shared_ptr<ExtractedWorld::Zone> ExtractedWorld::load(int ax, int ay) {
-    if (generatedMode && !worldgen::terrainZoneAvailable(ax, ay))
-        return nullptr;
     Key key{ax, ay};
     {
         std::lock_guard lock(cacheMutex);
@@ -754,19 +745,12 @@ bool ExtractedWorld::writeGameBlock(Zone &zone, int32_t ax, int32_t ay, int32_t 
         sand = zone.recordedSand;
     }
     const bool gap = !column.empty() && int64_t(z) + 1 < column.base;
-    worldgen::ColumnFiller filler;
-    if (gap && column.fullColour) {
-        filler = worldgen::alphaColumnFiller(x, y, column.sourceShift);
-        if (!filler)
-            return false;
-    }
-    // Legacy block-only exports need native cached inputs; Alpha gaps use the
-    // retained source palette, including the column's vertical translation.
-    if (gap && !colours && !filler)
+    // Legacy block-only exports need native cached inputs.
+    if (gap && !colours)
         return false;
     const worldgen::ColourInputs unused;
     return worldgen::storeColumn(column, x, y, z, {bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]}, colours ? *colours : unused,
-                                 sand, filler ? &filler : nullptr);
+                                 sand);
 }
 bool ExtractedWorld::setGameBlock(int32_t x, int32_t y, int32_t z, const GameBlock &block) {
     if (!blockEdits()) {
@@ -1965,36 +1949,10 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         return blockAt(column(lx, ly), z, b) && solidType(b.type);
     };
     glm::vec3 offset((float)zx * 64, (float)zy * 64, (float)Z_OFFSET);
-    // meshFaces samples each voxel's colour before shading that voxel's corners.
-    // Preserve implicit Alpha RGB in float throughout those corner calls.
-    std::optional<glm::vec3> implicitColour;
     auto colour = [&](int lx, int ly, int z) {
-        implicitColour.reset();
-        const auto &stored = column(lx, ly);
         Block b{};
-        blockAt(stored, z, b);
-        if (stored.fullColour && z < stored.base) {
-            implicitColour = worldgen::alphaImplicitColour(stored, int32_t(int64_t(ax) * 64 + lx), int32_t(int64_t(ay) * 64 + ly), z);
-            if (implicitColour && !alphaLook) {
-                b.r = alphalight::toByte(implicitColour->r);
-                b.g = alphalight::toByte(implicitColour->g);
-                b.b = alphalight::toByte(implicitColour->b);
-            }
-        }
-        // Steam bytes are half intensity; Alpha columns retain their original
-        // full RGB. Retained Steam construction columns keep the native encoding.
-        if (column(lx, ly).fullColour) {
-            if (nativeEncoding) {
-                b.r /= 2;
-                b.g /= 2;
-                b.b /= 2;
-            } else {
-                VoxelColor c{b.r, b.g, b.b, 0};
-                if (b.type == LEAVES_TYPE || b.type == SNOW_LEAVES_TYPE)
-                    c.flags |= SWAY;
-                return c;
-            }
-        }
+        blockAt(column(lx, ly), z, b);
+        // Steam bytes are half intensity.
         VoxelColor c = nativeEncoding ? VoxelColor{b.r, b.g, b.b, STEAM_VERTEX}
                                       : VoxelColor{(uint8_t)std::min(255, b.r * 2), (uint8_t)std::min(255, b.g * 2),
                                                    (uint8_t)std::min(255, b.b * 2), 0};
@@ -2043,8 +2001,7 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
         auto shade = [&](int x, int y, int z, int face, int k, VoxelColor c) {
             const int *corner = FACE_CORNERS[face][k];
             const auto sample = corners.sample({x + corner[0], y + corner[1], z + corner[2]}, face);
-            const auto rgb = implicitColour.value_or(glm::vec3(c.r, c.g, c.b) / 255.f);
-            return alphalight::shadeCorner(sample, rgb);
+            return alphalight::shadeCorner(sample, glm::vec3(c.r, c.g, c.b) / 255.f);
         };
         meshFaces({0, 0, lo + 1}, {64, 64, hi + 1}, solid, colour, shade, opaque, 1.f, offset, VoxelLayout::Classic, {}, true);
     } else if (nativeEncoding) {

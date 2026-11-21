@@ -87,8 +87,7 @@ class ExtractedWorld {
     // Zone coordinates are local (home zone = 0, 0). Also the zones the generator's hooks
     // make anew (load).
     bool has(int zx, int zy) const {
-        return generatedMode ? worldgen::terrainZoneAvailable(zx + originX, zy + originY)
-                             : zones.count({zx + originX, zy + originY}) > 0 || worldgen::hooksChange(zx + originX, zy + originY);
+        return generatedMode || zones.count({zx + originX, zy + originY}) > 0 || worldgen::hooksChange(zx + originX, zy + originY);
     }
     // Opaque and water meshes in local world coordinates (thread-safe).
     bool mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::optional<scenevisibility::Bounds> *nativeBounds = nullptr,

@@ -1,5 +1,4 @@
 #pragma once
-#include <glm/vec3.hpp>
 // The world generator as the engine uses it: one world at a time (its seed, its day, the day
 // zones are refreshed for and the creature tables), the zones it makes, kept in a small cache, and
 // the questions the engine asks of it about cells, places and regions.
@@ -12,7 +11,6 @@
 //   auto zone = worldgen::zone(zx, zy);            // blocks, objects, models, items, spawn points
 //   auto lit = worldgen::litZone(zx, zy);          // its columns lit as the game lights them
 #include "worldgen/BuildingRules.h"
-#include "alphagen/TerrainSample.h"
 #include "worldgen/CellObjects.h"
 #include "worldgen/CreatureTables.h"
 #include "worldgen/Height.h"
@@ -31,31 +29,19 @@
 
 namespace worldgen {
 
-// Select before any world workers start. Null retains the separate Steam generator.
-class AlphaTerrain;
-struct MapRegion;
-
-void setAlphaTerrain(std::shared_ptr<AlphaTerrain>);
-bool usingAlphaTerrain();
 // CubeVulkan's Alpha terrain: the Steam world with Alpha's hills (AlphaRelief.h); null for none.
+// Select before any world workers start.
 class AlphaRelief;
 void setTerrainRelief(std::shared_ptr<const AlphaRelief>);
-// Whether the generated world differs from the game's (Alpha columns or Alpha hills): saves and peers
-// then need a matching terrain identity.
+// Whether the generated world differs from the game's (Alpha hills): saves and peers then need a
+// matching terrain identity.
 bool customTerrain();
 std::string terrainIdentity();
-bool terrainZoneAvailable(int32_t zx, int32_t zy);
-std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y);
-void composeTerrainMap(MapRegion &);
-// Captures the selected immutable Alpha context; only downward gap writes use it.
-ColumnFiller alphaColumnFiller(int32_t x, int32_t y, int32_t sourceShift);
-// Alpha buried faces retain the reference/Rk blend in float until vertex shading.
-std::optional<glm::vec3> alphaImplicitColour(const TerrainColumn &, int32_t x, int32_t y, int32_t z);
 
 // --- The world -----------------------------------------------------------------------------------
 
 // Supported Steam startup input; World+0x244 is derived from it during configuration.
-// Explicit values, including zero for the existing Alpha composition, remain valid.
+// Explicit values, including zero, remain valid.
 inline constexpr int32_t STEAM_STARTUP_SEED = 123;
 void setWorldSeed(int32_t seed = STEAM_STARTUP_SEED); // select before generation workers start
 const WorldValues &currentWorld();

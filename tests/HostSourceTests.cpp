@@ -31,7 +31,7 @@ int hostSourceTests() {
     check(zonedemand::hostGenerationPriority({0,0}, multiple) == 4096 &&
               zonedemand::hostGenerationPriority({0,0}, {}) == -1,
           "host priority takes the minimum admitted centre and rejects an empty centre list");
-    if (worldgen::modHooksSet() || worldgen::usingAlphaTerrain()) {
+    if (worldgen::modHooksSet()) {
         check(false, "fixture requires the independent Steam generator without another owner's hooks");
         return failures;
     }

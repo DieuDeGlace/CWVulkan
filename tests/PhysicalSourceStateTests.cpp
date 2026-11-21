@@ -195,7 +195,7 @@ int physicalSourceStateTests() {
     const auto check = [&](bool ok, const char *message) {
         if (!ok) { ++failures; std::printf("FAIL physical source state: %s\n", message); }
     };
-    if (worldgen::modHooksSet() || worldgen::usingAlphaTerrain()) {
+    if (worldgen::modHooksSet()) {
         check(false, "controlled lifecycle fixture requires the unmodified Steam generator");
         return failures;
     }

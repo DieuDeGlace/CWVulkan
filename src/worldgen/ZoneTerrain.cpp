@@ -389,8 +389,7 @@ std::optional<size_t> setterColumn(int32_t zx, int32_t zy, int32_t x, int32_t y)
         return std::nullopt;
     return size_t(int64_t(x) - x0) * 64 + size_t(int64_t(y) - y0);
 }
-bool storeColumn(TerrainColumn &c, int32_t x, int32_t y, int32_t z, Block b, const ColourInputs &colours, const SandOffsets &sand,
-                 const ColumnFiller *filler) {
+bool storeColumn(TerrainColumn &c, int32_t x, int32_t y, int32_t z, Block b, const ColourInputs &colours, const SandOffsets &sand) {
     const int64_t top = int64_t(c.base) + int64_t(c.blocks.size());
     if (b.type == 0 && b.flags == 0 && int64_t(z) >= top)
         return false;
@@ -402,15 +401,8 @@ bool storeColumn(TerrainColumn &c, int32_t x, int32_t y, int32_t z, Block b, con
         std::vector<Block> below;
         below.reserve(size_t(int64_t(c.base) - z));
         below.push_back(b);
-        for (int64_t height = int64_t(z) + 1; height < c.base; ++height) {
-            if (filler) {
-                const auto material = (*filler)(int32_t(height));
-                if (!material)
-                    return false; // No column mutation until every gap material is available.
-                below.push_back(*material);
-            } else
-                below.push_back(toBlock(buriedColour(x, y, int32_t(height), colours, sand)));
-        }
+        for (int64_t height = int64_t(z) + 1; height < c.base; ++height)
+            below.push_back(toBlock(buriedColour(x, y, int32_t(height), colours, sand)));
         c.blocks.insert(c.blocks.begin(), below.begin(), below.end());
         c.base = z;
     } else {
@@ -421,12 +413,12 @@ bool storeColumn(TerrainColumn &c, int32_t x, int32_t y, int32_t z, Block b, con
     }
     return true;
 }
-void ZoneTerrain::store(int32_t x, int32_t y, int32_t z, Block b, const ColumnFiller *filler) {
+void ZoneTerrain::store(int32_t x, int32_t y, int32_t z, Block b) {
     const auto i = setterColumn(zx, zy, x, y);
     if (!i)
         return;
     const ColourInputs &colours = field.empty() ? retainedColours[*i] : field[*i].colours;
-    storeColumn(columns[*i], x, y, z, b, colours, sand, filler);
+    storeColumn(columns[*i], x, y, z, b, colours, sand);
 }
 
 ZoneTerrain zoneTerrain(const WorldValues &world, int32_t zx, int32_t zy, const TerrainOptions &options) {

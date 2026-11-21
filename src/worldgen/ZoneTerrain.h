@@ -42,10 +42,6 @@ struct ColumnField {
 struct TerrainColumn {
     int32_t base = 0;
     std::vector<Block> blocks;
-    // Project storage metadata: Alpha colors are full RGB; Steam terrain stores
-    // half-intensity channels. It is never packed into a native block flag.
-    bool fullColour = false;
-    int32_t sourceShift = 0; // runtime Z minus source Alpha Z, for translated material sampling
     int32_t top() const { return base + (int32_t)blocks.size(); }
     bool empty() const { return blocks.empty(); }
 };
@@ -55,9 +51,7 @@ std::optional<size_t> setterColumn(int32_t zx, int32_t zy, int32_t x, int32_t y)
 
 // Full setter (steam-full-block-setter.md): no history/events/cache side effects.
 // The retained material inputs are used only for a downward interior gap.
-using ColumnFiller = std::function<std::optional<Block>(int32_t z)>;
-bool storeColumn(TerrainColumn &column, int32_t x, int32_t y, int32_t z, Block block, const ColourInputs &colours, const SandOffsets &sand,
-                 const ColumnFiller *filler = nullptr);
+bool storeColumn(TerrainColumn &column, int32_t x, int32_t y, int32_t z, Block block, const ColourInputs &colours, const SandOffsets &sand);
 
 // A light the cliff pass hangs in a tall overhang (a model in the zone's model list, zone+0x18;
 // its record is part B's: type 0x59, flags 2, tint 1, second float 1).
@@ -86,7 +80,7 @@ struct ZoneTerrain {
     Block read(int32_t x, int32_t y, int32_t z) const;
     // Storing a block (0x31c1c0); the column grows down (filled with its buried colour) or up
     // (with empty blocks) to reach z.
-    void store(int32_t x, int32_t y, int32_t z, Block b, const ColumnFiller *filler = nullptr);
+    void store(int32_t x, int32_t y, int32_t z, Block b);
     void store(int32_t x, int32_t y, int32_t z, const BlockProps &p) { store(x, y, z, toBlock(p)); }
 };
 

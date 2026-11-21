@@ -130,21 +130,6 @@ target_compile_definitions(deps PUBLIC VK_NO_PROTOTYPES GLM_FORCE_DEPTH_ZERO_TO_
 # Shared precision-sensitive Alpha terrain core, separate from Steam generation.
 set(ALPHA_TERRAIN_SOURCES
     src/alphagen/Random.cpp
-    src/alphagen/Regions.cpp
-    src/alphagen/Locations.cpp
-    src/alphagen/Zone.cpp
-    src/alphagen/Terrain.cpp
-    src/alphagen/SurfaceStore.cpp
-    src/alphagen/SteamBridge.cpp
-    src/alphagen/Relief.cpp
-    src/alphagen/ReliefStore.cpp
-    src/alphagen/Trees.cpp
-    src/alphagen/TreeModels.cpp
-    src/alphagen/Landscape.cpp
-    src/alphagen/LandscapeStore.cpp
-    src/alphagen/Vegetation.cpp
-    src/alphagen/PlantModels.cpp
-    src/worldgen/AlphaTerrain.cpp
     src/worldgen/AlphaRelief.cpp)
 
 # The engine core is a library so the tests link the same code as the game.
@@ -492,7 +477,7 @@ target_sources(EngineTests PRIVATE tests/MapHistoryTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapControlsTests.cpp)
 target_sources(EngineTests PRIVATE tests/MapRenderTests.cpp)
 target_sources(EngineTests PRIVATE tests/PanelScrollTests.cpp)
-target_sources(EngineTests PRIVATE tests/SampledActionTests.cpp tests/GameMouseTests.cpp tests/PhysicalInputTests.cpp tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/GameWindowInputTests.cpp tests/AlphaTerrainTests.cpp tests/AlphaTransitionTests.cpp)
+target_sources(EngineTests PRIVATE tests/SampledActionTests.cpp tests/GameMouseTests.cpp tests/PhysicalInputTests.cpp tests/PlasmaInputTests.cpp tests/PlasmaKeyboardTests.cpp tests/PlasmaEditTests.cpp tests/PlasmaEditPointerTests.cpp tests/PlasmaTextMetricTests.cpp tests/LiveEditTests.cpp tests/GameWindowInputTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaLayoutTests.cpp)
 target_sources(EngineTests PRIVATE tests/ResidentPassTests.cpp tests/ResidentEffectsTests.cpp)
 target_sources(EngineTests PRIVATE tests/CameraMotionTests.cpp tests/CameraRenderTests.cpp tests/ControlPhaseTests.cpp tests/TargetStageTests.cpp tests/TerrainRayTests.cpp tests/CameraPositionTests.cpp tests/DrawnStateTests.cpp tests/LinkedPlacementTests.cpp)

@@ -17,8 +17,8 @@ nearby. Dungeons, towns and every Steam structure stand as generated.
 Its saves use the identity `steam-alpha-relief-v1-...`; earlier Alpha composition folders are
 kept and not migrated. Peers must use the same terrain. With the relief off (`Source=Game`)
 the Steam world is byte-identical to before: the terrain, block and structure oracles still
-match exactly. The earlier Alpha column composition below is history; its code is no longer
-selected by any setting.
+match exactly. The earlier Alpha column composition below is history; its code was removed on
+2026-11-21 at the user's request.
 
 ## Terrain review, 2026-11-17
 

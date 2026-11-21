@@ -128,7 +128,7 @@ int nativeSourceStreamingTests() {
     };
     priorities(check);
     sourceMapExamples(check);
-    if (worldgen::modHooksSet() || worldgen::usingAlphaTerrain()) {
+    if (worldgen::modHooksSet()) {
         check(false, "fixture requires the default independent Steam generator");
         return failures;
     }
@@ -328,7 +328,7 @@ int nativeSourceCreationTests() {
     auto check = [&](bool pass, const char *message) {
         if (!pass) { ++failures; std::printf("FAIL source creation: %s\n",message); }
     };
-    if (worldgen::modHooksSet() || worldgen::usingAlphaTerrain()) {
+    if (worldgen::modHooksSet()) {
         check(false,"fixture requires an independent default Steam generator");
         return failures;
     }

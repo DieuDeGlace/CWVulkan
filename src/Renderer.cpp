@@ -1030,7 +1030,7 @@ const std::optional<clouds::Cloud> &Renderer::cloudOfCell(int32_t cx, int32_t cy
     bool haveLast = false;
     auto column = [&](int32_t x, int32_t y) -> const SkyColumn & {
         if (!haveLast || lastAt != glm::ivec2(x, y)) {
-            const auto &query = alphaLook && worldProbe.alphaCloudColumn ? worldProbe.alphaCloudColumn : worldProbe.column;
+            const auto &query = worldProbe.column;
             last = query(x, y);
             lastAt = {x, y};
             haveLast = true;
@@ -1272,7 +1272,10 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             fogDistance.update(target, (time - lastFrameTime) * 1000);
         lastFrameTime = time;
     }
-    const float fogF = std::max(fogDistance.value(), 1.f);
+    // The user's add-on: nearby ground stays visible while the camera is next to an unfinished zone
+    // (never closer than half a zone), so loading terrain is not washed into the fog colour.
+    constexpr float MINIMUM_VIEW_DISTANCE = 64 * 0.5f;
+    const float fogF = std::max(fogDistance.value(), MINIMUM_VIEW_DISTANCE);
     blockLightBudget = 8;
     // §10.1: lamps, torches and fires light up as the sun goes, nearest first.
     struct PointLight {
@@ -1810,14 +1813,13 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     };
     std::vector<CloudDraw> cloudDraws;
     auto cloudMatrix = [&](const clouds::Cloud &c) {
-        const glm::dvec3 cloudOffset = alphaLook ? glm::dvec3(worldProbe.alphaCloudOrigin, 0) : glm::dvec3(0);
-        const glm::vec3 base = glm::vec3(c.base - worldProbe.origin - cloudOffset);
+        const glm::vec3 base = glm::vec3(c.base - worldProbe.origin);
         glm::mat4 m = glm::translate(glm::mat4(1), base);
         m = glm::scale(m, glm::vec3(c.scale));
         return glm::rotate(m, glm::radians(c.turnDegrees), glm::vec3(0, 0, 1));
     };
     if (alphaLook && skyModels.cloud && worldProbe.column && worldProbe.zone) {
-        const glm::dvec2 cloudEye = glm::dvec2(eyeGame) + worldProbe.alphaCloudOrigin;
+        const glm::dvec2 cloudEye = glm::dvec2(eyeGame);
         const int32_t centreX = clouds::cellOf(cloudEye.x), centreY = clouds::cellOf(cloudEye.y);
         // Alpha: a 13 x 13 grid, only while the player's column is moist and not on fire.
         const alpha::ZoneFactors player = worldProbe.zone(focus);

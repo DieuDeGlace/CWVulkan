@@ -1,5 +1,13 @@
 # Clean-room process
 
+## Alpha composition purge - 2026-11-21
+
+At the user's request the old Alpha column composition is removed: worldgen/AlphaTerrain, the
+unused src/alphagen generator files, their generator hooks and column fields, and their tests.
+`World.Source=Alpha` stays the Steam world with Alpha's hills (AlphaRelief) and no longer asks
+for the palm and plant model files. The user's loading-fog floor is adopted: fog never closes
+in nearer than half a zone, so loading ground stays visible.
+
 ## Aquatic encounters - 2026-11-21
 
 `[Creatures] AquaticEnemies` (off by default) brings the user's aquatic encounters: once per

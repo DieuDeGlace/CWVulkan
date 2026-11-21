@@ -6,8 +6,6 @@
 #include "NativeItems.h"
 #include "ProceduralItemData.h"
 #include "SteamSession.h"
-#include "CubModel.h"
-#include "alphagen/PlantModels.h"
 #include "Extracted.h"
 #include "../tools/ZoneExtractor/DungeonCapture.h"
 #include <windows.h>
@@ -181,40 +179,12 @@ bool partPresent(const fs::path &game, Part part, std::string &detail) {
 namespace {
 struct SourceRequirements {
     bool capturedWorld = true;
-    bool alphaModels = false;
 };
 SourceRequirements sourceRequirements(const fs::path &ini) {
     Config config;
     config.load(ini);
     const std::string source = config.text("World", "Source", "Alpha");
-    const bool alpha = source == "Alpha";
-    return {!alpha && source != "Game" && source != "Generated", alpha};
-}
-bool alphaModelFiles(const fs::path &game, std::string &detail) {
-    auto check = [&](std::string_view name) {
-        const std::string filename = std::string(name) + ".cub";
-        const fs::path file = game / "sprites" / filename;
-        std::error_code ec;
-        const auto size = fs::file_size(file, ec);
-        std::string why;
-        CubModel model;
-        if (!ec && size <= 256 * 1024 * 1024 && model.load(file, &why))
-            return true;
-        if (ec)
-            why = "missing or unreadable";
-        else if (size > 256 * 1024 * 1024)
-            why = "excessive file size";
-        detail = "Alpha terrain model " + filename + ": " + why + ". Verify the game files in Steam.";
-        return false;
-    };
-    if (!check("palm-leaf") || !check("palm-leaf-diagonal"))
-        return false;
-    for (int kind = 0; kind < 33; ++kind) {
-        const auto name = alphagen::plantSprite(kind);
-        if (!name.empty() && !check(name))
-            return false;
-    }
-    return true;
+    return {source != "Alpha" && source != "Game" && source != "Generated"};
 }
 Completeness assessRequired(const fs::path &game, SourceRequirements requirements, const dataCheck::Report *report) {
     Completeness c;
@@ -228,23 +198,11 @@ Completeness assessRequired(const fs::path &game, SourceRequirements requirement
         c.parts.push_back(std::move(s));
     };
     add(Part::GameFiles, "Game files", true, "CubeVulkan cannot start. Verify the game files in Steam.", {});
-    if (requirements.alphaModels && c.parts.back().present)
-        c.parts.back().present = alphaModelFiles(game, c.parts.back().detail);
     add(Part::World, "Extracted land", requirements.capturedWorld,
         requirements.capturedWorld ? "CubeVulkan has no land to show."
                                    : "Not needed: CubeVulkan.ini builds the land itself ([World] Source).",
         {"", "", true, false});
-    add(Part::SpriteList, "Model list", requirements.alphaModels,
-        requirements.alphaModels ? "Alpha terrain cannot start without the owner's environment model table."
-                                 : "Creatures and placed objects cannot be drawn.",
-        {"", "", false, true});
-    if (requirements.alphaModels && c.parts.back().present) {
-        std::string why;
-        if (!alphagen::loadPlantModels(game / "Extract", game / "sprites", why)) {
-            c.parts.back().present = false;
-            c.parts.back().detail = why;
-        }
-    }
+    add(Part::SpriteList, "Model list", false, "Creatures and placed objects cannot be drawn.", {"", "", false, true});
     add(Part::SoundList, "Sound list", false, "Sound effects are silent (music still plays).",
         {"sounds.request", "Sound list:", false, false});
     add(Part::CreatureTables, "Creature tables", false, "The world has no creatures or people.",
@@ -266,7 +224,7 @@ Completeness assessRequired(const fs::path &game, SourceRequirements requirement
 } // namespace
 
 Completeness assess(const fs::path &game, bool worldRequired, const dataCheck::Report *report) {
-    return assessRequired(game, {worldRequired, false}, report);
+    return assessRequired(game, {worldRequired}, report);
 }
 Completeness assessConfigured(const fs::path &game, const fs::path &ini, const dataCheck::Report *report) {
     return assessRequired(game, sourceRequirements(ini), report);

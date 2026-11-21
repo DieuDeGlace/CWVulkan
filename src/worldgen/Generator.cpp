@@ -3,7 +3,6 @@
 #include "MeshProfile.h"
 
 #include "worldgen/BlockColours.h"
-#include "worldgen/AlphaTerrain.h"
 #include "worldgen/AlphaRelief.h"
 #include <bit>
 #include <stdexcept>
@@ -25,7 +24,6 @@ struct Settings {
     std::atomic<int32_t> day{0};
     std::atomic<int32_t> refreshDay{-1};
     bool tablesLoaded = false;
-    std::shared_ptr<AlphaTerrain> alpha;
 };
 Settings settings;
 // Changes with every setting, so cached zones made under other settings are made again.
@@ -79,53 +77,17 @@ constexpr int ROLE_ITEM_IDS[8] = {1, 2, 0x12, 3, 5, 7, 8, 9}; // roles 6..13 (co
 
 // --- The world -------------------------------------------------------------------------------------
 
-void setAlphaTerrain(std::shared_ptr<AlphaTerrain> terrain) {
-    settings.alpha = std::move(terrain);
-    settingsVersion++;
-}
-bool usingAlphaTerrain() {
-    return bool(settings.alpha);
-}
 void setTerrainRelief(std::shared_ptr<const AlphaRelief> relief) {
     setAlphaRelief(std::move(relief));
     settingsVersion++;
 }
 bool customTerrain() {
-    return settings.alpha || alphaRelief();
+    return alphaRelief() != nullptr;
 }
 std::string terrainIdentity() {
-    if (settings.alpha)
-        return settings.alpha->identity(worldScale());
     if (const AlphaRelief *relief = alphaRelief())
         return relief->identity(worldScale());
     return "steam-v1-seed-" + std::to_string(settings.world.seed) + "-scale-bits-" + std::to_string(std::bit_cast<uint64_t>(worldScale()));
-}
-bool terrainZoneAvailable(int32_t zx, int32_t zy) {
-    return !settings.alpha || settings.alpha->coversZone(zx, zy);
-}
-
-std::optional<alphagen::TerrainSample> alphaTerrainSample(int32_t x, int32_t y) {
-    return settings.alpha ? settings.alpha->sample(x, y) : std::nullopt;
-}
-ColumnFiller alphaColumnFiller(int32_t x, int32_t y, int32_t shift) {
-    const auto context = settings.alpha;
-    if (!context)
-        return {};
-    return [context, x, y, shift](int32_t height) -> std::optional<Block> {
-        const auto sourceZ = int64_t(height) - shift;
-        if (sourceZ < INT32_MIN || sourceZ > INT32_MAX)
-            return std::nullopt;
-        return context->rock(x, y, int32_t(sourceZ));
-    };
-}
-std::optional<glm::vec3> alphaImplicitColour(const TerrainColumn &column, int32_t x, int32_t y, int32_t z) {
-    if (!column.fullColour || z >= column.base || !settings.alpha)
-        return std::nullopt;
-    return settings.alpha->implicitColour(column, x, y, z);
-}
-void composeTerrainMap(MapRegion &map) {
-    if (settings.alpha)
-        settings.alpha->composeMap(map);
 }
 
 void setWorldSeed(int32_t seed) {
@@ -249,7 +211,7 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
             }
         if (const auto live = liveZones.find(key); live != liveZones.end()) {
             if (auto result = live->second.lock()) {
-                meshprofile::Sample reused(zx, zy, bool(settings.alpha), "generation_reuse");
+                meshprofile::Sample reused(zx, zy, false, "generation_reuse");
                 reused.context(version, options, original);
                 // Existing consumers keep this result alive. Do not displace
                 // unowned neighboring inputs from the bounded ready cache.
@@ -270,40 +232,22 @@ std::shared_ptr<const ZoneContents> zone(int32_t zx, int32_t zy) {
     // A mesh reads eight neighbors. Concurrent readers of those neighbors share
     // one immutable result, without holding the cache lock during generation.
     if (!producer) {
-        meshprofile::Sample waiting(zx, zy, bool(settings.alpha), "generation_wait");
+        meshprofile::Sample waiting(zx, zy, false, "generation_wait");
         waiting.context(version, options, original);
         auto result = future.get();
         waiting.mark(meshprofile::Load);
         waiting.complete(0, 0, 0, 0, 0);
         return result;
     }
-    meshprofile::Sample profile(zx, zy, bool(settings.alpha), "generation");
+    meshprofile::Sample profile(zx, zy, false, "generation");
     profile.context(version, options, original);
     try {
-        if (!terrainZoneAvailable(zx, zy)) {
-            auto missing = std::make_shared<ZoneContents>();
-            missing->terrain.zx = zx;
-            missing->terrain.zy = zy;
-            missing->terrain.columns.resize(ZONE_COLUMNS);
-            {
-                std::lock_guard hold(cacheLock);
-                pendingZones.erase(key);
-            }
-            producer->set_value(missing);
-            return missing; // No generated residents outside Alpha's finite world.
-        }
         ZoneContents z = makeZone(zx, zy, false);
         profile.mark(meshprofile::SourceGenerate);
         const int32_t refreshDay = settings.refreshDay.load();
         if (refreshDay >= 0 && settings.tablesLoaded)
             refreshZoneCreatures(z, settings.world, creatureTables(), refreshDay);
         profile.mark(meshprofile::Refresh);
-        if (settings.alpha) {
-            std::string error;
-            if (!settings.alpha->compose(z, settings.world, error))
-                throw std::runtime_error("Alpha terrain composition: " + error);
-        }
-        profile.mark(meshprofile::AlphaCompose);
         // Live full-setter gap writes still need the original cached material inputs.
         z.terrain.retainedColours.reserve(z.terrain.field.size());
         for (const auto &column : z.terrain.field)
