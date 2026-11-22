@@ -1166,8 +1166,104 @@ worldmodel::Frame Renderer::steamPoseFrame() const {
                       : worldmodel::Frame{};
 }
 
+// The Alpha look draws in floats relative to the world's home, which lose a block of precision
+// per 2^24 blocks: some 10^8 blocks out, the world tears apart. Far from home (FAR_FROM_BLOCKS)
+// the frame is drawn relative to a nearby origin instead, home plus a shift that moves in
+// FAR_REBASE_BLOCKS steps. Positions with exact sources are rebuilt from them (the camera, zone
+// corners, scenery, objects and ground items at their fixed positions, creature parts from the
+// look-at they were posed around); the rest move by the exact shift. Near home nothing changes.
+namespace {
+constexpr double FAR_FROM_BLOCKS = 32768, FAR_REBASE_BLOCKS = 4096;
+}
+
+glm::dvec2 Renderer::alphaDrawShift(const Camera &camera, const Lighting &lighting) const {
+    if (settings.style != RenderStyle::Alpha || lighting.menuSky[5].w > 0)
+        return glm::dvec2(0);
+    glm::dvec2 eye(camera.eye);
+    if (camera.nativeFixedEye)
+        for (int axis = 0; axis < 2; ++axis)
+            eye[axis] = double((*camera.nativeFixedEye)[axis]) / 65536 - worldProbe.origin[axis];
+    if (drawShift != glm::dvec2(0) && glm::all(glm::lessThanEqual(glm::abs(eye - drawShift), glm::dvec2(FAR_REBASE_BLOCKS))))
+        return drawShift;
+    if (std::max(std::abs(eye.x), std::abs(eye.y)) < FAR_FROM_BLOCKS)
+        return glm::dvec2(0);
+    return glm::round(eye / FAR_REBASE_BLOCKS) * FAR_REBASE_BLOCKS;
+}
+
 void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time, const std::vector<DrawItem> &opaque,
                      const std::vector<DrawItem> &water) {
+    const glm::dvec2 shift = noGpu ? glm::dvec2(0) : alphaDrawShift(camera, lighting);
+    if (shift != drawShift) {
+        drawShift = shift;
+        blockLight.clear(); // keyed by frame-relative blocks
+        historyValid = false;
+    }
+    if (shift == glm::dvec2(0)) {
+        drawFrame(camera, lighting, focus, time, opaque, water);
+        return;
+    }
+    const glm::vec3 S(float(shift.x), float(shift.y), 0); // exact: whole multiples of FAR_REBASE_BLOCKS
+    const int64_t origin[2]{int64_t(worldProbe.origin.x * 65536) + int64_t(shift.x) * 65536,
+                            int64_t(worldProbe.origin.y * 65536) + int64_t(shift.y) * 65536};
+    const auto relative = [&](int64_t dots, int axis) { return double(gamemath::subtractFixed(dots, origin[axis])) / 65536; };
+    Camera drawn = camera;
+    drawn.eye -= S;
+    drawn.target -= S;
+    for (int axis = 0; axis < 2; ++axis) {
+        if (camera.nativeFixedEye)
+            drawn.eye[axis] = float(relative((*camera.nativeFixedEye)[axis], axis));
+        if (camera.nativeFixedLookAt)
+            drawn.target[axis] = float(relative((*camera.nativeFixedLookAt)[axis], axis));
+    }
+    // Creature parts are posed around the installed scene's look-at (SpawnedCreatures::draw).
+    std::optional<steampoints::Point> lookAt;
+    if (sceneFrame)
+        lookAt = steampoints::Point{gamemath::subtractFixed(0, sceneFrame->visibility.offset[0]),
+                                    gamemath::subtractFixed(0, sceneFrame->visibility.offset[1]), 0};
+    const auto place = [&](const std::vector<DrawItem> &items) {
+        std::vector<DrawItem> out(items);
+        for (DrawItem &item : out) {
+            if (item.flags & (WORLD_MAP | NATIVE_MENU))
+                continue; // the map and the captured menu have their own frames
+            const glm::vec3 placed(item.model[3]), light = item.lightPosition;
+            item.model[3].x -= S.x;
+            item.model[3].y -= S.y;
+            item.lightPosition -= S;
+            const steampoints::Point *anchor = item.nativeModel && item.nativePosition ? &*item.nativePosition
+                                               : item.nativeModel && item.nativeActor && lookAt ? &*lookAt
+                                                                                                : nullptr;
+            if (!anchor)
+                continue;
+            // model = translate(anchor - home) * nativeModel: rebuilt from the exact anchor.
+            for (int axis = 0; axis < 2; ++axis)
+                item.model[3][axis] = float(relative((*anchor)[axis], axis) + double((*item.nativeModel)[3][axis]));
+            item.lightPosition = glm::vec3(item.model[3]) + (light - placed);
+        }
+        return out;
+    };
+    const std::vector<DrawItem> drawnOpaque = place(opaque), drawnWater = place(water);
+    // The world's questions still take home-relative positions.
+    const WorldProbe home = worldProbe;
+    struct Restore {
+        WorldProbe &probe;
+        const WorldProbe &home;
+        ~Restore() { probe = home; }
+    } restore{worldProbe, home};
+    if (home.water)
+        worldProbe.water = [&home, S](glm::vec3 p) { return home.water(p + S); };
+    if (home.zone)
+        worldProbe.zone = [&home, S](glm::vec3 p) { return home.zone(p + S); };
+    if (home.light)
+        worldProbe.light = [&home, S](glm::vec3 p) { return home.light(p + S); };
+    if (home.sceneLighting)
+        worldProbe.sceneLighting = [&home, S](glm::vec3 p) { return home.sceneLighting(p + S); };
+    worldProbe.origin.x += shift.x;
+    worldProbe.origin.y += shift.y;
+    drawFrame(drawn, lighting, focus - S, time, drawnOpaque, drawnWater);
+}
+
+void Renderer::drawFrame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time,
+                         const std::vector<DrawItem> &opaque, const std::vector<DrawItem> &water) {
     const bool reuseScene = std::exchange(scenePrepared, false);
     const bool preparedMap = std::exchange(mapPrepared, false);
     const glm::mat4 mapView = std::exchange(pendingMapView, glm::mat4(1));
@@ -1402,7 +1498,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         mapFog = glm::vec3(palette.fog);
         steamStarValue = steamsky::starValue(dayMs, here.region.forest);
     }
-    const steampoints::Point homeXY{int64_t(worldProbe.origin.x * 65536), int64_t(worldProbe.origin.y * 65536), 0};
+    // The world's home (the far frame moves the origin by drawShift; cached placements stay home-relative).
+    const steampoints::Point homeXY{int64_t((worldProbe.origin.x - drawShift.x) * 65536), int64_t((worldProbe.origin.y - drawShift.y) * 65536), 0};
     auto absolutePoint = [&](steampoints::Point point) {
         for (int axis = 0; axis < 2; ++axis)
             point[axis] = gamemath::addFixed(point[axis], homeXY[axis]);
@@ -1637,7 +1734,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
             if (item.kind != DrawKind::Terrain) {
                 if (i >= FRAME_LIGHTS)
                     break;
-            } else if (glm::any(glm::lessThan(l.at + l.radius, m.min)) || glm::any(glm::greaterThan(l.at - l.radius, m.max)))
+            } else if (const glm::vec3 at = l.at - glm::vec3(item.model[3]); // zone-local terrain is placed by a translation
+                       glm::any(glm::lessThan(at + l.radius, m.min)) || glm::any(glm::greaterThan(at - l.radius, m.max)))
                 continue;
             set[count / 4] |= (uint32_t)i << (8 * (count % 4));
             count++;
@@ -2296,8 +2394,8 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, beamPipeline);
         for (const auto &[item, quad] : beams) {
             DrawItem draw = *item;
-            for (int i = 0; i < 4; ++i)
-                draw.model[i] = glm::vec4(quad.corners[i], 1);
+            for (int i = 0; i < 4; ++i) // home-relative corners, into the far frame
+                draw.model[i] = glm::vec4(quad.corners[i] - glm::vec3(float(drawShift.x), float(drawShift.y), 0), 1);
             draw.height = (float)quad.alpha / 255.0f;
             bindAndDraw(draw, 0);
         }

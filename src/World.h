@@ -164,6 +164,7 @@ class World {
     ScenePlayerProvider scenePlayerProvider;
     struct Zone {
         uint32_t opaque = 0, water = 0, lava = 0;
+        bool localTerrain = false; // opaque/water/lava hold zone-local vertices (ExtractedWorld::alphaLocalMesh)
         struct Band {
             int32_t base = 0;
             uint32_t opaque = 0, lava = 0, water = 0;

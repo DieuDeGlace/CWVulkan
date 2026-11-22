@@ -45,6 +45,14 @@ class ExtractedWorld {
     ~ExtractedWorld();
     static constexpr int Z_OFFSET = 128;
     static constexpr int SEA = Z_OFFSET + 1; // Water fills game z <= 0.
+    // The Alpha look meshes a zone this far from home (in blocks, either axis) in zone-local
+    // coordinates, drawn by a translation to the zone's corner (exact: a multiple of 64), so its
+    // vertices keep their precision wherever the world is drawn from (Renderer's far frame).
+    // Nearer zones keep home-relative vertices, which are exact there.
+    static constexpr int64_t ALPHA_LOCAL_MESH_BLOCKS = 16384;
+    static bool alphaLocalMesh(int zx, int zy) {
+        return std::max(std::abs(int64_t(zx)), std::abs(int64_t(zy))) * 64 >= ALPHA_LOCAL_MESH_BLOCKS;
+    }
 
     // Opens <dir> (a seed_<n> folder). Returns false when it holds no zones.
     bool open(const std::filesystem::path &dir, std::string &error);

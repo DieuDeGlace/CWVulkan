@@ -825,8 +825,10 @@ void World::update(glm::vec3 focus) {
                         return true;
                 return false;
             };
+            const glm::vec3 waterOrigin = g.water.localOrigin ? glm::vec3(float(key.first) * ZONE, float(key.second) * ZONE, ExtractedWorld::Z_OFFSET)
+                                                              : glm::vec3(0);
             auto pads = g.terrainBands.empty()
-                ? waterLilies::decorate(g.water, settings.seed, settings.lilyPatchDensity, settings.lilyMaxPadsPerZone, eligible)
+                ? waterLilies::decorate(g.water, settings.seed, settings.lilyPatchDensity, settings.lilyMaxPadsPerZone, eligible, waterOrigin)
                 : waterLilies::decorate(g.terrainBands, glm::vec3(float(key.first) * ZONE, float(key.second) * ZONE, ExtractedWorld::Z_OFFSET),
                                         settings.seed, settings.lilyPatchDensity, settings.lilyMaxPadsPerZone, eligible);
             if (renderStyle() == RenderStyle::Alpha)
@@ -835,6 +837,7 @@ void World::update(glm::vec3 focus) {
             z.decorations = std::move(pads);
         }
         if (!retainActive) {
+            z.localTerrain = g.opaque.localOrigin.has_value();
             z.opaque = renderer.upload(g.opaque);
             z.water = renderer.upload(g.water);
             z.lava = renderer.upload(g.lava);
@@ -1167,7 +1170,10 @@ void World::collect(std::vector<DrawItem> &opaque, std::vector<DrawItem> &water)
         auto terrainDraw = [&](uint32_t mesh, std::vector<DrawItem> &draws, DrawKind kind, uint32_t flags = 0, bool castShadow = true) {
             if (!mesh)
                 return;
-            DrawItem draw{mesh, glm::mat4(1), flags, 0, castShadow, kind};
+            const glm::mat4 corner = z.localTerrain ? glm::translate(glm::mat4(1), glm::vec3(float(key.first) * 64, float(key.second) * 64,
+                                                                                             float(ExtractedWorld::Z_OFFSET)))
+                                                    : glm::mat4(1);
+            DrawItem draw{mesh, corner, flags, 0, castShadow, kind};
             if (steamLook) {
                 draw.nativeZone = z.nativeBounds;
                 draw.nativeLights = z.nativeLights;

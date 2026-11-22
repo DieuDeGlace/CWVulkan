@@ -1080,8 +1080,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             }
         } else if (alphaGeneration) {
             // The Alpha world (the owner's add-on, not the game's) starts new characters near its
-            // home, as the earlier Alpha worlds did: the Alpha look draws relative to that home, and
-            // the game's far-away start spots (some 10^8 blocks out) are beyond float precision there.
+            // home, as the earlier Alpha worlds did. (Far from home the Alpha look now draws in a
+            // nearby frame, Renderer::frame, so characters elsewhere draw correctly too.)
             const glm::vec3 home = extractedWorld.home();
             front.startOrigin = {(int32_t)std::floor(((double)home.x + (double)(extractedWorld.originDotsX() >> 16)) / 1024.0),
                                  (int32_t)std::floor(((double)home.y + (double)(extractedWorld.originDotsY() >> 16)) / 1024.0)};

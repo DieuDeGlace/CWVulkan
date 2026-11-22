@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Alpha far frame (world re-homing for drawing) - 2026-11-22
+
+The Alpha look drew everything in floats relative to the world's home, which tear apart some
+10^8 blocks out. Beyond 32768 blocks from home it now draws relative to a nearby origin that
+moves in 4096-block steps; the camera, zone corners, scenery, objects, ground items and creature
+parts are placed from their exact fixed-point positions, and zones beyond 16384 blocks are
+meshed in zone-local coordinates. Near home nothing changes. This is engine-owned precision
+work with no Steam behaviour of its own; no source contract was needed.
+
 ## Play fixes: far start, save paths, clouds, TAA, automatic sweep - 2026-11-22
 
 The owner's first play found two failures. The Alpha look draws relative to the world's home,

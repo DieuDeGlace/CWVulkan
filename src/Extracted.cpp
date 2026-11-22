@@ -1857,6 +1857,10 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
     if (!self)
         return false;
     const bool alphaLook = renderStyle() == RenderStyle::Alpha;
+    // Far from home: zone-local vertices (see alphaLocalMesh), marked on both meshes even when empty.
+    const bool zoneLocal = alphaLook && alphaLocalMesh(zx, zy);
+    if (zoneLocal)
+        opaque.localOrigin = water.localOrigin = glm::ivec3(0);
     const bool needsAmbientBounds = nativeBounds && (!self->things || !self->things->emitters.empty());
     const auto nativeBox = (!alphaLook || needsAmbientBounds) ? boundsFor(ax, ay, around) : std::nullopt;
     if (nativeBounds)
@@ -2069,7 +2073,8 @@ bool ExtractedWorld::mesh(int zx, int zy, Mesh &opaque, Mesh &water, std::option
             const int *corner = nativeEncoding ? steamvoxel::CORNERS[face][k] : FACE_CORNERS[face][k];
             const glm::vec3 at = localWater
                 ? glm::vec3(float(x + corner[0]), float(y + corner[1]), float(int64_t(z) - target.localOrigin->z + corner[2]))
-                : offset + glm::vec3(x + corner[0], y + corner[1], z + corner[2]);
+                : zoneLocal ? glm::vec3(x + corner[0], y + corner[1], z + corner[2])
+                            : offset + glm::vec3(x + corner[0], y + corner[1], z + corner[2]);
             CornerShade shade{128, 255, 255, 255};
             if (alphaLook) {
                 glm::vec3 rgb = alphalight::waterColour(light->light({x, y, z}) / 255.f);

@@ -461,6 +461,12 @@ class Renderer {
     Buffer starBuffer; // the 3000 stars (position on the sky sphere, size)
     uint32_t starCount = 0;
     WorldProbe worldProbe;
+    // The Alpha look far from home (Renderer::frame): the frame is drawn relative to home plus
+    // this shift (whole blocks, a multiple of FAR_REBASE_BLOCKS; zero near home).
+    glm::dvec2 drawShift{0};
+    glm::dvec2 alphaDrawShift(const Camera &, const Lighting &) const;
+    void drawFrame(const Camera &camera, const Lighting &lighting, glm::vec3 focus, double time,
+                   const std::vector<DrawItem> &opaque, const std::vector<DrawItem> &water);
     float unloadedDistance = -1;   // -1: not told; the fog then opens to the render radius
     int worldDay = 4;              // the moon is full until told otherwise
     alpha::FogDistance fogDistance; // the Alpha look's smoothed fog distance F

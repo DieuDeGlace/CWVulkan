@@ -61,11 +61,12 @@ template<class Eligible> struct Builder {
 } // namespace detail
 
 template<class Eligible>
-std::vector<Scenery> decorate(const Mesh &water, uint64_t seed, double density, int limit, Eligible eligible) {
+std::vector<Scenery> decorate(const Mesh &water, uint64_t seed, double density, int limit, Eligible eligible,
+                              glm::vec3 offset = {}) {
     detail::Builder<Eligible> out{seed, density, limit, std::move(eligible)};
     for (size_t first = 0; first + 3 < water.vertices.size() && !out.full(); first += 4) {
         glm::vec3 centre;
-        if (detail::surface(water, first, {}, centre))
+        if (detail::surface(water, first, offset, centre))
             out.accept(centre);
     }
     return std::move(out.pads);

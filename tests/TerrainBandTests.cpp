@@ -271,6 +271,56 @@ int terrainBandTests() {
         check(exact && compared == referenceWater.size(),
               "far water keeps exact local unit corners, packed bytes and topology instead of rounded source-home positions");
     }
+    // The Alpha look far from home: the same zone meshed zone-local, exactly the near-home mesh
+    // less its height offset, and installed with a zone-corner translation.
+    setRenderStyle(RenderStyle::Alpha);
+    {
+        ExtractedWorld nearWorld, farWorld;
+        std::string error;
+        Mesh nearOpaque, nearWater, farOpaque, farWater;
+        check(nearWorld.open(directory, error) && nearWorld.mesh(0, 0, nearOpaque, nearWater) && farWorld.open(farDirectory, error) &&
+                  farWorld.mesh(farZone, 0, farOpaque, farWater),
+              "Alpha look meshes the near and far copies of one zone");
+        bool same = !nearOpaque.localOrigin && !nearWater.localOrigin && farOpaque.localOrigin && farWater.localOrigin &&
+                    !nearOpaque.empty() && !nearWater.empty();
+        for (const auto &[near, far] : {std::pair{&nearOpaque, &farOpaque}, std::pair{&nearWater, &farWater}}) {
+            same &= near->indices == far->indices && near->vertices.size() == far->vertices.size();
+            for (size_t i = 0; same && i < far->vertices.size(); ++i) {
+                Vertex v = far->vertices[i];
+                v.z += ExtractedWorld::Z_OFFSET;
+                same &= std::memcmp(&v, &near->vertices[i], sizeof v) == 0;
+            }
+        }
+        check(same, "a far Alpha zone keeps exact zone-local corners, colours and topology");
+        Renderer renderer;
+        RenderSettings settings;
+        settings.style = RenderStyle::Alpha;
+        renderer.initHeadless(settings);
+        Assets assets;
+        TerrainSettings options;
+        options.lilies = false;
+        Terrain terrain(options);
+        {
+            World runtime(terrain, assets, renderer, 0, &farWorld);
+            const glm::vec3 at(float(farZone) * 64 + 32, 32, 38);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            do {
+                runtime.update(at);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            } while ((!runtime.zoneCount() || runtime.preparingTerrain()) && std::chrono::steady_clock::now() < deadline);
+            std::vector<DrawItem> opaque, water;
+            runtime.collect(opaque, water);
+            const glm::vec4 corner(float(farZone) * 64, 0, ExtractedWorld::Z_OFFSET, 1);
+            size_t placed = 0;
+            for (const auto *list : {&opaque, &water})
+                for (const auto &draw : *list)
+                    if (draw.kind == DrawKind::Terrain && draw.mesh && draw.model[3] == corner && glm::mat3(draw.model) == glm::mat3(1))
+                        ++placed;
+            check(placed >= 2, "far Alpha terrain draws are placed by their exact zone corner");
+        }
+        renderer.shutdown();
+    }
+    setRenderStyle(RenderStyle::Steam);
     const auto seaDirectory = directory / "sea";
     std::filesystem::create_directory(seaDirectory);
     std::ofstream(seaDirectory / "manifest.txt") << "seed=0\nhomeX=0\nhomeY=0\nhomeZ=-250\n";
