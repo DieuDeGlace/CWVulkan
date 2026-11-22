@@ -44,10 +44,11 @@ game and separate compatible loader to run.
 ## Set up the owner's game data
 
 1. Install Steam Cube World and launch it normally once. Back up your saves.
-2. Open **CubeVulkanSetup.exe** and choose **Get ready to play**. The wizard checks
+2. Open **CubeVulkanSetup.exe**. Its **Game data** box says whether everything is ready. It checks
    the supported game build, Steam connection, ownership and missing data. It needs
    a locally built `ZoneExtractor.dll` and compatible CubeModLoader.
-3. Follow the wizard's in-game extraction steps. It journals the temporary changes,
+3. If something is missing, click **Extract game data** (or **Play**, which offers it) and
+   follow the box's in-game steps. The extractor goes into the game folder only for that run. It journals the temporary changes,
    sets aside mods and ReShade, preserves Save, and restores them after the game
    closes. An interrupted run offers recovery on the next launch.
 4. Use **Check data** to inspect the result, then **Play**. The game content stays

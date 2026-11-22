@@ -1,19 +1,19 @@
 # Checking an owner's extracted data
 
-## First-run wizard
+## Extracting from the setup window
 
-`CubeVulkanSetup` opens **Get ready to play** by itself when something needed is missing (or an earlier run was interrupted); the button of that name opens it at any time. It has three parts and a Play button:
+`CubeVulkanSetup`'s main window has a **Game data** box: one message saying whether everything is ready, or what is missing and what to do. When something can be extracted, an **Extract game data** button appears under it; **Play** offers the same when data is missing. There is no separate wizard window and no manual extractor install: the extractor is placed in the game folder only for a run and removed afterwards. What the box checks and does:
 
 1. **The game:** the Cube World folder (from `CubeVulkan.ini`, else every Steam library listed in `libraryfolders.vdf`), the executable's build (PE timestamp `0x5d93ab0d` is the one the extractor supports), CubeModLoader, and Steam online with a Cube World licence, checked as the engine does.
-2. **What is extracted:** each part the engine reads, present or missing, and what is lost without it: game files (always required), captured land (not required with `[World] Source=Alpha`, `Game` or `Generated`), the model list (required by the default Alpha mode), sound list (`Extract\sounds.txt`), creature tables (`Extract\oracle\`: spawn table, races, pickers, looks, gear), item models (`item-models.bin`) and special items (`items.bin`). DataCheck's other findings follow as notes.
-For Alpha, setup also parses the two original palm models and seventeen plant models, and checks that the owner-exported environment table identifies every required plant. Missing or damaged original `.cub` files require Steam file repair; extraction does not create replacements. Setup uses the same case-sensitive generation names as engine startup.
+2. **What is extracted:** each part the engine reads, present or missing, and what is lost without it: game files (always required), captured land (not required with `[World] Source=Alpha`, `Game` or `Generated`), sound list (`Extract\sounds.txt`), creature tables (`Extract\oracle\`: spawn table, races, pickers, looks, gear), item models (`item-models.bin`) and special items (`items.bin`). DataCheck's other findings follow as notes.
+Missing or damaged original `.cub` files require Steam file repair; extraction does not create replacements. Setup uses the same case-sensitive generation names as engine startup.
 
-3. **Extract missing data**, one button. With the game closed, the setup:
+3. **Extract game data**, one button. With the game closed, the setup:
    - copies `Save` to `<game>\CubeVulkanSetup\run-<time>\Save` and checks the copy;
    - moves the owner's `Mods` folder and `dxgi.dll` (ReShade) into the same folder, and installs `ZoneExtractor.dll` alone in a fresh `Mods` (CubeModLoader, already in the game folder, loads it);
    - writes the requests the extractor answers by itself once a world is loaded (`sounds.request`, `oracle.request`, `itemmodels.request`, `items.request`; an existing `Extract\oracle` is copied into the run folder first);
    - starts Cube World through Steam and says what to do: Start Game, pick or create any character, and press **F11** once for the sweep around home if land is missing. It watches `Mods\ZoneExtractor.log` and the output files and ticks each part off;
-   - when everything is collected, asks the owner to quit (or closes the game's window with **Close the game**), and once the game has gone, for whatever reason (quit, crash, **Stop and put back**), puts everything back: the run's `Mods` (with the extractor's log) is kept in the run folder, the owner's `Mods` and `dxgi.dll` return, and `Save` is put back exactly (the session's Save is kept as `Save-after-run`). Unanswered requests are removed; what was extracted stays.
+   - when everything is collected, asks the owner to quit, and once the game has gone, for whatever reason (quit, crash, **Stop and put back**), puts everything back: the run's `Mods` (with the extractor's log) is kept in the run folder, the owner's `Mods` and `dxgi.dll` return, and `Save` is put back exactly (the session's Save is kept as `Save-after-run`). Unanswered requests are removed; what was extracted stays.
 
 Each step is written to `<game>\CubeVulkanSetup\journal.txt` before it is taken. If the setup is closed, the PC restarts or anything else interrupts a run, the next start of the setup (or `--setup-restore`) puts the folder back from the journal; each step looks at the folder as it is, so this is safe at any point. The journal then moves into its run folder. Steam Cloud may notice that Save changed back after the session and ask which copy to keep; keep the local files.
 
@@ -100,7 +100,7 @@ cached exports. Allow the writer a few seconds to finish. F4 remains the animati
 recording toggle. The engine reads these records directly; it does not create
 replacement lamp assets or infer the missing auxiliary list from sprite names.
 
-For vanilla parity comparisons, use the wizard's isolated extraction workflow.
+For vanilla parity comparisons, use the setup's isolated extraction run (**Extract game data**).
 Captures made with gameplay/world-generation mods enabled describe that modified
 run. In particular, a BigRegions Scale2 region query is not a vanilla Scale1 oracle.
 Keep capture provenance separate instead of changing expected values to hide the

@@ -1,8 +1,8 @@
 // CubeVulkan Setup: the launcher/configuration tool (like OpenMW's launcher).
-// Finds and checks the Steam Cube World install, shows the extracted world,
-// installs or removes the ZoneExtractor mod on request, edits CubeVulkan.ini
-// and starts CubeVulkan. Its first-run wizard (Wizard.cpp) does the whole extraction in one
-// go; `--setup-check`, `--setup-extract [--dry-run]` and `--setup-restore` run it headless.
+// Finds and checks the Steam Cube World install, says whether the game data is ready, extracts
+// what is missing with one button (Wizard.cpp: the extractor goes into the game folder only for
+// that run), edits CubeVulkan.ini and starts CubeVulkan. `--setup-check`,
+// `--setup-extract [--dry-run]` and `--setup-restore` run the extraction headless.
 #include "Assets.h"
 #include "Extracted.h"
 #include "DataCheck.h"
@@ -21,8 +21,8 @@
 
 namespace {
 enum Id {
-    PATH_EDIT = 100, BROWSE, STATUS, WORLD_STATUS, INSTALL_EXTRACTOR, REMOVE_EXTRACTOR, SOURCE, STYLE, WIDTH,
-    HEIGHT, VSYNC, VIEW, SHADOWS, SHADOW_RES, SAVE, PLAY, CLOSE_BUTTON, CHECK_DATA, WIZARD
+    PATH_EDIT = 100, BROWSE, STATUS, WORLD_STATUS, SOURCE, STYLE, WIDTH,
+    HEIGHT, VSYNC, VIEW, SHADOWS, SHADOW_RES, SAVE, PLAY, CLOSE_BUTTON, CHECK_DATA
 };
 
 HWND window, controls[200];
@@ -106,17 +106,6 @@ void checkData() {
     SetWindowTextW(control(CHECK_DATA), L"Check data..."); EnableWindow(control(CHECK_DATA), TRUE);
 }
 
-// Query the exact installation; never replace a DLL in a running game.
-bool gameClosed(const fs::path &game, std::wstring &error) {
-    const bool closed = !ownersetup::systemHost()->gameRunning(game);
-    if (!closed) error = L"Close Cube World before installing, updating or removing its extractor.";
-    if (closed && ownersetup::runPending(game)) {
-        error = L"An extraction run from the setup wizard is still open. Open the wizard to put the game folder back first.";
-        return false;
-    }
-    return closed;
-}
-
 void combo(int id, std::initializer_list<const wchar_t *> items, const std::wstring &selected) {
     HWND c = control(id);
     int index = 0, i = 0;
@@ -157,7 +146,7 @@ void refreshWorld() {
             world = L"Extracted world: " + std::to_wstring(ex.zoneCount()) + L" zones from seed " +
                     std::to_wstring(ex.seed()) + L" (" + dir.filename().wstring() + L").";
         else
-            world = L"No usable captured land found. Check the configured extraction path or use the setup wizard to capture land.";
+            world = L"No captured land found yet. \"Extract game data\" captures it (press F11 in the game when asked).";
     }
     SetWindowTextW(control(WORLD_STATUS), world.c_str());
 }
@@ -181,18 +170,12 @@ void refresh() {
         for (auto &e : fs::directory_iterator(game / "music", ec))
             music += e.path().extension() == ".ogg";
         status = L"Steam Cube World found: " + std::to_wstring(sprites) + L" sprites, " + std::to_wstring(music) +
-                 L" music tracks. Game build " +
-                 (supported ? std::wstring(L"supported (extractor works).")
-                                               : std::wstring(L"differs from the supported one; extraction is unavailable."));
+                 L" music tracks." + (supported ? L"" : L" This game build is not the supported one.");
         if (!ok) status = wide(why);
     }
     SetWindowTextW(control(STATUS), status.c_str());
 
     refreshWorld();
-    bool installed = ok && fs::exists(game / "Mods" / "ZoneExtractor.dll", ec);
-    SetWindowTextW(control(INSTALL_EXTRACTOR), installed ? L"Update extractor" : L"Install extractor");
-    EnableWindow(control(INSTALL_EXTRACTOR), supported);
-    EnableWindow(control(REMOVE_EXTRACTOR), installed);
     EnableWindow(control(PLAY), ok);
     EnableWindow(control(CHECK_DATA), ok);
 }
@@ -211,14 +194,6 @@ int runHeadless(const std::vector<std::wstring> &args) {
     const int code = ownersetup::headless(args, root, std::cout);
     std::cout << std::flush;
     return code;
-}
-
-// The wizard opens by itself on a first run: an interrupted run, or data still missing.
-bool wizardNeeded() {
-    fs::path game = text(control(PATH_EDIT));
-    if (!ownersetup::inspectGame(game).found)
-        return true;
-    return ownersetup::runPending(game) || !ownersetup::assessConfigured(game, ini).readyToPlay();
 }
 
 void save() {
@@ -247,71 +222,24 @@ void browse() {
     }
 }
 
-void extractor(bool install) {
-    fs::path game = text(control(PATH_EDIT));
-    std::error_code ec;
-    std::wstring whyClosed;
-    if (!gameClosed(game, whyClosed)) { MessageBoxW(window, whyClosed.c_str(), L"CubeVulkan Setup", MB_ICONWARNING); return; }
-    if (install) {
-        uint32_t stamp = 0; std::string why;
-        if (!dataCheck::gameBuild(game / "cubeworld.exe", stamp, why) || stamp != dataCheck::SUPPORTED_BUILD) {
-            MessageBoxW(window, L"This game build is not supported by the extractor. No files were changed.", L"CubeVulkan Setup", MB_ICONWARNING);
-            return;
-        }
-        fs::path dll = root / "tools" / "ZoneExtractor.dll";
-        if (!fs::exists(dll, ec)) {
-            MessageBoxW(window, L"tools\\ZoneExtractor.dll is missing next to CubeVulkanSetup.exe.", L"CubeVulkan Setup", MB_ICONWARNING);
-            return;
-        }
-        uint32_t dllStamp = 0;
-        if (!dataCheck::gameBuild(dll, dllStamp, why)) {
-            MessageBoxW(window, L"The packaged extractor DLL is incomplete or is not an x64 build. Rebuild or replace it before installing.", L"CubeVulkan Setup", MB_ICONERROR);
-            return;
-        }
-        if (!fs::is_regular_file(game / "CubeModLoader.fip", ec)) {
-            MessageBoxW(window, L"CubeModLoader is required and was not found in this game folder. Install that dependency before installing ZoneExtractor.", L"CubeVulkan Setup", MB_ICONWARNING);
-            return;
-        }
-        if (MessageBoxW(window,
-                        L"Install or update ZoneExtractor.dll in the game's Mods folder?\n\nClose Cube World first. "
-                        L"It needs CubeModLoader. Back up your save first. "
-                        L"For a vanilla-identical world, disable mods that change terrain (TerrainVariance, WaterLilies) "
-                        L"while extracting. In game: F11 sweeps the area around your character (held in place with full "
-                        L"health), F9 returns home. F3 records creatures/NPCs; F5 saves your character's appearance; F4 records animation.",
-                        L"CubeVulkan Setup", MB_OKCANCEL | MB_ICONINFORMATION) != IDOK)
-            return;
-        if (!gameClosed(game, whyClosed)) { MessageBoxW(window, whyClosed.c_str(), L"CubeVulkan Setup", MB_ICONWARNING); return; }
-        fs::create_directories(game / "Mods", ec);
-        fs::path pending = game / "Mods" / (L"ZoneExtractor.dll.new-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
-        bool copied = !ec && fs::copy_file(dll, pending, fs::copy_options::none, ec);
-        if (copied) {
-            // An interrupted copy must leave the existing extractor intact.
-            if (!MoveFileExW(pending.c_str(), (game / "Mods/ZoneExtractor.dll").c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-                ec = std::error_code(GetLastError(), std::system_category());
-            std::error_code cleanup;
-            fs::remove(pending, cleanup); // only the newly created temporary DLL
-        }
-    } else
-        fs::remove(game / "Mods" / "ZoneExtractor.dll", ec);
-    if (ec) MessageBoxW(window, wide(ec.message()).c_str(), L"CubeVulkan Setup", MB_ICONERROR);
-    refresh();
-}
-
 LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_COMMAND:
         switch (LOWORD(wp)) {
-        case BROWSE: browse(); return 0;
-        case INSTALL_EXTRACTOR: extractor(true); return 0;
-        case REMOVE_EXTRACTOR: extractor(false); return 0;
+        case BROWSE: browse(); wizard::setGame(text(control(PATH_EDIT))); return 0;
         case CHECK_DATA: checkData(); return 0;
-        case WIZARD: wizard::open(window, root, text(control(PATH_EDIT)), font); return 0;
         case SOURCE:
-            if (HIWORD(wp) == CBN_SELCHANGE) refreshWorld();
+            if (HIWORD(wp) == CBN_SELCHANGE) {
+                refreshWorld();
+                writeIni(L"World", L"Source", selection(SOURCE)); // what the game data needs depends on it
+                wizard::setGame(text(control(PATH_EDIT)));
+            }
             return 0;
         case PATH_EDIT:
-            if (HIWORD(wp) == EN_KILLFOCUS)
+            if (HIWORD(wp) == EN_KILLFOCUS) {
                 refresh();
+                wizard::setGame(text(control(PATH_EDIT)));
+            }
             return 0;
         case SAVE:
             save();
@@ -319,12 +247,32 @@ LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case PLAY:
             save();
+            if (!wizard::readyToPlay()) {
+                if (MessageBoxW(h, L"Some game data CubeVulkan needs is missing. Extract it now?", L"CubeVulkan Setup",
+                                MB_YESNO | MB_ICONQUESTION) == IDYES)
+                    wizard::extract();
+                return 0;
+            }
             ShellExecuteW(h, L"open", (root / "CubeVulkan.exe").c_str(), nullptr, root.c_str(), SW_SHOWNORMAL);
             DestroyWindow(h);
             return 0;
-        case CLOSE_BUTTON: DestroyWindow(h); return 0;
+        case CLOSE_BUTTON:
+            if (wizard::mayClose())
+                DestroyWindow(h);
+            return 0;
+        default:
+            if (wizard::command(wp))
+                return 0;
         }
         break;
+    case WM_TIMER:
+        if (wizard::timer(wp))
+            return 0;
+        break;
+    case WM_CLOSE:
+        if (wizard::mayClose())
+            DestroyWindow(h);
+        return 0;
     case WM_CTLCOLORSTATIC:
         SetBkMode((HDC)wp, TRANSPARENT);
         return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
@@ -360,7 +308,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     RegisterClassW(&wc);
     window = CreateWindowW(wc.lpszClassName, L"CubeVulkan Setup", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                           CW_USEDEFAULT, CW_USEDEFAULT, 640, 560, nullptr, nullptr, instance, nullptr);
+                           CW_USEDEFAULT, CW_USEDEFAULT, 640, 660, nullptr, nullptr, instance, nullptr);
     NONCLIENTMETRICSW metrics{sizeof metrics};
     SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof metrics, &metrics, 0);
     font = CreateFontIndirectW(&metrics.lfMessageFont);
@@ -380,21 +328,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     y += 32;
     add(L"STATIC", L"", 0, 16, y, 592, 36, STATUS);
     y += 44;
-    add(L"BUTTON", L"World", BS_GROUPBOX, 10, y, 604, 160);
-    add(L"STATIC", L"", 0, 22, y + 22, 580, 52, WORLD_STATUS);
-    add(L"BUTTON", L"Install extractor", BS_PUSHBUTTON, 22, y + 80, 130, 26, INSTALL_EXTRACTOR);
-    add(L"BUTTON", L"Remove extractor", BS_PUSHBUTTON, 160, y + 80, 130, 26, REMOVE_EXTRACTOR);
-    add(L"STATIC", L"Source:", 0, 310, y + 84, 50, 20);
-    add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL, 362, y + 80, 110, 120, SOURCE);
+    add(L"BUTTON", L"Game data", BS_GROUPBOX, 10, y, 604, 160);
+    const int panelY = y + 22;
+    y += 172;
+    add(L"BUTTON", L"World", BS_GROUPBOX, 10, y, 604, 88);
+    add(L"STATIC", L"", 0, 22, y + 22, 580, 22, WORLD_STATUS);
+    y -= 40; // the World group's controls below keep their old offsets
+    add(L"STATIC", L"Source:", 0, 22, y + 84, 50, 20);
+    add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL, 74, y + 80, 110, 120, SOURCE);
     // An unrecognized source follows the engine fallback (the first entry).
     combo(SOURCE, {L"Extracted", L"Game", L"Alpha", L"Generated"}, readIni(L"World", L"Source", L"Alpha"));
-    add(L"STATIC", L"Generator:", 0, 482, y + 84, 60, 20);
-    add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL, 544, y + 80, 62, 120, STYLE);
+    add(L"STATIC", L"Generator:", 0, 200, y + 84, 60, 20);
+    add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL, 262, y + 80, 80, 120, STYLE);
     combo(STYLE, {L"Alpha", L"Variance"}, readIni(L"Terrain", L"Style", L"Alpha"));
-    add(L"BUTTON", L"Check data...", BS_PUSHBUTTON, 22, y + 118, 130, 26, CHECK_DATA);
-    add(L"BUTTON", L"Get ready to play...", BS_PUSHBUTTON, 160, y + 118, 150, 26, WIZARD);
-    add(L"STATIC", L"Extracts what is missing in one go.", 0, 320, y + 122, 280, 22);
-    y += 172;
+    add(L"BUTTON", L"Check data...", BS_PUSHBUTTON, 476, y + 78, 130, 26, CHECK_DATA);
+    y += 140;
     add(L"BUTTON", L"Graphics", BS_GROUPBOX, 10, y, 604, 120);
     add(L"STATIC", L"Window:", 0, 22, y + 26, 60, 20);
     add(L"EDIT", readIni(L"Graphics", L"Width", L"1600").c_str(), ES_NUMBER, 84, y + 22, 60, 24, WIDTH);
@@ -417,12 +365,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
 
     refresh();
     ShowWindow(window, show);
-    if (wizardNeeded())
-        wizard::open(window, root, text(control(PATH_EDIT)), font);
+    UpdateWindow(window);
+    wizard::embed(window, root, text(control(PATH_EDIT)), font, 22, panelY, 580, 130);
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         if (reportPane && IsDialogMessageW(reportPane, &msg)) continue;
-        if (wizard::dialogMessage(msg)) continue;
         if (!IsDialogMessageW(window, &msg)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);

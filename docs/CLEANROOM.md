@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Simpler setup window - 2026-11-22
+
+At the owner's request the setup asks less of players. The separate wizard window and the
+manual Install/Remove extractor buttons are gone. The main window's Game data box says whether
+everything is ready or what is missing; when something can be extracted, one Extract game data
+button runs the existing journaled run (the extractor goes into the game folder only for that
+run, and Save, Mods and ReShade are put back afterwards). Play offers the same when data is
+missing. The extraction itself is unchanged.
+
 ## Lua script mods - 2026-11-22
 
 Mods can now be Lua scripts: a folder mods/<Name>/main.lua sees the same services as a code mod

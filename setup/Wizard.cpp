@@ -1,13 +1,10 @@
-// The first-run wizard: from a fresh install to playing in one window.
-//   1. the game: its folder, build, CubeModLoader, Steam and the licence;
-//   2. the data: what is extracted and what is missing, in plain words;
-//   3. the extraction: one button sets the folder up for a vanilla run, starts the game, says
-//      what to do in it, watches the extractor and puts everything back afterwards;
-//   4. Play.
+// The extraction panel (Wizard.h): ready or not in plain words, and one button that extracts
+// what is missing. The button sets the game folder up for a vanilla run (Save copied aside, the
+// owner's Mods and ReShade set aside, the extractor alone in a fresh Mods folder), starts the
+// game through Steam, says what to do in it, watches the extractor and puts everything back.
 #include "Wizard.h"
 #include "Assets.h"
 #include "OwnerSetup.h"
-#include <shellapi.h>
 #include <memory>
 #include <string>
 
@@ -15,12 +12,13 @@ namespace wizard {
 namespace {
 using namespace ownersetup;
 
-enum Id { GAME_TEXT = 1, DATA_TEXT, RUN_TEXT, EXTRACT, CLOSE_GAME, STOP, RECHECK, PLAY, CLOSE };
+// Control ids below the main window's (which start at 100).
+enum Id { RUN_TEXT = 1, EXTRACT, STOP };
 constexpr UINT_PTR POLL_TIMER = 1;
 constexpr UINT POLL_MS = 500;
 
 struct State {
-    HWND window = nullptr, owner = nullptr;
+    HWND parent = nullptr;
     HFONT font = nullptr;
     fs::path root, game;
     GameStatus status;
@@ -41,16 +39,17 @@ std::wstring wide(const std::string &value) {
     return out;
 }
 // Edit controls want \r\n.
-void setText(int id, const std::string &text) {
+void setText(const std::string &text) {
     std::string crlf;
     for (char c : text) {
         if (c == '\n')
             crlf += '\r';
         crlf += c;
     }
-    SetWindowTextW(GetDlgItem(state->window, id), wide(crlf).c_str());
+    SetWindowTextW(GetDlgItem(state->parent, RUN_TEXT), wide(crlf).c_str());
 }
-void enable(int id, bool on) { EnableWindow(GetDlgItem(state->window, id), on); }
+void enable(int id, bool on) { EnableWindow(GetDlgItem(state->parent, id), on); }
+void show(int id, bool on) { ShowWindow(GetDlgItem(state->parent, id), on ? SW_SHOW : SW_HIDE); }
 fs::path extractorDll() { return state->root / "tools" / "ZoneExtractor.dll"; }
 
 void showButtons() {
@@ -60,96 +59,57 @@ void showButtons() {
     uint32_t build = 0;
     std::string why;
     const bool dll = dataCheck::gameBuild(extractorDll(), build, why);
-    enable(EXTRACT, !running && !pending && s.status.supportedBuild && s.status.modLoader && s.steamOk && dll &&
-                        s.data.anythingToExtract());
-    enable(CLOSE_GAME, running);
+    const bool needed = s.status.found && s.data.anythingToExtract();
+    show(EXTRACT, needed || running);
+    enable(EXTRACT, !running && !pending && s.status.supportedBuild && s.status.modLoader && s.steamOk && dll && needed);
+    show(STOP, running);
     enable(STOP, running);
-    enable(RECHECK, !running);
-    enable(PLAY, !running && !pending && s.status.found && s.steamOk && s.data.readyToPlay());
 }
 
-// Looks at everything again: an interrupted run first, then the game, Steam and the data.
+// The one message the owner reads: ready, or what is missing and what to do about it.
+std::string summary() {
+    State &s = *state;
+    if (!s.status.found)
+        return s.status.problem.empty() ? "Choose the folder that contains cubeworld.exe above." : s.status.problem;
+    if (!s.steamOk)
+        return "Start Steam and sign in with the account that owns Cube World, then reopen this window.\n(" + s.steamWhy + ")";
+    if (!s.data.anythingToExtract())
+        return s.data.readyToPlay() ? "Everything is ready. Click Play." : s.data.text();
+    std::string names;
+    for (const PartState *p : s.data.missing())
+        names += (names.empty() ? "" : ", ") + p->name;
+    std::string text = "Some game data is still missing (" + names + "). Click \"Extract game data\": your game opens "
+                       "through Steam with only the extractor; start or continue any character, wait until this box says "
+                       "it is done, then quit the game. Your saves and mods are put back exactly.";
+    if (!s.status.supportedBuild)
+        text = "This Cube World build is not the supported one, so its data cannot be extracted. " + s.status.problem;
+    else if (!s.status.modLoader)
+        text = "Install CubeModLoader in the game folder first (it loads the extractor), then click \"Extract game data\".";
+    return text;
+}
+
 void recheck() {
     State &s = *state;
-    std::string runText;
+    std::string outcome;
     if (runPending(s.game)) {
         if (s.host->gameRunning(s.game))
-            runText = "An earlier extraction run is still open. Quit Cube World, then click Recheck to put your game "
-                      "folder back.";
+            outcome = "An earlier extraction is still open. Quit Cube World; this window then puts your game folder back.\n";
         else {
             const RestoreResult back = restore(s.game, *s.host);
-            runText = back.ok ? "An earlier extraction run was interrupted. Your game folder has been put back:\n"
-                              : "An earlier extraction run was interrupted, and putting it back failed: " + back.why + "\n";
-            for (const auto &step : back.steps)
-                runText += "  " + step + "\n";
+            outcome = back.ok ? "An earlier extraction was interrupted; your game folder has been put back.\n"
+                              : "An earlier extraction was interrupted, and putting it back failed: " + back.why + "\n";
         }
     }
     SetCursor(LoadCursor(nullptr, IDC_WAIT));
     s.status = inspectGame(s.game);
-    std::string game = "Folder: " + (s.game.empty() ? std::string("not found") : utf8(s.game)) + "\n";
-    if (!s.status.found)
-        game += s.status.problem + " Set the folder in the setup window.";
-    else {
-        s.steamOk = steamVerified(s.game, s.steamWhy);
-        game += s.status.problem.empty() ? "Supported Cube World build. " : s.status.problem + " ";
-        game += s.status.modLoader ? "CubeModLoader is installed.\n" : "CubeModLoader is missing (the extractor needs it).\n";
-        game += s.steamOk ? "Steam is online and this account owns Cube World." : "Steam: " + s.steamWhy;
-    }
-    setText(GAME_TEXT, game);
+    s.steamOk = s.status.found && steamVerified(s.game, s.steamWhy);
     if (s.status.found) {
         const dataCheck::Report report = dataCheck::inspect(s.game);
         s.data = assessConfigured(s.game, s.root / "CubeVulkan.ini", &report);
-        setText(DATA_TEXT, s.data.text());
-    } else {
+    } else
         s.data = {};
-        setText(DATA_TEXT, "");
-    }
-    if (runText.empty()) {
-        if (!s.lastOutcome.empty())
-            runText = s.lastOutcome;
-        else if (!s.status.found)
-            runText = "";
-        else if (!s.data.anythingToExtract())
-            runText = "Nothing is missing. Click Play.";
-        else
-            runText = "Click \"Extract missing data\". The setup copies your Save aside, sets your Mods folder and "
-                      "ReShade (dxgi.dll) aside, installs the extractor and starts Cube World through Steam. It tells "
-                      "you what to do in the game, and puts everything back exactly when you quit.";
-    }
-    setText(RUN_TEXT, runText);
+    setText((s.lastOutcome.empty() ? "" : s.lastOutcome + "\n") + outcome + summary());
     SetCursor(LoadCursor(nullptr, IDC_ARROW));
-    showButtons();
-}
-
-void startExtraction() {
-    State &s = *state;
-    if (MessageBoxW(s.window,
-                    L"The setup will now:\n"
-                    L"  - copy your Save folder aside (it is put back exactly afterwards),\n"
-                    L"  - set your Mods folder and dxgi.dll (ReShade) aside for a vanilla session,\n"
-                    L"  - install ZoneExtractor.dll alone in a fresh Mods folder,\n"
-                    L"  - start Cube World through Steam.\n\n"
-                    L"When you quit the game, everything is put back. Continue?",
-                    L"Extract missing data", MB_OKCANCEL | MB_ICONINFORMATION) != IDOK)
-        return;
-    // The licence once more, right before the game folder is touched.
-    if (!steamVerified(s.game, s.steamWhy)) {
-        s.steamOk = false;
-        MessageBoxW(s.window, wide("Steam: " + s.steamWhy).c_str(), L"Extract missing data", MB_ICONWARNING);
-        showButtons();
-        return;
-    }
-    s.run = std::make_unique<ExtractionRun>(s.game, *s.host);
-    std::string why;
-    if (!s.run->start(s.data, extractorDll(), why)) {
-        MessageBoxW(s.window, wide(why).c_str(), L"Extract missing data", MB_ICONWARNING);
-        s.run.reset();
-        recheck();
-        return;
-    }
-    s.lastOutcome.clear();
-    s.lastRunText.clear();
-    SetTimer(s.window, POLL_TIMER, POLL_MS, nullptr);
     showButtons();
 }
 
@@ -160,144 +120,122 @@ void pollRun() {
     s.run->poll();
     const std::string text = s.run->instructions();
     if (text != s.lastRunText)
-        setText(RUN_TEXT, text), s.lastRunText = text;
+        setText(text), s.lastRunText = text;
     showButtons();
     if (s.run->active())
         return;
-    KillTimer(s.window, POLL_TIMER);
-    std::string outcome = s.run->message() + "\n";
-    for (const auto &step : s.run->restored().steps)
-        outcome += "  " + step + "\n";
-    s.lastOutcome = outcome;
+    KillTimer(s.parent, POLL_TIMER);
+    s.lastOutcome = s.run->message();
     s.run.reset();
-    recheck(); // the final report
-    FLASHWINFO flash{sizeof flash, s.window, FLASHW_ALL | FLASHW_TIMERNOFG, 3, 0};
+    recheck();
+    FLASHWINFO flash{sizeof flash, s.parent, FLASHW_ALL | FLASHW_TIMERNOFG, 3, 0};
     FlashWindowEx(&flash);
 }
 
-void play() {
-    State &s = *state;
-    WritePrivateProfileStringW(L"Game", L"Path", s.game.c_str(), (s.root / "CubeVulkan.ini").c_str());
-    ShellExecuteW(s.window, L"open", (s.root / "CubeVulkan.exe").c_str(), nullptr, s.root.c_str(), SW_SHOWNORMAL);
-    PostMessageW(s.owner, WM_CLOSE, 0, 0);
+HWND add(const wchar_t *cls, const wchar_t *caption, DWORD style, int x, int y, int w, int h, int id) {
+    const DWORD ex = wcscmp(cls, L"EDIT") == 0 ? WS_EX_CLIENTEDGE : 0;
+    HWND c = CreateWindowExW(ex, cls, caption, WS_CHILD | WS_VISIBLE | style, x, y, w, h, state->parent,
+                             (HMENU)(INT_PTR)id, nullptr, nullptr);
+    SendMessageW(c, WM_SETFONT, (WPARAM)state->font, TRUE);
+    return c;
+}
+} // namespace
+
+void embed(HWND parent, const fs::path &root, const fs::path &game, HFONT font, int x, int y, int width, int height) {
+    state = new State;
+    state->parent = parent;
+    state->root = root;
+    state->font = font;
+    add(L"EDIT", L"", ES_READONLY | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, x, y, width, height - 36, RUN_TEXT);
+    add(L"BUTTON", L"Extract game data", BS_PUSHBUTTON | WS_TABSTOP, x, y + height - 30, 150, 28, EXTRACT);
+    add(L"BUTTON", L"Stop and put back", BS_PUSHBUTTON | WS_TABSTOP, x + 158, y + height - 30, 140, 28, STOP);
+    fs::path start = game;
+    if (start.empty() || !inspectGame(start).found) {
+        const auto found = gamesInLibraries(Assets::steamLibraries());
+        if (!found.empty())
+            start = found.front();
+    }
+    setGame(start);
 }
 
-// Closing while a run is open: the folder must be put back first.
-bool mayClose() {
-    State &s = *state;
-    if (!s.run || !s.run->active())
+void setGame(const fs::path &game) {
+    if (!state || (state->run && state->run->active()))
+        return;
+    state->game = game;
+    state->lastOutcome.clear();
+    recheck();
+}
+
+bool command(WPARAM wp) {
+    if (!state)
+        return false;
+    switch (LOWORD(wp)) {
+    case EXTRACT: extract(); return true;
+    case STOP:
+        if (state->run)
+            state->run->stop(), pollRun();
         return true;
-    if (s.host->gameRunning(s.game)) {
-        MessageBoxW(s.window,
+    }
+    return false;
+}
+
+bool timer(WPARAM wp) {
+    if (!state || wp != POLL_TIMER)
+        return false;
+    pollRun();
+    return true;
+}
+
+bool readyToPlay() {
+    return state && state->status.found && state->steamOk && !runPending(state->game) && !(state->run && state->run->active()) &&
+           state->data.readyToPlay();
+}
+
+void extract() {
+    State &s = *state;
+    if (s.run && s.run->active())
+        return;
+    if (MessageBoxW(s.parent,
+                    L"Your game will open through Steam with only CubeVulkan's extractor:\n"
+                    L"  - your Save folder is copied aside and put back exactly afterwards,\n"
+                    L"  - your Mods folder and ReShade are set aside and put back afterwards.\n\n"
+                    L"In the game, start or continue any character and wait until the setup says it is done, "
+                    L"then quit. Continue?",
+                    L"Extract game data", MB_OKCANCEL | MB_ICONINFORMATION) != IDOK)
+        return;
+    // The licence once more, right before the game folder is touched.
+    if (!steamVerified(s.game, s.steamWhy)) {
+        s.steamOk = false;
+        MessageBoxW(s.parent, wide("Steam: " + s.steamWhy).c_str(), L"Extract game data", MB_ICONWARNING);
+        showButtons();
+        return;
+    }
+    s.run = std::make_unique<ExtractionRun>(s.game, *s.host);
+    std::string why;
+    if (!s.run->start(s.data, extractorDll(), why)) {
+        MessageBoxW(s.parent, wide(why).c_str(), L"Extract game data", MB_ICONWARNING);
+        s.run.reset();
+        recheck();
+        return;
+    }
+    s.lastOutcome.clear();
+    s.lastRunText.clear();
+    SetTimer(s.parent, POLL_TIMER, POLL_MS, nullptr);
+    showButtons();
+}
+
+bool mayClose() {
+    if (!state || !state->run || !state->run->active())
+        return true;
+    if (state->host->gameRunning(state->game)) {
+        MessageBoxW(state->parent,
                     L"An extraction is running. Quit Cube World first; the setup then puts your Mods, ReShade and Save "
                     L"back. (If this window is closed anyway, the setup puts them back the next time it opens.)",
                     L"CubeVulkan setup", MB_ICONINFORMATION);
         return false;
     }
-    s.run->stop();
+    state->run->stop();
     pollRun();
     return true;
 }
-
-HWND add(const wchar_t *cls, const wchar_t *caption, DWORD style, int x, int y, int w, int h, int id = 0) {
-    const DWORD ex = wcscmp(cls, L"EDIT") == 0 ? WS_EX_CLIENTEDGE : 0;
-    HWND c = CreateWindowExW(ex, cls, caption, WS_CHILD | WS_VISIBLE | style, x, y, w, h, state->window,
-                             (HMENU)(INT_PTR)id, nullptr, nullptr);
-    SendMessageW(c, WM_SETFONT, (WPARAM)state->font, TRUE);
-    return c;
-}
-
-LRESULT CALLBACK proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
-    switch (msg) {
-    case WM_COMMAND:
-        switch (LOWORD(wp)) {
-        case EXTRACT: startExtraction(); return 0;
-        case CLOSE_GAME:
-            if (state->run && !state->host->askGameToClose(state->game))
-                MessageBoxW(h, L"No Cube World window was found. Quit the game yourself.", L"CubeVulkan setup", MB_ICONINFORMATION);
-            return 0;
-        case STOP:
-            if (state->run)
-                state->run->stop(), pollRun();
-            return 0;
-        case RECHECK: state->lastOutcome.clear(); recheck(); return 0;
-        case PLAY: play(); return 0;
-        case CLOSE:
-            if (mayClose())
-                DestroyWindow(h);
-            return 0;
-        }
-        break;
-    case WM_TIMER:
-        if (wp == POLL_TIMER)
-            pollRun();
-        return 0;
-    case WM_CLOSE:
-        if (mayClose())
-            DestroyWindow(h);
-        return 0;
-    case WM_CTLCOLORSTATIC:
-        if ((HWND)lp != GetDlgItem(h, DATA_TEXT) && (HWND)lp != GetDlgItem(h, RUN_TEXT)) {
-            SetBkMode((HDC)wp, TRANSPARENT);
-            return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
-        }
-        break;
-    case WM_DESTROY:
-        KillTimer(h, POLL_TIMER);
-        delete state;
-        state = nullptr;
-        return 0;
-    }
-    return DefWindowProcW(h, msg, wp, lp);
-}
-} // namespace
-
-void open(HWND owner, const fs::path &root, const fs::path &game, HFONT font) {
-    if (state) {
-        SetForegroundWindow(state->window);
-        return;
-    }
-    WNDCLASSW wc{};
-    wc.lpfnWndProc = proc;
-    wc.hInstance = GetModuleHandleW(nullptr);
-    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
-    wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
-    wc.lpszClassName = L"CubeVulkanSetupWizard";
-    RegisterClassW(&wc);
-    state = new State;
-    state->owner = owner;
-    state->root = root;
-    state->font = font;
-    state->game = game;
-    if (state->game.empty() || !inspectGame(state->game).found) {
-        const auto found = gamesInLibraries(Assets::steamLibraries());
-        if (!found.empty())
-            state->game = found.front();
-    }
-    state->window = CreateWindowW(wc.lpszClassName, L"CubeVulkan - get ready to play", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                                  CW_USEDEFAULT, CW_USEDEFAULT, 780, 760, owner, nullptr, wc.hInstance, nullptr);
-    constexpr DWORD READ_ONLY = ES_READONLY | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL;
-    int y = 10;
-    add(L"BUTTON", L"1. The game", BS_GROUPBOX, 10, y, 744, 92);
-    add(L"STATIC", L"", 0, 22, y + 22, 720, 62, GAME_TEXT);
-    y += 102;
-    add(L"BUTTON", L"2. What is extracted", BS_GROUPBOX, 10, y, 744, 250);
-    add(L"EDIT", L"", READ_ONLY, 22, y + 22, 720, 216, DATA_TEXT);
-    y += 260;
-    add(L"BUTTON", L"3. Extract what is missing", BS_GROUPBOX, 10, y, 744, 272);
-    add(L"EDIT", L"", READ_ONLY, 22, y + 22, 720, 200, RUN_TEXT);
-    add(L"BUTTON", L"Extract missing data", BS_DEFPUSHBUTTON | WS_TABSTOP, 22, y + 232, 160, 28, EXTRACT);
-    add(L"BUTTON", L"Close the game", BS_PUSHBUTTON | WS_TABSTOP, 190, y + 232, 130, 28, CLOSE_GAME);
-    add(L"BUTTON", L"Stop and put back", BS_PUSHBUTTON | WS_TABSTOP, 328, y + 232, 140, 28, STOP);
-    y += 282;
-    add(L"BUTTON", L"Recheck", BS_PUSHBUTTON | WS_TABSTOP, 22, y, 100, 30, RECHECK);
-    add(L"BUTTON", L"Play", BS_PUSHBUTTON | WS_TABSTOP, 552, y, 96, 30, PLAY);
-    add(L"BUTTON", L"Close", BS_PUSHBUTTON | WS_TABSTOP, 656, y, 96, 30, CLOSE);
-    ShowWindow(state->window, SW_SHOW);
-    UpdateWindow(state->window);
-    recheck();
-}
-
-bool dialogMessage(MSG &msg) { return state && IsDialogMessageW(state->window, &msg); }
 } // namespace wizard
