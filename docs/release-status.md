@@ -1,5 +1,12 @@
 # Source review checkpoint — 2026-11-08
 
+## Bomb and pet hit specification - 2026-11-21
+
+Original Bomb hits on the player's level-1 pet never changed its HP, while the player lost
+the full amount. A new isolated static contract shows no pet-specific protection: the pet's
+ordinary defence exceeds the Bomb's 1-2 damage. CubeVulkan resolves the same way, so only
+the held specification is added. [Steam Bomb and bubble against a pet](specs/steam-bomb-pet-hit-application-20261121.md).
+
 ## Water Mage self-heal regression - 2026-11-21
 
 An original Steam recording showed a Water Mage at 20 HP gaining 26.351 from its own bubbles:

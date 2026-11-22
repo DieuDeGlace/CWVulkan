@@ -285,6 +285,13 @@ to the recipient. The receiving guest applies each incoming record to its
 local player separately and caps each write. A spell's rolled magnitude,
 HP change and displayed number can therefore differ. [Steam Water Bubble target outcomes](specs/steam-water-bubble-target-outcomes-20261118.md).
 
+A Bomb has no owner and is its own hit source, with strength 1 doubled on a critical
+roll. Its hits on the local player's pet pass through ordinary defence like any other
+target's, and nothing protects a pet specifically. A stock level-1 pet's defence exceeds
+2, so it takes no damage, while a player with no defence loses the full amount. Bubble
+heals on a pet are applied once, by the authority.
+[Steam Bomb and bubble against a pet](specs/steam-bomb-pet-hit-application-20261121.md).
+
 A successful guard takes precedence over shields and emits one block record.
 Otherwise a positive combined shield pool produces an absorb record, followed
 by an ordinary hit only when damage exceeds the original sum. Guest receipt
