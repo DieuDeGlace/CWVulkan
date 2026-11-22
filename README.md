@@ -70,9 +70,11 @@ The extractor source is included; its output is private game data.
 
 Edit `CubeVulkan.ini` beside the executable (the template is in `config/`).
 
-- `[World] Source=Alpha` is the default: Alpha terrain and climate with retained Steam towns
-  and dungeons. It uses isolated terrain-profile saves and compatible-engine
-  multiplayer. See [Alpha generation and its limits](docs/alpha-generation.md).
+- The Setup source menu offers all four world sources. Its Generator control applies to
+  `Generated`. Save writes the selected source to the configuration used at launch.
+- `[World] Source=Alpha` adds seeded hills to the Steam terrain. Roads, shores and
+  landmark centres retain their native heights. Alpha uses isolated terrain-profile
+  saves. See [Alpha generation and its limits](docs/alpha-generation.md).
 - `[World] Source=Extracted` loads the owner's exported zones. Areas outside those
   exports are unavailable.
 - `[World] Source=Game` uses the independently implemented generator in

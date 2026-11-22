@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Setup preserves the world source
+
+Saving the previous launcher with its shipped Alpha configuration selected
+Extracted. The Setup source menu now offers Alpha, Game, Extracted and Generated.
+Only Generated enables the legacy terrain generator selector. The source status
+describes the selected terrain and honours a configured extraction directory.
+A disposable copy of Setup saved and reopened each mode on a private desktop.
+The checks also covered an absent source key, the case-sensitive engine fallback,
+and retention of seed, terrain style, water and lighting.
+
 ## Alpha relief on the current Steam world - 2026-11-21
 
 On seed 123, 243 columns in three Undead Lands regions were above sea

@@ -1,5 +1,12 @@
 # Clean-room process
 
+## Launcher source selection
+
+This regression was reproduced in a packaged copy of CubeVulkanSetup using a
+synthetic installation. The corrected behaviour follows this project's engine
+configuration and source requirements. No original executable or original game
+session was used for the comparison.
+
 ## Alpha terrain regression evidence - 2026-11-21
 
 A fixed-seed comparison exercises CubeVulkan's native and Alpha terrain
