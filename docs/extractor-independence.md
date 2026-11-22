@@ -17,8 +17,8 @@ Required DLL exports and the actual compiler/header audit passed in both builds.
 This is source/build qualification, not supported-game live acceptance.
 
 The [historical SDK audit](sdk-license-provenance.md) still establishes no grant
-for the old snapshot; optional legacy RegionProbe/RegionScout sources are not part
-of this target. This build result is not legal clearance or live 1:1 acceptance.
+for the old snapshot; the legacy RegionProbe/RegionScout sources were removed
+on 2026-11-22. This build result is not legal clearance or live 1:1 acceptance.
 Native-only authors continue to use [the standalone policy](CLEANROOM_AUTHOR.md),
 without reading implementation, SDK, probes or other project prose.
 

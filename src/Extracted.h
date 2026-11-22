@@ -124,7 +124,7 @@ class ExtractedWorld {
     bool floorAt(double x, double y, double fromZ, int headroom, float &height);
     // Region type at a local column (CubeVulkan's Biome order).
     int biomeAt(double x, double y);
-    // The game's own region type there (cube::Zone::RegionType), and the game's
+    // The game's own region type there (the zone header's biome, worldgen-terrain.md), and the game's
     // 1024-block region cell (16 zones) that holds it. -1 where nothing was extracted.
     int regionTypeAt(double x, double y, int &cellX, int &cellY);
     // The zone's placed sprites (grass, flowers, lanterns, signs...) and

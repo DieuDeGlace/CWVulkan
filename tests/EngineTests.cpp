@@ -8813,7 +8813,7 @@ static void hudAuraTests() {
     }
     plx::Document icons; // the interface's sprite library
     std::string why;
-    CHECK(plx::read(assets.gameDir() / "icons.plx", icons, {plx::keyOf("PlasmaXGraphics")}, &why, plx::LOAD_SCALABLE_TEXT));
+    CHECK(plx::read(assets.gameDir() / "icons.plx", icons, {plx::phraseKey("PlasmaXGraphics")}, &why, plx::LOAD_SCALABLE_TEXT));
     int found = 0;
     for (int type = 0; type < 64; type++)
         if (const char *name = icon(type))
@@ -9074,11 +9074,11 @@ struct PlxWriter {
 // The interface library (docs/specs/plasma-format-and-scene.md, plasma-shapes-and-text.md).
 static void plasmaLibrary() {
     // The seal: key derivation and the spec's worked decryption (gui.plx at 0x58).
-    CHECK(plx::keyOf("PlasmaXGraphics") == 0xFB3A260B5EC7CD5Cull);
-    CHECK(plx::keyOf("PlasmaGraphics") == 0x62F15BACC28BC932ull);
+    CHECK(plx::phraseKey("PlasmaXGraphics") == 0xFB3A260B5EC7CD5Cull);
+    CHECK(plx::phraseKey("PlasmaGraphics") == 0x62F15BACC28BC932ull);
     {
         const uint8_t sealed[] = {0x80, 0x98, 0x9F, 0xB0, 0x32, 0x3F, 0xD2};
-        const std::vector<uint8_t> name = plx::unseal(sealed, sizeof sealed, plx::keyOf("PlasmaXGraphics"));
+        const std::vector<uint8_t> name = plx::unseal(sealed, sizeof sealed, plx::phraseKey("PlasmaXGraphics"));
         CHECK(std::string(name.begin(), name.end()) == "Texture");
         CHECK(plx::unseal(sealed, sizeof sealed, 0) == std::vector<uint8_t>(sealed, sealed + sizeof sealed));
     }
@@ -9212,7 +9212,7 @@ static void plasmaLibrary() {
         return;
     }
     const fs::path dir = assets.gameDir();
-    const std::vector<uint64_t> keys = {plx::keyOf("PlasmaXGraphics")};
+    const std::vector<uint64_t> keys = {plx::phraseKey("PlasmaXGraphics")};
     plx::Document gui;
     std::string why;
     CHECK(plx::read(dir / "gui.plx", gui, keys, &why, plx::LOAD_SCALABLE_TEXT));
@@ -10680,7 +10680,7 @@ int main(int argc, char **argv) {
         std::string why;
         // (the game reads every interface file but cursor.plx with scalable text)
         const bool cursor = std::filesystem::path(argv[2]).filename() == "cursor.plx";
-        if (!plx::read(argv[2], doc, {plx::keyOf("PlasmaXGraphics")}, &why, cursor ? 0 : plx::LOAD_SCALABLE_TEXT))
+        if (!plx::read(argv[2], doc, {plx::phraseKey("PlasmaXGraphics")}, &why, cursor ? 0 : plx::LOAD_SCALABLE_TEXT))
             return std::printf("%s\n", why.c_str()), 1;
         const int root = doc.find(argv[3]);
         if (root < 0)
@@ -10949,7 +10949,7 @@ int main(int argc, char **argv) {
     if (argc >= 7 && std::string(argv[1]) == "plxpanel") { // <file> <node> <width> <height> <out.png>: a widget resized as the game does
         plx::Document doc;
         std::string why;
-        if (!plx::read(argv[2], doc, {plx::keyOf("PlasmaXGraphics")}, &why))
+        if (!plx::read(argv[2], doc, {plx::phraseKey("PlasmaXGraphics")}, &why))
             return std::printf("%s\n", why.c_str()), 1;
         plasma::Scene scene(doc);
         plasma::SceneNode *panel = scene.instance(argv[3], &scene.root());
@@ -11007,7 +11007,7 @@ int main(int argc, char **argv) {
     if (argc >= 4 && std::string(argv[1]) == "plxseq") { // <file> <node>: the animation sequences under a node
         plx::Document doc;
         std::string why;
-        if (!plx::read(argv[2], doc, {plx::keyOf("PlasmaXGraphics")}, &why))
+        if (!plx::read(argv[2], doc, {plx::phraseKey("PlasmaXGraphics")}, &why))
             return std::printf("%s\n", why.c_str()), 1;
         auto show = [&](const char *what, const plx::Object &o, int d) {
             for (const plx::Chunk &p : o.properties)
@@ -11064,7 +11064,7 @@ int main(int argc, char **argv) {
     if (argc >= 4 && std::string(argv[1]) == "plxtext") { // <file> <node>: the text shapes under a node
         plx::Document doc;
         std::string why;
-        if (!plx::read(argv[2], doc, {plx::keyOf("PlasmaXGraphics")}, &why))
+        if (!plx::read(argv[2], doc, {plx::phraseKey("PlasmaXGraphics")}, &why))
             return std::printf("%s\n", why.c_str()), 1;
         std::function<void(int, int)> walk = [&](int i, int d) {
             const plx::Node &n = doc.nodes[(size_t)i];
@@ -11103,7 +11103,7 @@ int main(int argc, char **argv) {
     if (argc >= 3 && std::string(argv[1]) == "plx") { // <file> [depth]: a .plx's objects and node tree
         plx::Document doc;
         std::string why;
-        if (!plx::read(argv[2], doc, {plx::keyOf("PlasmaXGraphics")}, &why))
+        if (!plx::read(argv[2], doc, {plx::phraseKey("PlasmaXGraphics")}, &why))
             return std::printf("%s\n", why.c_str()), 1;
         std::printf("version %d, page %.0f x %.0f; %zu shapes, %zu transformations, %zu displays, %zu widgets, %zu textures (%zu with pixels), %zu nodes\n",
                     doc.version, doc.pageWidth, doc.pageHeight, doc.shapes.size(), doc.transformations.size(), doc.displays.size(),

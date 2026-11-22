@@ -341,7 +341,7 @@ void SceneNode::setText(const std::string &n, const std::wstring &t) {
         c->setText(n, t);
 }
 
-void SceneNode::setTextColour(const std::string &n, glm::vec4 colour) {
+void SceneNode::setLiveTextColour(const std::string &n, glm::vec4 colour) {
     if (disabled(*this))
         return;
     if (name == n) {
@@ -349,7 +349,7 @@ void SceneNode::setTextColour(const std::string &n, glm::vec4 colour) {
         return;
     }
     for (auto &c : children)
-        c->setTextColour(n, colour);
+        c->setLiveTextColour(n, colour);
 }
 
 void SceneNode::setAllText(const std::wstring &t) {

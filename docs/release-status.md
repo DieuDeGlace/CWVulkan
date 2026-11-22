@@ -1,5 +1,16 @@
 # Source review checkpoint — 2026-11-08
 
+## Final audit fixes - 2026-11-22
+
+The first pass of the final provenance audit found three items, now fixed. Comments that cited
+the excluded SDK for numbers (sprite matrix order, aura kinds, block and region types, creature
+record offsets and flags, equipment order, spawn-point record) now cite the held specs that
+state the same values; each was checked. The identifiers named by the 2026-10-27 audit
+(mapViewCentre, mapLabelScale, boughtFlights, boughtFromVendor, plx::keyOf, setTextColour) were
+renamed without consulting any reference source, removing any doubt about their origin. The
+unused RegionProbe/RegionScout development mods, which included SDK headers, were removed.
+Behaviour is unchanged.
+
 ## Bomb and pet hit specification - 2026-11-21
 
 Original Bomb hits on the player's level-1 pet never changed its HP, while the player lost

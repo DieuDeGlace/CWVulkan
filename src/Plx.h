@@ -167,7 +167,7 @@ struct Document {
 
 // The 64-bit key a phrase stands for (spec 1.4). The game seals its files with the key of
 // "PlasmaXGraphics" (0xFB3A260B5EC7CD5C).
-uint64_t keyOf(const std::string &phrase);
+uint64_t phraseKey(const std::string &phrase);
 // Undoes a seal: `n` obfuscated bytes with a key (spec 1.4). Key 0 leaves them unchanged.
 std::vector<uint8_t> unseal(const uint8_t *in, size_t n, uint64_t key);
 

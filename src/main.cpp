@@ -1738,10 +1738,10 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // figures below 1000, kilometres with a tenth below 10 km, else whole kilometres.
     auto flatDistance = mappreview::distanceText;
     std::array<int32_t, 2> selectedFlightPoint{0, 0};
-    std::set<std::array<int32_t, 2>> boughtFlights(saveGame.flightPoints.begin(), saveGame.flightPoints.end());
+    std::set<std::array<int32_t, 2>> knownFlightPoints(saveGame.flightPoints.begin(), saveGame.flightPoints.end());
     auto flightContext = [&] {
         mappreview::FlightContext context;
-        context.known = &boughtFlights;
+        context.known = &knownFlightPoints;
         context.money = playerGold;
         if (const auto *record = spawned.playerRecord()) {
             std::memcpy(context.physical.data(), record + 0x10, 24);
@@ -1759,7 +1759,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // The game's ground height at a block (the ground height), for the map's position.
     auto groundOf = [](double x, double y) { return (double)worldgen::groundHeight((int32_t)std::floor(x), (int32_t)std::floor(y)); };
     const float &minimapScale = gameOptions.mapScale; // options.cfg "mapScale" (the game's default 1; F5 / F6)
-    glm::vec2 mapViewCentre(1.0f, 1.0f);
+    glm::vec2 mapScreenCentre(1.0f, 1.0f);
     const int &showRarity = gameOptions.showRarity; // options.cfg "showRarity" (the game's default: on)
     std::optional<lore::Cell> hoveredLoreCell;      // the lore building under the pointer: its lore panel
     worldgen::Item hoveredArtifact;                 // the artifact of the place under the pointer
@@ -1769,7 +1769,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     std::map<std::tuple<int, int, int>, int> mapCreatureLooks;
     bool mapPlayerSet = false;
     int mapPlayerLooks = -1; // the player's marker models on the map (WorldMap::looks)
-    float mapLabelScale = minimapScale;
+    float mapTextScale = minimapScale;
     if (useExtracted)
         worldgen::setWorldSeed(extractedWorld.seed());
     // The shopkeeper being traded with (controller +0x1e98, +0x1ea0), what the player bought from
@@ -1810,7 +1810,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         }
         return k;
     };
-    std::map<int64_t, std::vector<gameshop::Item>> &boughtFromVendor = saveGame.purchases;
+    std::map<int64_t, std::vector<gameshop::Item>> &vendorPurchases = saveGame.purchases;
     gameshop::BuyBack soldItems;
     gameshop::Collection shopCollection;
     std::vector<size_t> listed; // gear item index of each list row
@@ -2358,7 +2358,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (input.cls == gameshop::WEAPON_SHOP || input.cls == gameshop::ARMOUR_SHOP)
                 std::memcpy(&input.id, merchant + worldgen::creature::ID, sizeof input.id);
             const int tier = gameshop::shopTier((*region)[0], (*region)[1], saveGame.solvedMissions);
-            const auto &bought = boughtFromVendor[vendorTrade.shop.id];
+            const auto &bought = vendorPurchases[vendorTrade.shop.id];
             return gameshop::stock(input, day, gear.playerClass(), tier,
                                    [&](const auto &item) { return gameshop::boughtCount(bought, item); });
         });
@@ -4091,7 +4091,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     mouseTrade.inventory = [&] { refreshBagAndThumb(); };
     mouseTrade.shop = [&] { rebuildShop(); };
     mouseTrade.crafting = [&] { rebuildCrafting(); };
-    mouseTrade.rememberBought = [&](const auto &item) { boughtFromVendor[vendorTrade.shop.id].push_back(item); };
+    mouseTrade.rememberBought = [&](const auto &item) { vendorPurchases[vendorTrade.shop.id].push_back(item); };
     mouseTrade.announce = [&](const auto &item) {
         const auto view = Gear::fromRecord(item);
         texts.push_back({player.position + glm::vec3(0, 0, 3.1f), bagName(view, itemName(view)), {255, 255, 255, 255}});
@@ -4220,15 +4220,15 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 else saveGame.treasures.erase(same);
             }
         } else if (button == 0 && !mapSelection.dragged && mapOpen && flightSelected) {
-            if (boughtFlights.count(selectedFlightPoint)) {
+            if (knownFlightPoints.count(selectedFlightPoint)) {
                 if (spawned.startFlight(selectedFlightPoint[0], selectedFlightPoint[1])) mapOpen = false;
             } else if (const int price = flightPrice(selectedFlightPoint); playerGold < price) {
                 hud.appendChat(chat, u"Not enough money.\n", {255, 127, 127});
                 audio.playInterface(0x34);
             } else {
                 playerGold = std::bit_cast<int32_t>(uint32_t(playerGold) - uint32_t(price));
-                boughtFlights.insert(selectedFlightPoint);
-                saveGame.flightPoints.assign(boughtFlights.begin(), boughtFlights.end());
+                knownFlightPoints.insert(selectedFlightPoint);
+                saveGame.flightPoints.assign(knownFlightPoints.begin(), knownFlightPoints.end());
                 audio.playInterface(0x3d);
             }
         }
@@ -5111,7 +5111,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 if (button == GLFW_MOUSE_BUTTON_LEFT && mapOpen && flightSelected &&
                     glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS) {
-                    if (boughtFlights.count(selectedFlightPoint)) { // off on the eagle
+                    if (knownFlightPoints.count(selectedFlightPoint)) { // off on the eagle
                         if (spawned.startFlight(selectedFlightPoint[0], selectedFlightPoint[1])) {
                             mapOpen = false;
                             logLine("Flight: to " + std::to_string(selectedFlightPoint[0]) + " " + std::to_string(selectedFlightPoint[1]));
@@ -5121,8 +5121,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         audio.playInterface(soundrules::soundid::HUMAN_VOICE);
                     } else {
                         playerGold -= price;
-                        boughtFlights.insert(selectedFlightPoint);
-                        saveGame.flightPoints.assign(boughtFlights.begin(), boughtFlights.end());
+                        knownFlightPoints.insert(selectedFlightPoint);
+                        saveGame.flightPoints.assign(knownFlightPoints.begin(), knownFlightPoints.end());
                         audio.playInterface(soundrules::soundid::DROP_COIN);
                         logLine("Flight: bought the flight point at " + std::to_string(selectedFlightPoint[0]) + " " +
                                 std::to_string(selectedFlightPoint[1]) + " for " + std::to_string(price) + " gold");
@@ -5712,7 +5712,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     } else {
                         const worldgen::Int2 region = regionHere();
                         const int tier = gameshop::shopTier(region.x, region.y, saveGame.solvedMissions);
-                        const std::vector<gameshop::Item> &bought = boughtFromVendor[vendorTrade.shop.id];
+                        const std::vector<gameshop::Item> &bought = vendorPurchases[vendorTrade.shop.id];
                         offers = gameshop::stock(vendorTrade.shop, day, gear.playerClass(), tier,
                                                  [&](const gameshop::Item &item) { return gameshop::boughtCount(bought, item); });
                     }
@@ -6351,7 +6351,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         if (--soldItems[k].second <= 0)
                             soldItems.erase(soldItems.begin() + (long long)k);
                     } else
-                        boughtFromVendor[vendorTrade.shop.id].push_back(offer); // keeps it from coming back today
+                        vendorPurchases[vendorTrade.shop.id].push_back(offer); // keeps it from coming back today
                     int64_t purchasePosition[3];
                     playerUnits(purchasePosition);
                     audio.playAt(gameshop::SOUND_BOUGHT, purchasePosition, 1, 1);
@@ -8673,14 +8673,14 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             const float w = (float)std::max(1u, size.width), h = (float)std::max(1u, size.height);
             const glm::vec2 cornerPosition(1.0f - h * 0.3f / w * minimapScale, 1.0f - minimapScale * 0.2f);
             if (!mapPlaced)
-                mapViewCentre = cornerPosition, mapPlaced = true;
+                mapScreenCentre = cornerPosition, mapPlaced = true;
             const float f = gamemath::blendFactor(stepMs, 0.01f);
-            mapViewCentre += ((mapOpen ? glm::vec2(0.5f, 0.6f) : cornerPosition) - mapViewCentre) * f;
-            mapLabelScale += ((mapOpen ? 1.8f : minimapScale) - mapLabelScale) * f;
+            mapScreenCentre += ((mapOpen ? glm::vec2(0.5f, 0.6f) : cornerPosition) - mapScreenCentre) * f;
+            mapTextScale += ((mapOpen ? 1.8f : minimapScale) - mapTextScale) * f;
             const auto movementStick = gameInput.gamepad().movement;
             if (mapOpen && input.lastUsedPad) {
-                input.pointerX = float(w * mapViewCentre.x);
-                input.pointerY = float((1.f - mapViewCentre.y) * h);
+                input.pointerX = float(w * mapScreenCentre.x);
+                input.pointerY = float((1.f - mapScreenCentre.y) * h);
                 input.pointerSampled = true;
                 targetMapPosition =
                     mapcontrol::blocks(mapcontrol::padPan(mapcontrol::fromBlocks(targetMapPosition), {movementStick.x, movementStick.y},
@@ -8732,8 +8732,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 view.level = mapZoom;
                 view.radius = radius;
                 view.pitch = displayedPitchRadians(), view.yaw = displayedYawRadians();
-                view.cursor = mapViewCentre;
-                view.viewScale = minimapScale * mapLabelScale; // options mapScale x the eased scale (§4.1)
+                view.cursor = mapScreenCentre;
+                view.viewScale = minimapScale * mapTextScale; // options mapScale x the eased scale (§4.1)
                 view.screen = glm::vec2(w, h);
                 // The player's own marker models on the map: its head and hair, the hair in its colour.
                 if (!mapPlayerSet) {
@@ -8882,7 +8882,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                     continue;
                             } else if (worldgen::placeKind(k.px, k.py, k.big) != 0 && !discoveredPlaces.count({k.px, k.py}))
                                 continue;
-                            v.scale = mapmarks::placeScale(k.type, unit, mapLabelScale);
+                            v.scale = mapmarks::placeScale(k.type, unit, mapTextScale);
                             v.icon = mapmarks::placeIcon(k.type);
                             v.shrineTarget = k.type == SHRINE;
                             v.reportsHover = v.reportsCell = k.type == LORE_BUILDING; // (hovering a read lore building shows its lore)
@@ -8903,7 +8903,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                                 }
                             }
                             mapmarks::MissionFacts facts;
-                            facts.kind = k.kind, facts.level = k.level, facts.unit = unit, facts.mapScale = mapLabelScale;
+                            facts.kind = k.kind, facts.level = k.level, facts.unit = unit, facts.mapScale = mapTextScale;
                             facts.discovered = discoveredPlaces.count(zone) != 0;
                             facts.known = known;
                             facts.completed = missions::completed(saveGame.finishedMissions, saveGame.solvedMissions, zone);
@@ -8929,23 +8929,23 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                             v.reportsHover = look.reportsHover;
                             v.item = artifact;
                         } else if (k.list == 3) { // a flight point, while a flight master shows them
-                            const mapmarks::Size size = mapmarks::pointSize(unit, mapLabelScale);
+                            const mapmarks::Size size = mapmarks::pointSize(unit, mapTextScale);
                             if (!flightmasterMode || !size.shown)
                                 continue;
                             v.scale = size.scale;
-                            v.icon = boughtFlights.count({k.x, k.y}) ? "flight-point" : "cross";
+                            v.icon = knownFlightPoints.count({k.x, k.y}) ? "flight-point" : "cross";
                             v.flightTarget = v.reportsHover = v.flightPoint = true;
                         } else { // a land's name
                             if (!discoveredAreas.count({k.px, k.py}))
                                 continue;
-                            v.scale = mapmarks::landSize(unit, mapLabelScale).scale;
+                            v.scale = mapmarks::landSize(unit, mapTextScale).scale;
                             v.label = landNameOf({k.px, k.py});
                             v.colour = mapmarks::landColour(k.type);
                         }
                         markers.push_back(v);
                     }
                     // The stars the player set on the map (the character's map stars).
-                    const mapmarks::Size starSize = mapmarks::pointSize(unit, mapLabelScale);
+                    const mapmarks::Size starSize = mapmarks::pointSize(unit, mapTextScale);
                     if (starSize.shown)
                         for (const auto &t : saveGame.treasures) {
                             mapmarks::Marker v;
@@ -9651,7 +9651,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 const int metres = (int)(glm::length(glm::dvec2(selectedFlightPoint[0], selectedFlightPoint[1]) - here) * 0.5);
                 hs.mapPreview.push_back(Line{"Flight point", 12, 3, glm::vec4(0.5f, 1, 1, 1), 30, true});
                 hs.mapPreview.push_back(Line{"Distance: " + flatDistance(metres), 12, 3, glm::vec4(1), 30, true});
-                if (boughtFlights.count(selectedFlightPoint)) {
+                if (knownFlightPoints.count(selectedFlightPoint)) {
                     int time = nativeability::flightTime((int32_t)here.x, (int32_t)here.y, selectedFlightPoint[0], selectedFlightPoint[1]);
                     float flightMs = 0;
                     if (const uint8_t *me = spawned.playerRecord(); me && spawned.playerAbility(flightMs) == 0x9c) {

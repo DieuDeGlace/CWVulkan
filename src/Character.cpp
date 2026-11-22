@@ -14,8 +14,9 @@
 namespace fs = std::filesystem;
 
 namespace {
-// Which animation state matrix the game draws each sprite with (matrix order as
-// in CWSDK's Creature::animation state; verified against the snapshot's positions).
+// Which animation state matrix the game draws each sprite with: the index of its
+// 64-byte part matrix from animation+0x138 (creature-pose.md §3 "The matrices kept
+// in A"); verified against the snapshot's positions.
 struct Binding {
     const char *sprite;
     int matrices[2];

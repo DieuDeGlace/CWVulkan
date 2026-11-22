@@ -95,7 +95,7 @@ bool Hud::load(const fs::path &gameDir, std::string &error) {
     { // the game's interface file and scale (its options.cfg)
         std::string why;
         // (the game reads gui.plx and icons.plx with scalable text, cursor.plx without)
-        const std::vector<uint64_t> keys = {plx::keyOf("PlasmaXGraphics")};
+        const std::vector<uint64_t> keys = {plx::phraseKey("PlasmaXGraphics")};
         const auto fontReady = [&](const plx::Object &shape) {
             plasma::TextStyle style;
             if (plasma::textStyle(shape, plx::LOAD_SCALABLE_TEXT, style))
@@ -1189,7 +1189,7 @@ void Hud::draw(const State &state, std::vector<OverlayVertex> &out,
             scene->setPosition(*node,middle,{0,-200});
             node->setText("name",wide(state.ring.name));
             node->setText("count",wide(state.ring.count));
-            node->setTextColour("name",state.ring.colour);
+            node->setLiveTextColour("name",state.ring.colour);
             const auto update=[&](auto &&self,plasma::SceneNode &at)->void {
                 if (at.name=="left") at.fill=state.ring.left ? glm::vec4(1,0,.2f,1) : glm::vec4(1);
                 else if (at.name=="right") at.fill=state.ring.right ? glm::vec4(1,0,.2f,1) : glm::vec4(1);

@@ -43,7 +43,6 @@ Supported-game startup, loaded-world extraction/recovery and broader parity chec
 remain open. Temporary unpublished-Zone disposal is still unproved; that oracle
 retention is not described as solved by removing the SDK dependency.
 
-Legacy RegionProbe/RegionScout sources remain optional and outside the shipping
-CMake target and runtime package. Their SDK setup and the historical license audit
-are separate from this build. No additional SDK rights, legal clearance or final
+The legacy RegionProbe/RegionScout sources, which needed SDK headers, were removed
+on 2026-11-22. The historical license audit is separate from this build. No additional SDK rights, legal clearance or final
 1:1 gameplay acceptance follows from successful compilation.

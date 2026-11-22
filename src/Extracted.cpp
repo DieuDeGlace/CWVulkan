@@ -25,7 +25,8 @@ uint64_t nextZoneCacheRevision() {
     return revision.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
-// cube::Block::Type values that are not drawn as solid blocks.
+// The game's block type values that are not drawn as solid blocks (leaves 8 and snowy 11:
+// worldgen-structures-nature.md; water 2, wet 3, lava 17, poison 19: steam-scene-lighting.md).
 constexpr uint8_t AIR_TYPE = 0, WATER_TYPE = 2, WET_TYPE = 3;
 constexpr uint8_t LEAVES_TYPE = 8, SNOW_LEAVES_TYPE = 11, LAVA_TYPE = 17, POISON_TYPE = 19;
 constexpr uint8_t DRY_AIR = 2; // breakable bit: air that does not become water below sea level.

@@ -81,7 +81,7 @@ int fontCatalogTests() {
     };
     std::vector<ParsedShape> encountered;
     std::string error;
-    check(plx::read(assets.gameDir() / "gui.plx", document, {plx::keyOf("PlasmaXGraphics")}, &error, plx::LOAD_SCALABLE_TEXT,
+    check(plx::read(assets.gameDir() / "gui.plx", document, {plx::phraseKey("PlasmaXGraphics")}, &error, plx::LOAD_SCALABLE_TEXT,
                     [&](const plx::Object &object) {
                         check(document.shapes.size() == encountered.size() + 1, "shape hook runs before the next shape is constructed");
                         plasma::TextStyle text;

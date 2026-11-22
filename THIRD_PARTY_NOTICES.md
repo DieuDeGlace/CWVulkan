@@ -31,9 +31,9 @@ This software uses the FreeType Project (https://freetype.org). FreeType is copy
 David Turner, Robert Wilhelm, Werner Lemberg and its contributors.
 
 The shipping ZoneExtractor target now uses project-owned native adapters and
-standard Windows headers, without CWSDK. The optional legacy sources in
-`tools/RegionProbe` and `tools/RegionScout` still include separately supplied SDK
-headers; they are not CMake targets or runtime-package binaries.
+standard Windows headers, without CWSDK. The unused legacy RegionProbe and
+RegionScout development mods, which included separately supplied SDK headers,
+were removed from the source on 2026-11-22.
 
 The historical local SDK notice is preserved in `licenses/CWSDK-MIT.txt`,
 copyright 2021 Gijs. The prior

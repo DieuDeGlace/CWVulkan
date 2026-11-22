@@ -81,7 +81,7 @@ inline float taken(float damage, float defense, int combo, int maxCombo) {
 }
 
 // --- Effects (the game's buff list, Creature +0x980) -------------------------------
-// Types as the game numbers them (CWSDK's Creature::Buff::buff type).
+// Types as the game numbers them (its aura kinds: steam-hud-poi-count-widget-20261115.md).
 enum Effect { BULWARK = 1, WAR_FRENZY = 2, CAMOUFLAGE = 3, POISON = 4, MANA_SHIELD = 6, INSTANT_FIRE = 9,
               SWIFTNESS = 12, NINJUTSU = 13, FLAME_RUSH = 16 };
 struct Active {

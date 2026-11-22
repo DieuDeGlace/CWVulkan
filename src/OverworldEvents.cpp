@@ -25,14 +25,15 @@ namespace {
 #include "ItemKeys.inc"
 #include "RaceKeys.inc"
 
-// The game's creature record (cube::Creature) where the events read and change it.
+// The game's creature record where the events read and change it (layout per the held specs:
+// creature-pose.md §2 and the creature-upkeep, residents and boss-flag contracts).
 constexpr size_t Position = 0x10, Pitch = 0x28, Roll = 0x2c, Yaw = 0x30, Velocity = 0x34, Acceleration = 0x40,
                  Retreat = 0x4c, Hostility = 0x60, Race = 0x64, Ability = 0x68, Flags = 0x80, GraphicsScale = 0x84,
                  HitboxScale = 0x88, PhysicsScale = 0x8c, ChestScale = 0xa4, ChestPositionZ = 0xe8, Toggles = 0x128,
                  Level = 0x144, Health = 0x180, InteractionState = 0x19c, Prisoner = 0x1a8, Home = 0x1b8,
                  Equipment = 0x278, Name = 0x958, Behaviours = 0xbcc, DrawnBefore = 0xaf8, Drawn = 0xb10,
                  Smoothing = 0xb54;
-// Hostility (cube::Enums::EntityBehaviour) and appearance flags.
+// Hostility kinds (+0x60) and appearance flags (+0x80), as in the held specs.
 constexpr int HostileBehaviour = 1, VillagerBehaviour = 3;
 constexpr uint32_t Fish = 1u << 8, Named = 1u << 9, NoTalk = 1u << 13, CanPickup = 1u << 14, Friendly = 1u << 15,
                    Mini = 1u << 17, Boss = 1u << 18, Petrified = 1u << 22;

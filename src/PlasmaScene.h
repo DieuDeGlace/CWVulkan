@@ -173,7 +173,7 @@ struct SceneNode {
     int displayFlags = 0;
     float blurRadius = 0;
     std::optional<Widget> widget;
-    // A text shape's live string and colour when the interface set them (setText, setTextColour).
+    // A text shape's live string and colour when the interface set them (setText, setLiveTextColour).
     std::optional<std::wstring> text;
     std::optional<glm::vec4> textColor;
     SceneNode *parent = nullptr;
@@ -202,7 +202,7 @@ struct SceneNode {
     // The text (or text colour) of every text shape under each node of a name (spec 2.4, the
     // subtree form); a matched node's subtree is not searched for further matches.
     void setText(const std::string &n, const std::wstring &t);
-    void setTextColour(const std::string &n, glm::vec4 c);
+    void setLiveTextColour(const std::string &n, glm::vec4 c);
     // The text (or text colour) of every text shape in this subtree.
     void setAllText(const std::wstring &t);
     void setAllTextColor(glm::vec4 c);

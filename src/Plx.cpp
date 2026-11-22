@@ -273,7 +273,7 @@ bool openSeal(const std::vector<uint8_t> &payload, const std::vector<uint64_t> &
         return false;
     std::vector<uint64_t> candidates = keys;
     candidates.push_back(0);
-    candidates.push_back(keyOf(GRAPHICS_NAME));
+    candidates.push_back(phraseKey(GRAPHICS_NAME));
     const std::string expected = GRAPHICS_NAME;
     for (uint64_t k : candidates) {
         const std::vector<uint8_t> plain = unseal(payload.data() + 4, n, k);
@@ -406,7 +406,7 @@ int Document::find(const std::string &name) const {
     return -1;
 }
 
-uint64_t keyOf(const std::string &phrase) {
+uint64_t phraseKey(const std::string &phrase) {
     uint64_t h = KEY_SEED;
     for (unsigned char b : phrase)
         h = h * KEY_MULTIPLIER + b;

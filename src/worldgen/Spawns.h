@@ -102,7 +102,7 @@ constexpr uint32_t FOREIGN_STYLE = 0x100000;
 constexpr uint32_t DEMON_MARKED = 0x4000000; // a demon portal's region
 } // namespace looksflag
 
-// The equipment slots, in the game's order (cube::Equipment).
+// The equipment slots, in the game's order (+0x278 + k x 0xa0: conversation-script.md), then the pet item (+0x8b8).
 enum EquipSlot { SLOT_NONE, NECK, CHEST, FEET, HANDS, SHOULDER, LEFT_HAND, RIGHT_HAND, LEFT_RING, RIGHT_RING, PET, SLOTS };
 
 // One inventory stack (0xa4 bytes): a quantity of an item.
@@ -138,7 +138,7 @@ struct Gear {
     Inventory inventory;             // +0x7f0
 };
 
-// A spawn point (cube::SpawnPoint, 0x950 bytes; §0.3), with its constructor's defaults (0x118a60).
+// A spawn point (0x950 bytes; worldgen-creatures.md §0.3), with its constructor's defaults (0x118a60).
 struct SpawnPoint {
     int64_t x = 0, y = 0, z = 0;                       // +0x00: 1/65536 blocks, z at the feet
     float yaw = 0;                                     // +0x18, degrees
