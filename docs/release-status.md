@@ -1,5 +1,15 @@
 # Source review checkpoint — 2026-11-08
 
+## Mod API version 2 and default aquatic life - 2026-11-22
+
+The mod API (include/cubevulkan/ModApi.h) gains version 2: code mods can take part in the host
+world step, under its lock, and make creatures through engine services
+([design](modding-api.md)). The aquatic encounter rules now live in src/AquaticPlan.cpp, shared
+by the built-in add-on and the new examples/AquaticMod; a test loads the DLL and requires the
+same creatures as the built-in rules, and an in-game run with the mod installed made schools by
+the sea. At the owner's request, aquatic life is now on by default, the only add-on that is;
+[Creatures] AquaticEnemies=0 restores the game's behaviour.
+
 ## Final audit fixes - 2026-11-22
 
 The first pass of the final provenance audit found three items, now fixed. Comments that cited

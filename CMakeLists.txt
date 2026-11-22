@@ -169,6 +169,7 @@ add_library(engine STATIC
     src/VillagerQuests.cpp
     src/TravelParties.cpp
     src/AquaticEncounters.cpp
+    src/AquaticPlan.cpp
     src/worldgen/Noise.cpp
     src/worldgen/Regions.cpp
     src/worldgen/Places.cpp
@@ -367,11 +368,19 @@ target_include_directories(HelloMod PRIVATE include)
 # does not silently alter the owner's world; copy it into mods/ to opt in.
 set_target_properties(HelloMod PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples)
 
+# Mod API version 2 example: the aquatic encounters add-on as a world mod (shares src/AquaticPlan.cpp).
+add_library(AquaticMod SHARED examples/AquaticMod/AquaticMod.cpp src/AquaticPlan.cpp)
+target_include_directories(AquaticMod PRIVATE include src ${glm_SOURCE_DIR})
+target_compile_features(AquaticMod PRIVATE cxx_std_20)
+set_target_properties(AquaticMod PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/examples)
+
 enable_testing()
 add_executable(EngineTests tests/EngineTests.cpp tests/AlphaRenderTests.cpp tests/SkyTests.cpp tests/RaceKeyTests.cpp tests/WorldMapTests.cpp tests/SaveTests.cpp tests/FrontendTests.cpp tests/WorldgenTerrainTests.cpp tests/WorldgenStructureTests.cpp tests/WorldgenCreatureTests.cpp tests/NetTests.cpp tests/OwnerSetupTests.cpp tests/PoseHudTests.cpp tests/LootWindowTests.cpp tests/FeatTextTests.cpp tests/WaterLookTests.cpp tests/WindContinueTests.cpp tests/EnemyRespawnTests.cpp tests/PlayerHitTests.cpp)
 target_link_libraries(EngineTests PRIVATE engine)
+add_dependencies(EngineTests AquaticMod) # its mod API test loads examples/AquaticMod.dll
 target_sources(EngineTests PRIVATE tests/FontCatalogTests.cpp tests/ChatCacheTests.cpp)
 target_sources(EngineTests PRIVATE tests/DialoguePageTests.cpp)
+target_sources(EngineTests PRIVATE tests/AquaticModTests.cpp)
 target_sources(EngineTests PRIVATE tests/AlphaSceneryTests.cpp)
 target_sources(EngineTests PRIVATE tests/InventorySlotTests.cpp tests/HudContextTests.cpp)
 target_sources(EngineTests PRIVATE tests/PetTests.cpp)

@@ -2508,8 +2508,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     // Travelling parties between villages ([Creatures] TravelParties, the user's add-on; off by default).
     const bool travelPartiesOn = config.flag("Creatures", "TravelParties", false);
     travelparties::Manager travelParties;
-    // Schools of fish, crabs and slimes in deep water ([Creatures] AquaticEnemies, the user's add-on; off by default).
-    const bool aquaticOn = config.flag("Creatures", "AquaticEnemies", false);
+    // Schools of fish, crabs and slimes in deep water ([Creatures] AquaticEnemies, the user's add-on). On by
+    // default at the owner's request, the one add-on that is; 0 restores the game's behaviour.
+    const bool aquaticOn = config.flag("Creatures", "AquaticEnemies", true);
     aquatic::Manager aquaticEncounters;
     std::vector<SaveGame::Quest> &quests = saveGame.quests;
     // Proper names. The game makes its own in code (Lalan, Telgor, Ikolon, Ardara);
@@ -8190,7 +8191,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 logLine("TAMED!");
             }
-            if ((travelPartiesOn || aquaticOn) && spawnedReady && !session.guestElsewhere()) {
+            if ((travelPartiesOn || aquaticOn || mods.stepsWorld()) && spawnedReady && !session.guestElsewhere()) {
                 auto partiesHold = session.lockHost();
                 std::vector<glm::dvec3> players;
                 hostWorld.forEachWorldCreature([&](const uint8_t *r) {
@@ -8208,6 +8209,36 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     travelParties.update(hostWorld, players, !mapOpen && !inventoryOpen, frameMs);
                 if (aquaticOn)
                     aquaticEncounters.update(hostWorld, authorityTerrain(), players, gameWorldSeed, frameMs);
+                { // Code mods' world logic (mod API version 2), on the same world under the same lock.
+                    ExtractedWorld &terrain = authorityTerrain();
+                    ModWorld mw;
+                    mw.seed = gameWorldSeed;
+                    mw.players = [&] { return players; };
+                    mw.zoneLoaded = [&](int32_t zx, int32_t zy) {
+                        bool loaded = false;
+                        terrain.gameBlock(int64_t(zx) * 64 + 32, int64_t(zy) * 64 + 32, 0, &loaded);
+                        return loaded;
+                    };
+                    mw.blockType = [&](int32_t x, int32_t y, int32_t z, bool &loaded) { return terrain.gameBlock(x, y, z, &loaded)[4]; };
+                    mw.ground = [](int32_t x, int32_t y) { return worldgen::groundHeight(x, y); };
+                    mw.biome = [](int32_t x, int32_t y) { return int32_t(worldgen::biomeAt(x, y)); };
+                    mw.spawnCreature = [&](int32_t race, int32_t hostility, int32_t level, const glm::dvec3 &at) -> int64_t {
+                        const int64_t dots[3] = {int64_t(at.x * 65536), int64_t(at.y * 65536), int64_t(at.z * 65536)};
+                        const int64_t id = hostWorld.make(race, hostility, level, dots, worldgen::regionOf(int32_t(at.x), int32_t(at.y)));
+                        return id && hostWorld.record(id) ? id : 0;
+                    };
+                    mw.addFlags = [&](int64_t id, uint32_t add) {
+                        uint8_t *r = hostWorld.record(id);
+                        if (!r)
+                            return false;
+                        uint32_t flags;
+                        std::memcpy(&flags, r + worldgen::creature::FLAGS, sizeof flags);
+                        flags |= add;
+                        std::memcpy(r + worldgen::creature::FLAGS, &flags, sizeof flags);
+                        return true;
+                    };
+                    mods.worldStep(mw, frameMs);
+                }
             }
             if (events.enabled()) {
                 auto eventsHold = session.lockHost();

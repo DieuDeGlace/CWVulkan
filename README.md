@@ -162,8 +162,10 @@ The [current checklist](docs/roadmap.md) tracks remaining work. In particular:
 - some ability/AI, pet, controller, conversation and network payload details remain open;
 - water lighting, distant-model ordering, logo shading and visual comparisons need work.
 
-The optional mod API is in `include/cubevulkan/ModApi.h`; `HelloMod` builds into
-`build/examples` and only runs if copied into the engine's `mods/` directory.
+The optional mod API is in `include/cubevulkan/ModApi.h` (version 2, see
+[docs/modding-api.md](docs/modding-api.md)). The examples `HelloMod` (models and the clock) and
+`AquaticMod` (world logic: the aquatic add-on as a mod) build into `build/examples` and only run if
+copied into the engine's `mods/` directory.
 CubeModLoader game patches are separate from engine mods.
 
 ## Prepare source for GitHub review

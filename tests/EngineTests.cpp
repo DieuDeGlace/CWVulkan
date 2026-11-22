@@ -8327,6 +8327,7 @@ static void shadowStepTests() {
 }
 
 // Aquatic encounters (AquaticEncounters.h, the user's add-on): which zones get a school, of what, where.
+int aquaticModTests(); // tests/AquaticModTests.cpp: returns its failures
 static void aquaticTests() {
     using namespace aquatic;
     // Deep sea everywhere (floor -20, surface 1), shallow ponds (floor 10, surface 12), dry land.
@@ -8361,6 +8362,8 @@ static void aquaticTests() {
     CHECK(rulesOk && placesOk);
     CHECK(waterHash(3, 4, 123) == waterHash(3, 4, 123) && waterHash(3, 4, 123) != waterHash(4, 3, 123));
     std::printf("Aquatic: %d sea schools (%d bosses), %d pond schools in 144 zones\n", seaSchools, bosses, pondSchools);
+
+    failures += aquaticModTests();
 }
 
 // Travelling parties (TravelParties.h, the user's add-on): villages, routes and waypoints.
