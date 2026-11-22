@@ -1,5 +1,12 @@
 # Clean-room process
 
+## Water Mage self-heal regression - 2026-11-21
+
+An original Steam recording showed a Water Mage at 20 HP gaining 26.351 from its own bubbles:
+twice the burst, because the host leaves the player's HP and the local client applies both heal
+records of each bubble. A regression now feeds the eight recorded bubbles through the single-player
+loopback and checks the same doubling. No engine behaviour changed.
+
 ## Playable Frogman appearance
 
 An isolated researcher reviewed the two playable Steam appearances and their

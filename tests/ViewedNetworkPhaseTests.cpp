@@ -236,6 +236,86 @@ void guestBubbleHealing(const auto &check) {
     check(guest.playerHealth() == guest.playerMaxHealth() && mirror.hitsTaken == 4,
           "each delivered healing record respects the guest's maximum HP");
 }
+// Single player is the client joined to its own host through the loopback. A Water Mage's own
+// bubbles heal the caster through the same two records: the host (no local actor) leaves the
+// player's HP alone and the local client applies each record, so the caster gains twice the
+// burst. The eight bubbles are the strength (+0x184) and remaining lifetime (+0x188) recorded
+// from an original Steam cast (run-4, 2026-11-21), where the caster went from 20 to 46.351 HP.
+void selfCastBubbleHealing(const auto &check) {
+    using namespace cwnet;
+    using namespace worldgen::creature;
+    constexpr int64_t me = 1;
+    constexpr float strengths[8] = {6.702720f, 8.846398f, 5.875595f, 7.285725f, 5.597901f, 8.455851f, 6.656365f, 8.068336f};
+    constexpr float lifetimes[8] = {0.231484f, 0.208284f, 0.191784f, 0.175284f, 0.155485f, 0.135685f, 0.119185f, 0.099385f};
+    ExtractedWorld blocks;
+    blocks.openGenerated(0, 0);
+    SpawnedCreatures host;
+    bool created = false;
+    auto *actor = host.networkCreature(me, created);
+    actor[HOSTILITY] = 0;
+    setActorField(actor, HEALTH, 20.f);
+    for (int i = 0; i < 8; ++i) {
+        actor = host.networkCreature(101 + i, created);
+        actor[HOSTILITY] = 7;
+        setActorField(actor, RACE, int32_t(0x11d));
+        setActorField(actor, OWNER, me);
+        setActorField(actor, HEALTH, 0.f);
+        setActorField(actor, BLOCK_POWER, strengths[i]);
+        setActorField(actor, 0x188, lifetimes[i]);
+    }
+    host.simulate(blocks, 10);
+    const auto &notices = host.events().damageNumbers;
+    std::vector<DamageRecord> heals;
+    for (const auto &notice : notices)
+        if (field<int64_t>(notice, 8) == me)
+            heals.push_back(notice);
+    bool paired = heals.size() == 16;
+    for (size_t i = 0; paired && i < heals.size(); i += 2) {
+        const float amount = -field<float>(heals[i], 0x10);
+        const int bubble = int(i / 2);
+        const float single = strengths[bubble] * lifetimes[bubble], doubled = (strengths[bubble] + strengths[bubble]) * lifetimes[bubble];
+        paired = heals[i] == heals[i + 1] && field<int64_t>(heals[i], damage::ATTACKER) == me &&
+                 amount == (heals[i][0x14] ? doubled : single);
+    }
+    float hostHealth;
+    std::memcpy(&hostHealth, host.record(me) + HEALTH, sizeof hostHealth);
+    check(paired && hostHealth == 20.f,
+          "each of the caster's eight bubbles publishes two caster-credited heal records and the host leaves the player's HP");
+    if (!paired)
+        return;
+
+    SpawnedCreatures local;
+    local.setNativePlayer(true);
+    local.setRemoteClient(true);
+    MirrorSide mirror(local, blocks);
+    LoopbackNetwork network;
+    constexpr PeerId peer = 1;
+    auto endpoint = network.endpoint(peer);
+    ClientGame client(*endpoint, mirror);
+    client.link().goHome(1000);
+    endpoint->send(peer, Channel::ToClient, encode(YourId{me}, Direction::ToClient));
+    client.receive(1000);
+    local.setPlayer(blocks, {}, 0.f, {}, 10.f, 1, true);
+    local.setPlayerHealth(20.f);
+    float expected = 20.f, once = 20.f;
+    for (size_t i = 0; i < heals.size(); ++i) {
+        expected = expected - field<float>(heals[i], 0x10); // each record is its own HP write
+        if (i % 2 == 0)
+            once = once - field<float>(heals[i], 0x10);
+    }
+    if (!(local.playerMaxHealth() >= expected)) {
+        check(false, "the local caster's maximum HP leaves room for the whole self-heal");
+        return;
+    }
+    endpoint->send(peer, Channel::ToClient, encode(WorldUpdate{host.events()}, Direction::ToClient));
+    client.receive(1001);
+    client.consumeWorldUpdates();
+    check(local.playerHealth() == expected && mirror.hitsTaken == 16 && expected - 20.f > 2.f * (once - 20.f) - 1e-3f &&
+              expected - 20.f < 2.f * (once - 20.f) + 1e-3f,
+          "the single-player caster applies every self-heal record: twice the host's burst, as in the original");
+    client.consumeWorldUpdates();
+    check(local.playerHealth() == expected && mirror.hitsTaken == 16, "an empty pass does not heal the caster again");
+}
 enum class BubbleDefense { Guard, FullShield, BrokenShield };
 
 void guestBubbleDefense(BubbleDefense defense, const auto &check) {
@@ -371,6 +451,7 @@ int viewedNetworkPhaseTests() {
     sessionPhases(check);
     queueAndSendOrder(check);
     guestBubbleHealing(check);
+    selfCastBubbleHealing(check);
     for (auto defense : {BubbleDefense::Guard, BubbleDefense::FullShield, BubbleDefense::BrokenShield})
         guestBubbleDefense(defense, check);
     std::printf("Viewed network dispatch phases: %s\n", failures ? "FAIL" : "PASS");

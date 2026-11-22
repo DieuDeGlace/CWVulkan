@@ -1,5 +1,12 @@
 # Source review checkpoint — 2026-11-08
 
+## Water Mage self-heal regression - 2026-11-21
+
+An original Steam recording showed a Water Mage at 20 HP gaining 26.351 from its own bubbles:
+twice the burst, because the host leaves the player's HP and the local client applies both heal
+records of each bubble. A regression now feeds the eight recorded bubbles through the single-player
+loopback and checks the same doubling. No engine behaviour changed.
+
 ## Frogman face and haircut colours
 
 The native appearance draws both playable Frogman haircuts with white while the
