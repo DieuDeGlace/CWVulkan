@@ -14,6 +14,9 @@ struct CubModel {
     bool loadMemory(const uint8_t *data, size_t size, std::string *error = nullptr);
     bool solid(int x, int y, int z) const;
     bool exposed(int x, int y, int z) const;
+    static bool isAttachmentMarker(uint8_t r, uint8_t g, uint8_t b) {
+        return (r == 255 && g == 0 && b == 0) || (r == 0 && g == 255 && b == 0) || (r == 0 && g == 0 && b == 255);
+    }
     bool attachmentMarker(int x, int y, int z) const;
     VoxelColor color(int x, int y, int z) const;
     // Mesh in voxel units, centred on x/y with its base at z = 0. Alpha corners fade toward

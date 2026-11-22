@@ -99,6 +99,17 @@ void meshFaces() {
     std::vector<uint8_t> row(3 * 3, 200);
     Mesh walls;
     worldmap::meshModel({3, 1, 1, row.data()}, 0, 1, 0, 0, false, walls);
+    // A primary-colour attachment sits next to a green painted cell.
+    // The paint contributes five faces. The invisible attachment still blocks the west side.
+    for (auto marker : {std::array<uint8_t, 3>{255, 0, 0}, {0, 255, 0}, {0, 0, 255}}) {
+        const std::array<uint8_t, 6> cells{marker[0], marker[1], marker[2], 55, 251, 0};
+        Mesh portrait, ordinary;
+        worldmap::meshModel({2, 1, 1, cells.data(), true}, 0, 1, 0, 0, true, portrait);
+        worldmap::meshModel({2, 1, 1, cells.data()}, 0, 1, 0, 0, true, ordinary);
+        MAP_CHECK(portrait.indices.size() == 30 && ordinary.indices.size() == 60);
+        for (const auto &vertex : portrait.vertices)
+            MAP_CHECK(vertex.x >= 1 && vertex.normal != worldmap::FACE_NORMAL_INDEX[worldmap::WEST]);
+    }
     MAP_CHECK(walls.indices.size() == 10 * 6); // 2 x (south, north, bottom, top) + west + east
 }
 

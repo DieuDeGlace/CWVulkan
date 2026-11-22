@@ -539,6 +539,47 @@ void progress() {
     FRONT_CHECK(withNotes.quests.size() == 1 && withNotes.quests[0].giver == 42 && withNotes.quests[0].target == "Wolf");
 }
 
+void frogmanAppearance() {
+    using A = worldgen::Appearance;
+    nativeprogress::SpriteTable sprites;
+    const int before = failures;
+    int pairs = 0;
+    for (int sex = 0; sex <= 1; ++sex) {
+        const int count = sex ? 4 : 5;
+        for (int face = 0; face < count; ++face) {
+            for (int haircut = 0; haircut < count; ++haircut) {
+                for (auto swatch : {glm::u8vec3(17, 59, 223), glm::u8vec3(251, 113, 7)}) {
+                    nativesaves::Character c;
+                    c.looks.set(7, sex, face, haircut, {swatch.r, swatch.g, swatch.b});
+                    CharacterEntry entry;
+                    FRONT_CHECK(nativeprogress::entryFor(c, 0, {}, sprites, entry) && entry.hasAppearance);
+                    A appearance;
+                    appearance.bytes = entry.appearance;
+                    FRONT_CHECK(appearance.get<int16_t>(A::HEAD) == (sex ? 0x60b : 0x601) + face);
+                    FRONT_CHECK(appearance.get<int16_t>(A::HAIR) == (sex ? 0x60f : 0x606) + haircut);
+                    FRONT_CHECK(appearance.get<int16_t>(A::HANDS) == 0x613 && appearance.get<int16_t>(A::FEET) == 0x267 &&
+                                appearance.get<int16_t>(A::CHEST) == 1);
+                    for (int channel = 0; channel < 3; ++channel)
+                        FRONT_CHECK(appearance.bytes[A::COLOUR + channel] == 255 && c.looks.hairColour()[channel] == swatch[channel]);
+                    FRONT_CHECK(entry.hairColor == swatch && entry.recordingHairTint(false) == glm::u8vec3(255));
+                    FRONT_CHECK(entry.recordingHairTint(true) == swatch);
+                }
+                ++pairs;
+            }
+        }
+    }
+    CharacterEntry elf;
+    elf.raceName = "elf";
+    elf.hairColor = {11, 99, 201};
+    FRONT_CHECK(elf.recordingHairTint(false) == elf.hairColor);
+    CharacterEntry legacy;
+    legacy.raceName = "frogman";
+    legacy.hairColor = {181, 19, 57};
+    FRONT_CHECK(!legacy.hasAppearance && legacy.recordingHairTint(false) == glm::u8vec3(255) &&
+                legacy.recordingHairTint(true) == legacy.hairColor);
+    if (failures == before) std::printf("Frogman appearance: %d face and haircut pairs, two swatches each\n", pairs);
+}
+
 // A saved character becomes a record the pose draws with a real size: its appearance names
 // models and sizes, and every part matrix the pose makes has non-zero axes. (A record whose
 // pose size factor was left at 0 drew the player and townsfolk with no size at all.)
@@ -894,6 +935,7 @@ int frontendTests() {
     treasureItems();
     progress();
     savedCharacterIsDrawn();
+    frogmanAppearance();
     return failures;
 }
 

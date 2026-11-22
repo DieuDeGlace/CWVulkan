@@ -97,7 +97,7 @@ class Map {
     // A marker's models, for View::Mark: a creature's head (or chest) and its hair in the
     // hair's colour, or the tombstone alone.
     int looks(Renderer &renderer, const CubModel &first, const CubModel *hairModel, glm::u8vec3 hairColor,
-              const hair::Style *style = nullptr);
+              const hair::Style *style = nullptr, int firstId = -1, int hairId = -1);
     // The region markers around the view's centre on the screen (map-markers.md §0.6, §0.7):
     // where (window pixels from the top left) and how deep, in the regions' order.
     struct Projected {
@@ -140,7 +140,7 @@ class Map {
     };
     std::vector<std::vector<Sprite>> markLooks;
     Sprite cube;
-    static Sprite spriteOf(Renderer &renderer, const CubModel &model, glm::vec3 colour);
+    static Sprite spriteOf(Renderer &renderer, const CubModel &model, glm::vec3 colour, bool hideMarkers = false);
 
     // The camera of a view, and where a region's model sits in map units.
     static glm::dvec3 regionOffset(const View &view, int rx, int ry, int baseHeight);

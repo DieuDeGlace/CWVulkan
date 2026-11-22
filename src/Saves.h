@@ -31,6 +31,10 @@ struct CharacterEntry {
     bool created = false;
     std::string head, hair, hand, foot; // sprite names
     glm::u8vec3 hairColor{255};
+    // The picker is retained in the save. Single-colour Frogman hair uses its own paint.
+    glm::u8vec3 recordingHairTint(bool dual) const {
+        return !dual && raceName == "frogman" ? glm::u8vec3(255) : hairColor;
+    }
     // A character of CubeVulkan's characters.db (the game's format, NativeProgress.h): its
     // index there, and its appearance (+0x78) as the looks routine makes it from its choices.
     bool native = false;

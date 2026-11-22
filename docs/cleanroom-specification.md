@@ -12,6 +12,15 @@ An appendix summarises the process. The authoritative process texts are [CLEANRO
 and [CLEANROOM_AUTHOR.md](CLEANROOM_AUTHOR.md); where this document and those files differ, the
 files win. These rules preserve source separation; they are not a statement of legal clearance.
 
+For both playable Frogman sexes, customization retains the selected primary RGB.
+The normal haircut draw multiplies its authored colours by white. Face and
+haircut choices select independent models. Exact red, green and blue attachment
+markers on the numbered haircuts are hidden. Near-primary paint remains visible
+where the model is exposed. The two-tone option is an engine extension.
+On the world map, the face and haircut retain their catalog geometry for the
+outline and central draw. Hidden haircut cells still occlude adjacent paint.
+[Steam Frogman appearance](specs/steam-frogman-primary-appearance-20261121.md). [Map portrait geometry](specs/steam-map-creature-head-markers-20261121.md).
+
 Bounced sunlight is an optional engine enhancement. It samples a 512 by 512
 sun-facing terrain map with twelve taps. The camera fade ends at 50 blocks.
 The stock cloud grid stays anchored as the day advances. Camera submersion

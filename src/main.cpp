@@ -1343,7 +1343,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         else if (character.load(chosen->dir, why)) {
             body = Body(character.hitboxScale);
             if (chosen->created) { // made in CubeVulkan: its own look and name on its class's recording
-                character.restyle(chosen->head, chosen->hair, chosen->hand, chosen->foot, chosen->hairColor);
+                character.restyle(chosen->head, chosen->hair, chosen->hand, chosen->foot, chosen->recordingHairTint(playerHairStyle.dual));
                 character.name = chosen->name;
             }
             const auto &look = playerHairStyle;
@@ -1765,6 +1765,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     worldgen::Item hoveredArtifact;                 // the artifact of the place under the pointer
     if (hudReady && !hud.loadQuestIcons(root / "assets" / "OverworldEvents" / "quest-icons.png"))
         logLine("Quest sprites: assets/OverworldEvents/quest-icons.png not found");
+    // Portrait indices refer to sprites owned by this map instance.
+    std::map<std::tuple<int, int, int>, int> mapCreatureLooks;
     bool mapPlayerSet = false;
     int mapPlayerLooks = -1; // the player's marker models on the map (WorldMap::looks)
     float mapLabelScale = minimapScale;
@@ -8775,18 +8777,18 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 }
                 { // The world map's creature markers (MapMarks.h): the player, the creatures leading it to a
                   // mission, and the tombstone where it last died.
-                    static std::map<std::tuple<std::string, std::string, int>, int> looksOf; // (models, hair colour) -> Map::looks
-                    auto looks = [&](const std::string &first, const std::string &hairName, glm::u8vec3 colour) {
-                        const auto key = std::make_tuple(first, hairName, (colour.r << 16) | (colour.g << 8) | colour.b);
-                        if (auto known = looksOf.find(key); known != looksOf.end())
+                    auto looks = [&](int firstId, int hairId, glm::u8vec3 colour) {
+                        const auto key = std::make_tuple(firstId, hairId, (colour.r << 16) | (colour.g << 8) | colour.b);
+                        if (auto known = mapCreatureLooks.find(key); known != mapCreatureLooks.end())
                             return known->second;
                         int index = -1;
                         CubModel model, hair;
+                        const auto first = spawned.spriteName(firstId), hairName = spawned.spriteName(hairId);
                         const auto modelPath = first.empty() ? std::nullopt : assets.resolve(fs::path("sprites") / (first + ".cub"));
                         const auto hairPath = hairName.empty() ? std::nullopt : assets.resolve(fs::path("sprites") / (hairName + ".cub"));
                         if (modelPath && model.load(*modelPath))
-                            index = worldMap.looks(renderer, model, hairPath && hair.load(*hairPath) ? &hair : nullptr, colour);
-                        return looksOf[key] = index;
+                            index = worldMap.looks(renderer, model, hairPath && hair.load(*hairPath) ? &hair : nullptr, colour, nullptr, firstId, hairId);
+                        return mapCreatureLooks[key] = index;
                     };
                     // Records walk the World's creature list, the local player included (§2.2);
                     // the recorded character's head stands in only when there is no native player.
@@ -8809,14 +8811,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                         // Its head (its chest when it has none) and its hair, from its looks (+0x78).
                         int16_t head, hair, chest;
                         std::memcpy(&head, c + 0x90, 2), std::memcpy(&hair, c + 0x92, 2), std::memcpy(&chest, c + 0x98, 2);
-                        std::string first = spawned.spriteName(head);
-                        if (first.empty())
-                            first = spawned.spriteName(chest);
+                        const int first = spawned.spriteName(head).empty() ? chest : head;
                         int64_t shown[3]; // where it is drawn (+0xb10), and its turn (+0xb3c, degrees)
                         float turn;
                         std::memcpy(shown, c + 0xb10, 24), std::memcpy(&turn, c + 0xb3c, 4);
                         worldmap::Map::View::Mark k;
-                        k.looks = looks(first, spawned.spriteName(hair), glm::u8vec3(c[0x7a], c[0x7b], c[0x7c]));
+                        k.looks = looks(first, hair, glm::u8vec3(c[0x7a], c[0x7b], c[0x7c]));
                         k.at = glm::dvec3((double)shown[0], (double)shown[1], (double)shown[2]) / 65536.0;
                         k.turnDegrees = turn;
                         k.pulses = hostility != 0;
@@ -8825,7 +8825,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                     if (const mapmarks::Tombstone tomb = spawned.tombstone(); spawned.playerRecord() && tomb.ms > 0) {
                         constexpr int TOMBSTONE_MODEL = 0xde7; // tombstone.cub in the world's model table
                         worldmap::Map::View::Mark k;
-                        k.looks = looks(spawned.spriteName(TOMBSTONE_MODEL), "", glm::u8vec3(255));
+                        k.looks = looks(TOMBSTONE_MODEL, -1, glm::u8vec3(255));
                         k.at = glm::dvec3((double)tomb.at[0], (double)tomb.at[1], (double)tomb.at[2]) / 65536.0;
                         k.pulses = true;
                         view.marks.push_back(k);

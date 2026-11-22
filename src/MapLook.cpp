@@ -1,5 +1,6 @@
 // How the world map looks (docs/specs/worldmap-rendering.md). See MapLook.h.
 #include "MapLook.h"
+#include "CubModel.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -96,19 +97,22 @@ void meshModel(const VoxelModel &model, int firstI, int lastI, int firstJ, int l
             for (int k = 0; k < model.sizeZ; k++) {
                 if (model.empty(i, j, k))
                     continue;
+                const uint8_t *paint = model.at(i, j, k);
+                // Markers hide their own faces but still occlude neighbours and shade corners.
+                if (model.hideAttachmentMarkers && CubModel::isAttachmentMarker(paint[0], paint[1], paint[2]))
+                    continue;
                 const bool shows[6] = {
                     i == firstI || model.empty(i - 1, j, k), i == lastI || model.empty(i + 1, j, k),
                     j == firstJ || model.empty(i, j - 1, k), j == lastJ || model.empty(i, j + 1, k),
                     model.empty(i, j, k - 1),                model.empty(i, j, k + 1),
                 };
-                const uint8_t *bytes = model.at(i, j, k);
                 for (int face = 0; face < 6; face++) {
                     if (!shows[face])
                         continue;
                     const uint32_t first = (uint32_t)mesh.vertices.size();
                     for (const glm::ivec3 &offset : FACES[face].corners) {
                         const glm::ivec3 corner = glm::ivec3(i, j, k) + offset;
-                        const glm::vec4 c = cornerColour(bytes, cornerOcclusion(model, corner, face), halve);
+                        const glm::vec4 c = cornerColour(paint, cornerOcclusion(model, corner, face), halve);
                         Vertex v{};
                         v.x = (float)corner.x, v.y = (float)corner.y, v.z = (float)corner.z;
                         v.r = colourByte(c.r), v.g = colourByte(c.g), v.b = colourByte(c.b), v.ao = colourByte(c.a);

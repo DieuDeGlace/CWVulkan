@@ -1,5 +1,14 @@
 # Clean-room process
 
+## Playable Frogman appearance
+
+An isolated researcher reviewed the two playable Steam appearances and their
+numbered models. The complete held account was read and fingerprinted before
+implementation. The test uses CubeVulkan's independent roster and appearance
+paths. The selectable two-tone enhancement remains a separate appearance mode.
+[Original appearance report](specs/steam-frogman-primary-appearance-20261121.md).
+[Map portrait report](specs/steam-map-creature-head-markers-20261121.md).
+
 ## Launcher source selection
 
 This regression was reproduced in a packaged copy of CubeVulkanSetup using a

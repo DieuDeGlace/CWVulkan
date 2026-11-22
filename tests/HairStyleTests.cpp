@@ -4,6 +4,8 @@
 #include "NativeProgress.h"
 #include "World.h"
 #include "CubModel.h"
+#include "Assets.h"
+#include "MapLook.h"
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -30,7 +32,70 @@ int hairStyleTests() {
     };
     check(color(0, 2) == glm::u8vec3(200, 1, 1) && color(0, 1) == glm::u8vec3(100, 1, 100) && color(0, 0) == glm::u8vec3(1, 1, 200),
           "gradient preserves primary roots and secondary tips");
-    check(color(1, 1) == glm::u8vec3(0) && color(2, 1) == glm::u8vec3(180, 120, 80), "markers are hidden and skin stays unchanged");
+    check(color(1, 1) == glm::u8vec3(0, 255, 0) && color(2, 1) == glm::u8vec3(180, 120, 80), "gradient keeps attachment occupancy and authored skin");
+    CubModel neutral;
+    neutral.sx = 5;
+    neutral.sy = neutral.sz = 1;
+    neutral.rgb = {255,255,255, 255,254,253, 0,17,255, 55,251,0, 0,0,255};
+    const auto authored = neutral.rgb;
+    World::tintHair(neutral, glm::u8vec3(255), nullptr);
+    check(neutral.rgb == authored, "neutral primary preserves every drawn paint byte");
+    Assets assets;
+    if (assets.locate("")) {
+        unsigned compared = 0;
+        size_t portraitFaces = 0;
+        for (int sex = 0; sex < 2; ++sex) {
+            for (int pick = 1; pick <= (sex ? 4 : 5); ++pick) {
+                const auto name = std::string("frogman-hair-") + (sex ? "f0" : "m0") + std::to_string(pick) + ".cub";
+                CubModel model;
+                if (!model.load(assets.gameDir() / "sprites" / name)) {
+                    check(false, "could not load a numbered owner Frogman haircut");
+                    continue;
+                }
+                const auto expected = model.rgb;
+                int red = 0, blue = 0, green = 0;
+                for (size_t i = 0; i < expected.size(); i += 3) {
+                    const auto *c = expected.data() + i;
+                    if (c[0] == 255 && c[1] == 0 && c[2] == 0) ++red;
+                    else if (c[0] == 0 && c[1] == 255 && c[2] == 0) ++green;
+                    else if (c[0] == 0 && c[1] == 0 && c[2] == 255) ++blue;
+                }
+                World::tintHair(model, glm::u8vec3(255), nullptr);
+                check(red == (!sex && pick == 5 ? 190 : 188) && blue == 70 && green == 0,
+                      "numbered Frogman haircut matches the original marker counts");
+                check(model.rgb == expected, "every non-marker cell retains its authored paint");
+                Mesh portrait;
+                worldmap::meshModel({model.sx, model.sy, model.sz, model.rgb.data(), true},
+                                    0, model.sx - 1, 0, model.sy - 1, true, portrait);
+                size_t faces = 0;
+                for (int z = 0; z < model.sz; ++z)
+                    for (int y = 0; y < model.sy; ++y)
+                        for (int x = 0; x < model.sx; ++x) {
+                            if (!model.solid(x, y, z) || model.attachmentMarker(x, y, z)) continue;
+                            for (const auto &axis : FACE_NORMALS)
+                                faces += !model.solid(x + axis[0], y + axis[1], z + axis[2]);
+                        }
+                check(portrait.vertices.size() == faces * 4 && portrait.indices.size() == faces * 6,
+                      "map haircut emits exactly the exposed paint faces");
+                if (pick == 1) {
+                    const auto paint = model.color(3, 7, 2);
+                    check(model.attachmentMarker(2, 7, 2) && paint.r == 55 && paint.g == 251 && paint.b == 0,
+                          "first haircut has the documented marker touching authored green");
+                    for (size_t i = 0; i < portrait.vertices.size(); i += 4) {
+                        const auto &vertex = portrait.vertices[i];
+                        check(!(vertex.normal == worldmap::FACE_NORMAL_INDEX[worldmap::WEST] &&
+                                vertex.x == 3 && vertex.y == 7 && vertex.z == 2),
+                              "marker occludes the west side of the documented painted cell");
+                    }
+                }
+                portraitFaces += portrait.indices.size() / 6;
+                ++compared;
+            }
+        }
+        check(portraitFaces == 982, "all nine portrait meshes reproduce the independent exposed-paint census");
+        std::printf("Frogman exposed map faces: %zu\n", portraitFaces);
+        std::printf("Frogman owner haircuts compared: %u\n", compared);
+    }
     const auto invalid = hair::normalised({true, {1, 2, 3}, std::numeric_limits<float>::quiet_NaN(), -1});
     check(invalid.start == .4f && invalid.blend == 0, "invalid gradient parameters have finite bounds");
     check(hair::cacheKey(style) != hair::cacheKey({true, {0, 255, 0}, 0, 1}), "secondary colors have distinct mesh keys");

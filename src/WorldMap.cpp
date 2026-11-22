@@ -1,6 +1,7 @@
 // The game's world map: its regions, their draw, its markers and its cursor (WorldMap.h;
 // docs/specs/worldmap-rendering.md cited as §n, docs/specs/map-markers.md as "markers §n").
 #include "WorldMap.h"
+#include "WorldModelControls.h"
 
 #include "MapMarks.h"
 #include "World.h"
@@ -319,7 +320,7 @@ void Map::drawRoute(const View &view, const MapCamera &camera, std::vector<DrawI
     }
 }
 
-Map::Sprite Map::spriteOf(Renderer &renderer, const CubModel &model, glm::vec3 colour) {
+Map::Sprite Map::spriteOf(Renderer &renderer, const CubModel &model, glm::vec3 colour, bool hideMarkers) {
     Sprite s;
     s.size = glm::vec3(model.sx, model.sy, model.sz);
     s.colour = colour;
@@ -327,7 +328,7 @@ Map::Sprite Map::spriteOf(Renderer &renderer, const CubModel &model, glm::vec3 c
         return s;
     // .cub models keep the halving the shader doubles back (§2.1).
     Mesh mesh;
-    meshModel(VoxelModel{model.sx, model.sy, model.sz, model.rgb.data()}, 0, model.sx - 1, 0, model.sy - 1, true, mesh);
+    meshModel(VoxelModel{model.sx, model.sy, model.sz, model.rgb.data(), hideMarkers}, 0, model.sx - 1, 0, model.sy - 1, true, mesh);
     if (!mesh.empty())
         s.mesh = renderer.upload(mesh);
     return s;
@@ -339,15 +340,18 @@ void Map::setCube(Renderer &renderer, const CubModel &model) {
     cube = spriteOf(renderer, model, glm::vec3(1));
 }
 
-int Map::looks(Renderer &renderer, const CubModel &first, const CubModel *hairModel, glm::u8vec3 hairColor, const hair::Style *style) {
-    std::vector<Sprite> sprites{spriteOf(renderer, first, glm::vec3(1))};
+int Map::looks(Renderer &renderer, const CubModel &first, const CubModel *hairModel, glm::u8vec3 hairColor, const hair::Style *style,
+               int firstId, int hairId) {
+    std::vector<Sprite> sprites{spriteOf(renderer, first, glm::vec3(1), worldmodel::hidesAttachmentMarkers(firstId))};
     if (hairModel) {
+        // A recorded haircut can come from the hair matrix without a catalog ID.
+        const bool hideMarkers = hairId < 0 || worldmodel::hidesAttachmentMarkers(hairId);
         if (style && style->dual) {
             auto tinted = *hairModel;
             World::tintHair(tinted, hairColor, style);
-            sprites.push_back(spriteOf(renderer, tinted, glm::vec3(1)));
+            sprites.push_back(spriteOf(renderer, tinted, glm::vec3(1), hideMarkers));
         } else
-            sprites.push_back(spriteOf(renderer, *hairModel, glm::vec3(hairColor) / 255.0f));
+            sprites.push_back(spriteOf(renderer, *hairModel, glm::vec3(hairColor) / 255.0f, hideMarkers));
     }
     markLooks.push_back(std::move(sprites));
     return (int)markLooks.size() - 1;

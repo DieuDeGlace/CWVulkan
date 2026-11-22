@@ -392,25 +392,22 @@ void World::lightScenery(std::vector<Scenery> &scenery) const {
 // Hair sprites take the character's hair colour, as the game tints them
 // (shared by the world renderer and the menu's portraits).
 void World::tintHair(CubModel &cub, glm::u8vec3 tint, const HairLook *look) {
-    // Hair sprites: pure red, green and blue voxels are markers the
-    // game does not draw (the face and eye areas); grey voxels take the
-    // colour; skin-coloured voxels stay as they are.
-    // Grey includes near-greys such as (242,241,241): exact equality left a
-    // few voxels on top of the hair uncoloured.
-    auto marker = [](const uint8_t *p) {
-        int lit = (p[0] == 255) + (p[1] == 255) + (p[2] == 255), dark = !p[0] + !p[1] + !p[2];
-        return lit == 1 && dark == 2;
-    };
+    // Keep attachment cells in the raw volume so neighbouring faces stay occluded.
+    // Only near-greys take the primary or optional gradient colour.
+    if (!look && tint == glm::u8vec3(255))
+        return;
     auto grey = [](const uint8_t *p) {
         int hi = std::max({p[0], p[1], p[2]}), lo = std::min({p[0], p[1], p[2]});
         return hi > 0 && hi - lo <= 12;
     };
     // The hair's height range, for the second colour's gradient (as DualHair).
     int top = -1, bottom = cub.sz;
-    for (int z = 0; z < cub.sz; z++)
-        for (int i = 0; i < cub.sx * cub.sy; i++)
-            if (grey(&cub.rgb[((size_t)z * cub.sx * cub.sy + i) * 3]))
-                top = std::max(top, z), bottom = std::min(bottom, z);
+    if (look) {
+        for (int z = 0; z < cub.sz; z++)
+            for (int i = 0; i < cub.sx * cub.sy; i++)
+                if (grey(&cub.rgb[((size_t)z * cub.sx * cub.sy + i) * 3]))
+                    top = std::max(top, z), bottom = std::min(bottom, z);
+    }
     float span = (float)std::max(1, top - bottom);
     for (int z = 0; z < cub.sz; z++) {
         float share = 0;
@@ -425,9 +422,7 @@ void World::tintHair(CubModel &cub, glm::u8vec3 tint, const HairLook *look) {
         }
         for (int i = 0; i < cub.sx * cub.sy; i++) {
             uint8_t *p = &cub.rgb[((size_t)z * cub.sx * cub.sy + i) * 3];
-            if (marker(p))
-                p[0] = p[1] = p[2] = 0; // Not drawn (face and eye areas).
-            else if (grey(p))
+            if (grey(p))
                 for (int c = 0; c < 3; c++) {
                     float t = tint[c] + ((look ? look->second[c] : tint[c]) - tint[c]) * share;
                     p[c] = (uint8_t)std::clamp((int)std::lround(p[c] * t / 255), 1, 254);
@@ -452,8 +447,9 @@ bool World::readModelVolume(const std::string &name, CubModel &cub, steamvoxel::
 }
 
 int World::loadModel(const std::string &name, glm::u8vec3 tint, bool hair, const HairLook *look, bool hideAttachmentMarkers) {
-    bool tinted = hair;
-    bool dual = hair && look && look->dual;
+    const bool dual = hair && look && look->dual;
+    const bool tinted = hair && (dual || tint != glm::u8vec3(255));
+    hideAttachmentMarkers = hideAttachmentMarkers || hair;
     std::string key = name;
     if (hideAttachmentMarkers)
         key += "#attachment-markers";

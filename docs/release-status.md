@@ -1,5 +1,21 @@
 # Source review checkpoint — 2026-11-08
 
+## Frogman face and haircut colours
+
+The native appearance draws both playable Frogman haircuts with white while the
+character keeps the chosen swatch. Recorded-character playback now uses the same
+neutral multiplier with single-colour hair. Neutral white preserves the authored
+paint, including fully white voxels. The regression covers 25 male and 16 female
+face and haircut pairs with two distinct swatches. A second check compared every
+cell in the nine numbered owner haircuts, their exact marker counts and their
+map triangle counts. Map portraits suppress each registered attachment's own
+faces while the occupied cell still blocks neighbouring faces. Across all nine
+models the meshes retained 982 exposed painted faces. A separate count found
+4,374 exposed marker faces and 3,280 painted faces hidden against markers.
+The first haircut for each sex also matched the documented green voxel beside
+a red marker. Final screen appearance still
+awaits an original-game comparison.
+
 ## Setup preserves the world source
 
 Saving the previous launcher with its shipped Alpha configuration selected

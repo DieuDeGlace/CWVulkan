@@ -63,7 +63,7 @@ bool CubModel::exposed(int x, int y, int z) const {
 
 bool CubModel::attachmentMarker(int x, int y, int z) const {
     const auto c = color(x, y, z);
-    return (c.r == 255 && c.g == 0 && c.b == 0) || (c.r == 0 && c.g == 255 && c.b == 0) || (c.r == 0 && c.g == 0 && c.b == 255);
+    return isAttachmentMarker(c.r, c.g, c.b);
 }
 
 Mesh CubModel::mesh(uint8_t flags, glm::u8vec3 shadeColour, steamvoxel::CubEncoding encoding, bool hideAttachmentMarkers) const {

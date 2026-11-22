@@ -334,9 +334,9 @@ uint32_t wallClockMs() {
 // The colours are doubled back as the model shader does (§3.2) and shaded once face by face
 // (screenModelShade). Native animated portraits and the logo use the WORLD path instead.
 // The mesh's corner is the model's corner, as the part matrices take it.
-uint32_t screenModel(Renderer &renderer, const CubModel &cub, int facing = -1) {
+uint32_t screenModel(Renderer &renderer, const CubModel &cub, bool hideAttachmentMarkers, int facing = -1) {
     Mesh m;
-    worldmap::meshModel(worldmap::VoxelModel{cub.sx, cub.sy, cub.sz, cub.rgb.data()}, 0, cub.sx - 1, 0, cub.sy - 1, true, m);
+    worldmap::meshModel(worldmap::VoxelModel{cub.sx, cub.sy, cub.sz, cub.rgb.data(), hideAttachmentMarkers}, 0, cub.sx - 1, 0, cub.sy - 1, true, m);
     for (Vertex &v : m.vertices) {
         const int *n = FACE_NORMALS[v.normal];
         const int axis = n[0] ? 0 : n[1] ? 1 : 2, sign = n[0] + n[1] + n[2];
@@ -779,7 +779,7 @@ void Session::makePreviews() {
         std::string why;
         if (!p.recording.load(l.entry.dir, why))
             continue;
-        p.recording.restyle(l.entry.head, l.entry.hair, l.entry.hand, l.entry.foot, l.entry.hairColor);
+        p.recording.restyle(l.entry.head, l.entry.hair, l.entry.hand, l.entry.foot, l.entry.recordingHairTint(l.hairStyle.dual));
         for (const CharacterRecording::Part &part : p.recording.parts()) {
             CubModel cub;
             const auto path = s.assets->resolve(fs::path("sprites") / (part.sprite + ".cub"));
@@ -789,7 +789,7 @@ void Session::makePreviews() {
             }
             if (part.hair)
                 World::tintHair(cub, part.tint, l.hairStyle.dual ? &l.hairStyle : nullptr);
-            p.meshes.push_back(screenModel(*s.renderer, cub));
+            p.meshes.push_back(screenModel(*s.renderer, cub, part.hair));
         }
         p.loaded = true;
     }

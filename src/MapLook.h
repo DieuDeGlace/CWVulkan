@@ -24,6 +24,7 @@ namespace worldmap {
 struct VoxelModel {
     int sizeX = 0, sizeY = 0, sizeZ = 0;
     const uint8_t *rgb = nullptr;
+    bool hideAttachmentMarkers = false;
     bool inside(int i, int j, int k) const {
         return i >= 0 && j >= 0 && k >= 0 && i < sizeX && j < sizeY && k < sizeZ;
     }
