@@ -146,7 +146,7 @@ void refreshWorld() {
             world = L"Extracted world: " + std::to_wstring(ex.zoneCount()) + L" zones from seed " +
                     std::to_wstring(ex.seed()) + L" (" + dir.filename().wstring() + L").";
         else
-            world = L"No captured land found yet. \"Extract game data\" captures it (press F11 in the game when asked).";
+            world = L"No captured land found yet. \"Extract game data\" captures it.";
     }
     SetWindowTextW(control(WORLD_STATUS), world.c_str());
 }

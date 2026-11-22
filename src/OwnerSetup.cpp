@@ -201,7 +201,7 @@ Completeness assessRequired(const fs::path &game, SourceRequirements requirement
     add(Part::World, "Extracted land", requirements.capturedWorld,
         requirements.capturedWorld ? "CubeVulkan has no land to show."
                                    : "Not needed: CubeVulkan.ini builds the land itself ([World] Source).",
-        {"", "", true, false});
+        {"sweep.request", "", true, false});
     add(Part::SpriteList, "Model list", false, "Creatures and placed objects cannot be drawn.", {"", "", false, true});
     add(Part::SoundList, "Sound list", false, "Sound effects are silent (music still plays).",
         {"sounds.request", "Sound list:", false, false});
@@ -888,10 +888,10 @@ std::string ExtractionRun::instructions() const {
         out << "The extractor is writing the game's tables. The game may stop responding or show a black screen "
                "for a minute or two while this finishes; leave it running.\n";
         if (const Target *sweep = sweepPending()) {
-            out << (sweepStopped_ ? "\nThe sweep was stopped (F11 was pressed again). Press F11 once to start it again.\n"
-                                  : "\nPress F11 once to sweep the land around your character. It is moved from place to "
-                                    "place and held there at full health; this takes several minutes. Do not press F11 "
-                                    "again until this window says the sweep is done.\n");
+            out << (sweepStopped_ ? "\nThe land sweep was stopped (F11 was pressed). Press F11 once to start it again.\n"
+                                  : "\nThe extractor sweeps the land around your character by itself: it is moved from "
+                                    "place to place and held there at full health, which takes several minutes. Leave "
+                                    "the game alone until this box says the sweep is done.\n");
             if (!sweep->progress.empty())
                 out << "Sweep: " << sweep->progress << ".\n";
         }
@@ -1180,7 +1180,7 @@ int headless(const std::vector<std::wstring> &args, const fs::path &setupRoot, s
         << "  5. Open Cube World from this folder with Steam running. In the game: Start Game, pick or create any character.\n";
     for (const auto &t : targets)
         if (t.collect.sweepKey)
-            out << "     Then press F11 once for the sweep around home, and wait until it is done.\n";
+            out << "     The land sweep around home then starts by itself; wait until it is done.\n";
     out << "  6. Quit the game; Mods, dxgi.dll and Save are put back exactly.\n  Collects:";
     for (const auto &t : targets)
         out << " " << t.name << ";";

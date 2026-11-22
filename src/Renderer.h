@@ -62,16 +62,20 @@ struct RenderSettings {
     // is World's (VegetationWind.h) and always on.
     bool wind = false;
     bool animatedClouds = false; // [Motion] AnimatedClouds
+    // [Render] AlphaCloudFade (on by default at the owner's request; not Alpha's, whose clouds are
+    // always opaque): the Alpha look's clouds fade near the camera as Steam's do (sky-and-clouds.md
+    // §B.7 step 6), so a cloud the camera is in or near is see-through instead of an outer shell.
+    bool alphaCloudFade = true;
     float leafAmplitude = .16f, windSpeed = 1, leafRange = 96;
     // [Graphics]
     float fov = 60, fogDistance = 400, sceneryDistance = 110;
-    // [AntiAliasing]: TAA as the user's Steam TemporalAA mod (its Mods/TemporalAA.ini is
-    // imported), then SMAA Ultra as CWSMTAA. Defaults give the softer Omega-style edges. Both
-    // are CubeVulkan's (the games only multisample, docs/specs/shadows.md §3). 85 % history and
-    // a half-pixel jitter keep the whole picture from wobbling with the jitter (shadows.md §5);
-    // edges keep at least 80 % rather than the mod's 90 %, so moving creatures trail less.
+    // [AntiAliasing]: TAA as the user's later Infinite Cubes Vulkan work tuned it (2026-11-22, at
+    // the owner's request, replacing the earlier 85/80/12/50 % tuning), then SMAA Ultra as
+    // CWSMTAA. Both are CubeVulkan's (the games only multisample, docs/specs/shadows.md §3).
+    // 72 % history (86 % at edges) that rises to 94 % for still pixels, a 0.6-pixel jitter applied
+    // only while the camera is settled, and an 8 % resolve blur.
     bool taa = true, smaa = true;
-    float historyWeight = .85f, edgeHistoryWeight = .80f, resolveBlur = .12f, jitterScale = .5f;
+    float historyWeight = .72f, edgeHistoryWeight = .86f, resolveBlur = .08f, jitterScale = .6f;
     void read(const Config &config);
 };
 
@@ -450,7 +454,8 @@ class Renderer {
                sceneryMirroredFadePipeline = VK_NULL_HANDLE;
     VkPipeline alphaSceneryPipeline = VK_NULL_HANDLE, alphaMirroredSceneryPipeline = VK_NULL_HANDLE;
     VkPipeline alphaScenePipeline = VK_NULL_HANDLE, alphaMirroredPipeline = VK_NULL_HANDLE, alphaWaterPipeline = VK_NULL_HANDLE,
-               alphaSkyPipeline = VK_NULL_HANDLE, alphaSpritePipeline = VK_NULL_HANDLE, alphaCloudPipeline = VK_NULL_HANDLE;
+               alphaSkyPipeline = VK_NULL_HANDLE, alphaSpritePipeline = VK_NULL_HANDLE, alphaCloudPipeline = VK_NULL_HANDLE,
+               alphaCloudFadedPipeline = VK_NULL_HANDLE;
     // The Steam look's clouds (blended, they fade near the camera) and star cubes.
     VkPipeline steamCloudPipeline = VK_NULL_HANDLE, steamStarPipeline = VK_NULL_HANDLE;
     Buffer starBuffer; // the 3000 stars (position on the sky sphere, size)

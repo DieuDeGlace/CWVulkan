@@ -193,7 +193,7 @@ void completenessRules() {
         sweeps += t.collect.sweepKey;
         SETUP_CHECK(t.part != Part::GameFiles);
     }
-    SETUP_CHECK(requests == 4 && sweeps == 1);
+    SETUP_CHECK(requests == 5 && sweeps == 1); // the land is asked for by sweep.request, no key needed
 
     // Damaged game files are needed and cannot be extracted.
     fs::remove(game / "resource2.dat");
@@ -544,7 +544,8 @@ void extractionRun() {
     append(log, "ZoneExtractor loaded\nSession: seed 7, 0 zones already extracted, folder Extract\\seed_7\n");
     run.poll();
     SETUP_CHECK(run.phase() == ExtractionRun::Phase::Collecting);
-    SETUP_CHECK(run.instructions().find("F11") != std::string::npos);
+    SETUP_CHECK(run.instructions().find("sweeps the land around your character by itself") != std::string::npos);
+    SETUP_CHECK(fs::exists(game / "Extract" / "sweep.request"));
 
     // The extractor answers the requests and writes the automatic lists.
     write(extract / "sprites.txt", "0 sprites/a.cub 1 1 1\n");

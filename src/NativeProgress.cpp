@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <cwctype>
 #include <cstdio>
 #include <cstring>
@@ -740,6 +741,15 @@ bool initializeProfileCharacters(const fs::path &base, const fs::path &importFro
 }
 } // namespace
 
+std::string profileFolderName(const std::string &profile) {
+    uint64_t hash = 1469598103934665603ull;
+    for (unsigned char c : profile)
+        hash = (hash ^ c) * 1099511628211ull;
+    char name[24];
+    std::snprintf(name, sizeof name, "p-%016llx", (unsigned long long)hash);
+    return name;
+}
+
 bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const fs::path &importFrom, bool writable,
                         const std::function<void(const std::string &)> &log, const std::string &profile) {
     std::error_code ec;
@@ -761,7 +771,20 @@ bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const 
         log("Saves: invalid terrain profile identity");
         return false;
     }
-    const auto target = profile.empty() ? folder : folder / profile;
+    auto target = profile.empty() ? folder : folder / profileFolderName(profile);
+    // A profile saved before short folder names lives in a folder named after its identity: it is
+    // renamed (or, when that fails or nothing may be written, used where it is).
+    if (!profile.empty() && !fs::exists(target, ec) && fs::is_directory(folder / profile, ec)) {
+        if (writable) {
+            fs::rename(folder / profile, target, ec);
+            if (ec) {
+                log("Saves: kept the profile folder " + profile + " (" + ec.message() + ")");
+                target = folder / profile;
+            } else
+                log("Saves: renamed the profile folder " + profile + " to " + profileFolderName(profile));
+        } else
+            target = folder / profile;
+    }
     folder_ = target;
     std::string why;
     if (!writable) {
@@ -775,6 +798,11 @@ bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const 
         return store_->openReadOnly(target / "characters.db", &why);
     }
     fs::create_directories(target, ec);
+    if (!profile.empty() && !fs::exists(target / "profile.txt", ec))
+        if (std::FILE *f = _wfopen((target / "profile.txt").c_str(), L"wb")) {
+            std::fputs((profile + "\n").c_str(), f);
+            std::fclose(f);
+        }
     if (!profile.empty()) {
         if (!initializeProfileCharacters(folder, importFrom, target, why)) {
             log("Saves: " + why);

@@ -590,7 +590,8 @@ void terrainProfiles() {
     {
         nativeprogress::ProgressFile profile;
         SAVE_CHECK(profile.open(base, game, {}, true, log, "alpha-profile-a"));
-        SAVE_CHECK(profile.folder() == base / "alpha-profile-a");
+        SAVE_CHECK(profile.folder() == base / nativeprogress::profileFolderName("alpha-profile-a"));
+        SAVE_CHECK(profile.folder().filename().native().size() == 18);
         SAVE_CHECK(profile.world().dead.empty() && profile.world().day != 99);
         Character copied;
         SAVE_CHECK(profile.store().load(0, copied));
@@ -631,18 +632,20 @@ void terrainProfiles() {
     }
 }
 
-// An actual Windows regression: the final database fits under MAX_PATH,
-// but a verbose temporary filename plus SQLite's journal suffix did not.
+// Actual Windows regressions: a verbose temporary filename plus SQLite's journal suffix passed
+// MAX_PATH, and then (2026-11-22, a packaged copy in a deep folder) the profile folder itself did:
+// Save\<85-character identity>\characters.db reached 275 characters. The short folder name fits.
 void longProfileImportPath() {
     const auto root=scratchFolder("profile-import-path");
-    const std::string identity="alpha-v2-compose-v3-seed-1570745101-steam-seed-0-scale-bits-4607182418800017408";
+    const std::string identity="steam-alpha-relief-v1-seed-123-landscape-1570745101-scale-bits-4607182418800017408";
     const size_t suffix=(fs::path(identity)/"characters.db").native().size()+1;
-    const size_t baseLength=230-suffix;
+    const size_t baseLength=275-suffix;
     SAVE_CHECK(root.native().size()+1<baseLength);
     if (root.native().size()+1>=baseLength) return;
     const auto base=root/std::string(baseLength-root.native().size()-1,'x');
     fs::create_directories(base);
-    SAVE_CHECK((base/identity/"characters.db").native().size()==230);
+    SAVE_CHECK((base/identity/"characters.db").native().size()==275); // what the long folder name needed
+    SAVE_CHECK((base/nativeprogress::profileFolderName(identity)/"characters.db").native().size()<240);
     const auto character=testCharacter();
     {
         CharacterStore store;
@@ -652,7 +655,7 @@ void longProfileImportPath() {
     {
         nativeprogress::ProgressFile profile;
         const bool opened=profile.open(base,root/"game",{},true,[](const auto &){},identity);
-        SAVE_CHECK(opened);
+        SAVE_CHECK(opened && profile.folder()==base/nativeprogress::profileFolderName(identity));
         if (opened) {
             Character imported;
             SAVE_CHECK(profile.store().load(0,imported));
@@ -664,6 +667,34 @@ void longProfileImportPath() {
     Character unchanged;
     SAVE_CHECK(original.openReadOnly(base/"characters.db") && original.load(0,unchanged));
     SAVE_CHECK(writeCharacter(unchanged)==writeCharacter(character));
+    std::ifstream note(base/nativeprogress::profileFolderName(identity)/"profile.txt");
+    std::string written;
+    SAVE_CHECK(std::getline(note,written) && written==identity);
+}
+
+// A profile saved before short folder names is moved to its short folder, keeping its saves.
+void legacyProfileFolder() {
+    const auto base=scratchFolder("profile-legacy-folder")/"Save";
+    const std::string identity="alpha-profile-legacy";
+    fs::create_directories(base/identity);
+    const auto character=testCharacter();
+    {
+        CharacterStore store;
+        SAVE_CHECK(store.open(base/identity/"characters.db") && store.create(character)==0);
+    }
+    WorldState old;
+    old.dead.insert(456);
+    SAVE_CHECK(writeWorldFile(base/identity/"world.db",old));
+    {
+        nativeprogress::ProgressFile readOnly; // nothing is moved without writing
+        SAVE_CHECK(readOnly.open(base,base.parent_path()/"game",{},false,[](const auto &){},identity));
+        SAVE_CHECK(readOnly.folder()==base/identity && fs::exists(base/identity));
+    }
+    nativeprogress::ProgressFile profile;
+    SAVE_CHECK(profile.open(base,base.parent_path()/"game",{},true,[](const auto &){},identity));
+    SAVE_CHECK(profile.folder()==base/nativeprogress::profileFolderName(identity) && !fs::exists(base/identity));
+    Character moved;
+    SAVE_CHECK(profile.store().load(0,moved) && moved.name==character.name && profile.world().dead.count(456));
 }
 
 void generatedObjectMetadata() {
@@ -795,6 +826,7 @@ int saveFormatTests() {
     generatedObjectMetadata();
     terrainProfiles();
     longProfileImportPath();
+    legacyProfileFolder();
     return failures;
 }
 

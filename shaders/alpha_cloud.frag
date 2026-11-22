@@ -14,5 +14,8 @@ layout(location = 0) out vec4 outColor;
 void main() {
     float f5 = pow(saturate(vFog.z), 5);
     float g = 1 - (1 - f5) * (1 - f5);
-    outColor = vec4(mix(vLit.rgb, alphaSkyAt(vFog.y), g), 1);
+    // params.w: 0 opaque; -1 the depth-only draw of a faded cloud; else its near-fade opacity
+    // ([Render] AlphaCloudFade, drawn blended after the world).
+    float opacity = pc.params.w == 0 ? 1 : clamp(pc.params.w, 0, 1);
+    outColor = vec4(mix(vLit.rgb, alphaSkyAt(vFog.y), g), opacity);
 }

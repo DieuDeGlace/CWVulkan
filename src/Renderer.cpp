@@ -153,6 +153,7 @@ void RenderSettings::read(const Config &c) {
     resolveBlur = (float)c.number("AntiAliasing", "BlurPercent", resolveBlur * 100, 0, 50) / 100;
     jitterScale = (float)c.number("AntiAliasing", "JitterPercent", jitterScale * 100, 0, 100) / 100;
     bouncedSunlight = c.flag("Render", "BouncedSunlight", bouncedSunlight);
+    alphaCloudFade = c.flag("Render", "AlphaCloudFade", alphaCloudFade);
     shadows = c.flag("Shadows", "Enabled", shadows);
     sunShadowStrength = (float)c.number("Shadows", "StrengthPercent", sunShadowStrength * 100, 0, 100) / 100;
     resolution = (uint32_t)c.number("Shadows", "Resolution", resolution, 512, 8192);
@@ -570,6 +571,8 @@ bool Renderer::createPipelines(std::string &error) {
         // blended so they can fade near the camera, writing depth so the faded ones can be laid
         // down first at no opacity; Steam's star cubes, blended over the sky behind the world.
         {alphaV, alphaCloudF, true, true, false, true, false, VK_COMPARE_OP_LESS, &alphaCloudPipeline},
+        // The Alpha look's faded clouds ([Render] AlphaCloudFade): blended after the world like Steam's.
+        {alphaV, alphaCloudF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &alphaCloudFadedPipeline},
         {sceneV, steamCloudF, true, true, true, true, false, VK_COMPARE_OP_LESS_OR_EQUAL, &steamCloudPipeline},
         {sceneV, steamStarF, true, false, true, true, false, VK_COMPARE_OP_LESS, &steamStarPipeline},
     };
@@ -1227,7 +1230,11 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // TAA: eight-frame Halton sub-pixel jitter (the Steam mod's), content moved by
     // `jitter` pixels; the resolve samples back at the same offset.
     glm::vec2 jitter(0);
-    if (settings.taa) {
+    // Jitter only while the camera is settled (moved under 8 blocks since a frame with valid
+    // history), as the Infinite Cubes TAA does: a jump or cut gets a clean, unjittered frame.
+    const glm::mat4 unjitteredProj = proj;
+    const bool settled = historyValid && settings.taa == previousTaa && glm::length(camera.eye - previousEye) < 8;
+    if (settings.taa && settled) {
         auto halton = [](uint32_t i, uint32_t base) {
             float f = 1, r = 0;
             while (i) {
@@ -1430,7 +1437,9 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     if (settings.taa != previousTaa || glm::length(camera.eye - previousEye) > 8)
         historyValid = false;
     glm::mat4 clipToPrevious = previousClip * glm::inverse(u.viewProj);
-    u.invViewProj = glm::inverse(u.viewProj);
+    // The sky is rebuilt from the unjittered lens: the jitter is for edges, and the sky's sun,
+    // moon and stars would only shimmer with it.
+    u.invViewProj = glm::inverse(unjitteredProj * view);
     // Shadows follow the clock's light. In the Alpha look that is the sun by day and
     // CubeVulkan's moon by night, each fading out towards the horizon, and they take away only
     // that light's own term.
@@ -1866,8 +1875,14 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         if (clouds::alphaCloudsShown(player.moisture, player.fire))
             for (int i = -clouds::ALPHA_REACH; i <= clouds::ALPHA_REACH; i++)
                 for (int j = -clouds::ALPHA_REACH; j <= clouds::ALPHA_REACH; j++)
-                    if (const auto &c = cloudOfCell(centreX + i, centreY + j, true))
-                        cloudDraws.push_back({skyModels.cloud, cloudMatrix(*c, c->base), 1});
+                    if (const auto &c = cloudOfCell(centreX + i, centreY + j, true)) {
+                        // [Render] AlphaCloudFade: Steam's near fade by the distance to the cloud's base.
+                        const float opacity = settings.alphaCloudFade
+                                                  ? clouds::steamOpacity(float(glm::length(c->base - eyeGame)))
+                                                  : 1.f;
+                        if (opacity >= clouds::STEAM_HIDDEN_BELOW)
+                            cloudDraws.push_back({skyModels.cloud, cloudMatrix(*c, c->base), opacity});
+                    }
     } else if ((!alphaLook || movingClouds) && !menuSky && !(movingClouds && underwater) && skyModels.cloud && worldProbe.column) {
         // Stock clouds follow the installed terrain range. Moving clouds use their own horizon.
         // See docs/specs/steam-cloud-view-distance-fog-20261117.md.
@@ -1906,14 +1921,16 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
         }
     }
     // One sky model with its own look constants (see common.glsl's Push).
-    auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look, uint32_t flags = 0, float depthOffset = 0) {
+    // `alphaOpacity` (Alpha clouds only, params.w): 0 opaque, -1 depth only, else the opacity.
+    auto drawSkyModel = [&](uint32_t mesh, const glm::mat4 &model, glm::vec4 look, uint32_t flags = 0, float depthOffset = 0,
+                            float alphaOpacity = 0) {
         const GpuMesh &m = meshes[mesh];
         if (!m.indexCount)
             return;
         VkDeviceSize zero = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &m.buffer.buffer, &zero);
         vkCmdBindIndexBuffer(cmd, m.buffer.buffer, m.indexOffset, VK_INDEX_TYPE_UINT32);
-        PushConstants pc{model, glm::vec4(float(flags), 0, depthOffset, 0), look, glm::uvec4(0)};
+        PushConstants pc{model, glm::vec4(float(flags), 0, depthOffset, alphaOpacity), look, glm::uvec4(0)};
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         vkCmdDrawIndexed(cmd, m.indexCount, 1, 0, 0, 0);
         draws++;
@@ -2118,7 +2135,7 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     if (alphaLook && !cloudDraws.empty()) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaCloudPipeline);
         for (const CloudDraw &c : cloudDraws)
-            if (modelInView(c.mesh, c.model))
+            if (c.opacity >= 1 && modelInView(c.mesh, c.model))
                 drawSkyModel(c.mesh, c.model, glm::vec4(1, 0, movingClouds ? 1.f / movingFog : 0.f, 1));
     }
     // The sky fills what the world left empty (it is drawn at the far plane).
@@ -2214,6 +2231,17 @@ void Renderer::frame(const Camera &camera, const Lighting &lighting, glm::vec3 f
     // Steam's clouds after the world (§B.7): the opaque ones, then the faded ones laid down at no
     // opacity (only their depth counts) and drawn again over that with their opacity, so each
     // shows only its nearest surface. They inherit the frame fog reciprocal.
+    // The Alpha look's faded clouds ([Render] AlphaCloudFade) the same way: depth only, then blended.
+    if (alphaLook && std::any_of(cloudDraws.begin(), cloudDraws.end(), [](const CloudDraw &c) { return c.opacity < 1; })) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, alphaCloudFadedPipeline);
+        const glm::vec4 look(1, 0, movingClouds ? 1.f / movingFog : 0.f, 1);
+        for (const CloudDraw &c : cloudDraws)
+            if (c.opacity < 1 && modelInView(c.mesh, c.model))
+                drawSkyModel(c.mesh, c.model, look, 0, 0, -1);
+        for (const CloudDraw &c : cloudDraws)
+            if (c.opacity < 1 && modelInView(c.mesh, c.model))
+                drawSkyModel(c.mesh, c.model, look, 0, 0, c.opacity);
+    }
     if (!alphaLook && !cloudDraws.empty()) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, steamCloudPipeline);
         // Use WORLD vertex lighting with the draw's white material and no point lights.
@@ -2446,6 +2474,7 @@ void Renderer::shutdown() {
                    alphaSkyPipeline,
                    alphaSpritePipeline,
                    alphaCloudPipeline,
+                   alphaCloudFadedPipeline,
                    steamCloudPipeline,
                    steamStarPipeline,
                    beamPipeline,

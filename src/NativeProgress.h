@@ -87,6 +87,12 @@ int migrateOldSaves(nativesaves::CharacterStore &store, const std::filesystem::p
                     const std::vector<CharacterEntry> &recorded, const std::string &worldName, const Frame &frame,
                     const std::function<void(const std::string &)> &log, std::set<int64_t> *worldDead = nullptr);
 
+// The folder name of a terrain profile inside the Save folder: "p-" and 16 hex digits of a
+// 64-bit FNV-1a hash of the identity. The identity itself is long (about 85 characters) and,
+// added to a deep install path, passed Windows' 260-character path limit; it is kept in the
+// folder's profile.txt instead.
+std::string profileFolderName(const std::string &profile);
+
 // CubeVulkan's Save folder for a session: characters.db and world.db in the game's format.
 class ProgressFile {
   public:

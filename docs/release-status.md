@@ -1,5 +1,17 @@
 # Source review checkpoint — 2026-11-08
 
+## Play fixes: far start, save paths, clouds, TAA, automatic sweep - 2026-11-22
+
+The owner's first play found two failures. The Alpha look draws relative to the world's home,
+and a new character's far-away start spot (about 10^8 blocks out) is beyond float precision
+there, so the world tore apart and the driver crashed; new Alpha-world characters now start
+near home, as earlier Alpha worlds did. A save profile folder named after the 85-character world
+identity passed Windows' path limit in a deep folder; profile folders now have short names, and
+old ones are renamed. Also at the owner's request: the Alpha look's clouds fade near the camera
+as Steam's do; TAA follows the owner's later Infinite Cubes resolve (jitter only while the camera
+is settled, still pixels keep more history, the sky is not jittered); and the extraction's land
+sweep starts by itself instead of by F11.
+
 ## Simpler setup window - 2026-11-22
 
 At the owner's request the setup asks less of players. The separate wizard window and the

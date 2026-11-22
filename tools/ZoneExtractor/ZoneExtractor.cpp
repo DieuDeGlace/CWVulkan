@@ -58,7 +58,8 @@
 //
 // Keys: F11 starts/stops a sweep that visits a grid around the home position
 // (the character is held in place with full health while sweeping); F9 returns
-// home. Zones are also saved as you play normally.
+// home. Extract\sweep.request starts the same sweep without a key once a world is
+// loaded (the setup's extraction run writes it). Zones are also saved as you play normally.
 //
 // .cwz format (little endian):
 //   char[4] "CWZ1"; int32 zoneX, zoneY, regionType, reserved;
@@ -7946,15 +7947,25 @@ static void tick(cube::Game *g) {
 
     static bool f11 = false, f9 = false;
     bool down11 = extract::hotkeyDown(VK_F11), down9 = extract::hotkeyDown(VK_F9);
+    const auto startSweep = [&] {
+        sweeping = true;
+        buildStops();
+        stop = 0;
+        stopStarted = GetTickCount64();
+        log("Sweep started: " + std::to_string(stops.size()) + " stops");
+    };
     if (down11 && !f11) {
-        sweeping = !sweeping;
-        if (sweeping) {
-            buildStops();
-            stop = 0;
-            stopStarted = GetTickCount64();
-            log("Sweep started: " + std::to_string(stops.size()) + " stops");
-        } else
+        if (!sweeping)
+            startSweep();
+        else {
+            sweeping = false;
             log("Sweep stopped at stop " + std::to_string(stop));
+        }
+    }
+    // The setup's request: the same sweep, started without a key once in the world.
+    if (!sweeping && DeleteFileA("Extract\\sweep.request")) {
+        log("Sweep requested");
+        startSweep();
     }
     if ((down9 && !f9) || (sweeping && stop >= (int)stops.size())) {
         if (sweeping)
