@@ -1,5 +1,14 @@
 # Source review checkpoint — 2026-11-08
 
+## Lua script mods - 2026-11-22
+
+Mods can now be Lua scripts: a folder mods/<Name>/main.lua sees the same services as a code mod
+([design](modding-api.md)). Scripts are sandboxed (no file, OS or module access, text chunks only,
+an instruction budget per call); an error disables only that script. Lua 5.4.6 is built from the
+official source tarball pinned by SHA-256 (MIT licence, licenses/Lua-MIT.txt). The example
+examples/AquaticLua is the aquatic add-on as a script; a test requires the same creatures as the
+built-in rules, and an in-game run with it installed made schools by the sea.
+
 ## Mod API version 2 and default aquatic life - 2026-11-22
 
 The mod API (include/cubevulkan/ModApi.h) gains version 2: code mods can take part in the host

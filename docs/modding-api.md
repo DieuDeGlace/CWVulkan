@@ -73,6 +73,33 @@ Services on `CwvWorld`:
 | `map_pin(x, y, icon, label)` | a marker on the map and minimap for this frame; `icon` names a sprite in the mod's folder |
 | `chat(text)` | a chat line for the local player |
 
+## Lua scripts
+
+A folder `mods/<Name>/` holding `main.lua` is a script mod, loaded after the DLLs in alphabetical
+order. It sees the same services as a code mod:
+
+- `cwv.log(...)` (also `print`), `cwv.config(section, key, fallback)` (reads `mods/<Name>.ini`
+  first, then `CubeVulkan.ini`), `cwv.get_hour()`, `cwv.set_hour(h)`, `cwv.focus()` (x, y, z),
+  `cwv.version` (2).
+- Optional callbacks: `on_update(seconds)`, `on_key(key)` (return true to consume it),
+  `on_world_step(world, milliseconds)`, `on_shutdown()`.
+- During `on_world_step`, `world.seed` and `world.players()` (a list of `{x, y, z}`),
+  `world.zone_loaded(zx, zy)`, `world.block_type(x, y, z)` (type, loaded), `world.ground(x, y)`,
+  `world.biome(x, y)`, `world.spawn_creature(race, hostility, level, x, y, z)` (id, 0 on failure)
+  and `world.add_flags(id, flags)`.
+- An optional global `mod = { name = ..., version = ..., changes_world = true }`.
+
+Scripts are sandboxed. Only the base, table, string, math, utf8 and coroutine libraries are
+present; `io`, `os`, `package`, `debug`, `require`, `load`, `loadfile` and `dofile` are not, and
+precompiled bytecode is refused. Each call has an instruction budget (200 million). A script that
+raises an error or exceeds its budget is disabled and the reason is logged; the game carries on.
+A world-changing script's multiplayer identity is its name, version and a hash of its text.
+Lua 5.4.6 is built from the official source tarball, pinned by SHA-256 (MIT licence).
+
+`examples/AquaticLua/main.lua` is the aquatic add-on as a script. EngineTests' `aquatic` group runs
+it through the host in the same world as the built-in rules and the `AquaticMod` DLL and requires
+the same creatures; it also checks the sandbox and the instruction budget.
+
 ## Multiplayer
 
 World logic runs only on the host (`on_world_step` is never called on a guest's mirror world).
@@ -98,5 +125,5 @@ mod the same way, one checkpoint each, with the owner's approval.
 
 ## Out of scope for version 2
 
-Rendering hooks (shaders, post effects), new item types, new races or UI panels, scripting
+Rendering hooks (shaders, post effects), new item types, new races or UI panels, other scripting
 languages, and changing the original game's behaviour when no mod is installed.

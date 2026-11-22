@@ -2,10 +2,12 @@
 // Loads code mods (mods/*.dll exporting cwv_mod_load) and gives them the
 // CwvApi table from include/cubevulkan/ModApi.h.
 #include "Config.h"
+#include "LuaMods.h"
 #include <cubevulkan/ModApi.h>
 #include <glm/glm.hpp>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,6 +45,8 @@ class ModHost {
     std::vector<std::string> worldChangingMods() const;
     // Loads a single DLL (also used by tests); false when it is not a CubeVulkan mod or declines.
     bool loadOne(const std::filesystem::path &dll, ModContext &context);
+    // Loads a Lua script mod folder (mods/<Name>/main.lua; also used by tests).
+    bool loadScript(const std::filesystem::path &folder, ModContext &context);
     void update(double seconds);
     bool key(int key);
     void shutdown();
@@ -56,4 +60,5 @@ class ModHost {
         Config config; // mods/<Name>.ini
     };
     std::vector<Loaded> mods;
+    std::vector<std::unique_ptr<LuaScript>> scripts;
 };

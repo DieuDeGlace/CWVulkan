@@ -116,10 +116,13 @@ void ModHost::worldStep(const ModWorld &world, double milliseconds) {
             m.mod.on_world_step(&w, milliseconds);
         }
     stepWorld = nullptr;
+    for (auto &s : scripts)
+        s->worldStep(world, milliseconds);
 }
 
 bool ModHost::stepsWorld() const {
-    return std::any_of(mods.begin(), mods.end(), [](const Loaded &m) { return m.mod.on_world_step != nullptr; });
+    return std::any_of(mods.begin(), mods.end(), [](const Loaded &m) { return m.mod.on_world_step != nullptr; }) ||
+           std::any_of(scripts.begin(), scripts.end(), [](const auto &s) { return s->stepsWorld(); });
 }
 
 std::vector<std::string> ModHost::worldChangingMods() const {
@@ -127,6 +130,9 @@ std::vector<std::string> ModHost::worldChangingMods() const {
     for (auto &m : mods)
         if (m.mod.changes_world)
             list.push_back(m.name + " " + (m.mod.version ? m.mod.version : ""));
+    for (auto &s : scripts)
+        if (s->changesWorld())
+            list.push_back(s->identity());
     return list;
 }
 
@@ -142,6 +148,32 @@ void ModHost::load(const std::filesystem::path &dir, ModContext &context) {
     std::sort(dlls.begin(), dlls.end());
     for (auto &path : dlls)
         loadOne(path, context);
+    // Then Lua script mods: folders holding main.lua.
+    std::vector<std::filesystem::path> folders;
+    for (auto &e : std::filesystem::directory_iterator(dir, ec))
+        if (e.is_directory() && std::filesystem::is_regular_file(e.path() / "main.lua", ec))
+            folders.push_back(e.path());
+    std::sort(folders.begin(), folders.end());
+    for (auto &folder : folders)
+        loadScript(folder, context);
+}
+
+bool ModHost::loadScript(const std::filesystem::path &folder, ModContext &context) {
+    LuaScript::Host host;
+    host.log = context.log;
+    host.config = context.config;
+    host.hour = context.hour;
+    host.focus = context.focus ? &context.focus->x : nullptr;
+    auto script = std::make_unique<LuaScript>();
+    if (!script->load(folder, host)) {
+        if (context.log)
+            context.log("Lua mod " + utf8(folder.filename()) + ": not loaded");
+        return false;
+    }
+    if (context.log)
+        context.log("Lua mod loaded: " + script->name());
+    scripts.push_back(std::move(script));
+    return true;
 }
 
 bool ModHost::loadOne(const std::filesystem::path &path, ModContext &context) {
@@ -185,6 +217,8 @@ void ModHost::update(double seconds) {
             Scope scope(m.name, &m.config);
             m.mod.on_update(seconds);
         }
+    for (auto &s : scripts)
+        s->update(seconds);
 }
 
 bool ModHost::key(int key) {
@@ -194,10 +228,16 @@ bool ModHost::key(int key) {
             if (m.mod.on_key(key))
                 return true;
         }
+    for (auto &s : scripts)
+        if (s->key(key))
+            return true;
     return false;
 }
 
 void ModHost::shutdown() {
+    for (auto it = scripts.rbegin(); it != scripts.rend(); ++it)
+        (*it)->shutdown();
+    scripts.clear();
     for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
         if (it->mod.on_shutdown) {
             Scope scope(it->name, &it->config);
@@ -212,5 +252,7 @@ std::vector<std::string> ModHost::names() const {
     std::vector<std::string> n;
     for (auto &m : mods)
         n.push_back(m.name);
+    for (auto &s : scripts)
+        n.push_back(s->name());
     return n;
 }

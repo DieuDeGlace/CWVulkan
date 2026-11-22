@@ -25,6 +25,7 @@ The build fetches these pinned open-source dependencies. License copies below ar
 | [zlib](https://zlib.net) | 1.3.1 | `licenses/zlib-LICENSE.txt` (zlib License) |
 | [glslang](https://github.com/KhronosGroup/glslang) | 15.0.0 | `licenses/glslang-LICENSE.txt` (multiple notices) |
 | [FreeType](https://freetype.org) | 2.13.3 | `licenses/FreeType-LICENSE.txt`, `FreeType-FTL.txt`, `FreeType-GPLv2.txt`; this project uses the FreeType License option |
+| [Lua](https://www.lua.org) | 5.4.6 (official tarball, SHA-256 pinned) | `licenses/Lua-MIT.txt` (MIT); the mod scripting layer |
 | [SMAA](https://github.com/iryoku/smaa) | vendored files in `third_party/smaa` | `third_party/smaa/LICENSE.txt` (MIT); shader, area and search tables retain their notices |
 
 This software uses the FreeType Project (https://freetype.org). FreeType is copyright

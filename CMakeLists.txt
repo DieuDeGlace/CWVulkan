@@ -59,6 +59,10 @@ FetchContent_Declare(sqlite URL https://www.sqlite.org/2024/sqlite-amalgamation-
 FetchContent_Declare(zlib URL https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
                      URL_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
                      DOWNLOAD_EXTRACT_TIMESTAMP TRUE SOURCE_SUBDIR none)
+# Lua (MIT License): the sandboxed scripting layer for mods (src/LuaMods.cpp, docs/modding-api.md).
+FetchContent_Declare(lua URL https://www.lua.org/ftp/lua-5.4.6.tar.gz
+                     URL_HASH SHA256=7d5ea1b9cb6aa0b59ca3dde1c6adcb57ef83a1ba8e5432c0ecd06bf439b3ad88
+                     DOWNLOAD_EXTRACT_TIMESTAMP TRUE SOURCE_SUBDIR none)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -76,7 +80,7 @@ foreach(feature ZLIB BZIP2 PNG HARFBUZZ BROTLI)
     set(FT_DISABLE_${feature} ON CACHE BOOL "" FORCE)
 endforeach()
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(vulkan_headers volk glm miniaudio stb glfw glslang sqlite zlib)
+FetchContent_MakeAvailable(vulkan_headers volk glm miniaudio stb glfw glslang sqlite zlib lua)
 set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE) # (FreeType asks for an old CMake version)
 FetchContent_MakeAvailable(freetype)
 unset(CMAKE_WARN_DEPRECATED CACHE)
@@ -116,6 +120,15 @@ endforeach()
 if(MSVC)
     set_source_files_properties(${ZLIB_SOURCES} PROPERTIES COMPILE_OPTIONS /w) # (third-party code, built as it comes)
 endif()
+# Lua's library sources (its interpreter and compiler front ends lua.c/luac.c are not built).
+file(GLOB LUA_SOURCES ${lua_SOURCE_DIR}/src/*.c)
+list(REMOVE_ITEM LUA_SOURCES ${lua_SOURCE_DIR}/src/lua.c ${lua_SOURCE_DIR}/src/luac.c)
+add_library(lua STATIC ${LUA_SOURCES})
+target_include_directories(lua PUBLIC ${lua_SOURCE_DIR}/src)
+if(MSVC)
+    target_compile_options(lua PRIVATE /w) # (third-party code, built as it comes)
+endif()
+
 add_library(deps STATIC
     ${volk_SOURCE_DIR}/volk.c
     ${sqlite_SOURCE_DIR}/sqlite3.c
@@ -332,11 +345,12 @@ add_library(engine STATIC
     src/DrawnState.cpp
     src/LinkedPlacement.cpp
     src/Mods.cpp
+    src/LuaMods.cpp
     src/Config.cpp)
 add_dependencies(engine shaders)
 target_include_directories(engine PUBLIC src include ${SHADER_OUT})
 # glu32: Windows' GLU, whose polygon tessellator fills the interface's outline shapes as Plasma's does.
-target_link_libraries(engine PUBLIC deps glfw ws2_32 glu32 freetype winmm dinput8 dxguid)
+target_link_libraries(engine PUBLIC deps lua glfw ws2_32 glu32 freetype winmm dinput8 dxguid)
 target_sources(engine PRIVATE src/GamepadUi.cpp)
 target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)

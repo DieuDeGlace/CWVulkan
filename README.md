@@ -165,7 +165,8 @@ The [current checklist](docs/roadmap.md) tracks remaining work. In particular:
 The optional mod API is in `include/cubevulkan/ModApi.h` (version 2, see
 [docs/modding-api.md](docs/modding-api.md)). The examples `HelloMod` (models and the clock) and
 `AquaticMod` (world logic: the aquatic add-on as a mod) build into `build/examples` and only run if
-copied into the engine's `mods/` directory.
+copied into the engine's `mods/` directory. Lua script mods are folders `mods/<Name>/main.lua`;
+`examples/AquaticLua` is the same add-on as a sandboxed script.
 CubeModLoader game patches are separate from engine mods.
 
 ## Prepare source for GitHub review
