@@ -9,15 +9,9 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#ifdef _WIN32
 #include <Windows.h>
 #include <Xinput.h>
 #include <mmsystem.h>
-#else
-#include "AndroidWindow.h"
-#include <chrono>
-#include <thread>
-#endif
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -29,33 +23,6 @@ namespace {
 constexpr int KEYBOARD = 0, MOUSE = 1;
 constexpr int MOUSE_BUTTONS = 4;       // 0 left, 1 right, 2 middle, 3 the fourth
 
-#ifndef _WIN32
-// timeGetTime: milliseconds of a steady clock, wrapping as a 32-bit count.
-uint32_t timeGetTime() {
-    using namespace std::chrono;
-    return uint32_t(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
-}
-// Android's first game controller, already in XInput's layout (android/native/AndroidGlfw.cpp).
-GamepadButtons readGamepad() {
-    GamepadButtons pad;
-    const androidwindow::Gamepad p = androidwindow::gamepad();
-    if (!p.connected)
-        return pad;
-    static uint32_t previousPoll = timeGetTime();
-    const uint32_t now = timeGetTime();
-    pad.elapsedMs = (int32_t)(now - previousPoll);
-    previousPoll = now;
-    pad.connected = true;
-    auto has = [&](uint16_t mask) { return (p.buttons & mask) != 0; };
-    pad.dpadUp = has(0x0001), pad.dpadDown = has(0x0002), pad.dpadLeft = has(0x0004), pad.dpadRight = has(0x0008);
-    pad.start = has(0x0010), pad.back = has(0x0020), pad.leftThumb = has(0x0040), pad.rightThumb = has(0x0080);
-    pad.leftShoulder = has(0x0100), pad.rightShoulder = has(0x0200);
-    pad.a = has(0x1000), pad.b = has(0x2000), pad.x = has(0x4000), pad.y = has(0x8000);
-    pad.leftTrigger = p.leftTrigger, pad.rightTrigger = p.rightTrigger;
-    pad.leftX = p.leftX, pad.leftY = p.leftY, pad.rightX = p.rightX, pad.rightY = p.rightY;
-    return pad;
-}
-#else
 GamepadButtons readGamepad() {
     GamepadButtons pad;
     using GetState = DWORD(WINAPI *)(DWORD, XINPUT_STATE *);
@@ -88,7 +55,6 @@ GamepadButtons readGamepad() {
     pad.leftX = p.sThumbLX, pad.leftY = p.sThumbLY, pad.rightX = p.sThumbRX, pad.rightY = p.sThumbRY;
     return pad;
 }
-#endif
 
 } // namespace
 
@@ -219,14 +185,6 @@ void GamepadFrame::update(const GamepadButtons &pad, bool ui, bool mapMode, bool
 namespace framepacing {
 // steam-game-update-complete-phase-schedule-20261112 §2.3: the tick and the budget sleep are
 // each taken with the 1 ms timer resolution raised, then restored.
-#ifndef _WIN32
-// (a steady clock has millisecond resolution without raising a timer's)
-uint32_t entryTick() { return timeGetTime(); }
-void sleepBeforePresent(uint32_t entry, uint32_t budget) {
-    if (const uint32_t ms = gamemath::frameBudgetSleep(timeGetTime(), entry, budget))
-        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-}
-#else
 uint32_t entryTick() {
     timeBeginPeriod(1);
     const uint32_t tick = timeGetTime();
@@ -239,5 +197,4 @@ void sleepBeforePresent(uint32_t entry, uint32_t budget) {
         Sleep(ms);
     timeEndPeriod(1);
 }
-#endif
 } // namespace framepacing

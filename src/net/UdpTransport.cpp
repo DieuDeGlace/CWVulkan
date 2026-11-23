@@ -1,29 +1,7 @@
 #include "net/UdpTransport.h"
 
-#ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
-using SockLength = int;
-#else
-// POSIX sockets under Winsock's names.
-#include <arpa/inet.h>
-#include <cerrno>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-using SOCKET = int;
-using SockLength = socklen_t;
-using SocketFlag = int; // (FIONBIO's argument)
-#define u_long SocketFlag
-constexpr SOCKET INVALID_SOCKET = -1;
-constexpr int SOCKET_ERROR = -1;
-constexpr int WSAECONNRESET = ECONNREFUSED; // a departed peer's ICMP error
-static int closesocket(SOCKET s) { return close(s); }
-static int ioctlsocket(SOCKET s, int request, SocketFlag *value) { return ioctl(s, request, value); }
-static int WSAGetLastError() { return errno; }
-#endif
 
 #include <algorithm>
 #include <cstring>
@@ -68,15 +46,11 @@ Bytes datagram(const Header &h, const uint8_t *data, size_t size) {
 
 // Winsock is started once per process and left running.
 bool startWinsock() {
-#ifdef _WIN32
     static const bool started = [] {
         WSADATA data;
         return WSAStartup(MAKEWORD(2, 2), &data) == 0;
     }();
     return started;
-#else
-    return true;
-#endif
 }
 
 } // namespace
@@ -109,7 +83,7 @@ bool UdpTransport::open(uint16_t port, std::string &error, bool loopbackOnly) {
     }
     u_long nonBlocking = 1;
     ioctlsocket(s, FIONBIO, &nonBlocking);
-    SockLength length = sizeof a;
+    int length = sizeof a;
     getsockname(s, (sockaddr *)&a, &length);
     boundPort = ntohs(a.sin_port);
     socketHandle = (unsigned long long)s;
@@ -215,7 +189,7 @@ void UdpTransport::readSocket() {
     uint8_t buffer[65536];
     for (int n = 0; n < 4096; n++) {
         sockaddr_in a{};
-        SockLength length = sizeof a;
+        int length = sizeof a;
         const int got = recvfrom((SOCKET)socketHandle, (char *)buffer, sizeof buffer, 0, (sockaddr *)&a, &length);
         if (got == SOCKET_ERROR) {
             // A departed UDP peer can report an ICMP error on this shared socket.

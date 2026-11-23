@@ -4,19 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <deque>
-#ifdef _WIN32
 #include <windows.h>
-constexpr const char *MOD_LIBRARY = ".dll";
-#else
-#include <dlfcn.h>
-// A mod is a shared library there (dlopen in place of LoadLibrary).
-constexpr const char *MOD_LIBRARY = ".so";
-using HMODULE = void *;
-static HMODULE LoadLibraryW(const char *path) { return dlopen(path, RTLD_NOW | RTLD_LOCAL); }
-static void *GetProcAddress(HMODULE module, const char *name) { return dlsym(module, name); }
-static void FreeLibrary(HMODULE module) { dlclose(module); }
-static int GetLastError() { return 0; } // (dlerror's text is not a number)
-#endif
 
 namespace {
 ModContext *ctx = nullptr;
@@ -155,7 +143,7 @@ void ModHost::load(const std::filesystem::path &dir, ModContext &context) {
         return;
     std::vector<std::filesystem::path> dlls;
     for (auto &e : std::filesystem::directory_iterator(dir, ec))
-        if (e.is_regular_file() && e.path().extension() == MOD_LIBRARY)
+        if (e.is_regular_file() && e.path().extension() == ".dll")
             dlls.push_back(e.path());
     std::sort(dlls.begin(), dlls.end());
     for (auto &path : dlls)
@@ -191,7 +179,7 @@ bool ModHost::loadScript(const std::filesystem::path &folder, ModContext &contex
 bool ModHost::loadOne(const std::filesystem::path &path, ModContext &context) {
     ctx = &context;
     std::string stem = utf8(path.stem());
-    HMODULE module = LoadLibraryW(path.c_str());
+    HMODULE module = LoadLibraryW(path.wstring().c_str());
     if (!module) {
         context.log("Mod " + stem + ": cannot load DLL (error " + std::to_string(GetLastError()) + ")");
         return false;

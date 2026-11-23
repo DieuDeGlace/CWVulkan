@@ -99,26 +99,15 @@
 #include "World.h"
 #include "GameFixtures.h"
 #include <glm/gtc/matrix_transform.hpp>
-#ifdef _WIN32
 #include <windows.h> // before GLFW, which defines APIENTRY only when Windows has not
 #include <mmsystem.h>
-#endif
 #include <bit>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 #include <commctrl.h>
 #include <dbghelp.h>
-#else
-#include "AndroidWindow.h"
-#include <android/log.h>
-#include <chrono>
-static uint32_t timeGetTime() { // Windows' millisecond count, from a steady clock
-    return uint32_t(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-}
-#endif
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -141,13 +130,9 @@ void logLine(const std::string &line) {
     std::printf("%s\n", line.c_str());
 }
 fs::path exeDir() {
-#ifdef _WIN32
     wchar_t buffer[MAX_PATH];
     GetModuleFileNameW(nullptr, buffer, MAX_PATH);
     return fs::path(buffer).parent_path();
-#else
-    return androidwindow::filesDirectory(); // the app's own folder stands for the program's
-#endif
 }
 
 MenuInput input;
@@ -160,25 +145,6 @@ uintptr_t entityLifetimeRecord = 0; // Address-only comparison, never dereferenc
 
 // Keep actual window edges separate from GLFW's synthetic focus-loss releases.
 // Configured action polling still uses the GLFW state; GUI callbacks share one mask.
-#ifndef _WIN32
-// Android's window passes the same messages (android/native/AndroidGlfw.cpp).
-void interfaceMessage(const androidwindow::Message &m) {
-    using Message = MenuInput::InterfaceMessage;
-    using A = androidwindow::Message;
-    switch (m.kind) {
-    case A::KeyDown: input.rawKeyMessage(Message::KeyDown, uint16_t(m.value)); break;
-    case A::KeyUp: input.rawKeyMessage(Message::KeyUp, uint16_t(m.value)); break;
-    case A::Character: input.rawKeyMessage(Message::Character, uint16_t(m.value)); break;
-    case A::LeftDown: input.interfaceMessages.push_back(Message::LeftDown); break;
-    case A::LeftUp: input.interfaceMessages.push_back(Message::LeftUp); break;
-    case A::RightDown: input.interfaceMessages.push_back(Message::RightDown); break;
-    case A::RightUp: input.interfaceMessages.push_back(Message::RightUp); break;
-    case A::MiddleDown: input.interfaceMessages.push_back(Message::MiddleDown); break;
-    case A::MiddleUp: input.interfaceMessages.push_back(Message::MiddleUp); break;
-    case A::Wheel: input.wheelMessage(int16_t(m.value)); break;
-    }
-}
-#else
 LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR) {
     using Message = MenuInput::InterfaceMessage;
     switch (message) {
@@ -196,7 +162,6 @@ LRESULT CALLBACK interfaceWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPA
     }
     return DefSubclassProc(hwnd, message, wParam, lParam);
 }
-#endif
 
 cameramotion::FieldOfView cameraFieldOfView; // Native lens survives frontend/character/world transitions in this process.
 struct ChatInputEvent {
@@ -629,15 +594,8 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
 
     const auto fatal = [hiddenWindow](const std::string &message) {
         logLine("Fatal: " + message);
-#ifdef _WIN32
         if (!hiddenWindow)
             MessageBoxA(nullptr, message.c_str(), "CubeVulkan", MB_ICONERROR | MB_OK);
-#else
-        (void)hiddenWindow;
-        __android_log_write(ANDROID_LOG_ERROR, "CubeVulkan", message.c_str());
-        if (!hiddenWindow)
-            androidwindow::showError(message);
-#endif
     };
 
     // Settings: the existing Steam mods' INI files are read first (so their
@@ -646,12 +604,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     Config bootstrap;
     bootstrap.load(root / "CubeVulkan.ini");
     Assets assets;
-#ifdef _WIN32
     if (!assets.locate(bootstrap.text("Game", "Path"))) {
-#else
-    // Android: the owner's game folder is copied into the app's folder as "Cube World".
-    if (!assets.locate(bootstrap.text("Game", "Path", utf8(root / "Cube World")))) {
-#endif
         fatal("Steam Cube World was not found.\n\nSet [Game] Path=... in CubeVulkan.ini to the folder "
               "that contains cubeworld.exe.");
         return 1;
@@ -793,13 +746,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         glfwWindowHint(GLFW_REFRESH_RATE, windowMode.refresh);
     GLFWwindow *window = glfwCreateWindow(windowMode.width, windowMode.height, "CubeVulkan",
                                           windowMode.fullscreen ? glfwGetPrimaryMonitor() : nullptr, nullptr);
-#ifdef _WIN32
     if (!window || !SetWindowSubclass(glfwGetWin32Window(window), interfaceWindowProc, 1, 0)) {
-#else
-    if (window)
-        androidwindow::setMessageHook(interfaceMessage);
-    if (!window) {
-#endif
         if (window)
             glfwDestroyWindow(window);
         glfwTerminate();
@@ -5024,12 +4971,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             if (input.rawKeyboardSeen) {
                 if (event.kind==ChatInputEvent::Key && !event.repeat) {
                     const auto scan=glfwGetKeyScancode(event.value);
-#ifdef _WIN32
                     const uint8_t key=uint8_t(MapVirtualKeyW(UINT(scan),MAPVK_VSC_TO_VK));
-#else
-                    (void)scan;
-                    const uint8_t key=uint8_t(androidwindow::virtualKey(event.value));
-#endif
                     if (std::find(nativeChatConsumed.begin(),nativeChatConsumed.end(),key)!=nativeChatConsumed.end())
                         if (const auto found=std::find(pressed.begin(),pressed.end(),event.value);found!=pressed.end())
                             pressed.erase(found);
@@ -10111,7 +10053,7 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
         // The peer can start its handshake lease as soon as it receives Join.
         if (std::exchange(startupConnectionPending, false) && !glfwWindowShouldClose(window))
             connectAtStartup();
-        if (serverMode) std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        if (serverMode) Sleep(16);
         // The FPS limit (minTimeStep) already slept before present (paceFrame); a frame that
         // presented nothing (server mode, a lost swapchain) takes it here. CPU usage REDUCED:
         // what the game does differently is not specified (frontend-options.md §1.2);
@@ -10201,7 +10143,6 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
     return returnToTitle && !exitCode ? 2 : exitCode;
 }
 
-#ifdef _WIN32
 // A crash writes what failed and where (function names from CubeVulkan.pdb) to
 // CubeVulkan.log, so a report needs no debugger.
 static LONG WINAPI logCrash(EXCEPTION_POINTERS *info) {
@@ -10235,14 +10176,9 @@ static LONG WINAPI logCrash(EXCEPTION_POINTERS *info) {
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
-#endif
 
-#ifdef _WIN32
 int main(int argc, char **argv) {
     SetUnhandledExceptionFilter(logCrash);
-#else
-int cubevulkanMain(int argc, char **argv) { // (started by android/native/AndroidMain.cpp)
-#endif
     // This controller owner outlives individual world/menu sessions. No save or
     // transition clear is inferred from the bounded native collection contract.
     usecollection::Collection creatureCollection;

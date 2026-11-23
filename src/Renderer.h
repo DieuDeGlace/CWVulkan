@@ -571,13 +571,6 @@ class Renderer {
     bool createDevice(std::string &error);
     bool createSwapchain();
     void destroySwapchain();
-#ifdef __ANDROID__
-    // Android takes the window away whenever the app leaves the screen and gives a new one back:
-    // the surface and swapchain are made again for it.
-    void followWindow();
-    unsigned surfaceWindow = ~0u; // the window generation of the surface (~0: the first)
-    bool surfaceLost = false;
-#endif
     bool createPipelines(std::string &error);
     Buffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags flags);
     void destroyBuffer(Buffer &b);

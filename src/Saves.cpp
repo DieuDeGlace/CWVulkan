@@ -11,11 +11,7 @@
 #include <iomanip>
 #include <limits>
 #include <atomic>
-#ifdef _WIN32
 #include <windows.h>
-#else
-#include "PosixFile.h"
-#endif
 
 namespace fs = std::filesystem;
 
@@ -439,9 +435,6 @@ bool SaveGame::save(const fs::path &file) const {
     std::error_code ec;
     if (!file.parent_path().empty()) fs::create_directories(file.parent_path(), ec);
     if (ec) return false;
-#ifndef _WIN32
-    return posixfile::replace(file, bytes.data(), bytes.size());
-#else
     static std::atomic<unsigned> serial{0};
     fs::path temp = file;
     temp += L".tmp-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(serial++);
@@ -453,7 +446,6 @@ bool SaveGame::save(const fs::path &file) const {
     if (ok) ok = MoveFileExW(temp.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
     fs::remove(temp, ec); // only the newly created temporary save; old save stays intact on failure
     return ok;
-#endif
 }
 
 void SaveGame::takeGear(const Gear &gear) {

@@ -799,8 +799,10 @@ bool ProgressFile::open(const fs::path &folder, const fs::path &gameSave, const 
     }
     fs::create_directories(target, ec);
     if (!profile.empty() && !fs::exists(target / "profile.txt", ec))
-        if (std::ofstream f(target / "profile.txt", std::ios::binary); f)
-            f << profile << "\n";
+        if (std::FILE *f = _wfopen((target / "profile.txt").c_str(), L"wb")) {
+            std::fputs((profile + "\n").c_str(), f);
+            std::fclose(f);
+        }
     if (!profile.empty()) {
         if (!initializeProfileCharacters(folder, importFrom, target, why)) {
             log("Saves: " + why);

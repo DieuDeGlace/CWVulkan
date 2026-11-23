@@ -6,11 +6,7 @@
 #endif
 #include "StateStore.h"
 #include "TownRules.h"
-#ifdef _WIN32
 #include <Windows.h>
-#else
-#include "PosixFile.h"
-#endif
 #include <charconv>
 #include <cmath>
 #include <fstream>
@@ -100,9 +96,6 @@ void writeRecord(std::ostream &stream, const EventRecord &record) {
            << ' ' << record.difficultyLevel << '\n';
 }
 bool atomicWrite(const std::filesystem::path &path, const std::string &text, std::string *error) {
-#ifndef _WIN32
-    return posixfile::replace(path, text.data(), text.size()) || fail(error, "Cannot atomically replace event state file.");
-#else
     auto temporary = path;
     temporary += L".tmp-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
                  std::to_wstring(GetTickCount64());
@@ -123,7 +116,6 @@ bool atomicWrite(const std::filesystem::path &path, const std::string &text, std
         return fail(error, "Cannot atomically replace event state file.");
     }
     return true;
-#endif
 }
 } // namespace
 

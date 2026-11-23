@@ -15,12 +15,6 @@ foreach ($directory in @('src', 'include', 'shaders', 'tests', 'setup', 'example
     Get-ChildItem -LiteralPath (Join-Path $sourceRoot $directory) -File -Recurse |
         Where-Object { $_.Extension -in $extensions } | ForEach-Object { $files.Add($_) }
 }
-# The Android app: its Gradle project, Java shell, native glue and its own vector launcher art
-# (never Gradle's build folders or a local.properties).
-Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'android') -File -Recurse |
-    Where-Object { $_.FullName -notmatch '[\\/](build|\.gradle|\.cxx)[\\/]' -and
-                   ($_.Extension -in @('.cpp', '.h', '.java', '.gradle', '.xml', '.cmake', '.cmd', '.md') -or $_.Name -eq '.gitignore') } |
-    ForEach-Object { $files.Add($_) }
 Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'docs') -File -Recurse -Filter '*.md' |
     ForEach-Object { $files.Add($_) }
 Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'third_party/smaa') -File |

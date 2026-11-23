@@ -5,9 +5,7 @@
 #include <iterator>
 #include <set>
 #include <sstream>
-#ifdef _WIN32
 #include <windows.h>
-#endif
 
 static bool isGame(const fs::path &dir) {
     std::error_code ec;
@@ -68,9 +66,6 @@ std::vector<fs::path> Assets::parseLibraryFolders(const std::string &text) {
 
 std::vector<fs::path> Assets::steamLibraries() {
     std::vector<fs::path> roots;
-#ifndef _WIN32
-    return roots; // (no Steam client: the game folder comes from [Game] Path)
-#else
     wchar_t buffer[MAX_PATH]{};
     DWORD size = sizeof(buffer);
     if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", L"SteamPath", RRF_RT_REG_SZ,
@@ -95,7 +90,6 @@ std::vector<fs::path> Assets::steamLibraries() {
             unique.push_back(l);
     }
     return unique;
-#endif
 }
 
 bool Assets::locate(const std::string &configured) {

@@ -13,9 +13,7 @@
 #include <bit>
 #include <cmath>
 #include <cstring>
-#if defined(_M_X64) || defined(__SSE__)
 #include <xmmintrin.h>
-#endif
 
 namespace nativeupkeep {
 namespace {
@@ -162,17 +160,8 @@ template <class T> void put(uint8_t *record, size_t offset, T v) { std::memcpy(r
 
 // Float to integer toward zero as the processor does it: out of range gives the
 // "integer indefinite" value instead of undefined behaviour.
-#if defined(_M_X64) || defined(__SSE__)
 int32_t trunc32(float v) { return _mm_cvttss_si32(_mm_set_ss(v)); }
 int64_t trunc64(float v) { return _mm_cvttss_si64(_mm_set_ss(v)); }
-#else
-// CVTTSS2SI elsewhere: truncation, and the integer indefinite (the lowest value) for NaN or a
-// value out of range.
-int32_t trunc32(float v) { return v >= -2147483648.0f && v < 2147483648.0f ? int32_t(v) : INT32_MIN; }
-int64_t trunc64(float v) {
-    return v >= -9223372036854775808.0f && v < 9223372036854775808.0f ? int64_t(v) : INT64_MIN;
-}
-#endif
 
 int64_t blocksToUnits(float blocks) { return trunc64(blocks * UNITS_PER_BLOCK); }
 
