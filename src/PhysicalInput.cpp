@@ -189,7 +189,7 @@ void Devices::inactiveWait() { std::this_thread::sleep_for(std::chrono::millisec
 struct Devices::State {
     HWND window = nullptr;
     GLFWwindow *glfwWindow = nullptr;
-    HRESULT mouseCreation = 0;
+    HRESULT mouseCreation = 0, inputCreation = 0;
     double previousX = 0, previousY = 0;
     bool previousPoint = false;
     IDirectInput8W *input = nullptr;
@@ -209,19 +209,22 @@ bool Devices::open(GLFWwindow *window, std::string &error) {
     auto next = std::make_unique<State>();
     next->window = glfwGetWin32Window(window);
     next->glfwWindow = window;
+    // Outside the native valid graph (no DirectInput, or no keyboard device, as in some remote
+    // sessions and on a fresh Windows install without one): the keyboard reads as idle and the
+    // mouse uses the GLFW compatibility path, instead of the game not starting.
     const HRESULT created = DirectInput8Create(GetModuleHandleW(nullptr), 0x0800, IID_IDirectInput8W,
                                                reinterpret_cast<void **>(&next->input), nullptr);
     if (created != 0 || !next->input) {
-        error = "Could not initialize Windows physical input";
-        return false;
+        next->input = nullptr;
+        next->inputCreation = created ? created : HRESULT(-1);
+        state = std::move(next);
+        return true;
     }
     next->input->CreateDevice(GUID_SysKeyboard, &next->keyboard, nullptr);
-    if (!next->keyboard) { // Defined engine diagnostic outside the native valid graph.
-        error = "Windows did not supply a physical keyboard device";
-        return false;
+    if (next->keyboard) {
+        next->keyboard->SetDataFormat(&c_dfDIKeyboard);
+        next->keyboard->Acquire();
     }
-    next->keyboard->SetDataFormat(&c_dfDIKeyboard);
-    next->keyboard->Acquire();
     next->mouseCreation = next->input->CreateDevice(GUID_SysMouse, &next->mouse, nullptr);
     if (next->mouse) {
         next->mouse->SetDataFormat(&c_dfDIMouse);
@@ -240,14 +243,23 @@ void Devices::close() { state.reset(); }
 bool Devices::foreground() const { return state && GetForegroundWindow() == state->window; }
 std::string Devices::description() const {
     if (!state) return "not initialized";
-    if (state->mouse) return "Unicode DirectInput keyboard and mouse";
-    char message[128];
-    std::snprintf(message, sizeof message, "Unicode DirectInput keyboard; GLFW compatibility mouse (DirectInput creation 0x%08lX)",
+    char message[160];
+    if (!state->input) {
+        std::snprintf(message, sizeof message, "no DirectInput (0x%08lX): idle keyboard; GLFW compatibility mouse",
+                      static_cast<unsigned long>(state->inputCreation));
+        return message;
+    }
+    const char *keyboard = state->keyboard ? "Unicode DirectInput keyboard" : "no DirectInput keyboard (idle)";
+    if (state->mouse) return std::string(keyboard) + " and mouse";
+    std::snprintf(message, sizeof message, "%s; GLFW compatibility mouse (DirectInput creation 0x%08lX)", keyboard,
                   static_cast<unsigned long>(state->mouseCreation));
     return message;
 }
 void Devices::readKeyboard(Keyboard &output) {
-    if (state) state->keyboard->GetDeviceState(DWORD(output.size()), output.data());
+    if (state && state->keyboard)
+        state->keyboard->GetDeviceState(DWORD(output.size()), output.data());
+    else if (state)
+        std::fill(output.begin(), output.end(), uint8_t(0)); // no keyboard device: idle
 }
 void Devices::readMouse(Mouse &output) {
     static_assert(sizeof(DIMOUSESTATE) == 16);

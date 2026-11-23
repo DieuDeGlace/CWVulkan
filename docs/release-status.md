@@ -1,5 +1,11 @@
 # Source review checkpoint — 2026-11-08
 
+## Fresh-install start-up - 2026-11-23
+
+All CubeVulkan binaries link the C and C++ runtimes statically and import only DLLs that ship with
+Windows, so no Visual C++ Redistributable is needed. A machine where DirectInput cannot start or
+has no keyboard device now starts with an idle keyboard and the GLFW mouse instead of stopping.
+Engine-owned start-up robustness with no Steam behaviour of its own; no source contract was needed.
 ## Android port, first build - 2026-11-22
 
 The engine now builds for Android ARM64 as libcubevulkan.so inside a debug APK (android/). The
