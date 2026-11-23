@@ -2,8 +2,12 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#ifdef _WIN32
 #include <windows.h>
-#include <GL/glu.h> // Windows' GLU: the polygon tessellator Plasma fills outlines with
+#else
+#define CALLBACK // (the SGI tessellator's callbacks have the platform's own calling convention)
+#endif
+#include <GL/glu.h> // GLU: the polygon tessellator Plasma fills outlines with (Windows' glu32; Mesa's on Android)
 
 #include <algorithm>
 #include <array>

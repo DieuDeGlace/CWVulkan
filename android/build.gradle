@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application' version '8.10.1'
+}
+
+android {
+    namespace 'org.cubevulkan.app'
+    compileSdk 35
+    ndkVersion '30.0.16248370'
+
+    defaultConfig {
+        applicationId 'org.cubevulkan.app'
+        minSdk 33
+        targetSdk 35
+        versionCode 1
+        versionName '0.1'
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+        externalNativeBuild {
+            cmake {
+                // A cross build cannot run its own shader compiler: use the desktop build's
+                // (build\spirv_compile.exe; CUBEVULKAN_HOST_SPIRV_COMPILE names another).
+                def hostCompiler = System.getenv('CUBEVULKAN_HOST_SPIRV_COMPILE')
+                if (hostCompiler)
+                    arguments "-DCUBEVULKAN_HOST_SPIRV_COMPILE=${hostCompiler}"
+                targets 'CubeVulkan'
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            // World generation and meshing are too slow on a phone without optimization.
+            externalNativeBuild {
+                cmake {
+                    arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo'
+                }
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path file('../CMakeLists.txt')
+            version '3.31.6'
+            // Windows limits paths to 260 characters, which the fetched dependencies exceed below a
+            // long checkout path. CUBEVULKAN_ANDROID_BUILD moves the native build to a short folder.
+            def nativeBuildDirectory = System.getenv('CUBEVULKAN_ANDROID_BUILD')
+            if (nativeBuildDirectory)
+                buildStagingDirectory file(nativeBuildDirectory)
+        }
+    }
+    sourceSets {
+        main {
+            // CubeVulkan's own files, unpacked beside the game on first start (AndroidMain.cpp).
+            assets.srcDirs = ['../assets', '../config']
+        }
+    }
+}

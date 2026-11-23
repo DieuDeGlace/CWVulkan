@@ -8,6 +8,9 @@
 #include "worldgen/Generator.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#ifdef __ANDROID__
+#include "AndroidWindow.h"
+#endif
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <array>
@@ -412,8 +415,16 @@ bool Renderer::createSwapchain() {
     sci.imageArrayLayers = 1;
     canCapture = caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | (canCapture ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
+#ifdef __ANDROID__
+    // Android's compositor turns the image to the display, and reports that as a suboptimal
+    // swapchain every frame (no reason to remake it); its surfaces may offer only inherited alpha.
+    sci.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    sci.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
+                                                                                         : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+#else
     sci.preTransform = caps.currentTransform;
     sci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+#endif
     sci.presentMode = mode;
     sci.clipped = VK_TRUE;
     if (vkCreateSwapchainKHR(device, &sci, nullptr, &swapchain) != VK_SUCCESS)
@@ -439,6 +450,29 @@ bool Renderer::createSwapchain() {
     // creates them after the pipelines).
     return !postPool || createPostTargets();
 }
+
+#ifdef __ANDROID__
+void Renderer::followWindow() {
+    const unsigned shown = androidwindow::windowGeneration();
+    if (surfaceWindow == ~0u)
+        surfaceWindow = shown; // the window init made the surface for
+    if (surfaceWindow == shown && swapchain && !surfaceLost)
+        return;
+    surfaceLost = false;
+    vkDeviceWaitIdle(device);
+    destroySwapchain();
+    if (surface)
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+    surface = VK_NULL_HANDLE;
+    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS)
+        return; // (tried again next frame)
+    VkBool32 present = VK_FALSE;
+    vkGetPhysicalDeviceSurfaceSupportKHR(gpu, queueFamily, surface, &present);
+    surfaceWindow = shown;
+    if (present)
+        createSwapchain();
+}
+#endif
 
 void Renderer::destroySwapchain() {
     destroyPostTargets();
@@ -1295,8 +1329,19 @@ void Renderer::drawFrame(const Camera &camera, const Lighting &lighting, glm::ve
     }
 
     uint32_t imageIndex = 0;
+#ifdef __ANDROID__
+    followWindow();
+    if (!swapchain)
+        return;
+#endif
     VkResult acquire = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, fr.acquired,
                                              VK_NULL_HANDLE, &imageIndex);
+#ifdef __ANDROID__
+    if (acquire == VK_ERROR_SURFACE_LOST_KHR) {
+        surfaceLost = true; // made again next frame
+        return;
+    }
+#endif
     if (acquire == VK_ERROR_OUT_OF_DATE_KHR) {
         vkDeviceWaitIdle(device);
         destroySwapchain();
@@ -2517,6 +2562,10 @@ void Renderer::drawFrame(const Camera &camera, const Lighting &lighting, glm::ve
     present.pSwapchains = &swapchain;
     present.pImageIndices = &imageIndex;
     VkResult result = vkQueuePresentKHR(queue, &present);
+#ifdef __ANDROID__
+    if (result == VK_SUBOPTIMAL_KHR) // (the compositor's rotation, above)
+        result = VK_SUCCESS;
+#endif
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         vkDeviceWaitIdle(device);
         destroySwapchain();

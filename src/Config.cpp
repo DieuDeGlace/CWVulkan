@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <vector>
 
 static std::string lower(std::string s) {
     for (auto &c : s)
@@ -70,3 +71,51 @@ void Config::set(const std::string &section, const std::string &key, const std::
         c = (char)std::tolower((unsigned char)c);
     values[name] = value;
 }
+
+#ifndef _WIN32
+bool Config::write(const std::filesystem::path &file, const std::string &section, const std::string &key,
+                   const std::string &value) {
+    std::vector<std::string> lines;
+    {
+        std::ifstream in(file, std::ios::binary);
+        for (std::string line; std::getline(in, line);) {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            lines.push_back(line);
+        }
+    }
+    const std::string wantedSection = lower(section), wantedKey = lower(key);
+    bool inSection = false, done = false;
+    size_t sectionEnd = std::string::npos;
+    for (size_t i = 0; i < lines.size() && !done; i++) {
+        const std::string t = trim(lines[i]);
+        if (!t.empty() && t.front() == '[') {
+            if (inSection)
+                break;
+            inSection = lower(trim(t.substr(1, t.find(']') - 1))) == wantedSection;
+            if (inSection)
+                sectionEnd = i + 1;
+            continue;
+        }
+        if (!inSection)
+            continue;
+        const size_t eq = t.find('=');
+        if (eq != std::string::npos && lower(trim(t.substr(0, eq))) == wantedKey) {
+            lines[i] = key + "=" + value;
+            done = true;
+        } else if (!t.empty())
+            sectionEnd = i + 1;
+    }
+    if (!done) {
+        if (sectionEnd == std::string::npos) {
+            lines.push_back("[" + section + "]");
+            sectionEnd = lines.size();
+        }
+        lines.insert(lines.begin() + std::ptrdiff_t(sectionEnd), key + "=" + value);
+    }
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    for (const auto &line : lines)
+        out << line << "\r\n";
+    return bool(out);
+}
+#endif

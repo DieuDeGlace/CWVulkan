@@ -80,7 +80,13 @@ foreach(feature ZLIB BZIP2 PNG HARFBUZZ BROTLI)
     set(FT_DISABLE_${feature} ON CACHE BOOL "" FORCE)
 endforeach()
 set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(vulkan_headers volk glm miniaudio stb glfw glslang sqlite zlib lua)
+if(ANDROID)
+    # Android supplies the window itself (android/native: a GLFW subset over ANativeWindow), and
+    # the shaders are compiled by the host's spirv_compile, so neither GLFW nor glslang is built.
+    FetchContent_MakeAvailable(vulkan_headers volk glm miniaudio stb sqlite zlib lua)
+else()
+    FetchContent_MakeAvailable(vulkan_headers volk glm miniaudio stb glfw glslang sqlite zlib lua)
+endif()
 set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE) # (FreeType asks for an old CMake version)
 FetchContent_MakeAvailable(freetype)
 unset(CMAKE_WARN_DEPRECATED CACHE)
@@ -88,8 +94,19 @@ if(MSVC)
     target_compile_options(freetype PRIVATE /w) # (third-party code, built as it comes)
 endif()
 
-add_executable(spirv_compile tools/spirv_compile.cpp)
-target_link_libraries(spirv_compile PRIVATE glslang glslang-default-resource-limits)
+if(ANDROID)
+    # A cross build cannot run its own tools: use the spirv_compile of a desktop build.
+    set(CUBEVULKAN_HOST_SPIRV_COMPILE "${CMAKE_CURRENT_SOURCE_DIR}/build/spirv_compile${CMAKE_HOST_EXECUTABLE_SUFFIX}"
+        CACHE FILEPATH "spirv_compile built for the host (from a desktop build)")
+    if(NOT EXISTS "${CUBEVULKAN_HOST_SPIRV_COMPILE}")
+        message(FATAL_ERROR "Build the desktop spirv_compile first, or set CUBEVULKAN_HOST_SPIRV_COMPILE.")
+    endif()
+    add_executable(spirv_compile IMPORTED)
+    set_target_properties(spirv_compile PROPERTIES IMPORTED_LOCATION "${CUBEVULKAN_HOST_SPIRV_COMPILE}")
+else()
+    add_executable(spirv_compile tools/spirv_compile.cpp)
+    target_link_libraries(spirv_compile PRIVATE glslang glslang-default-resource-limits)
+endif()
 
 # Shaders: GLSL -> SPIR-V headers (uint32_t arrays) in the build tree.
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
@@ -350,7 +367,12 @@ add_library(engine STATIC
 add_dependencies(engine shaders)
 target_include_directories(engine PUBLIC src include ${SHADER_OUT})
 # glu32: Windows' GLU, whose polygon tessellator fills the interface's outline shapes as Plasma's does.
-target_link_libraries(engine PUBLIC deps lua glfw ws2_32 glu32 freetype winmm dinput8 dxguid)
+if(ANDROID)
+    include(android/native/AndroidDeps.cmake)
+    target_link_libraries(engine PUBLIC deps lua android_glfw glutess freetype android log aaudio)
+else()
+    target_link_libraries(engine PUBLIC deps lua glfw ws2_32 glu32 freetype winmm dinput8 dxguid)
+endif()
 target_sources(engine PRIVATE src/GamepadUi.cpp)
 target_sources(engine PRIVATE src/ObjectVisual.cpp)
 if(MSVC)
@@ -367,8 +389,13 @@ else()
         PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
+if(ANDROID)
+    # The Android app: the same main.cpp in a shared library that NativeActivity loads.
+    include(android/native/AndroidApp.cmake)
+else()
 add_executable(CubeVulkan src/main.cpp)
 target_link_libraries(CubeVulkan PRIVATE engine dbghelp comctl32)
+endif()
 if(MSVC)
     # The retained Session callback graph exceeds the ordinary COFF section limit.
     target_compile_options(CubeVulkan PRIVATE /bigobj)
@@ -437,9 +464,14 @@ target_sources(EngineTests PRIVATE
     tests/StoredWorldDiagnosticsTests.cpp)
 target_sources(EngineTests PRIVATE tests/PlasmaHitTests.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectVisualTests.cpp)
+if(ANDROID)
+    set_target_properties(EngineTests PROPERTIES EXCLUDE_FROM_ALL ON) # the tests run on the desktop
+else()
 add_test(NAME EngineTests COMMAND EngineTests)
+endif()
 
 # CubeVulkan's own art (assets/: the OverworldEvents quest sprites, MIT) next to the executable.
+if(NOT ANDROID) # (the Android app packs assets/ into the APK)
 add_custom_command(TARGET CubeVulkan POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:CubeVulkan>/assets)
 
@@ -448,6 +480,9 @@ if(NOT EXISTS ${CMAKE_BINARY_DIR}/CubeVulkan.ini)
     file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config/CubeVulkan.ini DESTINATION ${CMAKE_BINARY_DIR})
 endif()
 
+endif()
+
+if(NOT ANDROID)
 # Launcher / configuration tool (like OpenMW's launcher).
 add_executable(CubeVulkanSetup WIN32 setup/Setup.cpp setup/Wizard.cpp)
 target_link_libraries(CubeVulkanSetup PRIVATE engine comctl32 shell32 ole32)
@@ -465,6 +500,7 @@ endif()
 add_executable(HudExtract tools/HudExtract.cpp)
 target_include_directories(HudExtract PRIVATE ${stb_SOURCE_DIR})
 set_target_properties(HudExtract PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tools)
+endif()
 
 target_sources(engine PRIVATE src/LightBeam.cpp src/UseCreatureCollection.cpp src/NativeVehicle.cpp)
 target_sources(EngineTests PRIVATE tests/ObjectClockTests.cpp tests/WorldObjectTests.cpp tests/DeadCreatureTests.cpp tests/BlockMutationTests.cpp)

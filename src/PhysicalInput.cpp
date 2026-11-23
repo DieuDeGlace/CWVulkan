@@ -11,13 +11,20 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#define GLFW_INCLUDE_NONE
+#ifdef _WIN32
 #define DIRECTINPUT_VERSION 0x0800
 #include <Windows.h>
 #include <dinput.h>
-#define GLFW_INCLUDE_NONE
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
+#else
+#include "AndroidWindow.h"
+#include <GLFW/glfw3.h>
+#include <chrono>
+#include <thread>
+#endif
 
 namespace physicalinput {
 namespace {
@@ -138,6 +145,47 @@ glm::vec2 Poll::relativeMotion() const {
     return {float(xy[0]), float(xy[1])};
 }
 
+#ifndef _WIN32
+// Android: the keyboard state the window keeps (DirectInput's layout) and the GLFW
+// compatibility mouse the Windows build uses without a DirectInput mouse.
+struct Devices::State {
+    GLFWwindow *glfwWindow = nullptr;
+    double previousX = 0, previousY = 0;
+    bool previousPoint = false;
+};
+Devices::Devices() = default;
+Devices::~Devices() = default;
+bool Devices::open(GLFWwindow *window, std::string &) {
+    state = std::make_unique<State>();
+    state->glfwWindow = window;
+    return true;
+}
+void Devices::close() { state.reset(); }
+bool Devices::foreground() const { return state != nullptr; } // (the app's window is the screen)
+std::string Devices::description() const { return state ? "Android keyboard; GLFW compatibility mouse (touch)" : "not initialized"; }
+void Devices::readKeyboard(Keyboard &output) {
+    uint8_t keys[256];
+    androidwindow::readKeyboard(keys);
+    std::memcpy(output.data(), keys, std::min(output.size(), sizeof keys));
+}
+void Devices::readMouse(Mouse &output) {
+    if (!state) return;
+    double x, y;
+    glfwGetCursorPos(state->glfwWindow, &x, &y);
+    const int32_t motion[3] = {
+        state->previousPoint ? truncate(float(x - state->previousX)) : 0,
+        state->previousPoint ? truncate(float(y - state->previousY)) : 0,
+        0
+    };
+    std::memcpy(output.data(), motion, sizeof motion);
+    for (int button = 0; button < 4; ++button)
+        output[size_t(12 + button)] = glfwGetMouseButton(state->glfwWindow, button) == GLFW_PRESS ? 0x80 : 0;
+    state->previousX = x;
+    state->previousY = y;
+    state->previousPoint = true;
+}
+void Devices::inactiveWait() { std::this_thread::sleep_for(std::chrono::milliseconds(16)); }
+#else
 struct Devices::State {
     HWND window = nullptr;
     GLFWwindow *glfwWindow = nullptr;
@@ -223,4 +271,5 @@ void Devices::readMouse(Mouse &output) {
     state->previousPoint = true;
 }
 void Devices::inactiveWait() { Sleep(16); }
+#endif
 } // namespace physicalinput

@@ -31,7 +31,11 @@
 #include "worldgen/Looks.h"
 #include "worldgen/Regions.h"
 
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include "Config.h" // (Config::write in place of WritePrivateProfileString)
+#endif
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -1170,7 +1174,11 @@ void Session::applyOptions() {
         s.renderer->cutHistory();
         if (!req.readOnly) {
             const auto file = std::filesystem::absolute(s.root / "Menu.ini");
+#ifdef _WIN32
             if (!WritePrivateProfileStringW(L"Render", L"BouncedSunlight", options.bouncedSunlight ? L"1" : L"0", file.c_str()) && s.log)
+#else
+            if (!Config::write(file, "Render", "BouncedSunlight", options.bouncedSunlight ? "1" : "0") && s.log)
+#endif
                 s.log("Global Illumination changed for this session. Could not write " + file.string());
         }
     }

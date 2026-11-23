@@ -1,5 +1,15 @@
 # Clean-room process
 
+## Android port, first build - 2026-11-22
+
+The engine now builds for Android ARM64 as libcubevulkan.so inside a debug APK (android/). The
+same src/main.cpp runs on NativeActivity's thread over a GLFW-compatible layer for the Android
+window, touch, keyboard and game controller; Windows-only paths stay under _WIN32 with POSIX
+counterparts. The app shell (Gradle project, crash log, folder picker) is adapted from the
+user's own Infinite Cubes Android port: only files our commits added there were read, and no
+reconstruction or original source. It is engine-owned platform work with no Steam behaviour of
+its own; no source contract was needed. It has not yet run on a device.
+
 ## Alpha far frame (world re-homing for drawing) - 2026-11-22
 
 The Alpha look drew everything in floats relative to the world's home, which tear apart some

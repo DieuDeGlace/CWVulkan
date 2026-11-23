@@ -1,4 +1,5 @@
 #include "SteamSession.h"
+#ifdef _WIN32
 #include <windows.h>
 #include <algorithm>
 #include <array>
@@ -334,3 +335,32 @@ bool SteamSession::friendInThisGame(uint64_t id) const {
     if (!state->friendGame(state->friendsApi, id, game.data())) return false;
     return (game[0] & 0xffffffu) == state->applicationId(state->utils);
 }
+#else
+// No Steam client runs on Android: the game is single player, as CubeVulkan.exe --offline, and
+// the owner supplies the game folder themself. Cloud and networking are unavailable.
+struct SteamSession::State {};
+SteamSession::SteamSession() = default;
+SteamSession::~SteamSession() = default;
+bool SteamSession::start(const std::filesystem::path &, std::string &) { return true; }
+bool SteamSession::check(std::string &) const { return true; }
+void SteamSession::pump() {}
+bool SteamSession::launchOriginal(const std::filesystem::path &, std::string &error) {
+    error = "The original game does not run on this system.";
+    return false;
+}
+bool SteamSession::cloudReady() const { return false; }
+bool SteamSession::cloudWrite(const std::string &, const std::string &) const { return false; }
+bool SteamSession::cloudRead(const std::string &, std::string &) const { return false; }
+SteamSession::CloudRead SteamSession::cloudReadState(const std::string &, std::string &) const { return CloudRead::Unavailable; }
+bool SteamSession::cloudDelete(const std::string &) const { return false; }
+bool SteamSession::cloudQuota(unsigned long long &, unsigned long long &) const { return false; }
+bool SteamSession::networkReady() const { return false; }
+uint64_t SteamSession::steamId() const { return 0; }
+std::string SteamSession::personaName() const { return {}; }
+bool SteamSession::p2pSendOn(uint64_t, const void *, uint32_t, int, int) const { return false; }
+bool SteamSession::p2pReadOn(std::vector<uint8_t> &, uint64_t &, int) const { return false; }
+void SteamSession::acceptFriendSessions(bool) {}
+std::vector<uint64_t> SteamSession::friendIds() const { return {}; }
+std::string SteamSession::friendName(uint64_t) const { return {}; }
+bool SteamSession::friendInThisGame(uint64_t) const { return false; }
+#endif

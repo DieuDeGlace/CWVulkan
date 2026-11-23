@@ -18,6 +18,11 @@ class Config {
     bool flag(const std::string &section, const std::string &key, bool fallback) const;
     // Sets a value in memory (settings changed in the menu while playing).
     void set(const std::string &section, const std::string &key, const std::string &value);
+#ifndef _WIN32
+    // WritePrivateProfileString's update of one value in an INI file (systems without it).
+    static bool write(const std::filesystem::path &file, const std::string &section, const std::string &key,
+                      const std::string &value);
+#endif
 
   private:
     std::map<std::string, std::string> values; // "section.key" (lower case) -> value
