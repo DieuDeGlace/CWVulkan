@@ -452,6 +452,17 @@ bool Renderer::createSwapchain() {
 }
 
 #ifdef __ANDROID__
+void Renderer::releaseWindow() {
+    if (!device)
+        return;
+    vkDeviceWaitIdle(device);
+    destroySwapchain();
+    if (surface)
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+    surface = VK_NULL_HANDLE;
+    surfaceLost = true; // made again for the next window (followWindow)
+}
+
 void Renderer::followWindow() {
     const unsigned shown = androidwindow::windowGeneration();
     if (surfaceWindow == ~0u)
@@ -828,6 +839,9 @@ void Renderer::initHeadless(const RenderSettings &s) {
 
 bool Renderer::init(GLFWwindow *w, const RenderSettings &s, std::string &error) {
     window = w;
+#ifdef __ANDROID__
+    androidwindow::setWindowLost([](void *renderer) { static_cast<Renderer *>(renderer)->releaseWindow(); }, this);
+#endif
     settings = s;
     steamFog = {};
     mapPrepared = false;
@@ -2579,6 +2593,9 @@ bool Renderer::steamSphereVisible(const steampoints::Point &position, float radi
 }
 
 void Renderer::shutdown() {
+#ifdef __ANDROID__
+    androidwindow::setWindowLost(nullptr, nullptr);
+#endif
     sceneFrame.reset();
     scenePrepared = false;
     lastSceneTime = -1;

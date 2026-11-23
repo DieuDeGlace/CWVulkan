@@ -38,8 +38,11 @@ GLFWmonitor theMonitor;
 GLFWvidmode theMode{};
 bool windowCreated = false;
 bool resumed = false, focused = false;
+bool pausedToSave = false, runOnce = false;
 unsigned generation = 0;
 androidwindow::MessageHook messageHook = nullptr;
+void (*windowLostHook)(void *) = nullptr;
+void *windowLostContext = nullptr;
 uint8_t keyboard[256] = {};
 androidwindow::Gamepad pad;
 
@@ -451,13 +454,19 @@ void onCommand(android_app *app, int32_t command) {
         }
         break;
     case APP_CMD_TERM_WINDOW:
+        if (windowLostHook) // (the glue hands the window back once this returns)
+            windowLostHook(windowLostContext);
+        [[fallthrough]];
     case APP_CMD_LOST_FOCUS:
         releaseEverything();
         focused = command != APP_CMD_LOST_FOCUS && focused;
         break;
     case APP_CMD_GAINED_FOCUS: focused = true; break;
     case APP_CMD_RESUME: resumed = true; break;
-    case APP_CMD_PAUSE: resumed = false; break;
+    case APP_CMD_PAUSE:
+        resumed = false;
+        pausedToSave = runOnce = true;
+        break;
     case APP_CMD_DESTROY: theWindow.shouldClose = true; break;
     }
 }
@@ -469,7 +478,7 @@ void pump(bool wait) {
     if (!theApp)
         return;
     for (;;) {
-        const bool block = wait && !visible() && !theApp->destroyRequested;
+        const bool block = wait && !visible() && !theApp->destroyRequested && !runOnce;
         android_poll_source *source = nullptr;
         const int result = ALooper_pollOnce(block ? -1 : 0, nullptr, nullptr, reinterpret_cast<void **>(&source));
         if (source)
@@ -496,6 +505,11 @@ Gamepad gamepad() {
 }
 std::vector<TouchShape> touchShapes() { return touchcontrols::shapes(); }
 unsigned windowGeneration() { return generation; }
+bool takePaused() { return std::exchange(pausedToSave, false); }
+void setWindowLost(void (*hook)(void *), void *context) {
+    windowLostHook = hook;
+    windowLostContext = context;
+}
 int virtualKey(int glfwKey) { return virtualKeyOf(glfwKey); }
 android_app *app() { return theApp; }
 void attach(android_app *app) {
@@ -540,10 +554,25 @@ bool shownError = false;
 void showError(const std::string &message) { shownError = callWithText("showError", message) || shownError; }
 bool errorShown() { return shownError; }
 void requestGameFolder(const std::string &message) { callWithText("requestGameFolder", message); }
-bool takeImportFinished() {
+bool takeFolderAnswered() {
     return withActivity([](JNIEnv *env, jobject activity, jclass type) {
-        const jmethodID id = env->GetMethodID(type, "takeImportFinished", "()Z");
+        const jmethodID id = env->GetMethodID(type, "takeFolderAnswered", "()Z");
         return id && env->CallBooleanMethod(activity, id);
+    });
+}
+std::string chosenGameFolder() {
+    return withActivity([](JNIEnv *env, jobject activity, jclass type) {
+        const jmethodID id = env->GetMethodID(type, "gameFolder", "()Ljava/lang/String;");
+        const auto text = id ? static_cast<jstring>(env->CallObjectMethod(activity, id)) : nullptr;
+        std::string path;
+        if (text) {
+            if (const char *chars = env->GetStringUTFChars(text, nullptr)) {
+                path = chars;
+                env->ReleaseStringUTFChars(text, chars);
+            }
+            env->DeleteLocalRef(text);
+        }
+        return path;
     });
 }
 bool waitEvents(int milliseconds) {
@@ -553,6 +582,12 @@ bool waitEvents(int milliseconds) {
     if (ALooper_pollOnce(milliseconds, nullptr, nullptr, reinterpret_cast<void **>(&source)) >= 0 && source)
         source->process(theApp, source);
     return !theApp->destroyRequested;
+}
+
+void wantText(bool wanted) {
+    static bool shown = false;
+    if (wanted != shown)
+        showKeyboard(shown = wanted);
 }
 
 // The system keyboard, through the activity's InputMethodManager.
@@ -634,6 +669,7 @@ const GLFWvidmode *glfwGetVideoModes(GLFWmonitor *monitor, int *count) {
 }
 void glfwSetWindowMonitor(GLFWwindow *, GLFWmonitor *, int, int, int, int, int) {}
 void glfwPollEvents(void) {
+    runOnce = false; // (one pass of the game after a pause, then wait)
     // Release presses whose time has come, one per poll (see Touch).
     if (!touch.pending.empty()) {
         const auto next = touch.pending.front();

@@ -43,18 +43,28 @@ std::vector<TouchShape> touchShapes();
 // Whether a new ANativeWindow has replaced the one the surface was made for: Android takes the
 // window away whenever the app leaves the screen. Counts up with each new window.
 unsigned windowGeneration();
+// True once after Android pauses the app (it may end a paused app without notice): the game
+// saves then. The poll that sees the pause returns once more before waiting, for that save.
+bool takePaused();
+// Called on the game thread as Android takes the window away, before it is gone: whatever draws
+// to it must let go of it then (the renderer's surface and swapchain). Null clears it.
+void setWindowLost(void (*hook)(void *context), void *context);
 
 // The Windows virtual-key code of a GLFW key (MapVirtualKey's answer on Windows), or 0.
 int virtualKey(int glfwKey);
 
 // Shows or hides the system keyboard (for a focused text field).
 void showKeyboard(bool show);
+// Shows the system keyboard while text is wanted and hides it after (only on a change).
+void wantText(bool wanted);
 
 // The activity's dialogs (CubeVulkanActivity.java). showError's dialog closes the app.
 void showError(const std::string &message);
 bool errorShown();
 void requestGameFolder(const std::string &message);
-bool takeImportFinished();
+bool takeFolderAnswered();
+// The game folder the player chose, as a path (empty without one or without All files access).
+std::string chosenGameFolder();
 // Handles waiting events for up to milliseconds; false once Android ends the activity.
 bool waitEvents(int milliseconds);
 

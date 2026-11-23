@@ -4901,7 +4901,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             else { enter(); click(); }
         }
         if (hudReady) hud.updateMenuCaptions(gameControls); // Before the Game time sample and World work.
-        if (!workerCharacterSaving && std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60)) {
+#ifdef __ANDROID__
+        const bool appPaused = androidwindow::takePaused(); // saved at once: Android may end a paused app
+#else
+        constexpr bool appPaused = false;
+#endif
+        if (!workerCharacterSaving && (appPaused || std::chrono::steady_clock::now() - lastSave > std::chrono::seconds(60))) {
             saveProgress();
             lastSave = std::chrono::steady_clock::now();
         }
@@ -5348,6 +5353,9 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
             controlInput.panelShown = itemSelector.shown || (mapOpen && input.lastUsedPad);
             controlInput.ordinaryUi = nativeOrdinaryUi();
             controlInput.typing = chat.typing();
+#ifdef __ANDROID__
+            androidwindow::wantText(chat.typing() || hud.interfaceHasFocus()); // the system keyboard
+#endif
             controlInput.walk = gameInput.held(WALK);
             controlInput.lamp = gameInput.held(LAMP);
             controlInput.pet = gameInput.held(CALL_PET);

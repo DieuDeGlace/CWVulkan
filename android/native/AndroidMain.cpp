@@ -2,6 +2,7 @@
 // compiled as cubevulkanMain) in the app's own folder, with the window, input and folders of
 // AndroidGlfw.cpp.
 #include "AndroidWindow.h"
+#include "Config.h"
 
 #include <android/asset_manager.h>
 #include <android/log.h>
@@ -56,23 +57,37 @@ void android_main(android_app *app) {
     if (chdir(root.c_str()) != 0)
         __android_log_print(ANDROID_LOG_ERROR, "CubeVulkan", "Cannot enter %s", root.c_str());
     unpackAppFiles(app->activity->assetManager, root);
-    // The owner's game folder, copied in once through the system's folder picker.
-    const fs::path game = root / "Cube World";
-    const auto present = [&] { return fs::is_regular_file(game / "cubeworld.exe", ec) && fs::is_directory(game / "sprites", ec); };
+    // The owner's game folder, read where it is: the folder chosen in the picker, one pushed into
+    // the app's own folder over USB, or Documents/Cube World. CubeVulkan.ini's [Game] Path names it.
+    const auto isGame = [&](const fs::path &dir) {
+        return !dir.empty() && fs::is_regular_file(dir / "cubeworld.exe", ec) && fs::is_directory(dir / "sprites", ec);
+    };
+    const auto find = [&]() -> fs::path {
+        for (const fs::path dir : {fs::path(androidwindow::chosenGameFolder()), root / "Cube World",
+                                   fs::path("/storage/emulated/0/Documents/Cube World")})
+            if (isGame(dir))
+                return dir;
+        return {};
+    };
+    fs::path game = find();
     bool asked = false;
-    while (!present()) {
+    while (game.empty()) {
         if (!asked) {
             androidwindow::requestGameFolder(
-                "CubeVulkan plays from your own copy of Steam Cube World. Copy its folder (the one with "
-                "cubeworld.exe, sprites and Extract) to this phone, for example into Documents, then choose it here. "
-                "It is copied into the app once.");
+                "CubeVulkan plays from your own copy of Steam Cube World, prepared on Windows. Put its folder "
+                "(the one with cubeworld.exe, sprites and Extract) on this device, for example in Documents, "
+                "and choose it. It is read where it is; nothing is copied or changed.");
             asked = true;
         }
         if (!androidwindow::waitEvents(250))
             return;
-        if (androidwindow::takeImportFinished())
-            asked = false; // copied (checked above) or not: ask again if still missing
+        if (androidwindow::takeFolderAnswered()) {
+            game = find();
+            asked = false; // ask again if that was not a game folder
+        }
     }
+    if (!Config::write(root / "CubeVulkan.ini", "Game", "Path", game.string()))
+        __android_log_print(ANDROID_LOG_ERROR, "CubeVulkan", "Cannot record the game folder in CubeVulkan.ini");
     // No Steam client runs on Android: single player through the loopback, as --offline on Windows.
     std::vector<std::string> arguments{"cubevulkan", "--offline"};
     std::vector<char *> argv;

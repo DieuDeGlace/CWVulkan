@@ -9,7 +9,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.DocumentsContract;
+import android.provider.Settings;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -18,17 +20,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 // The game runs on NativeActivity's thread (libcubevulkan.so). This activity adds what Android
-// asks of an app around it: the one-time copy of the owner's game folder, messages, and the
-// report of a previous crash.
+// asks of an app around it: access to the owner's game folder where it is (read in place, never
+// copied), messages, and the report of a previous crash.
 public final class CubeVulkanActivity extends NativeActivity {
     private static final int PICK_GAME_FOLDER = 1;
     private static final String TITLE = "CubeVulkan";
+    private static final String GAME_FOLDER = "game_folder_path";
 
-    private final AtomicBoolean importRunning = new AtomicBoolean();
-    private final AtomicBoolean importFinished = new AtomicBoolean();
+    private final AtomicBoolean folderAnswered = new AtomicBoolean();
     private AlertDialog dialog;
     private String lastMessage = "";
-    private volatile String importError;
+    private String pendingMessage; // waiting for All files access to come back from Settings
 
     @Override
     protected void onCreate(Bundle state) {
@@ -40,6 +42,16 @@ public final class CubeVulkanActivity extends NativeActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        String waiting = pendingMessage;
+        if (waiting != null && Environment.isExternalStorageManager()) {
+            pendingMessage = null;
+            showChooser(waiting);
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         dismissDialog();
         super.onDestroy();
@@ -47,17 +59,27 @@ public final class CubeVulkanActivity extends NativeActivity {
 
     // --- Called from the native game thread ----------------------------------------------------
 
-    // The game folder is missing: explain and offer the folder picker.
-    public void requestGameFolder(String message) {
-        importFinished.set(false);
-        String failed = importError;
-        importError = null;
-        runOnUiThread(() -> showChooser(failed == null ? message : failed + "\n\n" + message));
+    // The chosen game folder as a file path, or null. Readable only with All files access.
+    public String gameFolder() {
+        if (!Environment.isExternalStorageManager())
+            return null;
+        return getPreferences(MODE_PRIVATE).getString(GAME_FOLDER, null);
     }
 
-    // True once a copy has ended (whether or not it succeeded); native code then checks the folder.
-    public boolean takeImportFinished() {
-        return importFinished.getAndSet(false);
+    // No usable game folder: explain, get All files access, then offer the folder picker.
+    public void requestGameFolder(String message) {
+        folderAnswered.set(false);
+        runOnUiThread(() -> {
+            if (Environment.isExternalStorageManager())
+                showChooser(message);
+            else
+                askForAccess(message);
+        });
+    }
+
+    // True once the player has answered the picker (chosen a folder or not).
+    public boolean takeFolderAnswered() {
+        return folderAnswered.getAndSet(false);
     }
 
     // An error that ends the game: shown until the player closes it, which closes the app.
@@ -77,6 +99,31 @@ public final class CubeVulkanActivity extends NativeActivity {
 
     // --- The game folder -----------------------------------------------------------------------
 
+    // The game reads its files with ordinary file access, as on Windows, which needs All files
+    // access on Android. Nothing is written to the game folder.
+    private void askForAccess(String message) {
+        if (isFinishing() || isDestroyed())
+            return;
+        dismissDialog();
+        lastMessage = message;
+        dialog = withCopyLog(new AlertDialog.Builder(this)
+                .setTitle("Your Cube World folder")
+                .setMessage(message + "\n\nCubeVulkan reads the game's files where they are. Allow it to read files "
+                        + "on the next screen (All files access), then come back.")
+                .setCancelable(false)
+                .setPositiveButton("Allow", (shown, which) -> {
+                    pendingMessage = message;
+                    Intent settings = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    try {
+                        startActivity(settings);
+                    } catch (ActivityNotFoundException error) {
+                        startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+                    }
+                })
+                .setNegativeButton("Close", (shown, which) -> finish()));
+    }
+
     private void showChooser(String message) {
         if (isFinishing() || isDestroyed())
             return;
@@ -91,7 +138,7 @@ public final class CubeVulkanActivity extends NativeActivity {
     }
 
     private void chooseFolder() {
-        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         picker.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
                 DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents"));
         try {
@@ -107,38 +154,27 @@ public final class CubeVulkanActivity extends NativeActivity {
         if (request != PICK_GAME_FOLDER)
             return;
         Uri folder = data == null ? null : data.getData();
-        if (result != RESULT_OK || folder == null || !DocumentsContract.isTreeUri(folder)) {
-            importFinished.set(true); // the native side asks again
-            return;
-        }
-        File files = getExternalFilesDir(null);
-        if (files == null || !importRunning.compareAndSet(false, true)) {
-            showError("The app's storage is not available.");
-            return;
-        }
-        showProgress("Copying the game folder...");
-        new Thread(() -> {
-            String outcome = GameFolderImport.copy(getContentResolver(), folder, files,
-                    progress -> runOnUiThread(() -> showProgress(progress)));
-            importError = outcome;
-            runOnUiThread(this::dismissDialog);
-            importRunning.set(false);
-            importFinished.set(true);
-        }, "CubeVulkan game folder copy").start();
+        String path = result == RESULT_OK && folder != null ? pathOf(folder) : null;
+        if (path != null)
+            getPreferences(MODE_PRIVATE).edit().putString(GAME_FOLDER, path).apply();
+        folderAnswered.set(true); // the native side checks the folder, and asks again if needed
+    }
+
+    // A folder of the device's storage as a file path: "primary:Documents/Cube World" is
+    // /storage/emulated/0/Documents/Cube World, and "1234-ABCD:Games" /storage/1234-ABCD/Games.
+    static String pathOf(Uri tree) {
+        if (!"com.android.externalstorage.documents".equals(tree.getAuthority()) || !DocumentsContract.isTreeUri(tree))
+            return null;
+        String id = DocumentsContract.getTreeDocumentId(tree);
+        int colon = id.indexOf(':');
+        if (colon < 0)
+            return null;
+        String volume = id.substring(0, colon), relative = id.substring(colon + 1);
+        File root = "primary".equalsIgnoreCase(volume) ? Environment.getExternalStorageDirectory() : new File("/storage", volume);
+        return relative.isEmpty() ? root.getPath() : new File(root, relative).getPath();
     }
 
     // --- Dialogs -------------------------------------------------------------------------------
-
-    private void showProgress(String message) {
-        if (isFinishing() || isDestroyed())
-            return;
-        lastMessage = message;
-        if (dialog != null && dialog.isShowing()) {
-            dialog.setMessage(message);
-            return;
-        }
-        dialog = new AlertDialog.Builder(this).setTitle(TITLE).setMessage(message).setCancelable(false).show();
-    }
 
     private void dismissDialog() {
         if (dialog != null) {

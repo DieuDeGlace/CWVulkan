@@ -54,4 +54,11 @@ android {
             assets.srcDirs = ['../assets', '../config']
         }
     }
+    // The owner's launcher icon (the Infinite Cubes one, made from Cube World art) stays on this
+    // machine: android/local-icon is not in git, and the plain cube is used without it.
+    def localIcon = file('local-icon')
+    if (localIcon.isDirectory()) {
+        sourceSets.debug.res.srcDirs += localIcon
+        sourceSets.release.res.srcDirs += localIcon
+    }
 }

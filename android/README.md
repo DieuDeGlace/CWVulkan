@@ -38,13 +38,15 @@ for checking that the engine still compiles for Android.
 
 The app uses your own Steam Cube World, prepared on Windows as for the desktop engine (the
 `Extract` folder from CubeVulkanSetup's extraction must be present). Copy the game folder to the
-phone, for example into Documents. On first start the app asks for it: tap **Choose folder** and
-pick the folder that contains `cubeworld.exe`, `sprites` and `Extract`. It is copied once into
-the app's own folder as `Android/data/org.cubevulkan.app/files/Cube World` (about 500 MB). The
-chosen folder is only read.
+device, for example into Documents. On first start the app asks for **All files access**, which
+lets the engine read the game's files where they are with ordinary file access, as on Windows,
+then for the folder: pick the one that contains `cubeworld.exe`, `sprites` and `Extract`.
+Nothing is copied, and nothing is written to that folder. `Documents/Cube World` is found
+without asking.
 
-The app keeps `CubeVulkan.ini`, `CubeVulkan.log`, `options.cfg`, `controls.cfg` and `Save/` in
-`Android/data/org.cubevulkan.app/files/`. Over USB, the game folder can also be pushed there:
+The app keeps `CubeVulkan.ini` (whose `[Game] Path` names the game folder), `CubeVulkan.log`,
+`options.cfg`, `controls.cfg` and `Save/` in `Android/data/org.cubevulkan.app/files/`. A game
+folder pushed there over USB as `Cube World` also works:
 
 ```
 adb push "Cube World" /sdcard/Android/data/org.cubevulkan.app/files/
@@ -52,6 +54,9 @@ adb push "Cube World" /sdcard/Android/data/org.cubevulkan.app/files/
 
 After a crash, start the app once more to write `log_crash.txt` in the same folder.
 
+Leaving the app saves the character at once (Android may end a paused app); the world is saved
+every minute as on Windows. The system keyboard opens while a text field or the chat has the
+focus.
 ## Playing
 
 In the world, on-screen controls appear (a CubeVulkan addition; Steam has no touch controls).

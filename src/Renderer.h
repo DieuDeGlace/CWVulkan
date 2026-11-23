@@ -575,6 +575,7 @@ class Renderer {
     // Android takes the window away whenever the app leaves the screen and gives a new one back:
     // the surface and swapchain are made again for it.
     void followWindow();
+    void releaseWindow(); // (Android's window-lost hook)
     unsigned surfaceWindow = ~0u; // the window generation of the surface (~0: the first)
     bool surfaceLost = false;
 #endif

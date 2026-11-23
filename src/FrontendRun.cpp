@@ -34,6 +34,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include "AndroidWindow.h"
 #include "Config.h" // (Config::write in place of WritePrivateProfileString)
 #endif
 #define GLFW_INCLUDE_NONE
@@ -1244,6 +1245,9 @@ void Session::routeMessages() {
 }
 
 void Session::readInput(bool poll, double frameMs) {
+#ifdef __ANDROID__
+    androidwindow::wantText(hud.interfaceHasFocus()); // the system keyboard for a focused text field
+#endif
     nativeBackPressed=false;
     nativeControlsHandled=false;
     if (poll)
