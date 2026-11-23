@@ -6,8 +6,7 @@ and storage through a small GLFW-compatible layer (`native/AndroidGlfw.cpp`), so
 input, key bindings and options read the same as on Windows. It is single player: no Steam
 client runs on Android, so it starts as `CubeVulkan.exe --offline` does.
 
-**Status: early port.** It builds and packages, but it has not yet run on a device. There are
-no on-screen movement or action buttons yet: play with a game controller or a keyboard.
+**Status: early port.** It builds and packages, but it has not yet run on a device.
 
 ## Requirements
 
@@ -55,9 +54,17 @@ After a crash, start the app once more to write `log_crash.txt` in the same fold
 
 ## Playing
 
-- In menus a finger is the mouse: it points, then clicks. A second finger holds the right button
-  (it drags the map).
-- While the game holds the cursor (the camera), dragging turns the camera.
+In the world, on-screen controls appear (a CubeVulkan addition; Steam has no touch controls).
+They work as a game controller does, so each does what that controller button does:
+
+- drag on the left half to move with the stick that appears under the finger;
+- drag anywhere else to turn the camera;
+- lower right: Attack, Special, Jump, Dodge, Use, Item, Skill (class skill) and Ultimate;
+- along the top right: Menu, Bag (inventory), Map, Lamp and Pet; top left: zoom in (+) and out (-).
+
+In menus a finger is the mouse: it points, then clicks. A second finger holds the right button
+(it drags the map).
+
 - A hardware keyboard works as on Windows, with the same bindings.
 - A game controller works as an Xbox controller does on Windows.
 - Back is Escape.

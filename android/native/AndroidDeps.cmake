@@ -23,6 +23,7 @@ FetchContent_MakeAvailable(glfw_headers glu)
 set(native_glue "${CMAKE_ANDROID_NDK}/sources/android/native_app_glue")
 add_library(android_glfw STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/android/native/AndroidGlfw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/android/native/TouchControls.cpp
     "${native_glue}/android_native_app_glue.c")
 target_include_directories(android_glfw PUBLIC "${glfw_headers_SOURCE_DIR}/include" "${native_glue}"
     ${CMAKE_CURRENT_SOURCE_DIR}/android/native)

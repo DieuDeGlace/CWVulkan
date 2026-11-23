@@ -9966,6 +9966,12 @@ static int runSession(int argc, char **argv, bool returningToMenu, Hud &hud, use
                 hudVertices.clear();
             if (menusReady)
                 menus.draw(hudVertices);
+#ifdef __ANDROID__
+            // The on-screen controls, over everything (kept when F4 hides the interface).
+            if (hud.hasInterface())
+                for (const auto &shape : androidwindow::touchShapes())
+                    hud.touchDisc(hudVertices, {shape.x, shape.y}, shape.radius, shape.face, shape.rim, shape.label);
+#endif
             if (menusReady && !menus.interfaceShown())
                 renderer.overlay(hudVertices);
             else {

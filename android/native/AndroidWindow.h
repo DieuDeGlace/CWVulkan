@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct android_app;
 
@@ -29,7 +30,15 @@ struct Gamepad {
     uint8_t leftTrigger = 0, rightTrigger = 0;
     int16_t leftX = 0, leftY = 0, rightX = 0, rightY = 0;
 };
-Gamepad gamepad();
+Gamepad gamepad(); // a connected controller and the on-screen controls together
+
+// The on-screen controls to draw this frame (TouchControls.cpp): discs in screen pixels with the
+// opacity of their face and rim, and a label (null for none).
+struct TouchShape {
+    float x, y, radius, face, rim;
+    const wchar_t *label;
+};
+std::vector<TouchShape> touchShapes();
 
 // Whether a new ANativeWindow has replaced the one the surface was made for: Android takes the
 // window away whenever the app leaves the screen. Counts up with each new window.

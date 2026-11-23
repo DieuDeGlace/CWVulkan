@@ -61,6 +61,11 @@ inline bool shown(const std::string &info, bool fullMapOpen) { return !info.empt
 class Hud {
   public:
     Hud() = default;
+#ifdef __ANDROID__
+    // The Android app's on-screen controls (android/native/TouchControls.cpp): a disc with a rim and,
+    // when given, a code-made label, in screen pixels. Face and rim are opacities (0..1).
+    void touchDisc(std::vector<OverlayVertex> &out, glm::vec2 centre, float radius, float face, float rim, const wchar_t *label) const;
+#endif
     struct ScreenItem; // (below: the items of the screens drawScreen draws)
     struct Plate {      // a monster's name and health over its head
         glm::vec2 at;   // screen position of the top of its head

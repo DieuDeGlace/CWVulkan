@@ -12,6 +12,7 @@
 #include "stb_truetype.h"
 #include <algorithm>
 #include <cmath>
+#include <cwchar>
 #include <cstring>
 #include <cstdio>
 #include <fstream>
@@ -311,6 +312,31 @@ void Hud::plasmaLabel(std::vector<OverlayVertex> &out, const std::wstring &text,
     s.strokeRadius = 0;
     plasmaText(out, s, m);
 }
+
+#ifdef __ANDROID__
+void Hud::touchDisc(std::vector<OverlayVertex> &out, glm::vec2 c, float radius, float face, float rim, const wchar_t *label) const {
+    constexpr int SEGMENTS = 32;
+    const float u = white.x + 2.f, v = white.y + 2.f;
+    const float band = std::max(2.0f, radius * 0.07f), inner = radius - band;
+    auto at = [&](int i, float r) {
+        const float angle = float(i) * 6.2831853f / SEGMENTS;
+        return glm::vec2(c.x + r * std::cos(angle), c.y + r * std::sin(angle));
+    };
+    for (int i = 0; i < SEGMENTS; i++) {
+        const glm::vec2 a = at(i, inner), b = at(i + 1, inner), ao = at(i, radius), bo = at(i + 1, radius);
+        const float fa = face * 255, ra = rim * 255;
+        out.insert(out.end(), {OverlayVertex{c.x, c.y, u, v, 12, 25, 32, fa}, OverlayVertex{a.x, a.y, u, v, 12, 25, 32, fa},
+                               OverlayVertex{b.x, b.y, u, v, 12, 25, 32, fa}});
+        out.insert(out.end(), {OverlayVertex{a.x, a.y, u, v, 255, 255, 255, ra}, OverlayVertex{ao.x, ao.y, u, v, 255, 255, 255, ra},
+                               OverlayVertex{bo.x, bo.y, u, v, 255, 255, 255, ra}, OverlayVertex{a.x, a.y, u, v, 255, 255, 255, ra},
+                               OverlayVertex{bo.x, bo.y, u, v, 255, 255, 255, ra}, OverlayVertex{b.x, b.y, u, v, 255, 255, 255, ra}});
+    }
+    if (label && *label) {
+        const int size = std::clamp(int(radius / std::max(guiScale, 0.01f) * (std::wcslen(label) > 5 ? 0.42f : 0.55f)), 10, 40);
+        plasmaLabel(out, label, c, {0, 0}, size, std::max(2, size / 5), plasma::TEXT_CENTER | plasma::TEXT_MIDDLE);
+    }
+}
+#endif
 
 int Hud::fontIndex(const std::string &name, bool templateFont) const {
     const auto key = std::make_pair(name, templateFont);

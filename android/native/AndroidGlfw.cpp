@@ -3,6 +3,7 @@
 // controller. Keys carry the scan codes GLFW reports on Windows, so key bindings, options.cfg and
 // the DirectInput-style keyboard state read the same on both systems.
 #include "AndroidWindow.h"
+#include "TouchControls.h"
 
 #include <volk.h>
 #define GLFW_INCLUDE_NONE
@@ -294,6 +295,7 @@ void releaseEverything() {
         buttonEvent(b, false);
     touch = {};
     pad = {};
+    touchcontrols::cancel();
 }
 
 int32_t onMotion(const AInputEvent *event) {
@@ -326,6 +328,8 @@ int32_t onMotion(const AInputEvent *event) {
         if (index >= count)
             break;
         const int id = AMotionEvent_getPointerId(event, index);
+        if (touchcontrols::press(id, AMotionEvent_getX(event, index), AMotionEvent_getY(event, index)))
+            break; // an on-screen control's finger
         if (touch.pointer < 0) {
             touch.pointer = id;
             touch.lastX = AMotionEvent_getX(event, index), touch.lastY = AMotionEvent_getY(event, index);
@@ -333,7 +337,7 @@ int32_t onMotion(const AInputEvent *event) {
                 theWindow.cursorX = touch.lastX, theWindow.cursorY = touch.lastY;
                 touch.pending.push_back({GLFW_MOUSE_BUTTON_LEFT, true});
             }
-        } else if (touch.second < 0) {
+        } else if (touch.second < 0 && !held) { // (in the world the buttons are on screen)
             touch.second = id;
             touch.pending.push_back({GLFW_MOUSE_BUTTON_RIGHT, true});
         }
@@ -341,7 +345,9 @@ int32_t onMotion(const AInputEvent *event) {
     }
     case AMOTION_EVENT_ACTION_MOVE:
         for (size_t i = 0; i < count; i++)
-            if (AMotionEvent_getPointerId(event, i) == touch.pointer) {
+            if (touchcontrols::move(AMotionEvent_getPointerId(event, i), AMotionEvent_getX(event, i), AMotionEvent_getY(event, i)))
+                continue;
+            else if (AMotionEvent_getPointerId(event, i) == touch.pointer) {
                 const float x = AMotionEvent_getX(event, i), y = AMotionEvent_getY(event, i);
                 if (held)
                     theWindow.cursorX += x - touch.lastX, theWindow.cursorY += y - touch.lastY;
@@ -355,6 +361,8 @@ int32_t onMotion(const AInputEvent *event) {
         if (index >= count)
             break;
         const int id = AMotionEvent_getPointerId(event, index);
+        if (touchcontrols::release(id))
+            break;
         if (id == touch.pointer) {
             touch.pointer = -1;
             touch.pending.push_back({GLFW_MOUSE_BUTTON_LEFT, false});
@@ -365,6 +373,7 @@ int32_t onMotion(const AInputEvent *event) {
         break;
     }
     case AMOTION_EVENT_ACTION_CANCEL:
+        touchcontrols::cancel();
         touch.pending.push_back({GLFW_MOUSE_BUTTON_LEFT, false});
         touch.pending.push_back({GLFW_MOUSE_BUTTON_RIGHT, false});
         touch.pointer = touch.second = -1;
@@ -480,7 +489,12 @@ void pump(bool wait) {
 namespace androidwindow {
 void setMessageHook(MessageHook hook) { messageHook = hook; }
 void readKeyboard(uint8_t (&state)[256]) { std::memcpy(state, keyboard, sizeof keyboard); }
-Gamepad gamepad() { return pad; }
+Gamepad gamepad() {
+    Gamepad merged = pad;
+    touchcontrols::addTo(merged);
+    return merged;
+}
+std::vector<TouchShape> touchShapes() { return touchcontrols::shapes(); }
 unsigned windowGeneration() { return generation; }
 int virtualKey(int glfwKey) { return virtualKeyOf(glfwKey); }
 android_app *app() { return theApp; }
@@ -628,11 +642,15 @@ void glfwPollEvents(void) {
     }
     // While the app is off screen the game waits here, as a minimized window waits for messages.
     pump(true);
+    if (theApp && theApp->window)
+        touchcontrols::setScreen(float(ANativeWindow_getWidth(theApp->window)), float(ANativeWindow_getHeight(theApp->window)));
 }
 int glfwGetInputMode(GLFWwindow *w, int mode) { return mode == GLFW_CURSOR ? w->cursorMode : GLFW_FALSE; }
 void glfwSetInputMode(GLFWwindow *w, int mode, int value) {
-    if (mode == GLFW_CURSOR)
+    if (mode == GLFW_CURSOR) {
         w->cursorMode = value;
+        touchcontrols::setWorld(value == GLFW_CURSOR_DISABLED); // the on-screen controls show in the world
+    }
 }
 int glfwRawMouseMotionSupported(void) { return GLFW_FALSE; }
 int glfwGetKeyScancode(int key) { return scancodeOf(key); }
